@@ -4,7 +4,6 @@
  * DB tests run inside Docker via `pnpm test:server:db`.
  */
 
-import crypto from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { TestDb } from "../test-utils.js";
 import {
@@ -12,20 +11,15 @@ import {
   createMockJobQueue,
   seedOrgPublicKey,
   createTestTicketFixture,
+  insertTestChannel,
 } from "../test-utils.js";
 import {
   expirePortalMessages,
   registerPortalExpiryHandler,
   PORTAL_EXPIRY_QUEUE,
 } from "./portal-message-expiry.js";
-import {
-  channelSecretSchema,
-  newFollowupId,
-  newAttachmentId,
-  newRecordingId,
-} from "@care-y/shared";
+import { newFollowupId, newAttachmentId, newRecordingId } from "@care-y/shared";
 import type {
-  ClientId,
   ChannelRowId,
   TicketId,
   PortalMessageId,
@@ -36,32 +30,7 @@ import type {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function insertChannel(
-  db: TestDb["db"],
-  clientId: ClientId,
-  lastSeenAt: Date | null,
-): Promise<ChannelRowId> {
-  const channelId = channelSecretSchema.parse(
-    crypto.randomBytes(24).toString("hex"),
-  );
-  const row = await db
-    .insertInto("portal_channels")
-    .values({
-      client_id: clientId,
-      channel_id: channelId,
-      auth_hash: Buffer.alloc(32, 0xaa),
-      client_public: Buffer.alloc(32, 0xbb),
-      has_passphrase: false,
-      key_check_ephemeral_point: Buffer.alloc(32, 0xcc),
-      key_check_nonce: Buffer.alloc(24, 0xdd),
-      key_check_ciphertext: Buffer.from("kc"),
-      status: "active",
-      last_seen_at: lastSeenAt,
-    })
-    .returning("id")
-    .executeTakeFirstOrThrow();
-  return row.id;
-}
+// insertTestChannel imported from test-utils.ts
 
 /**
  * Insert a follow-up row (needed to satisfy the FK on portal_messages)
@@ -120,14 +89,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("deletes messages for channels inactive past the 30-day boundary", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
-      const expiredChannelId = await insertChannel(
+      const expiredChannel = await insertTestChannel(
         testDb.db,
         fixture.clientId,
-        oldDate,
+        { last_seen_at: oldDate },
       );
       const msgId = await insertPortalMessage(
         testDb.db,
-        expiredChannelId,
+        expiredChannel.id,
         fixture.ticketId,
       );
 
@@ -146,14 +115,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("leaves messages for recently active channels", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const recentDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000); // 1 day ago
-      const activeChannelId = await insertChannel(
+      const activeChannel = await insertTestChannel(
         testDb.db,
         fixture.clientId,
-        recentDate,
+        { last_seen_at: recentDate },
       );
       const msgId = await insertPortalMessage(
         testDb.db,
-        activeChannelId,
+        activeChannel.id,
         fixture.ticketId,
       );
 
@@ -170,10 +139,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("deletes portal_attachments for expired channels", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
-      const expiredChannelId = await insertChannel(
+      const expiredChannel = await insertTestChannel(
         testDb.db,
         fixture.clientId,
-        oldDate,
+        { last_seen_at: oldDate },
       );
 
       // Seed a follow-up, attachment, and portal_attachments wrap
@@ -208,7 +177,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("portal_attachments")
         .values({
           attachment_id: attId,
-          channel_id: expiredChannelId,
+          channel_id: expiredChannel.id,
           followup_id: fuId,
           direction: "from_client",
           ephemeral_point: Buffer.alloc(32, 0x01),
@@ -222,7 +191,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const remaining = await testDb.db
         .selectFrom("portal_attachments")
         .select("id")
-        .where("channel_id", "=", expiredChannelId)
+        .where("channel_id", "=", expiredChannel.id)
         .executeTakeFirst();
       expect(remaining).toBeUndefined();
 
@@ -238,10 +207,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("deletes portal_recordings for expired channels", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
-      const expiredChannelId = await insertChannel(
+      const expiredChannel = await insertTestChannel(
         testDb.db,
         fixture.clientId,
-        oldDate,
+        { last_seen_at: oldDate },
       );
 
       const fuId = newFollowupId();
@@ -274,7 +243,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("portal_recordings")
         .values({
           recording_id: recId,
-          channel_id: expiredChannelId,
+          channel_id: expiredChannel.id,
           followup_id: fuId,
           direction: "to_client",
           ephemeral_point: Buffer.alloc(32, 0x01),
@@ -288,7 +257,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const remaining = await testDb.db
         .selectFrom("portal_recordings")
         .select("id")
-        .where("channel_id", "=", expiredChannelId)
+        .where("channel_id", "=", expiredChannel.id)
         .executeTakeFirst();
       expect(remaining).toBeUndefined();
 
@@ -304,16 +273,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("leaves all three tables' rows for fresh channels", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const recentDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
-      const freshChannelId = await insertChannel(
+      const freshChannel = await insertTestChannel(
         testDb.db,
         fixture.clientId,
-        recentDate,
+        { last_seen_at: recentDate },
       );
 
       // Message
       const msgId = await insertPortalMessage(
         testDb.db,
-        freshChannelId,
+        freshChannel.id,
         fixture.ticketId,
       );
 
@@ -349,7 +318,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("portal_attachments")
         .values({
           attachment_id: attId,
-          channel_id: freshChannelId,
+          channel_id: freshChannel.id,
           followup_id: fuIdAtt,
           direction: "from_client",
           ephemeral_point: Buffer.alloc(32, 0x01),
@@ -389,7 +358,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("portal_recordings")
         .values({
           recording_id: recId,
-          channel_id: freshChannelId,
+          channel_id: freshChannel.id,
           followup_id: fuIdRec,
           direction: "to_client",
           ephemeral_point: Buffer.alloc(32, 0x01),
@@ -411,14 +380,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const att = await testDb.db
         .selectFrom("portal_attachments")
         .select("id")
-        .where("channel_id", "=", freshChannelId)
+        .where("channel_id", "=", freshChannel.id)
         .executeTakeFirst();
       expect(att).toBeDefined();
 
       const rec = await testDb.db
         .selectFrom("portal_recordings")
         .select("id")
-        .where("channel_id", "=", freshChannelId)
+        .where("channel_id", "=", freshChannel.id)
         .executeTakeFirst();
       expect(rec).toBeDefined();
     });
@@ -427,14 +396,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // Channel with null last_seen_at: uses created_at.
       // Since we just inserted it, created_at is now(), which is < 30 days.
       const fixture = await createTestTicketFixture(testDb.db);
-      const channelId = await insertChannel(
-        testDb.db,
-        fixture.clientId,
-        null, // never visited
-      );
+      const channel = await insertTestChannel(testDb.db, fixture.clientId, {
+        last_seen_at: null,
+      });
       const msgId = await insertPortalMessage(
         testDb.db,
-        channelId,
+        channel.id,
         fixture.ticketId,
       );
 

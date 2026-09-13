@@ -31,7 +31,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { decode, encode } from "@care-y/crypto";
+  import { encode } from "@care-y/crypto";
   import {
     newFollowupId,
     newKeyGeneration,
@@ -39,6 +39,11 @@
     type ContactCorrectionPayload,
   } from "@care-y/shared";
   import { requireRouter, PortalUnavailableError } from "$lib/errors.js";
+  import {
+    isPortalChannelDisabledError,
+    splitContactEnvelope,
+    parseContactJson,
+  } from "$lib/portal/portal-page-shared.js";
   import {
     buildAccountRegistration,
     collectDecryptedMessages,
@@ -77,24 +82,6 @@
   } from "$lib/client-shell/context.js";
   import { createPortalFilters } from "$lib/composables/portal/create-portal-filters.svelte.js";
   import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
-
-  /** Shape-probe for a PORTAL_CHANNEL_DISABLED tRPC error. */
-  function isPortalChannelDisabledError(err: unknown): boolean {
-    if (typeof err !== "object" || err === null) return false;
-    if ("message" in err && err.message === "PORTAL_CHANNEL_DISABLED") {
-      return true;
-    }
-    if (
-      "data" in err &&
-      typeof err.data === "object" &&
-      err.data !== null &&
-      "code" in err.data &&
-      err.data.code === "PORTAL_CHANNEL_DISABLED"
-    ) {
-      return true;
-    }
-    return false;
-  }
 
   const createPortalBridge = getPortalBridgeFactory();
 
@@ -721,30 +708,19 @@
 
   /**
    * Open a sealed contact envelope using the account session's bridge.
-   * The envelope is ephemeralPoint(32) | nonce(24) | ciphertext(N) as
-   * a single base64url string.
+   * The envelope byte layout and JSON parsing live in portal-page-shared.
    */
   async function openAccountContactEnvelope(
     sealed: string,
   ): Promise<{ phone?: string; email?: string }> {
     if (!session) throw new PortalUnavailableError("No active account session");
-    const raw = decode(sealed);
-    const ep = encode(raw.subarray(0, 32));
-    const nonce = encode(raw.subarray(32, 56));
-    const ct = encode(raw.subarray(56));
-    const json = await session.decryptMessage(ep, nonce, ct);
-    const parsed: unknown = JSON.parse(json);
-    if (typeof parsed !== "object" || parsed === null) {
-      return {};
-    }
-    const result: { phone?: string; email?: string } = {};
-    if ("phone" in parsed && typeof parsed.phone === "string") {
-      result.phone = parsed.phone;
-    }
-    if ("email" in parsed && typeof parsed.email === "string") {
-      result.email = parsed.email;
-    }
-    return result;
+    const parts = splitContactEnvelope(sealed);
+    const json = await session.decryptMessage(
+      parts.ephemeralPoint,
+      parts.nonce,
+      parts.ciphertext,
+    );
+    return parseContactJson(json);
   }
 
   // Locale-reactive title (the read establishes a $derived dependency)

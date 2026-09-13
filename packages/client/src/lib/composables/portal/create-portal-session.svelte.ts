@@ -29,6 +29,7 @@ import type {
   PortalAttachmentInput,
 } from "$lib/workers/portal-protocol.js";
 import type { FragmentData } from "./create-portal-fragment.svelte.js";
+import { evaluateChannelWithPowRetry } from "$lib/portal/portal-crypto.js";
 
 export type ChannelEvaluateCallback = (
   channelId: string,
@@ -128,59 +129,6 @@ export interface PortalSessionHandle {
    * client public key (base64url).
    */
   channelPassphraseFinish(evaluated: string): Promise<{ clientPublic: string }>;
-}
-
-/**
- * Type guard for tRPC errors carrying a PoW challenge. Mirrors the guard
- * in portal-crypto.ts for the channel evaluate path.
- */
-function isChannelPowRequired(
-  err: unknown,
-): err is { data: { code: string; challenge: string; difficulty: number } } {
-  if (typeof err !== "object" || err === null || !("data" in err)) {
-    return false;
-  }
-  const { data } = err;
-  if (typeof data !== "object" || data === null) {
-    return false;
-  }
-  return (
-    "code" in data &&
-    data.code === "POW_REQUIRED" &&
-    "challenge" in data &&
-    typeof data.challenge === "string" &&
-    "difficulty" in data &&
-    typeof data.difficulty === "number"
-  );
-}
-
-/**
- * Channel evaluate with PoW retry. The bridge returns the blinded element;
- * the main thread sends it to the server through tRPC, then posts the
- * evaluated result back to the worker for finalization.
- */
-async function evaluateChannelWithPowRetry(
-  channelId: string,
-  blindedElementB64: string,
-  auth: string | undefined,
-  evaluate: ChannelEvaluateCallback,
-  onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
-): Promise<string> {
-  try {
-    const result = await evaluate(channelId, blindedElementB64, auth);
-    return result.evaluated;
-  } catch (err: unknown) {
-    if (!isChannelPowRequired(err)) throw err;
-    const solution = await onPowRequired(
-      err.data.challenge,
-      err.data.difficulty,
-    );
-    const result = await evaluate(channelId, blindedElementB64, auth, {
-      challenge: err.data.challenge,
-      solution,
-    });
-    return result.evaluated;
-  }
 }
 
 export function createPortalSessionState(

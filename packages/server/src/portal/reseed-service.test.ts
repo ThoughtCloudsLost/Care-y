@@ -12,9 +12,11 @@ import {
   createTestDb,
   seedOrgPublicKey,
   createTestTicketFixture,
+  fakeTriple,
+  insertTestChannel,
+  createMemoryBlobStore,
 } from "../test-utils.js";
 import { ForbiddenError } from "../errors.js";
-import type { PortalChannelRow } from "./channel-service.js";
 import { createTicketAccessChecker } from "../tickets/access.js";
 import {
   reseedPortalHistory,
@@ -28,13 +30,12 @@ import {
   ReseedRowNotFoundError,
 } from "./portal-errors.js";
 import {
-  channelSecretSchema,
   orgSchemaNameSchema,
   newFollowupId,
   newAttachmentId,
   newRecordingId,
 } from "@care-y/shared";
-import type { ClientId, BlobKey, OrgSchema } from "@care-y/shared";
+import type { BlobKey } from "@care-y/shared";
 
 const TEST_ORG_SCHEMA = orgSchemaNameSchema.parse(
   "org_00000000-0000-4000-8000-cccccccccccc",
@@ -44,74 +45,7 @@ const TEST_ORG_SCHEMA = orgSchemaNameSchema.parse(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fakeTriple(): {
-  ephemeralPoint: Buffer;
-  nonce: Buffer;
-  ciphertext: Buffer;
-} {
-  return {
-    ephemeralPoint: Buffer.alloc(32, 0x01),
-    nonce: Buffer.alloc(24, 0x02),
-    ciphertext: Buffer.from("test-ciphertext"),
-  };
-}
-
-async function insertChannel(
-  db: TestDb["db"],
-  clientId: ClientId,
-  overrides?: Partial<Record<string, unknown>>,
-): Promise<PortalChannelRow> {
-  const channelId = channelSecretSchema.parse(
-    crypto.randomBytes(24).toString("hex"),
-  );
-  const row = await db
-    .insertInto("portal_channels")
-    .values({
-      client_id: clientId,
-      channel_id: channelId,
-      auth_hash: Buffer.alloc(32, 0xaa),
-      client_public: Buffer.alloc(32, 0xbb),
-      has_passphrase: false,
-      key_check_ephemeral_point: Buffer.alloc(32, 0xcc),
-      key_check_nonce: Buffer.alloc(24, 0xdd),
-      key_check_ciphertext: Buffer.from("key-check-ct"),
-      status: "active",
-      ...overrides,
-    })
-    .returningAll()
-    .executeTakeFirstOrThrow();
-  return row;
-}
-
-/** In-memory blob store for testing. */
-function createMemoryBlobStore(): {
-  put(orgSchema: OrgSchema, category: string, blob: Buffer): Promise<BlobKey>;
-  get(key: BlobKey): Promise<Buffer | null>;
-  delete(key: BlobKey): Promise<void>;
-  exists(key: BlobKey): Promise<boolean>;
-} {
-  const store = new Map<string, Buffer>();
-  return {
-    async put(
-      _orgSchema: OrgSchema,
-      _category: string,
-      blob: Buffer,
-    ): Promise<BlobKey> {
-      const key = `blob/${crypto.randomUUID()}` as BlobKey;
-      store.set(key, Buffer.from(blob));
-      return key;
-    },
-    async get(key: BlobKey): Promise<Buffer | null> {
-      return store.get(key) ?? null;
-    },
-    async delete(key: BlobKey): Promise<void> {
-      store.delete(key);
-    },
-    async exists(key: BlobKey): Promise<boolean> {
-      return store.has(key);
-    },
-  };
-}
+// fakeTriple, insertTestChannel, and createMemoryBlobStore imported from test-utils.ts
 
 // ---------------------------------------------------------------------------
 // DB integration tests
@@ -140,7 +74,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         // Insert a followup from a volunteer
@@ -187,7 +121,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -222,7 +156,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -263,7 +197,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -304,7 +238,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -334,7 +268,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -365,7 +299,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -396,7 +330,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -449,7 +383,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           createUser: true,
         });
         const fixture2 = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture1.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture1.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -479,7 +413,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        await insertChannel(testDb.db, fixture.clientId);
+        await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -512,7 +446,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -557,7 +491,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -621,7 +555,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -690,7 +624,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -746,7 +680,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -833,7 +767,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -953,7 +887,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         await expect(
@@ -971,7 +905,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const bogusFollowupId = newFollowupId();
@@ -997,7 +931,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -1054,7 +988,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -1092,7 +1026,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -1144,7 +1078,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId1 = newFollowupId();
@@ -1212,7 +1146,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -1250,7 +1184,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId = newFollowupId();
@@ -1301,7 +1235,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
 
         const fuId1 = newFollowupId();
@@ -1366,7 +1300,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("throws ForbiddenError when the caller lacks access to the followup's ticket", async () => {
         // Create a fixture without a user to ensure no access
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         // Create a second fixture with a user who has no queue membership for the first fixture's ticket
         const otherFixture = await createTestTicketFixture(testDb.db, {
@@ -1463,7 +1397,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        await insertChannel(testDb.db, fixture.clientId);
+        await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -1527,7 +1461,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -1570,7 +1504,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -1627,7 +1561,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -1699,7 +1633,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -1760,7 +1694,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -1839,7 +1773,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -1882,7 +1816,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -1938,7 +1872,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -2003,7 +1937,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -2062,7 +1996,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 
@@ -2119,7 +2053,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
         });
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const access = createTicketAccessChecker(testDb.db);
         const blobStore = createMemoryBlobStore();
 

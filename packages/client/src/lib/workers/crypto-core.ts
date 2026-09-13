@@ -112,6 +112,7 @@ import {
   newKeyGeneration,
 } from "@care-y/shared";
 import { TkCache } from "./tk-cache.js";
+import { pairKey } from "../tickets/pair-key.js";
 
 // ── Sink type ──────────────────────────────────────────────────────
 
@@ -1989,11 +1990,8 @@ function handleDetectMergeCandidates(
       const b = fingerprints[j];
       if (!b) continue;
 
-      const pairKey =
-        a.clientId < b.clientId
-          ? `${a.clientId}:${b.clientId}`
-          : `${b.clientId}:${a.clientId}`;
-      if (seen.has(pairKey)) continue;
+      const pk = pairKey(a.clientId, b.clientId);
+      if (seen.has(pk)) continue;
 
       // Check phone hash match
       for (const phoneHash of a.phones) {
@@ -2004,11 +2002,11 @@ function handleDetectMergeCandidates(
             matchKind: "phone",
             matchHash: phoneHash,
           });
-          seen.add(pairKey);
+          seen.add(pk);
           break;
         }
       }
-      if (seen.has(pairKey)) continue;
+      if (seen.has(pk)) continue;
 
       // Check email hash match
       for (const emailHash of a.emails) {
@@ -2019,7 +2017,7 @@ function handleDetectMergeCandidates(
             matchKind: "email",
             matchHash: emailHash,
           });
-          seen.add(pairKey);
+          seen.add(pk);
           break;
         }
       }

@@ -54,8 +54,10 @@ export class TicketDecryptCache extends AsyncDecryptCache {
         intakeWrap !== null &&
         intakeWrap !== ""
       ) {
-        return this.decryptTitleViaIntakeWrap(
+        return this.decryptViaIntakeWrap(
           ticketId,
+          ticketId,
+          "title",
           intakeWrap,
           encryptedTitle,
         );
@@ -111,9 +113,10 @@ export class TicketDecryptCache extends AsyncDecryptCache {
         intakeWrap !== null &&
         intakeWrap !== ""
       ) {
-        return this.decryptDescViaIntakeWrap(
+        return this.decryptViaIntakeWrap(
           cacheKey,
           ticketId,
+          "description",
           intakeWrap,
           encryptedDescription,
         );
@@ -142,14 +145,17 @@ export class TicketDecryptCache extends AsyncDecryptCache {
   }
 
   /**
-   * Decrypt description for an intake ticket. Chains unseal (if tk is
-   * not already cached) then decrypts. Uses the same intakePending guard.
+   * Shared intake-wrap decrypt path for both title and description.
+   * Chains unseal (idempotent when tk is already Worker-cached) then
+   * decrypts the specified slot. Guards with intakePending to avoid
+   * duplicate in-flight requests per cache key.
    */
-  private decryptDescViaIntakeWrap(
+  private decryptViaIntakeWrap(
     cacheKey: string,
     ticketId: string,
+    slot: string,
     intakeWrap: string,
-    encryptedDescription: string,
+    encryptedContent: string,
   ): string | undefined {
     const cached = this.get(cacheKey);
     if (cached !== undefined) return cached;
@@ -158,19 +164,17 @@ export class TicketDecryptCache extends AsyncDecryptCache {
 
     this.intakePending.add(cacheKey);
 
-    // Unseal tk (may already be cached from title decrypt; the Worker
-    // handles that idempotently) then decrypt description.
     void this.bridge
       .unwrapIntakeTk(ticketId, intakeWrap)
       .then(async () =>
         this.bridge.decrypt(
           ticketId,
-          "description",
+          slot,
           ticketId,
           "",
           "",
           "",
-          encryptedDescription,
+          encryptedContent,
         ),
       )
       .then((plaintext) => {
@@ -186,7 +190,7 @@ export class TicketDecryptCache extends AsyncDecryptCache {
         this.setError(cacheKey);
         if (import.meta.env.DEV) {
           console.warn(
-            "[TicketDecryptCache] intakeWrap desc decrypt failed for",
+            `[TicketDecryptCache] intakeWrap ${slot} decrypt failed for`,
             ticketId,
             err,
           );
@@ -223,70 +227,8 @@ export class TicketDecryptCache extends AsyncDecryptCache {
     );
   }
 
-  /** In-flight intake wrap operations, keyed by ticketId. */
+  /** In-flight intake wrap operations, keyed by cache key. */
   private readonly intakePending = new Set<string>();
-
-  /**
-   * Decrypt a ticket title via an intake wrap (org-key sealed box) when
-   * the volunteer has no ECIES wrap. The Worker unseals with orgSecret
-   * via crypto_box_seal_open, caches tk, then decrypts the title content.
-   *
-   * Uses the same cache key as standard decryptTitle (ticketId) so
-   * subsequent renders pick up the result regardless of the wrap source.
-   */
-  private decryptTitleViaIntakeWrap(
-    ticketId: string,
-    intakeWrap: string,
-    encryptedTitle: string,
-  ): string | undefined {
-    const cached = this.get(ticketId);
-    if (cached !== undefined) return cached;
-    if (this.intakePending.has(ticketId)) return undefined;
-    if (this.bridge.getState() === "DESTROYED") return undefined;
-
-    this.intakePending.add(ticketId);
-
-    // Chain: unseal tk into Worker cache, then decrypt the title using
-    // the now-cached tk. The Worker's resolveTk checks the cache before
-    // attempting ECIES, so the empty key-wrap strings never reach decode.
-    void this.bridge
-      .unwrapIntakeTk(ticketId, intakeWrap)
-      .then(async () =>
-        this.bridge.decrypt(
-          ticketId,
-          "title",
-          ticketId,
-          "",
-          "",
-          "",
-          encryptedTitle,
-        ),
-      )
-      .then((plaintext) => {
-        this.seed(ticketId, plaintext);
-      })
-      .catch((err: unknown) => {
-        if (
-          err instanceof CryptoWorkerError &&
-          err.code === "BRIDGE_DESTROYED"
-        ) {
-          return;
-        }
-        this.setError(ticketId);
-        if (import.meta.env.DEV) {
-          console.warn(
-            "[TicketDecryptCache] intakeWrap decrypt failed for",
-            ticketId,
-            err,
-          );
-        }
-      })
-      .finally(() => {
-        this.intakePending.delete(ticketId);
-      });
-
-    return undefined;
-  }
 
   clearFollowUps(): void {
     this.deleteByPrefix("fu:");

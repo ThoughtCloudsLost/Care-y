@@ -22,16 +22,13 @@ import {
 } from "@care-y/crypto";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import {
-  BlobStoreError,
-  type BlobStore,
-  type BlobCategory,
-} from "../storage/store.js";
+import { BlobStoreError, type BlobStore } from "../storage/store.js";
 import {
   TestSetupError,
   createTestDb,
   createTestTicketFixture,
   seedOrgPublicKey,
+  createMemoryBlobStore,
   type TestDb,
 } from "../test-utils.js";
 import {
@@ -41,7 +38,6 @@ import {
 import {
   newTicketId,
   type OrgSchema,
-  type BlobKey,
   type ChannelRowId,
   type ChannelSecret,
   type ClientId,
@@ -301,37 +297,7 @@ function generateTestKeypair(): { priv: Scalar; pub: RistrettoPoint } {
   return { priv, pub };
 }
 
-/** Map-backed BlobStore for integration tests. */
-function createMemoryBlobStore(): BlobStore & {
-  readonly blobs: ReadonlyMap<string, Buffer>;
-} {
-  const blobs = new Map<string, Buffer>();
-  let counter = 0;
-  return {
-    get blobs() {
-      return blobs;
-    },
-    async put(
-      orgSchema: OrgSchema,
-      category: BlobCategory,
-      blob: Buffer,
-    ): Promise<BlobKey> {
-      counter += 1;
-      const key = `${orgSchema}/${category}/blob-${String(counter)}` as BlobKey;
-      blobs.set(key, Buffer.from(blob));
-      return key;
-    },
-    async get(key: string): Promise<Buffer | null> {
-      return blobs.get(key) ?? null;
-    },
-    async delete(key: string): Promise<void> {
-      blobs.delete(key);
-    },
-    async exists(key: string): Promise<boolean> {
-      return blobs.has(key);
-    },
-  };
-}
+// createMemoryBlobStore imported from test-utils.ts
 
 /** Seeds a portal channel and returns the row id. */
 async function seedPortalChannel(

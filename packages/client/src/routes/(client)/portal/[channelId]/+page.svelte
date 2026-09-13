@@ -42,6 +42,12 @@
   import { solveProofOfWork } from "$lib/auth/pow-solver.js";
   import { requireRouter, PortalUnavailableError } from "$lib/errors.js";
   import type { ChannelEvaluateCallback } from "$lib/composables/portal/create-portal-session.svelte.js";
+  import {
+    isPortalChannelDisabledError,
+    splitContactEnvelope,
+    parseContactJson,
+  } from "$lib/portal/portal-page-shared.js";
+  import { evaluateChannelWithPowRetry } from "$lib/portal/portal-crypto.js";
   import PortalHint from "$lib/shell/PortalHint.svelte";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import PageLayout from "$lib/shell/PageLayout.svelte";
@@ -80,26 +86,6 @@
   import { createPortalFilters } from "$lib/composables/portal/create-portal-filters.svelte.js";
   import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
   import { useThreadChrome } from "$lib/shell/use-thread-chrome.svelte.js";
-
-  /** Shape-probe for a PORTAL_CHANNEL_DISABLED tRPC error. */
-  function isPortalChannelDisabledError(err: unknown): boolean {
-    if (typeof err !== "object" || err === null) return false;
-    // tRPC client errors carry the app error code in message (via
-    // the server's errorFormatter). Check both message and data.code.
-    if ("message" in err && err.message === "PORTAL_CHANNEL_DISABLED") {
-      return true;
-    }
-    if (
-      "data" in err &&
-      typeof err.data === "object" &&
-      err.data !== null &&
-      "code" in err.data &&
-      err.data.code === "PORTAL_CHANNEL_DISABLED"
-    ) {
-      return true;
-    }
-    return false;
-  }
 
   // Route param; the fragment-derived channel id is the crypto authority,
   // this one only keys the queries.
@@ -153,48 +139,6 @@
         : {}),
     });
   };
-
-  /**
-   * Evaluate with PoW retry for the passphrase-derive OPRF round.
-   * Same pattern as evaluateChannelWithPowRetry in the session composable.
-   */
-  async function evaluatePassphraseWithPowRetry(
-    channelId: string,
-    blindedElementB64: string,
-    auth: string | undefined,
-    evaluate: ChannelEvaluateCallback,
-    onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
-  ): Promise<string> {
-    try {
-      const result = await evaluate(channelId, blindedElementB64, auth);
-      return result.evaluated;
-    } catch (err: unknown) {
-      if (
-        typeof err !== "object" ||
-        err === null ||
-        !("data" in err) ||
-        typeof err.data !== "object" ||
-        err.data === null ||
-        !("code" in err.data) ||
-        err.data.code !== "POW_REQUIRED" ||
-        !("challenge" in err.data) ||
-        typeof err.data.challenge !== "string" ||
-        !("difficulty" in err.data) ||
-        typeof err.data.difficulty !== "number"
-      ) {
-        throw err;
-      }
-      const solution = await onPowRequired(
-        err.data.challenge,
-        err.data.difficulty,
-      );
-      const result = await evaluate(channelId, blindedElementB64, auth, {
-        challenge: err.data.challenge,
-        solution,
-      });
-      return result.evaluated;
-    }
-  }
 
   let hintShown = $state(false);
   let hintDismissed = $state(false);
@@ -697,33 +641,20 @@
 
   /**
    * Open a sealed contact envelope using the session's channel private key.
-   * The envelope is ephemeralPoint(32) | nonce(24) | ciphertext(N) as a
-   * single base64url string. Split it, re-encode each part, and decrypt
-   * through the session bridge.
+   * The envelope byte layout and JSON parsing live in portal-page-shared.
    */
   async function openContactEnvelope(
     sealed: string,
   ): Promise<{ phone?: string; email?: string }> {
     const sess = portalSession.session;
     if (!sess) throw new PortalUnavailableError("No active portal session");
-    const raw = decode(sealed);
-    // Split: ephemeralPoint = bytes 0..31, nonce = 32..55, ciphertext = 56+
-    const ep = encode(raw.subarray(0, 32));
-    const nonce = encode(raw.subarray(32, 56));
-    const ct = encode(raw.subarray(56));
-    const json = await sess.decryptMessage(ep, nonce, ct);
-    const parsed: unknown = JSON.parse(json);
-    if (typeof parsed !== "object" || parsed === null) {
-      return {};
-    }
-    const result: { phone?: string; email?: string } = {};
-    if ("phone" in parsed && typeof parsed.phone === "string") {
-      result.phone = parsed.phone;
-    }
-    if ("email" in parsed && typeof parsed.email === "string") {
-      result.email = parsed.email;
-    }
-    return result;
+    const parts = splitContactEnvelope(sealed);
+    const json = await sess.decryptMessage(
+      parts.ephemeralPoint,
+      parts.nonce,
+      parts.ciphertext,
+    );
+    return parseContactJson(json);
   }
 
   /**
@@ -797,7 +728,7 @@
         const deriveResult = await sess.channelPassphraseDerive(passphrase);
 
         // Evaluate via tRPC (main thread), with PoW retry
-        const evaluated = await evaluatePassphraseWithPowRetry(
+        const evaluated = await evaluateChannelWithPowRetry(
           deriveResult.channelId,
           deriveResult.blindedElement,
           deriveResult.auth,

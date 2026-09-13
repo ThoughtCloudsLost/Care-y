@@ -48,24 +48,27 @@
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
     resolveLocalized,
-    evaluateVisibility,
     isDataFieldType,
     BASE_LOCALE,
     FORM_LOCALES,
     newTicketId,
     newFollowupId,
-    type IntakeFieldConfig,
-    type IntakeFieldType,
-    type IntakeFieldRole,
     type LocalizedText,
     type FormLocale,
     type IntakeFormMeta,
     type AvailabilityData,
     type TicketPriority,
-    type VisibleWhen,
     type ProseMirrorDocJSON,
     ErrorCode,
   } from "@care-y/shared";
+  import {
+    isFieldVisible as isFieldVisiblePure,
+    splitIntoPages,
+    visiblePageIndices as computeVisiblePageIndices,
+    validateFields,
+    type PlaintextField,
+    type ValidationMessages,
+  } from "./intake-form-logic.js";
   import { readRichLocale } from "$lib/utils/localized-text.js";
   import {
     renderFormRichText,
@@ -82,18 +85,6 @@
   }
 
   let { slug = null }: IntakeFormBodyProps = $props();
-
-  // ---- Types ----
-
-  interface PlaintextField {
-    readonly fieldKey: string;
-    readonly fieldType: IntakeFieldType;
-    readonly role: IntakeFieldRole | null;
-    readonly label: LocalizedText;
-    readonly config: IntakeFieldConfig;
-    readonly isRequired: boolean;
-    readonly visibleWhen?: VisibleWhen;
-  }
 
   type ContactMethod = "phone" | "email" | "none";
 
@@ -407,63 +398,19 @@
    * excluded from validation, the response blob, and ticket text.
    */
   function isFieldVisible(field: PlaintextField): boolean {
-    return evaluateVisibility(field.visibleWhen, fieldValues);
+    return isFieldVisiblePure(field, fieldValues);
   }
 
   // ---- Page break pagination ----
 
-  /**
-   * Split form fields into pages. A page break element starts a new page.
-   * The first page starts at the first field. Page breaks carry an optional
-   * localized title.
-   */
-  interface FormPage {
-    /** Localized page title from the page break, undefined for the first page. */
-    readonly title?: LocalizedText;
-    /** Fields belonging to this page (data fields only, no page breaks). */
-    readonly fields: readonly PlaintextField[];
-  }
-
-  const formPages = $derived.by((): readonly FormPage[] => {
-    const pages: FormPage[] = [];
-    let currentFields: PlaintextField[] = [];
-    let currentTitle: LocalizedText | undefined = undefined;
-
-    for (const field of formFields) {
-      if (field.fieldType === "pageBreak") {
-        // Push current page (even if empty, it may have visible fields from a visibility change)
-        pages.push({ title: currentTitle, fields: currentFields });
-        currentFields = [];
-        currentTitle = field.label;
-      } else {
-        currentFields.push(field);
-      }
-    }
-    // Push the last page
-    pages.push({ title: currentTitle, fields: currentFields });
-    return pages;
-  });
+  const formPages = $derived(splitIntoPages(formFields));
 
   const hasPages = $derived(formPages.length > 1);
   let currentPageIndex = $state(0);
 
-  /**
-   * Visible pages: pages where at least one field is visible.
-   * Returns indices into formPages.
-   */
-  const visiblePageIndices = $derived.by((): readonly number[] => {
-    const indices: number[] = [];
-    for (let i = 0; i < formPages.length; i++) {
-      const page = formPages.at(i);
-      if (page === undefined) continue;
-      const hasVisibleField = page.fields.some((f) => isFieldVisible(f));
-      // Always include the first page (it has the intro content)
-      if (i === 0 || hasVisibleField) {
-        indices.push(i);
-      }
-    }
-    return indices;
-  });
+  const visiblePageIndices = $derived(
+    computeVisiblePageIndices(formPages, fieldValues),
+  );
 
   /** The page currently being displayed (when multi-page). */
   const currentPage = $derived(formPages.at(currentPageIndex));
@@ -633,15 +580,18 @@
 
   // ---- Validation ----
 
-  /** Loose email check for client-side validation (not a full RFC 5322 check). */
-  function isValidEmail(s: string): boolean {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-  }
-
-  /** Loose phone check: at least 7 digits, optional leading +, spaces/dashes allowed. */
-  function isValidPhone(s: string): boolean {
-    const digits = s.replace(/[\s\-().+]/g, "");
-    return /^\d{7,15}$/.test(digits);
+  /** Build the localized messages bag that validateFields needs. */
+  function validationMessages(): ValidationMessages {
+    return {
+      fieldRequired: m.intake_error_field_required(),
+      messageRequired: m.intake_error_message_required(),
+      emailFormat: m.intake_error_email_format(),
+      phoneFormat: m.intake_error_phone_format(),
+      numberFormat: m.intake_error_number_format(),
+      numberMin: (min: string) => m.intake_error_number_min({ min }),
+      numberMax: (max: string) => m.intake_error_number_max({ max }),
+      dateFormat: m.intake_error_date_format(),
+    };
   }
 
   /**
@@ -649,159 +599,22 @@
    * those fields are checked. Otherwise all visible form fields are checked.
    */
   function validate(fieldsToValidate?: readonly PlaintextField[]): boolean {
-    const errors: Record<string, string | undefined> = {};
-    let valid = true;
+    const result = validateFields({
+      fields: formFields,
+      fieldValues,
+      messages: validationMessages(),
+      isDefaultForm,
+      contactMethod,
+      contactDetail,
+      accountExpanded,
+      accountPassword,
+      accountConfirmPassword,
+      fieldsToValidate,
+    });
 
-    const fieldsToCheck = fieldsToValidate ?? formFields;
-
-    // Validate dynamic fields
-    for (const field of fieldsToCheck) {
-      // Skip page breaks (structural, not data)
-      if (!isDataFieldType(field.fieldType)) continue;
-
-      // Skip hidden fields (conditional visibility)
-      if (!isFieldVisible(field)) continue;
-
-      const val = fieldValues[field.fieldKey];
-
-      // Required check per field type
-      if (field.isRequired) {
-        if (field.fieldType === "text" || field.fieldType === "textarea") {
-          if (typeof val !== "string" || val.trim() === "") {
-            errors[field.fieldKey] =
-              field.fieldType === "textarea"
-                ? m.intake_error_message_required()
-                : m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        } else if (field.fieldType === "select") {
-          if (typeof val !== "string" || val === "") {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        } else if (field.fieldType === "multiselect") {
-          if (!Array.isArray(val) || val.length === 0) {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        } else if (field.fieldType === "checkbox") {
-          if (
-            field.config.type === "checkbox" &&
-            field.config.requiredTrue === true &&
-            val !== true
-          ) {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        } else if (field.fieldType === "date") {
-          if (typeof val !== "string" || val === "") {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        } else {
-          // field.fieldType === "availability" (only remaining type)
-          if (
-            val === undefined ||
-            typeof val !== "object" ||
-            Array.isArray(val) ||
-            typeof val === "boolean"
-          ) {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          } else if (val.recurring.length === 0 && val.specific.length === 0) {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        }
-      }
-
-      // Subtype format validation for text fields (runs even on optional fields when a value is present)
-      if (
-        field.fieldType === "text" &&
-        field.config.type === "text" &&
-        typeof val === "string" &&
-        val.trim() !== ""
-      ) {
-        const sub = field.config.subtype;
-        if (sub === "email" && !isValidEmail(val)) {
-          errors[field.fieldKey] = m.intake_error_email_format();
-          valid = false;
-          continue;
-        }
-        if (sub === "phone" && !isValidPhone(val)) {
-          errors[field.fieldKey] = m.intake_error_phone_format();
-          valid = false;
-          continue;
-        }
-        if (sub === "number") {
-          const num = Number(val);
-          if (Number.isNaN(num)) {
-            errors[field.fieldKey] = m.intake_error_number_format();
-            valid = false;
-            continue;
-          }
-          const range = field.config.numberRange;
-          if (range?.min !== undefined && num < range.min) {
-            errors[field.fieldKey] = m.intake_error_number_min({
-              min: String(range.min),
-            });
-            valid = false;
-            continue;
-          }
-          if (range?.max !== undefined && num > range.max) {
-            errors[field.fieldKey] = m.intake_error_number_max({
-              max: String(range.max),
-            });
-            valid = false;
-            continue;
-          }
-        }
-      }
-
-      // Date format validation (YYYY-MM-DD)
-      if (
-        field.fieldType === "date" &&
-        typeof val === "string" &&
-        val !== "" &&
-        !/^\d{4}-\d{2}-\d{2}$/.test(val)
-      ) {
-        errors[field.fieldKey] = m.intake_error_date_format();
-        valid = false;
-      }
-    }
-
-    // Validate default form contact detail
-    if (isDefaultForm) {
-      if (contactMethod === "phone" && contactDetail.trim() === "") {
-        contactDetailError = m.intake_error_field_required();
-        valid = false;
-      } else if (contactMethod === "email" && contactDetail.trim() === "") {
-        contactDetailError = m.intake_error_field_required();
-        valid = false;
-      } else {
-        contactDetailError = undefined;
-      }
-    }
-
-    // Validate account opt-in fields when the section is expanded
-    if (accountExpanded) {
-      if (
-        accountPassword.length > 0 &&
-        accountPassword !== accountConfirmPassword
-      ) {
-        valid = false;
-      }
-    }
-
-    fieldErrors = errors;
-    return valid;
+    fieldErrors = result.errors;
+    contactDetailError = result.contactDetailError;
+    return result.valid;
   }
 
   function focusFirstError(): void {

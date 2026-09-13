@@ -22,6 +22,7 @@ import { clientKeys } from "$lib/query/keys.js";
 import { trpc } from "$lib/trpc/index.js";
 import { getCryptoBridge } from "$lib/crypto/context.js";
 import { requireRouter } from "$lib/errors.js";
+import { pairKey } from "$lib/tickets/pair-key.js";
 import type {
   MergeCandidate,
   MergeScanClient,
@@ -60,14 +61,9 @@ export interface MergeScanResult {
   readonly invalidate: () => void;
 }
 
-/**
- * Computes a stable pair key from two client ids. Sorted so (A,B)==(B,A).
- */
-export function pairKey(clientIdA: string, clientIdB: string): string {
-  return clientIdA < clientIdB
-    ? `${clientIdA}:${clientIdB}`
-    : `${clientIdB}:${clientIdA}`;
-}
+// Re-export so existing consumers that import pairKey from this module
+// continue to compile without changes.
+export { pairKey } from "$lib/tickets/pair-key.js";
 
 /**
  * Creates the merge scan composable. Call from the dashboard route file.

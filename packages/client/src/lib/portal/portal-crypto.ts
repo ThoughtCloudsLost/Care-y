@@ -84,9 +84,10 @@ export interface ChannelOprfOptions {
 
 /**
  * Type guard for tRPC errors carrying a PoW challenge.
- * Mirrors the guard in crypto-helpers.ts for the channel evaluate path.
+ * Shared by performChannelOprf, create-portal-session, and the channel page's
+ * passphrase-derive path. Exported so all three sites import one copy.
  */
-function isChannelPowRequired(
+export function isChannelPowRequired(
   err: unknown,
 ): err is { data: { code: string; challenge: string; difficulty: number } } {
   if (typeof err !== "object" || err === null || !("data" in err)) {
@@ -163,10 +164,10 @@ export async function performChannelOprf(
 }
 
 /**
- * Channel evaluate with PoW retry, mirroring the pattern in
- * crypto-helpers.ts for volunteer/account OPRF.
+ * Channel evaluate with PoW retry. Shared by performChannelOprf,
+ * create-portal-session, and the channel page's passphrase-derive path.
  */
-async function evaluateChannelWithPowRetry(
+export async function evaluateChannelWithPowRetry(
   channelId: string,
   blindedElementB64: string,
   auth: string | undefined,

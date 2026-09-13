@@ -12,8 +12,10 @@ import {
   createTestDb,
   seedOrgPublicKey,
   createTestTicketFixture,
+  fakeTriple,
+  insertTestChannel,
+  createMemoryBlobStore,
 } from "../test-utils.js";
-import type { BlobStore } from "../storage/store.js";
 import type { PortalChannelRow } from "./channel-service.js";
 import {
   prepareAttachment,
@@ -32,16 +34,9 @@ import {
   newFollowupId,
   newAttachmentId,
   newKeyGeneration,
-  channelSecretSchema,
   PORTAL_ATTACHMENT_MAX_BYTES,
 } from "@care-y/shared";
-import type {
-  ClientId,
-  OrgSchema,
-  AttachmentId,
-  BlobKey,
-} from "@care-y/shared";
-import type { EciesTripleBuffers } from "./portal-message-service.js";
+import type { AttachmentId, BlobKey } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -51,64 +46,7 @@ const TEST_ORG_SCHEMA = orgSchemaNameSchema.parse(
   "org_00000000-0000-4000-8000-bbbbbbbbbbbb",
 );
 
-function fakeTriple(): EciesTripleBuffers {
-  return {
-    ephemeralPoint: Buffer.alloc(32, 0x01),
-    nonce: Buffer.alloc(24, 0x02),
-    ciphertext: Buffer.from("wrap-ct"),
-  };
-}
-
-/** Map-backed in-memory BlobStore for tests. */
-function createMapBlobStore(): BlobStore & {
-  readonly blobs: Map<string, Buffer>;
-} {
-  const blobs = new Map<string, Buffer>();
-  return {
-    blobs,
-    async put(orgSchema: OrgSchema, category: string, blob: Buffer) {
-      const key = `${orgSchema}/${category}/${crypto.randomUUID()}` as BlobKey;
-      blobs.set(key, Buffer.from(blob));
-      return key;
-    },
-    async get(key: string) {
-      return blobs.get(key) ?? null;
-    },
-    async delete(key: string) {
-      blobs.delete(key);
-    },
-    async exists(key: string) {
-      return blobs.has(key);
-    },
-  };
-}
-
-async function insertChannel(
-  db: TestDb["db"],
-  clientId: ClientId,
-  overrides?: Partial<Record<string, unknown>>,
-): Promise<PortalChannelRow> {
-  const channelId = channelSecretSchema.parse(
-    crypto.randomBytes(24).toString("hex"),
-  );
-  const row = await db
-    .insertInto("portal_channels")
-    .values({
-      client_id: clientId,
-      channel_id: channelId,
-      auth_hash: Buffer.alloc(32, 0xaa),
-      client_public: Buffer.alloc(32, 0xbb),
-      has_passphrase: false,
-      key_check_ephemeral_point: Buffer.alloc(32, 0xcc),
-      key_check_nonce: Buffer.alloc(24, 0xdd),
-      key_check_ciphertext: Buffer.from("key-check-ct"),
-      status: "active",
-      ...overrides,
-    })
-    .returningAll()
-    .executeTakeFirstOrThrow();
-  return row;
-}
+// fakeTriple and insertTestChannel imported from test-utils.ts
 
 function makeInput(overrides?: Partial<AttachmentInput>): AttachmentInput {
   const blob = Buffer.alloc(128, 0xff);
@@ -148,7 +86,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     describe("prepareAttachment", () => {
       it("accepts a valid upload and stores its blob", async () => {
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const fixture = await createTestTicketFixture(testDb.db);
         const input = makeInput({ ticketId: fixture.ticketId });
 
@@ -166,7 +104,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("rejects ciphertext exceeding the size limit", async () => {
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const fixture = await createTestTicketFixture(testDb.db);
         const oversized = Buffer.alloc(PORTAL_ATTACHMENT_MAX_BYTES + 1, 0x00);
         const input = makeInput({
@@ -184,7 +122,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("rejects a declared size that disagrees with the buffer", async () => {
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const fixture = await createTestTicketFixture(testDb.db);
         const input = makeInput({
           ticketId: fixture.ticketId,
@@ -199,7 +137,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("rejects a content type outside the allowlist with AttachmentValidationError", async () => {
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const fixture = await createTestTicketFixture(testDb.db);
         const input = makeInput({
           ticketId: fixture.ticketId,
@@ -217,7 +155,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // A real upload is encrypted, so its bytes carry no recognizable
         // file header. The server must accept it, since magic byte checks
         // on ciphertext would reject every real upload.
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const fixture = await createTestTicketFixture(testDb.db);
         const randomBytes = crypto.randomBytes(256);
         const input = makeInput({
@@ -236,7 +174,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("normalizes content type by stripping charset and lowercasing", async () => {
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const fixture = await createTestTicketFixture(testDb.db);
         const input = makeInput({
           ticketId: fixture.ticketId,
@@ -258,7 +196,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     describe("insertAttachmentRow and attachToFollowUp", () => {
       it("roundtrips: prepared upload becomes a row carrying its wrap", async () => {
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const fixture = await createTestTicketFixture(testDb.db);
         const input = makeInput({ ticketId: fixture.ticketId });
 
@@ -297,7 +235,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("attachToFollowUp returns false for an id that is already linked", async () => {
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const fixture = await createTestTicketFixture(testDb.db);
         const input = makeInput({ ticketId: fixture.ticketId });
 
@@ -370,7 +308,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("attachToFollowUp succeeds for a pending (null followup_id) row", async () => {
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const fixture = await createTestTicketFixture(testDb.db);
         const input = makeInput({ ticketId: fixture.ticketId });
 
@@ -422,7 +360,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         fixture: Awaited<ReturnType<typeof createTestTicketFixture>>,
         channel: PortalChannelRow,
       ): Promise<{ attachmentId: AttachmentId; blobKey: BlobKey }> {
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const input = makeInput({ ticketId: fixture.ticketId });
         const prepared = await prepareAttachment(
           blobStore,
@@ -460,7 +398,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns the blob key for a channel with a wrap", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const { attachmentId, blobKey } = await seedAttachmentWithWrap(
           fixture,
           channel,
@@ -478,7 +416,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db);
         // Old revoked channel holds the wrap; only one channel per client
         // may be active (uq_portal_channels_active_client).
-        const channelWithWrap = await insertChannel(
+        const channelWithWrap = await insertTestChannel(
           testDb.db,
           fixture.clientId,
           {
@@ -492,7 +430,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         );
 
         // Active replacement channel for the same client, no wrap inserted
-        const channelWithout = await insertChannel(testDb.db, fixture.clientId);
+        const channelWithout = await insertTestChannel(
+          testDb.db,
+          fixture.clientId,
+        );
 
         const resolved = await resolveChannelBlobKey(
           testDb.db,
@@ -504,7 +445,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns null once the attachment is soft-deleted", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const { attachmentId } = await seedAttachmentWithWrap(fixture, channel);
 
         // Soft-delete the attachment
@@ -530,15 +471,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("listChannelAttachments", () => {
       it("returns only this channel's files, skips soft-deleted, and is ordered", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel1 = await insertChannel(testDb.db, fixture.clientId);
+        const channel1 = await insertTestChannel(testDb.db, fixture.clientId);
         // Revoked: only one active channel per client is allowed
         // (uq_portal_channels_active_client).
-        const channel2 = await insertChannel(testDb.db, fixture.clientId, {
+        const channel2 = await insertTestChannel(testDb.db, fixture.clientId, {
           status: "revoked",
           revoked_at: new Date(),
         });
 
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
 
         const followupId1 = newFollowupId();
         await testDb.db
@@ -653,9 +594,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("purgeChannelAttachments", () => {
       it("removes the wraps and leaves the attachments row", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const followupId = newFollowupId();
         await testDb.db
           .insertInto("followups")
@@ -718,7 +659,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     describe("purgeUnlinkedAttachments", () => {
       it("removes a pending upload past the cutoff and deletes its blob", async () => {
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const fixture = await createTestTicketFixture(testDb.db);
         const input = makeInput({ ticketId: fixture.ticketId });
 
@@ -760,7 +701,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("leaves a linked attachment alone", async () => {
-        const blobStore = createMapBlobStore();
+        const blobStore = createMemoryBlobStore();
         const fixture = await createTestTicketFixture(testDb.db);
         const input = makeInput({ ticketId: fixture.ticketId });
 
