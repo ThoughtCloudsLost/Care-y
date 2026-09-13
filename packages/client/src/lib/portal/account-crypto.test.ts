@@ -1,21 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type * as CryptoPkg from "@care-y/crypto";
 
-// Mock trpc before importing the module under test
-vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
-  ...(await importOriginal()),
-  trpc: {
-    clientPortal: {
-      getAccountSalt: {
-        query: vi.fn(),
-      },
-      accountLogin: {
-        mutate: vi.fn(),
-      },
-    },
-  },
-}));
-
 vi.mock("$lib/auth/crypto-helpers.js", async (importOriginal) => ({
   ...(await importOriginal()),
   evaluateWithPowRetry: vi.fn(),
@@ -85,13 +70,7 @@ vi.mock("@care-y/crypto", async (importOriginal) => ({
   toSalt: vi.fn().mockImplementation((b: Uint8Array) => b),
 }));
 
-import {
-  accountLogin,
-  buildAccountRegistration,
-  rewrapMessages,
-} from "./account-crypto.js";
-import { trpc } from "$lib/trpc/index.js";
-import { requireRouter } from "$lib/errors.js";
+import { buildAccountRegistration, rewrapMessages } from "./account-crypto.js";
 import type { RistrettoPoint, Salt } from "@care-y/crypto";
 import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
@@ -100,8 +79,6 @@ import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 const fakeEvaluatedB64 = Buffer.from(new Uint8Array(32).fill(12)).toString(
   "base64url",
 );
-
-const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
 
 function makeCallbacks(): LoginCryptoCallbacks {
   return {
@@ -114,120 +91,6 @@ function makeCallbacks(): LoginCryptoCallbacks {
     onPowRequired: vi.fn().mockResolvedValue("solution"),
   };
 }
-
-describe("accountLogin", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("calls getAccountSalt with the raw username", async () => {
-    const saltB64 = Buffer.from(new Uint8Array(16).fill(1)).toString(
-      "base64url",
-    );
-    vi.mocked(portalRouter.getAccountSalt.query).mockResolvedValue({
-      salt: saltB64,
-      accountId: "test-uuid",
-    });
-    vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
-    vi.mocked(portalRouter.accountLogin.mutate).mockResolvedValue({});
-
-    const callbacks = makeCallbacks();
-    await accountLogin("myuser", "mypassword", callbacks);
-
-    expect(portalRouter.getAccountSalt.query).toHaveBeenCalledWith({
-      username: "myuser",
-    });
-  });
-
-  it("never sends the password to the server", async () => {
-    const saltB64 = Buffer.from(new Uint8Array(16).fill(1)).toString(
-      "base64url",
-    );
-    vi.mocked(portalRouter.getAccountSalt.query).mockResolvedValue({
-      salt: saltB64,
-      accountId: "test-uuid",
-    });
-    vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
-    vi.mocked(portalRouter.accountLogin.mutate).mockResolvedValue({});
-
-    const callbacks = makeCallbacks();
-    await accountLogin("myuser", "secret-password", callbacks);
-
-    // accountLogin mutation receives authToken, never the password
-    const loginCall = vi.mocked(portalRouter.accountLogin.mutate).mock.calls[0];
-    expect(loginCall).toBeDefined();
-    const payload = loginCall?.[0] as Record<string, unknown>;
-    expect(payload).not.toHaveProperty("password");
-    expect(payload).toHaveProperty("authToken");
-    expect(payload).toHaveProperty("accountId");
-  });
-
-  it("returns an AccountSession with a destroy method", async () => {
-    const saltB64 = Buffer.from(new Uint8Array(16).fill(1)).toString(
-      "base64url",
-    );
-    vi.mocked(portalRouter.getAccountSalt.query).mockResolvedValue({
-      salt: saltB64,
-      accountId: "test-uuid",
-    });
-    vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
-    vi.mocked(portalRouter.accountLogin.mutate).mockResolvedValue({});
-
-    const callbacks = makeCallbacks();
-    const session = await accountLogin("myuser", "pw", callbacks);
-
-    expect(session.keypair).toBeDefined();
-    expect(session.keypair.clientPublic).toBeDefined();
-    expect(typeof session.destroy).toBe("function");
-  });
-
-  it("calls all phase callbacks in order", async () => {
-    const saltB64 = Buffer.from(new Uint8Array(16).fill(1)).toString(
-      "base64url",
-    );
-    vi.mocked(portalRouter.getAccountSalt.query).mockResolvedValue({
-      salt: saltB64,
-      accountId: "test-uuid",
-    });
-    vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
-    vi.mocked(portalRouter.accountLogin.mutate).mockResolvedValue({});
-
-    const callbacks = makeCallbacks();
-    await accountLogin("user", "pass", callbacks);
-
-    const order = [
-      vi.mocked(callbacks.onArgon2idStart).mock.invocationCallOrder[0],
-      vi.mocked(callbacks.onArgon2idDone).mock.invocationCallOrder[0],
-      vi.mocked(callbacks.onOprfStart).mock.invocationCallOrder[0],
-      vi.mocked(callbacks.onOprfDone).mock.invocationCallOrder[0],
-      vi.mocked(callbacks.onDeriveStart).mock.invocationCallOrder[0],
-      vi.mocked(callbacks.onDone).mock.invocationCallOrder[0],
-    ];
-    for (let i = 1; i < order.length; i++) {
-      expect(order[i]).toBeGreaterThan(order[i - 1]!);
-    }
-  });
-
-  // Real zeroing behavior is verified by instrumented-backend tests
-  // in packages/crypto (client-account.security.test.ts).
-  it("invokes zeroAll in finally block", async () => {
-    const { zeroAll } = await import("@care-y/crypto");
-    const saltB64 = Buffer.from(new Uint8Array(16).fill(1)).toString(
-      "base64url",
-    );
-    vi.mocked(portalRouter.getAccountSalt.query).mockResolvedValue({
-      salt: saltB64,
-      accountId: "test-uuid",
-    });
-    vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
-    vi.mocked(portalRouter.accountLogin.mutate).mockResolvedValue({});
-
-    const callbacks = makeCallbacks();
-    await accountLogin("user", "pass", callbacks);
-
-    expect(zeroAll).toHaveBeenCalled();
-  });
-});
 
 describe("buildAccountRegistration", () => {
   beforeEach(() => {

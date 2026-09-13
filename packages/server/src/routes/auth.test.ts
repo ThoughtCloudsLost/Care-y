@@ -25,6 +25,7 @@ import {
   createMockEmailSender,
   createMockOprfDeps,
   createThrowingProviderFactory,
+  NO_OPTIONAL_ROUTERS,
   registerMethodDirectly,
   type TestDb,
 } from "../test-utils.js";
@@ -151,6 +152,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     // Shared by authDeps and twoFactorDeps, matching production wiring.
     const totpReplayCache = createInMemoryTotpReplayCache();
     return createAppRouter({
+      ...NO_OPTIONAL_ROUTERS,
       authDeps: {
         hasher,
         loginLimiter: limiter ?? loginLimiter,
@@ -699,6 +701,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       );
       const totpReplayCache = createInMemoryTotpReplayCache();
       const appRouter = createAppRouter({
+        ...NO_OPTIONAL_ROUTERS,
         authDeps: {
           hasher,
           loginLimiter,

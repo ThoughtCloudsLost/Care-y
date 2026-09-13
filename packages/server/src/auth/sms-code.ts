@@ -16,7 +16,7 @@ import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, SmsCodesTable } from "../db/types.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
 import type {
-  PhonePurpose,
+  CallerIdResolver,
   OrgIdentifiers,
 } from "../telephony/phone-resolver.js";
 import { RateLimitError, ValidationError } from "../errors.js";
@@ -24,11 +24,6 @@ import { ErrorCode } from "@care-y/shared";
 import type { UserId, SmsCodeId } from "@care-y/shared";
 import { toCount } from "../db/query-utils.js";
 import { createCodeHasher } from "./password.js";
-
-export type CallerIdResolver = (
-  org: OrgIdentifiers,
-  purpose: PhonePurpose,
-) => Promise<string | null>;
 
 const CODE_DIGITS = 6;
 const CODE_MAX = 10 ** CODE_DIGITS; // 1,000,000

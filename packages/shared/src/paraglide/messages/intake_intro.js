@@ -10,7 +10,7 @@ const en_intake_intro = /** @type {(inputs: Intake_IntroInputs) => LocalizedStri
 };
 
 const es_intake_intro = /** @type {(inputs: Intake_IntroInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Estamos aqui para ayudarte. Lo que escribas se cifra en tu dispositivo antes de enviarse.`)
+	return /** @type {LocalizedString} */ (`Estamos aquí para ayudarte. Lo que escribas se cifra en tu dispositivo antes de enviarse.`)
 };
 
 /**

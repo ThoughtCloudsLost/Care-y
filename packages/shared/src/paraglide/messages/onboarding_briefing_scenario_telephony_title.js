@@ -10,7 +10,7 @@ const en_onboarding_briefing_scenario_telephony_title = /** @type {(inputs: Onbo
 };
 
 const es_onboarding_briefing_scenario_telephony_title = /** @type {(inputs: Onboarding_Briefing_Scenario_Telephony_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El proveedor de telefonia es comprometido o citado judicialmente`)
+	return /** @type {LocalizedString} */ (`El proveedor de telefonía es comprometido o citado judicialmente`)
 };
 
 /**

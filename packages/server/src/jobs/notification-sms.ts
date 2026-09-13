@@ -10,7 +10,7 @@ import type { TenantDatabase } from "../db/types.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
 import type {
-  PhonePurpose,
+  CallerIdResolver,
   OrgIdentifiers,
 } from "../telephony/phone-resolver.js";
 import type { JobQueue } from "./queue.js";
@@ -43,10 +43,7 @@ export interface NotificationSmsJobDeps {
   readonly encryptor: FieldEncryptor;
   readonly getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>;
   readonly getProvider: (orgId: OrgId) => Promise<TelephonyProvider>;
-  readonly resolveCallerIdByPurpose: (
-    org: OrgIdentifiers,
-    purpose: PhonePurpose,
-  ) => Promise<string | null>;
+  readonly resolveCallerIdByPurpose: CallerIdResolver;
 }
 
 /**

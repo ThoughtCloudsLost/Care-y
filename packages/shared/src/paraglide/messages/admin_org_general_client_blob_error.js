@@ -10,7 +10,7 @@ const en_admin_org_general_client_blob_error = /** @type {(inputs: Admin_Org_Gen
 };
 
 const es_admin_org_general_client_blob_error = /** @type {(inputs: Admin_Org_General_Client_Blob_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre guardado. La pagina publica de inicio de sesion no se pudo actualizar y mostrara el nombre anterior hasta que se guarde la marca de nuevo.`)
+	return /** @type {LocalizedString} */ (`Nombre guardado. La página pública de inicio de sesión no se pudo actualizar y mostrará el nombre anterior hasta que se guarde la marca de nuevo.`)
 };
 
 /**

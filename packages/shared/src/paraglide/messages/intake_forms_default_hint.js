@@ -10,7 +10,7 @@ const en_intake_forms_default_hint = /** @type {(inputs: Intake_Forms_Default_Hi
 };
 
 const es_intake_forms_default_hint = /** @type {(inputs: Intake_Forms_Default_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Se muestra en /intake cuando no se usa un enlace especifico.`)
+	return /** @type {LocalizedString} */ (`Se muestra en /intake cuando no se usa un enlace específico.`)
 };
 
 /**

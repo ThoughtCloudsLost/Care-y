@@ -99,7 +99,10 @@ const ALSO_REQUIRED = new Set(["OrgsTable.schema_name", "OrgsTable.slug"]);
  * stringly-typed identifier and is skipped structurally.
  */
 const EXEMPT = new Map([
-  // (none yet - add as `["XxxTable.column", "why"]`)
+  [
+    "OprfAuditLogTable.user_id",
+    "Audit subject, not a row reference: holds a user uuid for volunteer and account evaluations or an OPRF tag string for channel evaluations (ADR-091, migration platform/009). No brand exists for the union and it is never joined against.",
+  ],
 ]);
 
 /** Strip wrappers and nullability so `Generated<TicketId> | null` reduces to `TicketId`. */

@@ -3,6 +3,26 @@ import { createSmsSend, type SmsSendConfig } from "./create-sms-send.svelte.js";
 import type * as ToastModule from "$lib/stores/toast.svelte.js";
 import type * as Messages from "$lib/paraglide/messages.js";
 import type * as QueryKeys from "$lib/query/keys.js";
+import type * as SealModule from "$lib/crypto/seal-portal-copy.js";
+
+// vi.mock required: sealPortalCopy imports from @care-y/crypto barrel which
+// triggers libsodium WASM initialization via getSodium(). Stubbing the module
+// keeps the sealed triple deterministic and avoids the WASM penalty.
+const { mockSealPortalCopy } = vi.hoisted(() => ({
+  mockSealPortalCopy: vi.fn((clientPublic: string | null, _text: string) =>
+    clientPublic != null && clientPublic !== ""
+      ? {
+          ephemeralPoint: "ep-sealed",
+          nonce: "n-sealed",
+          ciphertext: "ct-sealed",
+        }
+      : undefined,
+  ),
+}));
+vi.mock("$lib/crypto/seal-portal-copy.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof SealModule>()),
+  sealPortalCopy: mockSealPortalCopy,
+}));
 
 // vi.mock required: toast store is a $state rune module; the test asserts on
 // the show spy. Stub covers the full toastStore surface via satisfies.
@@ -42,6 +62,7 @@ function makeConfig(overrides?: Partial<SmsSendConfig>): SmsSendConfig {
     queryClient: {
       invalidateQueries: vi.fn().mockResolvedValue(undefined),
     } as unknown as SmsSendConfig["queryClient"],
+    getClientPublic: () => null,
     createFollowUpMutate: vi.fn().mockResolvedValue(undefined),
     onSuccess: vi.fn(),
     ...overrides,
@@ -51,6 +72,7 @@ function makeConfig(overrides?: Partial<SmsSendConfig>): SmsSendConfig {
 describe("createSmsSend", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockSealPortalCopy.mockClear();
   });
 
   it("sends SMS via relay, encrypts, creates follow-up, and calls onSuccess", async () => {
@@ -268,5 +290,69 @@ describe("createSmsSend", () => {
 
     expect(toastStore.show).toHaveBeenCalledWith("sms-error", 3000);
     expect(config.onSuccess).not.toHaveBeenCalled();
+  });
+
+  it("includes portalCopy when getClientPublic returns a key", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    );
+
+    const config = makeConfig({
+      getClientPublic: () => "client-pub-b64",
+    });
+    const sms = createSmsSend(config);
+    await sms.handleSmsSend("portal test");
+
+    expect(mockSealPortalCopy).toHaveBeenCalledWith(
+      "client-pub-b64",
+      "portal test",
+    );
+    const mutate = config.createFollowUpMutate as ReturnType<typeof vi.fn>;
+    const args = mutate.mock.calls[0]?.[0] as {
+      portalCopy?: {
+        ephemeralPoint: string;
+        nonce: string;
+        ciphertext: string;
+      };
+      encryptedContent: string;
+    };
+    expect(args.portalCopy).toEqual({
+      ephemeralPoint: "ep-sealed",
+      nonce: "n-sealed",
+      ciphertext: "ct-sealed",
+    });
+    // The portal copy is distinct from the org-encrypted content.
+    expect(args.portalCopy?.ciphertext).not.toBe(args.encryptedContent);
+  });
+
+  it("omits portalCopy when getClientPublic returns null", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    );
+
+    const config = makeConfig();
+    const sms = createSmsSend(config);
+    await sms.handleSmsSend("no portal");
+
+    const mutate = config.createFollowUpMutate as ReturnType<typeof vi.fn>;
+    expect(mutate.mock.calls[0]?.[0]?.portalCopy).toBeUndefined();
+  });
+
+  it("does not call createFollowUpMutate when relay fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 502 }),
+    );
+
+    const config = makeConfig({
+      getClientPublic: () => "client-pub-b64",
+    });
+    const sms = createSmsSend(config);
+    await sms.handleSmsSend("will fail");
+
+    expect(config.createFollowUpMutate).not.toHaveBeenCalled();
+    expect(mockSealPortalCopy).not.toHaveBeenCalled();
   });
 });

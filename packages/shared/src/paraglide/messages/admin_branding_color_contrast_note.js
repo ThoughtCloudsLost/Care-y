@@ -10,7 +10,7 @@ const en_admin_branding_color_contrast_note = /** @type {(inputs: Admin_Branding
 };
 
 const es_admin_branding_color_contrast_note = /** @type {(inputs: Admin_Branding_Color_Contrast_NoteInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los colores finales pueden variar ligeramente. La aplicacion los ajusta automaticamente para legibilidad y contraste.`)
+	return /** @type {LocalizedString} */ (`Los colores finales pueden variar ligeramente. La aplicación los ajusta automáticamente para legibilidad y contraste.`)
 };
 
 /**

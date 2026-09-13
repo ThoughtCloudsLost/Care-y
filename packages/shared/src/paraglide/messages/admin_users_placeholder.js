@@ -10,7 +10,7 @@ const en_admin_users_placeholder = /** @type {(inputs: Admin_Users_PlaceholderIn
 };
 
 const es_admin_users_placeholder = /** @type {(inputs: Admin_Users_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cargando gestion de usuarios...`)
+	return /** @type {LocalizedString} */ (`Cargando gestión de usuarios...`)
 };
 
 /**

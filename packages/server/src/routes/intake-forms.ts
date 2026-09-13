@@ -4,6 +4,10 @@
  * Thin procedures over IntakeFormService, gated with the MANAGE_QUEUES
  * permission. Audit events are dispatched for save, delete, and
  * web-intake-toggle operations.
+ *
+ * The listResponses query and backfillWraps mutation are gated with the
+ * VIEW_INTAKE_RESPONSES permission (high-trust, opt-in) and require
+ * completed 2FA.
  */
 
 import { z } from "zod";
@@ -16,19 +20,36 @@ import {
 import type { OrgContext } from "../trpc/context.js";
 import type { AuditService } from "../tickets/audit.js";
 import type { IntakeFormService } from "../portal/intake-form-service.js";
+import type { IntakeResponseService } from "../portal/intake-response-service.js";
+import type { BlobStore } from "../storage/store.js";
+import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import {
   Permission,
   saveIntakeFormInputSchema,
   intakeFormIdSchema,
+  listIntakeResponsesInputSchema,
+  backfillWrapsInputSchema,
+  logExportInputSchema,
+  uploadFormAssetInputSchema,
 } from "@care-y/shared";
+import { b64 } from "../utils/ciphertext-wire.js";
+import { uploadFormAsset } from "../portal/form-asset-service.js";
+import { TRPCError } from "@trpc/server";
 
 export interface IntakeFormRouterDeps {
   readonly createAuditSvc: (tDb: OrgContext["tenantDb"]) => AuditService;
   readonly intakeFormService: IntakeFormService;
+  readonly intakeResponseService: IntakeResponseService;
+  readonly blobStore: BlobStore;
+  readonly uploadLimiter: RateLimiter;
 }
 
 const queueManagerProcedure = authed2faProcedure.use(
   requireRole(Permission.MANAGE_QUEUES),
+);
+
+const responseViewerProcedure = authed2faProcedure.use(
+  requireRole(Permission.VIEW_INTAKE_RESPONSES),
 );
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -52,7 +73,10 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
         }),
       ),
 
-    /** Create or update a form (whole-form save). */
+    /**
+     * Create or update a form (whole-form save). Returns `{ formId, isActive }`.
+     * A created form is not reachable by the public until `setActive` runs.
+     */
     save: queueManagerProcedure.input(saveIntakeFormInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const result = await deps.intakeFormService.saveForm(
@@ -135,6 +159,175 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
           });
 
           return { ok: true };
+        }),
+      ),
+
+    /** Read the org-level built-in default form enabled flag. */
+    getBuiltinDefaultEnabled: queueManagerProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const enabled = await deps.intakeFormService.isBuiltinDefaultEnabled(
+          ctx.org.tenantDb,
+        );
+        return { enabled };
+      }),
+    ),
+
+    /** Toggle the org-level built-in default form enabled flag. */
+    setBuiltinDefaultEnabled: queueManagerProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          await deps.intakeFormService.setBuiltinDefaultEnabled(
+            ctx.org.tenantDb,
+            input.enabled,
+          );
+
+          const audit = deps.createAuditSvc(ctx.org.tenantDb);
+          void audit.log({
+            eventType: "builtin_default_toggled",
+            actorId: ctx.user.id,
+            metadata: { enabled: input.enabled },
+          });
+
+          return { ok: true };
+        }),
+      ),
+
+    /**
+     * Paginated listing of intake form responses.
+     * Returns ciphertext + wraps only; the server never sees plaintext.
+     * Access is audit-logged (explicit egress surface).
+     */
+    listResponses: responseViewerProcedure
+      .input(listIntakeResponsesInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const page = await deps.intakeResponseService.listResponses(
+            ctx.org.tenantDb,
+            ctx.org.orgSchema,
+            ctx.user.id,
+            input.formId,
+            { cursor: input.cursor, pageSize: input.pageSize },
+          );
+
+          // Audit-log this read (egress surface for encrypted responses)
+          const audit = deps.createAuditSvc(ctx.org.tenantDb);
+          void audit.log({
+            eventType: "intake_responses_viewed",
+            actorId: ctx.user.id,
+            metadata: { formId: input.formId, rowCount: page.rows.length },
+          });
+
+          // Convert Buffer fields to base64url for the wire
+          return {
+            rows: page.rows.map((r) => ({
+              ticketId: r.ticketId,
+              submittedAt: r.submittedAt.toISOString(),
+              encryptedResponse: b64(r.encryptedResponse),
+              callerKeyWrap: r.callerKeyWrap
+                ? {
+                    volunteerId: r.callerKeyWrap.volunteerId,
+                    ephemeralPoint: b64(r.callerKeyWrap.ephemeralPoint),
+                    nonce: b64(r.callerKeyWrap.nonce),
+                    wrappedKey: b64(r.callerKeyWrap.wrappedKey),
+                  }
+                : null,
+              orgSealWrap: r.orgSealWrap
+                ? { wrappedTk: b64(r.orgSealWrap.wrappedTk) }
+                : null,
+              missingPrincipals: r.missingPrincipals,
+            })),
+            nextCursor: page.nextCursor,
+            total: page.total,
+          };
+        }),
+      ),
+
+    /**
+     * Lazy wrap backfill: accepts client-minted ECIES wraps for
+     * principals missing ticket key wraps. Idempotent.
+     */
+    backfillWraps: responseViewerProcedure
+      .input(backfillWrapsInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const result = await deps.intakeResponseService.backfillWraps(
+            ctx.org.tenantDb,
+            ctx.org.orgSchema,
+            ctx.user.id,
+            {
+              ticketId: input.ticketId,
+              wraps: input.wraps.map((w) => ({
+                ticketId: input.ticketId,
+                volunteerId: w.volunteerId,
+                ephemeralPoint: Buffer.from(w.ephemeralPoint, "base64"),
+                nonce: Buffer.from(w.nonce, "base64"),
+                wrappedKey: Buffer.from(w.wrappedKey, "base64"),
+              })),
+            },
+          );
+
+          return result;
+        }),
+      ),
+
+    /**
+     * Record a CSV export audit event. Called by the client before
+     * the browser download fires. Carries counts and formId only,
+     * never exported content.
+     */
+    logExport: responseViewerProcedure.input(logExportInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const audit = deps.createAuditSvc(ctx.org.tenantDb);
+        await audit.log({
+          eventType: "intake_responses_exported",
+          actorId: ctx.user.id,
+          metadata: {
+            formId: input.formId,
+            exportedCount: input.exportedCount,
+            skippedCount: input.skippedCount,
+          },
+        });
+
+        return { ok: true };
+      }),
+    ),
+
+    /**
+     * Upload an encrypted form asset image (banner or inline rich-text image).
+     * Stores the blob under the form-asset/ namespace in BlobStore and records
+     * metadata for the serving handler.
+     */
+    uploadFormAsset: queueManagerProcedure
+      .input(uploadFormAssetInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const rateResult = deps.uploadLimiter.check(ctx.user.id);
+          if (!rateResult.allowed) {
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: `Upload rate limited. Retry after ${String(Math.ceil(rateResult.retryAfterMs / 1000))}s`,
+            });
+          }
+
+          const blobBuffer = Buffer.from(input.blob, "base64");
+          const result = await uploadFormAsset(
+            ctx.org.tenantDb,
+            deps.blobStore,
+            ctx.org.orgSchema,
+            blobBuffer,
+            input.sizeBytes,
+            input.contentType,
+          );
+
+          const audit = deps.createAuditSvc(ctx.org.tenantDb);
+          void audit.log({
+            eventType: "form_asset_uploaded",
+            actorId: ctx.user.id,
+            metadata: { blobId: result.blobId },
+          });
+
+          return { blobKey: result.blobKey, blobId: result.blobId };
         }),
       ),
   });

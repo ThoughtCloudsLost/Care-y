@@ -21,7 +21,10 @@ const demoAvailable =
 export default defineConfig({
   test: {
     pool: "threads",
-    maxThreads: process.env.CI ? undefined : 2,
+    // Local runs cap worker count so a full suite does not exhaust an 8 GB
+    // machine. Each worker holds its own jsdom environment, so the default
+    // (one per core) pushes the host into swap. CI runs uncapped.
+    maxWorkers: process.env.CI ? undefined : 2,
     coverage: {
       exclude: [
         ...coverageConfigDefaults.exclude,

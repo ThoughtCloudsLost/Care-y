@@ -116,6 +116,26 @@
     }
   }
 
+  /* The Konsta shell itself needs the same treatment: it hides its closed
+     state by translating one own-height below its centered (top-1/2)
+     position, which lands inside the viewport once the window is taller
+     than ~1280px, painting a stray popup-sized square below the fold.
+     Konsta marks the closed state with translate-y-full, so key off that
+     class and keep the slide-out transition alive by re-declaring the
+     transform longhands the visibility delay would otherwise clobber. */
+  :global(.k-popup.shell-popup.translate-y-full) {
+    visibility: hidden;
+    transition-property: transform, translate, visibility;
+    transition-duration: 400ms, 400ms, 0s;
+    transition-delay: 0s, 0s, var(--anim-overlay-outro, 400ms);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(.k-popup.shell-popup.translate-y-full) {
+      transition-delay: 0s;
+    }
+  }
+
   .popup-scroll {
     flex: 1;
     min-height: 0;

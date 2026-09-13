@@ -10,7 +10,7 @@ const en_onboarding_briefing_diagram_caption = /** @type {(inputs: Onboarding_Br
 };
 
 const es_onboarding_briefing_diagram_caption = /** @type {(inputs: Onboarding_Briefing_Diagram_CaptionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Como tu contrasena se convierte en claves de cifrado`)
+	return /** @type {LocalizedString} */ (`Como tu contraseña se convierte en claves de cifrado`)
 };
 
 /**

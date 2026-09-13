@@ -1,12 +1,25 @@
 /**
- * Client-side account crypto. Runs on the main thread.
+ * Client-side account crypto utilities that remain on the main thread.
  *
- * The account page has no Worker and no CryptoBridge (the (client)
- * surface never imports volunteer session machinery). All key material
- * lives in module-scope closures, zeroed on quick exit, logout, idle
- * timeout, and pagehide. Same main-thread justification as
- * portal-crypto.ts: no session secrets to protect, plaintext is
- * already in the DOM.
+ * ADR-091 posture: key custody lives in the portal Worker (portal-core.ts).
+ * The main thread holds no account key material after session start. This
+ * module retains only:
+ *
+ *   - buildAccountRegistration: mint-like path that assembles a registration
+ *     payload from scratch. Stays main-thread because its output is the
+ *     wire payload (salt, publicKey, authHash, keyCheck), so worker custody
+ *     buys nothing; the keypair is zeroed in the caller's finally block.
+ *   - rewrapMessages: re-encrypts already-decrypted messages to a new
+ *     public key. Operates on plaintext strings the session already
+ *     decrypted, never re-fetches ciphertext. Stays main-thread for the
+ *     same reason.
+ *   - Type exports consumed by callers.
+ *
+ * Functions that moved into the portal worker and are consumed via the
+ * bridge: accountLogin pipeline (Argon2id, OPRF, derive), deriveAuthProof.
+ * The login/registration mutations and Set-Cookie handling stay on the
+ * main thread, consuming the returned authToken and clientPublic from
+ * the bridge.
  */
 
 import {
@@ -19,31 +32,18 @@ import {
   PORTAL_KEY_CHECK,
   encode,
   decode,
-  requireSodium,
   zeroAll,
   generateSalt,
-  type PortalKeypair,
   type RistrettoPoint,
   type EciesOutput,
-  type ClientAccountKeys,
-  toSalt,
   toRistrettoPoint,
 } from "@care-y/crypto";
-import { trpc } from "$lib/trpc/index.js";
-import { requireRouter } from "$lib/errors.js";
 import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/** Live account session. The page holds one of these in module scope. */
-export interface AccountSession {
-  readonly keypair: PortalKeypair;
-  /** Zero clientPrivate. Called by quick exit, logout, idle timeout, pagehide. */
-  destroy(): void;
-}
 
 /** Wire-ready registration payload matching accountRegistrationSchema. */
 export interface AccountRegistrationWire {
@@ -70,164 +70,10 @@ export interface RewrappedMessageWire {
 }
 
 // ---------------------------------------------------------------------------
-// accountLogin
+// buildAccountRegistration
 // ---------------------------------------------------------------------------
 
 const textEncoder = new TextEncoder();
-
-/**
- * Login pipeline: getAccountSalt -> deriveAccountKey (Argon2id) ->
- * oprfBlind -> evaluateWithPowRetry -> oprfFinalize ->
- * deriveClientAccountKeys -> accountLogin mutation.
- *
- * Cookie lands via Set-Cookie; nothing token-shaped returns in the body.
- * Progress phases via LoginCryptoCallbacks. zeroAll in finally; keypair
- * ownership transfers to the returned AccountSession.
- *
- * A login failure (generic UNAUTHORIZED) zeroes everything and throws.
- */
-export async function accountLogin(
-  username: string,
-  password: string,
-  callbacks: LoginCryptoCallbacks,
-): Promise<AccountSession> {
-  const { accountId, keys } = await runDerivationPipeline(
-    username,
-    password,
-    callbacks,
-  );
-
-  try {
-    // Login mutation: send auth token, cookie arrives via Set-Cookie
-    const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
-    await portalRouter.accountLogin.mutate({
-      accountId,
-      authToken: encode(keys.authToken),
-    });
-  } catch (err) {
-    requireSodium().memzero(keys.keypair.clientPrivate);
-    throw err;
-  } finally {
-    zeroAll(keys.authToken);
-  }
-
-  callbacks.onDone();
-
-  // Keypair ownership transfers to the session
-  let destroyed = false;
-  const session: AccountSession = {
-    keypair: keys.keypair,
-    destroy(): void {
-      if (destroyed) return;
-      destroyed = true;
-      const sodium = requireSodium();
-      sodium.memzero(keys.keypair.clientPrivate);
-    },
-  };
-
-  return session;
-}
-
-/**
- * Proof of knowledge of the current password, used by change-password.
- * The caller encodes authToken for the wire and MUST call destroy()
- * when done (zeroes the token bytes and the derived private key).
- */
-export interface AccountAuthProof {
-  readonly accountId: string;
-  readonly authToken: Uint8Array;
-  readonly keypair: PortalKeypair;
-  destroy(): void;
-}
-
-/**
- * Runs the login derivation pipeline without the login mutation.
- * Change-password uses this to produce currentAuthToken and to verify
- * the key check against the current keypair before any state changes.
- */
-export async function deriveAuthProof(
-  username: string,
-  password: string,
-  callbacks: LoginCryptoCallbacks,
-): Promise<AccountAuthProof> {
-  const { accountId, keys } = await runDerivationPipeline(
-    username,
-    password,
-    callbacks,
-  );
-
-  let destroyed = false;
-  return {
-    accountId,
-    authToken: keys.authToken,
-    keypair: keys.keypair,
-    destroy(): void {
-      if (destroyed) return;
-      destroyed = true;
-      const sodium = requireSodium();
-      sodium.memzero(keys.authToken);
-      sodium.memzero(keys.keypair.clientPrivate);
-    },
-  };
-}
-
-/**
- * Shared salt -> Argon2id -> OPRF -> derive pipeline (steps 1-5 of the
- * login flow). Zeroes the stretched key and OPRF output before returning;
- * ownership of the derived keys transfers to the caller.
- */
-async function runDerivationPipeline(
-  username: string,
-  password: string,
-  callbacks: LoginCryptoCallbacks,
-): Promise<{ accountId: string; keys: ClientAccountKeys }> {
-  let stretched: Uint8Array | null = null;
-  let oprfOutput: Uint8Array | null = null;
-
-  try {
-    // 1. Get salt + accountId from server (fake-salt defense for unknowns)
-    const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
-    const { salt: saltB64, accountId } =
-      await portalRouter.getAccountSalt.query({ username });
-    const saltBytes = decode(saltB64);
-
-    // 2. Argon2id (floor-enforced params)
-    callbacks.onArgon2idStart();
-    const passwordBytes = textEncoder.encode(password);
-    stretched = deriveAccountKey(passwordBytes, toSalt(saltBytes));
-    callbacks.onArgon2idDone();
-
-    // 3. OPRF blind
-    callbacks.onOprfStart();
-    const { blindedElement, blindState } = oprfBlind(stretched);
-
-    // 4. OPRF evaluate via tRPC (with automatic PoW retry)
-    const evaluatedB64 = await evaluateWithPowRetry(
-      accountId,
-      encode(blindedElement),
-      callbacks.onPowRequired,
-    );
-    callbacks.onOprfDone();
-
-    // 5. OPRF finalize + key derivation
-    callbacks.onDeriveStart();
-    const evaluatedBytes = decode(evaluatedB64);
-    oprfOutput = oprfFinalize(
-      blindState,
-      toRistrettoPoint(evaluatedBytes),
-      stretched,
-    );
-    const keys = deriveClientAccountKeys(oprfOutput);
-
-    return { accountId, keys };
-  } finally {
-    zeroAll(stretched, oprfOutput);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// buildAccountRegistration
-// ---------------------------------------------------------------------------
 
 /**
  * Registration assembly shared by the intake opt-in step, the in-portal
@@ -247,7 +93,10 @@ export async function buildAccountRegistration(
   password: string,
   accountId: string | null,
   callbacks: LoginCryptoCallbacks,
-): Promise<{ payload: AccountRegistrationWire; keypair: PortalKeypair }> {
+): Promise<{
+  payload: AccountRegistrationWire;
+  keypair: { clientPublic: RistrettoPoint; clientPrivate: Uint8Array };
+}> {
   let stretched: Uint8Array | null = null;
   let oprfOutput: Uint8Array | null = null;
   let authToken: Uint8Array | null = null;
@@ -268,6 +117,7 @@ export async function buildAccountRegistration(
 
     // 3. OPRF evaluate
     const evaluatedB64 = await evaluateWithPowRetry(
+      "account",
       resolvedAccountId,
       encode(blindedElement),
       callbacks.onPowRequired,

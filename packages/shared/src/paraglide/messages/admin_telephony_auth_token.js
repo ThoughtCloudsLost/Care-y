@@ -10,7 +10,7 @@ const en_admin_telephony_auth_token = /** @type {(inputs: Admin_Telephony_Auth_T
 };
 
 const es_admin_telephony_auth_token = /** @type {(inputs: Admin_Telephony_Auth_TokenInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Token de autenticacion`)
+	return /** @type {LocalizedString} */ (`Token de autenticación`)
 };
 
 /**

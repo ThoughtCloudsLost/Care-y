@@ -10,7 +10,7 @@ const en_admin_blocklist_filter = /** @type {(inputs: Admin_Blocklist_FilterInpu
 };
 
 const es_admin_blocklist_filter = /** @type {(inputs: Admin_Blocklist_FilterInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Filtrar numeros bloqueados...`)
+	return /** @type {LocalizedString} */ (`Filtrar números bloqueados...`)
 };
 
 /**

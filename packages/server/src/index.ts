@@ -69,7 +69,9 @@ import { createWebhookHandler } from "./routes/webhooks.js";
 import { createTelephonyContentService } from "./telephony/telephony-content-service.js";
 import { createGreetingAudioHandler } from "./routes/greeting-audio.js";
 import { createBrandingIconHandler } from "./routes/branding-icons.js";
+import { createFormAssetHandler } from "./routes/form-assets.js";
 import { createBlobDownloadHandler } from "./routes/blob-download.js";
+import { withNoStore } from "./http/response-headers.js";
 import { createManifestHandler } from "./routes/manifest.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
 import { authenticateRelay, type OrgResolved } from "./routes/relay-utils.js";
@@ -98,6 +100,7 @@ import {
   type PendingClient,
 } from "./tickets/ticket-service.js";
 import { createFollowUpService } from "./tickets/followup-service.js";
+import { portalReplyChannelKey } from "./routes/client-portal.js";
 import { createReadCursorService } from "./tickets/read-cursor-service.js";
 import { createMergeService } from "./tickets/merge-service.js";
 import { createPresetService } from "./tickets/preset-service.js";
@@ -138,6 +141,7 @@ import {
 import { createKBMediaService } from "./kb/kb-media-service.js";
 import { createClientService } from "./clients/client-service.js";
 import { createIntakeFormService } from "./portal/intake-form-service.js";
+import { createIntakeResponseService } from "./portal/intake-response-service.js";
 import * as portalChannelService from "./portal/channel-service.js";
 import * as portalMessageService from "./portal/portal-message-service.js";
 import {
@@ -155,6 +159,10 @@ import {
   DEFAULT_ESCALATION_RULES_INTERVAL_MS,
 } from "./jobs/escalation-checker.js";
 import { ensureRecurringJob } from "./jobs/ensure-recurring.js";
+import {
+  registerOutboxDrainHandler,
+  OUTBOX_DRAIN_QUEUE,
+} from "./jobs/notification-outbox-drain.js";
 import {
   runEscalationCheck,
   type EscalationServiceDeps,
@@ -300,6 +308,7 @@ const RATE_PASSWORD_CHANGE_MAX = 5;
 const RATE_UPLOAD_MAX = 3;
 const RATE_KB_UPLOAD_MAX = 5;
 const RATE_BRANDING_UPLOAD_MAX = 3;
+const RATE_FORM_ASSET_UPLOAD_MAX = 5;
 const RATE_BOOTSTRAP_MAX = getEnv().NODE_ENV === "production" ? 2 : 20;
 
 // Portal read: 60 req/hour per IP. A 5-minute polling interval uses 12/hr.
@@ -307,21 +316,44 @@ const RATE_BOOTSTRAP_MAX = getEnv().NODE_ENV === "production" ? 2 : 20;
 // CGNAT-shared IPs where multiple clients behind the same NAT share
 // one public IP.
 const RATE_PORTAL_READ_MAX = 60;
-// Portal reply: 30 req/hour per IP. Reply writes 3 DB rows per call
-// (follow-up + portal wrap + portal message), so a lower cap limits
-// storage DoS from a single source.
+// Portal reply: 30 replies/hour per CHANNEL. Reply writes 3 DB rows per
+// call (follow-up + portal wrap + portal message), so a cap bounds
+// storage DoS. Channel keying makes the limit mean "messages on this
+// conversation", and an org reply resets the window (onPortalOrgReply
+// below), so an active two-sided conversation is never cut off.
 const RATE_PORTAL_REPLY_MAX = 30;
+// Portal reply IP layer: 60/hour per IP counting only writes to channels
+// with no org reply in the last hour. Double the channel cap, so two
+// not-yet-answered conversations from one IP still fit; spraying many
+// dormant channels trips it. Engaged conversations bypass it entirely,
+// keeping every reply limit liftable by org engagement. The same
+// limiter instance also carries the "authgate:" failed-auth flood
+// namespace and the "upgrade:" one-shot account-upgrade cap.
+const RATE_PORTAL_REPLY_IP_MAX = 60;
 
 // Share open: 10 req/min per IP. Defense in depth on the public consume
 // endpoint. UUIDv4 ids (122 random bits) make enumeration infeasible;
 // the limiter caps probe volume and log noise.
 const RATE_SHARE_OPEN_MAX = 10;
 
-// Account salt + login: 10 req/hour per IP each. Online guessing is
-// already throttled at the OPRF step; these bound salt-endpoint
-// scraping and login spam independently.
-const RATE_ACCOUNT_SALT_MAX = 10;
-const RATE_ACCOUNT_LOGIN_MAX = 10;
+// Account salt + login: 10 req/hour per IP each in production. Online
+// guessing is already throttled at the OPRF step; these bound
+// salt-endpoint scraping and login spam independently. Outside
+// production the caps are raised (same reasoning as RATE_BOOTSTRAP_MAX):
+// e2e browser projects share one IP and burn through 10/hour in one
+// suite pass.
+const RATE_ACCOUNT_SALT_MAX = getEnv().NODE_ENV === "production" ? 10 : 200;
+const RATE_ACCOUNT_LOGIN_MAX = getEnv().NODE_ENV === "production" ? 10 : 200;
+
+// Intake challenge: 10 req/hour per IP in production, raised in dev for
+// the same shared-IP reason (each intake submission fetches a challenge).
+const RATE_INTAKE_CHALLENGE_MAX = getEnv().NODE_ENV === "production" ? 10 : 200;
+
+// Portal reseed: authenticated volunteer operation. 120 chunks/min bounds
+// throughput without blocking a large thread from finishing promptly.
+const RATE_RESEED_MAX = 120;
+// Blob conversion: heavier (re-stores full blobs). 30/min per user.
+const RATE_RESEED_BLOB_MAX = 30;
 
 // --- Rate limiters ---
 
@@ -531,6 +563,17 @@ const pendingClients = new Map<string, PendingClient>();
 // accepted on either path is burned for both (RFC 6238 Section 5.2).
 const totpReplayCache = createTotpReplayCache();
 
+// Named outside the deps literal: the ticket router's org-reply hook
+// resets the same instance the client-portal reply paths consume.
+const portalReplyLimiter = createInMemoryRateLimiter({
+  windowMs: RATE_WINDOW_1H,
+  maxRequests: RATE_PORTAL_REPLY_MAX,
+});
+const portalReplyIpLimiter = createInMemoryRateLimiter({
+  windowMs: RATE_WINDOW_1H,
+  maxRequests: RATE_PORTAL_REPLY_IP_MAX,
+});
+
 const appRouter = createAppRouter({
   authDeps: {
     hasher,
@@ -570,6 +613,10 @@ const appRouter = createAppRouter({
   oprfDeps: { oprfService },
   orgService,
   providerFactory,
+  // Both take no deps. Previously mounted by omission; stated now so the
+  // full set of mounted routers is readable from this one call.
+  consultant: true,
+  reports: true,
   telephonyAdminDeps: {
     configService: telephonyConfigService,
     webhookBaseUrl: env.WEBHOOK_BASE_URL,
@@ -588,6 +635,13 @@ const appRouter = createAppRouter({
     createTicketAccess: createTicketAccessChecker,
     createTicketSvc: createTicketService,
     createFollowUpSvc: createFollowUpService,
+    followUpServiceDeps: {
+      // An org reply on a channel clears that channel's portal reply
+      // window, so a volunteer answering always unblocks the client.
+      onPortalOrgReply: (channelRowId) => {
+        portalReplyLimiter.reset(portalReplyChannelKey(channelRowId));
+      },
+    },
     createReadCursorSvc: createReadCursorService,
     createMergeSvc: createMergeService,
     createPresetSvc: createPresetService,
@@ -607,6 +661,14 @@ const appRouter = createAppRouter({
     notificationService,
     fieldEncryptor: encryptor,
     pendingClients,
+    reseedLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_RESEED_MAX,
+    }),
+    reseedBlobLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_RESEED_BLOB_MAX,
+    }),
   },
   kbDeps: {
     createCategorySvc: createKBCategoryService,
@@ -630,15 +692,22 @@ const appRouter = createAppRouter({
   intakeFormDeps: {
     createAuditSvc: (tDb) => createAuditService(tDb),
     intakeFormService: createIntakeFormService({ fieldEncryptor: encryptor }),
+    intakeResponseService: createIntakeResponseService(),
+    blobStore,
+    uploadLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_FORM_ASSET_UPLOAD_MAX,
+    }),
   },
   clientPortalDeps: {
+    blobStore,
     submissionLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,
       maxRequests: env.INTAKE_SUBMISSION_LIMIT,
     }),
     challengeLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,
-      maxRequests: 10,
+      maxRequests: RATE_INTAKE_CHALLENGE_MAX,
     }),
     powVerifier:
       env.INTAKE_POW_DIFFICULTY > 0
@@ -657,15 +726,15 @@ const appRouter = createAppRouter({
     portalMessageService: {
       bootstrap: portalMessageService.bootstrap,
       clientReply: portalMessageService.clientReply,
+      listMessages: portalMessageService.listMessages,
+      hasRecentOrgReply: portalMessageService.hasRecentOrgReply,
     },
     portalReadLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,
       maxRequests: RATE_PORTAL_READ_MAX,
     }),
-    portalReplyLimiter: createInMemoryRateLimiter({
-      windowMs: RATE_WINDOW_1H,
-      maxRequests: RATE_PORTAL_REPLY_MAX,
-    }),
+    portalReplyLimiter,
+    portalReplyIpLimiter,
     portalGetProvider: async (orgId: OrgId) =>
       providerFactory.getProvider(orgId),
     portalResolveCallerId: phoneResolver,
@@ -686,6 +755,8 @@ const appRouter = createAppRouter({
       windowMs: RATE_WINDOW_1H,
       maxRequests: RATE_ACCOUNT_LOGIN_MAX,
     }),
+    // Channel OPRF deps (ADR-091)
+    oprfService,
   },
   brandingDeps: {
     blobStore,
@@ -732,17 +803,29 @@ const appRouter = createAppRouter({
       return (row?.cnt ?? 0) > 0;
     },
   },
-  devDeps: env.NODE_ENV !== "production" ? { blobStore } : undefined,
+  devDeps: env.NODE_ENV !== "production" ? { blobStore } : null,
 });
 
 export type AppRouter = typeof appRouter;
+
+// Which API surfaces this process actually serves. The deps type makes an
+// omitted router a compile error, but a router wired behind a runtime
+// condition (devDeps below) compiles either way, so state the result.
+// Router names only: nothing here is tenant-scoped or request-derived.
+console.log(
+  `Routers mounted: ${Object.keys(appRouter._def.record).sort().join(", ")}`,
+);
 
 const cors = buildCorsHeaders(env.CORS_ORIGIN);
 const trpcHandler = createHTTPHandler({
   router: appRouter,
   createContext,
+  // Every tRPC response is uncacheable: without an explicit Cache-Control,
+  // browsers apply heuristic caching (RFC 9111 4.2.2, SEC-228), which
+  // both serves stale threads and leaves ciphertext in disk caches.
+  // See http/response-headers.ts.
   responseMeta() {
-    return { headers: cors.base };
+    return { headers: withNoStore(cors.base) };
   },
 });
 
@@ -872,11 +955,28 @@ registerPortalExpiryHandler(jobQueue, async () => {
 
 registerShareCleanupHandler(jobQueue, tenantDb, listActiveOrgSchemas);
 
+// Notification outbox drain: polls tenant outbox tables for durable
+// intake notification dispatch (~5 second interval).
+registerOutboxDrainHandler(jobQueue, {
+  listActiveOrgs: listActiveOrgSchemasWithSlugs,
+  getTenantDb: tenantDb,
+  buildDrainDeps: (org) => ({
+    notificationService,
+    fieldEncryptor: encryptor,
+    orgId: org.id,
+    orgSchema: org.schema,
+    orgSlug: org.slug,
+    createTicketAccess: (tDb) => createTicketAccessChecker(tDb),
+    createWatchersSvc: (tDb, access) => createWatchersService(tDb, access),
+  }),
+});
+
 await ensureRecurringJob(db, jobQueue, ESCALATION_RULES_QUEUE);
 await ensureRecurringJob(db, jobQueue, ESCALATION_QUEUE);
 await ensureRecurringJob(db, jobQueue, MEDIA_CLEANUP_QUEUE);
 await ensureRecurringJob(db, jobQueue, PORTAL_EXPIRY_QUEUE);
 await ensureRecurringJob(db, jobQueue, SHARE_CLEANUP_QUEUE);
+await ensureRecurringJob(db, jobQueue, OUTBOX_DRAIN_QUEUE);
 jobQueue.start();
 console.log("Job queue started");
 
@@ -1097,6 +1197,13 @@ const brandingIconHandler = createBrandingIconHandler({
   corsHeaders: cors.base,
 });
 
+const formAssetHandler = createFormAssetHandler({
+  blobStore,
+  orgService,
+  corsHeaders: cors.base,
+  createTenantDb: (orgSchema) => tenantDb(orgSchema),
+});
+
 const blobDownloadHandler = createBlobDownloadHandler({
   blobStore,
   orgResolver: relayOrgResolver,
@@ -1127,6 +1234,7 @@ const server = createHttpServer(trpcHandler, cors.preflight, [
   { prefix: "/notifications/stream", handler: handleSse },
   { prefix: "/api/greetings/", handler: greetingAudioHandler },
   { prefix: "/api/blobs/", handler: blobDownloadHandler },
+  { prefix: "/api/forms/", handler: formAssetHandler },
   { prefix: "/api/branding/", handler: brandingIconHandler },
   { prefix: "/manifest.webmanifest", handler: manifestHandler },
 ]);

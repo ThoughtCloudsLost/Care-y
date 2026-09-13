@@ -2,6 +2,10 @@ import type { QueryClient } from "@tanstack/svelte-query";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { RateLimitError, RelayError } from "$lib/errors.js";
 import { followupSlot } from "@care-y/crypto";
+import {
+  sealPortalCopy,
+  type PortalCopy,
+} from "$lib/crypto/seal-portal-copy.js";
 import { newFollowupId } from "@care-y/shared";
 import { ticketKeys } from "$lib/query/keys.js";
 import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
@@ -12,6 +16,12 @@ export interface SmsSendConfig {
   readonly getTicketId: () => string;
   readonly cryptoBridge: CryptoBridge;
   readonly queryClient: QueryClient;
+  /**
+   * Base64 client public key from the active portal channel, or null.
+   * When present, the message also gets an ECIES client copy so the
+   * client can read the reply in the portal (dual-copy write).
+   */
+  readonly getClientPublic: () => string | null;
   readonly createFollowUpMutate: (args: {
     id: string;
     ticketId: string;
@@ -20,6 +30,7 @@ export interface SmsSendConfig {
     type: "sms_outbound";
     isPrivate: false;
     mentionedPseudonyms: never[];
+    portalCopy?: PortalCopy;
   }) => Promise<unknown>;
   readonly onSuccess: () => void;
 }
@@ -34,6 +45,7 @@ export function createSmsSend(config: SmsSendConfig): SmsSend {
     getTicketId,
     cryptoBridge,
     queryClient,
+    getClientPublic,
     createFollowUpMutate,
     onSuccess,
   } = config;
@@ -62,11 +74,15 @@ export function createSmsSend(config: SmsSendConfig): SmsSend {
       if (!resp.ok) throw new RelayError("SMS_FAILED", resp.status);
 
       const followUpId = newFollowupId();
+      const trimmed = body.trim();
       const encryptedContent = await cryptoBridge.encrypt(
         ticketId,
         followupSlot(followUpId),
-        body.trim(),
+        trimmed,
       );
+
+      const portalCopy = sealPortalCopy(getClientPublic(), trimmed);
+
       await createFollowUpMutate({
         id: followUpId,
         ticketId,
@@ -75,6 +91,7 @@ export function createSmsSend(config: SmsSendConfig): SmsSend {
         type: "sms_outbound",
         isPrivate: false,
         mentionedPseudonyms: [],
+        portalCopy,
       });
 
       onSuccess();

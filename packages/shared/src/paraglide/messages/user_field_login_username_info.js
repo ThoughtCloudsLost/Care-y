@@ -10,7 +10,7 @@ const en_user_field_login_username_info = /** @type {(inputs: User_Field_Login_U
 };
 
 const es_user_field_login_username_info = /** @type {(inputs: User_Field_Login_Username_InfoInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Se usa para iniciar sesion. No uses tu nombre real ni correo electronico. Letras minusculas, digitos, puntos, guiones o guiones bajos.`)
+	return /** @type {LocalizedString} */ (`Se usa para iniciar sesión. No uses tu nombre real ni correo electrónico. Letras minúsculas, dígitos, puntos, guiones o guiones bajos.`)
 };
 
 /**

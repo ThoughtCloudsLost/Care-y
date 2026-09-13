@@ -28,6 +28,21 @@ export interface OrgIdentifiers {
   readonly orgSchema: OrgSchema;
 }
 
+/**
+ * Resolves the org's caller ID for a purpose, or null when the org has no
+ * provisioned numbers.
+ *
+ * Every dependency group that takes this resolver declares it with this type.
+ * The number is branded `E164` end to end: `createPhoneResolver` is the only
+ * implementation, it reads numbers already branded by the provider config, and
+ * consumers pass the result straight to a telephony provider. Redeclaring the
+ * shape locally is what let a bare `string` back in.
+ */
+export type CallerIdResolver = (
+  org: OrgIdentifiers,
+  purpose: PhonePurpose,
+) => Promise<E164 | null>;
+
 export interface PhoneResolverDeps {
   /** Read org_config phone purpose SIDs from the tenant schema. */
   readonly getOrgConfig: (orgSchema: OrgSchema) => Promise<{
@@ -54,9 +69,7 @@ export interface PhoneResolverDeps {
  * The fallback chain ensures existing orgs keep working without
  * reconfiguration when new purposes are added.
  */
-export function createPhoneResolver(
-  deps: PhoneResolverDeps,
-): (org: OrgIdentifiers, purpose: PhonePurpose) => Promise<E164 | null> {
+export function createPhoneResolver(deps: PhoneResolverDeps): CallerIdResolver {
   return async function resolveCallerIdByPurpose(
     org: OrgIdentifiers,
     purpose: PhonePurpose,

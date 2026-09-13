@@ -10,7 +10,7 @@ const en_admin_telephony_managed_note = /** @type {(inputs: Admin_Telephony_Mana
 };
 
 const es_admin_telephony_managed_note = /** @type {(inputs: Admin_Telephony_Managed_NoteInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Su servicio telefonico es gestionado por la plataforma. Contacte a su administrador para realizar cambios.`)
+	return /** @type {LocalizedString} */ (`Su servicio telefónico es gestionado por la plataforma. Contacte a su administrador para realizar cambios.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_error_username_already_taken = /** @type {(inputs: Error_Username_Alrea
 };
 
 const es_error_username_already_taken = /** @type {(inputs: Error_Username_Already_TakenInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este usuario de inicio de sesion ya esta en uso.`)
+	return /** @type {LocalizedString} */ (`Este usuario de inicio de sesión ya está en uso.`)
 };
 
 /**

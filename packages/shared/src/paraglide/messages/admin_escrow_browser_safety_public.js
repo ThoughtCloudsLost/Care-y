@@ -10,7 +10,7 @@ const en_admin_escrow_browser_safety_public = /** @type {(inputs: Admin_Escrow_B
 };
 
 const es_admin_escrow_browser_safety_public = /** @type {(inputs: Admin_Escrow_Browser_Safety_PublicInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No haga esto en una computadora compartida o publica`)
+	return /** @type {LocalizedString} */ (`No haga esto en una computadora compartida o pública`)
 };
 
 /**

@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import { filenameSlot } from "@care-y/crypto";
+  import { buildRecordingDecrypt } from "$lib/tickets/recording-decrypt.js";
   import { Block, BlockTitle } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import MmsImage from "$lib/components/tickets/MmsImage.svelte";
@@ -105,6 +106,8 @@
     attachments.filter((a) => a.contentType?.startsWith("image/") !== true),
   );
 
+  // --- Recording decrypt callback (ADR-092) ---
+
   // --- File download ---
 
   const downloadingFiles = new SvelteSet<string>();
@@ -135,9 +138,14 @@
     {#each recordings as rec (rec.id)}
       <div class="voicemail-row">
         <VoicemailPlayer
-          recordingId={rec.id}
-          {ticketId}
-          {keyWrap}
+          blobUrl={`/api/blobs/recordings/${rec.id}`}
+          decrypt={buildRecordingDecrypt(
+            bridge,
+            ticketId,
+            keyWrap,
+            rec.id,
+            rec.fileKeyWrap,
+          )}
           durationSeconds={rec.durationSeconds}
         />
         <span class="media-time">
@@ -175,6 +183,7 @@
             attachmentId={att.id}
             {ticketId}
             {keyWrap}
+            {bridge}
             alt={m.ticket_mms_image()}
             onopen={(url: string) => onlightbox?.(url)}
           />

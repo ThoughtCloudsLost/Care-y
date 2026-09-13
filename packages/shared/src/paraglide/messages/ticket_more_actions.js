@@ -10,7 +10,7 @@ const en_ticket_more_actions = /** @type {(inputs: Ticket_More_ActionsInputs) =>
 };
 
 const es_ticket_more_actions = /** @type {(inputs: Ticket_More_ActionsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mas acciones`)
+	return /** @type {LocalizedString} */ (`Más acciones`)
 };
 
 /**

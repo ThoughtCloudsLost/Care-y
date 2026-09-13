@@ -10,7 +10,7 @@ const en_admin_telephony_system_messages = /** @type {(inputs: Admin_Telephony_S
 };
 
 const es_admin_telephony_system_messages = /** @type {(inputs: Admin_Telephony_System_MessagesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Textos automaticos`)
+	return /** @type {LocalizedString} */ (`Textos automáticos`)
 };
 
 /**

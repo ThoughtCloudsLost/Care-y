@@ -8,9 +8,13 @@ import type * as IntakeFormCrypto from "$lib/portal/intake-form-crypto.js";
 import type * as CryptoPkg from "@care-y/crypto";
 import type * as PowSolver from "$lib/auth/pow-solver.js";
 import type * as AnnounceModule from "$lib/utils/announce.js";
+import type * as ParaglideRuntime from "$lib/paraglide/runtime.js";
 
 // --- Controllable mock state ---
 
+// vi.hoisted: the ui-locale store calls getLocale() at module scope, so
+// the mock factory runs before top-level let declarations initialize.
+const localeState = vi.hoisted(() => ({ current: "en" }));
 let mockOrgKey: Uint8Array | null = new Uint8Array(32);
 let mockOrgKeyLoading = false;
 let mockPowRequired = false;
@@ -94,7 +98,11 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => {
   };
 });
 
-const { mockEncryptIntake, mockBuildAccountPayload } = vi.hoisted(() => ({
+const {
+  mockEncryptIntake,
+  mockBuildAccountPayload,
+  mockBuildContinuationPayload,
+} = vi.hoisted(() => ({
   mockEncryptIntake: vi.fn().mockReturnValue({
     encryptedTitle: "enc-title",
     encryptedDescription: "enc-desc",
@@ -114,12 +122,27 @@ const { mockEncryptIntake, mockBuildAccountPayload } = vi.hoisted(() => ({
       ciphertext: "ct",
     },
   }),
+  mockBuildContinuationPayload: vi.fn().mockReturnValue({
+    payload: {
+      channelId: "abc123def456abc123def456abc123def456abc123def456",
+      authHash: "bW9jay1hdXRoLWhhc2g",
+      clientPublic: "bW9jay1wdWJsaWMta2V5",
+      keyCheck: {
+        ephemeralPoint: "ep-cont",
+        nonce: "nc-cont",
+        ciphertext: "ct-cont",
+      },
+    },
+    channelId: "abc123def456abc123def456abc123def456abc123def456",
+    encodedSeed: "bW9jay1lbmNvZGVkLXNlZWQ",
+  }),
 }));
 
 vi.mock("./intake-crypto.js", async (importOriginal) => ({
   ...(await importOriginal<typeof IntakeCrypto>()),
   encryptIntake: mockEncryptIntake,
   buildAccountPayload: mockBuildAccountPayload,
+  buildContinuationPayload: mockBuildContinuationPayload,
 }));
 
 vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
@@ -140,6 +163,13 @@ vi.mock("$lib/auth/pow-solver.js", async (importOriginal) => ({
 vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
   ...(await importOriginal<typeof AnnounceModule>()),
   announceToLiveRegion: vi.fn(),
+}));
+
+// vi.mock required: $lib/paraglide/runtime.js needs a controllable getLocale
+// so tests can simulate Spanish visitors without a real locale cookie.
+vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ParaglideRuntime>()),
+  getLocale: () => localeState.current,
 }));
 
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
@@ -163,7 +193,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ParaglideMessages>()),
   intake_title: () => "Get help",
   intake_intro: () => "We're here to help.",
-  intake_field_name_label: () => "Your name",
+  intake_field_name_label: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Tu nombre" : "Your name"),
+  intake_field_name_placeholder: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Nombre o alias" : "First name or alias"),
   intake_field_name_hint: () => "optional",
   intake_contact_method_label: () => "How should we reach you?",
   intake_contact_phone: () => "Text or call my phone",
@@ -173,8 +210,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "The organization will not be able to reach out to you.",
   intake_field_contact_detail_phone_label: () => "Phone number",
   intake_field_contact_detail_email_label: () => "Email address",
-  intake_field_message_label: () => "Your message",
-  intake_field_message_placeholder: () => "What's going on?",
+  intake_field_message_label: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Tu mensaje" : "Your message"),
+  intake_field_message_placeholder: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Que esta pasando?" : "What's going on?"),
   intake_char_count: ({ count, max }: { count: number; max: number }) =>
     `${String(count)} / ${String(max)}`,
   intake_submit: () => "Send encrypted message",
@@ -197,6 +240,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "Please write a message so we know how to help.",
   intake_not_available: () =>
     "This form is not available. Contact the organization directly.",
+  intake_form_closed_default: () =>
+    "This form is no longer accepting submissions.",
   intake_noscript: () => "This form needs JavaScript.",
   intake_protected_title: () => "How you're protected",
   intake_protected_summary: () => "Your data is encrypted.",
@@ -222,6 +267,23 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   account_username_taken: () => "That username is already taken.",
   account_intake_confirm_reminder: ({ username }: { username: string }) =>
     `Your username is ${username}. Sign in at /account.`,
+  intake_continuation_toggle_title: () =>
+    "Save a link to add more later (optional)",
+  intake_continuation_toggle_body: () =>
+    "Get a link you can reopen to add information or read replies.",
+  intake_continuation_expanded_text: () =>
+    "After you submit, you will receive a link.",
+  intake_continuation_expanded_warning: () =>
+    "If you lose this link, there is no way to recover it.",
+  intake_continuation_link_label: () => "Your continuation link:",
+  intake_continuation_copy_button: () => "Copy link",
+  intake_continuation_copied: () => "Link copied.",
+  intake_continuation_copy_error: () =>
+    "Could not copy the link. Select it manually and copy.",
+  intake_continuation_warning: () =>
+    "This link is the only way back to your conversation.",
+  intake_continuation_hint: () =>
+    "The link above carries the key that unlocks your conversation.",
 }));
 
 vi.mock("$lib/shell/PageShell.svelte", async (importOriginal) => ({
@@ -238,6 +300,14 @@ vi.mock("$lib/shell/ShellToast.svelte", async (importOriginal) => ({
   ).default,
 }));
 
+// vi.mock required: Svelte 5 createContext throws missing_context when the
+// consumer renders without its provider, and this spec renders the page on
+// its own rather than inside the (client) layout that sets the container.
+vi.mock("$lib/client-shell/context.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getClientShellCtx: () => ({ current: undefined }),
+}));
+
 // jsdom lacks Web Animations API (used by Konsta transitions).
 if (typeof Element.prototype.animate !== "function") {
   Element.prototype.animate = vi.fn().mockReturnValue({
@@ -247,12 +317,14 @@ if (typeof Element.prototype.animate !== "function") {
   }) as unknown as Element["animate"];
 }
 
+import * as m from "$lib/paraglide/messages.js";
 import IntakePage from "./+page.svelte";
 
 // --- Tests ---
 
 describe("intake page", () => {
   beforeEach(() => {
+    localeState.current = "en";
     mockOrgKey = new Uint8Array(32);
     mockOrgKeyLoading = false;
     mockPowRequired = false;
@@ -286,6 +358,30 @@ describe("intake page", () => {
     expect(screen.getByText("I'll check back myself")).toBeTruthy();
   });
 
+  it("renders name field with a dedicated placeholder (not the label)", () => {
+    render(IntakePage);
+    // The name field should use intake_field_name_placeholder, not the label
+    const nameInput = screen.getByPlaceholderText("First name or alias");
+    expect(nameInput).toBeTruthy();
+    // The label text should appear separately from the placeholder
+    expect(screen.getAllByText(/Your name/)[0]).toBeTruthy();
+  });
+
+  it("populates default form labels and placeholders for both locales", () => {
+    // The localizeMsg helper calls each Paraglide message function with
+    // explicit locale overrides, producing { en: "...", es: "..." } records.
+    // IntakeFieldRenderer resolves placeholders via resolveLocalized, so
+    // the rendered placeholder proves the en key is populated. We verify
+    // the message functions were called with locale options by confirming
+    // the English placeholder text comes through correctly rather than the
+    // label text (which would indicate the old bug).
+    render(IntakePage);
+    const nameInput = screen.getByPlaceholderText("First name or alias");
+    expect(nameInput).toBeTruthy();
+    const msgInput = screen.getByPlaceholderText("What's going on?");
+    expect(msgInput).toBeTruthy();
+  });
+
   it("shows encryption unavailable when org key is null", () => {
     mockOrgKey = null;
     render(IntakePage);
@@ -309,6 +405,16 @@ describe("intake page", () => {
    * event so Konsta's onInput handler fires with the correct e.target.value.
    * jsdom's fireEvent.input does not set the element's .value property.
    */
+  /**
+   * Helper: PasswordConfirmPair renders through ListInput's input snippet
+   * and carries no testid, so its fields are addressed by accessible name.
+   */
+  function getPasswordField(label: string): HTMLInputElement | null {
+    return document.querySelector<HTMLInputElement>(
+      `input[aria-label="${label}"]`,
+    );
+  }
+
   function setInputValue(
     el: HTMLInputElement | HTMLTextAreaElement,
     val: string,
@@ -401,8 +507,8 @@ describe("intake page", () => {
 
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByTestId("account-create-username")).toBeTruthy();
-    expect(screen.getByTestId("account-create-password")).toBeTruthy();
-    expect(screen.getByTestId("account-create-confirm")).toBeTruthy();
+    expect(getPasswordField(m.account_login_password())).toBeTruthy();
+    expect(getPasswordField(m.account_create_confirm())).toBeTruthy();
     expect(screen.getByTestId("warning-password")).toBeTruthy();
     expect(screen.getByTestId("warning-reset")).toBeTruthy();
   });
@@ -423,20 +529,14 @@ describe("intake page", () => {
       setInputValue(usernameInput as HTMLInputElement, "testuser");
 
     // Fill mismatched passwords
-    const passwordInput = screen
-      .getByTestId("account-create-password")
-      .querySelector("input");
-    const confirmInput = screen
-      .getByTestId("account-create-confirm")
-      .querySelector("input");
-    if (passwordInput)
-      setInputValue(passwordInput as HTMLInputElement, "password123");
-    if (confirmInput)
-      setInputValue(confirmInput as HTMLInputElement, "mismatch456");
+    const passwordInput = getPasswordField(m.account_login_password());
+    const confirmInput = getPasswordField(m.account_create_confirm());
+    if (passwordInput) setInputValue(passwordInput, "password123");
+    if (confirmInput) setInputValue(confirmInput, "mismatch456");
 
     // The mismatch error should appear
     await vi.waitFor(() => {
-      expect(screen.getByTestId("account-mismatch")).toBeTruthy();
+      expect(document.body.textContent).toContain(m.account_create_mismatch());
     });
   });
 
@@ -457,18 +557,12 @@ describe("intake page", () => {
     const usernameInput = screen
       .getByTestId("account-create-username")
       .querySelector("input");
-    const passwordInput = screen
-      .getByTestId("account-create-password")
-      .querySelector("input");
-    const confirmInput = screen
-      .getByTestId("account-create-confirm")
-      .querySelector("input");
+    const passwordInput = getPasswordField(m.account_login_password());
+    const confirmInput = getPasswordField(m.account_create_confirm());
     if (usernameInput)
       setInputValue(usernameInput as HTMLInputElement, "takenuser");
-    if (passwordInput)
-      setInputValue(passwordInput as HTMLInputElement, "password123");
-    if (confirmInput)
-      setInputValue(confirmInput as HTMLInputElement, "password123");
+    if (passwordInput) setInputValue(passwordInput, "password123");
+    if (confirmInput) setInputValue(confirmInput, "password123");
 
     const submitBtn = screen.getByTestId("intake-submit");
     await fireEvent.click(submitBtn);
@@ -482,5 +576,302 @@ describe("intake page", () => {
 
     // Form should still be rendered (not submitted/cleared)
     expect(screen.getByTestId("intake-submit")).toBeTruthy();
+  });
+
+  it("renders closed state with default message when formClosed is true", () => {
+    mockFormData = {
+      formId: "closed-form-id",
+      fields: null,
+      encryptedFormMeta: null,
+      intakeDisabled: false,
+      formClosed: true,
+    } as typeof mockFormData;
+    render(IntakePage);
+    expect(
+      screen.getByText("This form is no longer accepting submissions."),
+    ).toBeTruthy();
+    // No submit button should be visible
+    expect(screen.queryByTestId("intake-submit")).toBeNull();
+  });
+
+  // -----------------------------------------------------------------
+  // Continuation link tests
+  // -----------------------------------------------------------------
+
+  it("continuation toggle is collapsed by default", () => {
+    render(IntakePage);
+    const toggle = screen.getByTestId("intake-continuation-toggle");
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("expanding continuation collapses account", async () => {
+    render(IntakePage);
+
+    // Expand account first
+    const accountToggle = screen.getByTestId("intake-account-toggle");
+    await fireEvent.click(accountToggle);
+    expect(accountToggle.getAttribute("aria-expanded")).toBe("true");
+
+    // Expand continuation
+    const contToggle = screen.getByTestId("intake-continuation-toggle");
+    await fireEvent.click(contToggle);
+    expect(contToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(accountToggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("expanding account collapses continuation", async () => {
+    render(IntakePage);
+
+    // Expand continuation first
+    const contToggle = screen.getByTestId("intake-continuation-toggle");
+    await fireEvent.click(contToggle);
+    expect(contToggle.getAttribute("aria-expanded")).toBe("true");
+
+    // Expand account
+    const accountToggle = screen.getByTestId("intake-account-toggle");
+    await fireEvent.click(accountToggle);
+    expect(accountToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(contToggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("submit with continuation shows link block on success", async () => {
+    mockMutateAsync.mockResolvedValue({ reference: "calm-pebble-7" });
+
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    // Expand continuation
+    const contToggle = screen.getByTestId("intake-continuation-toggle");
+    await fireEvent.click(contToggle);
+
+    const submitBtn = screen.getByTestId("intake-submit");
+    await fireEvent.click(submitBtn);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Your message was sent")).toBeTruthy();
+    });
+
+    const linkEl = screen.getByTestId("intake-continuation-link");
+    expect(linkEl).toBeTruthy();
+    expect(linkEl.textContent).toContain(
+      "/portal/abc123def456abc123def456abc123def456abc123def456#bW9jay1lbmNvZGVkLXNlZWQ",
+    );
+    expect(mockBuildContinuationPayload).toHaveBeenCalled();
+  });
+
+  it("submit without continuation renders no link block", async () => {
+    mockMutateAsync.mockResolvedValue({ reference: "calm-pebble-7" });
+
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    const submitBtn = screen.getByTestId("intake-submit");
+    await fireEvent.click(submitBtn);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Your message was sent")).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId("intake-continuation-link")).toBeNull();
+    expect(mockBuildContinuationPayload).not.toHaveBeenCalled();
+  });
+
+  it("account+continuation both expanded results in account only", async () => {
+    mockMutateAsync.mockResolvedValue({ reference: "calm-pebble-7" });
+
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    // Expand continuation (this will be overridden by account)
+    const contToggle = screen.getByTestId("intake-continuation-toggle");
+    await fireEvent.click(contToggle);
+
+    // Expand account (collapses continuation)
+    const accountToggle = screen.getByTestId("intake-account-toggle");
+    await fireEvent.click(accountToggle);
+
+    // Fill account fields to trigger the account branch
+    const usernameInput = screen
+      .getByTestId("account-create-username")
+      .querySelector("input");
+    const passwordInput = getPasswordField(m.account_login_password());
+    const confirmInput = getPasswordField(m.account_create_confirm());
+    if (usernameInput)
+      setInputValue(usernameInput as HTMLInputElement, "testuser");
+    if (passwordInput) setInputValue(passwordInput, "password123");
+    if (confirmInput) setInputValue(confirmInput, "password123");
+
+    const submitBtn = screen.getByTestId("intake-submit");
+    await fireEvent.click(submitBtn);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Your message was sent")).toBeTruthy();
+    });
+
+    expect(mockBuildAccountPayload).toHaveBeenCalled();
+    expect(mockBuildContinuationPayload).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("intake-continuation-link")).toBeNull();
+  });
+
+  it("copy button writes to clipboard", async () => {
+    mockMutateAsync.mockResolvedValue({ reference: "calm-pebble-7" });
+
+    const savedClipboard = navigator.clipboard;
+    const mockWriteText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText: mockWriteText },
+    });
+
+    try {
+      render(IntakePage);
+      fillDefaultFormRequiredFields();
+
+      const contToggle = screen.getByTestId("intake-continuation-toggle");
+      await fireEvent.click(contToggle);
+
+      const submitBtn = screen.getByTestId("intake-submit");
+      await fireEvent.click(submitBtn);
+
+      await vi.waitFor(() => {
+        expect(screen.getByTestId("intake-continuation-copy")).toBeTruthy();
+      });
+
+      const copyBtn = screen.getByTestId("intake-continuation-copy");
+      await fireEvent.click(copyBtn);
+
+      await vi.waitFor(() => {
+        expect(mockWriteText).toHaveBeenCalledTimes(1);
+      });
+
+      const writtenUrl = mockWriteText.mock.calls[0]?.[0] as string;
+      expect(writtenUrl).toContain("/portal/");
+      expect(writtenUrl).toContain("#bW9jay1lbmNvZGVkLXNlZWQ");
+    } finally {
+      Object.assign(navigator, { clipboard: savedClipboard });
+    }
+  });
+
+  it("failed submit reveals no link", async () => {
+    mockMutateAsync.mockRejectedValue(new Error("server error"));
+
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    const contToggle = screen.getByTestId("intake-continuation-toggle");
+    await fireEvent.click(contToggle);
+
+    const submitBtn = screen.getByTestId("intake-submit");
+    await fireEvent.click(submitBtn);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/didn't go through/)).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId("intake-continuation-link")).toBeNull();
+  });
+
+  // -----------------------------------------------------------------
+  // Locale-aware rendering tests
+  // -----------------------------------------------------------------
+
+  it("Spanish visitor sees Spanish labels and placeholder on the default form", () => {
+    localeState.current = "es";
+    render(IntakePage);
+
+    // Label resolves to Spanish via localizeMsg + visitorLocale
+    expect(screen.getAllByText(/Tu nombre/)[0]).toBeTruthy();
+    // Placeholder resolves to Spanish via visitorLocale passed to IntakeFieldRenderer
+    const nameInput = screen.getByPlaceholderText("Nombre o alias");
+    expect(nameInput).toBeTruthy();
+    // Message label in Spanish
+    expect(screen.getAllByText(/Tu mensaje/)[0]).toBeTruthy();
+    const msgInput = screen.getByPlaceholderText("Que esta pasando?");
+    expect(msgInput).toBeTruthy();
+  });
+
+  it("Spanish visitor sees Spanish labels on a custom form", async () => {
+    localeState.current = "es";
+
+    // Set up a custom form with bilingual fields
+    const { decryptFieldContent } =
+      await import("$lib/portal/intake-form-crypto.js");
+    const mockedDecrypt = vi.mocked(decryptFieldContent);
+    mockedDecrypt.mockImplementation(() => ({
+      label: { en: "Your location", es: "Tu ubicacion" },
+      config: {
+        type: "text" as const,
+        maxLength: 200,
+        placeholder: { en: "City", es: "Ciudad" },
+      },
+    }));
+
+    mockFormData = {
+      formId: "custom-form-1",
+      fields: [
+        {
+          fieldKey: "loc-field",
+          fieldType: "text",
+          role: null,
+          isRequired: false,
+          encryptedLabel: "enc-label-loc",
+          encryptedConfig: "enc-config-loc",
+        },
+      ],
+    };
+
+    render(IntakePage);
+
+    // The label should resolve to Spanish for a Spanish visitor
+    await vi.waitFor(() => {
+      expect(screen.getAllByText(/Tu ubicacion/)[0]).toBeTruthy();
+    });
+    // The placeholder should also be Spanish
+    const locInput = screen.getByPlaceholderText("Ciudad");
+    expect(locInput).toBeTruthy();
+
+    mockedDecrypt.mockReset();
+  });
+
+  it("queue-facing submission labels stay in base locale for a Spanish visitor", async () => {
+    localeState.current = "es";
+    mockMutateAsync.mockResolvedValue({ reference: "calm-pebble-7" });
+
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    const submitBtn = screen.getByTestId("intake-submit");
+    await fireEvent.click(submitBtn);
+
+    await vi.waitFor(() => {
+      // The success heading mock returns English regardless of locale
+      // (Paraglide message mocks are not fully locale-aware for all keys).
+      // The important assertion is below: the submission payload labels.
+      expect(screen.getByText("Your message was sent")).toBeTruthy();
+    });
+
+    // Verify that the answer labels are in English (base locale),
+    // not Spanish, even though the visitor is browsing in Spanish.
+    const encryptCall = mockEncryptIntake.mock.calls[0] as unknown[];
+    const answers = encryptCall[1] as Array<{
+      fieldKey: string;
+      label: string;
+    }>;
+
+    const nameAnswer = answers.find((a) => a.fieldKey === "default:name");
+    // Name is optional, may or may not be present. If present, label is English.
+    if (nameAnswer) {
+      expect(nameAnswer.label).toBe("Your name");
+    }
+
+    const msgAnswer = answers.find((a) => a.fieldKey === "default:message");
+    expect(msgAnswer).toBeTruthy();
+    expect(msgAnswer?.label).toBe("Your message");
+
+    const contactMethodAnswer = answers.find(
+      (a) => a.fieldKey === "default:contact-method",
+    );
+    expect(contactMethodAnswer).toBeTruthy();
+    expect(contactMethodAnswer?.label).toBe("How should we reach you?");
   });
 });

@@ -10,7 +10,7 @@ const en_logs_audit_empty_subtitle = /** @type {(inputs: Logs_Audit_Empty_Subtit
 };
 
 const es_logs_audit_empty_subtitle = /** @type {(inputs: Logs_Audit_Empty_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La actividad del sistema aparecera aqui a medida que se realicen cambios.`)
+	return /** @type {LocalizedString} */ (`La actividad del sistema aparecerá aquí a medida que se realicen cambios.`)
 };
 
 /**

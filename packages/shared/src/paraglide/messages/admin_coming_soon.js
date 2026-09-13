@@ -10,7 +10,7 @@ const en_admin_coming_soon = /** @type {(inputs: Admin_Coming_SoonInputs) => Loc
 };
 
 const es_admin_coming_soon = /** @type {(inputs: Admin_Coming_SoonInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Proximamente`)
+	return /** @type {LocalizedString} */ (`Próximamente`)
 };
 
 /**

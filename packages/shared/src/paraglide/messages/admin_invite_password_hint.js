@@ -10,7 +10,7 @@ const en_admin_invite_password_hint = /** @type {(inputs: Admin_Invite_Password_
 };
 
 const es_admin_invite_password_hint = /** @type {(inputs: Admin_Invite_Password_HintInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Comparta de forma segura con el ${i?.volunteer}. Debe cambiarla despues del primer inicio de sesion.`)
+	return /** @type {LocalizedString} */ (`Comparta de forma segura con el ${i?.volunteer}. Debe cambiarla después del primer inicio de sesión.`)
 };
 
 /**

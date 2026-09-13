@@ -10,7 +10,7 @@ const en_admin_rotation_dialog_why = /** @type {(inputs: Admin_Rotation_Dialog_W
 };
 
 const es_admin_rotation_dialog_why = /** @type {(inputs: Admin_Rotation_Dialog_WhyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Rota tu clave si un miembro del equipo deja la organizacion, si sospechas acceso no autorizado, o como parte de un calendario regular de seguridad.`)
+	return /** @type {LocalizedString} */ (`Rota tu clave si un miembro del equipo deja la organización, si sospechas acceso no autorizado, o como parte de un calendario regular de seguridad.`)
 };
 
 /**

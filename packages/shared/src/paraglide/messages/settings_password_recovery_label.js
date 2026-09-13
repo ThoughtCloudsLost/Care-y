@@ -10,7 +10,7 @@ const en_settings_password_recovery_label = /** @type {(inputs: Settings_Passwor
 };
 
 const es_settings_password_recovery_label = /** @type {(inputs: Settings_Password_Recovery_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Contrasena actual`)
+	return /** @type {LocalizedString} */ (`Contraseña actual`)
 };
 
 /**

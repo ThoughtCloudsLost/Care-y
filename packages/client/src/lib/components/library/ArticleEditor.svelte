@@ -8,9 +8,6 @@
 -->
 <script lang="ts">
   import { Node as PMNode } from "prosemirror-model";
-  import { setBlockType, toggleMark, wrapIn, lift } from "prosemirror-commands";
-  import { wrapInList, liftListItem } from "prosemirror-schema-list";
-  import { undo, redo } from "prosemirror-history";
   import {
     Button as KButton,
     Preloader,
@@ -25,19 +22,19 @@
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import {
-    kbArticleSchema,
-    kbEditorPlugins,
+    editorSchema,
+    composeEditorPlugins,
   } from "$lib/editor/prosemirror-schema.js";
   import { useProseMirror } from "$lib/editor/use-prosemirror.svelte.js";
   import {
     deriveToolbarState,
-    blockTypeActive,
     type ToolbarCommand,
   } from "$lib/editor/toolbar-state.js";
-  import { headingHierarchyPlugin } from "$lib/editor/plugins/heading-hierarchy.js";
-  import { linkTextLintPlugin } from "$lib/editor/plugins/link-text-lint.js";
   import {
-    atagDecorationsPlugin,
+    dispatchToolbarCommand,
+    type EditorAction,
+  } from "$lib/editor/toolbar-commands.js";
+  import {
     atagDecorationsKey,
     setAtagActive,
   } from "$lib/editor/plugins/atag-decorations.js";
@@ -133,27 +130,6 @@
   }
   const pendingUploads = new SvelteMap<string, PendingUpload>();
 
-  // ── Suppress iOS Safari auto-zoom on contenteditable focus ──
-  // Temporarily sets maximum-scale=1 while the editor is mounted.
-  // Restored on unmount so pinch-to-zoom works on other pages.
-  // Disabling meta-viewport zoom conflicts with WCAG 1.4.4 (resize text),
-  // but is accepted here because iOS Safari's auto-zoom on contenteditable
-  // is disorienting and breaks the keyboard-docked toolbar positioning.
-  $effect(() => {
-    const meta = document.querySelector<HTMLMetaElement>(
-      'meta[name="viewport"]',
-    );
-    if (meta === null) return;
-    const original = meta.getAttribute("content") ?? "";
-    meta.setAttribute(
-      "content",
-      original.replace(/maximum-scale=\d+/, "maximum-scale=1"),
-    );
-    return () => {
-      meta.setAttribute("content", original);
-    };
-  });
-
   // ── Editor mount ──
 
   let editorMountEl = $state<HTMLElement | null>(null);
@@ -163,7 +139,7 @@
     const body = existingArticle?.decryptedBody;
     if (body == null) return undefined;
     try {
-      return PMNode.fromJSON(kbArticleSchema, body);
+      return PMNode.fromJSON(editorSchema, body);
     } catch {
       return undefined;
     }
@@ -176,15 +152,10 @@
     orgKeyManager,
   };
 
-  const allPlugins = [
-    ...kbEditorPlugins,
-    headingHierarchyPlugin(),
-    linkTextLintPlugin(),
-    atagDecorationsPlugin(),
-  ];
+  const allPlugins = composeEditorPlugins();
 
   const editor = useProseMirror(() => editorMountEl, {
-    schema: kbArticleSchema,
+    schema: editorSchema,
     plugins: allPlugins,
     doc: initialDoc,
     nodeViews: {
@@ -388,87 +359,10 @@
 
   // ── Toolbar command dispatch ──
 
-  function handleToolbarCommand(cmd: ToolbarCommand): void {
-    const view = editor.view;
-    if (view === null) return;
-
-    const { state, dispatch } = view;
-
-    switch (cmd.kind) {
-      case "toggleBold":
-        if (kbArticleSchema.marks.strong)
-          toggleMark(kbArticleSchema.marks.strong)(state, dispatch);
-        break;
-      case "toggleItalic":
-        if (kbArticleSchema.marks.em)
-          toggleMark(kbArticleSchema.marks.em)(state, dispatch);
-        break;
-      case "toggleStrikethrough":
-        if (kbArticleSchema.marks.strikethrough)
-          toggleMark(kbArticleSchema.marks.strikethrough)(state, dispatch);
-        break;
-      case "toggleCode":
-        if (kbArticleSchema.marks.code)
-          toggleMark(kbArticleSchema.marks.code)(state, dispatch);
-        break;
+  function handleEditorAction(action: EditorAction): void {
+    switch (action.action) {
       case "toggleLink":
         openLinkSheet();
-        break;
-      case "wrapInBulletList":
-        if (kbArticleSchema.nodes.bullet_list) {
-          if (
-            blockTypeActive(state, kbArticleSchema.nodes.bullet_list) &&
-            kbArticleSchema.nodes.list_item
-          ) {
-            liftListItem(kbArticleSchema.nodes.list_item)(state, dispatch);
-          } else {
-            wrapInList(kbArticleSchema.nodes.bullet_list)(state, dispatch);
-          }
-        }
-        break;
-      case "wrapInOrderedList":
-        if (kbArticleSchema.nodes.ordered_list) {
-          if (
-            blockTypeActive(state, kbArticleSchema.nodes.ordered_list) &&
-            kbArticleSchema.nodes.list_item
-          ) {
-            liftListItem(kbArticleSchema.nodes.list_item)(state, dispatch);
-          } else {
-            wrapInList(kbArticleSchema.nodes.ordered_list)(state, dispatch);
-          }
-        }
-        break;
-      case "wrapInBlockquote":
-        if (kbArticleSchema.nodes.blockquote) {
-          if (blockTypeActive(state, kbArticleSchema.nodes.blockquote)) {
-            lift(state, dispatch);
-          } else {
-            wrapIn(kbArticleSchema.nodes.blockquote)(state, dispatch);
-          }
-        }
-        break;
-      case "setCodeBlock":
-        {
-          const codeBlock = kbArticleSchema.nodes.code_block;
-          const para = kbArticleSchema.nodes.paragraph;
-          if (codeBlock && para) {
-            if (blockTypeActive(state, codeBlock)) {
-              setBlockType(para)(state, dispatch);
-            } else {
-              setBlockType(codeBlock)(state, dispatch);
-            }
-          }
-        }
-        break;
-      case "setParagraph":
-        if (kbArticleSchema.nodes.paragraph)
-          setBlockType(kbArticleSchema.nodes.paragraph)(state, dispatch);
-        break;
-      case "setHeading":
-        if (kbArticleSchema.nodes.heading)
-          setBlockType(kbArticleSchema.nodes.heading, {
-            level: cmd.level,
-          })(state, dispatch);
         break;
       case "insertImage":
         triggerImageUpload();
@@ -482,14 +376,13 @@
       case "insertHorizontalRule":
         insertHorizontalRule();
         break;
-      case "undo":
-        undo(state, dispatch);
-        break;
-      case "redo":
-        redo(state, dispatch);
-        break;
     }
+  }
 
+  function handleToolbarCommand(cmd: ToolbarCommand): void {
+    const view = editor.view;
+    if (view === null) return;
+    dispatchToolbarCommand(view, cmd, handleEditorAction);
     view.focus();
   }
 
@@ -501,7 +394,7 @@
 
     // Pre-fill from selection if link mark is active
     const { from, to, empty } = view.state.selection;
-    const linkType = kbArticleSchema.marks.link;
+    const linkType = editorSchema.marks.link;
     if (linkType === undefined) return;
 
     if (!empty) {
@@ -528,7 +421,7 @@
     const view = editor.view;
     if (view === null || linkUrl.trim() === "") return;
 
-    const linkType = kbArticleSchema.marks.link;
+    const linkType = editorSchema.marks.link;
     if (linkType === undefined) return;
 
     const { from, to, empty } = view.state.selection;
@@ -537,7 +430,7 @@
     if (empty && linkText.trim() !== "") {
       // Insert new text with link mark
       const mark = linkType.create({ href: linkUrl });
-      const textNode = kbArticleSchema.text(linkText, [mark]);
+      const textNode = editorSchema.text(linkText, [mark]);
       tr.replaceSelectionWith(textNode, false);
     } else if (!empty) {
       // Apply link mark to selection
@@ -662,7 +555,7 @@
     const view = editor.view;
     if (view === null) return;
 
-    const imageType = kbArticleSchema.nodes.image;
+    const imageType = editorSchema.nodes.image;
     if (imageType === undefined) return;
 
     const imageNode = imageType.create({ src, alt });
@@ -735,7 +628,7 @@
     if (view === null) return;
 
     const { table, table_row, table_header, table_cell, paragraph } =
-      kbArticleSchema.nodes;
+      editorSchema.nodes;
     if (!table || !table_row || !table_header || !table_cell || !paragraph)
       return;
 
@@ -766,7 +659,7 @@
     const view = editor.view;
     if (view === null) return;
 
-    const hrType = kbArticleSchema.nodes.horizontal_rule;
+    const hrType = editorSchema.nodes.horizontal_rule;
     if (hrType === undefined) return;
 
     const tr = view.state.tr.replaceSelectionWith(hrType.create());
@@ -842,7 +735,7 @@
     if (json.content) {
       json.content = replaceInContent(json.content, urlMap);
     }
-    return PMNode.fromJSON(kbArticleSchema, json);
+    return PMNode.fromJSON(editorSchema, json);
   }
 
   function replaceInContent(

@@ -5,6 +5,7 @@ import {
   toSymmetricKey,
   toSalt,
   toNonce,
+  toCiphertext,
 } from "./types.js";
 
 describe("toRistrettoPoint", () => {
@@ -96,6 +97,28 @@ describe("toSalt", () => {
 
   it("includes actual length in error message", () => {
     expect(() => toSalt(new Uint8Array(12))).toThrow(/got 12/);
+  });
+});
+
+describe("toCiphertext", () => {
+  it("accepts the shortest thing the format can produce", () => {
+    // 24-byte nonce plus a 16-byte tag around an empty plaintext.
+    const buf = new Uint8Array(40).fill(0x03);
+    const result = toCiphertext(buf);
+
+    expect(result).toBe(buf);
+  });
+
+  it("accepts anything longer", () => {
+    expect(toCiphertext(new Uint8Array(4096)).length).toBe(4096);
+  });
+
+  it("throws RangeError for a buffer too short to be a ciphertext", () => {
+    // Catching this here turns a truncated or wrong-field value into an
+    // error at its source rather than a decrypt failure further away.
+    expect(() => toCiphertext(new Uint8Array(39))).toThrow(RangeError);
+    expect(() => toCiphertext(new Uint8Array(24))).toThrow(RangeError);
+    expect(() => toCiphertext(new Uint8Array(0))).toThrow(RangeError);
   });
 });
 

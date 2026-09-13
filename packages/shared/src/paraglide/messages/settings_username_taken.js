@@ -10,7 +10,7 @@ const en_settings_username_taken = /** @type {(inputs: Settings_Username_TakenIn
 };
 
 const es_settings_username_taken = /** @type {(inputs: Settings_Username_TakenInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este usuario ya esta en uso`)
+	return /** @type {LocalizedString} */ (`Este usuario ya está en uso`)
 };
 
 /**

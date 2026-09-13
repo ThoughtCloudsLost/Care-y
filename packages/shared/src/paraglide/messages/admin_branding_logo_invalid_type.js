@@ -10,7 +10,7 @@ const en_admin_branding_logo_invalid_type = /** @type {(inputs: Admin_Branding_L
 };
 
 const es_admin_branding_logo_invalid_type = /** @type {(inputs: Admin_Branding_Logo_Invalid_TypeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo se aceptan imagenes PNG, JPEG y SVG.`)
+	return /** @type {LocalizedString} */ (`Solo se aceptan imágenes PNG, JPEG y SVG.`)
 };
 
 /**

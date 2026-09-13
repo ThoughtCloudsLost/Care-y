@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_2fa_tradeoff = /** @type {(inputs: Onboardin
 };
 
 const es_onboarding_briefing_choice_2fa_tradeoff = /** @type {(inputs: Onboarding_Briefing_Choice_2fa_TradeoffInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una aplicacion autenticadora es facil de configurar pero puede ser enganada por una pagina falsa convincente. Una llave de seguridad fisica (como YubiKey) verifica la direccion del sitio automaticamente y no puede ser enganada. Las llaves fisicas cuestan dinero y los voluntarios necesitan llevarlas consigo.`)
+	return /** @type {LocalizedString} */ (`Una aplicación autenticadora es fácil de configurar pero puede ser enganada por una página falsa convincente. Una llave de seguridad fisica (como YubiKey) verifica la dirección del sitio automáticamente y no puede ser enganada. Las llaves fisicas cuestan dinero y los voluntarios necesitan llevarlas consigo.`)
 };
 
 /**

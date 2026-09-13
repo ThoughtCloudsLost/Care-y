@@ -30,6 +30,18 @@ vi.mock("./AvailabilityField.svelte", async (importOriginal) => {
   };
 });
 
+// vi.mock required: renderFormRichText has deep ProseMirror/DOMPurify dependencies.
+vi.mock("$lib/utils/render-form-content.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  renderFormRichText: (value: unknown): string => {
+    if (value === undefined) return "";
+    if (typeof value === "string") return `<p>${value}</p>`;
+    if (typeof value === "object" && value !== null && "type" in value)
+      return "<p>Rich content</p>";
+    return "";
+  },
+}));
+
 const { default: IntakeFieldRenderer } =
   await import("./IntakeFieldRenderer.svelte");
 
@@ -103,10 +115,10 @@ describe("IntakeFieldRenderer", () => {
       expect(screen.getByText("2 / 100")).toBeTruthy();
     });
 
-    it("respects placeholder from config", () => {
+    it("respects placeholder from config (LocalizedText)", () => {
       render(IntakeFieldRenderer, {
         props: makeProps({
-          config: { type: "text", placeholder: "Enter name" },
+          config: { type: "text", placeholder: { en: "Enter name" } },
         }),
       });
       const input = document.querySelector("input[placeholder='Enter name']");
@@ -138,7 +150,11 @@ describe("IntakeFieldRenderer", () => {
   describe("select type", () => {
     const selectConfig: IntakeFieldConfig = {
       type: "select",
-      options: ["Phone", "Email", "None"],
+      options: [
+        { key: "phone", label: { en: "Phone" } },
+        { key: "email", label: { en: "Email" } },
+        { key: "none", label: { en: "None" } },
+      ],
     };
 
     it("renders a select with options", () => {
@@ -152,15 +168,15 @@ describe("IntakeFieldRenderer", () => {
       expect(options.length).toBe(4);
     });
 
-    it("emits value on change", async () => {
+    it("emits option key on change", async () => {
       const onchange = vi.fn();
       render(IntakeFieldRenderer, {
         props: makeProps({ config: selectConfig, onchange }),
       });
       const select = document.querySelector("select");
       expect(select).not.toBeNull();
-      await fireEvent.change(select!, { target: { value: "Email" } });
-      expect(onchange).toHaveBeenCalledWith("Email");
+      await fireEvent.change(select!, { target: { value: "email" } });
+      expect(onchange).toHaveBeenCalledWith("email");
     });
 
     it("has a disabled prompt option with the label text", () => {
@@ -179,7 +195,11 @@ describe("IntakeFieldRenderer", () => {
   describe("multiselect type", () => {
     const multiConfig: IntakeFieldConfig = {
       type: "multiselect",
-      options: ["Housing", "Legal", "Medical"],
+      options: [
+        { key: "housing", label: { en: "Housing" } },
+        { key: "legal", label: { en: "Legal" } },
+        { key: "medical", label: { en: "Medical" } },
+      ],
     };
 
     it("renders checkbox list items with role group and aria-labelledby", () => {
@@ -296,7 +316,13 @@ describe("IntakeFieldRenderer", () => {
     it("shows metadata indicator for server-metadata role", () => {
       render(IntakeFieldRenderer, {
         props: makeProps({
-          config: { type: "select", options: ["A", "B"] },
+          config: {
+            type: "select",
+            options: [
+              { key: "a", label: { en: "A" } },
+              { key: "b", label: { en: "B" } },
+            ],
+          },
           role: "queue-routing",
         }),
       });
@@ -329,6 +355,49 @@ describe("IntakeFieldRenderer", () => {
       // The stub (PassthroughShell) renders a div with data-testid
       const stub = document.querySelector("[data-testid='passthrough-shell']");
       expect(stub).not.toBeNull();
+    });
+  });
+
+  describe("richText type", () => {
+    it("renders sanitized HTML from a string body value", () => {
+      render(IntakeFieldRenderer, {
+        props: makeProps({
+          config: { type: "richText", body: { en: "Hello world" } },
+          isRequired: false,
+          value: undefined,
+        }),
+      });
+      const block = document.querySelector(".rich-text-block");
+      expect(block).not.toBeNull();
+      expect(block!.innerHTML).toContain("Hello world");
+    });
+
+    it("renders nothing when body is empty", () => {
+      render(IntakeFieldRenderer, {
+        props: makeProps({
+          config: { type: "richText", body: {} },
+          isRequired: false,
+          value: undefined,
+        }),
+      });
+      const block = document.querySelector(".rich-text-block");
+      expect(block).toBeNull();
+    });
+
+    it("does not render label, required marker, or privacy indicator", () => {
+      render(IntakeFieldRenderer, {
+        props: makeProps({
+          label: "Should not appear as heading",
+          config: { type: "richText", body: { en: "Content" } },
+          isRequired: true,
+          value: undefined,
+        }),
+      });
+      // No BlockTitle or label rendered for richText
+      const heading = document.getElementById("intake-label-f-1");
+      expect(heading).toBeNull();
+      // No privacy indicator
+      expect(screen.queryByText("Fully encrypted.")).toBeNull();
     });
   });
 });

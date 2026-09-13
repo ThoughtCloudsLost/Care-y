@@ -10,7 +10,7 @@ const en_intake_forms_destination_none = /** @type {(inputs: Intake_Forms_Destin
 };
 
 const es_intake_forms_destination_none = /** @type {(inputs: Intake_Forms_Destination_NoneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cola de recepcion predeterminada`)
+	return /** @type {LocalizedString} */ (`Cola de recepción predeterminada`)
 };
 
 /**

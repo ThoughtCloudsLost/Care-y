@@ -9,7 +9,8 @@
  * backfilled on first decrypt.
  *
  * Generated aliases are structurally unique: the numeric suffix is
- * drawn from a per-org sequence so no two generated aliases can collide.
+ * drawn from a per-org counter on org_config, atomically incremented
+ * via UPDATE ... RETURNING, so no two generated aliases can collide.
  */
 
 import type { Kysely, Selectable } from "kysely";

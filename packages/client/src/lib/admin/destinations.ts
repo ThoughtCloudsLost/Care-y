@@ -2,8 +2,10 @@ import type { Component } from "svelte";
 import { Permission } from "@care-y/shared";
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
+import type { ScrollSection } from "$lib/components/useSectionScroll.svelte.js";
 import {
   Users,
+  UsersRound,
   Layers,
   HeartHandshake,
   Phone,
@@ -18,9 +20,11 @@ import {
   ClipboardPenLine,
   LayoutDashboard,
   ChartBar,
+  ChartColumn,
   Search,
   PhoneMissed,
   PhoneCall,
+  RadioTower,
   ScrollText,
   ClipboardList,
 } from "@lucide/svelte";
@@ -273,4 +277,50 @@ export function groupDestinations(
     grouped.set(dest.group, list);
   }
   return grouped;
+}
+
+// ── Admin hub section helpers (shared by the page and registry) ────
+
+export function groupIcon(group: AdminGroup): Component {
+  switch (group) {
+    case "people":
+      return UsersRound;
+    case "communications":
+      return RadioTower;
+    case "organization":
+      return Building2;
+    case "analytics":
+      return ChartColumn;
+  }
+}
+
+export function groupLabel(group: AdminGroup): string {
+  switch (group) {
+    case "people":
+      return m.panel_group_people();
+    case "communications":
+      return m.panel_group_communications();
+    case "organization":
+      return m.panel_group_organization();
+    case "analytics":
+      return m.panel_group_analytics();
+  }
+}
+
+/**
+ * Build the scroll sections for the admin hub from permission-filtered
+ * destinations. Single derivation used by both the hub page and the
+ * section registry.
+ */
+export function buildAdminHubSections(
+  permissions: ReadonlySet<Permission>,
+): readonly ScrollSection[] {
+  const visible = getVisibleDestinations(permissions);
+  const groupSet = new Set(visible.map((d) => d.group));
+  const visibleGroups = GROUP_ORDER.filter((g) => groupSet.has(g));
+  return visibleGroups.map((g) => ({
+    id: g,
+    label: () => groupLabel(g),
+    icon: groupIcon(g),
+  }));
 }

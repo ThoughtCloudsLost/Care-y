@@ -35,6 +35,7 @@ import {
   createMockEmailSender,
   createMockOprfDeps,
   createThrowingProviderFactory,
+  NO_OPTIONAL_ROUTERS,
   type TestDb,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
@@ -138,6 +139,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // Shared by authDeps and twoFactorDeps, matching production wiring.
       const totpReplayCache = createInMemoryTotpReplayCache();
       return createAppRouter({
+        ...NO_OPTIONAL_ROUTERS,
         authDeps: {
           hasher,
           loginLimiter,

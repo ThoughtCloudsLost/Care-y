@@ -10,7 +10,7 @@ const en_mgr_role_reports = /** @type {(inputs: Mgr_Role_ReportsInputs) => Local
 };
 
 const es_mgr_role_reports = /** @type {(inputs: Mgr_Role_ReportsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ver reportes y metricas de la organizacion`)
+	return /** @type {LocalizedString} */ (`Ver reportes y métricas de la organización`)
 };
 
 /**

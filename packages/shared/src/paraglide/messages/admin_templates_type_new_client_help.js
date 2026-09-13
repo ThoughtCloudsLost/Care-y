@@ -10,7 +10,7 @@ const en_admin_templates_type_new_client_help = /** @type {(inputs: Admin_Templa
 };
 
 const es_admin_templates_type_new_client_help = /** @type {(inputs: Admin_Templates_Type_New_Client_HelpInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Se envia automaticamente a cada mensaje de texto entrante. Informa al remitente que su mensaje fue recibido y que un ${i?.volunteer} dara seguimiento.`)
+	return /** @type {LocalizedString} */ (`Se envia automáticamente a cada mensaje de texto entrante. Informa al remitente que su mensaje fue recibido y que un ${i?.volunteer} dará seguimiento.`)
 };
 
 /**

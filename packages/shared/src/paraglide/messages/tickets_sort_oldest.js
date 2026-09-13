@@ -10,7 +10,7 @@ const en_tickets_sort_oldest = /** @type {(inputs: Tickets_Sort_OldestInputs) =>
 };
 
 const es_tickets_sort_oldest = /** @type {(inputs: Tickets_Sort_OldestInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mas antiguos`)
+	return /** @type {LocalizedString} */ (`Más antiguos`)
 };
 
 /**

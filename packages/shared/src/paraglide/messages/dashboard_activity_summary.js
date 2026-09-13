@@ -10,7 +10,7 @@ const en_dashboard_activity_summary = /** @type {(inputs: Dashboard_Activity_Sum
 };
 
 const es_dashboard_activity_summary = /** @type {(inputs: Dashboard_Activity_SummaryInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} eventos en la ultima hora`)
+	return /** @type {LocalizedString} */ (`${i?.count} eventos en la última hora`)
 };
 
 /**

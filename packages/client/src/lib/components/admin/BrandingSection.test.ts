@@ -25,13 +25,38 @@ const {
   mockHaptic,
   mockSetBrandingTitle,
   mockUploadPwaIcons,
-} = vi.hoisted(() => ({
-  mockSaveBrandingField: vi.fn().mockResolvedValue(undefined),
-  mockToastShow: vi.fn(),
-  mockHaptic: vi.fn(),
-  mockSetBrandingTitle: vi.fn(),
-  mockUploadPwaIcons: vi.fn().mockResolvedValue(undefined),
-}));
+  mockWhenSettled,
+  decryptGate,
+} = await vi.hoisted(async () => {
+  // Controllable settlement gate: when `blocked` is true, decrypt returns
+  // null for the "branding:name" key (simulating an in-flight async
+  // decrypt that has not yet resolved). Tests that need immediate
+  // decryption leave `blocked` at its default (false).
+  //
+  // Backed by a SvelteMap so reads inside a component's $derived are
+  // tracked: the real cache stores results in a SvelteMap, which is what
+  // lets whenSettled-then-reread observe the settled value. A plain
+  // object here would leave the derived cached at null forever.
+  const { SvelteMap } = await import("svelte/reactivity");
+  const gateMap = new SvelteMap<string, boolean>([["blocked", false]]);
+  const gate = {
+    get blocked(): boolean {
+      return gateMap.get("blocked") === true;
+    },
+    set blocked(value: boolean) {
+      gateMap.set("blocked", value);
+    },
+  };
+  return {
+    mockSaveBrandingField: vi.fn().mockResolvedValue(undefined),
+    mockToastShow: vi.fn(),
+    mockHaptic: vi.fn(),
+    mockSetBrandingTitle: vi.fn(),
+    mockUploadPwaIcons: vi.fn().mockResolvedValue(undefined),
+    mockWhenSettled: vi.fn().mockResolvedValue(undefined),
+    decryptGate: gate,
+  };
+});
 
 let mockBrandingData: BrandingData | undefined;
 let mockIsLoading: boolean;
@@ -188,7 +213,17 @@ vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof CryptoContext>()),
   getOrgDecryptCache: () => ({
-    decrypt: (_id: string, encrypted: unknown) => {
+    decrypt: (id: string, encrypted: unknown) => {
+      // When the gate is blocked, name/text/support_label keys return null
+      // (simulating an async decrypt that has not settled yet).
+      if (decryptGate.blocked) {
+        const unsettledKeys = new Set([
+          "branding:name",
+          "branding:text",
+          "branding:support_label",
+        ]);
+        if (unsettledKeys.has(id)) return null;
+      }
       if (encrypted instanceof Uint8Array) {
         return new TextDecoder().decode(encrypted);
       }
@@ -205,6 +240,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
     has: vi.fn().mockReturnValue(false),
     delete: vi.fn(),
     isFailed: vi.fn().mockReturnValue(false),
+    whenSettled: mockWhenSettled,
   }),
   getOrgKeyManager: () => ({
     isLoaded: true,
@@ -360,6 +396,7 @@ vi.mock("$lib/shell/context.js", async (importOriginal) => ({
 
 import BrandingSection from "./BrandingSection.svelte";
 import { DEFAULT_PRIMARY, DEFAULT_ACCENT } from "$lib/branding/index.js";
+import { buildClientBrandingBlob } from "$lib/branding/encrypt.js";
 
 const LOADED_DATA: BrandingData = {
   encryptedName: btoa("Safe Harbor Hotline"),
@@ -367,6 +404,7 @@ const LOADED_DATA: BrandingData = {
   encryptedPrimaryColor: btoa(DEFAULT_PRIMARY),
   encryptedAccentColor: btoa(DEFAULT_ACCENT),
   encryptedClientText: btoa("We provide confidential support."),
+  encryptedClientSupportLabel: null,
   clientEncryptedBranding: null,
   encryptedTerminology: null,
   hasIcons: false,
@@ -397,6 +435,7 @@ describe("BrandingSection", () => {
     mockBrandingData = undefined;
     mockIsLoading = true;
     mockIsError = false;
+    decryptGate.blocked = false;
     vi.clearAllMocks();
   });
 
@@ -427,6 +466,7 @@ describe("BrandingSection", () => {
       encryptedName: null,
       encryptedLogo: null,
       encryptedPrimaryColor: null,
+      encryptedClientSupportLabel: null,
       encryptedClientText: null,
     });
     expect(screen.getByText("No logo uploaded")).toBeTruthy();
@@ -821,5 +861,46 @@ describe("BrandingSection", () => {
     });
     // When no color data exists, a dash placeholder renders
     expect(screen.getByText("-")).toBeTruthy();
+  });
+
+  it("preserves the settled org name when saving a color change", async () => {
+    // Regression: before the fix, saving a color change while the name
+    // decrypt was still in flight rebuilt the client blob with name: "",
+    // silently erasing the client-facing org name.
+
+    // Render with name encrypted but decrypt gate blocked so the derived
+    // returns null (simulating a pending fire-and-forget decrypt).
+    decryptGate.blocked = true;
+    renderWithData({ encryptedName: btoa("Safe Harbor Hotline") });
+
+    // Open sheet, change the primary color
+    await openEditSheet();
+    const picker = document.querySelector(
+      'input[type="color"]',
+    ) as HTMLInputElement;
+    await fireEvent.input(picker, { target: { value: "#aa1122" } });
+
+    // Wire whenSettled so it unblocks the gate and resolves, letting the
+    // derived re-read the settled plaintext on the next access.
+    mockWhenSettled.mockImplementation(async () => {
+      decryptGate.blocked = false;
+    });
+
+    const saveBtn = screen.getByRole("button", { name: /save changes/i });
+    await fireEvent.click(saveBtn);
+
+    await vi.waitFor(() => {
+      expect(mockSaveBrandingField).toHaveBeenCalled();
+    });
+
+    // The blob builder must have received the settled name, not "".
+    const blobSpy = vi.mocked(buildClientBrandingBlob);
+    expect(blobSpy).toHaveBeenCalled();
+    const blobArgs = blobSpy.mock.calls as Array<
+      [{ name: string; primaryColor: string; supportLabel: string }, unknown]
+    >;
+    const blobCall = blobArgs.find((c) => c[0].primaryColor === "#aa1122");
+    expect(blobCall).toBeTruthy();
+    expect(blobCall![0].name).toBe("Safe Harbor Hotline");
   });
 });

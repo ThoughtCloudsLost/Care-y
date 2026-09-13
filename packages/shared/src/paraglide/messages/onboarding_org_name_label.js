@@ -10,7 +10,7 @@ const en_onboarding_org_name_label = /** @type {(inputs: Onboarding_Org_Name_Lab
 };
 
 const es_onboarding_org_name_label = /** @type {(inputs: Onboarding_Org_Name_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre de la organizacion`)
+	return /** @type {LocalizedString} */ (`Nombre de la organización`)
 };
 
 /**

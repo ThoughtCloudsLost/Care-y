@@ -10,7 +10,7 @@ const en_ticket_new_error_title_required = /** @type {(inputs: Ticket_New_Error_
 };
 
 const es_ticket_new_error_title_required = /** @type {(inputs: Ticket_New_Error_Title_RequiredInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El titulo es obligatorio`)
+	return /** @type {LocalizedString} */ (`El título es obligatorio`)
 };
 
 /**

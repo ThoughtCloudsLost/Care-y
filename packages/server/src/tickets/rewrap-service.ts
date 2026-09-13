@@ -2,7 +2,14 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import type { BlobStore, BlobCategory } from "../storage/store.js";
-import type { FollowupId, UserId, BlobKey, OrgSchema } from "@care-y/shared";
+import type {
+  FollowupId,
+  UserId,
+  BlobKey,
+  OrgSchema,
+  AttachmentId,
+  RecordingId,
+} from "@care-y/shared";
 
 export interface RewrapInput {
   readonly followUpId: FollowupId;
@@ -11,6 +18,32 @@ export interface RewrapInput {
     readonly oldBlobKey: BlobKey;
     readonly encryptedData: Buffer;
     readonly category: BlobCategory;
+  }[];
+  /**
+   * Attachments encrypted under a key of their own, whose key was wrapped
+   * with tk_temp (ADR-089). Convergence replaces the wrap and leaves the
+   * blob untouched, so these carry 32 bytes where `blobUpdates` carries a
+   * whole re-encrypted file. Rows with a null `file_key_wrap` are the
+   * older envelope and still travel through `blobUpdates`.
+   */
+  readonly fileKeyUpdates?: readonly {
+    readonly attachmentId: AttachmentId;
+    readonly fileKeyWrap: Buffer;
+    /**
+     * Filename re-encrypted under the canonical tk. Present for portal
+     * uploads, whose name was encrypted under tk_temp at upload time and
+     * would become unreadable once the temp wraps are deleted.
+     */
+    readonly encryptedFilename?: Buffer;
+  }[];
+  /**
+   * Recordings encrypted under a file key (ADR-092). Mirrors
+   * fileKeyUpdates but for the recordings table. Recordings carry no
+   * encrypted filename, so only the wrap column is updated.
+   */
+  readonly recordingFileKeyUpdates?: readonly {
+    readonly recordingId: RecordingId;
+    readonly fileKeyWrap: Buffer;
   }[];
 }
 
@@ -93,6 +126,34 @@ export async function rewrapFollowUp(
       .deleteFrom("portal_reply_key_wraps")
       .where("followup_id", "=", input.followUpId)
       .execute();
+
+    // Converge file keys. The blob is not rewritten: only the wrap that
+    // opens it moves from tk_temp to the canonical tk (ADR-089). Scoped to
+    // this follow-up so a wrap cannot be written onto another one's row.
+    for (const update of input.fileKeyUpdates ?? []) {
+      await trx
+        .updateTable("attachments")
+        .set({
+          file_key_wrap: update.fileKeyWrap,
+          ...(update.encryptedFilename !== undefined
+            ? { encrypted_filename: update.encryptedFilename }
+            : {}),
+        })
+        .where("id", "=", update.attachmentId)
+        .where("followup_id", "=", input.followUpId)
+        .execute();
+    }
+
+    // Converge recording file keys (ADR-092). Same shape as attachment
+    // convergence but recordings carry no encrypted filename.
+    for (const update of input.recordingFileKeyUpdates ?? []) {
+      await trx
+        .updateTable("recordings")
+        .set({ file_key_wrap: update.fileKeyWrap })
+        .where("id", "=", update.recordingId)
+        .where("followup_id", "=", input.followUpId)
+        .execute();
+    }
 
     // Update blob references in attachment/recording rows
     for (const { oldKey, newKey } of blobReplacements) {

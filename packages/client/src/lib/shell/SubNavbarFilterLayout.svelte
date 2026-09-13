@@ -32,9 +32,22 @@
     view?: ViewToggleConfig;
     headerRight?: Snippet;
     stats?: Snippet;
+    /** Optional snippet rendered on the right side of the stats row,
+     *  beside the select/sort controls (e.g. a view toggle on detail pages). */
+    statsRight?: Snippet;
     sort?: SortConfig;
-    selectLabel: string;
-    onselect: () => void;
+    /**
+     * Multi-select entry. Both are optional together: a surface with a
+     * single conversation has nothing to select across, and it reuses
+     * this row for search rather than carrying a control that would do
+     * nothing. Absent means the button is not rendered.
+     */
+    selectLabel?: string;
+    onselect?: () => void;
+    /** Render the select button in the filter pill row (beside search)
+     *  instead of the stats row. Detail pages use this so the stats row
+     *  keeps only the view toggle. */
+    selectInFilterRow?: boolean;
     savedFilters?: SavedFiltersConfig;
     filterPills: FilterPillsConfig;
     manage?: ManageConfig;
@@ -54,9 +67,11 @@
     view,
     headerRight,
     stats,
+    statsRight,
     sort,
     selectLabel,
     onselect,
+    selectInFilterRow = false,
     savedFilters,
     filterPills,
     manage,
@@ -65,6 +80,9 @@
     onsearch,
     searchLabel,
   }: Props = $props();
+
+  /** True when the header row has visible content and should render. */
+  const showHeader = $derived(!hideTitle || !!view || !!headerRight);
 
   // Compose a sort button label that includes the current direction so
   // screen readers announce state changes (e.g. "Sort clients, ascending").
@@ -99,25 +117,28 @@
 </script>
 
 <section class="subnavbar-filter-content" aria-label={title}>
-  <div class="page-header">
-    {#if hideTitle}
-      <span class="page-title-spacer" aria-hidden="true"></span>
-    {:else if smallTitle}
-      <span class="page-title-small">{title}</span>
-    {:else}
-      <BlockTitle large class="page-title heading-compact">{title}</BlockTitle>
-    {/if}
-    {#if view}
-      <ViewSwitcher
-        mode={view.mode}
-        onchange={view.onchange}
-        label={view.label}
-      />
-    {:else if headerRight}
-      {@render headerRight()}
-    {/if}
-  </div>
-  {#if stats ?? sort}
+  {#if showHeader}
+    <div class="page-header">
+      {#if hideTitle}
+        <span class="page-title-spacer" aria-hidden="true"></span>
+      {:else if smallTitle}
+        <span class="page-title-small">{title}</span>
+      {:else}
+        <BlockTitle large class="page-title heading-compact">{title}</BlockTitle
+        >
+      {/if}
+      {#if view}
+        <ViewSwitcher
+          mode={view.mode}
+          onchange={view.onchange}
+          label={view.label}
+        />
+      {:else if headerRight}
+        {@render headerRight()}
+      {/if}
+    </div>
+  {/if}
+  {#if stats ?? sort ?? statsRight}
     <div class="stats-row">
       <div class="stats-counts">
         {#if stats}
@@ -125,6 +146,9 @@
         {/if}
       </div>
       <div class="view-controls">
+        {#if statsRight}
+          {@render statsRight()}
+        {/if}
         {#if sort}
           <span bind:this={sortAnchorEl} class="sort-anchor">
             <Button
@@ -145,17 +169,19 @@
             </Button>
           </span>
         {/if}
-        <Button
-          tonal
-          rounded
-          small
-          inline
-          class="select-btn"
-          aria-label={selectLabel}
-          onclick={onselect}
-        >
-          <SquareCheckBig size={16} aria-hidden="true" />
-        </Button>
+        {#if onselect && !selectInFilterRow}
+          <Button
+            tonal
+            rounded
+            small
+            inline
+            class="select-btn"
+            aria-label={selectLabel}
+            onclick={onselect}
+          >
+            <SquareCheckBig size={16} aria-hidden="true" />
+          </Button>
+        {/if}
         {#if manage}
           {@const ManageIcon = manage.icon ?? Settings}
           <Button
@@ -172,7 +198,7 @@
         {/if}
       </div>
     </div>
-  {:else}
+  {:else if onselect && !selectInFilterRow}
     <div class="view-controls standalone-controls">
       <Button
         tonal
@@ -208,6 +234,19 @@
         onclick={onsearch}
       >
         <Search size={16} aria-hidden="true" />
+      </Button>
+    {/if}
+    {#if onselect && selectInFilterRow}
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="select-btn filter-select-btn"
+        aria-label={selectLabel}
+        onclick={onselect}
+      >
+        <SquareCheckBig size={16} aria-hidden="true" />
       </Button>
     {/if}
     <FilterPillBar
@@ -380,10 +419,27 @@
     overflow: visible !important;
   }
 
+  /* Invisible 44px touch hit area (WCAG 2.5.8 / Apple HIG 44pt).
+     Vertical expansion is -8px each side (28px + 16px = 44px).
+     Horizontal expansion is capped at -4px per side so the 6px
+     inter-button gap keeps at least 2px of effective separation. */
+  :global(.sort-btn)::after,
+  :global(.select-btn)::after,
+  :global(.manage-btn)::after,
+  :global(.filter-search-btn)::after {
+    content: "";
+    position: absolute;
+    inset: -8px -4px;
+  }
+
   :global(.sort-btn svg),
   :global(.select-btn svg),
   :global(.manage-btn svg) {
     color: var(--ink) !important;
+  }
+
+  :global(.filter-select-btn) {
+    flex-shrink: 0;
   }
 
   :global(.filter-search-btn) {

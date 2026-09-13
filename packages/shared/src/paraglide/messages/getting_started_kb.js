@@ -10,7 +10,7 @@ const en_getting_started_kb = /** @type {(inputs: Getting_Started_KbInputs) => L
 };
 
 const es_getting_started_kb = /** @type {(inputs: Getting_Started_KbInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Agregar articulos a la ${i?.knowledgeBase}`)
+	return /** @type {LocalizedString} */ (`Agregar artículos a la ${i?.knowledgeBase}`)
 };
 
 /**

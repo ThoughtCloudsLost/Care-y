@@ -1,7 +1,9 @@
 <!--
   Admin intake form editor. Renders the ordered field list, add/reorder/remove
   controls, slug, destination queue, default toggle, share link, read-only
-  preview, and save/delete actions.
+  preview, and save/delete actions. Supports multilingual authoring for all
+  localized content (labels, help text, options, form-level meta) via locale
+  tabs, and tracks unsaved changes for navigation guarding.
 
   Edits plaintext in component-local state only. Nothing plaintext persists.
   On save, every field's label and config are encrypted via encryptFieldContent
@@ -17,32 +19,94 @@
     Block,
     Toggle,
     DialogButton,
+    Segmented,
+    SegmentedButton,
+    Preloader,
   } from "konsta/svelte";
-  import { ArrowUp, ArrowDown, Settings, X, Copy } from "@lucide/svelte";
+  import { untrack } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
+  import {
+    ArrowUp,
+    ArrowDown,
+    Settings,
+    X,
+    Copy,
+    Eye,
+    ImagePlus,
+    Trash2,
+  } from "@lucide/svelte";
   import {
     createMutation,
     createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import type {
-    IntakeFieldConfig,
-    IntakeFieldType,
-    IntakeFieldRole,
+  import {
+    resolveLocalized,
+    normalizeVisibleWhen,
+    BASE_LOCALE,
+    FORM_LOCALES,
+    KB_ATTACHMENT_MAX_BYTES,
+    FORM_ASSET_CONTENT_TYPES,
+    type IntakeFieldConfig,
+    type IntakeFieldType,
+    type IntakeFormMeta,
+    type LocalizedRichText,
+    type FormLocale,
   } from "@care-y/shared";
+  import { encryptClientBranding, encode } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
-  import { intakeFormKeys, queueKeys, volunteerKeys } from "$lib/query/keys.js";
+  import {
+    intakeFormKeys,
+    queueKeys,
+    volunteerKeys,
+    adminKeys,
+  } from "$lib/query/keys.js";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { encryptFieldContent } from "$lib/portal/intake-form-crypto.js";
+  import {
+    encryptFieldContent,
+    encryptFormMeta,
+  } from "$lib/portal/intake-form-crypto.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { getErrorMessage } from "$lib/components/query-error-messages.js";
   import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
+  import SplitView from "$lib/shell/SplitView.svelte";
+  import { layoutMode } from "$lib/stores/layout-mode.svelte";
+  import EmptyState from "$lib/components/EmptyState.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import IntakeFieldConfigSheet from "./IntakeFieldConfigSheet.svelte";
+  import FormContentEditor from "./FormContentEditor.svelte";
+  import {
+    getFieldTypeLabel,
+    getFieldTypeDesc,
+    getRoleLabel,
+  } from "./intake-field-labels.js";
+  import {
+    hasAnyRichContent,
+    trimLocalizedRichText,
+  } from "$lib/utils/localized-text.js";
+  import {
+    renderFormRichText,
+    rewriteFormAssetUrls,
+  } from "$lib/utils/render-form-content.js";
+  import { getOrgSlug } from "$lib/utils/org-slug.js";
+  import {
+    computeLocaleCompleteness,
+    validateRichTextCap as validateRichTextCapPure,
+    validateFieldBodyCap as validateFieldBodyCapPure,
+    richTextBodyPreview as richTextBodyPreviewPure,
+    resolveRichPreview,
+    cleanStaleVisibilityRules,
+    CONDITION_DRIVER_TYPES,
+    RICH_TEXT_LOCALE_CAP,
+    type ContentCapErrors,
+    type ContentCapField,
+    type PlaintextField,
+  } from "./intake-form-editor-logic.js";
   import type {
     FieldConfigState,
     FieldConfigInitial,
@@ -51,15 +115,8 @@
   } from "./intake-field-config-types.js";
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
 
-  interface PlaintextField {
-    label: string;
-    isRequired: boolean;
-    config: IntakeFieldConfig;
-    fieldType: IntakeFieldType;
-    role: IntakeFieldRole | null;
-    routingQueueIds: string[] | null;
-    escalationRecipientIds: string[] | null;
-  }
+  import type { IntakeOption } from "@care-y/shared";
+  import type { EarlierFieldOption } from "./intake-field-config-types.js";
 
   interface IntakeFormEditorProps {
     readonly formId: string | null;
@@ -67,9 +124,13 @@
     readonly initialSlug: string | null;
     readonly initialIsDefault: boolean;
     readonly initialDestinationQueueId: string | null;
+    readonly initialFormMeta: IntakeFormMeta;
+    /** ISO 8601 datetime string or null when no closing date is set. */
+    readonly initialClosesAt: string | null;
     readonly initialFields: readonly PlaintextField[];
     readonly onback: () => void;
     readonly ondeleted: () => void;
+    readonly ondirtychange?: (dirty: boolean) => void;
   }
 
   let {
@@ -78,9 +139,12 @@
     initialSlug,
     initialIsDefault,
     initialDestinationQueueId,
+    initialFormMeta,
+    initialClosesAt,
     initialFields,
     onback,
     ondeleted,
+    ondirtychange,
   }: IntakeFormEditorProps = $props();
 
   const intakeFormsRouter = requireRouter(trpc.intakeForms, "intakeForms");
@@ -89,19 +153,180 @@
   const orgKeyManager = getOrgKeyManager();
   const orgCache = getOrgDecryptCache();
 
-  let formName = $state(initialName);
-  let formSlug = $state(initialSlug ?? "");
-  let isDefault = $state(initialIsDefault);
-  let destinationQueueId = $state<string | null>(initialDestinationQueueId);
-  let fields = $state<PlaintextField[]>([...initialFields]);
+  // ---- Locale authoring state ----
+  let editingLocale = $state<FormLocale>(BASE_LOCALE);
+  let previewLocale = $state<FormLocale>(BASE_LOCALE);
 
-  // Field config sheet state
+  type PreviewState = "form" | "submitted" | "closed";
+  let previewState = $state<PreviewState>("form");
+
+  const isDesktop = $derived(layoutMode.isDesktop);
+
+  /** Native locale name for display in the segmented control. */
+  function localeName(loc: FormLocale): string {
+    switch (loc) {
+      case "en":
+        return "EN";
+      case "es":
+        return "ES";
+    }
+  }
+
+  // ---- Form-level state ----
+  // untrack: intentionally captures each initial prop value once; the
+  // component owns a local editing copy that diverges from the prop.
+  let formName = $state(untrack(() => initialName));
+  let formSlug = $state(untrack(() => initialSlug ?? ""));
+  let slugError = $state("");
+  let isDefault = $state(untrack(() => initialIsDefault));
+  let destinationQueueId = $state<string | null>(
+    untrack(() => initialDestinationQueueId),
+  );
+  let formDescription = $state<LocalizedRichText>(
+    untrack(() => initialFormMeta.description ?? {}),
+  );
+  let formSubmitMessage = $state<LocalizedRichText>(
+    untrack(() => initialFormMeta.submitMessage ?? {}),
+  );
+  let formClosedMessage = $state<LocalizedRichText>(
+    untrack(() => initialFormMeta.closedMessage ?? {}),
+  );
+
+  // ---- Banner state ----
+  let bannerBlobKey = $state<string | null>(
+    untrack(() => initialFormMeta.bannerBlobKey ?? null),
+  );
+  let bannerAlt = $state(untrack(() => initialFormMeta.bannerAlt ?? ""));
+  let bannerUploading = $state(false);
+
+  const orgSlug = getOrgSlug();
+
+  /** Validation errors for the three rich text fields. */
+  let contentCapErrors = $state<ContentCapErrors>({});
+
+  /**
+   * Convert an ISO 8601 datetime string to the datetime-local input format
+   * (YYYY-MM-DDThh:mm). datetime-local inputs work in the browser's local
+   * timezone, so we produce a local representation.
+   */
+  function isoToDatetimeLocal(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const year = String(d.getFullYear()).padStart(4, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  let closesAtLocal = $state(
+    untrack(() =>
+      initialClosesAt != null ? isoToDatetimeLocal(initialClosesAt) : "",
+    ),
+  );
+
+  let fields = $state<PlaintextField[]>(untrack(() => [...initialFields]));
+
+  // F-002: Track whether the user has manually edited the slug field.
+  // When false, typing in the name field auto-generates the slug.
+  // untrack: intentionally captures the initial prop value once.
+  let slugTouched = $state(
+    untrack(() => initialSlug != null && initialSlug.length > 0),
+  );
+
+  // ---- Slug validation (mirrors intakeFormSlugSchema from shared) ----
+
+  /** Validate slug format inline. Returns an error string or empty. */
+  function validateSlug(slug: string): string {
+    if (slug.length === 0) return "";
+    if (slug.length < 2) return m.intake_forms_slug_error_length();
+    if (slug.length > 80) return m.intake_forms_slug_error_length();
+    if (!/^[a-z0-9]/.test(slug) || !/[a-z0-9]$/.test(slug)) {
+      return m.intake_forms_slug_error_format();
+    }
+    if (!/^[a-z0-9-]+$/.test(slug)) {
+      return m.intake_forms_slug_error_format();
+    }
+    if (slug.includes("--")) return m.intake_forms_slug_error_format();
+    return "";
+  }
+
+  // ---- Dirty tracking ----
+
+  const isDirty = $derived.by((): boolean => {
+    if (formName !== initialName) return true;
+    if (formSlug !== (initialSlug ?? "")) return true;
+    if (isDefault !== initialIsDefault) return true;
+    if (destinationQueueId !== initialDestinationQueueId) return true;
+    const initialClosesAtLocal =
+      initialClosesAt != null ? isoToDatetimeLocal(initialClosesAt) : "";
+    if (closesAtLocal !== initialClosesAtLocal) return true;
+    if (fields.length !== initialFields.length) return true;
+    // Shallow field comparison: check fieldKeys, labels, required, and types
+    for (let i = 0; i < fields.length; i++) {
+      const cur = fields.at(i);
+      const ini = initialFields.at(i);
+      if (cur === undefined || ini === undefined) return true;
+      if (cur.fieldKey !== ini.fieldKey) return true;
+      if (JSON.stringify(cur.label) !== JSON.stringify(ini.label)) return true;
+      if (JSON.stringify(cur.helpText) !== JSON.stringify(ini.helpText))
+        return true;
+      if (cur.isRequired !== ini.isRequired) return true;
+      if (JSON.stringify(cur.config) !== JSON.stringify(ini.config))
+        return true;
+    }
+    // Compare form-level meta (rich text maps via JSON serialization)
+    if (
+      JSON.stringify(formDescription) !==
+      JSON.stringify(initialFormMeta.description ?? {})
+    )
+      return true;
+    if (
+      JSON.stringify(formSubmitMessage) !==
+      JSON.stringify(initialFormMeta.submitMessage ?? {})
+    )
+      return true;
+    if (
+      JSON.stringify(formClosedMessage) !==
+      JSON.stringify(initialFormMeta.closedMessage ?? {})
+    )
+      return true;
+    // Banner
+    if (bannerBlobKey !== (initialFormMeta.bannerBlobKey ?? null)) return true;
+    if (bannerAlt !== (initialFormMeta.bannerAlt ?? "")) return true;
+    return false;
+  });
+
+  // Notify parent of dirty changes
+  $effect(() => {
+    ondirtychange?.(isDirty);
+  });
+
+  // ---- Per-locale completeness indicator ----
+
+  function localeCompleteness(loc: FormLocale): {
+    filled: number;
+    total: number;
+  } {
+    return computeLocaleCompleteness(
+      loc,
+      formDescription,
+      formSubmitMessage,
+      formClosedMessage,
+      fields,
+    );
+  }
+
+  // ---- Field config sheet state ----
   let configSheetOpened = $state(false);
   let configFieldIndex = $state(-1);
   let configFieldIsNew = $state(false);
   let configFieldType = $state<IntakeFieldType>("text");
   const defaultConfigInitial: FieldConfigInitial = {
-    label: "",
+    fieldType: "text",
+    label: {},
+    helpText: {},
     isRequired: false,
     config: { type: "text" },
     role: null,
@@ -143,6 +368,34 @@
       id: q.id,
       name: getQueueName(q),
     }));
+  });
+
+  // Query the org's default intake queue id for the destination label (F-008)
+  const orgRouter = trpc.org;
+  const intakeQueueQuery = createQuery(() => ({
+    queryKey: adminKeys.intakeQueue(),
+    queryFn: async () => orgRouter.getIntakeQueue.query(),
+  }));
+
+  /**
+   * Resolve the label for the "default intake queue" option.
+   * Names the queue it resolves to (e.g. "Default intake queue (Intake)")
+   * and falls back to the generic label when the queue id is null or
+   * the queue is not in the loaded list.
+   */
+  const defaultQueueLabel = $derived.by((): string => {
+    const intakeQueueId = intakeQueueQuery.data?.queueId ?? null;
+    if (intakeQueueId === null || queuesQuery.data == null) {
+      return m.intake_forms_destination_none();
+    }
+    const match = queuesQuery.data.find(
+      (q: { id: string }) => q.id === intakeQueueId,
+    );
+    if (match == null) {
+      return m.intake_forms_destination_none();
+    }
+    const name = getQueueName(match);
+    return m.intake_forms_destination_default_named({ name });
   });
 
   /** Decrypted volunteer options for the escalation recipient picker. */
@@ -191,6 +444,8 @@
       slug: string | null;
       isDefault: boolean;
       destinationQueueId: string | null;
+      closesAt: string | null;
+      formMeta: IntakeFormMeta;
       fields: PlaintextField[];
     }) => {
       const orgPub = orgKeyManager.getPublicKey();
@@ -200,10 +455,15 @@
 
       const encryptedFields = input.fields.map((f) => {
         const encrypted = encryptFieldContent(
-          { label: f.label, config: f.config },
+          {
+            label: f.label,
+            config: f.config,
+            visibleWhen: f.visibleWhen,
+          },
           orgPub,
         );
         return {
+          fieldKey: f.fieldKey,
           fieldType: f.fieldType,
           encryptedLabel: encrypted.encryptedLabel,
           encryptedConfig: encrypted.encryptedConfig,
@@ -214,12 +474,16 @@
         };
       });
 
+      const encryptedFormMeta = encryptFormMeta(input.formMeta, orgPub);
+
       return intakeFormsRouter.save.mutate({
         formId: input.formId,
         name: input.name,
         slug: input.slug,
         isDefault: input.isDefault,
         destinationQueueId: input.destinationQueueId,
+        closesAt: input.closesAt,
+        ...(encryptedFormMeta != null ? { encryptedFormMeta } : {}),
         fields: encryptedFields,
       });
     },
@@ -285,8 +549,9 @@
     const target = e.target;
     if (target instanceof HTMLInputElement) {
       formName = target.value;
-      // Auto-suggest slug when creating a new form and slug is empty
-      if (formId === null && formSlug === "") {
+      // Auto-suggest slug while creating a new form, until the user
+      // manually edits the slug field (tracked by slugTouched).
+      if (formId === null && !slugTouched) {
         formSlug = suggestSlug(target.value);
       }
     }
@@ -295,7 +560,9 @@
   function handleSlugInput(e: Event): void {
     const target = e.target;
     if (target instanceof HTMLInputElement) {
+      slugTouched = true;
       formSlug = target.value;
+      slugError = validateSlug(target.value);
     }
   }
 
@@ -306,22 +573,74 @@
     }
   }
 
+  /**
+   * Sweep all fields and clean stale visibility rules. After reorder or
+   * delete, a rule may reference a field that is no longer eligible
+   * (removed, moved after the dependent field, or changed type).
+   */
+  function sweepStaleConditions(fieldList: PlaintextField[]): PlaintextField[] {
+    return fieldList.map((f, i) => {
+      if (f.visibleWhen == null) return f;
+      const cleaned = cleanStaleVisibilityRules(f.visibleWhen, i, fieldList);
+      if (cleaned === f.visibleWhen) return f;
+      return { ...f, visibleWhen: cleaned };
+    });
+  }
+
   function moveField(index: number, direction: -1 | 1): void {
     const swapTarget = index + direction;
     if (swapTarget < 0 || swapTarget >= fields.length) return;
     const src = fields.at(index);
     const dst = fields.at(swapTarget);
     if (src === undefined || dst === undefined) return;
-    fields = fields.map((f, i) => {
+    const swapped = fields.map((f, i) => {
       if (i === index) return dst;
       if (i === swapTarget) return src;
       return f;
     });
+    fields = sweepStaleConditions(swapped);
   }
 
   function removeField(index: number): void {
-    fields = fields.filter((_, i) => i !== index);
+    const remaining = fields.filter((_, i) => i !== index);
+    fields = sweepStaleConditions(remaining);
   }
+
+  /**
+   * Build the list of earlier fields eligible for conditional visibility rules.
+   * Only fields whose type is in CONDITION_DRIVER_TYPES appearing before the
+   * given index qualify.
+   */
+  function buildEarlierFields(beforeIndex: number): EarlierFieldOption[] {
+    const result: EarlierFieldOption[] = [];
+    for (let i = 0; i < beforeIndex && i < fields.length; i++) {
+      const f = fields.at(i);
+      if (f === undefined) continue;
+      if (!CONDITION_DRIVER_TYPES.has(f.fieldType)) continue;
+      const label = resolveLocalized(f.label, BASE_LOCALE) ?? f.fieldKey;
+      const cfg = f.config;
+      let fieldOptions: { key: string; label: string }[] | undefined;
+      if (cfg.type === "select" || cfg.type === "multiselect") {
+        fieldOptions = cfg.options.map((o: IntakeOption) => ({
+          key: o.key,
+          label: resolveLocalized(o.label, BASE_LOCALE) ?? o.key,
+        }));
+      }
+      result.push({
+        fieldKey: f.fieldKey,
+        label,
+        fieldType: f.fieldType,
+        options: fieldOptions,
+      });
+    }
+    return result;
+  }
+
+  /** Reactively derived from fields + the open sheet's index so mid-session
+   *  reorders and renames are reflected without the snapshot staleness bug. */
+  const configEarlierFields = $derived(
+    configFieldIndex >= 0 ? buildEarlierFields(configFieldIndex) : [],
+  );
 
   function openConfigSheet(index: number, isNew = false): void {
     const field = fields.at(index);
@@ -330,11 +649,14 @@
     configFieldIndex = index;
     configFieldType = field.fieldType;
     configFieldInitial = {
-      label: field.label,
+      fieldType: field.fieldType,
+      label: { ...field.label },
+      helpText: { ...field.helpText },
       isRequired: field.isRequired,
       config: field.config,
       role: field.role,
       escalationRecipientIds: field.escalationRecipientIds,
+      visibleWhen: field.visibleWhen,
     };
     configSheetOpened = true;
   }
@@ -353,19 +675,24 @@
     configSheetOpened = false;
     configFieldIsNew = false;
     if (configFieldIndex >= 0 && configFieldIndex < fields.length) {
-      fields = fields.map((f, i) => {
+      const updated = fields.map((f, i) => {
         if (i !== configFieldIndex) return f;
-        const updated: PlaintextField = {
-          fieldType: f.fieldType,
+        const patched: PlaintextField = {
+          fieldKey: f.fieldKey,
+          fieldType: result.fieldType,
           label: result.label,
+          helpText: result.helpText,
           isRequired: result.isRequired,
           config: result.config,
           role: result.role,
           routingQueueIds: result.routingQueueIds,
           escalationRecipientIds: result.escalationRecipientIds,
+          visibleWhen: result.visibleWhen,
         };
-        return updated;
+        return patched;
       });
+      // Type change on the saved field may invalidate rules on later fields.
+      fields = sweepStaleConditions(updated);
     }
   }
 
@@ -378,9 +705,11 @@
 
     const defaultConfig = getDefaultConfig(type);
 
-    // Label starts empty; the config sheet that opens next requires one.
+    // Mint a stable UUID for this field (preserved across saves).
     const newField: PlaintextField = {
-      label: "",
+      fieldKey: crypto.randomUUID(),
+      label: {},
+      helpText: {},
       isRequired: false,
       config: defaultConfig,
       fieldType: type,
@@ -402,9 +731,15 @@
       case "textarea":
         return { type: "textarea" };
       case "select":
-        return { type: "select", options: [""] };
+        return {
+          type: "select",
+          options: [{ key: crypto.randomUUID(), label: { en: "" } }],
+        };
       case "multiselect":
-        return { type: "multiselect", options: [""] };
+        return {
+          type: "multiselect",
+          options: [{ key: crypto.randomUUID(), label: { en: "" } }],
+        };
       case "checkbox":
         return { type: "checkbox" };
       case "availability":
@@ -413,222 +748,996 @@
           allowRecurring: true,
           allowSpecific: true,
         };
+      case "date":
+        return { type: "date" };
+      case "pageBreak":
+        return { type: "pageBreak" };
+      case "richText":
+        return { type: "richText", body: {} };
     }
   }
 
-  function getFieldTypeLabel(type: IntakeFieldType): string {
-    switch (type) {
-      case "text":
-        return m.intake_forms_field_type_text();
-      case "textarea":
-        return m.intake_forms_field_type_textarea();
-      case "select":
-        return m.intake_forms_field_type_select();
-      case "multiselect":
-        return m.intake_forms_field_type_multiselect();
-      case "checkbox":
-        return m.intake_forms_field_type_checkbox();
-      case "availability":
-        return m.intake_forms_field_type_availability();
+  /** Resolve a field label in the base locale for display in the field list. */
+  function fieldDisplayLabel(field: PlaintextField): string {
+    return resolveLocalized(field.label, BASE_LOCALE) ?? "";
+  }
+
+  /** Get a human-readable label for a text subtype. */
+  function getSubtypeLabel(sub: string): string {
+    switch (sub) {
+      case "email":
+        return m.intake_forms_config_subtype_email();
+      case "phone":
+        return m.intake_forms_config_subtype_phone();
+      case "number":
+        return m.intake_forms_config_subtype_number();
+      default:
+        return "";
     }
   }
 
-  function getFieldTypeDesc(type: IntakeFieldType): string {
-    switch (type) {
-      case "text":
-        return m.intake_forms_field_type_text_desc();
-      case "textarea":
-        return m.intake_forms_field_type_textarea_desc();
-      case "select":
-        return m.intake_forms_field_type_select_desc();
-      case "multiselect":
-        return m.intake_forms_field_type_multiselect_desc();
-      case "checkbox":
-        return m.intake_forms_field_type_checkbox_desc();
-      case "availability":
-        return m.intake_forms_field_type_availability_desc();
+  /**
+   * Build a detailed subtitle for a field list row (F-009).
+   * Includes type (with subtype), role, condition dependency, help text
+   * preview, and type-specific config (option count, min/max, max length).
+   */
+  function buildFieldSubtitle(field: PlaintextField): string {
+    const parts: string[] = [];
+
+    // Type line; text fields show their subtype instead of the base type
+    const cfg = field.config;
+    if (cfg.type === "text" && cfg.subtype != null) {
+      const subtypeLabel = getSubtypeLabel(cfg.subtype);
+      if (subtypeLabel.length > 0) {
+        parts.push(
+          m.intake_forms_field_row_subtype({
+            type: getFieldTypeLabel(field.fieldType),
+            subtype: subtypeLabel,
+          }),
+        );
+      } else {
+        parts.push(getFieldTypeLabel(field.fieldType));
+      }
+    } else {
+      // Only show the type in subtitle if the title is not already the type
+      // (untitled fields show the type as title, so skip it here to avoid repetition)
+      const label = fieldDisplayLabel(field);
+      if (label.length > 0) {
+        parts.push(getFieldTypeLabel(field.fieldType));
+      }
     }
+
+    // Role
+    if (field.role != null) {
+      parts.push(
+        m.intake_forms_field_row_role({ role: getRoleLabel(field.role) }),
+      );
+    }
+
+    // Condition dependency (v2 shape: groups of rules)
+    if (field.visibleWhen != null) {
+      const v2 = normalizeVisibleWhen(field.visibleWhen);
+      const firstGroup = v2.groups.at(0);
+      const firstRule = firstGroup?.at(0);
+      if (firstRule != null) {
+        const depKey = firstRule.fieldKey;
+        const depField = fields.find((f) => f.fieldKey === depKey);
+        const depLabel =
+          depField != null
+            ? (resolveLocalized(depField.label, BASE_LOCALE) ??
+              depField.fieldKey)
+            : depKey;
+        parts.push(m.intake_forms_field_row_conditional({ field: depLabel }));
+      }
+    }
+
+    // Type-specific config
+    if (
+      (cfg.type === "select" || cfg.type === "multiselect") &&
+      cfg.options.length > 0
+    ) {
+      parts.push(
+        m.intake_forms_field_row_options_count({
+          count: String(cfg.options.length),
+        }),
+      );
+    }
+    if (
+      cfg.type === "text" &&
+      cfg.subtype === "number" &&
+      cfg.numberRange != null
+    ) {
+      const nr = cfg.numberRange;
+      if (nr.min !== undefined && nr.max !== undefined) {
+        parts.push(
+          m.intake_forms_field_row_min_max({
+            min: String(nr.min),
+            max: String(nr.max),
+          }),
+        );
+      } else if (nr.min !== undefined) {
+        parts.push(m.intake_forms_field_row_min_only({ min: String(nr.min) }));
+      } else if (nr.max !== undefined) {
+        parts.push(m.intake_forms_field_row_max_only({ max: String(nr.max) }));
+      }
+    }
+    if (
+      (cfg.type === "text" || cfg.type === "textarea") &&
+      cfg.maxLength != null
+    ) {
+      parts.push(
+        m.intake_forms_field_row_max_length({ max: String(cfg.maxLength) }),
+      );
+    }
+
+    // Truncated help text preview
+    const ht = resolveLocalized(field.helpText, BASE_LOCALE);
+    if (ht != null && ht.length > 0) {
+      const truncated = ht.length > 40 ? ht.slice(0, 40) + "..." : ht;
+      parts.push(truncated);
+    }
+
+    return parts.join(" · ");
+  }
+
+  /**
+   * Build the title for a field row. Uses per-page numbering (F-009).
+   * Page breaks get their label, input fields get "N. Label" or
+   * "N. TypeLabel" for untitled fields. The required marker is an
+   * asterisk matching the renderer convention.
+   */
+  function buildFieldTitle(field: PlaintextField, fieldNumber: number): string {
+    const label = fieldDisplayLabel(field);
+    const requiredMarker = field.isRequired ? " *" : "";
+    const displayName =
+      label.length > 0 ? label : getFieldTypeLabel(field.fieldType);
+    return `${String(fieldNumber)}. ${displayName}${requiredMarker}`;
+  }
+
+  /**
+   * Compute per-page field numbering. Returns an array parallel to `fields`
+   * where each entry is either { kind: 'field', number, page } or
+   * { kind: 'pageBreak', page }.
+   */
+  const fieldNumbering = $derived.by(
+    (): {
+      kind: "field" | "pageBreak" | "richText";
+      number: number;
+      page: number;
+    }[] => {
+      const result: {
+        kind: "field" | "pageBreak" | "richText";
+        number: number;
+        page: number;
+      }[] = [];
+      let page = 1;
+      let fieldNum = 1;
+      for (const field of fields) {
+        if (field.fieldType === "pageBreak") {
+          result.push({ kind: "pageBreak", number: 0, page });
+          page++;
+          fieldNum = 1;
+        } else if (field.fieldType === "richText") {
+          result.push({ kind: "richText", number: 0, page });
+        } else {
+          result.push({ kind: "field", number: fieldNum, page });
+          fieldNum++;
+        }
+      }
+      return result;
+    },
+  );
+
+  /** True when page breaks exist, so page numbers should be shown. */
+  const hasPageBreaks = $derived(
+    fields.some((f) => f.fieldType === "pageBreak"),
+  );
+
+  /** Render to sanitized HTML with form-asset image URLs resolved. */
+  function renderPreviewHtml(
+    value: string | { type: "doc"; content: unknown[] } | undefined,
+  ): string {
+    const html = renderFormRichText(value);
+    if (html.length === 0 || orgSlug == null) return html;
+    return rewriteFormAssetUrls(html, orgSlug);
+  }
+
+  /** Preview-locale-resolved form meta rendered to sanitized HTML. */
+  const previewDescriptionHtml: string = $derived(
+    renderPreviewHtml(resolveRichPreview(formDescription, previewLocale)),
+  );
+  const previewSubmitMsgHtml: string = $derived(
+    renderPreviewHtml(resolveRichPreview(formSubmitMessage, previewLocale)),
+  );
+  const previewClosedMsgHtml: string = $derived(
+    renderPreviewHtml(resolveRichPreview(formClosedMessage, previewLocale)),
+  );
+
+  /** Banner preview URL (same-origin, via the form-asset serving endpoint). */
+  const bannerPreviewUrl = $derived.by((): string | null => {
+    if (bannerBlobKey == null || orgSlug == null) return null;
+    return `/api/forms/${orgSlug}/${bannerBlobKey}`;
+  });
+
+  function richTextBodyPreview(field: PlaintextField): string {
+    return richTextBodyPreviewPure(
+      field,
+      m.intake_forms_rich_text_preview_empty(),
+    );
+  }
+
+  // ---- Field-level rich text body cap validation ----
+
+  /**
+   * Track per-field body cap errors by fieldKey. SvelteMap provides
+   * reactive add/delete without full-object spread rebuilds.
+   */
+  let fieldBodyCapErrors = new SvelteMap<string, string>();
+
+  /**
+   * Validate per-locale 30K cap on a richText field's body.
+   * Returns true if all locales pass.
+   */
+  function validateFieldBodyCap(field: PlaintextField): boolean {
+    const capMsg = m.intake_forms_content_cap_error({
+      max: String(RICH_TEXT_LOCALE_CAP),
+    });
+    const result = validateFieldBodyCapPure(field, capMsg);
+    if (!result.valid && result.error !== undefined) {
+      fieldBodyCapErrors.set(field.fieldKey, result.error);
+      return false;
+    }
+    fieldBodyCapErrors.delete(field.fieldKey);
+    return true;
+  }
+
+  const hasFieldBodyCapErrors = $derived(fieldBodyCapErrors.size > 0);
+
+  /** Resolve a page break label in the preview locale, with a fallback. */
+  function pageBreakLabel(field: PlaintextField): string {
+    const resolved = resolveLocalized(field.label, previewLocale);
+    if (resolved != null && resolved.length > 0) return resolved;
+    return m.intake_forms_page_break_divider();
+  }
+
+  /**
+   * Validate per-locale 30K cap on a named rich text field.
+   * Returns true if all locales pass. Sets contentCapErrors on failure.
+   */
+  function validateRichTextCap(
+    field: ContentCapField,
+    value: LocalizedRichText,
+  ): boolean {
+    const capMsg = m.intake_forms_content_cap_error({
+      max: String(RICH_TEXT_LOCALE_CAP),
+    });
+    const result = validateRichTextCapPure(
+      field,
+      value,
+      capMsg,
+      contentCapErrors,
+    );
+    contentCapErrors = result.errors;
+    return result.valid;
   }
 
   function handleSave(): void {
     if (!formName.trim() || fields.length === 0) return;
-    const slugValue = formSlug.trim() || null;
+    // Check slug validity before saving
+    const sv = formSlug.trim();
+    if (sv.length > 0) {
+      const err = validateSlug(sv);
+      if (err.length > 0) {
+        slugError = err;
+        return;
+      }
+    }
+
+    // Validate rich text caps (form-level meta and per-field bodies)
+    const descOk = validateRichTextCap("description", formDescription);
+    const submitOk = validateRichTextCap("submitMessage", formSubmitMessage);
+    const closedOk = validateRichTextCap("closedMessage", formClosedMessage);
+    let fieldBodiesOk = true;
+    for (const field of fields) {
+      if (!validateFieldBodyCap(field)) fieldBodiesOk = false;
+    }
+    if (!descOk || !submitOk || !closedOk || !fieldBodiesOk) return;
+
+    const slugValue = sv || null;
+    const desc = trimLocalizedRichText(formDescription);
+    const submit = trimLocalizedRichText(formSubmitMessage);
+    const closed = trimLocalizedRichText(formClosedMessage);
+    const meta: IntakeFormMeta = {
+      ...(hasAnyRichContent(desc) ? { description: desc } : {}),
+      ...(hasAnyRichContent(submit) ? { submitMessage: submit } : {}),
+      ...(hasAnyRichContent(closed) ? { closedMessage: closed } : {}),
+      ...(bannerBlobKey != null ? { bannerBlobKey } : {}),
+      ...(bannerAlt.trim().length > 0 ? { bannerAlt: bannerAlt.trim() } : {}),
+    };
+    // Convert datetime-local to ISO 8601 for the server, or null to clear.
+    const closesAtValue =
+      closesAtLocal.length > 0 ? new Date(closesAtLocal).toISOString() : null;
+
     saveMutation.mutate({
       formId,
       name: formName.trim(),
       slug: slugValue,
       isDefault,
       destinationQueueId,
+      closesAt: closesAtValue,
+      formMeta: meta,
       fields,
     });
   }
 
-  const fieldTypes: IntakeFieldType[] = [
+  /** Data field types shown in the "Fields" group of the add-field sheet. */
+  const dataFieldTypes: IntakeFieldType[] = [
     "text",
     "textarea",
     "select",
     "multiselect",
     "checkbox",
+    "date",
     "availability",
   ];
 
+  /** Structural field types shown in the "Structure" group of the add-field sheet. */
+  const structuralFieldTypes: IntakeFieldType[] = ["pageBreak", "richText"];
+
+  // ---- Banner upload ----
+
+  let bannerInputEl: HTMLInputElement | undefined;
+
+  /** Type guard for form asset content types. */
+  function isFormAssetType(
+    type: string,
+  ): type is (typeof FORM_ASSET_CONTENT_TYPES)[number] {
+    return (FORM_ASSET_CONTENT_TYPES as readonly string[]).includes(type);
+  }
+
+  function triggerBannerUpload(): void {
+    const pub = orgKeyManager.getPublicKey();
+    if (pub == null) {
+      toastStore.show(m.form_content_editor_image_no_key(), 3000);
+      return;
+    }
+    bannerInputEl?.click();
+  }
+
+  function handleBannerSelected(e: Event): void {
+    if (!(e.target instanceof HTMLInputElement)) return;
+    const input = e.target;
+    const file = input.files?.[0];
+    input.value = "";
+    if (file == null) return;
+
+    if (file.size > KB_ATTACHMENT_MAX_BYTES) {
+      toastStore.show(m.intake_forms_banner_file_too_large(), 3000);
+      return;
+    }
+    if (!isFormAssetType(file.type)) {
+      toastStore.show(m.intake_forms_banner_file_type(), 3000);
+      return;
+    }
+
+    void uploadBanner(file);
+  }
+
+  async function uploadBanner(file: File): Promise<void> {
+    const pub = orgKeyManager.getPublicKey();
+    if (bannerUploading || pub == null) return;
+    bannerUploading = true;
+
+    try {
+      const arrayBuf = await file.arrayBuffer();
+      const plainBytes = new Uint8Array(arrayBuf);
+      const encrypted = encryptClientBranding(plainBytes, pub);
+      const blob = encode(encrypted);
+
+      const result = await intakeFormsRouter.uploadFormAsset.mutate({
+        blob,
+        sizeBytes: encrypted.length,
+        contentType: isFormAssetType(file.type) ? file.type : "image/png",
+      });
+
+      bannerBlobKey = result.blobId;
+      haptic();
+    } catch (err: unknown) {
+      console.error("[IntakeFormEditor] Banner upload failed", err);
+      toastStore.show(m.intake_forms_banner_upload_failed(), 3000);
+    } finally {
+      bannerUploading = false;
+    }
+  }
+
+  function removeBanner(): void {
+    bannerBlobKey = null;
+    bannerAlt = "";
+  }
+
+  const BANNER_ACCEPT = FORM_ASSET_CONTENT_TYPES.join(",");
+
+  const hasContentCapErrors = $derived(
+    contentCapErrors.description !== undefined ||
+      contentCapErrors.submitMessage !== undefined ||
+      contentCapErrors.closedMessage !== undefined,
+  );
+
   const canSave = $derived(
-    formName.trim().length > 0 && fields.length > 0 && !saveMutation.isPending,
+    formName.trim().length > 0 &&
+      fields.length > 0 &&
+      !saveMutation.isPending &&
+      slugError.length === 0 &&
+      !hasContentCapErrors &&
+      !hasFieldBodyCapErrors,
   );
 </script>
 
-<List strong inset>
-  <ListInput
-    label={m.intake_forms_name_label()}
-    type="text"
-    placeholder={m.intake_forms_name_placeholder()}
-    value={formName}
-    onInput={handleNameInput}
-  />
-  <ListInput
-    label={m.intake_forms_slug_label()}
-    type="text"
-    placeholder={m.intake_forms_slug_placeholder()}
-    info={m.intake_forms_slug_hint()}
-    value={formSlug}
-    onInput={handleSlugInput}
-  />
-  {#if queuesQuery.data}
-    <ListInput
-      label={m.intake_forms_destination_label()}
-      type="select"
-      dropdown
-      value={destinationQueueId ?? ""}
-      onChange={handleDestinationChange}
-    >
-      <option value="">{m.intake_forms_destination_none()}</option>
-      {#each queuesQuery.data as queue (queue.id)}
-        <option value={queue.id}>{getQueueName(queue)}</option>
-      {/each}
-    </ListInput>
-  {/if}
-</List>
-
-<!-- Default toggle -->
-<List strong inset>
-  <ListItem title={m.intake_forms_default_toggle()}>
-    {#snippet subtitle()}
-      <span class="default-hint">{m.intake_forms_default_hint()}</span>
-    {/snippet}
-    {#snippet after()}
-      <Toggle checked={isDefault} onChange={() => (isDefault = !isDefault)} />
-    {/snippet}
-  </ListItem>
-</List>
-
-<!-- Share link -->
-{#if shareLink}
-  <BlockTitle>{m.intake_forms_share_link()}</BlockTitle>
+{#snippet editorContent()}
   <List strong inset>
-    <ListItem title={shareLink}>
+    <ListInput
+      label={m.intake_forms_name_label()}
+      type="text"
+      placeholder={m.intake_forms_name_placeholder()}
+      value={formName}
+      onInput={handleNameInput}
+    />
+    <ListInput
+      label={m.intake_forms_slug_label()}
+      type="text"
+      placeholder={m.intake_forms_slug_placeholder()}
+      info={slugError || m.intake_forms_slug_hint()}
+      error={slugError}
+      value={formSlug}
+      onInput={handleSlugInput}
+    />
+    {#if queuesQuery.data}
+      <ListInput
+        label={m.intake_forms_destination_label()}
+        type="select"
+        dropdown
+        value={destinationQueueId ?? ""}
+        onChange={handleDestinationChange}
+      >
+        <option value="">{defaultQueueLabel}</option>
+        {#each queuesQuery.data as queue (queue.id)}
+          <option value={queue.id}>{getQueueName(queue)}</option>
+        {/each}
+      </ListInput>
+    {/if}
+  </List>
+
+  <!-- Default toggle -->
+  <List strong inset>
+    <ListItem title={m.intake_forms_default_toggle()}>
+      {#snippet subtitle()}
+        <span class="default-hint">{m.intake_forms_default_hint()}</span>
+      {/snippet}
       {#snippet after()}
-        <button
-          type="button"
-          class="copy-btn"
-          onclick={() => void copyShareLink()}
-          aria-label={m.intake_forms_link_copied()}
-        >
-          <Copy size={18} />
-        </button>
+        <Toggle checked={isDefault} onChange={() => (isDefault = !isDefault)} />
       {/snippet}
     </ListItem>
   </List>
-{/if}
 
-<BlockTitle>
-  {m.intake_forms_fields_heading({ count: String(fields.length) })}
-</BlockTitle>
-<List strong inset>
-  {#each fields as field, index (index)}
-    <ListItem
-      title={`${String(index + 1)}. ${field.label || getFieldTypeLabel(field.fieldType)}`}
-      subtitle={`${getFieldTypeLabel(field.fieldType)} - ${field.isRequired ? m.intake_forms_field_required() : m.intake_forms_field_optional()}`}
-    >
-      {#snippet after()}
-        <div class="field-actions">
-          <button
-            type="button"
-            class="field-action-btn"
-            disabled={index === 0}
-            onclick={() => moveField(index, -1)}
-            aria-label={m.intake_forms_move_up()}
+  <!-- Closing date (locale-independent, sits above locale switcher per F-006) -->
+  <BlockTitle>{m.intake_forms_closes_at_heading()}</BlockTitle>
+  <List strong inset>
+    <ListInput
+      label={m.intake_forms_closes_at_label()}
+      type="datetime-local"
+      info={m.intake_forms_closes_at_hint_with_message()}
+      value={closesAtLocal}
+      onInput={(e: Event) => {
+        if (e.target instanceof HTMLInputElement)
+          closesAtLocal = e.target.value;
+      }}
+    />
+    {#if closesAtLocal.length > 0}
+      <ListItem>
+        {#snippet after()}
+          <Button
+            outline
+            small
+            onclick={() => {
+              closesAtLocal = "";
+            }}
           >
-            <ArrowUp size={18} />
-          </button>
-          <button
-            type="button"
-            class="field-action-btn"
-            disabled={index === fields.length - 1}
-            onclick={() => moveField(index, 1)}
-            aria-label={m.intake_forms_move_down()}
-          >
-            <ArrowDown size={18} />
-          </button>
-          <button
-            type="button"
-            class="field-action-btn"
-            onclick={() => openConfigSheet(index)}
-            aria-label={m.intake_forms_configure()}
-          >
-            <Settings size={18} />
-          </button>
-          <button
-            type="button"
-            class="field-action-btn field-action-btn-remove"
-            onclick={() => removeField(index)}
-            aria-label={m.intake_forms_remove_field()}
-          >
-            <X size={18} />
-          </button>
-        </div>
-      {/snippet}
-    </ListItem>
-  {/each}
-</List>
-
-<Block>
-  <Button outline onclick={openAddFieldSheet}>
-    {m.intake_forms_add_field()}
-  </Button>
-</Block>
-
-{#if fields.length > 0}
-  <BlockTitle>{m.intake_forms_preview()}</BlockTitle>
-  <Block>
-    {#each fields as field, index (index)}
-      <IntakeFieldRenderer
-        fieldId={`preview-${String(index)}`}
-        label={field.label}
-        config={field.config}
-        isRequired={field.isRequired}
-        value={undefined}
-        onchange={previewNoop}
-      />
-    {/each}
-  </Block>
-{/if}
-
-<Block>
-  <Button large disabled={!canSave} onclick={handleSave}>
-    {#if saveMutation.isPending}
-      {m.common_loading()}
-    {:else}
-      {m.intake_forms_save()}
+            {m.intake_forms_closes_at_clear()}
+          </Button>
+        {/snippet}
+      </ListItem>
     {/if}
-  </Button>
-</Block>
+  </List>
 
-{#if formId !== null}
+  <!-- Share link (locale-independent, sits above locale switcher per F-006) -->
+  {#if shareLink}
+    <BlockTitle>{m.intake_forms_share_link()}</BlockTitle>
+    <List strong inset>
+      <ListItem title={shareLink}>
+        {#snippet after()}
+          <button
+            type="button"
+            class="copy-btn"
+            onclick={() => void copyShareLink()}
+            aria-label={m.intake_forms_link_copied()}
+          >
+            <Copy size={18} />
+          </button>
+        {/snippet}
+      </ListItem>
+    </List>
+  {/if}
+
+  <!-- Locale selector for authoring -->
+  <BlockTitle>{m.intake_forms_locale_heading()}</BlockTitle>
   <Block>
-    <Button large outline class="delete-form-btn" onclick={openDeleteDialog}>
-      {m.intake_forms_delete()}
+    <Segmented strong>
+      {#each FORM_LOCALES as loc (loc)}
+        {@const comp = localeCompleteness(loc)}
+        <SegmentedButton
+          active={editingLocale === loc}
+          onclick={() => (editingLocale = loc)}
+        >
+          {localeName(loc)}
+          {#if comp.total > 0}
+            <span class="locale-badge">{comp.filled}/{comp.total}</span>
+          {/if}
+        </SegmentedButton>
+      {/each}
+    </Segmented>
+    {#if editingLocale !== BASE_LOCALE}
+      <p class="locale-hint">{m.intake_forms_locale_optional_hint()}</p>
+    {/if}
+  </Block>
+
+  <!-- Banner image (locale-independent, sits above content editors) -->
+  <BlockTitle>{m.intake_forms_banner_heading()}</BlockTitle>
+  <Block>
+    <!-- Hidden file input for banner upload -->
+    <input
+      bind:this={bannerInputEl}
+      type="file"
+      accept={BANNER_ACCEPT}
+      class="sr-only"
+      tabindex={-1}
+      aria-label={m.intake_forms_banner_add()}
+      onchange={(e) => handleBannerSelected(e)}
+    />
+
+    {#if bannerPreviewUrl != null}
+      <div class="banner-preview">
+        <img
+          src={bannerPreviewUrl}
+          alt={bannerAlt || ""}
+          class="banner-preview-img"
+        />
+        <div class="banner-actions">
+          <ListInput
+            label={m.intake_forms_banner_alt_label()}
+            type="text"
+            placeholder={m.intake_forms_banner_alt_placeholder()}
+            value={bannerAlt}
+            onInput={(e: Event) => {
+              if (e.target instanceof HTMLInputElement)
+                bannerAlt = e.target.value;
+            }}
+          />
+          <Button outline small onclick={removeBanner}>
+            <Trash2 size={16} />
+            {m.intake_forms_banner_remove()}
+          </Button>
+        </div>
+      </div>
+    {:else if bannerUploading}
+      <div class="banner-uploading" role="status">
+        <Preloader />
+        <span>{m.intake_forms_banner_uploading()}</span>
+      </div>
+    {:else}
+      <Button outline onclick={triggerBannerUpload}>
+        <ImagePlus size={18} />
+        {m.intake_forms_banner_add()}
+      </Button>
+    {/if}
+  </Block>
+
+  <!-- Form-level descriptive content (locale-dependent, rich text editors) -->
+  <BlockTitle>{m.intake_forms_content_heading()}</BlockTitle>
+  <Block>
+    <FormContentEditor
+      value={formDescription}
+      locale={editingLocale}
+      onchange={(updated: LocalizedRichText) => {
+        formDescription = updated;
+      }}
+      label={m.intake_forms_description_label()}
+      hint={m.intake_forms_description_hint()}
+      orgPublicKey={orgKeyManager.getPublicKey()}
+    />
+    {#if contentCapErrors.description}
+      <p class="content-cap-error" role="alert">
+        {contentCapErrors.description}
+      </p>
+    {/if}
+  </Block>
+  <Block>
+    <FormContentEditor
+      value={formSubmitMessage}
+      locale={editingLocale}
+      onchange={(updated: LocalizedRichText) => {
+        formSubmitMessage = updated;
+      }}
+      label={m.intake_forms_submit_message_label()}
+      hint={m.intake_forms_submit_message_hint()}
+      orgPublicKey={orgKeyManager.getPublicKey()}
+    />
+    {#if contentCapErrors.submitMessage}
+      <p class="content-cap-error" role="alert">
+        {contentCapErrors.submitMessage}
+      </p>
+    {/if}
+  </Block>
+  <Block>
+    <FormContentEditor
+      value={formClosedMessage}
+      locale={editingLocale}
+      onchange={(updated: LocalizedRichText) => {
+        formClosedMessage = updated;
+      }}
+      label={m.intake_forms_closed_message_label()}
+      hint={m.intake_forms_closed_message_hint()}
+      orgPublicKey={orgKeyManager.getPublicKey()}
+    />
+    {#if contentCapErrors.closedMessage}
+      <p class="content-cap-error" role="alert">
+        {contentCapErrors.closedMessage}
+      </p>
+    {/if}
+  </Block>
+
+  <!-- Field list (F-009: enriched rows, per-page numbering, page break separators) -->
+  <BlockTitle>
+    {m.intake_forms_fields_heading({ count: String(fields.length) })}
+  </BlockTitle>
+  <List strong inset>
+    {#each fields as field, index (field.fieldKey)}
+      {@const numbering = fieldNumbering.at(index)}
+      {#if field.fieldType === "pageBreak"}
+        <!-- Page break rendered as a separator row, not a numbered field -->
+        <ListItem
+          title={fieldDisplayLabel(field) ||
+            m.intake_forms_field_type_page_break()}
+        >
+          {#snippet subtitle()}
+            {#if hasPageBreaks && numbering != null}
+              <span class="page-break-subtitle">
+                {m.intake_forms_field_row_page_number({
+                  page: String(numbering.page + 1),
+                })}
+              </span>
+            {/if}
+          {/snippet}
+          {#snippet after()}
+            <div class="field-actions">
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === 0}
+                onclick={() => moveField(index, -1)}
+                aria-label={m.intake_forms_move_up()}
+              >
+                <ArrowUp size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === fields.length - 1}
+                onclick={() => moveField(index, 1)}
+                aria-label={m.intake_forms_move_down()}
+              >
+                <ArrowDown size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                onclick={() => openConfigSheet(index)}
+                aria-label={m.intake_forms_configure()}
+              >
+                <Settings size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn field-action-btn-remove"
+                onclick={() => removeField(index)}
+                aria-label={m.intake_forms_remove_field()}
+              >
+                <X size={18} />
+              </button>
+            </div>
+          {/snippet}
+        </ListItem>
+      {:else if field.fieldType === "richText"}
+        <!-- Rich text block rendered as a structural row with content preview -->
+        {@const bodyCapError = fieldBodyCapErrors.get(field.fieldKey)}
+        <ListItem
+          title={m.intake_forms_field_type_rich_text()}
+          subtitle={richTextBodyPreview(field)}
+        >
+          {#snippet after()}
+            <div class="field-actions">
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === 0}
+                onclick={() => moveField(index, -1)}
+                aria-label={m.intake_forms_move_up()}
+              >
+                <ArrowUp size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === fields.length - 1}
+                onclick={() => moveField(index, 1)}
+                aria-label={m.intake_forms_move_down()}
+              >
+                <ArrowDown size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                onclick={() => openConfigSheet(index)}
+                aria-label={m.intake_forms_configure()}
+              >
+                <Settings size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn field-action-btn-remove"
+                onclick={() => removeField(index)}
+                aria-label={m.intake_forms_remove_field()}
+              >
+                <X size={18} />
+              </button>
+            </div>
+          {/snippet}
+        </ListItem>
+        {#if bodyCapError}
+          <p class="content-cap-error" role="alert">{bodyCapError}</p>
+        {/if}
+      {:else}
+        {@const fieldNum = numbering?.number ?? index + 1}
+        {@const title = buildFieldTitle(field, fieldNum)}
+        {@const subtitle = buildFieldSubtitle(field)}
+        <ListItem
+          {title}
+          {subtitle}
+          aria-label={title +
+            (field.isRequired ? `, ${m.intake_forms_field_required()}` : "")}
+        >
+          {#snippet after()}
+            <div class="field-actions">
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === 0}
+                onclick={() => moveField(index, -1)}
+                aria-label={m.intake_forms_move_up()}
+              >
+                <ArrowUp size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === fields.length - 1}
+                onclick={() => moveField(index, 1)}
+                aria-label={m.intake_forms_move_down()}
+              >
+                <ArrowDown size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                onclick={() => openConfigSheet(index)}
+                aria-label={m.intake_forms_configure()}
+              >
+                <Settings size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn field-action-btn-remove"
+                onclick={() => removeField(index)}
+                aria-label={m.intake_forms_remove_field()}
+              >
+                <X size={18} />
+              </button>
+            </div>
+          {/snippet}
+        </ListItem>
+      {/if}
+    {/each}
+  </List>
+
+  <Block>
+    <Button outline onclick={openAddFieldSheet}>
+      {m.intake_forms_add_field()}
     </Button>
   </Block>
+
+  <Block>
+    <Button large disabled={!canSave} onclick={handleSave}>
+      {#if saveMutation.isPending}
+        {m.common_loading()}
+      {:else}
+        {m.intake_forms_save()}
+      {/if}
+    </Button>
+  </Block>
+
+  {#if formId !== null}
+    <Block>
+      <Button large outline class="delete-form-btn" onclick={openDeleteDialog}>
+        {m.intake_forms_delete()}
+      </Button>
+    </Block>
+  {/if}
+{/snippet}
+
+{#snippet previewContent()}
+  {#if fields.length === 0}
+    <div class="preview-empty-wrapper" data-testid="preview-empty-state">
+      <EmptyState
+        icon={Eye}
+        title={m.intake_forms_preview_empty_title()}
+        subtitle={m.intake_forms_preview_empty_subtitle()}
+      />
+    </div>
+  {:else}
+    <BlockTitle>{m.intake_forms_preview()}</BlockTitle>
+    <Block>
+      <div class="preview-state-switcher" data-testid="preview-state-switcher">
+        <Segmented strong>
+          <SegmentedButton
+            active={previewState === "form"}
+            onclick={() => (previewState = "form")}
+          >
+            {m.intake_forms_preview_state_form()}
+          </SegmentedButton>
+          <SegmentedButton
+            active={previewState === "submitted"}
+            onclick={() => (previewState = "submitted")}
+          >
+            {m.intake_forms_preview_state_submitted()}
+          </SegmentedButton>
+          <SegmentedButton
+            active={previewState === "closed"}
+            onclick={() => (previewState = "closed")}
+          >
+            {m.intake_forms_preview_state_closed()}
+          </SegmentedButton>
+        </Segmented>
+      </div>
+      <div class="preview-locale-switcher">
+        <Segmented strong>
+          {#each FORM_LOCALES as loc (loc)}
+            <SegmentedButton
+              active={previewLocale === loc}
+              onclick={() => (previewLocale = loc)}
+            >
+              {localeName(loc)}
+            </SegmentedButton>
+          {/each}
+        </Segmented>
+      </div>
+
+      <!-- Banner renders above content in all preview states -->
+      {#if bannerPreviewUrl != null}
+        <img
+          src={bannerPreviewUrl}
+          alt={bannerAlt || ""}
+          class="preview-banner-img"
+        />
+      {/if}
+
+      {#if previewState === "form"}
+        <!-- Description above fields, mirroring public page placement -->
+        {#if previewDescriptionHtml.length > 0}
+          <div class="preview-description preview-rich-content">
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+            {@html previewDescriptionHtml}
+          </div>
+        {/if}
+        {#each fields as field, index (field.fieldKey)}
+          {#if field.fieldType === "pageBreak"}
+            <div class="preview-page-break" role="separator">
+              <hr class="preview-page-break-line" />
+              <span class="preview-page-break-label">
+                {pageBreakLabel(field)}
+              </span>
+              <hr class="preview-page-break-line" />
+            </div>
+          {:else if field.fieldType === "richText"}
+            {@const richHtml = renderPreviewHtml(
+              resolveRichPreview(
+                field.config.type === "richText" ? field.config.body : {},
+                previewLocale,
+              ),
+            )}
+            {#if richHtml.length > 0}
+              <div class="preview-rich-text-block preview-rich-content">
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+                {@html richHtml}
+              </div>
+            {/if}
+          {:else}
+            <IntakeFieldRenderer
+              fieldId={`preview-${String(index)}`}
+              label={resolveLocalized(field.label, previewLocale) ?? ""}
+              helpText={resolveLocalized(field.helpText, previewLocale)}
+              config={field.config}
+              isRequired={field.isRequired}
+              locale={previewLocale}
+              value={undefined}
+              onchange={previewNoop}
+            />
+          {/if}
+        {/each}
+      {:else if previewState === "submitted"}
+        <!-- Success state, mirrors IntakeFormBody submitted layout -->
+        <h2 class="intake-preview-success-heading">
+          {m.intake_success_heading()}
+        </h2>
+        {#if previewSubmitMsgHtml.length > 0}
+          <div class="intake-preview-success-body preview-rich-content">
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+            {@html previewSubmitMsgHtml}
+          </div>
+        {:else}
+          <p class="intake-preview-success-body">
+            {m.intake_success_body()}
+          </p>
+        {/if}
+        <p class="intake-preview-reference-label">
+          {m.intake_reference_label()}
+        </p>
+        <code class="intake-preview-reference-code"
+          >{m.intake_forms_preview_reference_placeholder()}</code
+        >
+        <p class="intake-preview-reference-save">{m.intake_reference_save()}</p>
+      {:else}
+        <!-- Closed state, mirrors IntakeFormBody closed layout -->
+        {#if previewClosedMsgHtml.length > 0}
+          <div class="intake-preview-closed preview-rich-content" role="status">
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+            {@html previewClosedMsgHtml}
+          </div>
+        {:else}
+          <p class="intake-preview-closed" role="status">
+            {m.intake_form_closed_default()}
+          </p>
+        {/if}
+      {/if}
+    </Block>
+  {/if}
+{/snippet}
+
+{#if isDesktop}
+  <SplitView>
+    {#snippet left()}
+      <div class="editor-pane-inner">
+        {@render editorContent()}
+      </div>
+    {/snippet}
+    {#snippet right()}
+      <div class="preview-pane-inner">
+        {@render previewContent()}
+      </div>
+    {/snippet}
+  </SplitView>
+{:else}
+  <!-- Mobile stacked layout: editor then preview stacked -->
+  {@render editorContent()}
+  {@render previewContent()}
 {/if}
 
 <!-- Delete confirmation dialog -->
@@ -667,8 +1776,9 @@
   ondismiss={() => (addFieldSheetOpened = false)}
   title={m.intake_forms_add_field()}
 >
+  <BlockTitle>{m.intake_forms_add_field_fields_heading()}</BlockTitle>
   <List strong inset>
-    {#each fieldTypes as type (type)}
+    {#each dataFieldTypes as type (type)}
       {@const disabled = type === "availability" && hasAvailability}
       <ListItem
         title={getFieldTypeLabel(type)}
@@ -681,6 +1791,16 @@
       />
     {/each}
   </List>
+  <BlockTitle>{m.intake_forms_add_field_structure_heading()}</BlockTitle>
+  <List strong inset>
+    {#each structuralFieldTypes as type (type)}
+      <ListItem
+        title={getFieldTypeLabel(type)}
+        subtitle={getFieldTypeDesc(type)}
+        onclick={() => addField(type)}
+      />
+    {/each}
+  </List>
 </ShellSheet>
 
 <!-- Field config sheet -->
@@ -690,6 +1810,8 @@
   initial={configFieldInitial}
   queues={queueOptions}
   volunteers={volunteerOptions}
+  {editingLocale}
+  earlierFields={configEarlierFields}
   ondone={handleConfigDone}
   ondismiss={handleConfigCancel}
 />
@@ -750,5 +1872,219 @@
 
   .copy-btn:active {
     background: color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+
+  .locale-badge {
+    font-size: var(--text-xs);
+    margin-left: 4px;
+    opacity: 0.7;
+  }
+
+  .locale-hint {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin-top: var(--space-xs);
+    text-align: center;
+  }
+
+  .editor-pane-inner {
+    padding: var(--space-sm);
+    overflow-y: auto;
+    height: 100%;
+  }
+
+  .preview-pane-inner {
+    padding: var(--space-sm);
+    overflow-y: auto;
+    height: 100%;
+  }
+
+  .preview-empty-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    height: 100%;
+  }
+
+  .preview-state-switcher {
+    margin-bottom: var(--space-sm);
+  }
+
+  .preview-locale-switcher {
+    margin-bottom: var(--space-md);
+  }
+
+  .preview-description {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    white-space: pre-line;
+    margin-bottom: var(--space-md);
+  }
+
+  .intake-preview-success-heading {
+    font-size: var(--text-md);
+    font-weight: 600;
+    color: var(--ink);
+    margin: 0 0 var(--space-sm);
+  }
+
+  .intake-preview-success-body {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .intake-preview-reference-label {
+    font-size: var(--text-sm);
+    color: var(--ink);
+    margin: var(--space-md) 0 var(--space-xs);
+  }
+
+  .intake-preview-reference-code {
+    display: block;
+    font-size: var(--text-base);
+    font-weight: 600;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--raised);
+    border-radius: 8px;
+    text-align: center;
+    margin: 0 0 var(--space-sm);
+  }
+
+  .intake-preview-reference-save {
+    font-size: var(--text-sm);
+    color: var(--muted);
+  }
+
+  .intake-preview-closed {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    text-align: center;
+    padding: var(--space-xl) 0;
+  }
+
+  .preview-page-break {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-md) 0;
+  }
+
+  .preview-page-break-line {
+    flex: 1;
+    border: none;
+    border-top: 1px dashed var(--hair);
+  }
+
+  .preview-page-break-label {
+    flex-shrink: 0;
+    font-size: var(--text-xs);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .page-break-subtitle {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* Rich text block preview */
+  .preview-rich-text-block {
+    margin-bottom: var(--space-md);
+  }
+
+  /* Banner */
+  .banner-preview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .banner-preview-img {
+    max-width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    border-radius: var(--card-radius);
+  }
+
+  .banner-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .banner-uploading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: var(--text-sm);
+    color: var(--muted);
+    padding: var(--space-sm) 0;
+  }
+
+  /* Rich content preview */
+  .preview-rich-content {
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  .preview-rich-content :global(p) {
+    margin-bottom: 0.5em;
+  }
+
+  .preview-rich-content :global(a) {
+    color: var(--brand-text);
+    text-decoration: underline;
+  }
+
+  .preview-rich-content :global(ul) {
+    list-style-type: disc;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .preview-rich-content :global(ol) {
+    list-style-type: decimal;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .preview-rich-content :global(img) {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--card-radius);
+  }
+
+  .preview-banner-img {
+    max-width: 100%;
+    border-radius: var(--card-radius);
+    margin-bottom: var(--space-md);
+  }
+
+  /* Content cap validation error */
+  .content-cap-error {
+    font-size: var(--text-xs);
+    color: var(--k-ios-red, #ff3b30);
+    padding: var(--space-xs) var(--space-md);
+    margin: 0;
+  }
+
+  /* Screen-reader only (hidden file inputs) */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
   }
 </style>

@@ -10,7 +10,7 @@ const en_intake_submit_hint = /** @type {(inputs: Intake_Submit_HintInputs) => L
 };
 
 const es_intake_submit_hint = /** @type {(inputs: Intake_Submit_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Lo que escribiste fue cifrado. Solo los voluntarios asignados pueden leerlo. Aunque alguien acceda a este servidor, no podra leerlo.`)
+	return /** @type {LocalizedString} */ (`Lo que escribiste fue cifrado. Solo los voluntarios asignados pueden leerlo. Aunque alguien acceda a este servidor, no podrá leerlo.`)
 };
 
 /**

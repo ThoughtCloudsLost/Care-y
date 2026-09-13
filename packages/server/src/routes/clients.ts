@@ -373,7 +373,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
             }[],
             fieldRoles: [] as readonly {
               formId: string;
-              fieldId: string;
+              fieldKey: string;
               role: string;
             }[],
             phoneHashes: [] as readonly {
@@ -400,7 +400,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
           })),
           fieldRoles: fieldRoles.map((fr) => ({
             formId: fr.formId,
-            fieldId: fr.fieldId,
+            fieldKey: fr.fieldKey,
             role: fr.role,
           })),
           phoneHashes: phoneHashes.map((ph) => ({

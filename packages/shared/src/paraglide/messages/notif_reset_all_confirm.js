@@ -10,7 +10,7 @@ const en_notif_reset_all_confirm = /** @type {(inputs: Notif_Reset_All_ConfirmIn
 };
 
 const es_notif_reset_all_confirm = /** @type {(inputs: Notif_Reset_All_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Todas tus preferencias de notificacion volveran a los valores predeterminados. Esto no se puede deshacer.`)
+	return /** @type {LocalizedString} */ (`Todas tus preferencias de notificación volveran a los valores predeterminados. Esto no se puede deshacer.`)
 };
 
 /**

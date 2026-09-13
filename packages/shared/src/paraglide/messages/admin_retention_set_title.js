@@ -10,7 +10,7 @@ const en_admin_retention_set_title = /** @type {(inputs: Admin_Retention_Set_Tit
 };
 
 const es_admin_retention_set_title = /** @type {(inputs: Admin_Retention_Set_TitleInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Establecer retencion de datos en ${i?.days} dias?`)
+	return /** @type {LocalizedString} */ (`¿Establecer retención de datos en ${i?.days} días?`)
 };
 
 /**

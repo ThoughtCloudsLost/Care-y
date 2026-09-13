@@ -20,6 +20,8 @@ import type {
   DeriveKeysResponse,
   DecryptContentResponse,
   EncryptContentResponse,
+  EncryptAttachmentResponse,
+  DecryptAttachmentResponse,
   GetVolPublicResponse,
   UnwrapOrgKeyResponse,
   RewrapTkResponse,
@@ -39,7 +41,9 @@ describe("crypto-protocol types", () => {
       "decryptAndRewrap",
       "rewrapBlob",
       "encryptContent",
+      "encryptAttachment",
       "decryptBlob",
+      "decryptAttachment",
       "evictTk",
       "zeroAll",
       "getVolPublic",
@@ -49,7 +53,7 @@ describe("crypto-protocol types", () => {
       "rewrapTk",
       "createTicketKey",
     ];
-    expect(allTypes).toHaveLength(17);
+    expect(allTypes).toHaveLength(19);
   });
 
   it("ResponseForRequest maps each request type to its response", () => {
@@ -70,6 +74,12 @@ describe("crypto-protocol types", () => {
       ? true
       : false;
     true satisfies ResponseForRequest<"encryptContent"> extends EncryptContentResponse
+      ? true
+      : false;
+    true satisfies ResponseForRequest<"encryptAttachment"> extends EncryptAttachmentResponse
+      ? true
+      : false;
+    true satisfies ResponseForRequest<"decryptAttachment"> extends DecryptAttachmentResponse
       ? true
       : false;
     true satisfies ResponseForRequest<"getVolPublic"> extends GetVolPublicResponse

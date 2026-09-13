@@ -16,19 +16,34 @@
   >
 {/snippet}
 
-<ShellToast
-  opened={toastStore.current !== null}
-  position="center"
-  button={dismissButton}
+<div
+  data-testid="shell-toasts"
+  class:toasts-closed={toastStore.current === null}
 >
-  {#if toastStore.current !== null}
-    <div class="toast-content" role="status" aria-live="polite">
-      {toastStore.current.message}
-    </div>
-  {/if}
-</ShellToast>
+  <ShellToast
+    opened={toastStore.current !== null}
+    position="center"
+    button={dismissButton}
+  >
+    {#if toastStore.current !== null}
+      <div class="toast-content" role="status" aria-live="polite">
+        {toastStore.current.message}
+      </div>
+    {/if}
+  </ShellToast>
+</div>
 
 <style>
+  /* Konsta's closed Toast keeps its fixed wrapper in the DOM without
+     pointer-events-none (unlike its dialogs), so it silently swallows
+     taps over the bottom bar and leaves a focusable dismiss button in
+     the accessibility tree. Neutralize both whenever nothing is shown;
+     the exit animation is traded for a correct hit target. */
+  .toasts-closed :global(.k-toast) {
+    pointer-events: none;
+    visibility: hidden;
+  }
+
   .toast-content {
     font-size: 0.875rem;
     text-align: center;

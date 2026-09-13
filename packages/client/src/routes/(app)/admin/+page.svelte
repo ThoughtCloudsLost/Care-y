@@ -3,46 +3,28 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { Permission } from "@care-y/shared";
-  import {
-    UsersRound,
-    RadioTower,
-    Building2,
-    ChartColumn,
-  } from "@lucide/svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
-  import { getNavbarOverrideCtx } from "$lib/shell/context.js";
+  import {
+    getNavbarOverrideCtx,
+    getSectionRailCtx,
+  } from "$lib/shell/context.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
-  import {
-    createSectionScroll,
-    type ScrollSection,
-  } from "$lib/components/useSectionScroll.svelte.js";
+  import { createSectionScroll } from "$lib/components/useSectionScroll.svelte.js";
   import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
   import {
     type AdminDestination,
-    type AdminGroup,
     GROUP_ORDER,
     getVisibleDestinations,
     groupDestinations,
+    groupLabel,
+    buildAdminHubSections,
   } from "$lib/admin/destinations.js";
-
-  function groupIcon(group: AdminGroup): typeof UsersRound {
-    switch (group) {
-      case "people":
-        return UsersRound;
-      case "communications":
-        return RadioTower;
-      case "organization":
-        return Building2;
-      case "analytics":
-        return ChartColumn;
-    }
-  }
 
   const authRouter = trpc.auth;
   const telephonyAdmin = requireRouter(trpc.telephonyAdmin, "telephonyAdmin");
@@ -65,13 +47,7 @@
 
   const visibleGroups = $derived(GROUP_ORDER.filter((g) => grouped.has(g)));
 
-  const scrollSections: readonly ScrollSection[] = $derived(
-    visibleGroups.map((g) => ({
-      id: g,
-      label: () => groupLabel(g),
-      icon: groupIcon(g),
-    })),
-  );
+  const scrollSections = $derived(buildAdminHubSections(permissions));
 
   const scroll = createSectionScroll(() => scrollSections);
 
@@ -151,19 +127,6 @@
     }
   }
 
-  function groupLabel(group: AdminGroup): string {
-    switch (group) {
-      case "people":
-        return m.panel_group_people();
-      case "communications":
-        return m.panel_group_communications();
-      case "organization":
-        return m.panel_group_organization();
-      case "analytics":
-        return m.panel_group_analytics();
-    }
-  }
-
   function handleDestinationTap(dest: AdminDestination): void {
     if (dest.implemented) {
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- dest.path is a known admin route from destinations.ts
@@ -174,14 +137,21 @@
   }
 
   const navbarCtx = getNavbarOverrideCtx();
+  const sectionRailCtx = getSectionRailCtx();
 
   $effect(() => {
     navbarCtx.current = {
       title: m.admin_hub_title(),
       subnavbar: hubSubnavbar,
     };
+    sectionRailCtx.current = {
+      sections: scrollSections,
+      active: scroll.active,
+      scrollTo: (id: string) => scroll.scrollTo(id),
+    };
     return () => {
       navbarCtx.current = undefined;
+      sectionRailCtx.current = undefined;
     };
   });
 </script>

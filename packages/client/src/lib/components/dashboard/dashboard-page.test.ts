@@ -221,6 +221,7 @@ const navbarOverride: { current: NavbarOverride | undefined } = {
 
 vi.mock("$lib/shell/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ShellContext>()),
+  getSectionRailCtx: () => ({ current: undefined }),
   getScrollContainer: () => () => undefined,
   getNavbarOverrideCtx: () => navbarOverride,
   getTabbarOverrideCtx: () => ({ current: undefined }),

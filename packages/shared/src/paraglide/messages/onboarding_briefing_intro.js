@@ -10,7 +10,7 @@ const en_onboarding_briefing_intro = /** @type {(inputs: Onboarding_Briefing_Int
 };
 
 const es_onboarding_briefing_intro = /** @type {(inputs: Onboarding_Briefing_IntroInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`CARE-Y cifra todo en el navegador del voluntario antes de que llegue al servidor. El servidor almacena solo datos ilegibles. Descifrar requiere la contrasena del voluntario mas la verificacion de dos servidores separados en distintos paises. Ningun servidor individual tiene informacion suficiente para descifrar nada.`)
+	return /** @type {LocalizedString} */ (`CARE-Y cifra todo en el navegador del voluntario antes de que llegue al servidor. El servidor almacena solo datos ilegibles. Descifrar requiere la contraseña del voluntario más la verificación de dos servidores separados en distintos paises. Ningún servidor individual tiene información suficiente para descifrar nada.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_vol_section_protected = /** @type {(inputs: Vol_Section_ProtectedInputs
 };
 
 const es_vol_section_protected = /** @type {(inputs: Vol_Section_ProtectedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Como Estas Protegido`)
+	return /** @type {LocalizedString} */ (`Cómo Estás Protegido`)
 };
 
 /**

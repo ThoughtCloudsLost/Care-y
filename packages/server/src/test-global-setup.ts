@@ -12,9 +12,10 @@
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import pg from "pg";
-import { Kysely, PostgresDialect } from "kysely";
+import { Kysely } from "kysely";
 import { FileMigrationProvider, Migrator } from "kysely/migration";
 import type { PlatformDatabase } from "./db/types.js";
+import { SafeIntrospectionPostgresDialect } from "./test-utils.js";
 
 export async function setup(): Promise<void> {
   const connectionString = process.env.DATABASE_URL;
@@ -26,7 +27,7 @@ export async function setup(): Promise<void> {
 
   const pool = new pg.Pool({ connectionString, max: 2 });
   const db = new Kysely<PlatformDatabase>({
-    dialect: new PostgresDialect({ pool }),
+    dialect: new SafeIntrospectionPostgresDialect({ pool }, "public"),
   });
 
   const platformDir = path.join(

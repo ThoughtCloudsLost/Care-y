@@ -10,7 +10,7 @@ const en_intake_privacy_retention_title = /** @type {(inputs: Intake_Privacy_Ret
 };
 
 const es_intake_privacy_retention_title = /** @type {(inputs: Intake_Privacy_Retention_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Por cuanto tiempo conservamos tus datos`)
+	return /** @type {LocalizedString} */ (`Por cuánto tiempo conservamos tus datos`)
 };
 
 /**

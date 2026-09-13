@@ -10,7 +10,7 @@ const en_getting_started_branding_desc = /** @type {(inputs: Getting_Started_Bra
 };
 
 const es_getting_started_branding_desc = /** @type {(inputs: Getting_Started_Branding_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sube un logo y configura los colores de tu organizacion.`)
+	return /** @type {LocalizedString} */ (`Sube un logo y configura los colores de tu organización.`)
 };
 
 /**

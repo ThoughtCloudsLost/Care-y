@@ -10,7 +10,7 @@ const en_admin_invite_pending_revoked = /** @type {(inputs: Admin_Invite_Pending
 };
 
 const es_admin_invite_pending_revoked = /** @type {(inputs: Admin_Invite_Pending_RevokedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Invitacion revocada`)
+	return /** @type {LocalizedString} */ (`Invitación revocada`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_escrow_storage_test = /** @type {(inputs: Admin_Escrow_Storage_Te
 };
 
 const es_admin_escrow_storage_test = /** @type {(inputs: Admin_Escrow_Storage_TestInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Pruebe el archivo periodicamente: puede encontrarlo y recordar la frase de contrasena?`)
+	return /** @type {LocalizedString} */ (`¿Pruebe el archivo periódicamente: puede encontrarlo y recordar la frase de contraseña?`)
 };
 
 /**

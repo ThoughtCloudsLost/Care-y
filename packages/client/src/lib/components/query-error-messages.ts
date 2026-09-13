@@ -165,6 +165,8 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.FORM_HAS_RESPONSES]: () => m.error_form_has_responses(),
   [ErrorCode.INTAKE_SLUG_TAKEN]: () => m.error_intake_slug_taken(),
   [ErrorCode.INTAKE_DISABLED]: () => m.error_intake_disabled(),
+  [ErrorCode.INTAKE_FORM_CLOSED]: () => m.error_intake_form_closed(),
+  [ErrorCode.BUILTIN_FORM_DISABLED]: () => m.error_builtin_form_disabled(),
 
   // Portal channels
   [ErrorCode.PORTAL_CHANNEL_EXISTS]: () =>
@@ -172,6 +174,11 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   // Deliberately generic: the portal surface never distinguishes
   // unknown, revoked, and bad-auth channels.
   [ErrorCode.PORTAL_CHANNEL_NOT_FOUND]: () => m.error_generic(),
+  [ErrorCode.PORTAL_CHANNEL_MISMATCH]: () => m.error_portal_channel_mismatch(),
+  [ErrorCode.PORTAL_RESEED_VALIDATION]: () =>
+    m.error_portal_reseed_validation(),
+  [ErrorCode.PORTAL_RESEED_ALREADY_CONVERTED]: () =>
+    m.error_portal_reseed_already_converted(),
 
   // Client accounts
   [ErrorCode.ACCOUNT_USERNAME_TAKEN]: () => m.error_account_username_taken(),

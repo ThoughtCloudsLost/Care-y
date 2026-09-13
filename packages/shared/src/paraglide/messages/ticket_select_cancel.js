@@ -10,7 +10,7 @@ const en_ticket_select_cancel = /** @type {(inputs: Ticket_Select_CancelInputs) 
 };
 
 const es_ticket_select_cancel = /** @type {(inputs: Ticket_Select_CancelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cancelar seleccion`)
+	return /** @type {LocalizedString} */ (`Cancelar selección`)
 };
 
 /**

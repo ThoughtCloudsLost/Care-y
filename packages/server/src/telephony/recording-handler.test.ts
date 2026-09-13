@@ -41,6 +41,8 @@ import {
   type ClientId,
   type BlobKey,
   type E164,
+  type ChannelRowId,
+  type ChannelSecret,
 } from "@care-y/shared";
 import type { OrgSlug } from "@care-y/shared";
 
@@ -673,6 +675,202 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
 
       expect(result.followUpId).not.toBeNull();
+    });
+
+    // --- Portal carrier tests (ADR-092) ---
+
+    /** Seeds an active portal channel for the given client. */
+    async function seedPortalChannel(
+      clientId: ClientId,
+      clientPublic: Uint8Array,
+    ): Promise<ChannelRowId> {
+      const channelId =
+        `ch-${crypto.randomUUID().slice(0, 8)}` as ChannelSecret;
+      const row = await testDb.db
+        .insertInto("portal_channels")
+        .values({
+          client_id: clientId,
+          channel_id: channelId,
+          auth_hash: Buffer.alloc(32, 0xaa),
+          client_public: Buffer.from(clientPublic),
+          key_check_ephemeral_point: Buffer.alloc(32, 0xbb),
+          key_check_nonce: Buffer.alloc(24, 0xcc),
+          key_check_ciphertext: Buffer.alloc(48, 0xdd),
+          status: "active",
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      return row.id;
+    }
+
+    it("writes portal_recordings carrier row when the client has an active channel", async () => {
+      const { requireSodium: reqSodium } = await import("@care-y/crypto");
+      const sodium = reqSodium();
+      const priv = sodium.crypto_core_ristretto255_scalar_random();
+      const pub = sodium.crypto_scalarmult_ristretto255_base(priv);
+
+      const fixture = await createTestTicketFixture(testDb.db);
+      const channelRowId = await seedPortalChannel(fixture.clientId, pub);
+
+      const tracker = createCallTracker();
+      await tracker.track(
+        testDb.schemaName as OrgSchema,
+        callSidSchema.parse("CA_PORTAL_HAPPY"),
+        {
+          ticketId: fixture.ticketId,
+          userId: null,
+          direction: "inbound",
+          orgSchema: testDb.schemaName as OrgSchema,
+          clientId: fixture.clientId,
+          createdAt: Date.now(),
+        },
+      );
+
+      const blobStore = createMemoryBlobStore();
+      const dbDeps = makeDbDeps({ callTracker: tracker, blobStore });
+      vi.mocked(dbDeps.provider.getRecording).mockResolvedValueOnce(
+        Buffer.from("portal-voicemail-audio"),
+      );
+
+      const result = await handleRecordingComplete(
+        {
+          RecordingSid: "RE_PORTAL_HAPPY",
+          CallSid: "CA_PORTAL_HAPPY",
+          RecordingDuration: "10",
+        },
+        dbDeps,
+      );
+
+      expect(result.followUpId).not.toBeNull();
+
+      // Recording row has file_key_wrap
+      const rec = await testDb.db
+        .selectFrom("recordings")
+        .select("file_key_wrap")
+        .where("followup_id", "=", result.followUpId!)
+        .executeTakeFirstOrThrow();
+      expect(rec.file_key_wrap).not.toBeNull();
+
+      // portal_recordings carrier row exists
+      const prRows = await testDb.db
+        .selectFrom("portal_recordings")
+        .selectAll()
+        .where("channel_id", "=", channelRowId)
+        .where("followup_id", "=", result.followUpId!)
+        .execute();
+      expect(prRows).toHaveLength(1);
+      expect(prRows[0]!.direction).toBe("from_client");
+    });
+
+    it("writes null file_key_wrap and no portal carrier when client has no channel", async () => {
+      const fixture = await createTestTicketFixture(testDb.db);
+      const tracker = createCallTracker();
+      await tracker.track(
+        testDb.schemaName as OrgSchema,
+        callSidSchema.parse("CA_NO_CHAN"),
+        {
+          ticketId: fixture.ticketId,
+          userId: null,
+          direction: "inbound",
+          orgSchema: testDb.schemaName as OrgSchema,
+          clientId: fixture.clientId,
+          createdAt: Date.now(),
+        },
+      );
+
+      const dbDeps = makeDbDeps({ callTracker: tracker });
+      vi.mocked(dbDeps.provider.getRecording).mockResolvedValueOnce(
+        Buffer.from("no-channel-audio"),
+      );
+
+      const result = await handleRecordingComplete(
+        {
+          RecordingSid: "RE_NO_CHAN",
+          CallSid: "CA_NO_CHAN",
+          RecordingDuration: "3",
+        },
+        dbDeps,
+      );
+
+      expect(result.followUpId).not.toBeNull();
+
+      const rec = await testDb.db
+        .selectFrom("recordings")
+        .select("file_key_wrap")
+        .where("followup_id", "=", result.followUpId!)
+        .executeTakeFirstOrThrow();
+      expect(rec.file_key_wrap).toBeNull();
+
+      const prRows = await testDb.db
+        .selectFrom("portal_recordings")
+        .selectAll()
+        .where("followup_id", "=", result.followUpId!)
+        .execute();
+      expect(prRows).toHaveLength(0);
+    });
+
+    it("still creates the follow-up when channel lookup throws", async () => {
+      const fixture = await createTestTicketFixture(testDb.db);
+      const tracker = createCallTracker();
+      await tracker.track(
+        testDb.schemaName as OrgSchema,
+        callSidSchema.parse("CA_CHAN_ERR"),
+        {
+          ticketId: fixture.ticketId,
+          userId: null,
+          direction: "inbound",
+          orgSchema: testDb.schemaName as OrgSchema,
+          clientId: fixture.clientId,
+          createdAt: Date.now(),
+        },
+      );
+
+      const dbDeps = makeDbDeps({ callTracker: tracker });
+      vi.mocked(dbDeps.provider.getRecording).mockResolvedValueOnce(
+        Buffer.from("channel-error-audio"),
+      );
+
+      // Sabotage portal_channels select to throw
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const origSelectFrom = testDb.db.selectFrom.bind(testDb.db);
+      const selectSpy = vi.spyOn(testDb.db, "selectFrom").mockImplementation(((
+        table: string,
+      ) => {
+        if (table === "portal_channels") {
+          throw new Error("simulated channel lookup failure");
+        }
+        return origSelectFrom(table as never);
+      }) as unknown as typeof testDb.db.selectFrom);
+
+      const result = await handleRecordingComplete(
+        {
+          RecordingSid: "RE_CHAN_ERR",
+          CallSid: "CA_CHAN_ERR",
+          RecordingDuration: "2",
+        },
+        dbDeps,
+      );
+
+      // Follow-up still created
+      expect(result.followUpId).not.toBeNull();
+
+      // Recording row still present with null wrap (direct envelope)
+      const rec = await testDb.db
+        .selectFrom("recordings")
+        .select("file_key_wrap")
+        .where("followup_id", "=", result.followUpId!)
+        .executeTakeFirstOrThrow();
+      expect(rec.file_key_wrap).toBeNull();
+
+      // Warn was called without content
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Portal seal skipped"),
+      );
+
+      selectSpy.mockRestore();
+      warnSpy.mockRestore();
     });
 
     it("leaves the provider recording untouched when blob storage fails", async () => {

@@ -10,7 +10,7 @@ const en_admin_invite_link_generate = /** @type {(inputs: Admin_Invite_Link_Gene
 };
 
 const es_admin_invite_link_generate = /** @type {(inputs: Admin_Invite_Link_GenerateInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Generar enlace de invitacion`)
+	return /** @type {LocalizedString} */ (`Generar enlace de invitación`)
 };
 
 /**

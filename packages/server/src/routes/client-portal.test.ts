@@ -22,8 +22,10 @@ import {
 import { getSodium } from "@care-y/crypto";
 import {
   createClientPortalRouter,
+  portalReplyChannelKey,
   type ClientPortalRouterDeps,
 } from "./client-portal.js";
+import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createCallerFactory } from "../trpc/trpc.js";
 import {
   mockReq,
@@ -31,6 +33,7 @@ import {
   stubTenantDbDefaultRoles,
   expectTrpcError,
   testSealedBox,
+  createMemoryBlobStore,
 } from "../test-utils.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
@@ -40,10 +43,11 @@ import type { IntakeFormService } from "../portal/intake-form-service.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import { IntakeQueueNotConfiguredError } from "../portal/intake-service.js";
+import { RateLimitError } from "../errors.js";
 import type * as IntakeServiceModule from "../portal/intake-service.js";
 import type * as ShareServiceModule from "../portal/share-service.js";
 import type { IntakeSubmissionInput } from "@care-y/shared";
-import { RoleId } from "@care-y/shared";
+import { RoleId, clientAccountIdSchema } from "@care-y/shared";
 import type {
   SessionId,
   SessionToken,
@@ -172,11 +176,16 @@ function mockIntakeFormService(): IntakeFormService {
     setActive: vi.fn(),
     isWebIntakeEnabled: vi.fn().mockResolvedValue(true),
     setWebIntakeEnabled: vi.fn(),
+    isBuiltinDefaultEnabled: vi.fn().mockResolvedValue(true),
+    setBuiltinDefaultEnabled: vi.fn(),
     resolvePublicForm: vi.fn().mockResolvedValue({
       formId: null,
       slug: null,
+      encryptedFormMeta: null,
       fields: null,
       intakeDisabled: false,
+      formClosed: false,
+      builtinFormDisabled: false,
     }),
   };
 }
@@ -191,12 +200,26 @@ function buildDeps(
   overrides?: Partial<ClientPortalRouterDeps>,
 ): ClientPortalRouterDeps {
   return {
+    blobStore: createMemoryBlobStore(),
     submissionLimiter: allowLimiter(),
     challengeLimiter: allowLimiter(),
     powVerifier: null,
     intakeFormService: mockIntakeFormService(),
     notificationService: mockNotificationService(),
     shareLimiter: allowLimiter(),
+    // Tiers off by default; a test that exercises one overrides it.
+    fieldEncryptor: null,
+    portalChannelService: null,
+    portalMessageService: null,
+    portalReadLimiter: null,
+    portalReplyLimiter: null,
+    portalReplyIpLimiter: null,
+    portalGetProvider: null,
+    portalResolveCallerId: null,
+    accountServiceDeps: null,
+    accountSaltLimiter: null,
+    accountLoginLimiter: null,
+    oprfService: null,
     ...overrides,
   };
 }
@@ -303,8 +326,11 @@ describe("client-portal router", () => {
       expect(result).toEqual({
         formId: null,
         slug: null,
+        encryptedFormMeta: null,
         fields: null,
         intakeDisabled: false,
+        formClosed: false,
+        builtinFormDisabled: false,
       });
     });
 
@@ -313,9 +339,11 @@ describe("client-portal router", () => {
       const formData = {
         formId: "f-1",
         slug: "general-help",
+        encryptedFormMeta: VALID_BASE64,
         fields: [
           {
             id: "field-1",
+            fieldKey: crypto.randomUUID(),
             fieldType: "text",
             role: null,
             encryptedLabel: VALID_BASE64,
@@ -512,6 +540,100 @@ describe("client-portal router", () => {
       expect(Object.keys(result)).toEqual(["reference"]);
       expect(typeof result.reference).toBe("string");
     });
+
+    it("passes decoded continuation branch to the service", async () => {
+      const caller = buildCaller();
+      const VALID_CHANNEL_ID = "a".repeat(48);
+      const contInput = makeSubmitInput({
+        continuation: {
+          channelId: VALID_CHANNEL_ID,
+          authHash: Buffer.alloc(32, 0x01).toString("base64"),
+          clientPublic: Buffer.alloc(32, 0x02).toString("base64"),
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0x03).toString("base64"),
+            nonce: Buffer.alloc(24, 0x04).toString("base64"),
+            ciphertext: Buffer.from("kc-ct").toString("base64"),
+          },
+        },
+      } as Partial<IntakeSubmissionInput>);
+
+      await caller.submitIntake(contInput);
+
+      expect(mockCreateIntakeTicket).toHaveBeenCalledOnce();
+      const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as Record<
+        string,
+        unknown
+      >;
+      expect(serviceInput.continuation).not.toBeNull();
+      const cont = serviceInput.continuation as {
+        channelId: string;
+        authHash: Buffer;
+        clientPublic: Buffer;
+        selfCopy: unknown;
+      };
+      expect(cont.channelId).toBe(VALID_CHANNEL_ID);
+      expect(Buffer.isBuffer(cont.authHash)).toBe(true);
+      expect(Buffer.isBuffer(cont.clientPublic)).toBe(true);
+      expect(cont.selfCopy).toBeNull();
+    });
+
+    it("passes null continuation when the branch is absent", async () => {
+      const caller = buildCaller();
+      await caller.submitIntake(makeSubmitInput());
+
+      const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as Record<
+        string,
+        unknown
+      >;
+      expect(serviceInput.continuation).toBeNull();
+    });
+
+    it("strips continuation at schema level when both account and continuation are present", async () => {
+      const caller = buildCaller(
+        buildDeps({
+          accountServiceDeps: {
+            indexer: {
+              hash: vi.fn().mockReturnValue("hashed"),
+            } as unknown as BlindIndexer,
+            fakeSaltKey: Buffer.alloc(32, 0xab),
+          },
+        }),
+      );
+      const bothInput = makeSubmitInput({
+        account: {
+          accountId: clientAccountIdSchema.parse(crypto.randomUUID()),
+          username: "testuser",
+          salt: Buffer.alloc(16, 0x01).toString("base64"),
+          publicKey: Buffer.alloc(32, 0x02).toString("base64"),
+          authHash: Buffer.alloc(32, 0x03).toString("base64"),
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0x04).toString("base64"),
+            nonce: Buffer.alloc(24, 0x05).toString("base64"),
+            ciphertext: Buffer.from("kc-ct").toString("base64"),
+          },
+        },
+        continuation: {
+          channelId: "b".repeat(48),
+          authHash: Buffer.alloc(32, 0x06).toString("base64"),
+          clientPublic: Buffer.alloc(32, 0x07).toString("base64"),
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0x08).toString("base64"),
+            nonce: Buffer.alloc(24, 0x09).toString("base64"),
+            ciphertext: Buffer.from("kc-ct2").toString("base64"),
+          },
+        },
+      } as Partial<IntakeSubmissionInput>);
+
+      await caller.submitIntake(bothInput);
+
+      const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as Record<
+        string,
+        unknown
+      >;
+      // Schema transform strips continuation when account is present
+      expect(serviceInput.continuation).toBeNull();
+      expect(serviceInput.account).not.toBeNull();
+    });
   });
 
   // -----------------------------------------------------------------
@@ -557,6 +679,9 @@ describe("client-portal router", () => {
         },
         ticketId: crypto.randomUUID() as TicketId,
         messages: [],
+        attachments: [],
+        recordings: [],
+        callEntries: [],
         messagesExpireDays: 30,
         safeExitUrl: null,
         accountOffer: false,
@@ -574,6 +699,10 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn().mockResolvedValue(fakeBootstrapResult()),
           clientReply: vi.fn().mockResolvedValue(undefined),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
         },
         portalReadLimiter: allowLimiter(),
         portalReplyLimiter: allowLimiter(),
@@ -693,11 +822,17 @@ describe("client-portal router", () => {
       const warnSpy = vi
         .spyOn(console, "warn")
         .mockImplementation(() => undefined);
-      await expectTrpcError(
+      const limitErr = await expectTrpcError(
         caller.portalBootstrap(makeBootstrapInput()),
         "TOO_MANY_REQUESTS",
       );
       warnSpy.mockRestore();
+
+      // The cause is the AppError whose retryAfterSeconds the errorFormatter
+      // forwards to the client (portal schedules its auto-retry from it).
+      expect(limitErr.cause).toBeInstanceOf(RateLimitError);
+      const rle = limitErr.cause as RateLimitError;
+      expect(rle.retryAfterSeconds).toBe(1800);
     });
 
     it("returns NOT_FOUND when portal deps are not configured", async () => {
@@ -752,6 +887,7 @@ describe("client-portal router", () => {
         messages: [
           {
             id: crypto.randomUUID(),
+            followupId: crypto.randomUUID(),
             direction: "to_client",
             ephemeralPoint: "ep1",
             nonce: "n1",
@@ -760,6 +896,9 @@ describe("client-portal router", () => {
             editedAt: null,
           },
         ],
+        attachments: [],
+        recordings: [],
+        callEntries: [],
         messagesExpireDays: 30,
         safeExitUrl: null,
         accountOffer: false,
@@ -772,6 +911,10 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn().mockResolvedValue(bootstrapResult),
           clientReply: vi.fn(),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
         },
         portalReadLimiter: allowLimiter(),
         portalReplyLimiter: allowLimiter(),
@@ -860,6 +1003,10 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: vi.fn().mockResolvedValue(undefined),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
         },
         portalReadLimiter: allowLimiter(),
         portalReplyLimiter: allowLimiter(),
@@ -887,6 +1034,10 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: mockClientReply,
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
         },
       });
       const caller = buildCaller(replyDeps);
@@ -935,39 +1086,76 @@ describe("client-portal router", () => {
       expect(err.message).toBe("Channel not found or not available");
     });
 
-    it("rejects the 31st reply with TOO_MANY_REQUESTS", async () => {
-      let callCount = 0;
-      const trackingLimiter: RateLimiter = {
-        check: () => {
-          callCount++;
-          if (callCount > 30) {
-            return { allowed: false, remaining: 0, retryAfterMs: 1800_000 };
-          }
-          return {
-            allowed: true,
-            remaining: 30 - callCount,
-            retryAfterMs: 0,
-          };
-        },
-        reset: () => undefined,
-      };
-
-      const replyDeps = buildReplyDeps({
-        portalReplyLimiter: trackingLimiter,
-      });
-      const ctx = makeContext();
-      const routerInstance = createClientPortalRouter(replyDeps);
-      const factory = createCallerFactory(routerInstance);
+    it("rejects the 31st reply on one channel with a structured retry hint", async () => {
+      const limiter = createInMemoryRateLimiter(
+        { windowMs: 3_600_000, maxRequests: 30 },
+        () => 1_000,
+      );
+      const replyDeps = buildReplyDeps({ portalReplyLimiter: limiter });
+      const caller = buildCaller(replyDeps);
 
       // First 30 succeed
       for (let i = 0; i < 30; i++) {
-        const caller = factory(ctx);
         const result = await caller.portalReply(makeReplyInput());
         expect(result).toEqual({});
       }
 
       // 31st is rejected
-      const caller = factory(ctx);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const limitErr = await expectTrpcError(
+        caller.portalReply(makeReplyInput()),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+      expect(limitErr.cause).toBeInstanceOf(RateLimitError);
+      expect((limitErr.cause as RateLimitError).retryAfterSeconds).toBe(3600);
+    });
+
+    it("keys the reply limit by channel: a second channel from the same IP still sends", async () => {
+      const limiter = createInMemoryRateLimiter(
+        { windowMs: 3_600_000, maxRequests: 2 },
+        () => 1_000,
+      );
+      // Two channels (fakeChannelRow mints a fresh row id per deps set)
+      // sharing one limiter instance and one caller IP.
+      const depsA = buildReplyDeps({ portalReplyLimiter: limiter });
+      const depsB = buildReplyDeps({ portalReplyLimiter: limiter });
+      const callerA = buildCaller(depsA);
+      const callerB = buildCaller(depsB);
+
+      await callerA.portalReply(makeReplyInput());
+      await callerA.portalReply(makeReplyInput());
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(
+        callerA.portalReply(makeReplyInput()),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+
+      // Channel B is untouched by channel A's exhaustion.
+      const result = await callerB.portalReply(makeReplyInput());
+      expect(result).toEqual({});
+    });
+
+    it("resetting the channel key (the org-reply hook) unblocks the channel", async () => {
+      const limiter = createInMemoryRateLimiter(
+        { windowMs: 3_600_000, maxRequests: 1 },
+        () => 1_000,
+      );
+      const channel = fakeChannelRow();
+      const replyDeps = buildReplyDeps({
+        portalChannelService: {
+          resolveAuthedChannel: vi.fn().mockResolvedValue(channel),
+        },
+        portalReplyLimiter: limiter,
+      });
+      const caller = buildCaller(replyDeps);
+
+      await caller.portalReply(makeReplyInput());
       const warnSpy = vi
         .spyOn(console, "warn")
         .mockImplementation(() => undefined);
@@ -976,6 +1164,164 @@ describe("client-portal router", () => {
         "TOO_MANY_REQUESTS",
       );
       warnSpy.mockRestore();
+
+      // What index.ts wires into the followup service's onPortalOrgReply.
+      limiter.reset(portalReplyChannelKey(channel.id));
+
+      const result = await caller.portalReply(makeReplyInput());
+      expect(result).toEqual({});
+    });
+
+    it("counts unengaged replies against the IP layer and rejects past the cap", async () => {
+      const ipLimiter = createInMemoryRateLimiter(
+        { windowMs: 3_600_000, maxRequests: 2 },
+        () => 1_000,
+      );
+      const replyDeps = buildReplyDeps({
+        portalReplyIpLimiter: ipLimiter,
+      });
+      const caller = buildCaller(replyDeps);
+
+      // hasRecentOrgReply is stubbed false: every write counts.
+      await caller.portalReply(makeReplyInput());
+      await caller.portalReply(makeReplyInput());
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const limitErr = await expectTrpcError(
+        caller.portalReply(makeReplyInput()),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+      expect(limitErr.cause).toBeInstanceOf(RateLimitError);
+    });
+
+    it("skips the IP layer entirely when the org replied recently", async () => {
+      // Denies only conversation-count keys; the authgate namespace on
+      // the same instance stays open so the pre-auth gate passes.
+      const ipDenyLimiter: RateLimiter = {
+        check: (key: string) =>
+          key.startsWith("ip:")
+            ? { allowed: false, remaining: 0, retryAfterMs: 3000 }
+            : { allowed: true, remaining: 10, retryAfterMs: 0 },
+        reset: () => undefined,
+      };
+      const replyDeps = buildReplyDeps({
+        portalReplyIpLimiter: ipDenyLimiter,
+        portalMessageService: {
+          bootstrap: vi.fn(),
+          clientReply: vi.fn().mockResolvedValue(undefined),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(true),
+        },
+      });
+      const caller = buildCaller(replyDeps);
+
+      // The engaged conversation sends even though "ip:" would deny.
+      const result = await caller.portalReply(makeReplyInput());
+      expect(result).toEqual({});
+    });
+
+    it("blocks repeated failed-auth attempts before channel resolution", async () => {
+      const ipLimiter = createInMemoryRateLimiter(
+        { windowMs: 3_600_000, maxRequests: 2 },
+        () => 1_000,
+      );
+      const resolveAuthedChannel = vi.fn().mockResolvedValue(null);
+      const replyDeps = buildReplyDeps({
+        portalChannelService: { resolveAuthedChannel },
+        portalReplyIpLimiter: ipLimiter,
+      });
+      const caller = buildCaller(replyDeps);
+
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(caller.portalReply(makeReplyInput()), "NOT_FOUND");
+      await expectTrpcError(caller.portalReply(makeReplyInput()), "NOT_FOUND");
+      // Third attempt is stopped by the gate before any DB-shaped work.
+      await expectTrpcError(
+        caller.portalReply(makeReplyInput()),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+      expect(resolveAuthedChannel).toHaveBeenCalledTimes(2);
+    });
+
+    it("successful auth resets the flood gate so honest callers never accumulate", async () => {
+      const ipLimiter = createInMemoryRateLimiter(
+        { windowMs: 3_600_000, maxRequests: 2 },
+        () => 1_000,
+      );
+      const channel = fakeChannelRow();
+      // Fails once, then succeeds, then fails again.
+      const resolveAuthedChannel = vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(channel)
+        .mockResolvedValueOnce(null);
+      const replyDeps = buildReplyDeps({
+        portalChannelService: { resolveAuthedChannel },
+        portalReplyIpLimiter: ipLimiter,
+      });
+      const caller = buildCaller(replyDeps);
+
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(caller.portalReply(makeReplyInput()), "NOT_FOUND");
+      await caller.portalReply(makeReplyInput());
+      // Without the reset this third call would be the gate's 3rd slot
+      // and 429; the successful call cleared it, so auth runs again.
+      await expectTrpcError(caller.portalReply(makeReplyInput()), "NOT_FOUND");
+      warnSpy.mockRestore();
+      expect(resolveAuthedChannel).toHaveBeenCalledTimes(3);
+    });
+
+    it("passes kind through decodeReplyInput to the service", async () => {
+      const mockClientReply = vi.fn().mockResolvedValue(undefined);
+      const replyDeps = buildReplyDeps({
+        portalMessageService: {
+          bootstrap: vi.fn(),
+          clientReply: mockClientReply,
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+        },
+      });
+      const caller = buildCaller(replyDeps);
+      const input = {
+        ...makeReplyInput(),
+        kind: "contact_correction" as const,
+      };
+      await caller.portalReply(input);
+
+      const serviceInput = mockClientReply.mock
+        .calls[0]?.[3] as PortalReplyServiceInput;
+      expect(serviceInput.kind).toBe("contact_correction");
+    });
+
+    it("passes undefined kind when omitted", async () => {
+      const mockClientReply = vi.fn().mockResolvedValue(undefined);
+      const replyDeps = buildReplyDeps({
+        portalMessageService: {
+          bootstrap: vi.fn(),
+          clientReply: mockClientReply,
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+        },
+      });
+      const caller = buildCaller(replyDeps);
+      await caller.portalReply(makeReplyInput());
+
+      const serviceInput = mockClientReply.mock
+        .calls[0]?.[3] as PortalReplyServiceInput;
+      expect(serviceInput.kind).toBeUndefined();
     });
   });
 
@@ -1397,6 +1743,9 @@ describe("client-portal router", () => {
         },
         ticketId: crypto.randomUUID() as TicketId,
         messages: [],
+        attachments: [],
+        recordings: [],
+        callEntries: [],
         messagesExpireDays: 30,
         safeExitUrl: null,
         accountOffer: false,
@@ -1418,6 +1767,10 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn().mockResolvedValue(fakeBootstrapResult()),
           clientReply: vi.fn().mockResolvedValue(undefined),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
         },
         portalReplyLimiter: allowLimiter(),
         fieldEncryptor: {
@@ -1582,6 +1935,10 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: vi.fn().mockResolvedValue(undefined),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
         },
         portalReplyLimiter: allowLimiter(),
         fieldEncryptor: {
@@ -1663,6 +2020,10 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: vi.fn(),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
         },
         portalReplyLimiter: allowLimiter(),
         accountServiceDeps: {
@@ -1836,6 +2197,10 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: vi.fn(),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
         },
         portalReplyLimiter: allowLimiter(),
       });
@@ -1938,6 +2303,10 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: vi.fn(),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
         },
       });
     }

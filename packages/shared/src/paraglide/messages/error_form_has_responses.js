@@ -10,7 +10,7 @@ const en_error_form_has_responses = /** @type {(inputs: Error_Form_Has_Responses
 };
 
 const es_error_form_has_responses = /** @type {(inputs: Error_Form_Has_ResponsesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este formulario tiene respuestas y no se puede eliminar. Desactivalo en su lugar.`)
+	return /** @type {LocalizedString} */ (`Este formulario tiene respuestas y no se puede eliminar. Desactívalo en su lugar.`)
 };
 
 /**

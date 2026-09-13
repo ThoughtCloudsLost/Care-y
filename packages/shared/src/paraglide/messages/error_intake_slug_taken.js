@@ -10,7 +10,7 @@ const en_error_intake_slug_taken = /** @type {(inputs: Error_Intake_Slug_TakenIn
 };
 
 const es_error_intake_slug_taken = /** @type {(inputs: Error_Intake_Slug_TakenInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ese nombre de enlace ya esta en uso por otro formulario.`)
+	return /** @type {LocalizedString} */ (`Ese nombre de enlace ya está en uso por otro formulario.`)
 };
 
 /**

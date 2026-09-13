@@ -10,7 +10,7 @@ const en_admin_templates_segment_hint = /** @type {(inputs: Admin_Templates_Segm
 };
 
 const es_admin_templates_segment_hint = /** @type {(inputs: Admin_Templates_Segment_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los mensajes de mas de 160 caracteres se dividiran en varios textos.`)
+	return /** @type {LocalizedString} */ (`Los mensajes de más de 160 caracteres se dividiran en varios textos.`)
 };
 
 /**

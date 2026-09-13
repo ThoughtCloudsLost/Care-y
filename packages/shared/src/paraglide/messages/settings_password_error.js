@@ -10,7 +10,7 @@ const en_settings_password_error = /** @type {(inputs: Settings_Password_ErrorIn
 };
 
 const es_settings_password_error = /** @type {(inputs: Settings_Password_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No se pudo cambiar la contrasena`)
+	return /** @type {LocalizedString} */ (`No se pudo cambiar la contraseña`)
 };
 
 /**

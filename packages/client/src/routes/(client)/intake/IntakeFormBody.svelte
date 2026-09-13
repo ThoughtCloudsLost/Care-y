@@ -17,37 +17,62 @@
     BlockTitle,
   } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { requireRouter } from "$lib/errors.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { decode } from "@care-y/crypto";
-  import { decryptFieldContent } from "$lib/portal/intake-form-crypto.js";
+  import {
+    decryptFieldContent,
+    decryptFormMeta,
+  } from "$lib/portal/intake-form-crypto.js";
   import { solveProofOfWork } from "$lib/auth/pow-solver.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import {
     encryptIntake,
     resolveSubmitMetadata,
     buildAccountPayload,
+    buildContinuationPayload,
     type IntakeAnswer,
     type IntakeAccountPayload,
+    type IntakeContinuationPayload,
   } from "./intake-crypto.js";
   import FieldError from "$lib/components/FieldError.svelte";
+  import PasswordConfirmPair from "$lib/components/inputs/PasswordConfirmPair.svelte";
   import HowProtected from "$lib/components/portal/HowProtected.svelte";
-  import PortalHint from "$lib/components/portal/PortalHint.svelte";
+  import PortalHint from "$lib/shell/PortalHint.svelte";
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
   import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
   import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
   import {
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
+    resolveLocalized,
+    evaluateVisibility,
+    isDataFieldType,
+    BASE_LOCALE,
+    FORM_LOCALES,
     newTicketId,
     newFollowupId,
     type IntakeFieldConfig,
     type IntakeFieldType,
     type IntakeFieldRole,
+    type LocalizedText,
+    type FormLocale,
+    type IntakeFormMeta,
     type AvailabilityData,
     type TicketPriority,
+    type VisibleWhen,
+    type ProseMirrorDocJSON,
     ErrorCode,
   } from "@care-y/shared";
+  import { readRichLocale } from "$lib/utils/localized-text.js";
+  import {
+    renderFormRichText,
+    rewriteFormAssetUrls,
+  } from "$lib/utils/render-form-content.js";
+  import { getOrgSlug } from "$lib/utils/org-slug.js";
+  import { getClientShellCtx } from "$lib/client-shell/context.js";
 
   // ---- Props ----
 
@@ -61,36 +86,81 @@
   // ---- Types ----
 
   interface PlaintextField {
-    readonly id: string;
+    readonly fieldKey: string;
     readonly fieldType: IntakeFieldType;
     readonly role: IntakeFieldRole | null;
-    readonly label: string;
+    readonly label: LocalizedText;
     readonly config: IntakeFieldConfig;
     readonly isRequired: boolean;
+    readonly visibleWhen?: VisibleWhen;
   }
 
   type ContactMethod = "phone" | "email" | "none";
 
+  // ---- Visitor locale ----
+
+  /**
+   * The visitor's current locale, narrowed from Paraglide's Locale type to
+   * FormLocale for use with resolveLocalized and readRichLocale. Falls back
+   * to BASE_LOCALE when the runtime returns a locale not in FORM_LOCALES
+   * (should not happen given both sets are ["en", "es"], but the type
+   * narrowing is explicit rather than a cast).
+   *
+   * Wrapped in $derived so the value stays reactive across locale switches.
+   * In practice, setLocale triggers a page reload, so the component
+   * re-mounts with the new locale. The $derived is a safety net.
+   */
+  const visitorLocale: FormLocale = $derived.by((): FormLocale => {
+    const raw = getLocale();
+    return FORM_LOCALES.includes(raw) ? raw : BASE_LOCALE;
+  });
+
   // ---- Default form definition ----
+
+  /**
+   * Build a LocalizedText record by evaluating a Paraglide message function
+   * in each supported locale. Paraglide message functions accept an options
+   * object with an explicit locale override, so this produces the correct
+   * translation for every key rather than storing a single resolved string
+   * under one locale.
+   */
+  function localizeMsg(
+    fn: (
+      params?: Record<string, never>,
+      opts?: { locale?: FormLocale },
+    ) => string,
+  ): LocalizedText {
+    // Locales are written out rather than looped so that adding one to
+    // LocalizedText becomes a compile error here instead of a silently
+    // missing translation.
+    return {
+      en: fn(undefined, { locale: "en" }),
+      es: fn(undefined, { locale: "es" }),
+    };
+  }
 
   const DEFAULT_INTAKE_FORM: readonly PlaintextField[] = [
     {
-      id: "default:name",
+      fieldKey: "default:name",
       fieldType: "text",
       role: null,
-      label: m.intake_field_name_label(),
-      config: { type: "text", maxLength: 200, placeholder: undefined },
+      label: localizeMsg(m.intake_field_name_label),
+      config: {
+        type: "text",
+        maxLength: 200,
+        placeholder: localizeMsg(m.intake_field_name_placeholder),
+      },
       isRequired: false,
     },
     {
-      id: "default:message",
+      fieldKey: "default:message",
       fieldType: "textarea",
       role: null,
-      label: m.intake_field_message_label(),
+      label: localizeMsg(m.intake_field_message_label),
       config: {
         type: "textarea",
         maxLength: 5_000,
-        placeholder: m.intake_field_message_placeholder(),
+        placeholder: localizeMsg(m.intake_field_message_placeholder),
       },
       isRequired: true,
     },
@@ -139,7 +209,10 @@
           formId: null,
           fields: null,
           slug: null,
+          encryptedFormMeta: null,
           intakeDisabled: false,
+          formClosed: false,
+          builtinFormDisabled: false,
         };
       }
       const input = slug != null ? { slug } : undefined;
@@ -149,31 +222,76 @@
     retry: false,
   }));
 
-  // Not-available: intake is disabled or slug was given but not found
+  // Disabled intake, an unknown slug, and a disabled builtin form all
+  // render the not-available state below.
   const intakeDisabled = $derived(formQuery.data?.intakeDisabled === true);
-  const slugNotFound = $derived(
-    slug != null && formQuery.data?.formId == null && !intakeDisabled,
+  const formClosed = $derived(formQuery.data?.formClosed === true);
+  const builtinFormDisabled = $derived(
+    formQuery.data?.builtinFormDisabled === true,
   );
-  const notAvailable = $derived(intakeDisabled || slugNotFound);
+  const slugNotFound = $derived(
+    slug != null &&
+      formQuery.data?.formId == null &&
+      !intakeDisabled &&
+      !formClosed,
+  );
+  const notAvailable = $derived(
+    intakeDisabled || slugNotFound || builtinFormDisabled,
+  );
 
   // Decrypt form fields when a custom form is returned
   interface ResolvedForm {
     formId: string | null;
     fields: readonly PlaintextField[];
+    formMeta: IntakeFormMeta;
     error: boolean;
   }
 
+  const EMPTY_META: IntakeFormMeta = {};
+
   const resolvedForm = $derived.by((): ResolvedForm => {
     const data = formQuery.data;
-    if (notAvailable) {
-      return { formId: null, fields: [], error: false };
+    if (notAvailable || formClosed) {
+      // For closed forms, still try to decrypt meta so we can show
+      // the custom closed message when available.
+      if (
+        formClosed &&
+        data?.encryptedFormMeta != null &&
+        orgPublicKey !== null
+      ) {
+        try {
+          const closedMeta = decryptFormMeta(
+            data.encryptedFormMeta,
+            orgPublicKey,
+          );
+          return {
+            formId: null,
+            fields: [],
+            formMeta: closedMeta,
+            error: false,
+          };
+        } catch {
+          // Fall through to empty meta
+        }
+      }
+      return { formId: null, fields: [], formMeta: EMPTY_META, error: false };
     }
     if (data?.formId == null) {
-      return { formId: null, fields: DEFAULT_INTAKE_FORM, error: false };
+      return {
+        formId: null,
+        fields: DEFAULT_INTAKE_FORM,
+        formMeta: EMPTY_META,
+        error: false,
+      };
     }
 
     if (orgPublicKey === null) {
-      return { formId: null, fields: DEFAULT_INTAKE_FORM, error: false };
+      return {
+        formId: null,
+        fields: DEFAULT_INTAKE_FORM,
+        formMeta: EMPTY_META,
+        error: false,
+      };
     }
 
     try {
@@ -190,17 +308,33 @@
           orgPublicKey,
         );
         decrypted.push({
-          id: field.id,
+          fieldKey: field.fieldKey,
           fieldType: parsedType,
           role: parsedRole,
           label: content.label,
           config: content.config,
           isRequired: field.isRequired,
+          visibleWhen: content.visibleWhen,
         });
       }
-      return { formId: data.formId, fields: decrypted, error: false };
+
+      // Decrypt form-level metadata when the server returns a non-null blob.
+      // The field is string | null on the wire (nullable column). When null
+      // or when decryption fails, fall back to empty meta so the form
+      // renders with default i18n strings for description/submit/closed.
+      let formMeta: IntakeFormMeta = EMPTY_META;
+      const metaBlob = data.encryptedFormMeta;
+      if (metaBlob != null && metaBlob.length > 0) {
+        try {
+          formMeta = decryptFormMeta(metaBlob, orgPublicKey);
+        } catch {
+          // Non-fatal: form renders with default text
+        }
+      }
+
+      return { formId: data.formId, fields: decrypted, formMeta, error: false };
     } catch {
-      return { formId: null, fields: [], error: true };
+      return { formId: null, fields: [], formMeta: EMPTY_META, error: true };
     }
   });
 
@@ -208,6 +342,48 @@
     resolvedForm.formId === null && !resolvedForm.error && !notAvailable,
   );
   const formFields = $derived(resolvedForm.fields);
+
+  // Org slug for resolving form-asset:// image URLs
+  const orgSlug = $derived(getOrgSlug());
+
+  /** Render sanitized HTML then rewrite form-asset image URLs. */
+  function renderAndRewrite(
+    value: string | ProseMirrorDocJSON | undefined,
+  ): string {
+    const html = renderFormRichText(value);
+    if (html.length === 0 || orgSlug === null) return html;
+    return rewriteFormAssetUrls(html, orgSlug);
+  }
+
+  /** Custom description replaces the default intro text when present. */
+  const formDescriptionHtml = $derived(
+    renderAndRewrite(
+      readRichLocale(resolvedForm.formMeta.description, visitorLocale),
+    ),
+  );
+
+  /** Custom submit message replaces the default success copy when present. */
+  const formSubmitMsgHtml = $derived(
+    renderAndRewrite(
+      readRichLocale(resolvedForm.formMeta.submitMessage, visitorLocale),
+    ),
+  );
+
+  /** Custom closed message shown when the form's closing date has passed. */
+  const formClosedMsgHtml = $derived(
+    renderAndRewrite(
+      readRichLocale(resolvedForm.formMeta.closedMessage, visitorLocale),
+    ),
+  );
+
+  /** Banner image blob key from form meta, when present. */
+  const bannerBlobKey = $derived(resolvedForm.formMeta.bannerBlobKey);
+  const bannerAlt = $derived(resolvedForm.formMeta.bannerAlt ?? "");
+  const bannerUrl = $derived(
+    bannerBlobKey != null && orgSlug !== null
+      ? `/api/forms/${orgSlug}/${bannerBlobKey}`
+      : null,
+  );
 
   // ---- Form state ----
 
@@ -223,6 +399,110 @@
   // Validation errors keyed by field id
   let fieldErrors = $state<Record<string, string | undefined>>({});
   let contactDetailError = $state<string | undefined>(undefined);
+
+  // ---- Visibility evaluation ----
+
+  /**
+   * Determine whether a field is currently visible. Hidden fields are
+   * excluded from validation, the response blob, and ticket text.
+   */
+  function isFieldVisible(field: PlaintextField): boolean {
+    return evaluateVisibility(field.visibleWhen, fieldValues);
+  }
+
+  // ---- Page break pagination ----
+
+  /**
+   * Split form fields into pages. A page break element starts a new page.
+   * The first page starts at the first field. Page breaks carry an optional
+   * localized title.
+   */
+  interface FormPage {
+    /** Localized page title from the page break, undefined for the first page. */
+    readonly title?: LocalizedText;
+    /** Fields belonging to this page (data fields only, no page breaks). */
+    readonly fields: readonly PlaintextField[];
+  }
+
+  const formPages = $derived.by((): readonly FormPage[] => {
+    const pages: FormPage[] = [];
+    let currentFields: PlaintextField[] = [];
+    let currentTitle: LocalizedText | undefined = undefined;
+
+    for (const field of formFields) {
+      if (field.fieldType === "pageBreak") {
+        // Push current page (even if empty, it may have visible fields from a visibility change)
+        pages.push({ title: currentTitle, fields: currentFields });
+        currentFields = [];
+        currentTitle = field.label;
+      } else {
+        currentFields.push(field);
+      }
+    }
+    // Push the last page
+    pages.push({ title: currentTitle, fields: currentFields });
+    return pages;
+  });
+
+  const hasPages = $derived(formPages.length > 1);
+  let currentPageIndex = $state(0);
+
+  /**
+   * Visible pages: pages where at least one field is visible.
+   * Returns indices into formPages.
+   */
+  const visiblePageIndices = $derived.by((): readonly number[] => {
+    const indices: number[] = [];
+    for (let i = 0; i < formPages.length; i++) {
+      const page = formPages.at(i);
+      if (page === undefined) continue;
+      const hasVisibleField = page.fields.some((f) => isFieldVisible(f));
+      // Always include the first page (it has the intro content)
+      if (i === 0 || hasVisibleField) {
+        indices.push(i);
+      }
+    }
+    return indices;
+  });
+
+  /** The page currently being displayed (when multi-page). */
+  const currentPage = $derived(formPages.at(currentPageIndex));
+
+  /** Position of current page among visible pages (for progress display). */
+  const currentVisibleStep = $derived(
+    visiblePageIndices.indexOf(currentPageIndex) + 1,
+  );
+  const totalVisibleSteps = $derived(visiblePageIndices.length);
+
+  /**
+   * Navigate to the next visible page. Returns false if already on the last page.
+   * Validates the current page's visible fields before advancing.
+   */
+  function goNextPage(): boolean {
+    const currentVisIdx = visiblePageIndices.indexOf(currentPageIndex);
+    if (currentVisIdx < 0 || currentVisIdx >= visiblePageIndices.length - 1)
+      return false;
+    const nextIdx = visiblePageIndices.at(currentVisIdx + 1);
+    if (nextIdx === undefined) return false;
+    currentPageIndex = nextIdx;
+    return true;
+  }
+
+  /** Navigate to the previous visible page. */
+  function goPrevPage(): boolean {
+    const currentVisIdx = visiblePageIndices.indexOf(currentPageIndex);
+    if (currentVisIdx <= 0) return false;
+    const prevIdx = visiblePageIndices.at(currentVisIdx - 1);
+    if (prevIdx === undefined) return false;
+    currentPageIndex = prevIdx;
+    return true;
+  }
+
+  /** Whether we are on the last visible page. */
+  const isLastPage = $derived(
+    visiblePageIndices.indexOf(currentPageIndex) ===
+      visiblePageIndices.length - 1,
+  );
 
   // ---- PoW state ----
 
@@ -306,14 +586,17 @@
   let accountUsername = $state("");
   let accountPassword = $state("");
   let accountConfirmPassword = $state("");
+  // ---- Continuation link state ----
+
+  let continuationExpanded = $state(false);
+  let continuationLink = $state<string | null>(null);
+  let linkCopied = $state(false);
+  let linkCopyError = $state(false);
+
+  const wantsContinuation = $derived(continuationExpanded && !accountExpanded);
+
   let accountPending = $state(false);
   let accountError = $state<string | undefined>(undefined);
-
-  const accountShowMismatch = $derived(
-    accountConfirmPassword.length > 0 &&
-      accountPassword.length > 0 &&
-      accountPassword !== accountConfirmPassword,
-  );
 
   // ---- Submission ----
 
@@ -337,6 +620,7 @@
       resolvedPriority?: TicketPriority;
       resolvedEscalationLevel?: string;
       account?: IntakeAccountPayload;
+      continuation?: IntakeContinuationPayload;
     }) => {
       if (!trpc.clientPortal) {
         throw new Error("Client portal not available");
@@ -349,57 +633,147 @@
 
   // ---- Validation ----
 
-  function validate(): boolean {
+  /** Loose email check for client-side validation (not a full RFC 5322 check). */
+  function isValidEmail(s: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+  }
+
+  /** Loose phone check: at least 7 digits, optional leading +, spaces/dashes allowed. */
+  function isValidPhone(s: string): boolean {
+    const digits = s.replace(/[\s\-().+]/g, "");
+    return /^\d{7,15}$/.test(digits);
+  }
+
+  /**
+   * Validate a subset of fields. When fieldsToValidate is provided, only
+   * those fields are checked. Otherwise all visible form fields are checked.
+   */
+  function validate(fieldsToValidate?: readonly PlaintextField[]): boolean {
     const errors: Record<string, string | undefined> = {};
     let valid = true;
 
-    // Validate dynamic fields
-    for (const field of formFields) {
-      if (!field.isRequired) continue;
-      const val = fieldValues[field.id];
+    const fieldsToCheck = fieldsToValidate ?? formFields;
 
-      if (field.fieldType === "text" || field.fieldType === "textarea") {
-        if (typeof val !== "string" || val.trim() === "") {
-          errors[field.id] =
-            field.fieldType === "textarea"
-              ? m.intake_error_message_required()
-              : m.intake_error_field_required();
-          valid = false;
+    // Validate dynamic fields
+    for (const field of fieldsToCheck) {
+      // Skip page breaks (structural, not data)
+      if (!isDataFieldType(field.fieldType)) continue;
+
+      // Skip hidden fields (conditional visibility)
+      if (!isFieldVisible(field)) continue;
+
+      const val = fieldValues[field.fieldKey];
+
+      // Required check per field type
+      if (field.isRequired) {
+        if (field.fieldType === "text" || field.fieldType === "textarea") {
+          if (typeof val !== "string" || val.trim() === "") {
+            errors[field.fieldKey] =
+              field.fieldType === "textarea"
+                ? m.intake_error_message_required()
+                : m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
+        } else if (field.fieldType === "select") {
+          if (typeof val !== "string" || val === "") {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
+        } else if (field.fieldType === "multiselect") {
+          if (!Array.isArray(val) || val.length === 0) {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
+        } else if (field.fieldType === "checkbox") {
+          if (
+            field.config.type === "checkbox" &&
+            field.config.requiredTrue === true &&
+            val !== true
+          ) {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
+        } else if (field.fieldType === "date") {
+          if (typeof val !== "string" || val === "") {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
+        } else {
+          // field.fieldType === "availability" (only remaining type)
+          if (
+            val === undefined ||
+            typeof val !== "object" ||
+            Array.isArray(val) ||
+            typeof val === "boolean"
+          ) {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          } else if (val.recurring.length === 0 && val.specific.length === 0) {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
         }
-      } else if (field.fieldType === "select") {
-        if (typeof val !== "string" || val === "") {
-          errors[field.id] = m.intake_error_field_required();
+      }
+
+      // Subtype format validation for text fields (runs even on optional fields when a value is present)
+      if (
+        field.fieldType === "text" &&
+        field.config.type === "text" &&
+        typeof val === "string" &&
+        val.trim() !== ""
+      ) {
+        const sub = field.config.subtype;
+        if (sub === "email" && !isValidEmail(val)) {
+          errors[field.fieldKey] = m.intake_error_email_format();
           valid = false;
+          continue;
         }
-      } else if (field.fieldType === "multiselect") {
-        if (!Array.isArray(val) || val.length === 0) {
-          errors[field.id] = m.intake_error_field_required();
+        if (sub === "phone" && !isValidPhone(val)) {
+          errors[field.fieldKey] = m.intake_error_phone_format();
           valid = false;
+          continue;
         }
-      } else if (field.fieldType === "checkbox") {
-        // Consent-type checkbox with requiredTrue: must be checked
-        if (
-          field.config.type === "checkbox" &&
-          field.config.requiredTrue === true &&
-          val !== true
-        ) {
-          errors[field.id] = m.intake_error_field_required();
-          valid = false;
+        if (sub === "number") {
+          const num = Number(val);
+          if (Number.isNaN(num)) {
+            errors[field.fieldKey] = m.intake_error_number_format();
+            valid = false;
+            continue;
+          }
+          const range = field.config.numberRange;
+          if (range?.min !== undefined && num < range.min) {
+            errors[field.fieldKey] = m.intake_error_number_min({
+              min: String(range.min),
+            });
+            valid = false;
+            continue;
+          }
+          if (range?.max !== undefined && num > range.max) {
+            errors[field.fieldKey] = m.intake_error_number_max({
+              max: String(range.max),
+            });
+            valid = false;
+            continue;
+          }
         }
-      } else {
-        // field.fieldType === "availability"
-        if (
-          val === undefined ||
-          typeof val !== "object" ||
-          Array.isArray(val) ||
-          typeof val === "boolean"
-        ) {
-          errors[field.id] = m.intake_error_field_required();
-          valid = false;
-        } else if (val.recurring.length === 0 && val.specific.length === 0) {
-          errors[field.id] = m.intake_error_field_required();
-          valid = false;
-        }
+      }
+
+      // Date format validation (YYYY-MM-DD)
+      if (
+        field.fieldType === "date" &&
+        typeof val === "string" &&
+        val !== "" &&
+        !/^\d{4}-\d{2}-\d{2}$/.test(val)
+      ) {
+        errors[field.fieldKey] = m.intake_error_date_format();
+        valid = false;
       }
     }
 
@@ -433,9 +807,11 @@
   function focusFirstError(): void {
     if (!browser) return;
     for (const field of formFields) {
-      const fieldErr = fieldErrors[field.id];
+      // Skip hidden fields
+      if (!isFieldVisible(field)) continue;
+      const fieldErr = fieldErrors[field.fieldKey];
       if (fieldErr !== undefined && fieldErr !== "") {
-        const el = document.getElementById(`intake-field-${field.id}`);
+        const el = document.getElementById(`intake-field-${field.fieldKey}`);
         if (el) {
           el.focus();
           return;
@@ -474,13 +850,17 @@
     const answers: IntakeAnswer[] = [];
 
     if (isDefaultForm) {
-      // Default form: name, contact method, contact detail, message
+      // Default form: name, contact method, contact detail, message.
+      // Labels pin to BASE_LOCALE so queue-facing ticket text stays
+      // uniform regardless of the visitor's language (same rationale
+      // as the custom form path below).
+      const baseLoc = { locale: BASE_LOCALE };
       const nameVal = fieldValues["default:name"];
       if (typeof nameVal === "string" && nameVal.trim() !== "") {
         answers.push({
-          fieldId: "default:name",
+          fieldKey: "default:name",
           fieldType: "text",
-          label: m.intake_field_name_label(),
+          label: m.intake_field_name_label({}, baseLoc),
           value: nameVal,
         });
       }
@@ -489,31 +869,31 @@
       let contactMethodLabel: string;
       switch (contactMethod) {
         case "phone":
-          contactMethodLabel = m.intake_contact_phone();
+          contactMethodLabel = m.intake_contact_phone({}, baseLoc);
           break;
         case "email":
-          contactMethodLabel = m.intake_contact_email();
+          contactMethodLabel = m.intake_contact_email({}, baseLoc);
           break;
         case "none":
-          contactMethodLabel = m.intake_contact_none();
+          contactMethodLabel = m.intake_contact_none({}, baseLoc);
           break;
       }
       answers.push({
-        fieldId: "default:contact-method",
+        fieldKey: "default:contact-method",
         fieldType: "text",
-        label: m.intake_contact_method_label(),
+        label: m.intake_contact_method_label({}, baseLoc),
         value: contactMethodLabel,
       });
 
       // Contact detail (when applicable)
       if (contactMethod !== "none" && contactDetail.trim() !== "") {
         answers.push({
-          fieldId: "default:contact-detail",
+          fieldKey: "default:contact-detail",
           fieldType: "text",
           label:
             contactMethod === "phone"
-              ? m.intake_field_contact_detail_phone_label()
-              : m.intake_field_contact_detail_email_label(),
+              ? m.intake_field_contact_detail_phone_label({}, baseLoc)
+              : m.intake_field_contact_detail_email_label({}, baseLoc),
           value: contactDetail,
         });
       }
@@ -522,22 +902,31 @@
       const msgVal = fieldValues["default:message"];
       if (typeof msgVal === "string") {
         answers.push({
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
-          label: m.intake_field_message_label(),
+          label: m.intake_field_message_label({}, baseLoc),
           value: msgVal,
         });
       }
     } else {
-      // Custom form: all fields in order
+      // Custom form: all visible data fields in order.
+      // Labels resolve to the org base locale so queue-facing ticket
+      // text stays uniform regardless of the language the form was filled in.
+      // Hidden fields (conditional visibility) are excluded from the response
+      // blob and ticket text.
       for (const field of formFields) {
-        const val = fieldValues[field.id];
+        // Skip page breaks and hidden fields
+        if (!isDataFieldType(field.fieldType)) continue;
+        if (!isFieldVisible(field)) continue;
+
+        const val = fieldValues[field.fieldKey];
         if (val === undefined) continue;
         answers.push({
-          fieldId: field.id,
+          fieldKey: field.fieldKey,
           fieldType: field.fieldType,
-          label: field.label,
+          label: resolveLocalized(field.label, BASE_LOCALE) ?? "",
           value: val,
+          config: field.config,
         });
       }
     }
@@ -577,6 +966,7 @@
       resolvedPriority?: TicketPriority;
       resolvedEscalationLevel?: string;
       account?: IntakeAccountPayload;
+      continuation?: IntakeContinuationPayload;
     } = {
       ticketId,
       followUpId,
@@ -652,11 +1042,63 @@
       }
     }
 
+    // Continuation link: derive channel material before the mutation.
+    // Hold the channel id and encoded seed in locals; the URL is assembled
+    // only after a successful submit so a failed attempt reveals nothing.
+    let continuationChannelId: string | undefined;
+    let continuationEncodedSeed: string | undefined;
+
+    if (wantsContinuation && !wantsAccount) {
+      const messageForCopy = answers.find(
+        (a) => a.fieldType === "textarea" && typeof a.value === "string",
+      );
+      const messageText =
+        messageForCopy !== undefined && typeof messageForCopy.value === "string"
+          ? messageForCopy.value
+          : null;
+
+      try {
+        const evaluateCb = async (
+          chanId: string,
+          blindedB64: string,
+          chanAuth?: string,
+        ): Promise<{ evaluated: string }> => {
+          const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+          return portalRouter.evaluateChannelOprf.mutate({
+            channelId: chanId,
+            blindedElement: blindedB64,
+            ...(chanAuth !== undefined ? { auth: chanAuth } : {}),
+          });
+        };
+
+        const result = await buildContinuationPayload(
+          messageText,
+          evaluateCb,
+          solveProofOfWork,
+        );
+        payload.continuation = result.payload;
+        continuationChannelId = result.channelId;
+        continuationEncodedSeed = result.encodedSeed;
+      } catch {
+        submitError = m.intake_error_generic();
+        return;
+      }
+    }
+
     try {
       const result = await submitMutation.mutateAsync(payload);
       reference = result.reference;
       submitted = true;
       hintShown = true;
+
+      // Assemble the continuation URL only after successful submission
+      if (
+        continuationChannelId !== undefined &&
+        continuationEncodedSeed !== undefined
+      ) {
+        continuationLink = `${location.origin}/portal/${continuationChannelId}#${continuationEncodedSeed}`;
+      }
+
       announceToLiveRegion("polite", m.intake_success_heading());
 
       // Focus the success heading after render
@@ -784,6 +1226,23 @@
       resolvedForm.error ||
       (powRequired && powSolving && powSolution === null),
   );
+  // ---- Client shell ----
+
+  // Publishing is what gives this page quick exit and the drawer. The
+  // destroy callback is a genuine no-op: intake-crypto zeroes every key it
+  // touches synchronously inside the call that made it, so by the time
+  // anyone could tap exit there is nothing left holding key material.
+  const shellContainer = getClientShellCtx();
+
+  $effect(() => {
+    shellContainer.current = {
+      ondestroy: () => undefined,
+      actions: [],
+    };
+    return () => {
+      shellContainer.current = undefined;
+    };
+  });
 </script>
 
 <noscript>
@@ -799,8 +1258,32 @@
       {m.intake_not_available()}
     </p>
   </Block>
+{:else if formClosed}
+  <!-- Closed state: form's closing date has passed -->
+  {#if bannerUrl !== null}
+    <Block>
+      <img src={bannerUrl} alt={bannerAlt} class="intake-banner-img" />
+    </Block>
+  {/if}
+  <Block>
+    {#if formClosedMsgHtml.length > 0}
+      <div class="intake-rich-content prose-quotes" role="status">
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+        {@html formClosedMsgHtml}
+      </div>
+    {:else}
+      <p class="intake-not-available" role="status">
+        {m.intake_form_closed_default()}
+      </p>
+    {/if}
+  </Block>
 {:else if submitted}
   <!-- Success state -->
+  {#if bannerUrl !== null}
+    <Block>
+      <img src={bannerUrl} alt={bannerAlt} class="intake-banner-img" />
+    </Block>
+  {/if}
   <Block>
     <h2
       id="intake-success-heading"
@@ -809,7 +1292,16 @@
     >
       {m.intake_success_heading()}
     </h2>
-    <p class="intake-success-body">{m.intake_success_body()}</p>
+    {#if formSubmitMsgHtml.length > 0}
+      <div class="intake-rich-content prose-quotes">
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+        {@html formSubmitMsgHtml}
+      </div>
+    {:else}
+      <p class="intake-success-body">
+        {m.intake_success_body()}
+      </p>
+    {/if}
   </Block>
 
   <Block>
@@ -819,6 +1311,53 @@
     </code>
     <p class="intake-reference-save">{m.intake_reference_save()}</p>
   </Block>
+
+  {#if continuationLink !== null}
+    <Block>
+      <p class="intake-continuation-label">
+        {m.intake_continuation_link_label()}
+      </p>
+      <code
+        class="intake-continuation-link"
+        data-testid="intake-continuation-link">{continuationLink}</code
+      >
+      <button
+        class="intake-continuation-copy"
+        type="button"
+        data-testid="intake-continuation-copy"
+        onclick={async () => {
+          if (continuationLink === null) return;
+          try {
+            await navigator.clipboard.writeText(continuationLink);
+            linkCopied = true;
+            linkCopyError = false;
+            announceToLiveRegion("polite", m.intake_continuation_copied());
+            setTimeout(() => {
+              linkCopied = false;
+            }, 3000);
+          } catch {
+            linkCopyError = true;
+            linkCopied = false;
+          }
+        }}
+      >
+        {m.intake_continuation_copy_button()}
+      </button>
+      {#if linkCopied}
+        <p class="intake-continuation-copied" role="status">
+          {m.intake_continuation_copied()}
+        </p>
+      {/if}
+      {#if linkCopyError}
+        <p class="intake-continuation-copy-error" role="alert">
+          {m.intake_continuation_copy_error()}
+        </p>
+      {/if}
+      <p class="intake-continuation-warning">
+        {m.intake_continuation_warning()}
+      </p>
+    </Block>
+  {/if}
 
   {#if accountExpanded && accountUsername.trim().length > 0}
     <Block>
@@ -838,14 +1377,26 @@
     ondismiss={() => {
       hintShown = false;
     }}
-    message={m.intake_submit_hint()}
-    dismissLabel={m.intake_hint_dismiss()}
-    dismissTestid="intake-hint-dismiss"
+    message={continuationLink !== null
+      ? m.intake_continuation_hint()
+      : m.intake_submit_hint()}
   />
 {:else}
   <!-- Form state -->
+  {#if bannerUrl !== null}
+    <Block>
+      <img src={bannerUrl} alt={bannerAlt} class="intake-banner-img" />
+    </Block>
+  {/if}
   <Block>
-    <p class="intake-intro">{m.intake_intro()}</p>
+    {#if formDescriptionHtml.length > 0}
+      <div class="intake-intro intake-rich-content prose-quotes">
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+        {@html formDescriptionHtml}
+      </div>
+    {:else}
+      <p class="intake-intro">{m.intake_intro()}</p>
+    {/if}
   </Block>
 
   <HowProtected />
@@ -863,20 +1414,74 @@
       </p>
     </Block>
   {:else}
+    <!-- Progress indicator for multi-page forms -->
+    {#if hasPages && !isDefaultForm}
+      <Block>
+        <p class="intake-page-progress" role="status" aria-live="polite">
+          {m.intake_page_progress({
+            current: String(currentVisibleStep),
+            total: String(totalVisibleSteps),
+          })}
+        </p>
+      </Block>
+
+      <!-- Page title when present -->
+      {#if currentPage?.title}
+        {@const pageTitle = resolveLocalized(currentPage.title, visitorLocale)}
+        {#if pageTitle}
+          <BlockTitle>{pageTitle}</BlockTitle>
+        {/if}
+      {/if}
+    {/if}
+
     <!-- Dynamic form fields -->
-    {#each formFields as field (field.id)}
-      <IntakeFieldRenderer
-        fieldId={field.id}
-        label={field.label}
-        config={field.config}
-        isRequired={field.isRequired}
-        role={field.role}
-        value={fieldValues[field.id]}
-        error={fieldErrors[field.id]}
-        onchange={(val: string | string[] | AvailabilityData | boolean) =>
-          handleFieldChange(field.id, val)}
-      />
-    {/each}
+    {#if hasPages && !isDefaultForm}
+      <!-- Multi-page: render only the current page's visible fields -->
+      {#if currentPage}
+        {#each currentPage.fields as field (field.fieldKey)}
+          {#if isFieldVisible(field) && (isDataFieldType(field.fieldType) || field.fieldType === "richText")}
+            <IntakeFieldRenderer
+              fieldId={field.fieldKey}
+              label={resolveLocalized(field.label, visitorLocale) ?? ""}
+              locale={visitorLocale}
+              config={field.config}
+              isRequired={field.isRequired}
+              role={field.role}
+              value={isDataFieldType(field.fieldType)
+                ? fieldValues[field.fieldKey]
+                : undefined}
+              error={isDataFieldType(field.fieldType)
+                ? fieldErrors[field.fieldKey]
+                : undefined}
+              onchange={(val: string | string[] | AvailabilityData | boolean) =>
+                handleFieldChange(field.fieldKey, val)}
+            />
+          {/if}
+        {/each}
+      {/if}
+    {:else}
+      <!-- Single-page: render all visible fields flat -->
+      {#each formFields as field (field.fieldKey)}
+        {#if isFieldVisible(field) && (isDataFieldType(field.fieldType) || field.fieldType === "richText")}
+          <IntakeFieldRenderer
+            fieldId={field.fieldKey}
+            label={resolveLocalized(field.label, visitorLocale) ?? ""}
+            locale={visitorLocale}
+            config={field.config}
+            isRequired={field.isRequired}
+            role={field.role}
+            value={isDataFieldType(field.fieldType)
+              ? fieldValues[field.fieldKey]
+              : undefined}
+            error={isDataFieldType(field.fieldType)
+              ? fieldErrors[field.fieldKey]
+              : undefined}
+            onchange={(val: string | string[] | AvailabilityData | boolean) =>
+              handleFieldChange(field.fieldKey, val)}
+          />
+        {/if}
+      {/each}
+    {/if}
 
     <!-- Default form: contact method radio group + conditional detail field -->
     {#if isDefaultForm}
@@ -973,6 +1578,7 @@
         aria-expanded={accountExpanded}
         onclick={() => {
           accountExpanded = !accountExpanded;
+          if (accountExpanded) continuationExpanded = false;
         }}
         disabled={isSubmitting || accountPending}
         data-testid="intake-account-toggle"
@@ -995,6 +1601,7 @@
       <Block>
         <List strong inset class="intake-account-fields">
           <ListInput
+            label={m.account_login_username()}
             type="text"
             inputId="account-create-username"
             placeholder={m.account_login_username()}
@@ -1007,51 +1614,23 @@
             }}
             disabled={isSubmitting || accountPending}
             autocomplete="off"
+            autocapitalize="none"
             data-testid="account-create-username"
-          >
-            {#snippet label()}
-              <span class="sr-only">{m.account_login_username()}</span>
-            {/snippet}
-          </ListInput>
-          <ListInput
-            type="password"
-            inputId="account-create-password"
-            placeholder={m.account_login_password()}
-            value={accountPassword}
-            onInput={(e: Event) => {
-              if (e.target instanceof HTMLInputElement)
-                accountPassword = e.target.value;
-            }}
-            disabled={isSubmitting || accountPending}
-            data-testid="account-create-password"
-          >
-            {#snippet label()}
-              <span class="sr-only">{m.account_login_password()}</span>
-            {/snippet}
-          </ListInput>
-          <ListInput
-            type="password"
-            inputId="account-create-confirm"
-            placeholder={m.account_create_confirm()}
-            value={accountConfirmPassword}
-            onInput={(e: Event) => {
-              if (e.target instanceof HTMLInputElement)
-                accountConfirmPassword = e.target.value;
-            }}
-            disabled={isSubmitting || accountPending}
-            data-testid="account-create-confirm"
-          >
-            {#snippet label()}
-              <span class="sr-only">{m.account_create_confirm()}</span>
-            {/snippet}
-          </ListInput>
+          />
         </List>
-
-        {#if accountShowMismatch}
-          <p class="intake-account-mismatch" data-testid="account-mismatch">
-            {m.account_create_mismatch()}
-          </p>
-        {/if}
+        <PasswordConfirmPair
+          bind:password={accountPassword}
+          bind:confirm={accountConfirmPassword}
+          passwordLabel={m.account_login_password()}
+          passwordPlaceholder={m.account_login_password()}
+          confirmLabel={m.account_create_confirm()}
+          confirmPlaceholder={m.account_create_confirm()}
+          mismatchError={m.account_create_mismatch()}
+          passwordInfo={m.account_create_password_hint()}
+          autocomplete="new-password"
+          minLength={8}
+          disabled={isSubmitting || accountPending}
+        />
 
         {#if accountError}
           <p
@@ -1065,7 +1644,6 @@
         {/if}
 
         <p class="intake-account-hint">{m.account_create_username_hint()}</p>
-        <p class="intake-account-hint">{m.account_create_password_hint()}</p>
 
         <div class="intake-account-warnings">
           <p class="intake-account-warning" data-testid="warning-password">
@@ -1073,6 +1651,46 @@
           </p>
           <p class="intake-account-warning" data-testid="warning-reset">
             {m.account_create_warning_reset()}
+          </p>
+        </div>
+      </Block>
+    {/if}
+
+    <!-- Continuation link opt-in disclosure (collapsed by default) -->
+    <Block>
+      <button
+        class="intake-account-toggle"
+        type="button"
+        aria-expanded={continuationExpanded}
+        onclick={() => {
+          continuationExpanded = !continuationExpanded;
+          if (continuationExpanded) accountExpanded = false;
+        }}
+        disabled={isSubmitting || accountPending}
+        data-testid="intake-continuation-toggle"
+      >
+        <span class="intake-account-toggle-arrow"
+          >{continuationExpanded ? "▾" : "▸"}</span
+        >
+        <span class="intake-account-toggle-content">
+          <span class="intake-account-toggle-title"
+            >{m.intake_continuation_toggle_title()}</span
+          >
+          <span class="intake-account-toggle-body"
+            >{m.intake_continuation_toggle_body()}</span
+          >
+        </span>
+      </button>
+    </Block>
+
+    {#if continuationExpanded}
+      <Block>
+        <p class="intake-continuation-text">
+          {m.intake_continuation_expanded_text()}
+        </p>
+        <div class="intake-account-warnings">
+          <p class="intake-account-warning">
+            {m.intake_continuation_expanded_warning()}
           </p>
         </div>
       </Block>
@@ -1092,31 +1710,67 @@
       </Block>
     {/if}
 
-    <!-- Submit button -->
-    <Block>
-      <Button
-        large
-        disabled={submitDisabled}
-        onclick={() => void handleSubmit()}
-        data-testid="intake-submit"
-      >
-        {#if isSubmitting || accountPending || (powRequired && powSolving && !submitted)}
-          <span
-            role="progressbar"
-            aria-label={accountPending
-              ? m.account_unlocking()
-              : m.intake_solving_challenge()}
-            class="intake-progress"
-          >
-            {accountPending
-              ? m.account_unlocking()
-              : m.intake_solving_challenge()}
-          </span>
-        {:else}
-          {m.intake_submit()}
-        {/if}
-      </Button>
-    </Block>
+    <!-- Page navigation for multi-page forms -->
+    {#if hasPages && !isDefaultForm}
+      <Block>
+        <div class="intake-page-nav">
+          {#if currentVisibleStep > 1}
+            <Button outline onclick={goPrevPage} data-testid="intake-page-back">
+              {m.intake_page_back()}
+            </Button>
+          {:else}
+            <span></span>
+          {/if}
+          {#if !isLastPage}
+            <Button
+              onclick={() => {
+                // Validate current page before advancing
+                if (currentPage && validate(currentPage.fields)) {
+                  goNextPage();
+                } else {
+                  announceToLiveRegion(
+                    "polite",
+                    m.intake_error_field_required(),
+                  );
+                  focusFirstError();
+                }
+              }}
+              data-testid="intake-page-next"
+            >
+              {m.intake_page_next()}
+            </Button>
+          {/if}
+        </div>
+      </Block>
+    {/if}
+
+    <!-- Submit button (shown on last page or single-page forms) -->
+    {#if !hasPages || isDefaultForm || isLastPage}
+      <Block>
+        <Button
+          large
+          disabled={submitDisabled}
+          onclick={() => void handleSubmit()}
+          data-testid="intake-submit"
+        >
+          {#if isSubmitting || accountPending || (powRequired && powSolving && !submitted)}
+            <span
+              role="progressbar"
+              aria-label={accountPending
+                ? m.account_unlocking()
+                : m.intake_solving_challenge()}
+              class="intake-progress"
+            >
+              {accountPending
+                ? m.account_unlocking()
+                : m.intake_solving_challenge()}
+            </span>
+          {:else}
+            {m.intake_submit()}
+          {/if}
+        </Button>
+      </Block>
+    {/if}
   {/if}
 {/if}
 
@@ -1125,6 +1779,59 @@
     color: var(--muted);
     font-size: var(--text-sm);
     line-height: 1.5;
+  }
+
+  .intake-banner-img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--card-radius);
+  }
+
+  /* Rich content prose styling for rendered ProseMirror HTML.
+     Scoped to .intake-rich-content containers. Mirrors the
+     preview-rich-content styles from the admin editor and stays
+     consistent with ArticleDetailView's article-body styles. */
+  .intake-rich-content {
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  .intake-rich-content :global(p) {
+    margin-bottom: 0.5em;
+  }
+
+  .intake-rich-content :global(h1),
+  .intake-rich-content :global(h2),
+  .intake-rich-content :global(h3),
+  .intake-rich-content :global(h4) {
+    font-weight: 600;
+    color: var(--ink);
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
+
+  .intake-rich-content :global(a) {
+    color: var(--brand-text);
+    text-decoration: underline;
+  }
+
+  .intake-rich-content :global(ul) {
+    list-style-type: disc;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .intake-rich-content :global(ol) {
+    list-style-type: decimal;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .intake-rich-content :global(img) {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--card-radius);
   }
 
   .intake-not-available {
@@ -1264,12 +1971,6 @@
     line-height: 1.5;
   }
 
-  .intake-account-mismatch {
-    font-size: var(--text-sm);
-    color: var(--danger);
-    margin-top: var(--space-xs);
-  }
-
   .intake-account-warnings {
     margin-top: var(--space-md);
     padding: var(--space-sm) var(--space-md);
@@ -1286,6 +1987,81 @@
 
   .intake-account-warning + .intake-account-warning {
     margin-top: var(--space-xs);
+  }
+
+  .intake-page-progress {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    text-align: center;
+    margin: 0;
+  }
+
+  .intake-page-nav {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-sm);
+  }
+
+  .intake-continuation-text {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
+    margin: 0 0 var(--space-sm);
+  }
+
+  .intake-continuation-label {
+    font-size: var(--text-sm);
+    color: var(--ink);
+    margin: 0 0 var(--space-xs);
+  }
+
+  .intake-continuation-link {
+    display: block;
+    font-size: var(--text-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--raised);
+    border-radius: 8px;
+    word-break: break-all;
+    user-select: all;
+    -webkit-user-select: all;
+    margin: 0 0 var(--space-sm);
+  }
+
+  .intake-continuation-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+    background: var(--raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--ink);
+    min-height: 44px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .intake-continuation-copied {
+    font-size: var(--text-sm);
+    color: var(--success, #16a34a);
+    margin: var(--space-xs) 0 0;
+  }
+
+  .intake-continuation-copy-error {
+    font-size: var(--text-sm);
+    color: var(--danger);
+    margin: var(--space-xs) 0 0;
+  }
+
+  .intake-continuation-warning {
+    font-size: var(--text-sm);
+    color: var(--careful-text, var(--ink));
+    background: var(--careful-bg, rgba(234, 179, 8, 0.08));
+    padding: var(--space-sm) var(--space-md);
+    border-radius: 8px;
+    line-height: 1.5;
+    margin: var(--space-sm) 0 0;
   }
 
   .sr-only {

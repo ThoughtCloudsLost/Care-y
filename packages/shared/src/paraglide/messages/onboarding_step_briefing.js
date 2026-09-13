@@ -10,7 +10,7 @@ const en_onboarding_step_briefing = /** @type {(inputs: Onboarding_Step_Briefing
 };
 
 const es_onboarding_step_briefing = /** @type {(inputs: Onboarding_Step_BriefingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Informacion`)
+	return /** @type {LocalizedString} */ (`Información`)
 };
 
 /**

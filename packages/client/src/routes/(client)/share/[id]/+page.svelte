@@ -8,7 +8,10 @@
   import { getSodium } from "@care-y/crypto";
   import { decryptShare } from "$lib/portal/share-crypto.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import PortalHint from "$lib/components/portal/PortalHint.svelte";
+  import PortalHint from "$lib/shell/PortalHint.svelte";
+  import LinkErrorState from "$lib/portal/LinkErrorState.svelte";
+  import { getClientShellCtx } from "$lib/client-shell/context.js";
+  import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
 
   type ShareViewState =
     | { kind: "loading" }
@@ -80,48 +83,83 @@
         announceToLiveRegion("polite", m.share_view_bad_link());
       });
   });
+
+  // Publishing is what gives a share link quick exit and the drawer; it had
+  // neither. The shell supplies the org's exit URL, which a share link
+  // could never reach before, since it carries no portal bootstrap.
+  //
+  // The decrypted text lives in a JS string, which cannot be zeroed, so
+  // exiting drops the reference instead. The navigation tears the page down
+  // anyway; this makes the intent explicit and covers the pagehide path.
+  const shellContainer = getClientShellCtx();
+
+  $effect(() => {
+    shellContainer.current = {
+      ondestroy: () => {
+        viewState = { kind: "opened" };
+      },
+      actions: [],
+    };
+    return () => {
+      shellContainer.current = undefined;
+    };
+  });
+
+  // Locale-reactive title (the read establishes a $derived dependency)
+  const pageTitle = $derived.by((): string => {
+    void uiLocaleStore.locale;
+    return m.share_view_title();
+  });
 </script>
 
 <svelte:head>
-  <title>{m.share_view_title()}</title>
+  <title>{pageTitle}</title>
 </svelte:head>
 
-{#if viewState.kind === "loading"}
-  <Block class="share-loading">
-    <div class="share-preloader-center" data-testid="share-loading">
-      <Preloader />
-    </div>
-  </Block>
-{:else if viewState.kind === "content"}
-  <h1 class="share-heading">{m.share_view_heading()}</h1>
-  <Block class="share-content-block">
-    <p class="share-content-text">{viewState.text}</p>
-  </Block>
-  <p class="share-one-time-notice">{m.share_view_one_time_notice()}</p>
-  <PortalHint
-    opened={hintShown}
-    ondismiss={() => (hintShown = false)}
-    message={m.share_view_hint()}
-    dismissLabel={m.portal_hint_dismiss()}
-    dismissTestid="share-view-hint-dismiss"
-  />
-{:else if viewState.kind === "opened"}
-  <Block>
-    <p class="share-terminal-text">{m.share_view_opened()}</p>
-  </Block>
-{:else if viewState.kind === "expired"}
-  <Block>
-    <p class="share-terminal-text">{m.share_view_expired()}</p>
-  </Block>
-{:else if viewState.kind === "notFound"}
-  <Block>
-    <p class="share-terminal-text">{m.share_view_not_found()}</p>
-  </Block>
-{:else if viewState.kind === "badLink"}
-  <Block>
-    <p class="share-terminal-text">{m.share_view_bad_link()}</p>
-  </Block>
-{/if}
+{#key uiLocaleStore.locale}
+  {#if viewState.kind === "loading"}
+    <Block class="share-loading">
+      <div class="share-preloader-center" data-testid="share-loading">
+        <Preloader />
+      </div>
+    </Block>
+  {:else if viewState.kind === "content"}
+    <h1 class="share-heading">{m.share_view_heading()}</h1>
+    <Block class="share-content-block">
+      <p class="share-content-text">{viewState.text}</p>
+    </Block>
+    <p class="share-one-time-notice">{m.share_view_one_time_notice()}</p>
+    <PortalHint
+      opened={hintShown}
+      ondismiss={() => (hintShown = false)}
+      message={m.share_view_hint()}
+    />
+  {:else if viewState.kind === "opened"}
+    <LinkErrorState
+      title={m.share_view_opened_title()}
+      body={m.share_view_opened()}
+      testId="share-opened"
+    />
+  {:else if viewState.kind === "expired"}
+    <LinkErrorState
+      title={m.share_view_expired_title()}
+      body={m.share_view_expired()}
+      testId="share-expired"
+    />
+  {:else if viewState.kind === "notFound"}
+    <LinkErrorState
+      title={m.share_view_not_found_title()}
+      body={m.share_view_not_found()}
+      testId="share-not-found"
+    />
+  {:else if viewState.kind === "badLink"}
+    <LinkErrorState
+      title={m.share_view_bad_link_title()}
+      body={m.share_view_bad_link()}
+      testId="share-bad-link"
+    />
+  {/if}
+{/key}
 
 <style>
   .share-preloader-center {
@@ -149,9 +187,5 @@
     font-size: var(--text-sm);
     padding: 0 var(--page-pad-x);
     margin-top: var(--space-md);
-  }
-
-  .share-terminal-text {
-    color: var(--ink);
   }
 </style>

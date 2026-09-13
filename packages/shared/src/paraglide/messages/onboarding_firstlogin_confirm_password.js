@@ -10,7 +10,7 @@ const en_onboarding_firstlogin_confirm_password = /** @type {(inputs: Onboarding
 };
 
 const es_onboarding_firstlogin_confirm_password = /** @type {(inputs: Onboarding_Firstlogin_Confirm_PasswordInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Confirmar contrasena`)
+	return /** @type {LocalizedString} */ (`Confirmar contraseña`)
 };
 
 /**

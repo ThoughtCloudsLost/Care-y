@@ -104,6 +104,7 @@ describe("followUpTypeSchema", () => {
       "priority_changed",
       "merge_note",
       "share_link",
+      "contact_correction",
     ];
     for (const t of valid) {
       expect(followUpTypeSchema.safeParse(t).success).toBe(true);
@@ -112,6 +113,12 @@ describe("followUpTypeSchema", () => {
 
   it("accepts share_link type", () => {
     expect(followUpTypeSchema.safeParse("share_link").success).toBe(true);
+  });
+
+  it("accepts contact_correction type", () => {
+    expect(followUpTypeSchema.safeParse("contact_correction").success).toBe(
+      true,
+    );
   });
 
   it("rejects invalid type", () => {
@@ -622,6 +629,54 @@ describe("mergeClientsInputSchema", () => {
         secondaryClientId: VALID_UUID_2,
       }).success,
     ).toBe(false);
+  });
+
+  it("accepts optional keepChannelOf 'primary'", () => {
+    const result = mergeClientsInputSchema.safeParse({
+      primaryClientId: VALID_UUID,
+      secondaryClientId: VALID_UUID_2,
+      encryptedSnapshot: VALID_BASE64,
+      keepChannelOf: "primary",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.keepChannelOf).toBe("primary");
+    }
+  });
+
+  it("accepts optional keepChannelOf 'secondary'", () => {
+    const result = mergeClientsInputSchema.safeParse({
+      primaryClientId: VALID_UUID,
+      secondaryClientId: VALID_UUID_2,
+      encryptedSnapshot: VALID_BASE64,
+      keepChannelOf: "secondary",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.keepChannelOf).toBe("secondary");
+    }
+  });
+
+  it("accepts input without keepChannelOf (optional)", () => {
+    const result = mergeClientsInputSchema.safeParse({
+      primaryClientId: VALID_UUID,
+      secondaryClientId: VALID_UUID_2,
+      encryptedSnapshot: VALID_BASE64,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.keepChannelOf).toBeUndefined();
+    }
+  });
+
+  it("rejects invalid keepChannelOf value", () => {
+    const result = mergeClientsInputSchema.safeParse({
+      primaryClientId: VALID_UUID,
+      secondaryClientId: VALID_UUID_2,
+      encryptedSnapshot: VALID_BASE64,
+      keepChannelOf: "neither",
+    });
+    expect(result.success).toBe(false);
   });
 });
 

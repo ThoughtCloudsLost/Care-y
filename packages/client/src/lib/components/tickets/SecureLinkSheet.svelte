@@ -12,10 +12,19 @@
   The passphrase and the link are never visible in the same step.
 -->
 <script lang="ts">
-  import { Block, Button, List, ListItem, Toggle } from "konsta/svelte";
+  import {
+    Block,
+    Button,
+    List,
+    ListItem,
+    Preloader,
+    Toggle,
+  } from "konsta/svelte";
+  import { DialogButton } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import Register from "$lib/components/Register.svelte";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
@@ -26,18 +35,24 @@
     deriveChannelId,
     deriveChannelAuth,
     hashChannelAuth,
-    derivePortalKeypair,
     PORTAL_KEY_CHECK,
     eciesEncrypt,
     encode,
     requireSodium,
     zeroAll,
   } from "@care-y/crypto";
+  import { performChannelOprf } from "$lib/portal/portal-crypto.js";
+  import { solveProofOfWork } from "$lib/auth/pow-solver.js";
+  import { ErrorCode } from "@care-y/shared";
   import { EFF_WORDLIST } from "$lib/portal/eff-wordlist.js";
+  import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { createPortalReseed } from "$lib/composables/tickets/create-portal-reseed.svelte.js";
+  import type { PortalReseedStartArgs } from "$lib/composables/tickets/create-portal-reseed.svelte.js";
 
   interface SecureLinkSheetProps {
     opened: boolean;
     ticketId: string;
+    clientId: string;
     mode: "setup" | "regenerate";
     hasPhone: boolean;
     ondismiss: () => void;
@@ -47,6 +62,7 @@
   let {
     opened,
     ticketId,
+    clientId,
     mode,
     hasPhone,
     ondismiss,
@@ -65,6 +81,18 @@
   let generatedLink = $state("");
   let generating = $state(false);
   let smsSending = $state(false);
+
+  // Reseed opt-in and composable
+  let reseedEnabled = $state(false);
+  let reseedStarted = $state(false);
+  let capturedChannelId = $state("");
+  let capturedClientPublic = $state("");
+  let cancelConfirmOpen = $state(false);
+
+  const bridge = getCryptoBridge();
+  const reseed = createPortalReseed({ bridge });
+
+  const reseedState = $derived(reseed.state);
 
   // Key material held only until zeroed in finally or on close.
   let heldSeed: Uint8Array | null = null;
@@ -107,6 +135,20 @@
 
   // --- Generate link ---
 
+  /** Wire the channel evaluate callback to the clientPortal tRPC mutation. */
+  async function channelEvaluate(
+    chanId: string,
+    blindedElementB64: string,
+    chanAuth?: string,
+  ): Promise<{ evaluated: string }> {
+    const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+    return portalRouter.evaluateChannelOprf.mutate({
+      channelId: chanId,
+      blindedElement: blindedElementB64,
+      ...(chanAuth !== undefined ? { auth: chanAuth } : {}),
+    });
+  }
+
   async function handleGenerate(): Promise<void> {
     if (generating) return;
     generating = true;
@@ -122,7 +164,13 @@
       heldAuth = auth;
 
       const passphrase = passphraseEnabled ? words.join(" ") : undefined;
-      const keypair = derivePortalKeypair(seed, passphrase);
+
+      // ADR-091: derive through OPRF round (no auth for mint path)
+      const keypair = await performChannelOprf(seed, channelId, {
+        passphrase,
+        evaluate: channelEvaluate,
+        onPowRequired: solveProofOfWork,
+      });
       heldPrivate = keypair.clientPrivate;
 
       const checkPlaintext = new TextEncoder().encode(PORTAL_KEY_CHECK);
@@ -148,14 +196,39 @@
         await ticketRouter.upgradeToSecureLink.mutate(mutationInput);
       }
 
+      capturedChannelId = channelId;
+      capturedClientPublic = encode(keypair.clientPublic);
+
       generatedLink = `${location.origin}/portal/${channelId}#${encode(seed)}`;
       step = "ready";
       onsuccess();
-    } catch (_err: unknown) {
+
+      if (reseedEnabled) {
+        reseedStarted = true;
+        const args: PortalReseedStartArgs = {
+          clientId,
+          channelId: capturedChannelId,
+          clientPublic: capturedClientPublic,
+        };
+        void reseed.start(args).catch((_err: unknown) => {
+          // Intentional discard: the composable manages its own error
+          // state. Surfacing the rejection here would duplicate the UI.
+        });
+      }
+    } catch (err: unknown) {
       // Intentional discard: error may carry decrypted content or key
       // material from the crypto pipeline. Toast is the only safe signal.
+      // Narrow exception: surface the channel-exists message when the
+      // error code matches, without rendering the error object itself.
       step = "setup";
-      toastStore.show(m.error_generic(), 3000);
+      const isChannelExists =
+        err instanceof Error && err.message === ErrorCode.PORTAL_CHANNEL_EXISTS;
+      toastStore.show(
+        isChannelExists
+          ? m.error_portal_channel_exists(withTerms())
+          : m.error_generic(),
+        3000,
+      );
     } finally {
       generating = false;
     }
@@ -218,6 +291,11 @@
     zeroKeyMaterial();
     step = "setup";
     passphraseEnabled = false;
+    reseedEnabled = false;
+    reseedStarted = false;
+    capturedChannelId = "";
+    capturedClientPublic = "";
+    cancelConfirmOpen = false;
     words = [];
     generatedLink = "";
     generating = false;
@@ -225,8 +303,36 @@
   }
 
   function handleDismiss(): void {
+    if (reseedState.phase === "running") {
+      cancelConfirmOpen = true;
+      return;
+    }
     resetState();
     ondismiss();
+  }
+
+  function confirmCancelAndDismiss(): void {
+    reseed.cancel();
+    cancelConfirmOpen = false;
+    resetState();
+    ondismiss();
+  }
+
+  function declineCancelDismiss(): void {
+    cancelConfirmOpen = false;
+  }
+
+  function handleReseedRetry(): void {
+    if (reseedState.phase === "running") return;
+    reseedStarted = true;
+    const args: PortalReseedStartArgs = {
+      clientId,
+      channelId: capturedChannelId,
+      clientPublic: capturedClientPublic,
+    };
+    void reseed.start(args).catch((_err: unknown) => {
+      // Intentional discard: composable manages error state.
+    });
   }
 
   // Zero key material when the sheet closes for any reason.
@@ -261,6 +367,22 @@
             <Toggle
               checked={passphraseEnabled}
               onChange={handlePassphraseToggle}
+              disabled={step === "generating"}
+            />
+          </span>
+        {/snippet}
+      </ListItem>
+      <ListItem
+        title={m.ticket_tier_reseed_toggle()}
+        subtitle={m.ticket_tier_reseed_explain()}
+      >
+        {#snippet after()}
+          <span use:labelToggleInput={m.ticket_tier_reseed_toggle()}>
+            <Toggle
+              checked={reseedEnabled}
+              onChange={() => {
+                reseedEnabled = !reseedEnabled;
+              }}
               disabled={step === "generating"}
             />
           </span>
@@ -317,6 +439,49 @@
       {/if}
     </Block>
 
+    {#if reseedStarted}
+      <Block class="!my-3">
+        <div
+          class="reseed-region"
+          role="region"
+          aria-label={m.ticket_tier_reseed_toggle()}
+        >
+          {#if reseedState.phase === "running"}
+            <div class="reseed-status" aria-live="polite">
+              <Preloader />
+              <span
+                >{m.reseed_progress({
+                  done: String(reseedState.itemsDone),
+                  total: String(reseedState.itemsTotal),
+                })}</span
+              >
+            </div>
+            <Button small outline onclick={() => reseed.cancel()}>
+              {m.reseed_cancel()}
+            </Button>
+          {:else if reseedState.phase === "done" && reseedState.skippedCount === 0}
+            <p class="reseed-done" aria-live="polite">{m.reseed_done()}</p>
+          {:else if reseedState.phase === "done" && reseedState.skippedCount > 0}
+            <p class="reseed-partial" aria-live="polite">
+              {m.reseed_partial({ count: String(reseedState.skippedCount) })}
+            </p>
+            <Button small outline onclick={handleReseedRetry}>
+              {m.reseed_retry()}
+            </Button>
+          {:else if reseedState.phase === "error"}
+            <p class="reseed-error" aria-live="polite">{m.reseed_error()}</p>
+            <Button small outline onclick={handleReseedRetry}>
+              {m.reseed_retry()}
+            </Button>
+          {:else if reseedState.phase === "cancelled"}
+            <p class="reseed-partial" aria-live="polite">
+              {m.reseed_partial({ count: String(reseedState.skippedCount) })}
+            </p>
+          {/if}
+        </div>
+      </Block>
+    {/if}
+
     <Block class="!my-3">
       <Register kind="careful">
         <p class="warning-text">{m.ticket_tier_link_warning()}</p>
@@ -330,6 +495,24 @@
     </Block>
   {/if}
 </ShellSheet>
+
+<ShellDialog
+  opened={cancelConfirmOpen}
+  ondismiss={declineCancelDismiss}
+  title={m.reseed_cancel()}
+>
+  {#snippet content()}
+    <p>{m.reseed_cancel_confirm()}</p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={declineCancelDismiss}>
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton strong onclick={confirmCancelAndDismiss}>
+      {m.reseed_cancel()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   .intro-text {
@@ -389,6 +572,37 @@
     margin: 0;
     font-size: var(--text-sm);
     line-height: 1.4;
+  }
+
+  .reseed-region {
+    min-height: 3rem;
+  }
+
+  .reseed-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: var(--text-sm);
+    color: var(--ink);
+    margin-bottom: 0.5rem;
+  }
+
+  .reseed-done {
+    color: var(--care);
+    font-size: var(--text-sm);
+    margin: 0;
+  }
+
+  .reseed-partial {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    margin: 0 0 0.5rem;
+  }
+
+  .reseed-error {
+    color: var(--danger);
+    font-size: var(--text-sm);
+    margin: 0 0 0.5rem;
   }
 
   .inline-progress {

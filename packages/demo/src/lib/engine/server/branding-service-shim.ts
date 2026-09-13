@@ -49,6 +49,7 @@ function brandingColumnUpdate(
     | "encrypted_primary_color"
     | "encrypted_accent_color"
     | "encrypted_client_text"
+    | "encrypted_client_support_label"
     | "encrypted_terminology"
   >
 > {
@@ -63,6 +64,8 @@ function brandingColumnUpdate(
       return { encrypted_accent_color: value };
     case "client_text":
       return { encrypted_client_text: value };
+    case "support_label":
+      return { encrypted_client_support_label: value };
     case "terminology":
       return { encrypted_terminology: value };
   }
@@ -99,6 +102,7 @@ export function createBrandingService(
           "encrypted_primary_color",
           "encrypted_accent_color",
           "encrypted_client_text",
+          "encrypted_client_support_label",
           "client_encrypted_branding",
           "encrypted_terminology",
           "icon_192_blob_key",
@@ -111,6 +115,9 @@ export function createBrandingService(
         encryptedPrimaryColor: bufferToBase64(config.encrypted_primary_color),
         encryptedAccentColor: bufferToBase64(config.encrypted_accent_color),
         encryptedClientText: bufferToBase64(config.encrypted_client_text),
+        encryptedClientSupportLabel: bufferToBase64(
+          config.encrypted_client_support_label,
+        ),
         clientEncryptedBranding: bufferToBase64(
           config.client_encrypted_branding,
         ),

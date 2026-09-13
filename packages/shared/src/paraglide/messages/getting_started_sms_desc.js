@@ -10,7 +10,7 @@ const en_getting_started_sms_desc = /** @type {(inputs: Getting_Started_Sms_Desc
 };
 
 const es_getting_started_sms_desc = /** @type {(inputs: Getting_Started_Sms_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configura respuestas automaticas para mensajes de texto entrantes.`)
+	return /** @type {LocalizedString} */ (`Configura respuestas automáticas para mensajes de texto entrantes.`)
 };
 
 /**

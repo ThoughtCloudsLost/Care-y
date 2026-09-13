@@ -10,7 +10,7 @@ const en_onboarding_telephony_byot_description = /** @type {(inputs: Onboarding_
 };
 
 const es_onboarding_telephony_byot_description = /** @type {(inputs: Onboarding_Telephony_Byot_DescriptionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Traiga sus propias credenciales de Twilio. Usted administra la cuenta y los numeros.`)
+	return /** @type {LocalizedString} */ (`Traiga sus propias credenciales de Twilio. Usted administra la cuenta y los números.`)
 };
 
 /**

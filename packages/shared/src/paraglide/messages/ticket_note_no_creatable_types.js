@@ -10,7 +10,7 @@ const en_ticket_note_no_creatable_types = /** @type {(inputs: Ticket_Note_No_Cre
 };
 
 const es_ticket_note_no_creatable_types = /** @type {(inputs: Ticket_Note_No_Creatable_TypesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu rol no tiene permiso para crear ningun tipo de nota.`)
+	return /** @type {LocalizedString} */ (`Tu rol no tiene permiso para crear ningún tipo de nota.`)
 };
 
 /**

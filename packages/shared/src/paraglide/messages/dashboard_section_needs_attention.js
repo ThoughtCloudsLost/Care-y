@@ -10,7 +10,7 @@ const en_dashboard_section_needs_attention = /** @type {(inputs: Dashboard_Secti
 };
 
 const es_dashboard_section_needs_attention = /** @type {(inputs: Dashboard_Section_Needs_AttentionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Necesita atencion`)
+	return /** @type {LocalizedString} */ (`Necesita atención`)
 };
 
 /**

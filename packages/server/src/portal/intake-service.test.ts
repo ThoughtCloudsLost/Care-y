@@ -6,34 +6,28 @@
  */
 
 import crypto from "node:crypto";
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  vi,
-  type Mock,
-} from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { TestDb } from "../test-utils.js";
 import {
   createTestDb,
   seedOrgPublicKey,
   createTestQueue,
-  createTestUser,
   testSealedBox,
   testUnseal,
   noopEncryptor,
   testBlindIndexer,
   TEST_ORG_ID,
 } from "../test-utils.js";
-import type { NotificationService } from "../notifications/service.js";
 import {
   createIntakeTicket,
   IntakeQueueNotConfiguredError,
   IntakeDisabledError,
+  IntakeFormClosedError,
+  IntakeAccountUnavailableError,
+  BuiltinFormDisabledError,
   type IntakeTicketInput,
   type IntakeAccountInput,
+  type IntakeContinuationInput,
 } from "./intake-service.js";
 import { ValidationError } from "../errors.js";
 import { UsernameTakenError } from "./portal-errors.js";
@@ -43,22 +37,14 @@ import {
   newFollowupId,
   newClientAccountId,
   orgSlugIdSchema,
+  channelSecretSchema,
 } from "@care-y/shared";
 import type { QueueId, OrgSchema, OrgSlug } from "@care-y/shared";
+import { resolveAuthedChannel, revokeChannel } from "./channel-service.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function createMockNotificationService(): NotificationService & {
-  dispatch: Mock;
-  dispatchTicketless: Mock;
-} {
-  return {
-    dispatch: vi.fn().mockResolvedValue(undefined),
-    dispatchTicketless: vi.fn().mockResolvedValue(undefined),
-  };
-}
 
 function makeInput(overrides?: Partial<IntakeTicketInput>): IntakeTicketInput {
   return {
@@ -74,6 +60,7 @@ function makeInput(overrides?: Partial<IntakeTicketInput>): IntakeTicketInput {
     resolvedPriority: null,
     resolvedEscalationLevel: null,
     account: null,
+    continuation: null,
     ...overrides,
   };
 }
@@ -107,6 +94,34 @@ function makeAccountInputWithSelfCopy(
       ephemeralPoint: crypto.randomBytes(32),
       nonce: crypto.randomBytes(24),
       ciphertext: Buffer.from("selfcopy-ciphertext"),
+    },
+  };
+}
+
+function makeContinuationInput(): IntakeContinuationInput {
+  return {
+    channelId: channelSecretSchema.parse(
+      crypto.randomBytes(24).toString("hex"),
+    ),
+    authHash: crypto.randomBytes(32),
+    clientPublic: crypto.randomBytes(32),
+    keyCheck: {
+      ephemeralPoint: crypto.randomBytes(32),
+      nonce: crypto.randomBytes(24),
+      ciphertext: Buffer.from("keycheck-ciphertext"),
+    },
+    selfCopy: null,
+  };
+}
+
+function makeContinuationInputWithSelfCopy(): IntakeContinuationInput {
+  const base = makeContinuationInput();
+  return {
+    ...base,
+    selfCopy: {
+      ephemeralPoint: crypto.randomBytes(32),
+      nonce: crypto.randomBytes(24),
+      ciphertext: Buffer.from("cont-selfcopy-ciphertext"),
     },
   };
 }
@@ -152,13 +167,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("creates client + ticket + follow-up + interim wrap in one transaction", async () => {
-      const ns = createMockNotificationService();
       const input = makeInput();
 
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -212,7 +225,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("skips follow-up when encryptedMessage is null", async () => {
-      const ns = createMockNotificationService();
       const input = makeInput({
         encryptedMessage: null,
         followUpId: null,
@@ -221,7 +233,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -239,7 +250,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("routes to form destination queue when resolvedQueueId is null", async () => {
-      const ns = createMockNotificationService();
       const destQueue = await createTestQueue(testDb.db, { label: "Dest" });
 
       // Create a form with destination_queue_id
@@ -259,7 +269,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -277,7 +286,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("routes to resolvedQueueId when in the field allow-list", async () => {
-      const ns = createMockNotificationService();
       const routeQueue = await createTestQueue(testDb.db, { label: "Route" });
 
       // Create a form with a queue-routing field
@@ -296,6 +304,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .values({
           form_id: form.id,
           position: 0,
+          field_key: crypto.randomUUID(),
           field_type: "select",
           role: "queue-routing",
           routing_queue_ids: [routeQueue.id],
@@ -313,7 +322,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -331,7 +339,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("rejects resolvedQueueId not in allow-list", async () => {
-      const ns = createMockNotificationService();
       const allowedQueue = await createTestQueue(testDb.db, {
         label: "Allowed",
       });
@@ -351,6 +358,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .values({
           form_id: form.id,
           position: 0,
+          field_key: crypto.randomUUID(),
           field_type: "select",
           role: "queue-routing",
           routing_queue_ids: [allowedQueue.id],
@@ -369,7 +377,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -381,13 +388,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("applies resolvedPriority to the ticket", async () => {
-      const ns = createMockNotificationService();
       const input = makeInput({ resolvedPriority: "urgent" });
 
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -404,9 +409,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(ticket.priority).toBe("urgent");
     });
 
-    it("dispatches escalation notification when resolvedEscalationLevel present", async () => {
-      const ns = createMockNotificationService();
-      const user = await createTestUser(testDb.db);
+    it("enqueues both ticket_created and ticket_escalated outbox rows when escalation present", async () => {
       const form = await testDb.db
         .insertInto("intake_forms")
         .values({
@@ -422,10 +425,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .values({
           form_id: form.id,
           position: 0,
+          field_key: crypto.randomUUID(),
           field_type: "checkbox",
           role: "escalation",
           encrypted_escalation_recipient_ids: noopEncryptor.encrypt(
-            JSON.stringify([user.id]),
+            JSON.stringify([crypto.randomUUID()]),
           ),
           encrypted_label: Buffer.from("l"),
           encrypted_config: Buffer.from("c"),
@@ -438,10 +442,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         resolvedEscalationLevel: "triggered",
       });
 
-      await createIntakeTicket(
+      const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           fieldEncryptor: noopEncryptor,
           orgId: TEST_ORG_ID,
@@ -451,11 +454,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
         input,
       );
 
-      // Give fire-and-forget dispatches a tick
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Two outbox rows: ticket_created + ticket_escalated
+      const outboxRows = await testDb.db
+        .selectFrom("notification_outbox")
+        .selectAll()
+        .where("ticket_id", "=", result.ticketId)
+        .execute();
+      expect(outboxRows).toHaveLength(2);
 
-      // Two dispatches: ticket_created + ticket_escalated
-      expect(ns.dispatch).toHaveBeenCalledTimes(2);
+      const eventTypes = outboxRows.map((r) => r.event_type).sort();
+      expect(eventTypes).toEqual(["ticket_created", "ticket_escalated"]);
+
+      // Verify rows are pending with correct metadata
+      for (const row of outboxRows) {
+        expect(row.status).toBe("pending");
+        expect(row.queue_id).toBe(intakeQueueId);
+        expect(row.form_id).toBe(form.id);
+        expect(row.actor_user_id).toBeNull();
+      }
     });
 
     it("throws IntakeDisabledError when web_intake_enabled is false", async () => {
@@ -464,14 +480,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .set({ web_intake_enabled: false })
         .execute();
 
-      const ns = createMockNotificationService();
       const input = makeInput();
 
       await expect(
         createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -488,6 +502,62 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .execute();
     });
 
+    it("throws BuiltinFormDisabledError when builtin_default_enabled is false and formId is null", async () => {
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: false })
+        .execute();
+
+      const input = makeInput({ formId: null });
+
+      await expect(
+        createIntakeTicket(
+          testDb.db,
+          {
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        ),
+      ).rejects.toThrow(BuiltinFormDisabledError);
+
+      // Cleanup
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+    });
+
+    it("allows builtin submission when builtin_default_enabled is true and formId is null", async () => {
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+
+      const input = makeInput({ formId: null });
+
+      // This should not throw BuiltinFormDisabledError (may throw
+      // IntakeQueueNotConfiguredError if no queue is set, which is fine;
+      // the point is the builtin check passes)
+      try {
+        await createIntakeTicket(
+          testDb.db,
+          {
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        );
+      } catch (err: unknown) {
+        // IntakeQueueNotConfiguredError is acceptable; BuiltinFormDisabledError is not
+        expect(err).not.toBeInstanceOf(BuiltinFormDisabledError);
+      }
+    });
+
     it("throws IntakeQueueNotConfiguredError when intake_queue_id is null", async () => {
       const freshDb = await createTestDb();
       try {
@@ -497,14 +567,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .onConflict((oc) => oc.doNothing())
           .execute();
 
-        const ns = createMockNotificationService();
         const input = makeInput();
 
         await expect(
           createIntakeTicket(
             freshDb.db,
             {
-              notificationService: ns,
               sealedBox: testSealedBox,
               orgId: TEST_ORG_ID,
               orgSchema: freshDb.schemaName as OrgSchema,
@@ -518,21 +586,90 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
     }, 30_000);
 
-    it("dispatches ticket_created to queue watchers after commit", async () => {
-      const ns = createMockNotificationService();
+    it("succeeds for a form with its own destination queue when org intake queue is null", async () => {
+      const freshDb = await createTestDb();
+      try {
+        await freshDb.db
+          .insertInto("org_config")
+          .values({ pii_retention_days: null, intake_queue_id: null })
+          .onConflict((oc) => oc.doNothing())
+          .execute();
+        await seedOrgPublicKey(freshDb.db);
 
-      const user = await createTestUser(testDb.db);
-      await testDb.db
-        .insertInto("queue_watchers")
-        .values({ queue_id: intakeQueueId, user_id: user.id })
-        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
-        .execute();
+        const destQueue = await createTestQueue(freshDb.db, {
+          label: "FormQueue",
+        });
 
+        const form = await freshDb.db
+          .insertInto("intake_forms")
+          .values({
+            // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+            name: "Own Queue Form",
+            is_active: true,
+            destination_queue_id: destQueue.id,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const input = makeInput({ formId: form.id });
+
+        const result = await createIntakeTicket(
+          freshDb.db,
+          {
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: freshDb.schemaName as OrgSchema,
+            orgSlug: orgSlugIdSchema.parse("test-org"),
+          },
+          input,
+        );
+
+        expect(result.ticketId).toBe(input.ticketId);
+
+        const ticket = await freshDb.db
+          .selectFrom("tickets")
+          .select("queue_id")
+          .where("id", "=", result.ticketId)
+          .executeTakeFirstOrThrow();
+        expect(ticket.queue_id).toBe(destQueue.id);
+      } finally {
+        await freshDb.cleanup();
+      }
+    }, 30_000);
+
+    it("throws IntakeQueueNotConfiguredError for default form path when org intake queue is null", async () => {
+      const freshDb = await createTestDb();
+      try {
+        await freshDb.db
+          .insertInto("org_config")
+          .values({ pii_retention_days: null, intake_queue_id: null })
+          .onConflict((oc) => oc.doNothing())
+          .execute();
+
+        const input = makeInput({ formId: null });
+
+        await expect(
+          createIntakeTicket(
+            freshDb.db,
+            {
+              sealedBox: testSealedBox,
+              orgId: TEST_ORG_ID,
+              orgSchema: freshDb.schemaName as OrgSchema,
+              orgSlug: orgSlugIdSchema.parse("test-org"),
+            },
+            input,
+          ),
+        ).rejects.toThrow(IntakeQueueNotConfiguredError);
+      } finally {
+        await freshDb.cleanup();
+      }
+    }, 30_000);
+
+    it("enqueues ticket_created outbox row with correct queue_id", async () => {
       const input = makeInput();
-      await createIntakeTicket(
+      const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -541,42 +678,26 @@ describe.skipIf(!process.env.DATABASE_URL)(
         input,
       );
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      const outboxRow = await testDb.db
+        .selectFrom("notification_outbox")
+        .selectAll()
+        .where("ticket_id", "=", result.ticketId)
+        .where("event_type", "=", "ticket_created")
+        .executeTakeFirst();
 
-      expect(ns.dispatch).toHaveBeenCalledOnce();
-      expect(ns.dispatch).toHaveBeenCalledWith(
-        testDb.db,
-        TEST_ORG_ID,
-        testDb.schemaName,
-        "test-org",
-        "ticket_created",
-        input.ticketId,
-        intakeQueueId,
-        expect.objectContaining({
-          recipients: expect.arrayContaining([
-            expect.objectContaining({
-              userId: user.id,
-              source: "queue_watcher",
-            }),
-          ]),
-        }),
-      );
-
-      await testDb.db
-        .deleteFrom("queue_watchers")
-        .where("queue_id", "=", intakeQueueId)
-        .where("user_id", "=", user.id)
-        .execute();
+      expect(outboxRow).toBeDefined();
+      expect(outboxRow!.status).toBe("pending");
+      expect(outboxRow!.queue_id).toBe(intakeQueueId);
+      expect(outboxRow!.actor_user_id).toBeNull();
+      expect(outboxRow!.form_id).toBeNull();
     });
 
     it("default-form submissions (formId null) store no response row", async () => {
-      const ns = createMockNotificationService();
       const input = makeInput({ formId: null });
 
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -613,14 +734,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("creates client + ticket + account + kind-account channel + tier atomically", async () => {
-        const ns = createMockNotificationService();
         const acct = makeAccountInput();
         const input = makeInput({ account: acct });
 
         const result = await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -668,7 +787,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("stores selfCopy row with the correct followup_id", async () => {
-        const ns = createMockNotificationService();
         const acct = makeAccountInputWithSelfCopy();
         const followUpId = newFollowupId();
         const input = makeInput({ account: acct, followUpId });
@@ -676,7 +794,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -713,7 +830,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("rolls back everything on duplicate username", async () => {
-        const ns = createMockNotificationService();
         const sharedUsername = `dup-${crypto.randomUUID().slice(0, 8)}`;
 
         // First submission with this username should succeed
@@ -722,7 +838,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -740,7 +855,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           createIntakeTicket(
             testDb.db,
             {
-              notificationService: ns,
               sealedBox: testSealedBox,
               orgId: TEST_ORG_ID,
               orgSchema: testDb.schemaName as OrgSchema,
@@ -760,14 +874,39 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(ticket).toBeUndefined();
       });
 
+      it("rejects with IntakeAccountUnavailableError when account input present but deps missing", async () => {
+        const acct = makeAccountInput();
+        const input = makeInput({ account: acct });
+
+        // Omit accountServiceDeps to trigger the fail-loud guard
+        await expect(
+          createIntakeTicket(
+            testDb.db,
+            {
+              sealedBox: testSealedBox,
+              orgId: TEST_ORG_ID,
+              orgSchema: testDb.schemaName as OrgSchema,
+              orgSlug: "test-org" as OrgSlug,
+            },
+            input,
+          ),
+        ).rejects.toThrow(IntakeAccountUnavailableError);
+
+        // Verify transaction rolled back: no ticket or client rows created
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("id")
+          .where("id", "=", input.ticketId)
+          .executeTakeFirst();
+        expect(ticket).toBeUndefined();
+      });
+
       it("without account branch is byte-identical to prior behavior", async () => {
-        const ns = createMockNotificationService();
         const input = makeInput({ account: null });
 
         const result = await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -801,6 +940,336 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where("kind", "=", "account")
           .executeTakeFirst();
         expect(channel).toBeUndefined();
+      });
+    });
+
+    // -----------------------------------------------------------------
+    // Closing date enforcement tests
+    // -----------------------------------------------------------------
+
+    describe("closing date enforcement", () => {
+      it("rejects submission for a form whose closes_at is in the past", async () => {
+        const form = await testDb.db
+          .insertInto("intake_forms")
+          .values({
+            // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+            name: "Closed Form",
+            is_active: true,
+            closes_at: new Date(Date.now() - 60_000),
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const input = makeInput({ formId: form.id });
+
+        await expect(
+          createIntakeTicket(
+            testDb.db,
+            {
+              sealedBox: testSealedBox,
+              orgId: TEST_ORG_ID,
+              orgSchema: testDb.schemaName as OrgSchema,
+              orgSlug: orgSlugIdSchema.parse("test-org"),
+            },
+            input,
+          ),
+        ).rejects.toThrow(IntakeFormClosedError);
+      });
+
+      it("accepts submission for a form whose closes_at is in the future", async () => {
+        const form = await testDb.db
+          .insertInto("intake_forms")
+          .values({
+            // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+            name: "Future Close Form",
+            is_active: true,
+            closes_at: new Date(Date.now() + 86_400_000),
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const input = makeInput({ formId: form.id });
+
+        const result = await createIntakeTicket(
+          testDb.db,
+          {
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: orgSlugIdSchema.parse("test-org"),
+          },
+          input,
+        );
+
+        expect(result.ticketId).toBe(input.ticketId);
+      });
+
+      it("accepts submission when closes_at is null", async () => {
+        // Default form (formId null) has no closing date
+        const input = makeInput({ formId: null });
+
+        const result = await createIntakeTicket(
+          testDb.db,
+          {
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: orgSlugIdSchema.parse("test-org"),
+          },
+          input,
+        );
+
+        expect(result.ticketId).toBe(input.ticketId);
+      });
+
+      it("rejects submission at the boundary (closes_at equals now)", async () => {
+        // Set closes_at to a moment ago to guarantee the server clock reads it as past
+        const form = await testDb.db
+          .insertInto("intake_forms")
+          .values({
+            // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+            name: "Boundary Close Form",
+            is_active: true,
+            closes_at: new Date(Date.now() - 1),
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const input = makeInput({ formId: form.id });
+
+        await expect(
+          createIntakeTicket(
+            testDb.db,
+            {
+              sealedBox: testSealedBox,
+              orgId: TEST_ORG_ID,
+              orgSchema: testDb.schemaName as OrgSchema,
+              orgSlug: orgSlugIdSchema.parse("test-org"),
+            },
+            input,
+          ),
+        ).rejects.toThrow(IntakeFormClosedError);
+      });
+    });
+
+    // -----------------------------------------------------------------
+    // Continuation branch integration tests
+    // -----------------------------------------------------------------
+
+    describe("continuation branch", () => {
+      it("creates client + ticket + intake_continuation channel + tier atomically", async () => {
+        const cont = makeContinuationInput();
+        const input = makeInput({ continuation: cont });
+
+        const result = await createIntakeTicket(
+          testDb.db,
+          {
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        );
+
+        expect(result.ticketId).toBe(input.ticketId);
+
+        // Verify ticket
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("client_id")
+          .where("id", "=", input.ticketId)
+          .executeTakeFirstOrThrow();
+
+        // Verify channel with kind='intake_continuation'
+        const channel = await testDb.db
+          .selectFrom("portal_channels")
+          .selectAll()
+          .where("client_id", "=", ticket.client_id)
+          .where("status", "=", "active")
+          .where("kind", "=", "intake_continuation")
+          .executeTakeFirst();
+        expect(channel).toBeDefined();
+        expect(channel!.channel_id).toBe(cont.channelId);
+        expect(channel!.has_passphrase).toBe(false);
+
+        // Verify tier is secure_link (continuation behaves identically)
+        const client = await testDb.db
+          .selectFrom("clients")
+          .select("communication_tier")
+          .where("id", "=", ticket.client_id)
+          .executeTakeFirstOrThrow();
+        expect(client.communication_tier).toBe("secure_link");
+      });
+
+      it("stores selfCopy row with the correct followup_id and direction", async () => {
+        const cont = makeContinuationInputWithSelfCopy();
+        const followUpId = newFollowupId();
+        const input = makeInput({ continuation: cont, followUpId });
+
+        await createIntakeTicket(
+          testDb.db,
+          {
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        );
+
+        // Get the continuation channel
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("client_id")
+          .where("id", "=", input.ticketId)
+          .executeTakeFirstOrThrow();
+
+        const channel = await testDb.db
+          .selectFrom("portal_channels")
+          .select("id")
+          .where("client_id", "=", ticket.client_id)
+          .where("kind", "=", "intake_continuation")
+          .executeTakeFirstOrThrow();
+
+        // Verify portal_messages row
+        const messages = await testDb.db
+          .selectFrom("portal_messages")
+          .selectAll()
+          .where("channel_id", "=", channel.id)
+          .execute();
+
+        expect(messages).toHaveLength(1);
+        expect(messages[0]!.followup_id).toBe(followUpId);
+        expect(messages[0]!.direction).toBe("from_client");
+      });
+
+      it("resolves the continuation channel via resolveAuthedChannel", async () => {
+        const { hashChannelAuth: hash } = await import("@care-y/crypto");
+
+        const rawAuth = crypto.randomBytes(32);
+        const authHash = Buffer.from(hash(rawAuth));
+
+        const cont = makeContinuationInput();
+        // Override with a real hash so resolveAuthedChannel can verify
+        const contWithRealHash: IntakeContinuationInput = {
+          ...cont,
+          authHash,
+        };
+        const input = makeInput({ continuation: contWithRealHash });
+
+        await createIntakeTicket(
+          testDb.db,
+          {
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        );
+
+        // resolveAuthedChannel should resolve this intake_continuation row
+        const resolved = await resolveAuthedChannel(
+          testDb.db,
+          contWithRealHash.channelId,
+          rawAuth,
+        );
+        expect(resolved).not.toBeNull();
+        expect(resolved!.kind).toBe("intake_continuation");
+        expect(resolved!.channel_id).toBe(contWithRealHash.channelId);
+      });
+
+      it("continuation channel returns null from resolveAuthedChannel after revocation", async () => {
+        const { hashChannelAuth: hash } = await import("@care-y/crypto");
+
+        const rawAuth = crypto.randomBytes(32);
+        const authHash = Buffer.from(hash(rawAuth));
+
+        const cont: IntakeContinuationInput = {
+          ...makeContinuationInput(),
+          authHash,
+        };
+        const input = makeInput({ continuation: cont });
+
+        await createIntakeTicket(
+          testDb.db,
+          {
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        );
+
+        // Get client id for revocation
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("client_id")
+          .where("id", "=", input.ticketId)
+          .executeTakeFirstOrThrow();
+
+        await revokeChannel(testDb.db, ticket.client_id);
+
+        const resolved = await resolveAuthedChannel(
+          testDb.db,
+          cont.channelId,
+          rawAuth,
+        );
+        expect(resolved).toBeNull();
+      });
+
+      it("account wins when both branches are present: account artifacts created, no continuation channel", async () => {
+        const { deriveFakeSaltKey } = await import("../auth/salt-defense.js");
+        const opsHex =
+          "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe";
+        const fakeSaltKey = await deriveFakeSaltKey(opsHex);
+        const accountDeps = {
+          indexer: testBlindIndexer,
+          fakeSaltKey,
+          orgUuid: TEST_ORG_ID,
+        };
+
+        const acct = makeAccountInput();
+        const cont = makeContinuationInput();
+        const input = makeInput({ account: acct, continuation: cont });
+
+        const result = await createIntakeTicket(
+          testDb.db,
+          {
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+            accountServiceDeps: accountDeps,
+          },
+          input,
+        );
+
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("client_id")
+          .where("id", "=", result.ticketId)
+          .executeTakeFirstOrThrow();
+
+        // Account channel should exist
+        const accountChannel = await testDb.db
+          .selectFrom("portal_channels")
+          .select(["id", "kind"])
+          .where("client_id", "=", ticket.client_id)
+          .where("kind", "=", "account")
+          .executeTakeFirst();
+        expect(accountChannel).toBeDefined();
+
+        // Continuation channel should NOT exist
+        const contChannel = await testDb.db
+          .selectFrom("portal_channels")
+          .select("id")
+          .where("client_id", "=", ticket.client_id)
+          .where("kind", "=", "intake_continuation")
+          .executeTakeFirst();
+        expect(contChannel).toBeUndefined();
       });
     });
   },

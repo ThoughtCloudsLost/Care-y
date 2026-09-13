@@ -1,6 +1,11 @@
 import DOMPurify, { type Config } from "dompurify";
-import { DOMSerializer, Fragment, Node as PMNode } from "prosemirror-model";
-import { kbArticleSchema } from "$lib/editor/prosemirror-schema.js";
+import {
+  DOMSerializer,
+  Fragment,
+  Node as PMNode,
+  type Schema,
+} from "prosemirror-model";
+import { editorSchema } from "$lib/editor/prosemirror-schema.js";
 
 export interface RenderArticleOptions {
   /** If provided, a first heading whose text matches (case-insensitive)
@@ -9,9 +14,13 @@ export interface RenderArticleOptions {
   title?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Shared sanitizer configuration (exported for reuse by form renderers)
+// ---------------------------------------------------------------------------
+
 /**
- * Sanitization config for rendered article HTML.
- * Allowlist derived from the ProseMirror schema's toDOM output.
+ * Sanitization config for rendered ProseMirror HTML.
+ * Allowlist derived from the schema's toDOM output.
  * Every tag and attribute here corresponds to a schema-defined
  * node or mark. No speculative extras.
  *
@@ -19,16 +28,18 @@ export interface RenderArticleOptions {
  * security attrs, not stored in the document JSON). They're in ALLOWED_ATTR
  * so DOMPurify doesn't strip them from serialized output.
  */
+
 /**
  * DOMPurify strips src/href attributes with unrecognized URI schemes
- * by default. kb-attachment:// is our custom scheme for encrypted
- * blob references. Allow it alongside standard web protocols.
+ * by default. `kb-attachment://` is the custom scheme for encrypted
+ * blob references. `form-asset://` is the custom scheme for encrypted
+ * form content images. Allow both alongside standard web protocols.
  * The detail page resolves these URIs post-render via fetch+decrypt.
  */
-const ALLOWED_URI =
-  /^(?:(?:https?|blob|data|ftp|mailto|tel|kb-attachment):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i;
+export const ALLOWED_URI_REGEXP =
+  /^(?:(?:https?|blob|data|ftp|mailto|tel|kb-attachment|form-asset):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i;
 
-const PURIFY_CONFIG: Config = {
+export const PURIFY_CONFIG: Config = {
   ALLOWED_TAGS: [
     "p",
     "h1",
@@ -67,12 +78,34 @@ const PURIFY_CONFIG: Config = {
     "rowspan",
     "start",
   ],
-  ALLOWED_URI_REGEXP: ALLOWED_URI,
+  ALLOWED_URI_REGEXP,
   ALLOW_DATA_ATTR: false,
   FORCE_BODY: true,
 };
 
-const serializer = DOMSerializer.fromSchema(kbArticleSchema);
+// ---------------------------------------------------------------------------
+// Generic ProseMirror doc renderer
+// ---------------------------------------------------------------------------
+
+/**
+ * Serialize a ProseMirror document fragment through DOMSerializer and
+ * sanitize the result with DOMPurify using the shared allowlist config.
+ *
+ * Callers provide the schema so the correct serializer is used for the
+ * document's node/mark set.
+ */
+export function renderProseMirrorDoc(doc: PMNode, schema: Schema): string {
+  const serializer = DOMSerializer.fromSchema(schema);
+  const fragment = serializer.serializeFragment(doc.content);
+  const div = document.createElement("div");
+  div.appendChild(fragment);
+  return DOMPurify.sanitize(div.innerHTML, PURIFY_CONFIG);
+}
+
+// ---------------------------------------------------------------------------
+// Article-specific render pipeline
+// ---------------------------------------------------------------------------
+
 const decoder = new TextDecoder();
 
 /**
@@ -97,7 +130,7 @@ export function renderArticleBody(
 
   let doc: PMNode;
   try {
-    doc = PMNode.fromJSON(kbArticleSchema, json);
+    doc = PMNode.fromJSON(editorSchema, json);
   } catch {
     // Invalid ProseMirror JSON: treat as plain text
     return sanitizeLegacyPlainText(text);
@@ -120,10 +153,11 @@ export function renderArticleBody(
     }
   }
 
-  const fragment = serializer.serializeFragment(content);
-  const div = document.createElement("div");
-  div.appendChild(fragment);
-  return sanitizeArticleHtml(div.innerHTML);
+  // Use the generic renderer for the (possibly stripped) content.
+  // Reconstruct a doc node wrapping the modified content so
+  // renderProseMirrorDoc receives a full PMNode.
+  const renderDoc = doc.copy(content);
+  return renderProseMirrorDoc(renderDoc, editorSchema);
 }
 
 /**

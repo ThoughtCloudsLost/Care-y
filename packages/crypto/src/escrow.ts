@@ -12,7 +12,8 @@
  * not a browser.
  *
  * All operations use Uint8Array exclusively. No JS string conversion of key
- * material (SOG-33). The caller converts from user input via TextEncoder.
+ * material, since strings cannot be zeroed. The caller converts from user
+ * input via TextEncoder.
  *
  * Serialization format: salt (16) || nonce (24) || ciphertext (variable)
  *
@@ -34,6 +35,7 @@ import {
   type EscrowBlob,
   type Salt,
   type Nonce,
+  type Scalar,
 } from "./types.js";
 
 /**
@@ -173,5 +175,79 @@ export function deserializeEscrowBlob(data: Uint8Array): EscrowBlob {
     salt: data.subarray(1, 1 + saltLen) as Salt,
     nonce: data.subarray(1 + saltLen, 1 + saltLen + nonceLen) as Nonce,
     ciphertext: data.subarray(1 + saltLen + nonceLen),
+  };
+}
+
+/**
+ * OPRF shares escrow payload version byte.
+ * v1 = two 32-byte ristretto255 scalars (master share A, master share B).
+ */
+const OPRF_SHARES_VERSION = 0x01;
+
+/** ristretto255 scalar length; both OPRF master shares are scalars. */
+const OPRF_SHARE_BYTES = 32;
+
+/** Exact serialized length: version (1) || shareA (32) || shareB (32). */
+const OPRF_SHARES_PAYLOAD_LENGTH = 1 + OPRF_SHARE_BYTES * 2;
+
+/**
+ * Serialize the two OPRF master shares into the escrow plaintext payload.
+ *
+ * Under per-tag share derivation (ADR-091) there is no combined OPRF key
+ * to escrow: every working key is derived per identity tag from the two
+ * master shares, and the combined per-tag key never exists anywhere.
+ * Escrow therefore stores the master shares themselves. The result is the
+ * plaintext handed to encryptWithPassphrase; it never leaves the ceremony
+ * machine unencrypted.
+ *
+ * Format: version (1) || shareA (32) || shareB (32)
+ *
+ * @param shareA - Server A's 32-byte master share (ristretto255 scalar)
+ * @param shareB - Server B's 32-byte master share (ristretto255 scalar)
+ * @returns Contiguous payload with version prefix
+ * @throws InvalidInputError if either share is not exactly 32 bytes
+ */
+export function serializeOprfShares(
+  shareA: Uint8Array,
+  shareB: Uint8Array,
+): Uint8Array {
+  if (shareA.length !== OPRF_SHARE_BYTES) {
+    throw new InvalidInputError(
+      `Share A must be ${String(OPRF_SHARE_BYTES)} bytes, got ${String(shareA.length)}`,
+    );
+  }
+  if (shareB.length !== OPRF_SHARE_BYTES) {
+    throw new InvalidInputError(
+      `Share B must be ${String(OPRF_SHARE_BYTES)} bytes, got ${String(shareB.length)}`,
+    );
+  }
+  return concatBytes(new Uint8Array([OPRF_SHARES_VERSION]), shareA, shareB);
+}
+
+/**
+ * Parse an OPRF shares escrow payload back into the two master shares.
+ *
+ * @param data - Payload from serializeOprfShares (after escrow decryption)
+ * @returns Both master shares as fresh copies (safe to zero independently)
+ * @throws InvalidInputError if the length or version byte is wrong
+ */
+export function deserializeOprfShares(data: Uint8Array): {
+  shareA: Scalar;
+  shareB: Scalar;
+} {
+  if (data.length !== OPRF_SHARES_PAYLOAD_LENGTH) {
+    throw new InvalidInputError(
+      `OPRF shares payload must be ${String(OPRF_SHARES_PAYLOAD_LENGTH)} bytes, got ${String(data.length)}`,
+    );
+  }
+  const version = data[0];
+  if (version !== OPRF_SHARES_VERSION) {
+    throw new InvalidInputError(
+      `Unknown OPRF shares payload version: ${String(version)} (expected ${String(OPRF_SHARES_VERSION)})`,
+    );
+  }
+  return {
+    shareA: data.slice(1, 1 + OPRF_SHARE_BYTES) as Scalar,
+    shareB: data.slice(1 + OPRF_SHARE_BYTES) as Scalar,
   };
 }

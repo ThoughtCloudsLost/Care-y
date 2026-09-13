@@ -10,7 +10,7 @@ const en_admin_key_rotated = /** @type {(inputs: Admin_Key_RotatedInputs) => Loc
 };
 
 const es_admin_key_rotated = /** @type {(inputs: Admin_Key_RotatedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Clave de la organizacion rotada`)
+	return /** @type {LocalizedString} */ (`Clave de la organización rotada`)
 };
 
 /**

@@ -9,14 +9,7 @@
 -->
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
-  import {
-    followupSlot,
-    eciesEncrypt,
-    encode,
-    decode,
-    toRistrettoPoint,
-  } from "@care-y/crypto";
-  import { newFollowupId } from "@care-y/shared";
+  import { followupSlot } from "@care-y/crypto";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getCryptoBridge,
@@ -34,9 +27,17 @@
     createReactionsQuery,
     writeReactionToCache,
   } from "$lib/tickets/create-reactions-query.svelte.js";
+  import { createSendMessage } from "$lib/composables/ticket-detail/create-send-message.svelte.js";
+  import {
+    buildPendingFollowUpEntry,
+    type FollowUpListEntry,
+  } from "$lib/composables/ticket-detail/pending-follow-up.js";
   import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
+  import { createAttachmentUpload } from "$lib/composables/ticket-detail/create-attachment-upload.svelte.js";
   import { createExposureHint } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
   import { useQueryClient } from "@tanstack/svelte-query";
+  import { Chip } from "konsta/svelte";
+  import { X } from "@lucide/svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
   import TicketCompose from "$lib/components/tickets/TicketCompose.svelte";
@@ -44,6 +45,7 @@
   import ComposeActions from "$lib/components/tickets/ComposeActions.svelte";
   import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
   import {
+    getDraftForMode,
     setDraftForMode,
     clearDraftForMode,
   } from "$lib/tickets/draft-store.svelte.js";
@@ -66,6 +68,8 @@
     clientPublic?: string | null;
     previewFollowUps: RawFollowUpPreview[] | undefined;
     followUpCount: number;
+    /** When true, a contact correction is pending for this ticket. */
+    hasUnacknowledgedCorrection?: boolean;
     ondismiss: () => void;
     onsent: (ticketId: string) => void;
   }
@@ -79,6 +83,7 @@
     clientPublic = null,
     previewFollowUps,
     followUpCount,
+    hasUnacknowledgedCorrection: correctionPending = false,
     ondismiss,
     onsent,
   }: ReplySheetProps = $props();
@@ -94,8 +99,16 @@
   // ── Compose (shared TicketCompose owns mode, drafts, and mentions) ──
 
   let compose = $state<TicketComposeHandle>();
-  let replySending = $state(false);
   let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // ── Attachment upload ──
+
+  const attachmentUpload = createAttachmentUpload({
+    getTicketId: () => ticketId,
+    getClientPublic: () => clientPublic ?? null,
+    cryptoBridge,
+    uploadMutate: async (args) => ticketRouter.uploadAttachment.mutate(args),
+  });
 
   // ── Exposure hint ──
 
@@ -107,6 +120,7 @@
     getTicketId: () => ticketId,
     cryptoBridge,
     queryClient,
+    getClientPublic: () => clientPublic ?? null,
     createFollowUpMutate: async (args) =>
       ticketRouter.createFollowUp.mutate(args),
     onSuccess: () => {
@@ -247,77 +261,51 @@
     previewFollowUps ? Math.max(0, followUpCount - previewFollowUps.length) : 0,
   );
 
-  // ── Reply send pipeline ──
+  // ── Reply send (composable) ──
 
-  async function handleReplySend(rawText: string): Promise<void> {
-    const text = rawText.trim();
-    if (text === "" || replySending) return;
-    replySending = true;
-
-    // Optimistic clear, mirroring the pre-send draft wipe; the catch
-    // below restores the untrimmed draft on failure.
-    clearDraftForMode(ticketId, "reply");
-
-    const followUpId = newFollowupId();
-
-    try {
-      const encryptedContent = await cryptoBridge.encrypt(
-        ticketId,
-        followupSlot(followUpId),
-        text,
-      );
-
-      // Build portal copy so the client can read this reply in their
-      // portal view. Only when the ticket has an active portal channel
-      // with a known client public key.
-      let portalCopy:
-        | { ephemeralPoint: string; nonce: string; ciphertext: string }
-        | undefined;
-
-      if (clientPublic != null && clientPublic !== "") {
-        const pubBytes = toRistrettoPoint(decode(clientPublic));
-        const textBytes = new TextEncoder().encode(text);
-        const ecies = eciesEncrypt(textBytes, pubBytes);
-        portalCopy = {
-          ephemeralPoint: encode(ecies.ephemeralPoint),
-          nonce: encode(ecies.nonce),
-          ciphertext: encode(ecies.ciphertext),
-        };
-      }
-
+  // The composable owns the whole pipeline (encrypt, portal copy,
+  // attachments, mutation, draft rollback, error toasts); the sheet
+  // keeps only its own optimistic bubble and the auto-dismiss timing.
+  const messenger = createSendMessage<FollowUpListEntry>({
+    getTicketId: () => ticketId,
+    getCurrentUserId: () => currentUserId ?? null,
+    getDraftText: () => getDraftForMode(ticketId, "reply"),
+    setDraftText: (v: string) => {
+      setDraftForMode(ticketId, "reply", v);
+    },
+    cryptoBridge,
+    followUpCache,
+    queryClient,
+    buildPendingEntry: (opts) => {
       optimisticMessage = {
-        id: `optimistic-${String(Date.now())}`,
-        text,
+        id: opts.pendingId,
+        text: opts.text,
         type: "message",
         createdAt: new Date().toISOString(),
       };
-
-      await ticketRouter.createFollowUp.mutate({
-        id: followUpId,
-        ticketId,
-        encryptedContent,
-        source: "volunteer",
-        type: "message",
-        isPrivate: false,
-        portalCopy,
-      });
-
+      return buildPendingFollowUpEntry(opts);
+    },
+    getClientPublic: () => clientPublic ?? null,
+    getAttachmentLinks: () => attachmentUpload.links(),
+    createFollowUpMutate: async (args) => {
+      const result = await ticketRouter.createFollowUp.mutate(args);
+      // Clear pending attachments only after the mutation resolves.
+      attachmentUpload.clear();
+      return result;
+    },
+    onSuccess: () => {
       haptic();
       toastStore.show(m.ticket_toast_message_sent());
-
       dismissTimer = setTimeout(() => {
         dismissTimer = null;
         optimisticMessage = null;
         onsent(ticketId);
       }, 1500);
-    } catch {
+    },
+    onError: () => {
       optimisticMessage = null;
-      setDraftForMode(ticketId, "reply", rawText);
-      toastStore.show(m.error_generic(), 3000);
-    } finally {
-      replySending = false;
-    }
-  }
+    },
+  });
 
   // ── Compose actions popover ──
 
@@ -396,12 +384,47 @@
     </div>
   </div>
 
+  {#if attachmentUpload.pending.length > 0}
+    <div
+      class="pending-attachments"
+      role="list"
+      aria-label={m.attachment_pending_list()}
+    >
+      {#each attachmentUpload.pending as entry (entry.attachmentId)}
+        <Chip
+          class="attachment-chip"
+          outline={entry.status === "failed"}
+          role="listitem"
+        >
+          <span class="attachment-chip-name">{entry.filename}</span>
+          {#if entry.status === "encrypting" || entry.status === "uploading"}
+            <span class="attachment-chip-status">
+              {m.attachment_uploading()}
+            </span>
+          {:else if entry.status === "failed"}
+            <span class="attachment-chip-status attachment-chip-failed">
+              {m.attachment_failed()}
+            </span>
+          {/if}
+        </Chip>
+        <button
+          type="button"
+          class="attachment-remove-btn"
+          onclick={() => attachmentUpload.remove(entry.attachmentId)}
+          aria-label={m.attachment_remove({ name: entry.filename })}
+        >
+          <X size={14} aria-hidden="true" />
+        </button>
+      {/each}
+    </div>
+  {/if}
   <TicketCompose
     bind:this={compose}
     {ticketId}
     inline
-    sending={replySending || sms.sending}
-    onsendreply={(text: string) => void handleReplySend(text)}
+    sending={messenger.sending || sms.sending || attachmentUpload.busy}
+    hasUnacknowledgedCorrection={correctionPending}
+    onsendreply={() => void messenger.handleSend()}
     onsendsms={(text: string) => void sms.handleSmsSend(text)}
     onplus={handlePlus}
   />
@@ -420,8 +443,15 @@
   }}
   onreply={portalCapable ? () => compose?.activateReply() : undefined}
   ontextclient={hasPhone
-    ? () => exposureHint.show("sms", () => compose?.activateSms())
+    ? () => {
+        exposureHint.show("sms");
+        compose?.activateSms();
+      }
     : undefined}
+  onattach={(file: File) => {
+    compose?.activateReply();
+    void attachmentUpload.attach(file);
+  }}
 />
 
 {#if exposureHint.type}
@@ -460,5 +490,45 @@
     font-size: var(--text-xs);
     color: var(--muted);
     margin: 0;
+  }
+
+  .pending-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 16px;
+    align-items: center;
+  }
+
+  .attachment-chip-name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .attachment-chip-status {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  .attachment-chip-failed {
+    color: var(--danger);
+  }
+
+  .attachment-remove-btn {
+    appearance: none;
+    border: none;
+    background: none;
+    padding: 6px;
+    margin: -6px 0 -6px -2px;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
   }
 </style>

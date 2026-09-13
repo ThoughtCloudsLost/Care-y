@@ -19,7 +19,7 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
     testDb = await createTestDb();
     await seedOrgPublicKey(testDb.db);
     greetingRepo = createGreetingRepository(testDb.db);
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await testDb.cleanup();

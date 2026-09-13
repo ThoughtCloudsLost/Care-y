@@ -10,7 +10,7 @@ const en_note_type_resolution = /** @type {(inputs: Note_Type_ResolutionInputs) 
 };
 
 const es_note_type_resolution = /** @type {(inputs: Note_Type_ResolutionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Resolucion`)
+	return /** @type {LocalizedString} */ (`Resolución`)
 };
 
 /**

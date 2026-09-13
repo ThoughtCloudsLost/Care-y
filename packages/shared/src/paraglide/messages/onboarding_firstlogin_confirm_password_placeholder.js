@@ -10,7 +10,7 @@ const en_onboarding_firstlogin_confirm_password_placeholder = /** @type {(inputs
 };
 
 const es_onboarding_firstlogin_confirm_password_placeholder = /** @type {(inputs: Onboarding_Firstlogin_Confirm_Password_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ingresa la contrasena de nuevo`)
+	return /** @type {LocalizedString} */ (`Ingresa la contraseña de nuevo`)
 };
 
 /**

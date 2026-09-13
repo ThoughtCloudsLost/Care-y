@@ -10,7 +10,7 @@ const en_intake_privacy_basis_body = /** @type {(inputs: Intake_Privacy_Basis_Bo
 };
 
 const es_intake_privacy_basis_body = /** @type {(inputs: Intake_Privacy_Basis_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Procesamos tu informacion para brindarte el apoyo que solicitaste. Tu organizacion debe confirmar la base legal especifica con asesoria legal.`)
+	return /** @type {LocalizedString} */ (`Procesamos tu información para brindarte el apoyo que solicitaste. Tu organización debe confirmar la base legal específica con asesoria legal.`)
 };
 
 /**

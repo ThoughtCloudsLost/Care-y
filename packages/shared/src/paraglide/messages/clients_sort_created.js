@@ -10,7 +10,7 @@ const en_clients_sort_created = /** @type {(inputs: Clients_Sort_CreatedInputs) 
 };
 
 const es_clients_sort_created = /** @type {(inputs: Clients_Sort_CreatedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Fecha de creacion`)
+	return /** @type {LocalizedString} */ (`Fecha de creación`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_client_merge_confirm_body = /** @type {(inputs: Client_Merge_Confirm_Bo
 };
 
 const es_client_merge_confirm_body = /** @type {(inputs: Client_Merge_Confirm_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.secondaryAlias} sera fusionado en ${i?.primaryAlias}. Todos los ${i?.tickets} de ${i?.secondaryAlias} se moveran a ${i?.primaryAlias}. Esto se puede deshacer.`)
+	return /** @type {LocalizedString} */ (`${i?.secondaryAlias} será fusionado en ${i?.primaryAlias}. Todos los ${i?.tickets} de ${i?.secondaryAlias} se moveran a ${i?.primaryAlias}. Esto se puede deshacer.`)
 };
 
 /**

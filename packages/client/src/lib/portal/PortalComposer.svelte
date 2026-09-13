@@ -10,20 +10,35 @@
 <script lang="ts">
   import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import {
+    getDraftForMode,
+    setDraftForMode,
+    clearDraftForMode,
+  } from "$lib/tickets/draft-store.svelte.js";
 
   interface PortalComposerProps {
     /** Called with the message text when send is activated. */
-    onsend: (text: string) => void;
+    onsend: (text: string, kind?: "message" | "contact_correction") => void;
     /** Whether a send mutation is in flight. */
     pending: boolean;
     /** Called on first focus (for the web chat hint). */
     onfirstfocus?: () => void;
     /** Error message displayed below the composer on send failure. */
     errorMessage?: string;
+    /**
+     * Thread identity the unsent draft is held under. Omit and the
+     * composer keeps nothing across navigation.
+     */
+    draftKey?: string;
   }
 
-  let { onsend, pending, onfirstfocus, errorMessage }: PortalComposerProps =
-    $props();
+  let {
+    onsend,
+    pending,
+    onfirstfocus,
+    errorMessage,
+    draftKey,
+  }: PortalComposerProps = $props();
 
   /** Refill the composer with unsent text, only when it is currently empty. */
   export function restoreDraft(draft: string): void {
@@ -34,6 +49,24 @@
 
   let text = $state("");
   let hasFocused = $state(false);
+
+  // Which thread the current text belongs to. Reading the key once at init
+  // would leave a composer that outlives a navigation showing the previous
+  // thread's draft, which is someone else's message in their bar.
+  let loadedKey: string | undefined = undefined;
+
+  // Declared before the save effect so a key change swaps the text in
+  // before anything is written back under the new key.
+  $effect(() => {
+    if (draftKey === loadedKey) return;
+    loadedKey = draftKey;
+    text = draftKey !== undefined ? getDraftForMode(draftKey, "reply") : "";
+  });
+
+  $effect(() => {
+    if (draftKey === undefined) return;
+    setDraftForMode(draftKey, "reply", text);
+  });
 
   const CHAR_LIMIT = 5_000;
   const COUNTER_THRESHOLD = 4_500;
@@ -47,6 +80,7 @@
     if (!canSend) return;
     const msg = text.trim();
     text = "";
+    if (draftKey !== undefined) clearDraftForMode(draftKey, "reply");
     onsend(msg);
   }
 
@@ -101,6 +135,13 @@
     .portal-composer .k-messagebar .k-toolbar > :nth-child(2) > :first-child
   ) {
     display: none;
+  }
+
+  /* Strip opaque backgrounds from the Konsta Toolbar's bg element so
+     the glass backdrop from PageLayout's overlay bar reads through.
+     The first child of .k-toolbar is the bg div (Konsta convention). */
+  :global(.portal-composer .k-messagebar .k-toolbar > :first-child) {
+    background: transparent !important;
   }
 
   .char-counter {

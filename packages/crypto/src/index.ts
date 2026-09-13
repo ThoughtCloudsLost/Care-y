@@ -30,6 +30,7 @@ export {
   toSymmetricKey,
   toSalt,
   toNonce,
+  toCiphertext,
 } from "./types.js";
 
 // --- Errors ---
@@ -58,6 +59,7 @@ export {
   oprfBlind,
   oprfFinalize,
   lagrangeInterpolate,
+  deriveTaggedShare,
   generateRefreshScalar,
   computeRefreshDelta,
   applyRefresh,
@@ -85,12 +87,18 @@ export {
   followupSlot,
   blobSlot,
   filenameSlot,
+  fileKeySlot,
   cursorSlot,
   fieldSlot,
 } from "./content.js";
 
 // --- Blob Encryption ---
 export { encryptBlob, decryptBlob } from "./blob.js";
+export {
+  encodeFileKeyPayload,
+  decodeFileKeyPayload,
+  type FileKeyPayload,
+} from "./attachment.js";
 
 // --- Org Key Wrapping ---
 export { wrapKey, unwrapKey } from "./keywrap.js";
@@ -105,12 +113,24 @@ export {
   decryptClientBranding,
 } from "./branding.js";
 
+// --- Intake Form ---
+export {
+  encryptFieldContent,
+  decryptFieldContent,
+  encryptFormMeta,
+  decryptFormMeta,
+  type EncryptedFieldContent,
+  type DecryptedFieldContent,
+} from "./intake-form.js";
+
 // --- Escrow ---
 export {
   encryptWithPassphrase,
   decryptWithPassphrase,
   serializeEscrowBlob,
   deserializeEscrowBlob,
+  serializeOprfShares,
+  deserializeOprfShares,
 } from "./escrow.js";
 
 // --- Portal Key Derivation ---
@@ -121,7 +141,8 @@ export {
   deriveChannelId,
   deriveChannelAuth,
   hashChannelAuth,
-  derivePortalKeypair,
+  portalOprfInput,
+  derivePortalKeypairFromOprf,
   type PortalKeypair,
 } from "./portal.js";
 

@@ -10,7 +10,7 @@ const en_tickets_exit_multiselect = /** @type {(inputs: Tickets_Exit_Multiselect
 };
 
 const es_tickets_exit_multiselect = /** @type {(inputs: Tickets_Exit_MultiselectInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Salir del modo de seleccion`)
+	return /** @type {LocalizedString} */ (`Salir del modo de selección`)
 };
 
 /**

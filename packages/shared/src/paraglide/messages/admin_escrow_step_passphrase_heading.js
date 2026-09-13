@@ -10,7 +10,7 @@ const en_admin_escrow_step_passphrase_heading = /** @type {(inputs: Admin_Escrow
 };
 
 const es_admin_escrow_step_passphrase_heading = /** @type {(inputs: Admin_Escrow_Step_Passphrase_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Crear una frase de contrasena para el archivo de custodia`)
+	return /** @type {LocalizedString} */ (`Crear una frase de contraseña para el archivo de custodia`)
 };
 
 /**

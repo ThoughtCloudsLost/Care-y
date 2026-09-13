@@ -10,7 +10,7 @@ const en_intake_reference_save = /** @type {(inputs: Intake_Reference_SaveInputs
 };
 
 const es_intake_reference_save = /** @type {(inputs: Intake_Reference_SaveInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Guardalo por si quieres dar seguimiento por telefono.`)
+	return /** @type {LocalizedString} */ (`Guardalo por si quieres dar seguimiento por teléfono.`)
 };
 
 /**

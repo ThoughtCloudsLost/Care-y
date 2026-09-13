@@ -10,7 +10,7 @@ const en_onboarding_telephony_skip_description = /** @type {(inputs: Onboarding_
 };
 
 const es_onboarding_telephony_skip_description = /** @type {(inputs: Onboarding_Telephony_Skip_DescriptionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Puede configurar la telefonia desde el panel de administracion en cualquier momento.`)
+	return /** @type {LocalizedString} */ (`Puede configurar la telefonía desde el panel de administración en cualquier momento.`)
 };
 
 /**

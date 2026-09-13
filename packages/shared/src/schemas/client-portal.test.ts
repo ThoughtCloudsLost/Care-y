@@ -24,6 +24,9 @@ import {
   rewrappedMessagesSchema,
   accountUpgradeInputSchema,
   accountChangePasswordInputSchema,
+  attachmentUploadSchema,
+  PORTAL_ATTACHMENT_MAX_BYTES,
+  PORTAL_ATTACHMENTS_PER_MESSAGE,
 } from "./client-portal.js";
 
 /**
@@ -344,9 +347,23 @@ describe("intakeConfigResponseSchema", () => {
 });
 
 describe("publicIntakeFieldSchema", () => {
-  it("accepts a valid public field", () => {
+  it("accepts a valid public field with fieldKey", () => {
     const result = publicIntakeFieldSchema.safeParse({
       id: crypto.randomUUID(),
+      fieldKey: crypto.randomUUID(),
+      fieldType: "text",
+      role: "phone-contact",
+      encryptedLabel: "abc123",
+      encryptedConfig: "def456",
+      isRequired: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts sentinel pseudo-key as fieldKey", () => {
+    const result = publicIntakeFieldSchema.safeParse({
+      id: crypto.randomUUID(),
+      fieldKey: "default:phone",
       fieldType: "text",
       role: "phone-contact",
       encryptedLabel: "abc123",
@@ -359,6 +376,7 @@ describe("publicIntakeFieldSchema", () => {
   it("accepts null role", () => {
     const result = publicIntakeFieldSchema.safeParse({
       id: crypto.randomUUID(),
+      fieldKey: crypto.randomUUID(),
       fieldType: "select",
       role: null,
       encryptedLabel: "abc",
@@ -371,6 +389,7 @@ describe("publicIntakeFieldSchema", () => {
   it("rejects unknown role", () => {
     const result = publicIntakeFieldSchema.safeParse({
       id: crypto.randomUUID(),
+      fieldKey: crypto.randomUUID(),
       fieldType: "text",
       role: "unknown-role",
       encryptedLabel: "abc",
@@ -379,16 +398,29 @@ describe("publicIntakeFieldSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("rejects missing fieldKey", () => {
+    const result = publicIntakeFieldSchema.safeParse({
+      id: crypto.randomUUID(),
+      fieldType: "text",
+      role: null,
+      encryptedLabel: "abc",
+      encryptedConfig: "def",
+      isRequired: true,
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("publicIntakeFormSchema", () => {
-  it("accepts a valid public form with fields", () => {
+  it("accepts a valid public form with fields including fieldKey", () => {
     const result = publicIntakeFormSchema.safeParse({
       id: crypto.randomUUID(),
       slug: "general-help",
       fields: [
         {
           id: crypto.randomUUID(),
+          fieldKey: crypto.randomUUID(),
           fieldType: "text",
           role: null,
           encryptedLabel: "abc",
@@ -595,6 +627,30 @@ describe("portalReplyInputSchema", () => {
   it("rejects missing selfCopy", () => {
     const input = validReply();
     delete input.selfCopy;
+    expect(portalReplyInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("accepts kind 'message'", () => {
+    const input = { ...validReply(), kind: "message" };
+    expect(portalReplyInputSchema.safeParse(input).success).toBe(true);
+  });
+
+  it("accepts kind 'contact_correction'", () => {
+    const input = { ...validReply(), kind: "contact_correction" };
+    expect(portalReplyInputSchema.safeParse(input).success).toBe(true);
+  });
+
+  it("accepts omitted kind (optional, defaults to undefined)", () => {
+    const input = validReply();
+    const result = portalReplyInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.kind).toBeUndefined();
+    }
+  });
+
+  it("rejects invalid kind value", () => {
+    const input = { ...validReply(), kind: "unknown_type" };
     expect(portalReplyInputSchema.safeParse(input).success).toBe(false);
   });
 });
@@ -1065,6 +1121,284 @@ describe("intakeSubmissionInputSchema account branch", () => {
       },
     };
     const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Continuation branch schemas
+// ---------------------------------------------------------------------------
+
+function validContinuation(): Record<string, unknown> {
+  return {
+    channelId: "a".repeat(48),
+    authHash: base64OfBytes(32),
+    clientPublic: base64OfBytes(32),
+    keyCheck: {
+      ephemeralPoint: base64OfBytes(32),
+      nonce: base64OfBytes(24),
+      ciphertext: base64Chars(100),
+    },
+  };
+}
+
+describe("intakeSubmissionInputSchema continuation branch", () => {
+  it("accepts intake without continuation (optional)", () => {
+    const result = intakeSubmissionInputSchema.safeParse(validSubmission());
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts intake with continuation branch (no selfCopy)", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: validContinuation(),
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts intake with continuation branch including selfCopy", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        selfCopy: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects continuation with invalid channelId (wrong length)", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        channelId: "a".repeat(47),
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects continuation with uppercase hex channelId", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        channelId: "A".repeat(48),
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects continuation with wrong-length authHash (31 bytes)", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        authHash: base64OfBytes(31),
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects continuation with wrong-length clientPublic (33 bytes)", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        clientPublic: base64OfBytes(33),
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects continuation with wrong-length keyCheck.ephemeralPoint (31 bytes)", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        keyCheck: {
+          ephemeralPoint: base64OfBytes(31),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects continuation with oversized keyCheck.ciphertext", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        keyCheck: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(28_001),
+        },
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("intakeSubmissionInputSchema account-wins precedence", () => {
+  it("strips continuation when both account and continuation are present", () => {
+    const input = {
+      ...validSubmission(),
+      account: {
+        accountId: crypto.randomUUID(),
+        username: "testuser",
+        salt: base64OfBytes(16),
+        publicKey: base64OfBytes(32),
+        authHash: base64OfBytes(32),
+        keyCheck: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+      },
+      continuation: validContinuation(),
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.account).toBeDefined();
+      expect(result.data.continuation).toBeUndefined();
+    }
+  });
+
+  it("preserves continuation when account is absent", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: validContinuation(),
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.continuation).toBeDefined();
+    }
+  });
+});
+
+describe("portalChannelKindSchema (intake_continuation)", () => {
+  it("accepts 'intake_continuation'", () => {
+    expect(
+      portalChannelKindSchema.safeParse("intake_continuation").success,
+    ).toBe(true);
+  });
+});
+
+describe("attachmentUploadSchema", () => {
+  const validUpload = (): Record<string, unknown> => ({
+    attachmentId: crypto.randomUUID(),
+    blob: base64OfBytes(64),
+    sizeBytes: 64,
+    contentType: "image/png",
+    fileKeyWrap: base64OfBytes(72),
+    encryptedFilename: base64OfBytes(48),
+  });
+
+  it("accepts a well-formed upload", () => {
+    expect(attachmentUploadSchema.safeParse(validUpload()).success).toBe(true);
+  });
+
+  it("rejects a file key wrap that is not the wrap of a 32-byte key", () => {
+    const result = attachmentUploadSchema.safeParse({
+      ...validUpload(),
+      fileKeyWrap: base64OfBytes(71),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a blob past the size cap on decoded bytes", () => {
+    // Padded base64 would pass a naive character-count check while
+    // decoding to more bytes than the cap allows.
+    const result = attachmentUploadSchema.safeParse({
+      ...validUpload(),
+      blob: "A".repeat(Math.ceil((PORTAL_ATTACHMENT_MAX_BYTES + 1024) / 3) * 4),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a content type outside the allowlist", () => {
+    // SVG is the one that matters: opened directly rather than through an
+    // <img>, it executes.
+    const result = attachmentUploadSchema.safeParse({
+      ...validUpload(),
+      contentType: "image/svg+xml",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("portalReplyInputSchema attachments", () => {
+  const baseReply = (): Record<string, unknown> => ({
+    channelId: "a".repeat(48),
+    auth: base64OfBytes(32),
+    ticketId: crypto.randomUUID(),
+    followUpId: crypto.randomUUID(),
+    keyGeneration: crypto.randomUUID(),
+    encryptedContent: base64OfBytes(64),
+    wrappedTkTemp: base64OfBytes(80),
+    selfCopy: {
+      ephemeralPoint: base64OfBytes(32),
+      nonce: base64OfBytes(24),
+      ciphertext: base64OfBytes(64),
+    },
+  });
+
+  const replyAttachment = (): Record<string, unknown> => ({
+    attachmentId: crypto.randomUUID(),
+    blob: base64OfBytes(64),
+    sizeBytes: 64,
+    contentType: "application/pdf",
+    fileKeyWrap: base64OfBytes(72),
+    encryptedFilename: base64OfBytes(48),
+    selfCopy: {
+      ephemeralPoint: base64OfBytes(32),
+      nonce: base64OfBytes(24),
+      ciphertext: base64OfBytes(64),
+    },
+  });
+
+  it("defaults to no attachments so a text reply needs no new field", () => {
+    const result = portalReplyInputSchema.safeParse(baseReply());
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.attachments).toEqual([]);
+    }
+  });
+
+  it("accepts a reply carrying a file", () => {
+    const result = portalReplyInputSchema.safeParse({
+      ...baseReply(),
+      attachments: [replyAttachment()],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects more attachments than one message may carry", () => {
+    const tooMany = Array.from(
+      { length: PORTAL_ATTACHMENTS_PER_MESSAGE + 1 },
+      replyAttachment,
+    );
+    const result = portalReplyInputSchema.safeParse({
+      ...baseReply(),
+      attachments: tooMany,
+    });
     expect(result.success).toBe(false);
   });
 });

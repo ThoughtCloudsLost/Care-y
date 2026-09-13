@@ -2,6 +2,21 @@ import tseslint from "typescript-eslint";
 import eslintPluginSvelte from "eslint-plugin-svelte";
 import eslintPluginSecurity from "eslint-plugin-security";
 import noHardcodedStrings from "./eslint-rules/no-hardcoded-strings.js";
+import noTenantRawSql from "./eslint-rules/no-tenant-raw-sql.js";
+import noRawInternalAnchor from "./eslint-rules/no-raw-internal-anchor.js";
+
+// One plugin object shared by every block that enables a care-y rule. Flat
+// config compares plugin objects by identity when the same name appears in
+// more than one block, so defining it once avoids a mismatch as rules are
+// added for different file types.
+const careYPlugin = {
+  meta: { name: "eslint-plugin-care-y", version: "1.0.0" },
+  rules: {
+    "no-hardcoded-strings": noHardcodedStrings,
+    "no-tenant-raw-sql": noTenantRawSql,
+    "no-raw-internal-anchor": noRawInternalAnchor,
+  },
+};
 
 // Casting to a branded identifier type is the one way to launder a wrong value
 // past the brands (ADR-074). `schemaName as OrgId` reintroduces the exact defect
@@ -63,12 +78,7 @@ export default tseslint.config(
   ...eslintPluginSvelte.configs["flat/recommended"],
   {
     files: ["**/*.svelte", "*.svelte"],
-    plugins: {
-      "care-y": {
-        meta: { name: "eslint-plugin-care-y", version: "1.0.0" },
-        rules: { "no-hardcoded-strings": noHardcodedStrings },
-      },
-    },
+    plugins: { "care-y": careYPlugin },
     languageOptions: {
       parserOptions: {
         parser: tseslint.parser,
@@ -88,6 +98,10 @@ export default tseslint.config(
       // compiler, not the TS type checker. The checker sees them as void,
       // triggering false positives on assignments like `let x = $state(null)`.
       "@typescript-eslint/no-confusing-void-expression": "off",
+      // In-app navigation goes through goto() so the client router handles
+      // the transition. A raw anchor unloads the document wherever the
+      // router is not running, which is how the demo renders routes.
+      "care-y/no-raw-internal-anchor": "error",
       // All user-facing strings in Svelte templates must use Paraglide
       // message functions for i18n. Catches hardcoded aria-labels,
       // title, placeholder, alt, and visible text content.
@@ -410,10 +424,24 @@ export default tseslint.config(
   // Custom ESLint rules are plain JS without TS annotations.
   // explicit-module-boundary-types isn't type-aware so disableTypeChecked
   // doesn't cover it.
+  //
+  // detect-unsafe-regex is off here for a narrower reason. The rules match SQL
+  // and markup shapes, which needs alternations under a quantifier, and
+  // safe-regex (what eslint-plugin-security uses) is a static star-height
+  // check: it flags a star over a group containing a quantifier without
+  // testing whether the branches can overlap. In these patterns they cannot,
+  // since the alternatives differ on their first character, so matching stays
+  // linear. Measured against 20,000-character inputs built to maximize
+  // backtracking: 0.05 to 0.33 ms each. The deciding factor is the threat
+  // model rather than the timing. These regexes run inside the linter over
+  // this repository's own source, so there is no attacker-controlled input to
+  // exploit; reaching them requires commit access. Scoped to this directory
+  // only, and the rule stays on everywhere a regex can meet real input.
   {
     files: ["eslint-rules/**/*.js"],
     rules: {
       "@typescript-eslint/explicit-module-boundary-types": "off",
+      "security/detect-unsafe-regex": "off",
     },
   },
 
@@ -423,7 +451,9 @@ export default tseslint.config(
   // place. Test files and the shared test fixtures are exempted below.
   {
     files: ["packages/server/src/**/*.ts"],
+    plugins: { "care-y": careYPlugin },
     rules: {
+      "care-y/no-tenant-raw-sql": "error",
       "no-restricted-syntax": [
         "error",
         {
@@ -487,6 +517,24 @@ export default tseslint.config(
       // The single internal cast each mint site performs is the one place a
       // brand assertion is legitimate; the rule stays on everywhere else.
       "@typescript-eslint/no-unsafe-type-assertion": "off",
+    },
+  },
+
+  // Platform-scoped database code. These files address tables that live in the
+  // platform schema, where an unqualified name resolving to the connection
+  // default is the correct target rather than a tenant leak. The tenant raw-SQL
+  // rule stays on everywhere else. Every tenant migration is covered.
+  {
+    files: [
+      "packages/server/src/db/migrations/platform/**/*.ts",
+      "packages/server/src/jobs/postgres-queue.ts",
+      // These exercise the platform job queue, so they address pending_jobs
+      // directly for the same reason the implementation does.
+      "packages/server/src/jobs/postgres-queue.test.ts",
+      "packages/server/src/jobs/ensure-recurring.test.ts",
+    ],
+    rules: {
+      "care-y/no-tenant-raw-sql": "off",
     },
   },
 );

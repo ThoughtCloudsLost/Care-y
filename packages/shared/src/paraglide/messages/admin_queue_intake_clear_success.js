@@ -10,7 +10,7 @@ const en_admin_queue_intake_clear_success = /** @type {(inputs: Admin_Queue_Inta
 };
 
 const es_admin_queue_intake_clear_success = /** @type {(inputs: Admin_Queue_Intake_Clear_SuccessInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Designacion de ${i?.queue} de recepcion eliminada`)
+	return /** @type {LocalizedString} */ (`Designación de ${i?.queue} de recepción eliminada`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_reactivate_title = /** @type {(inputs: Admin_Reactivate_TitleInpu
 };
 
 const es_admin_reactivate_title = /** @type {(inputs: Admin_Reactivate_TitleInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Reactivar a ${i?.name}?`)
+	return /** @type {LocalizedString} */ (`¿Reactivar a ${i?.name}?`)
 };
 
 /**

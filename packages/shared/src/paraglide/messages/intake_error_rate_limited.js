@@ -10,7 +10,7 @@ const en_intake_error_rate_limited = /** @type {(inputs: Intake_Error_Rate_Limit
 };
 
 const es_intake_error_rate_limited = /** @type {(inputs: Intake_Error_Rate_LimitedInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Demasiados mensajes desde esta conexion. Intenta de nuevo en unos ${i?.minutes} minutos, o llamanos.`)
+	return /** @type {LocalizedString} */ (`Demasiados mensajes desde esta conexión. Intenta de nuevo en unos ${i?.minutes} minutos, o llamanos.`)
 };
 
 /**

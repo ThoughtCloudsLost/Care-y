@@ -10,7 +10,7 @@ const en_onboarding_account_error_password_mismatch = /** @type {(inputs: Onboar
 };
 
 const es_onboarding_account_error_password_mismatch = /** @type {(inputs: Onboarding_Account_Error_Password_MismatchInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las contrasenas no coinciden.`)
+	return /** @type {LocalizedString} */ (`Las contraseñas no coinciden.`)
 };
 
 /**

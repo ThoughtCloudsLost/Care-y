@@ -10,7 +10,7 @@ const en_error_reverification_required = /** @type {(inputs: Error_Reverificatio
 };
 
 const es_error_reverification_required = /** @type {(inputs: Error_Reverification_RequiredInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Se requiere volver a verificar el telefono para activar esta funcion.`)
+	return /** @type {LocalizedString} */ (`Se requiere volver a verificar el teléfono para activar esta función.`)
 };
 
 /**

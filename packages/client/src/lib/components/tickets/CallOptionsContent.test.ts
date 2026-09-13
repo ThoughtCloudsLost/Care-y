@@ -15,6 +15,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_call_browser: () => "Call via browser",
   ticket_call_phone: () => "Call to my phone",
   common_cancel: () => "Cancel",
+  contact_correction_pending_warning: () =>
+    "A contact correction is pending below.",
 }));
 
 afterEach(() => {
@@ -76,5 +78,36 @@ describe("CallOptionsContent", () => {
     expect(phoneBtn).toBeDefined();
     await fireEvent.click(phoneBtn!);
     expect(onaction).toHaveBeenCalledWith("phone-call");
+  });
+
+  it("shows correction warning when hasUnacknowledgedCorrection is true", () => {
+    const { container } = render(CallOptionsContent, {
+      props: {
+        hasVerifiedPhone: false,
+        hasUnacknowledgedCorrection: true,
+        onaction: vi.fn(),
+      },
+    });
+    const warning = container.querySelector(
+      "[data-testid='call-correction-warning']",
+    );
+    expect(warning).toBeTruthy();
+    expect(warning?.textContent).toContain(
+      "A contact correction is pending below.",
+    );
+  });
+
+  it("hides correction warning when hasUnacknowledgedCorrection is false", () => {
+    const { container } = render(CallOptionsContent, {
+      props: {
+        hasVerifiedPhone: false,
+        hasUnacknowledgedCorrection: false,
+        onaction: vi.fn(),
+      },
+    });
+    const warning = container.querySelector(
+      "[data-testid='call-correction-warning']",
+    );
+    expect(warning).toBeNull();
   });
 });

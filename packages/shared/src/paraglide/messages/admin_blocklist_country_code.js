@@ -10,7 +10,7 @@ const en_admin_blocklist_country_code = /** @type {(inputs: Admin_Blocklist_Coun
 };
 
 const es_admin_blocklist_country_code = /** @type {(inputs: Admin_Blocklist_Country_CodeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Codigo`)
+	return /** @type {LocalizedString} */ (`Código`)
 };
 
 /**

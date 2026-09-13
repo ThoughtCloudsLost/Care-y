@@ -16,6 +16,7 @@
   import { tick } from "svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys } from "$lib/query/keys";
+  import { hasUnacknowledgedCorrection as computeUnackedCorrection } from "$lib/tickets/correction-status.js";
   import { Checkbox, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -64,6 +65,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
+  import DateSeparator from "$lib/components/tickets/DateSeparator.svelte";
   import CallEntry from "$lib/components/tickets/CallEntry.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
   import FollowUpMedia from "$lib/components/tickets/FollowUpMedia.svelte";
@@ -78,8 +80,10 @@
   import TicketPlaceholder from "$lib/components/tickets/TicketPlaceholder.svelte";
   import GapIndicator from "$lib/components/GapIndicator.svelte";
   import ShareStatusLine from "$lib/components/tickets/ShareStatusLine.svelte";
+  import CorrectionStatusLine from "$lib/components/tickets/CorrectionStatusLine.svelte";
   import {
     followUpKind,
+    followUpRenderVariant,
     groupConsecutive,
     isFollowUpGroup,
     followUpGroupKey,
@@ -154,6 +158,13 @@
     scrollContainerEl?: HTMLElement | undefined;
     /** Two-way bindable: true after scroll-to-unread initialization is complete. */
     scrollReady?: boolean;
+    /**
+     * Two-way bindable: whether the reader is within reach of the newest
+     * message. The compose bar lives outside this component and renders the
+     * jump control, so the state has to travel out the same way the scroll
+     * container does.
+     */
+    isNearBottom?: boolean;
     /** Active search term for match highlighting (null = no search overlay). */
     searchTerm?: string | null;
     /** ID of the currently navigated search match (gets glow animation). */
@@ -167,6 +178,9 @@
     loadedFollowUpCount?: number;
     /** Two-way bindable: function to load one older page. */
     loadOlderPage?: () => Promise<void>;
+    /** Two-way bindable: true when any contact_correction follow-up
+     *  has no acknowledge reaction. Drives outbound-surface warnings. */
+    correctionPending?: boolean;
   }
 
   let {
@@ -190,6 +204,7 @@
     searchableFollowUps = $bindable(undefined),
     scrollContainerEl = $bindable(undefined),
     scrollReady = $bindable(false),
+    isNearBottom = $bindable(true),
     searchTerm = null,
     searchActiveMatchId = null,
     searchScrollRequested = false,
@@ -197,6 +212,7 @@
     hasMoreMessages = $bindable(false),
     loadedFollowUpCount = $bindable(0),
     loadOlderPage: loadOlderPageProp = $bindable(undefined),
+    correctionPending = $bindable(false),
   }: TicketDetailProps = $props();
 
   const ticketCache = getTicketDecryptCache();
@@ -355,7 +371,8 @@
   const paginator = createChatPaginator({
     pageSize: PAGE_SIZE,
     queryClient,
-    getTicketId: () => ticketId,
+    getPageQueryKey: (cursor: string) =>
+      ticketKeys.followUpsPage(ticketId, cursor),
     fetchPage: async (cursor) =>
       fetchFollowUps({
         ticketId,
@@ -511,6 +528,13 @@
 
   $effect(() => {
     filteredFollowUps = displayFollowUps;
+  });
+
+  // Reactively compute whether any contact_correction follow-up lacks an
+  // acknowledge reaction. Uses the unfiltered followUps (not displayFollowUps)
+  // so a filter can't suppress the warning.
+  $effect(() => {
+    correctionPending = computeUnackedCorrection(followUps, getReactions);
   });
 
   // Expose the broadest available follow-up list for search matching.
@@ -1028,6 +1052,10 @@
     scrollContainerEl = scroll.scrollContainerEl;
   });
 
+  $effect(() => {
+    isNearBottom = scroll.isNearBottom;
+  });
+
   // Auto-scroll when new follow-ups arrive via SSE and user was near bottom.
   const followUpCount = $derived(followUps.length);
 
@@ -1141,7 +1169,7 @@
 
 {#if ticketQuery.isLoading}
   <div
-    class="chat-container"
+    class="chat-container chrome-underlap"
     role="log"
     aria-label={m.shell_loading()}
     use:scroll.scrollToBottom
@@ -1154,7 +1182,7 @@
   </div>
 {:else if ticket}
   <div
-    class="chat-container"
+    class="chat-container chrome-underlap"
     bind:this={scroll.scrollContainerEl}
     use:scroll.scrollToBottom
     onscroll={() => scroll.onScroll(followUps, onreadprogress)}
@@ -1208,6 +1236,7 @@
         })}
           {@const recResult = resolveExpandedDecrypt(rec)}
           {@const kind = followUpKind(rec)}
+          {@const variant = followUpRenderVariant(rec)}
           <div
             id="tl-fu-{rec.id}"
             class="cluster-bubble-tap"
@@ -1248,7 +1277,7 @@
                   handleToggleReaction(rec.id, reaction)}
                 resolveUserName={(uid: string) => resolveVolunteerName(uid)}
               />
-            {:else if rec.type === "phone_call"}
+            {:else if variant === "call"}
               <ConversationBubble
                 direction={rec.source === "client" ? "received" : "sent"}
                 speaker={rec.source === "client" ? clientAlias : undefined}
@@ -1294,10 +1323,18 @@
                     onlightbox={(url: string) => onlightbox?.(url)}
                   />
                 {/if}
-                {#if rec.type === "share_link"}
+                {#if variant === "share"}
                   <ShareStatusLine
                     share={findShareForFollowUp(rec.eventParams)}
                     loading={sharesQuery.isLoading}
+                  />
+                {/if}
+                {#if variant === "correction"}
+                  <CorrectionStatusLine
+                    reactions={getReactions(rec.id)}
+                    ontoggleacknowledge={() =>
+                      handleToggleReaction(rec.id, "acknowledge")}
+                    resolveUserName={(uid: string) => resolveVolunteerName(uid)}
                   />
                 {/if}
               </ConversationBubble>
@@ -1333,11 +1370,9 @@
                   : undefined}
 
                 {#if needsDateSeparator(grp.firstTimestamp, prevTimestamp)}
-                  <div class="date-separator" role="separator">
-                    <span class="date-separator-label"
-                      >{formatDateSeparator(grp.firstTimestamp)}</span
-                    >
-                  </div>
+                  <DateSeparator
+                    label={formatDateSeparator(grp.firstTimestamp)}
+                  />
                 {/if}
 
                 <div class="fu-wrapper">
@@ -1354,6 +1389,7 @@
               {:else}
                 {@const fu = item}
                 {@const kind = followUpKind(fu)}
+                {@const variant = followUpRenderVariant(fu)}
                 {@const contentResult =
                   decrypt != null
                     ? decrypt.followUp(
@@ -1378,11 +1414,7 @@
                 <GapIndicator count={gapBefore} />
 
                 {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
-                  <div class="date-separator" role="separator">
-                    <span class="date-separator-label"
-                      >{formatDateSeparator(fu.createdAt)}</span
-                    >
-                  </div>
+                  <DateSeparator label={formatDateSeparator(fu.createdAt)} />
                 {/if}
 
                 {#if fu.id === firstUnreadId}
@@ -1403,6 +1435,7 @@
                   id="fu-{fu.id}"
                   data-fu-id={fu.id}
                   class="fu-wrapper"
+                  class:fu-correction={variant === "correction"}
                   class:match-active={searchActiveMatchId === fu.id}
                   class:fu-select-mode={selectModeActive}
                   class:fu-select-left={selectModeActive &&
@@ -1478,7 +1511,7 @@
                       resolveUserName={(uid: string) =>
                         resolveVolunteerName(uid)}
                     />
-                  {:else if fu.type === "phone_call"}
+                  {:else if variant === "call"}
                     <ConversationBubble
                       direction={messageType(fu)}
                       speaker={fu.source === "client" ? clientAlias : undefined}
@@ -1526,10 +1559,19 @@
                           onlightbox={(url: string) => onlightbox?.(url)}
                         />
                       {/if}
-                      {#if fu.type === "share_link"}
+                      {#if variant === "share"}
                         <ShareStatusLine
                           share={findShareForFollowUp(fu.eventParams)}
                           loading={sharesQuery.isLoading}
+                        />
+                      {/if}
+                      {#if variant === "correction"}
+                        <CorrectionStatusLine
+                          reactions={getReactions(fu.id)}
+                          ontoggleacknowledge={() =>
+                            handleToggleReaction(fu.id, "acknowledge")}
+                          resolveUserName={(uid: string) =>
+                            resolveVolunteerName(uid)}
                         />
                       {/if}
                     </ConversationBubble>
@@ -1550,9 +1592,15 @@
     padding: 1rem var(--page-pad-x);
   }
 
-  /* Pull the container up behind the glass chrome so messages scroll
-     under the frosted blur. CaseHeader is in the subnavbar chrome;
-     this container's negative margin + padding restores the overlap. */
+  /* The container scrolls under the glass chrome via the shared
+     .chrome-underlap class (shared.css), keeping the pull-up in one
+     place for both the org and client threads.
+     KEEP IN SYNC with the client portal's assembly (PageLayout
+     underChrome): the two surfaces consume the same class through
+     different DOM shapes, so a structural change here (an ancestor
+     gaining overflow clipping, padding moving off this element)
+     must be checked against the clip-chain constraint documented on
+     .chrome-underlap in shared.css and mirrored in PageLayout. */
   .chat-container {
     flex: 1;
     min-height: 0;
@@ -1561,8 +1609,6 @@
     overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
-    margin-top: calc(-1 * (var(--navbar-h, 0px) + var(--subnavbar-h, 0px)));
-    padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
   }
 
   /* The conversation thread: a plain flex column in place of Konsta
@@ -1598,6 +1644,15 @@
      work through the wrapper without breaking the thread flex column. */
   .fu-wrapper {
     display: contents;
+  }
+
+  /* Contact correction: tinted background block per Inkwell Careful register. */
+  .fu-correction {
+    display: block;
+    background: var(--care-soft);
+    border-radius: 10px;
+    padding: 4px;
+    margin: 2px 0;
   }
 
   /* In select mode, switch to flex row for checkbox placement. */
@@ -1636,32 +1691,6 @@
     color: var(--muted);
     font-size: var(--text-base);
     padding: 2rem;
-  }
-
-  /* --- Date separators (dateline anatomy) --- */
-
-  /* No padding of its own: the .thread gap and side padding place it. */
-  .date-separator {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-  }
-
-  .date-separator::before,
-  .date-separator::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--hair);
-  }
-
-  .date-separator-label {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: var(--muted);
-    white-space: nowrap;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
   }
 
   /* --- Loading older messages --- */

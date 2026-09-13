@@ -10,7 +10,7 @@ const en_admin_telephony_change_mode_confirm_body = /** @type {(inputs: Admin_Te
 };
 
 const es_admin_telephony_change_mode_confirm_body = /** @type {(inputs: Admin_Telephony_Change_Mode_Confirm_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambiar de modo restablecera su configuracion de telefonia actual. Si tiene credenciales BYOT almacenadas, se eliminaran.`)
+	return /** @type {LocalizedString} */ (`Cambiar de modo restablecerá su configuración de telefonía actual. Si tiene credenciales BYOT almacenadas, se eliminaran.`)
 };
 
 /**

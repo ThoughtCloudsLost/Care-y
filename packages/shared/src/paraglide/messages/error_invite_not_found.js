@@ -10,7 +10,7 @@ const en_error_invite_not_found = /** @type {(inputs: Error_Invite_Not_FoundInpu
 };
 
 const es_error_invite_not_found = /** @type {(inputs: Error_Invite_Not_FoundInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Invitacion no encontrada o ya utilizada.`)
+	return /** @type {LocalizedString} */ (`Invitación no encontrada o ya utilizada.`)
 };
 
 /**

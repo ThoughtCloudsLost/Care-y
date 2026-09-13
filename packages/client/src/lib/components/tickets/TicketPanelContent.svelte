@@ -243,6 +243,7 @@
 
   <PortalTierSection
     {ticketId}
+    clientId={ticket?.clientId ?? ""}
     clientTier={ticket?.clientTier}
     portalChannel={ticket?.portalChannel}
     clientPhone={ticket?.clientPhone}

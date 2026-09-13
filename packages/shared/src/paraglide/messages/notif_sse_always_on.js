@@ -10,7 +10,7 @@ const en_notif_sse_always_on = /** @type {(inputs: Notif_Sse_Always_OnInputs) =>
 };
 
 const es_notif_sse_always_on = /** @type {(inputs: Notif_Sse_Always_OnInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las alertas en la aplicacion siempre estan activas.`)
+	return /** @type {LocalizedString} */ (`Las alertas en la aplicación siempre estan activas.`)
 };
 
 /**

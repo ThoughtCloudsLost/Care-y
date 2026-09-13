@@ -10,7 +10,7 @@ const en_getting_started_greetings = /** @type {(inputs: Getting_Started_Greetin
 };
 
 const es_getting_started_greetings = /** @type {(inputs: Getting_Started_GreetingsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configurar saludos telefonicos`)
+	return /** @type {LocalizedString} */ (`Configurar saludos telefónicos`)
 };
 
 /**

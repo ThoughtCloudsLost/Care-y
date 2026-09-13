@@ -10,7 +10,7 @@ const en_admin_branding_card_color_label = /** @type {(inputs: Admin_Branding_Ca
 };
 
 const es_admin_branding_card_color_label = /** @type {(inputs: Admin_Branding_Card_Color_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Colores de la organizacion`)
+	return /** @type {LocalizedString} */ (`Colores de la organización`)
 };
 
 /**

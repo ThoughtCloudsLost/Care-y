@@ -10,7 +10,7 @@ const en_intake_protected_server_why = /** @type {(inputs: Intake_Protected_Serv
 };
 
 const es_intake_protected_server_why = /** @type {(inputs: Intake_Protected_Server_WhyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Si alguien accede a este servidor, solo ve texto cifrado. Descifrarlo requiere la contrasena de un voluntario y la verificacion de dos servidores separados en paises diferentes. Ningun servidor tiene suficiente informacion por si solo para leer tus datos.`)
+	return /** @type {LocalizedString} */ (`Si alguien accede a este servidor, solo ve texto cifrado. Descifrarlo requiere la contraseña de un voluntario y la verificación de dos servidores separados en paises diferentes. Ningún servidor tiene suficiente información por sí solo para leer tus datos.`)
 };
 
 /**

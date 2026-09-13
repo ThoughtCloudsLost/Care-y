@@ -17,34 +17,37 @@ import {
   buildContentAad,
   followupSlot,
   eciesEncrypt,
+  generatePortalSeed,
+  deriveChannelId,
+  deriveChannelAuth,
+  hashChannelAuth,
+  PORTAL_KEY_CHECK,
   type SymmetricKey,
   type Ciphertext,
   type EciesOutput,
 } from "@care-y/crypto";
-import type {
-  IntakeFieldType,
-  IntakeFieldRole,
-  IntakeFieldConfig,
-  AvailabilityData,
-  IntakeFormResponse,
-  TicketPriority,
+import {
+  performChannelOprf,
+  type ChannelEvaluateCallback,
+} from "$lib/portal/portal-crypto.js";
+import {
+  composeIntakeTicketContent,
+  extractMessageText,
+  buildIntakeFormResponse,
+  type IntakeAnswer,
+  type AvailabilityData,
+  type IntakeFieldRole,
+  type IntakeFieldConfig,
+  type TicketPriority,
 } from "@care-y/shared";
 import { buildAccountRegistration } from "$lib/portal/account-crypto.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
-const textEncoder = new TextEncoder();
+// Re-export IntakeAnswer so existing consumer imports from this module
+// continue to resolve without changes.
+export type { IntakeAnswer } from "@care-y/shared";
 
-/**
- * A single answered field, ready for encryption.
- * Labels are included for human-readable description composition only;
- * they are NOT stored in the structured response blob.
- */
-export interface IntakeAnswer {
-  readonly fieldId: string;
-  readonly fieldType: IntakeFieldType;
-  readonly label: string;
-  readonly value: string | readonly string[] | AvailabilityData | boolean;
-}
+const textEncoder = new TextEncoder();
 
 export interface EncryptedIntake {
   readonly encryptedTitle: string;
@@ -59,58 +62,6 @@ export interface EncryptedIntake {
  * The Worker reconstructs the same slot string to verify the binding.
  */
 const FORM_RESPONSE_SLOT = "intake-form-response";
-
-/**
- * Format an availability value as human-readable text lines for the
- * description composition. The IANA timezone name is included.
- */
-function formatAvailability(data: AvailabilityData): string {
-  const parts: string[] = [];
-  for (const r of data.recurring) {
-    parts.push(`${r.day} ${r.start}-${r.end}`);
-  }
-  for (const s of data.specific) {
-    parts.push(`${s.date} ${s.start}-${s.end}`);
-  }
-  if (parts.length === 0) return `(${data.timezone})`;
-  return `${parts.join(", ")} (${data.timezone})`;
-}
-
-/**
- * Check whether a value is an AvailabilityData object (has the timezone +
- * recurring + specific shape). Used to narrow the answer value union without
- * an unsafe type assertion.
- */
-function isAvailabilityData(
-  v: string | readonly string[] | AvailabilityData | boolean,
-): v is AvailabilityData {
-  return typeof v === "object" && !Array.isArray(v) && "timezone" in v;
-}
-
-/**
- * Format a single answer value as a string for the description.
- */
-function formatValue(
-  value: string | readonly string[] | AvailabilityData | boolean,
-): string {
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "string") return value;
-  if (isAvailabilityData(value)) return formatAvailability(value);
-  return value.join(", ");
-}
-
-/**
- * Strip the label from the value for the structured response blob.
- * Availability is stored as-is; arrays and strings pass through.
- */
-function toResponseValue(
-  value: string | readonly string[] | AvailabilityData | boolean,
-): string | string[] | AvailabilityData | boolean {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "string") return value;
-  if (isAvailabilityData(value)) return value;
-  return [...value];
-}
 
 /**
  * Encrypt an intake form submission. All four ciphertexts are AAD-bound
@@ -133,49 +84,9 @@ export function encryptIntake(
 ): EncryptedIntake {
   const tk: SymmetricKey = generateContentKey();
   try {
-    // Title: "Web intake" for custom forms; "Web intake - <name>" for the
-    // default form when a name answer is present and non-empty
-    const nameAnswer = answers.find(
-      (a) =>
-        a.fieldId === "default:name" &&
-        typeof a.value === "string" &&
-        a.value !== "",
-    );
-    const nameValue =
-      nameAnswer !== undefined && typeof nameAnswer.value === "string"
-        ? nameAnswer.value
-        : null;
-    const title =
-      nameValue !== null ? `Web intake - ${nameValue}` : "Web intake";
-
-    // Description: one line per answered field, "<label>: <value>"
-    const descriptionLines: string[] = [];
-    for (const answer of answers) {
-      const formatted = formatValue(answer.value);
-      if (formatted !== "") {
-        descriptionLines.push(`${answer.label}: ${formatted}`);
-      }
-    }
-    const description = descriptionLines.join("\n");
-
-    // Message: first textarea answer becomes the follow-up content.
-    // Custom forms without a textarea skip the follow-up entirely.
-    const textareaAnswer = answers.find((a) => a.fieldType === "textarea");
-    const messageText = textareaAnswer
-      ? typeof textareaAnswer.value === "string"
-        ? textareaAnswer.value
-        : ""
-      : null;
-
-    // Structured response blob (availability-matching Worker seam)
-    const responsePayload: IntakeFormResponse = {
-      formId,
-      answers: answers.map((a) => ({
-        fieldId: a.fieldId,
-        fieldType: a.fieldType,
-        value: toResponseValue(a.value),
-      })),
-    };
+    const { title, description } = composeIntakeTicketContent(answers);
+    const messageText = extractMessageText(answers);
+    const responsePayload = buildIntakeFormResponse(formId, answers);
 
     // AAD bindings
     const titleAad = buildContentAad(ids.ticketId, "title");
@@ -237,7 +148,7 @@ export interface SubmitMetadata {
 interface FieldWithRole {
   readonly role: IntakeFieldRole | null;
   readonly config: IntakeFieldConfig;
-  readonly id: string;
+  readonly fieldKey: string;
 }
 
 /**
@@ -258,7 +169,7 @@ export function resolveSubmitMetadata(
 
   for (const field of fields) {
     if (field.role === null) continue;
-    const val = values[field.id];
+    const val = values[field.fieldKey];
 
     if (field.role === "queue-routing" && typeof val === "string") {
       const cfg = field.config;
@@ -379,5 +290,106 @@ export async function buildAccountPayload(
   } finally {
     const sodium = requireSodium();
     sodium.memzero(keypair.clientPrivate);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Continuation-link payload assembly for intake opt-in
+// ---------------------------------------------------------------------------
+
+/** Wire-ready continuation branch for the intake submission payload. */
+export interface IntakeContinuationPayload {
+  readonly channelId: string;
+  readonly authHash: string;
+  readonly clientPublic: string;
+  readonly keyCheck: {
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly ciphertext: string;
+  };
+  readonly selfCopy?: {
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly ciphertext: string;
+  };
+}
+
+/**
+ * Mint a portal channel for the continuation-link flow.
+ *
+ * Generates a fresh seed, derives all channel material through the
+ * OPRF pipeline (ADR-091), and builds the wire payload. The raw seed
+ * and private key are zeroed in the finally block after the
+ * base64url-encoded seed string is captured. The encoded seed and
+ * channel id are returned so the caller can assemble the one-time
+ * URL on successful submission.
+ *
+ * @param message - Optional message text for the self-copy
+ * @param evaluate - Channel OPRF evaluate callback (tRPC wiring)
+ * @param onPowRequired - PoW solver callback
+ */
+export async function buildContinuationPayload(
+  message: string | null,
+  evaluate: ChannelEvaluateCallback,
+  onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
+): Promise<{
+  payload: IntakeContinuationPayload;
+  channelId: string;
+  encodedSeed: string;
+}> {
+  const sodium = requireSodium();
+  const seed = generatePortalSeed();
+  const channelId = deriveChannelId(seed);
+  const auth = deriveChannelAuth(seed);
+  const encodedSeed = encode(seed);
+
+  // ADR-091: derive through OPRF round (no auth for mint path)
+  const keypair = await performChannelOprf(seed, channelId, {
+    evaluate,
+    onPowRequired,
+  });
+
+  try {
+    const authHash = encode(hashChannelAuth(auth));
+    const clientPublicEncoded = encode(keypair.clientPublic);
+
+    const checkPlaintext = textEncoder.encode(PORTAL_KEY_CHECK);
+    const keyCheckTriple: EciesOutput = eciesEncrypt(
+      checkPlaintext,
+      keypair.clientPublic,
+    );
+    const keyCheck = {
+      ephemeralPoint: encode(keyCheckTriple.ephemeralPoint),
+      nonce: encode(keyCheckTriple.nonce),
+      ciphertext: encode(keyCheckTriple.ciphertext),
+    };
+
+    let selfCopy: IntakeContinuationPayload["selfCopy"] | undefined;
+    if (message !== null && message.length > 0) {
+      const messageBytes = textEncoder.encode(message);
+      const triple: EciesOutput = eciesEncrypt(
+        messageBytes,
+        keypair.clientPublic,
+      );
+      selfCopy = {
+        ephemeralPoint: encode(triple.ephemeralPoint),
+        nonce: encode(triple.nonce),
+        ciphertext: encode(triple.ciphertext),
+      };
+    }
+
+    const payload: IntakeContinuationPayload = {
+      channelId,
+      authHash,
+      clientPublic: clientPublicEncoded,
+      keyCheck,
+      ...(selfCopy != null ? { selfCopy } : {}),
+    };
+
+    return { payload, channelId, encodedSeed };
+  } finally {
+    sodium.memzero(keypair.clientPrivate);
+    sodium.memzero(auth);
+    sodium.memzero(seed);
   }
 }

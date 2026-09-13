@@ -5,16 +5,19 @@ import { frameMessage, createMessageReader } from "./ipc-protocol.js";
 
 const POINT_BYTES = 32;
 const IPC_TIMEOUT_MS = 5_000;
+const TAG_LEN_BYTES = 2;
 
 /** Transport-agnostic OPRF evaluation interface. */
 export interface OprfEvaluator {
   /**
-   * Evaluates a blinded element against the threshold OPRF key.
+   * Evaluates a blinded element under a per-tag derived key.
    * Fans out to both processes, combines via Lagrange interpolation.
-   * @returns The combined evaluated element (identical to fullKey * blindedElement)
+   * @param blindedElement - 32-byte blinded ristretto255 point
+   * @param tag - Public tag string (e.g. "volunteer:<userId>")
+   * @returns The combined evaluated element
    * @throws OprfError if either process fails, times out, or returns invalid data
    */
-  evaluate(blindedElement: Uint8Array): Promise<Uint8Array>;
+  evaluate(blindedElement: Uint8Array, tag: string): Promise<Uint8Array>;
   /** Gracefully close connections */
   close(): void;
 }
@@ -22,6 +25,19 @@ export interface OprfEvaluator {
 interface IpcConfig {
   readonly socketPathA: string;
   readonly socketPathB: string;
+}
+
+/**
+ * Build the tagged IPC payload.
+ * Wire format: [uint16BE tagLen][tag UTF-8 bytes][32-byte blinded element]
+ */
+function buildTaggedPayload(blindedElement: Uint8Array, tag: string): Buffer {
+  const tagBuf = Buffer.from(tag, "utf8");
+  const payload = Buffer.alloc(TAG_LEN_BYTES + tagBuf.length + POINT_BYTES);
+  payload.writeUInt16BE(tagBuf.length, 0);
+  tagBuf.copy(payload, TAG_LEN_BYTES);
+  Buffer.from(blindedElement).copy(payload, TAG_LEN_BYTES + tagBuf.length);
+  return payload;
 }
 
 /**
@@ -83,14 +99,17 @@ async function sendToProcess(
  */
 export function createIpcEvaluator(config: IpcConfig): OprfEvaluator {
   return {
-    async evaluate(blindedElement: Uint8Array): Promise<Uint8Array> {
+    async evaluate(
+      blindedElement: Uint8Array,
+      tag: string,
+    ): Promise<Uint8Array> {
       if (blindedElement.length !== POINT_BYTES) {
         throw new OprfError(
           `Blinded element must be ${String(POINT_BYTES)} bytes, got ${String(blindedElement.length)}`,
         );
       }
 
-      const payload = Buffer.from(blindedElement);
+      const payload = buildTaggedPayload(blindedElement, tag);
 
       const [partialA, partialB] = await Promise.all([
         sendToProcess(config.socketPathA, payload),
@@ -112,14 +131,31 @@ export function createIpcEvaluator(config: IpcConfig): OprfEvaluator {
 }
 
 /**
- * Mock evaluator for unit tests. Uses a single key (no threshold split).
- * Performs blindEvaluate directly without IPC.
+ * Mock evaluator for tests. Takes the two Shamir shares (not the combined
+ * key) and reproduces the real math: derives a tagged share from each
+ * master share, evaluates each partial, then combines via Lagrange
+ * interpolation, so mock and IPC evaluations agree for any tag.
+ *
+ * @param shareA - First Shamir share (evaluation point x=1)
+ * @param shareB - Second Shamir share (evaluation point x=2)
  */
-export function createMockEvaluator(fullKey: Uint8Array): OprfEvaluator {
+export function createMockEvaluator(
+  shareA: Uint8Array,
+  shareB: Uint8Array,
+): OprfEvaluator {
   return {
-    async evaluate(blindedElement: Uint8Array): Promise<Uint8Array> {
-      const { blindEvaluate } = await import("./oprf-server.js");
-      return blindEvaluate(fullKey, blindedElement);
+    async evaluate(
+      blindedElement: Uint8Array,
+      tag: string,
+    ): Promise<Uint8Array> {
+      const { taggedBlindEvaluate } = await import("./oprf-server.js");
+
+      const partialA = taggedBlindEvaluate(shareA, tag, blindedElement);
+      const partialB = taggedBlindEvaluate(shareB, tag, blindedElement);
+
+      const combined = lagrangeInterpolate(partialA, partialB);
+
+      return Buffer.from(combined);
     },
     close(): void {
       // Mock has no resources to release

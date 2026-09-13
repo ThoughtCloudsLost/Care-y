@@ -10,7 +10,7 @@ const en_crypto_org_key_waiting_body = /** @type {(inputs: Crypto_Org_Key_Waitin
 };
 
 const es_crypto_org_key_waiting_body = /** @type {(inputs: Crypto_Org_Key_Waiting_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu cuenta fue creada, pero un administrador necesita distribuir la clave de cifrado de la organizacion. Esto generalmente ocurre automaticamente en pocos segundos cuando un administrador esta en linea.`)
+	return /** @type {LocalizedString} */ (`Tu cuenta fue creada, pero un administrador necesita distribuir la clave de cifrado de la organización. Esto generalmente ocurre automáticamente en pocos segundos cuando un administrador esta en línea.`)
 };
 
 /**

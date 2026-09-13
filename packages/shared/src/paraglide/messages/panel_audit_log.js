@@ -10,7 +10,7 @@ const en_panel_audit_log = /** @type {(inputs: Panel_Audit_LogInputs) => Localiz
 };
 
 const es_panel_audit_log = /** @type {(inputs: Panel_Audit_LogInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Registro de auditoria`)
+	return /** @type {LocalizedString} */ (`Registro de auditoría`)
 };
 
 /**

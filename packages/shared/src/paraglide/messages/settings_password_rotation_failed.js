@@ -10,7 +10,7 @@ const en_settings_password_rotation_failed = /** @type {(inputs: Settings_Passwo
 };
 
 const es_settings_password_rotation_failed = /** @type {(inputs: Settings_Password_Rotation_FailedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Contrasena cambiada, pero la rotacion de claves fallo. Toca reintentar para completar.`)
+	return /** @type {LocalizedString} */ (`Contraseña cambiada, pero la rotación de claves fallo. Toca reintentar para completar.`)
 };
 
 /**

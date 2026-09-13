@@ -10,7 +10,7 @@ import {
   openComposeActions,
   openTicketByTitle,
 } from "./helpers";
-import { countRows, queryDb } from "./db-probe";
+import { countRows, queryDb, resetCommunicationTiers } from "./db-probe";
 
 /**
  * Secure Link portal E2E roundtrip.
@@ -28,7 +28,10 @@ import { countRows, queryDb } from "./db-probe";
  * passphrase Argon2id runs at test parameters.
  */
 
-const TICKET_TITLE = "Safety planning session";
+// "Safety planning session" belongs to account-portal.spec's upgrade
+// half; this spec uses its own seeded ticket so the two upgrade flows
+// never fight over one client's tier.
+const TICKET_TITLE = "Benefits application help";
 const VOLUNTEER_MESSAGE = `Portal hello ${String(Date.now()).slice(-6)}`;
 const CLIENT_REPLY = `Client portal reply ${String(Date.now()).slice(-6)}`;
 
@@ -40,6 +43,10 @@ test.describe.serial("Secure Link Portal", () => {
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+    // All browser projects share one org: an earlier project's run left
+    // this spec's client upgraded, and "Set up secure link" only renders
+    // for a fresh SMS/Email client.
+    resetCommunicationTiers();
     volunteerPage = await browser.newPage();
     await startCoverage(volunteerPage);
     await login(volunteerPage);
@@ -320,7 +327,15 @@ test.describe.serial("Secure Link Portal", () => {
       `UPDATE portal_messages SET edited_at = now() WHERE direction = 'to_client';`,
     );
 
-    await portalPage.reload();
+    // Re-open the saved link rather than reloading: fragment custody
+    // strips location.hash after parsing, so a bare reload lands on the
+    // missing-fragment state. Step through about:blank first, because
+    // navigating from /portal/<id> to /portal/<id>#fragment differs only
+    // in the hash and the browser treats it as a same-document
+    // navigation, leaving the old session (and its stale message cache)
+    // alive.
+    await portalPage.goto("about:blank");
+    await portalPage.goto(portalLink);
     const gateInput = portalPage.getByLabel(/passphrase/i);
     await expect(gateInput).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await gateInput.fill(passphrase);

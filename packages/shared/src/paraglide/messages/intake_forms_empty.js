@@ -10,7 +10,7 @@ const en_intake_forms_empty = /** @type {(inputs: Intake_Forms_EmptyInputs) => L
 };
 
 const es_intake_forms_empty = /** @type {(inputs: Intake_Forms_EmptyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No hay formularios. Crea uno para personalizar la pagina de admision.`)
+	return /** @type {LocalizedString} */ (`No hay formularios. Crea uno para personalizar la página de admisión.`)
 };
 
 /**

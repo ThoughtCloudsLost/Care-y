@@ -10,7 +10,7 @@ const en_admin_invite_password_mismatch = /** @type {(inputs: Admin_Invite_Passw
 };
 
 const es_admin_invite_password_mismatch = /** @type {(inputs: Admin_Invite_Password_MismatchInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las contrasenas no coinciden`)
+	return /** @type {LocalizedString} */ (`Las contraseñas no coinciden`)
 };
 
 /**

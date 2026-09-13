@@ -10,7 +10,7 @@ const en_mgr_section_protected = /** @type {(inputs: Mgr_Section_ProtectedInputs
 };
 
 const es_mgr_section_protected = /** @type {(inputs: Mgr_Section_ProtectedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Proteccion`)
+	return /** @type {LocalizedString} */ (`Protección`)
 };
 
 /**

@@ -20,6 +20,7 @@ import {
   newFollowupId,
   newTicketId,
   newKeyGeneration,
+  channelSecretSchema,
   type FollowupId,
   type NoteTypeId,
   type KeyGeneration,
@@ -94,6 +95,70 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     expect(fu.mentionedPseudonyms).toEqual(["alice"]);
     expect(Buffer.isBuffer(fu.encryptedContent)).toBe(true);
     expect(fu.createdAt).toBeInstanceOf(Date);
+  });
+
+  it("create fires onPortalOrgReply with the channel row id when a client copy lands", async () => {
+    const { userId, ticketId, clientId } = await createTicketFixture();
+    const channel = await testDb.db
+      .insertInto("portal_channels")
+      .values({
+        client_id: clientId,
+        channel_id: channelSecretSchema.parse(
+          crypto.randomBytes(24).toString("hex"),
+        ),
+        auth_hash: Buffer.alloc(32, 0xaa),
+        client_public: Buffer.alloc(32, 0xbb),
+        has_passphrase: false,
+        key_check_ephemeral_point: Buffer.alloc(32, 0xcc),
+        key_check_nonce: Buffer.alloc(24, 0xdd),
+        key_check_ciphertext: Buffer.from("key-check-ct"),
+        status: "active",
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+
+    const resetKeys: string[] = [];
+    const hookedSvc = createFollowUpService(testDb.db, access, {
+      onPortalOrgReply: (channelRowId) => resetKeys.push(channelRowId),
+    });
+
+    await hookedSvc.create(userId, {
+      id: newFollowupId(),
+      ticketId,
+      encryptedContent: Buffer.from("org-reply"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+      portalCopy: {
+        ephemeralPoint: Buffer.alloc(32, 0x01),
+        nonce: Buffer.alloc(24, 0x02),
+        ciphertext: Buffer.from("portal-ct"),
+      },
+    });
+
+    expect(resetKeys).toEqual([channel.id]);
+  });
+
+  it("create does not fire onPortalOrgReply without a client copy", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const resetKeys: string[] = [];
+    const hookedSvc = createFollowUpService(testDb.db, access, {
+      onPortalOrgReply: (channelRowId) => resetKeys.push(channelRowId),
+    });
+
+    await hookedSvc.create(userId, {
+      id: newFollowupId(),
+      ticketId,
+      encryptedContent: Buffer.from("internal-note"),
+      source: "volunteer",
+      type: "note",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    expect(resetKeys).toEqual([]);
   });
 
   it("create throws ForbiddenError for inaccessible ticket", async () => {

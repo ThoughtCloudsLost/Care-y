@@ -21,6 +21,7 @@ import {
   intakeSubmissionInputSchema,
   portalBootstrapInputSchema,
   portalReplyInputSchema,
+  portalMessagePageInputSchema,
   createShareInputSchema,
   openShareInputSchema,
   getAccountSaltInputSchema,
@@ -33,15 +34,17 @@ import type {
   OrgId,
   OrgSchema,
   OrgSlug,
-  E164,
   TicketId,
   FollowupId,
   KeyGeneration,
   ClientAccountId,
   PortalMessageId,
+  AttachmentId,
+  ChannelRowId,
 } from "@care-y/shared";
 import { ticketIdSchema } from "@care-y/shared";
 import type { ChannelSecret } from "@care-y/shared";
+import { channelSecretSchema } from "@care-y/shared";
 import type { IncomingMessage } from "node:http";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { PowVerifier } from "../crypto/pow.js";
@@ -49,6 +52,7 @@ import type { IntakeFormService } from "../portal/intake-form-service.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
+import type { CallerIdResolver } from "../telephony/phone-resolver.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { PortalChannelRow } from "../portal/channel-service.js";
@@ -56,7 +60,10 @@ import type {
   PortalBootstrapResult,
   PortalReplyServiceInput,
   PortalMessageServiceDeps,
+  PortalMessageListResult,
+  ReplyAttachmentInput,
 } from "../portal/portal-message-service.js";
+import type { BlobStore } from "../storage/store.js";
 import type {
   AccountServiceDeps,
   AccountRegistrationInput,
@@ -68,37 +75,62 @@ import {
   UsernameTakenError,
   StaleThreadError,
 } from "../portal/portal-errors.js";
+import { RateLimitError } from "../errors.js";
 import { hashChannelAuth } from "@care-y/crypto";
+import {
+  CLIENT_SESSION_COOKIE,
+  parseClientCookies,
+} from "../portal/portal-blob-auth.js";
 import {
   createIntakeTicket,
   IntakeQueueNotConfiguredError,
   IntakeDisabledError,
+  IntakeFormClosedError,
+  IntakeAccountUnavailableError,
 } from "../portal/intake-service.js";
-import type { IntakeAccountInput } from "../portal/intake-service.js";
+import type {
+  IntakeAccountInput,
+  IntakeContinuationInput,
+} from "../portal/intake-service.js";
 import { extractClientIp } from "../http/request-utils.js";
 import {
   createShare,
   openShare,
   listSharesByTicket,
 } from "../portal/share-service.js";
+import type { OprfEvaluateService } from "../crypto/oprf-evaluate-service.js";
 
+/**
+ * Deps for the client-facing portal.
+ *
+ * The tier deps below are required and nullable, matching `powVerifier`
+ * above them: `null` declines a tier, and omitting a key is a type error.
+ * Leaving one out used to remove that tier's procedures silently, which is
+ * the same defect one level down from `OptionalRouterDeps` in `router.ts`.
+ */
 export interface ClientPortalRouterDeps {
+  /**
+   * Blob storage for portal attachments. Not nullable like the tier deps
+   * below: a portal that cannot store a file still has to say so at the
+   * request, and an omitted store would make that a silent no-op.
+   */
+  readonly blobStore: BlobStore;
   readonly submissionLimiter: RateLimiter;
   readonly challengeLimiter: RateLimiter;
   readonly powVerifier: PowVerifier | null;
   readonly intakeFormService: IntakeFormService;
   readonly notificationService: NotificationService;
-  readonly fieldEncryptor?: FieldEncryptor;
+  readonly fieldEncryptor: FieldEncryptor | null;
 
   // Secure Link portal deps (appended by 8b)
-  readonly portalChannelService?: {
+  readonly portalChannelService: {
     readonly resolveAuthedChannel: (
       db: Kysely<TenantDatabase>,
       channelId: ChannelSecret,
       auth: Buffer,
     ) => Promise<PortalChannelRow | null>;
-  };
-  readonly portalMessageService?: {
+  } | null;
+  readonly portalMessageService: {
     readonly bootstrap: (
       db: Kysely<TenantDatabase>,
       channel: PortalChannelRow,
@@ -109,34 +141,59 @@ export interface ClientPortalRouterDeps {
       channel: PortalChannelRow,
       input: PortalReplyServiceInput,
     ) => Promise<void>;
-  };
+    readonly listMessages: (
+      db: Kysely<TenantDatabase>,
+      channel: PortalChannelRow,
+      opts: {
+        limit: number;
+        cursor?: PortalMessageId;
+        direction: "older" | "newer";
+      },
+    ) => Promise<PortalMessageListResult>;
+    /** True when the org replied on the channel within the engagement
+     *  window. Grants the per-IP reply cap exemption. */
+    readonly hasRecentOrgReply: (
+      db: Kysely<TenantDatabase>,
+      channelRowId: ChannelRowId,
+    ) => Promise<boolean>;
+  } | null;
   /** 60 req/hour per IP. Budget: 5-minute polling interval (12/hr) plus
    *  refetchOnWindowFocus headroom, leaving margin for CGNAT-shared IPs
    *  where multiple clients behind the same NAT share one public IP. */
-  readonly portalReadLimiter?: RateLimiter;
-  /** 30 req/hour per IP. Reply is a heavier operation (3 DB rows per call). */
-  readonly portalReplyLimiter?: RateLimiter;
+  readonly portalReadLimiter: RateLimiter | null;
+  /** 30 replies/hour per CHANNEL (see portalReplyChannelKey). An org
+   *  reply resets the channel's window (followup-service hook), so an
+   *  active two-sided conversation is never cut off. Reply writes 3 DB
+   *  rows per call, which is why a cap exists at all. */
+  readonly portalReplyLimiter: RateLimiter | null;
+  /** Per-IP layer on top of the channel cap. Two key namespaces on one
+   *  instance: "ip:" counts writes to channels WITHOUT recent org
+   *  engagement (anti-spray; engaged conversations are exempt, keeping
+   *  every limit liftable by org replies), and "authgate:" bounds
+   *  unauthenticated reply floods (consumed before channel auth, reset
+   *  on success, so it only ever accumulates for failing callers). */
+  readonly portalReplyIpLimiter: RateLimiter | null;
   /** Provider factory for portal nudge SMS (fire-and-forget after reply). */
-  readonly portalGetProvider?: (
-    orgId: OrgId,
-  ) => Promise<TelephonyProvider | null>;
+  readonly portalGetProvider:
+    ((orgId: OrgId) => Promise<TelephonyProvider | null>) | null;
   /** Phone purpose resolver for portal nudge caller ID. */
-  readonly portalResolveCallerId?: (
-    org: { readonly orgId: OrgId; readonly orgSchema: OrgSchema },
-    purpose: "outbound" | "system",
-  ) => Promise<E164 | null>;
+  readonly portalResolveCallerId: CallerIdResolver | null;
 
   // Share link deps (appended by 8d)
   /** 10 req/min per IP on the public openShare endpoint. */
-  readonly shareLimiter?: RateLimiter;
+  readonly shareLimiter: RateLimiter | null;
 
   // Encrypted Account deps (appended by 8c)
   /** Startup-scoped deps (indexer + fakeSaltKey); orgUuid resolved per-request. */
-  readonly accountServiceDeps?: Omit<AccountServiceDeps, "orgUuid">;
+  readonly accountServiceDeps: Omit<AccountServiceDeps, "orgUuid"> | null;
   /** 10 req/hour per IP on getAccountSalt. Bounds salt-endpoint scraping. */
-  readonly accountSaltLimiter?: RateLimiter;
+  readonly accountSaltLimiter: RateLimiter | null;
   /** 10 req/hour per IP on accountLogin. Bounds login spam. */
-  readonly accountLoginLimiter?: RateLimiter;
+  readonly accountLoginLimiter: RateLimiter | null;
+
+  // Channel OPRF deps (appended by ADR-091)
+  /** OPRF evaluate service for channel-scoped evaluations. */
+  readonly oprfService: OprfEvaluateService | null;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -274,7 +331,49 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           accountInput = { registration: reg, selfCopy };
         }
 
-        // 6. Delegate to service
+        // 6. Decode optional continuation branch
+        let continuationInput: IntakeContinuationInput | null = null;
+        if (input.continuation != null) {
+          const contSelfCopy =
+            input.continuation.selfCopy != null
+              ? {
+                  ephemeralPoint: Buffer.from(
+                    input.continuation.selfCopy.ephemeralPoint,
+                    "base64",
+                  ),
+                  nonce: Buffer.from(
+                    input.continuation.selfCopy.nonce,
+                    "base64",
+                  ),
+                  ciphertext: Buffer.from(
+                    input.continuation.selfCopy.ciphertext,
+                    "base64",
+                  ),
+                }
+              : null;
+          continuationInput = {
+            channelId: input.continuation.channelId,
+            authHash: Buffer.from(input.continuation.authHash, "base64"),
+            clientPublic: Buffer.from(
+              input.continuation.clientPublic,
+              "base64",
+            ),
+            keyCheck: {
+              ephemeralPoint: Buffer.from(
+                input.continuation.keyCheck.ephemeralPoint,
+                "base64",
+              ),
+              nonce: Buffer.from(input.continuation.keyCheck.nonce, "base64"),
+              ciphertext: Buffer.from(
+                input.continuation.keyCheck.ciphertext,
+                "base64",
+              ),
+            },
+            selfCopy: contSelfCopy,
+          };
+        }
+
+        // 7. Delegate to service
         try {
           const acctDeps =
             input.account != null
@@ -284,9 +383,10 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           const result = await createIntakeTicket(
             ctx.org.tenantDb,
             {
-              notificationService: deps.notificationService,
               sealedBox: ctx.org.sealedBox,
-              fieldEncryptor: deps.fieldEncryptor,
+              // createIntakeTicket declares this optional, so a declined
+              // encryptor crosses the boundary as undefined, not null.
+              fieldEncryptor: deps.fieldEncryptor ?? undefined,
               orgId: ctx.org.orgId,
               orgSchema: ctx.org.orgSchema,
               orgSlug: ctx.org.orgSlug,
@@ -305,6 +405,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               resolvedPriority: input.resolvedPriority ?? null,
               resolvedEscalationLevel: input.resolvedEscalationLevel ?? null,
               account: accountInput,
+              continuation: continuationInput,
             },
           );
 
@@ -332,6 +433,28 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               message: "Web intake is not available",
             });
           }
+          if (err instanceof IntakeFormClosedError) {
+            console.warn("Intake submission rejected (form closed)", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "form_closed",
+            });
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Web intake is not available",
+            });
+          }
+          if (err instanceof IntakeAccountUnavailableError) {
+            console.warn("Intake account branch unavailable", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "account_deps_missing",
+            });
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Service temporarily unavailable",
+            });
+          }
           if (err instanceof UsernameTakenError) {
             throw new TRPCError({
               code: "CONFLICT",
@@ -351,7 +474,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.portalReadLimiter) {
+        if (deps.portalReadLimiter !== null) {
           const limitResult = deps.portalReadLimiter.check(ip);
           if (!limitResult.allowed) {
             console.warn("Portal read rate limited", {
@@ -359,10 +482,16 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               ip,
               reason: "rate_limit",
             });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
+            const retryAfterSeconds = Math.ceil(
+              limitResult.retryAfterMs / 1000,
+            );
+            // AppError instead of raw TRPCError: withErrorWrapping maps it to
+            // TOO_MANY_REQUESTS and the errorFormatter forwards
+            // retryAfterSeconds so the portal can schedule its retry.
+            throw new RateLimitError(
+              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+              retryAfterSeconds,
+            );
           }
         }
 
@@ -380,7 +509,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.portalReadLimiter) {
+        if (deps.portalReadLimiter !== null) {
           const limitResult = deps.portalReadLimiter.check(ip);
           if (!limitResult.allowed) {
             console.warn("Portal read rate limited", {
@@ -388,10 +517,16 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               ip,
               reason: "rate_limit",
             });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
+            const retryAfterSeconds = Math.ceil(
+              limitResult.retryAfterMs / 1000,
+            );
+            // AppError instead of raw TRPCError: withErrorWrapping maps it to
+            // TOO_MANY_REQUESTS and the errorFormatter forwards
+            // retryAfterSeconds so the portal can schedule its retry.
+            throw new RateLimitError(
+              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+              retryAfterSeconds,
+            );
           }
         }
 
@@ -417,22 +552,28 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       }),
     ),
 
-    portalReply: orgProcedure.input(portalReplyInputSchema).mutation(
+    portalMessagePage: orgProcedure.input(portalMessagePageInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.portalReplyLimiter) {
-          const limitResult = deps.portalReplyLimiter.check(ip);
+        if (deps.portalReadLimiter !== null) {
+          const limitResult = deps.portalReadLimiter.check(ip);
           if (!limitResult.allowed) {
-            console.warn("Portal reply rate limited", {
+            console.warn("Portal read rate limited", {
               orgSlug: ctx.org.orgSlug,
               ip,
               reason: "rate_limit",
             });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
+            const retryAfterSeconds = Math.ceil(
+              limitResult.retryAfterMs / 1000,
+            );
+            // AppError instead of raw TRPCError: withErrorWrapping maps it to
+            // TOO_MANY_REQUESTS and the errorFormatter forwards
+            // retryAfterSeconds so the portal can schedule its retry.
+            throw new RateLimitError(
+              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+              retryAfterSeconds,
+            );
           }
         }
 
@@ -441,6 +582,29 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           ctx,
           input,
         );
+
+        // listMessages carries the same stamp and lazy expiry the
+        // bootstrap path does, without loading the whole conversation.
+        return portalMessageService.listMessages(ctx.org.tenantDb, channel, {
+          limit: input.limit,
+          cursor: input.cursor,
+          direction: input.direction,
+        });
+      }),
+    ),
+
+    portalReply: orgProcedure.input(portalReplyInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        checkReplyAuthGate(deps, ctx, "Portal reply");
+
+        const { channel, portalMessageService } = await requirePortalChannel(
+          deps,
+          ctx,
+          input,
+        );
+
+        resetReplyAuthGate(deps, ctx.req);
+        await enforceReplyLimits(deps, ctx, channel, "Portal reply");
 
         const serviceInput = decodeReplyInput(input);
         const msgDeps = buildPortalMessageDeps(deps, ctx);
@@ -493,7 +657,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     openShare: orgProcedure.input(openShareInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        if (deps.shareLimiter) {
+        if (deps.shareLimiter !== null) {
           const ip = extractClientIp(ctx.req);
           const limit = deps.shareLimiter.check(ip);
           if (!limit.allowed) {
@@ -527,7 +691,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.accountSaltLimiter) {
+        if (deps.accountSaltLimiter !== null) {
           const limitResult = deps.accountSaltLimiter.check(ip);
           if (!limitResult.allowed) {
             console.warn("Account salt rate limited", {
@@ -560,7 +724,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.accountLoginLimiter) {
+        if (deps.accountLoginLimiter !== null) {
           const limitResult = deps.accountLoginLimiter.check(ip);
           if (!limitResult.allowed) {
             console.warn("Account login rate limited", {
@@ -645,24 +809,12 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     accountReply: orgProcedure.input(accountReplyInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-
-        if (deps.portalReplyLimiter) {
-          const limitResult = deps.portalReplyLimiter.check(ip);
-          if (!limitResult.allowed) {
-            console.warn("Account reply rate limited", {
-              orgSlug: ctx.org.orgSlug,
-              ip,
-              reason: "rate_limit",
-            });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
-          }
-        }
+        checkReplyAuthGate(deps, ctx, "Account reply");
 
         const session = await requireAccountSession(ctx);
+
+        resetReplyAuthGate(deps, ctx.req);
+        await enforceReplyLimits(deps, ctx, session.channel, "Account reply");
 
         const serviceInput = decodeReplyInput(input);
         const msgDeps = buildPortalMessageDeps(deps, ctx);
@@ -681,20 +833,25 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     accountUpgrade: orgProcedure.input(accountUpgradeInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-
-        if (deps.portalReplyLimiter) {
-          const limitResult = deps.portalReplyLimiter.check(ip);
+        // Upgrade is a one-shot heavy operation, not a conversation, so
+        // it keeps a plain per-IP cap on the IP-layer limiter ("upgrade:"
+        // namespace) rather than the channel-keyed conversation limits.
+        if (deps.portalReplyIpLimiter !== null) {
+          const ip = extractClientIp(ctx.req);
+          const limitResult = deps.portalReplyIpLimiter.check(`upgrade:${ip}`);
           if (!limitResult.allowed) {
             console.warn("Account upgrade rate limited", {
               orgSlug: ctx.org.orgSlug,
               ip,
               reason: "rate_limit",
             });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
+            const retryAfterSeconds = Math.ceil(
+              limitResult.retryAfterMs / 1000,
+            );
+            throw new RateLimitError(
+              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+              retryAfterSeconds,
+            );
           }
         }
 
@@ -813,6 +970,39 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
         return {};
       }),
     ),
+
+    // -----------------------------------------------------------------
+    // Channel OPRF evaluation (ADR-091)
+    // -----------------------------------------------------------------
+
+    evaluateChannelOprf: orgProcedure
+      .input(
+        z.object({
+          channelId: channelSecretSchema,
+          blindedElement: z.string().min(1).max(64),
+          auth: z.string().min(1).max(128).optional(),
+        }),
+      )
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (deps.oprfService === null) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "OPRF service not available",
+            });
+          }
+
+          const ip = extractClientIp(ctx.req);
+
+          return deps.oprfService.evaluateChannel(ctx.org.tenantDb, {
+            channelId: input.channelId,
+            blindedElement: input.blindedElement,
+            auth: input.auth,
+            ip,
+            orgUuid: ctx.org.orgId,
+          });
+        }),
+      ),
   });
 }
 
@@ -820,7 +1010,9 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 // Constants
 // ---------------------------------------------------------------------------
 
-const CLIENT_SESSION_COOKIE = "care_y_client_session";
+// Cookie name and parser live beside the portal blob auth that also needs
+// them. One definition, so the download path and the tRPC path can never
+// disagree about which cookie carries a client session.
 
 /** The ONE generic error message for unknown, revoked, or bad-auth channels.
  *  All three paths return this identical shape (enumeration resistance). */
@@ -846,31 +1038,6 @@ const accountReplyInputSchema = portalReplyInputSchema.omit({
 // SESSION_COOKIE_NAME from auth/service.js, which pulls volunteer
 // session code transitively, violating the isolation anti-pattern)
 // ---------------------------------------------------------------------------
-
-/**
- * Parses a raw Cookie header string into a Map of name-value pairs.
- * Local duplicate of auth/cookies.ts parseCookies to avoid importing
- * volunteer session code.
- */
-function parseClientCookies(
-  header: string | null | undefined,
-): Map<string, string> {
-  const cookies = new Map<string, string>();
-  if (header == null || header === "") return cookies;
-
-  for (const pair of header.split(";")) {
-    const eqIndex = pair.indexOf("=");
-    if (eqIndex === -1) continue;
-
-    const name = pair.slice(0, eqIndex).trim();
-    const value = pair.slice(eqIndex + 1).trim();
-    if (name) {
-      cookies.set(name, value);
-    }
-  }
-
-  return cookies;
-}
 
 /**
  * Builds a Set-Cookie header for the client session cookie.
@@ -974,6 +1141,120 @@ async function requireAccountSession(ctx: {
  *
  * Logs only { orgSlug, ip, reason }, never channelId or auth.
  */
+/**
+ * Limiter key for a channel's reply window. Exported so the org-side
+ * reset hook (index.ts wiring of onPortalOrgReply) clears exactly the
+ * key the reply paths consume. Keyed by the channel ROW id: a UUID, so
+ * no cross-tenant collision, and not the URL-visible channel secret.
+ */
+export function portalReplyChannelKey(channelRowId: ChannelRowId): string {
+  return `channel:${channelRowId}`;
+}
+
+/**
+ * Two-layer reply limit, both liftable by org engagement.
+ *
+ * Layer 1 (channel): N replies per rolling hour per conversation; an
+ * org reply resets the window via onPortalOrgReply. Layer 2 (IP):
+ * anti-spray baseline that only counts writes to channels without a
+ * recent org reply, so an engaged conversation is exempt and the
+ * server never links an IP to a channel to decide that. Runs after
+ * channel auth; the pre-auth flood gate lives at the call sites.
+ */
+async function enforceReplyLimits(
+  deps: ClientPortalRouterDeps,
+  ctx: {
+    org: { tenantDb: Kysely<TenantDatabase>; orgSlug: string };
+    req: IncomingMessage;
+  },
+  channel: PortalChannelRow,
+  surface: string,
+): Promise<void> {
+  if (deps.portalReplyLimiter !== null) {
+    const limitResult = deps.portalReplyLimiter.check(
+      portalReplyChannelKey(channel.id),
+    );
+    if (!limitResult.allowed) {
+      console.warn("Portal write rate limited", {
+        surface,
+        orgSlug: ctx.org.orgSlug,
+        reason: "channel_rate_limit",
+      });
+      const retryAfterSeconds = Math.ceil(limitResult.retryAfterMs / 1000);
+      throw new RateLimitError(
+        `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+        retryAfterSeconds,
+      );
+    }
+  }
+
+  if (
+    deps.portalReplyIpLimiter !== null &&
+    deps.portalMessageService !== null
+  ) {
+    const engaged = await deps.portalMessageService.hasRecentOrgReply(
+      ctx.org.tenantDb,
+      channel.id,
+    );
+    if (!engaged) {
+      const ip = extractClientIp(ctx.req);
+      const limitResult = deps.portalReplyIpLimiter.check(`ip:${ip}`);
+      if (!limitResult.allowed) {
+        console.warn("Portal write rate limited", {
+          surface,
+          orgSlug: ctx.org.orgSlug,
+          ip,
+          reason: "ip_rate_limit",
+        });
+        const retryAfterSeconds = Math.ceil(limitResult.retryAfterMs / 1000);
+        throw new RateLimitError(
+          `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+          retryAfterSeconds,
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Pre-auth flood gate for the reply paths. Consumes an "authgate:" slot
+ * before the channel/session lookup; the caller resets it after auth
+ * succeeds, so only callers that keep failing accumulate. Bounds the
+ * DB work an unauthenticated flood can force without capping any
+ * client who can actually authenticate.
+ */
+function checkReplyAuthGate(
+  deps: ClientPortalRouterDeps,
+  ctx: { org: { orgSlug: string }; req: IncomingMessage },
+  surface: string,
+): void {
+  if (deps.portalReplyIpLimiter === null) return;
+  const ip = extractClientIp(ctx.req);
+  const limitResult = deps.portalReplyIpLimiter.check(`authgate:${ip}`);
+  if (!limitResult.allowed) {
+    console.warn("Portal write rate limited", {
+      surface,
+      orgSlug: ctx.org.orgSlug,
+      ip,
+      reason: "auth_gate_rate_limit",
+    });
+    const retryAfterSeconds = Math.ceil(limitResult.retryAfterMs / 1000);
+    throw new RateLimitError(
+      `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+      retryAfterSeconds,
+    );
+  }
+}
+
+/** Clears the caller's auth-gate slots after successful auth. */
+function resetReplyAuthGate(
+  deps: ClientPortalRouterDeps,
+  req: IncomingMessage,
+): void {
+  if (deps.portalReplyIpLimiter === null) return;
+  deps.portalReplyIpLimiter.reset(`authgate:${extractClientIp(req)}`);
+}
+
 async function requirePortalChannel(
   deps: ClientPortalRouterDeps,
   ctx: {
@@ -988,7 +1269,7 @@ async function requirePortalChannel(
   >;
 }> {
   const { portalChannelService, portalMessageService } = deps;
-  if (!portalChannelService || !portalMessageService) {
+  if (portalChannelService === null || portalMessageService === null) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: PORTAL_NOT_FOUND_MSG,
@@ -1028,7 +1309,7 @@ function requireAccountDeps(
   deps: ClientPortalRouterDeps,
   orgId: OrgId,
 ): AccountServiceDeps {
-  if (!deps.accountServiceDeps) {
+  if (deps.accountServiceDeps === null) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: ACCOUNT_AUTH_FAILED_MSG,
@@ -1041,7 +1322,7 @@ function requireAccountDeps(
 function requirePortalMessageService(
   deps: ClientPortalRouterDeps,
 ): NonNullable<ClientPortalRouterDeps["portalMessageService"]> {
-  if (!deps.portalMessageService) {
+  if (deps.portalMessageService === null) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: PORTAL_NOT_FOUND_MSG,
@@ -1065,6 +1346,16 @@ function decodeReplyInput(input: {
     nonce: string;
     ciphertext: string;
   };
+  kind?: "message" | "contact_correction";
+  attachments?: readonly {
+    attachmentId: AttachmentId;
+    blob: string;
+    sizeBytes: number;
+    contentType: string;
+    fileKeyWrap: string;
+    encryptedFilename: string;
+    selfCopy: { ephemeralPoint: string; nonce: string; ciphertext: string };
+  }[];
 }): PortalReplyServiceInput {
   return {
     ticketId: input.ticketId,
@@ -1077,6 +1368,11 @@ function decodeReplyInput(input: {
       nonce: Buffer.from(input.selfCopy.nonce, "base64"),
       ciphertext: Buffer.from(input.selfCopy.ciphertext, "base64"),
     },
+    kind: input.kind,
+    attachments: decodeReplyAttachments(
+      input.ticketId,
+      input.attachments ?? [],
+    ),
   };
 }
 
@@ -1093,7 +1389,7 @@ function buildPortalMessageDeps(
   },
 ): PortalMessageServiceDeps {
   const fieldEncryptor = deps.fieldEncryptor;
-  if (!fieldEncryptor) {
+  if (fieldEncryptor === null) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: PORTAL_NOT_FOUND_MSG,
@@ -1108,7 +1404,42 @@ function buildPortalMessageDeps(
     orgId: ctx.org.orgId,
     orgSchema: ctx.org.orgSchema,
     orgSlug: ctx.org.orgSlug,
+    blobStore: deps.blobStore,
   };
+}
+
+/**
+ * Decode the files riding a reply into service inputs.
+ *
+ * The self copy travels with its own attachment rather than in a second
+ * list, so the pairing cannot drift on the way through the route.
+ */
+function decodeReplyAttachments(
+  ticketId: TicketId,
+  attachments: readonly {
+    attachmentId: AttachmentId;
+    blob: string;
+    sizeBytes: number;
+    contentType: string;
+    fileKeyWrap: string;
+    encryptedFilename: string;
+    selfCopy: { ephemeralPoint: string; nonce: string; ciphertext: string };
+  }[],
+): ReplyAttachmentInput[] {
+  return attachments.map((att) => ({
+    attachmentId: att.attachmentId,
+    ticketId,
+    blob: Buffer.from(att.blob, "base64"),
+    declaredSize: att.sizeBytes,
+    contentType: att.contentType,
+    fileKeyWrap: Buffer.from(att.fileKeyWrap, "base64"),
+    encryptedFilename: Buffer.from(att.encryptedFilename, "base64"),
+    selfCopy: {
+      ephemeralPoint: Buffer.from(att.selfCopy.ephemeralPoint, "base64"),
+      nonce: Buffer.from(att.selfCopy.nonce, "base64"),
+      ciphertext: Buffer.from(att.selfCopy.ciphertext, "base64"),
+    },
+  }));
 }
 
 /** Decode account registration from wire base64 to Buffers. */

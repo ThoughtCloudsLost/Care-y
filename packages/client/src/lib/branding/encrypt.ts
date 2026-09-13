@@ -26,6 +26,13 @@ export interface BrandingBlobParams {
   readonly primaryColor: string;
   readonly accentColor: string;
   readonly clientText: string;
+  /**
+   * Name clients see above messages from the org, e.g. "The night team".
+   * Org-level: it replaces a generic word with a chosen one and must never
+   * carry a volunteer pseudonym or any per-person identity. Empty means the
+   * portal keeps its built-in wording.
+   */
+  readonly supportLabel: string;
 }
 
 export function buildClientBrandingBlob(
@@ -42,6 +49,7 @@ export function buildClientBrandingBlob(
     primaryColor: params.primaryColor,
     accentColor: params.accentColor,
     clientText: params.clientText,
+    supportLabel: params.supportLabel,
   });
   const payloadBytes = encoder.encode(payload);
   const ciphertext = encryptClientBranding(payloadBytes, orgPubKey);

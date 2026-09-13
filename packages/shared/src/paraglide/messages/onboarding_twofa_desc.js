@@ -10,7 +10,7 @@ const en_onboarding_twofa_desc = /** @type {(inputs: Onboarding_Twofa_DescInputs
 };
 
 const es_onboarding_twofa_desc = /** @type {(inputs: Onboarding_Twofa_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Agrega al menos un metodo de verificacion para proteger tu cuenta. Aunque tu contrasena se vea comprometida, nadie mas podra acceder al sistema sin este segundo factor.`)
+	return /** @type {LocalizedString} */ (`Agrega al menos un método de verificación para proteger tu cuenta. Aunque tu contraseña se vea comprometida, nadie más podrá acceder al sistema sin este segundo factor.`)
 };
 
 /**

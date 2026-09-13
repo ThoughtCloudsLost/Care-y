@@ -10,7 +10,7 @@ const en_admin_reachability_phone_unverified = /** @type {(inputs: Admin_Reachab
 };
 
 const es_admin_reachability_phone_unverified = /** @type {(inputs: Admin_Reachability_Phone_UnverifiedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Telefono sin verificar`)
+	return /** @type {LocalizedString} */ (`Teléfono sin verificar`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_settings_password_mismatch = /** @type {(inputs: Settings_Password_Mism
 };
 
 const es_settings_password_mismatch = /** @type {(inputs: Settings_Password_MismatchInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las contrasenas no coinciden`)
+	return /** @type {LocalizedString} */ (`Las contraseñas no coinciden`)
 };
 
 /**

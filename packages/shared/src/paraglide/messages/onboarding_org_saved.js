@@ -10,7 +10,7 @@ const en_onboarding_org_saved = /** @type {(inputs: Onboarding_Org_SavedInputs) 
 };
 
 const es_onboarding_org_saved = /** @type {(inputs: Onboarding_Org_SavedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Detalles de la organizacion guardados.`)
+	return /** @type {LocalizedString} */ (`Detalles de la organización guardados.`)
 };
 
 /**

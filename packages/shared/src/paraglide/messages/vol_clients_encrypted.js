@@ -10,7 +10,7 @@ const en_vol_clients_encrypted = /** @type {(inputs: Vol_Clients_EncryptedInputs
 };
 
 const es_vol_clients_encrypted = /** @type {(inputs: Vol_Clients_EncryptedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Toda la informacion del cliente se cifra antes de llegar al servidor. Solo tu equipo puede descifrarla.`)
+	return /** @type {LocalizedString} */ (`Toda la información del cliente se cifra antes de llegar al servidor. Solo tu equipo puede descifrarla.`)
 };
 
 /**

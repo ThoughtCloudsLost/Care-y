@@ -10,7 +10,7 @@ const en_consultant_phone_code_sent_to = /** @type {(inputs: Consultant_Phone_Co
 };
 
 const es_consultant_phone_code_sent_to = /** @type {(inputs: Consultant_Phone_Code_Sent_ToInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Enviamos un codigo a ***${i?.tail}`)
+	return /** @type {LocalizedString} */ (`Enviamos un código a ***${i?.tail}`)
 };
 
 /**

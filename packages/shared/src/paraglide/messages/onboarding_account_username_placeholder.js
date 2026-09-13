@@ -10,7 +10,7 @@ const en_onboarding_account_username_placeholder = /** @type {(inputs: Onboardin
 };
 
 const es_onboarding_account_username_placeholder = /** @type {(inputs: Onboarding_Account_Username_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Elige un usuario de inicio de sesion`)
+	return /** @type {LocalizedString} */ (`Elige un usuario de inicio de sesión`)
 };
 
 /**

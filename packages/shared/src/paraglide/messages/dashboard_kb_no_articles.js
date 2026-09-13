@@ -10,7 +10,7 @@ const en_dashboard_kb_no_articles = /** @type {(inputs: Dashboard_Kb_No_Articles
 };
 
 const es_dashboard_kb_no_articles = /** @type {(inputs: Dashboard_Kb_No_ArticlesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sin articulos recientes`)
+	return /** @type {LocalizedString} */ (`Sin artículos recientes`)
 };
 
 /**

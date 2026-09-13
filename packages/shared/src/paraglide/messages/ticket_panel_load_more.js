@@ -10,7 +10,7 @@ const en_ticket_panel_load_more = /** @type {(inputs: Ticket_Panel_Load_MoreInpu
 };
 
 const es_ticket_panel_load_more = /** @type {(inputs: Ticket_Panel_Load_MoreInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cargar mas`)
+	return /** @type {LocalizedString} */ (`Cargar más`)
 };
 
 /**

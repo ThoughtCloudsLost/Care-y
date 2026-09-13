@@ -10,7 +10,7 @@ const en_admin_deactivate_title = /** @type {(inputs: Admin_Deactivate_TitleInpu
 };
 
 const es_admin_deactivate_title = /** @type {(inputs: Admin_Deactivate_TitleInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Desactivar a ${i?.name}?`)
+	return /** @type {LocalizedString} */ (`¿Desactivar a ${i?.name}?`)
 };
 
 /**

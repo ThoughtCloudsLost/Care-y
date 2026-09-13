@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_username_compromise = /** @type {(inputs: 
 };
 
 const es_onboarding_briefing_practice_username_compromise = /** @type {(inputs: Onboarding_Briefing_Practice_Username_CompromiseInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo usuarios de inicio de sesion. No se almacenan contrasenas.`)
+	return /** @type {LocalizedString} */ (`Solo usuarios de inicio de sesión. No se almacenan contraseñas.`)
 };
 
 /**

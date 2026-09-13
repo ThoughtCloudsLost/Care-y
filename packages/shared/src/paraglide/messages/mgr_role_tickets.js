@@ -10,7 +10,7 @@ const en_mgr_role_tickets = /** @type {(inputs: Mgr_Role_TicketsInputs) => Local
 };
 
 const es_mgr_role_tickets = /** @type {(inputs: Mgr_Role_TicketsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Permisos elevados de gestion de tickets`)
+	return /** @type {LocalizedString} */ (`Permisos elevados de gestión de tickets`)
 };
 
 /**

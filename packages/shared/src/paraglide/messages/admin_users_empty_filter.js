@@ -10,7 +10,7 @@ const en_admin_users_empty_filter = /** @type {(inputs: Admin_Users_Empty_Filter
 };
 
 const es_admin_users_empty_filter = /** @type {(inputs: Admin_Users_Empty_FilterInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ningun usuario coincide con los filtros actuales.`)
+	return /** @type {LocalizedString} */ (`Ningún usuario coincide con los filtros actuales.`)
 };
 
 /**

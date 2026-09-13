@@ -10,7 +10,7 @@ const en_ticket_new_field_description = /** @type {(inputs: Ticket_New_Field_Des
 };
 
 const es_ticket_new_field_description = /** @type {(inputs: Ticket_New_Field_DescriptionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Descripcion`)
+	return /** @type {LocalizedString} */ (`Descripción`)
 };
 
 /**

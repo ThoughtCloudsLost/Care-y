@@ -10,7 +10,7 @@ const en_ticket_new_field_client_placeholder = /** @type {(inputs: Ticket_New_Fi
 };
 
 const es_ticket_new_field_client_placeholder = /** @type {(inputs: Ticket_New_Field_Client_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Buscar por alias o telefono`)
+	return /** @type {LocalizedString} */ (`Buscar por alias o teléfono`)
 };
 
 /**

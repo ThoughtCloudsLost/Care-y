@@ -10,7 +10,7 @@ const en_admin_telephony_change_mode_confirm_title = /** @type {(inputs: Admin_T
 };
 
 const es_admin_telephony_change_mode_confirm_title = /** @type {(inputs: Admin_Telephony_Change_Mode_Confirm_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambiar modo de telefonia?`)
+	return /** @type {LocalizedString} */ (`¿Cambiar modo de telefonía?`)
 };
 
 /**

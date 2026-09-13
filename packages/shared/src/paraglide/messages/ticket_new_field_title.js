@@ -10,7 +10,7 @@ const en_ticket_new_field_title = /** @type {(inputs: Ticket_New_Field_TitleInpu
 };
 
 const es_ticket_new_field_title = /** @type {(inputs: Ticket_New_Field_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Titulo`)
+	return /** @type {LocalizedString} */ (`Título`)
 };
 
 /**

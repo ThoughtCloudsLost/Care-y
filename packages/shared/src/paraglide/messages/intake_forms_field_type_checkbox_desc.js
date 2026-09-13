@@ -10,7 +10,7 @@ const en_intake_forms_field_type_checkbox_desc = /** @type {(inputs: Intake_Form
 };
 
 const es_intake_forms_field_type_checkbox_desc = /** @type {(inputs: Intake_Forms_Field_Type_Checkbox_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Seleccion si/no`)
+	return /** @type {LocalizedString} */ (`Selección si/no`)
 };
 
 /**

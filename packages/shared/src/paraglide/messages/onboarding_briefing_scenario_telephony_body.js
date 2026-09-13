@@ -10,7 +10,7 @@ const en_onboarding_briefing_scenario_telephony_body = /** @type {(inputs: Onboa
 };
 
 const es_onboarding_briefing_scenario_telephony_body = /** @type {(inputs: Onboarding_Briefing_Scenario_Telephony_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El proveedor telefonico puede escuchar llamadas y leer mensajes SMS. Mantienen registros de a quien llamo tu organizacion, cuando y por cuanto tiempo. Las conversaciones sensibles deben hacerse por el chat cifrado, no por llamadas o mensajes de texto.`)
+	return /** @type {LocalizedString} */ (`El proveedor telefónico puede escuchar llamadas y leer mensajes SMS. Mantienen registros de a quien llamo tu organización, cuando y por cuánto tiempo. Las conversaciones sensibles deben hacerse por el chat cifrado, no por llamadas o mensajes de texto.`)
 };
 
 /**

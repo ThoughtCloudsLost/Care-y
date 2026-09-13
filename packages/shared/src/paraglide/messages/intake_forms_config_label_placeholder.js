@@ -10,7 +10,7 @@ const en_intake_forms_config_label_placeholder = /** @type {(inputs: Intake_Form
 };
 
 const es_intake_forms_config_label_placeholder = /** @type {(inputs: Intake_Forms_Config_Label_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`ej. Cual es la mejor manera de contactarte?`)
+	return /** @type {LocalizedString} */ (`¿ej. Cual es la mejor manera de contactarte?`)
 };
 
 /**

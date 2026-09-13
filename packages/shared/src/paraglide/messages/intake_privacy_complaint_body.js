@@ -10,7 +10,7 @@ const en_intake_privacy_complaint_body = /** @type {(inputs: Intake_Privacy_Comp
 };
 
 const es_intake_privacy_complaint_body = /** @type {(inputs: Intake_Privacy_Complaint_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Si crees que tus datos han sido manejados incorrectamente, tienes derecho a presentar una queja ante una autoridad de proteccion de datos en tu pais.`)
+	return /** @type {LocalizedString} */ (`Si crees que tus datos han sido manejados incorrectamente, tienes derecho a presentar una queja ante una autoridad de protección de datos en tu país.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_branding_logo_hint = /** @type {(inputs: Onboarding_Branding
 };
 
 const es_onboarding_branding_logo_hint = /** @type {(inputs: Onboarding_Branding_Logo_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`PNG, JPEG o SVG. Maximo 512 KB.`)
+	return /** @type {LocalizedString} */ (`PNG, JPEG o SVG. Máximo 512 KB.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_blocklist_invalid_format = /** @type {(inputs: Admin_Blocklist_In
 };
 
 const es_admin_blocklist_invalid_format = /** @type {(inputs: Admin_Blocklist_Invalid_FormatInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ingrese un numero de telefono valido (al menos 5 digitos).`)
+	return /** @type {LocalizedString} */ (`Ingrese un número de teléfono válido (al menos 5 dígitos).`)
 };
 
 /**

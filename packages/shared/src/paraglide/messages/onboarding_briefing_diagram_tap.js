@@ -10,7 +10,7 @@ const en_onboarding_briefing_diagram_tap = /** @type {(inputs: Onboarding_Briefi
 };
 
 const es_onboarding_briefing_diagram_tap = /** @type {(inputs: Onboarding_Briefing_Diagram_TapInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Toca para ver a tamano completo`)
+	return /** @type {LocalizedString} */ (`Toca para ver a tamaño completo`)
 };
 
 /**

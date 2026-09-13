@@ -10,7 +10,7 @@ const en_onboarding_org_language_es = /** @type {(inputs: Onboarding_Org_Languag
 };
 
 const es_onboarding_org_language_es = /** @type {(inputs: Onboarding_Org_Language_EsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Espanol`)
+	return /** @type {LocalizedString} */ (`Español`)
 };
 
 /**

@@ -5,6 +5,7 @@ import {
   oprfBlind,
   oprfFinalize,
   lagrangeInterpolate,
+  deriveTaggedShare,
   generateRefreshScalar,
   computeRefreshDelta,
   applyRefresh,
@@ -255,6 +256,142 @@ describe("OPRF protocol", () => {
     });
   });
 
+  describe("deriveTaggedShare (ADR-091 per-tag key derivation)", () => {
+    it("returns a 32-byte scalar", () => {
+      const share = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+      const tagged = deriveTaggedShare(share, "volunteer:abc-123");
+      expect(tagged.length).toBe(sodium.crypto_core_ristretto255_SCALARBYTES);
+    });
+
+    it("is deterministic: same share + same tag = same scalar", () => {
+      const share = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+      const a = deriveTaggedShare(share, "channel:org1:ch42");
+      const b = deriveTaggedShare(share, "channel:org1:ch42");
+      expect(a).toEqual(b);
+    });
+
+    it("distinct tags produce distinct scalars from the same share", () => {
+      const share = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+      const a = deriveTaggedShare(share, "volunteer:user-1");
+      const b = deriveTaggedShare(share, "volunteer:user-2");
+      expect(a).not.toEqual(b);
+    });
+
+    it("distinct shares produce distinct scalars for the same tag", () => {
+      const shareA = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+      const shareB = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+      const tag = "account:acc-99";
+      const a = deriveTaggedShare(shareA, tag);
+      const b = deriveTaggedShare(shareB, tag);
+      expect(a).not.toEqual(b);
+    });
+
+    it("throws InvalidInputError for a share that is not 32 bytes", () => {
+      expect(() =>
+        deriveTaggedShare(new Uint8Array(16), "volunteer:x"),
+      ).toThrow(InvalidInputError);
+      expect(() => deriveTaggedShare(new Uint8Array(0), "volunteer:x")).toThrow(
+        InvalidInputError,
+      );
+      expect(() =>
+        deriveTaggedShare(new Uint8Array(64), "volunteer:x"),
+      ).toThrow(InvalidInputError);
+    });
+
+    it("throws InvalidInputError for an empty tag", () => {
+      const share = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+      expect(() => deriveTaggedShare(share, "")).toThrow(InvalidInputError);
+    });
+
+    it("per-tag threshold evaluation produces a valid OPRF output", () => {
+      // Full pipeline: split a key, derive per-tag shares, evaluate,
+      // Lagrange-combine, finalize. The output must be 64 bytes and
+      // deterministic for the same input + tag.
+      const key = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+      const { shareA, shareB } = shamirSplit(sodium, key);
+      const tag = "channel:org-x:ch-7";
+
+      const taggedA = deriveTaggedShare(shareA, tag);
+      const taggedB = deriveTaggedShare(shareB, tag);
+
+      const input = new TextEncoder().encode("portal-seed-material");
+      const { blindedElement, blindState } = oprfBlind(input);
+
+      const partialA = blindEvaluate(sodium, taggedA, blindedElement);
+      const partialB = blindEvaluate(sodium, taggedB, blindedElement);
+      const combined = lagrangeInterpolate(partialA, partialB);
+
+      const output = oprfFinalize(blindState, combined, input);
+      expect(output.length).toBe(64);
+
+      // Determinism: same pipeline again with fresh blinds
+      const { blindedElement: b2, blindState: s2 } = oprfBlind(input);
+      const p2A = blindEvaluate(sodium, taggedA, b2);
+      const p2B = blindEvaluate(sodium, taggedB, b2);
+      const c2 = lagrangeInterpolate(p2A, p2B);
+      const output2 = oprfFinalize(s2, c2, input);
+      expect(output2).toEqual(output);
+    });
+
+    it("different tags produce different OPRF outputs for the same input", () => {
+      const key = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+      const { shareA, shareB } = shamirSplit(sodium, key);
+      const input = new TextEncoder().encode("same-input-different-tag");
+
+      const tagA = "volunteer:v1";
+      const tagB = "channel:org:ch1";
+
+      const tA1 = deriveTaggedShare(shareA, tagA);
+      const tB1 = deriveTaggedShare(shareB, tagA);
+      const tA2 = deriveTaggedShare(shareA, tagB);
+      const tB2 = deriveTaggedShare(shareB, tagB);
+
+      const { blindedElement: be1, blindState: bs1 } = oprfBlind(input);
+      const c1 = lagrangeInterpolate(
+        blindEvaluate(sodium, tA1, be1),
+        blindEvaluate(sodium, tB1, be1),
+      );
+      const out1 = oprfFinalize(bs1, c1, input);
+
+      const { blindedElement: be2, blindState: bs2 } = oprfBlind(input);
+      const c2 = lagrangeInterpolate(
+        blindEvaluate(sodium, tA2, be2),
+        blindEvaluate(sodium, tB2, be2),
+      );
+      const out2 = oprfFinalize(bs2, c2, input);
+
+      expect(out1).not.toEqual(out2);
+    });
+
+    it("per-tag evaluation differs from the master-key evaluation", () => {
+      // The per-tag combined key is independent from the master key,
+      // so evaluating with tagged shares must not match the original key.
+      const key = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+      const { shareA, shareB } = shamirSplit(sodium, key);
+      const tag = "account:acc-1";
+      const input = new TextEncoder().encode("tag-vs-master");
+
+      const { blindedElement, blindState } = oprfBlind(input);
+
+      // Master-key evaluation (untransformed shares)
+      const masterCombined = lagrangeInterpolate(
+        blindEvaluate(sodium, shareA, blindedElement),
+        blindEvaluate(sodium, shareB, blindedElement),
+      );
+      const masterOut = oprfFinalize(blindState, masterCombined, input);
+
+      // Per-tag evaluation
+      const { blindedElement: be2, blindState: bs2 } = oprfBlind(input);
+      const taggedCombined = lagrangeInterpolate(
+        blindEvaluate(sodium, deriveTaggedShare(shareA, tag), be2),
+        blindEvaluate(sodium, deriveTaggedShare(shareB, tag), be2),
+      );
+      const taggedOut = oprfFinalize(bs2, taggedCombined, input);
+
+      expect(taggedOut).not.toEqual(masterOut);
+    });
+  });
+
   describe("deterministic blind (algebraic verification)", () => {
     it("injecting a known blind scalar produces consistent results", () => {
       // Use a fixed blind to verify the algebraic structure:
@@ -487,6 +624,41 @@ describe("OPRF protocol", () => {
           const combined = lagrangeInterpolate(partialA, partialB);
 
           expect(combined).toEqual(fullEval);
+        }),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+
+    it("deriveTaggedShare: same share + same tag is deterministic", () => {
+      fc.assert(
+        fc.property(fc.string({ minLength: 1, maxLength: 64 }), (tag) => {
+          const share =
+            sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+          const a = deriveTaggedShare(share, tag);
+          const b = deriveTaggedShare(share, tag);
+          expect(a).toEqual(b);
+        }),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+
+    it("deriveTaggedShare: per-tag threshold pipeline produces 64-byte output", () => {
+      fc.assert(
+        fc.property(fc.string({ minLength: 1, maxLength: 64 }), (tag) => {
+          const key = sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+          const { shareA, shareB } = shamirSplit(sodium, key);
+          const input = sodium.randombytes_buf(32);
+
+          const tA = deriveTaggedShare(shareA, tag);
+          const tB = deriveTaggedShare(shareB, tag);
+
+          const { blindedElement, blindState } = oprfBlind(input);
+          const combined = lagrangeInterpolate(
+            blindEvaluate(sodium, tA, blindedElement),
+            blindEvaluate(sodium, tB, blindedElement),
+          );
+          const output = oprfFinalize(blindState, combined, input);
+          expect(output.length).toBe(64);
         }),
         { numRuns: FC_MEDIUM },
       );

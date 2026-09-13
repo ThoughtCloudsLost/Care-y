@@ -10,7 +10,7 @@ const en_search_conversation_view_all = /** @type {(inputs: Search_Conversation_
 };
 
 const es_search_conversation_view_all = /** @type {(inputs: Search_Conversation_View_AllInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Ver las ${i?.count} coincidencias en la conversacion`)
+	return /** @type {LocalizedString} */ (`Ver las ${i?.count} coincidencias en la conversación`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_settings_password_recovery_prompt = /** @type {(inputs: Settings_Passwo
 };
 
 const es_settings_password_recovery_prompt = /** @type {(inputs: Settings_Password_Recovery_PromptInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un cambio de contrasena anterior no se completo. Ingresa tu contrasena actual para completar la rotacion de claves.`)
+	return /** @type {LocalizedString} */ (`Un cambio de contraseña anterior no se completo. Ingresa tu contraseña actual para completar la rotación de claves.`)
 };
 
 /**

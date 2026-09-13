@@ -10,7 +10,7 @@ const en_admin_telephony_no_phones_friendly = /** @type {(inputs: Admin_Telephon
 };
 
 const es_admin_telephony_no_phones_friendly = /** @type {(inputs: Admin_Telephony_No_Phones_FriendlyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No hay numeros conectados aun.`)
+	return /** @type {LocalizedString} */ (`No hay números conectados aún.`)
 };
 
 /**

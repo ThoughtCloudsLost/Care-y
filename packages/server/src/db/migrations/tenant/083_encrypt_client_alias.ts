@@ -1,4 +1,4 @@
-import { sql, type Kysely } from "kysely";
+import type { Kysely } from "kysely";
 
 // Typed DML narrowing: Kysely migrations receive Kysely<unknown>. Typed
 // inserts/updates require narrowing to a concrete table interface. The
@@ -57,10 +57,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .unique()
     .execute();
 
-  // 7. Per-org sequence for structurally unique generated alias suffixes.
-  //    Kysely's schema builder has no CREATE SEQUENCE support; raw DDL
-  //    runs through the schema search_path set by withSchema.
-  await sql`CREATE SEQUENCE IF NOT EXISTS client_alias_seq START 1`.execute(db);
+  // 7. Per-org alias suffix counter was originally a PostgreSQL sequence
+  //    created here via raw SQL. Migration 102 replaced it with a counter
+  //    column on org_config, which the query builder qualifies correctly.
+  //    No action is needed here; the column is created by migration 102.
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
@@ -76,5 +76,6 @@ export async function down(db: Kysely<unknown>): Promise<void> {
   await db.schema.alterTable("clients").dropColumn("encrypted_alias").execute();
   await db.schema.alterTable("clients").dropColumn("alias_hash").execute();
 
-  await sql`DROP SEQUENCE IF EXISTS client_alias_seq`.execute(db);
+  // Sequence drop removed: migration 102 replaced the sequence with a
+  // counter column on org_config. The column is dropped by 102's down().
 }

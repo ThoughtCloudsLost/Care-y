@@ -10,7 +10,7 @@ const en_vol_protected_keys = /** @type {(inputs: Vol_Protected_KeysInputs) => L
 };
 
 const es_vol_protected_keys = /** @type {(inputs: Vol_Protected_KeysInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tus claves de cifrado se derivan de tu contrasena. El servidor nunca las almacena.`)
+	return /** @type {LocalizedString} */ (`Tus claves de cifrado se derivan de tu contraseña. El servidor nunca las almacena.`)
 };
 
 /**

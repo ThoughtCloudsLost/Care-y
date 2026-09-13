@@ -61,6 +61,7 @@
     orgCache.delete("branding:color");
     orgCache.delete("branding:accent");
     orgCache.delete("branding:text");
+    orgCache.delete("branding:support_label");
     await queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
     await brandingQuery.refetch();
 
@@ -70,17 +71,25 @@
     void decryptedColor;
     void decryptedAccent;
     void decryptedText;
+    void decryptedSupportLabel;
     await orgCache.whenSettled();
 
     const name = decryptedName ?? "";
     const color = currentColor();
     const accent = currentAccent();
     const text = decryptedText ?? "";
+    const supportLabel = decryptedSupportLabel ?? "";
 
     let clientBlob: string;
     try {
       clientBlob = buildClientBrandingBlob(
-        { name, primaryColor: color, accentColor: accent, clientText: text },
+        {
+          name,
+          primaryColor: color,
+          accentColor: accent,
+          clientText: text,
+          supportLabel,
+        },
         orgKeyManager,
       );
     } catch {
@@ -141,6 +150,13 @@
     orgCache.decrypt(
       "branding:text",
       brandingQuery.data?.encryptedClientText ?? null,
+    ),
+  );
+
+  const decryptedSupportLabel = $derived(
+    orgCache.decrypt(
+      "branding:support_label",
+      brandingQuery.data?.encryptedClientSupportLabel ?? null,
     ),
   );
 
@@ -369,6 +385,7 @@
       orgCache.delete("branding:color");
       orgCache.delete("branding:accent");
       orgCache.delete("branding:text");
+      orgCache.delete("branding:support_label");
       toastStore.show(m.admin_branding_saved());
       announceToLiveRegion("polite", m.admin_branding_saved());
       closeSheet(false);
@@ -384,6 +401,16 @@
   async function handleSave(): Promise<void> {
     if (!hasChanges) return;
 
+    // The blob rebuild below is a whole-value rewrite, so every field it
+    // carries through must have finished decrypting first. Saving a color
+    // before the name's fire-and-forget decrypt settled republished the
+    // blob with an empty name and silently erased the client-facing org
+    // name. Same settlement contract as rebuildBlob and OrgGeneralSection.
+    void decryptedName;
+    void decryptedText;
+    void decryptedSupportLabel;
+    await orgCache.whenSettled();
+
     const finalName = decryptedName ?? "";
     const finalColor =
       colorChanged && isValidHexColor(editColor) ? editColor : currentColor();
@@ -392,6 +419,7 @@
         ? editAccent
         : currentAccent();
     const finalText = textChanged ? editText : (decryptedText ?? "");
+    const finalSupportLabel = decryptedSupportLabel ?? "";
 
     // Build the client branding blob with all current values
     let clientBlob: string;
@@ -402,6 +430,7 @@
           primaryColor: finalColor,
           accentColor: finalAccent,
           clientText: finalText,
+          supportLabel: finalSupportLabel,
         },
         orgKeyManager,
       );

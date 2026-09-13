@@ -158,12 +158,16 @@ vi.mock("$lib/crypto/context.js", (): typeof CryptoCtxModule => ({
     ({ decrypt: vi.fn().mockReturnValue(null) }) as never,
   getTicketDecryptCache: () =>
     ({ decrypt: vi.fn().mockReturnValue(null) }) as never,
-  getCurrentUserId: () => () => "user-001",
+  // A real UUID: the pending-entry builder runs this through
+  // userIdSchema (z.uuid()), which rejects non-UUID sentinels.
+  getCurrentUserId: () => () => "8b7bd6a0-59f2-4f4b-9d6a-3f1c2e4a5b6c",
   getCurrentUserRoleId: () => () => undefined,
   getCurrentPermissions: () => () => new Set(),
   getFollowUpDecryptCache: () =>
     ({
       decryptContent: vi.fn().mockReturnValue("Decrypted preview content"),
+      seed: vi.fn(),
+      deleteByPrefix: vi.fn(),
     }) as never,
   getPreviewLoader: () => ({ load: vi.fn() }) as never,
   setCryptoBridge: passthrough,
@@ -286,6 +290,8 @@ vi.mock(
       setTabbarHiddenCtx: passthrough,
       getNavbarOverrideCtx: () => ({ current: undefined }),
       setNavbarOverrideCtx: passthrough,
+      getSectionRailCtx: () => ({ current: undefined }),
+      setSectionRailCtx: passthrough,
     }) satisfies typeof ShellCtxModule,
 );
 
@@ -321,7 +327,10 @@ function makePreview(
 
 const baseProps = {
   opened: true,
-  ticketId: "ticket-001",
+  // Regenerated per test in beforeEach: must be a real UUID for
+  // ticketIdSchema, and a fresh one isolates the module-level draft
+  // store between tests.
+  ticketId: crypto.randomUUID(),
   clientAlias: "Sparrow",
   hasPhone: false,
   clientPublic: null as string | null,
@@ -333,6 +342,7 @@ const baseProps = {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  baseProps.ticketId = crypto.randomUUID();
   mockEncrypt.mockClear();
   mockCreateFollowUp.mockClear();
   mockToggleReaction.mockClear();

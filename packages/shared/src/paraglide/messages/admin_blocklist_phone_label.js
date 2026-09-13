@@ -10,7 +10,7 @@ const en_admin_blocklist_phone_label = /** @type {(inputs: Admin_Blocklist_Phone
 };
 
 const es_admin_blocklist_phone_label = /** @type {(inputs: Admin_Blocklist_Phone_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numero`)
+	return /** @type {LocalizedString} */ (`Número`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_contact_method_label = /** @type {(inputs: Intake_Contact_Method
 };
 
 const es_intake_contact_method_label = /** @type {(inputs: Intake_Contact_Method_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Como quieres que te contactemos?`)
+	return /** @type {LocalizedString} */ (`¿Cómo quieres que te contactemos?`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_ticket_no_filter_results = /** @type {(inputs: Ticket_No_Filter_Results
 };
 
 const es_ticket_no_filter_results = /** @type {(inputs: Ticket_No_Filter_ResultsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ningun mensaje coincide con tus filtros`)
+	return /** @type {LocalizedString} */ (`Ningún mensaje coincide con tus filtros`)
 };
 
 /**

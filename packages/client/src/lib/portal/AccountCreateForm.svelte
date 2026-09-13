@@ -9,6 +9,7 @@
 <script lang="ts">
   import { Block, Button, List, ListInput } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import PasswordConfirmPair from "$lib/components/inputs/PasswordConfirmPair.svelte";
 
   interface AccountCreateFormProps {
     /** Called with username + password when the user submits. */
@@ -35,15 +36,9 @@
   let password = $state("");
   let confirmPassword = $state("");
 
-  const passwordsMatch = $derived(
-    password.length === 0 ||
-      confirmPassword.length === 0 ||
-      password === confirmPassword,
-  );
+  // PasswordConfirmPair owns showing the mismatch; submit gating still
+  // needs to know about it.
   const passwordLongEnough = $derived(password.length >= 8);
-  const showMismatch = $derived(
-    confirmPassword.length > 0 && password.length > 0 && !passwordsMatch,
-  );
 
   const canSubmit = $derived(
     username.trim().length >= 3 &&
@@ -69,6 +64,7 @@
 <Block>
   <List strong inset class="create-list">
     <ListInput
+      label={m.account_login_username()}
       type="text"
       inputId="account-create-username"
       placeholder={m.account_login_username()}
@@ -78,50 +74,23 @@
       }}
       disabled={pending}
       autocomplete="off"
+      autocapitalize="none"
       data-testid="account-create-username"
-    >
-      {#snippet label()}
-        <span class="sr-only">{m.account_login_username()}</span>
-      {/snippet}
-    </ListInput>
-    <ListInput
-      type="password"
-      inputId="account-create-password"
-      placeholder={m.account_login_password()}
-      value={password}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) password = e.target.value;
-      }}
-      disabled={pending}
-      data-testid="account-create-password"
-    >
-      {#snippet label()}
-        <span class="sr-only">{m.account_login_password()}</span>
-      {/snippet}
-    </ListInput>
-    <ListInput
-      type="password"
-      inputId="account-create-confirm"
-      placeholder={m.account_create_confirm()}
-      value={confirmPassword}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement)
-          confirmPassword = e.target.value;
-      }}
-      disabled={pending}
-      data-testid="account-create-confirm"
-    >
-      {#snippet label()}
-        <span class="sr-only">{m.account_create_confirm()}</span>
-      {/snippet}
-    </ListInput>
+    />
   </List>
-
-  {#if showMismatch}
-    <p class="create-mismatch" data-testid="account-mismatch">
-      {m.account_create_mismatch()}
-    </p>
-  {/if}
+  <PasswordConfirmPair
+    bind:password
+    bind:confirm={confirmPassword}
+    passwordLabel={m.account_login_password()}
+    passwordPlaceholder={m.account_login_password()}
+    confirmLabel={m.account_create_confirm()}
+    confirmPlaceholder={m.account_create_confirm()}
+    mismatchError={m.account_create_mismatch()}
+    passwordInfo={m.account_create_password_hint()}
+    autocomplete="new-password"
+    minLength={8}
+    disabled={pending}
+  />
 
   {#if errorMessage}
     <p
@@ -134,8 +103,8 @@
     </p>
   {/if}
 
+  <!-- The password hint rides on the field itself via passwordInfo. -->
   <p class="create-hint">{m.account_create_username_hint()}</p>
-  <p class="create-hint">{m.account_create_password_hint()}</p>
 
   {#if showLinkNote}
     <p class="create-link-note" data-testid="upgrade-link-note">
@@ -191,12 +160,6 @@
     margin-top: var(--space-sm);
     line-height: 1.5;
     font-style: italic;
-  }
-
-  .create-mismatch {
-    font-size: var(--text-sm);
-    color: var(--danger);
-    margin-top: var(--space-xs);
   }
 
   .create-error {

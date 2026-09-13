@@ -10,7 +10,7 @@ const en_admin_reports_resolution_title = /** @type {(inputs: Admin_Reports_Reso
 };
 
 const es_admin_reports_resolution_title = /** @type {(inputs: Admin_Reports_Resolution_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tiempo de resolucion`)
+	return /** @type {LocalizedString} */ (`Tiempo de resolución`)
 };
 
 /**

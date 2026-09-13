@@ -10,7 +10,7 @@ const en_settings_password_current = /** @type {(inputs: Settings_Password_Curre
 };
 
 const es_settings_password_current = /** @type {(inputs: Settings_Password_CurrentInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Contrasena actual`)
+	return /** @type {LocalizedString} */ (`Contraseña actual`)
 };
 
 /**

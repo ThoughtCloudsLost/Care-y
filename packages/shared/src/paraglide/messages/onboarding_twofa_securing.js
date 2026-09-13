@@ -10,7 +10,7 @@ const en_onboarding_twofa_securing = /** @type {(inputs: Onboarding_Twofa_Securi
 };
 
 const es_onboarding_twofa_securing = /** @type {(inputs: Onboarding_Twofa_SecuringInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Asegurando sesion...`)
+	return /** @type {LocalizedString} */ (`Asegurando sesión...`)
 };
 
 /**

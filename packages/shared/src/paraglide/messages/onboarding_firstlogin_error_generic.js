@@ -10,7 +10,7 @@ const en_onboarding_firstlogin_error_generic = /** @type {(inputs: Onboarding_Fi
 };
 
 const es_onboarding_firstlogin_error_generic = /** @type {(inputs: Onboarding_Firstlogin_Error_GenericInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No se pudo crear la cuenta. Intentalo de nuevo.`)
+	return /** @type {LocalizedString} */ (`No se pudo crear la cuenta. Inténtalo de nuevo.`)
 };
 
 /**

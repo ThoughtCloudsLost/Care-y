@@ -10,7 +10,7 @@ const en_onboarding_telephony_token_placeholder = /** @type {(inputs: Onboarding
 };
 
 const es_onboarding_telephony_token_placeholder = /** @type {(inputs: Onboarding_Telephony_Token_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Su token de autenticacion de Twilio`)
+	return /** @type {LocalizedString} */ (`Su token de autenticación de Twilio`)
 };
 
 /**

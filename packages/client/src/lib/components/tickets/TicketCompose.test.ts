@@ -86,6 +86,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_save_note: () => "Save note",
   ticket_compose_actions: () => "Compose actions",
   ticket_mention_volunteers: () => "Mention a volunteer",
+  contact_correction_pending_warning: () =>
+    "A contact correction is pending below.",
 }));
 
 const TICKET_ID = "ticket-1";
@@ -275,6 +277,42 @@ describe("TicketCompose", () => {
 
       await rerender({ sending: true });
       expect(sendButton.getAttribute("aria-disabled")).toBe("true");
+    });
+  });
+
+  describe("correction warning", () => {
+    it("shows correction warning in SMS mode when hasUnacknowledgedCorrection is true", async () => {
+      const { component } = render(TicketCompose, {
+        props: { ...baseProps(), hasUnacknowledgedCorrection: true },
+      });
+      component.activateSms();
+      await tick();
+
+      const warning = screen.queryByTestId("compose-correction-warning");
+      expect(warning).toBeTruthy();
+      expect(warning?.textContent).toContain(
+        "A contact correction is pending below.",
+      );
+    });
+
+    it("hides correction warning in reply mode even when prop is true", async () => {
+      const { component } = render(TicketCompose, {
+        props: { ...baseProps(), hasUnacknowledgedCorrection: true },
+      });
+      component.activateReply();
+      await tick();
+
+      expect(screen.queryByTestId("compose-correction-warning")).toBeNull();
+    });
+
+    it("hides correction warning in SMS mode when prop is false", async () => {
+      const { component } = render(TicketCompose, {
+        props: { ...baseProps(), hasUnacknowledgedCorrection: false },
+      });
+      component.activateSms();
+      await tick();
+
+      expect(screen.queryByTestId("compose-correction-warning")).toBeNull();
     });
   });
 

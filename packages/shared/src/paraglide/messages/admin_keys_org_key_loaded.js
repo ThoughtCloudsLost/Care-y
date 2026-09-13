@@ -10,7 +10,7 @@ const en_admin_keys_org_key_loaded = /** @type {(inputs: Admin_Keys_Org_Key_Load
 };
 
 const es_admin_keys_org_key_loaded = /** @type {(inputs: Admin_Keys_Org_Key_LoadedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Clave de la organizacion cargada`)
+	return /** @type {LocalizedString} */ (`Clave de la organización cargada`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_avail_max_reached = /** @type {(inputs: Intake_Avail_Max_Reached
 };
 
 const es_intake_avail_max_reached = /** @type {(inputs: Intake_Avail_Max_ReachedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Maximo alcanzado.`)
+	return /** @type {LocalizedString} */ (`Máximo alcanzado.`)
 };
 
 /**

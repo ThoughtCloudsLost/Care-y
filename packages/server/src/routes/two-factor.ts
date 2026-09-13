@@ -43,11 +43,8 @@ import {
   createEmailCodeService,
   type EmailCodeService,
 } from "../auth/email-code.js";
-import {
-  createSmsCodeService,
-  type SmsCodeService,
-  type CallerIdResolver,
-} from "../auth/sms-code.js";
+import { createSmsCodeService, type SmsCodeService } from "../auth/sms-code.js";
+import type { CallerIdResolver } from "../telephony/phone-resolver.js";
 import {
   createPushChallengeService,
   type PushChallengeService,

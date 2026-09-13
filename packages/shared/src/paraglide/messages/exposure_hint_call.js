@@ -10,7 +10,7 @@ const en_exposure_hint_call = /** @type {(inputs: Exposure_Hint_CallInputs) => L
 };
 
 const es_exposure_hint_call = /** @type {(inputs: Exposure_Hint_CallInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esta llamada pasa por tu proveedor de telefonia. Pueden escuchar la llamada. Mantiene los detalles sensibles en el chat cifrado.`)
+	return /** @type {LocalizedString} */ (`Esta llamada pasa por tu proveedor de telefonía. Pueden escuchar la llamada. Mantiene los detalles sensibles en el chat cifrado.`)
 };
 
 /**

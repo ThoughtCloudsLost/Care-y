@@ -10,7 +10,7 @@ const en_consultant_phone_number_label = /** @type {(inputs: Consultant_Phone_Nu
 };
 
 const es_consultant_phone_number_label = /** @type {(inputs: Consultant_Phone_Number_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numero de telefono`)
+	return /** @type {LocalizedString} */ (`Número de teléfono`)
 };
 
 /**

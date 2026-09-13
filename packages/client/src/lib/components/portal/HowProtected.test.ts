@@ -73,6 +73,14 @@ vi.mock("$lib/shell/context.js", async (importOriginal) => ({
   getNavbarOverrideCtx: () => ({ current: undefined }),
 }));
 
+// vi.mock required: Svelte 5 createContext throws missing_context when the
+// consumer renders without its provider; this spec renders the privacy page
+// in isolation rather than inside the (client) layout that sets the container.
+vi.mock("$lib/client-shell/context.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  getClientShellCtx: () => ({ current: undefined }),
+}));
+
 // jsdom lacks Web Animations API (used by Konsta transitions).
 if (typeof Element.prototype.animate !== "function") {
   Element.prototype.animate = vi.fn().mockReturnValue({

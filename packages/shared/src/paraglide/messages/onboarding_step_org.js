@@ -10,7 +10,7 @@ const en_onboarding_step_org = /** @type {(inputs: Onboarding_Step_OrgInputs) =>
 };
 
 const es_onboarding_step_org = /** @type {(inputs: Onboarding_Step_OrgInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Organizacion`)
+	return /** @type {LocalizedString} */ (`Organización`)
 };
 
 /**

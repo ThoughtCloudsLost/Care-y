@@ -10,7 +10,7 @@ const en_onboarding_firstlogin_signin = /** @type {(inputs: Onboarding_Firstlogi
 };
 
 const es_onboarding_firstlogin_signin = /** @type {(inputs: Onboarding_Firstlogin_SigninInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Iniciar sesion`)
+	return /** @type {LocalizedString} */ (`Iniciar sesión`)
 };
 
 /**

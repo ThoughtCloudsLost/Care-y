@@ -10,7 +10,7 @@ const en_onboarding_org_name_placeholder = /** @type {(inputs: Onboarding_Org_Na
 };
 
 const es_onboarding_org_name_placeholder = /** @type {(inputs: Onboarding_Org_Name_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mi organizacion`)
+	return /** @type {LocalizedString} */ (`Mi organización`)
 };
 
 /**

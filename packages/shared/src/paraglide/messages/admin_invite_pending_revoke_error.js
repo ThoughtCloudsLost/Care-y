@@ -10,7 +10,7 @@ const en_admin_invite_pending_revoke_error = /** @type {(inputs: Admin_Invite_Pe
 };
 
 const es_admin_invite_pending_revoke_error = /** @type {(inputs: Admin_Invite_Pending_Revoke_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Error al revocar la invitacion`)
+	return /** @type {LocalizedString} */ (`Error al revocar la invitación`)
 };
 
 /**

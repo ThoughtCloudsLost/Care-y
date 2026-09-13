@@ -10,7 +10,7 @@ const en_intake_not_available = /** @type {(inputs: Intake_Not_AvailableInputs) 
 };
 
 const es_intake_not_available = /** @type {(inputs: Intake_Not_AvailableInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este formulario no esta disponible. Si necesita ayuda, comuniquese directamente con la organizacion.`)
+	return /** @type {LocalizedString} */ (`Este formulario no está disponible. Si necesita ayuda, comuniquese directamente con la organización.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_dashboard_kb_encrypted_title = /** @type {(inputs: Dashboard_Kb_Encrypt
 };
 
 const es_dashboard_kb_encrypted_title = /** @type {(inputs: Dashboard_Kb_Encrypted_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Articulo actualizado`)
+	return /** @type {LocalizedString} */ (`Artículo actualizado`)
 };
 
 /**

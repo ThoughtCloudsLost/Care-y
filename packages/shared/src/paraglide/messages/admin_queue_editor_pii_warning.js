@@ -10,7 +10,7 @@ const en_admin_queue_editor_pii_warning = /** @type {(inputs: Admin_Queue_Editor
 };
 
 const es_admin_queue_editor_pii_warning = /** @type {(inputs: Admin_Queue_Editor_Pii_WarningInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Los nombres de las ${i?.queues} aparecen en las notificaciones por correo enviadas a los ${i?.volunteers}. Usa nombres funcionales como "Recepcion General" o "Linea Nocturna" en lugar de nombres que puedan identificar personas, casos o ubicaciones.`)
+	return /** @type {LocalizedString} */ (`Los nombres de las ${i?.queues} aparecen en las notificaciones por correo enviadas a los ${i?.volunteers}. Usa nombres funcionales como "Recepción General" o "Línea Nocturna" en lugar de nombres que puedan identificar personas, casos o ubicaciones.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_quarantine_reason_no_intake_queue = /** @type {(inputs: Admin_Qua
 };
 
 const es_admin_quarantine_reason_no_intake_queue = /** @type {(inputs: Admin_Quarantine_Reason_No_Intake_QueueInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sin cola de admision configurada`)
+	return /** @type {LocalizedString} */ (`Sin cola de admisión configurada`)
 };
 
 /**

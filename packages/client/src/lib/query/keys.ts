@@ -223,6 +223,10 @@ export const intakeFormKeys = {
   list: () => [...intakeFormKeys.all, "list"] as const,
   detail: (formId: string) =>
     [...intakeFormKeys.all, "detail", formId] as const,
+  responses: (formId: string) =>
+    [...intakeFormKeys.all, "responses", formId] as const,
+  responsePage: (formId: string, cursor: string | null) =>
+    [...intakeFormKeys.responses(formId), "page", cursor] as const,
 };
 
 export const portalKeys = {
@@ -232,6 +236,9 @@ export const portalKeys = {
     [...portalKeys.all, "bootstrap", channelId] as const,
   messages: (channelId: string) =>
     [...portalKeys.all, "messages", channelId] as const,
+  /** One older page of a channel's thread, keyed by the cursor it starts at. */
+  messagePage: (channelId: string, cursor: string) =>
+    [...portalKeys.all, "messagePage", channelId, cursor] as const,
   accountBootstrap: () => [...portalKeys.all, "accountBootstrap"] as const,
   accountMessages: () => [...portalKeys.all, "accountMessages"] as const,
 };

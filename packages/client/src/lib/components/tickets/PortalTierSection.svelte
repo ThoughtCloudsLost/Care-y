@@ -34,6 +34,7 @@
 
   interface PortalTierSectionProps {
     ticketId: string;
+    clientId: string;
     clientTier: string | undefined;
     portalChannel: PortalChannelWire | null | undefined;
     clientPhone: string | null | undefined;
@@ -42,6 +43,7 @@
 
   let {
     ticketId,
+    clientId,
     clientTier,
     portalChannel,
     clientPhone,
@@ -60,6 +62,10 @@
 
   const isSecureLink = $derived(
     clientTier === "secure_link" && portalChannel?.kind === "secure_link",
+  );
+  const isContinuation = $derived(
+    clientTier === "secure_link" &&
+      portalChannel?.kind === "intake_continuation",
   );
   const isAccount = $derived(
     clientTier === "account" && portalChannel?.kind === "account",
@@ -207,6 +213,45 @@
       </Button>
     </div>
   </Block>
+{:else if isContinuation && portalChannel}
+  <Block class="!my-3">
+    <p class="tier-name">
+      {m.ticket_tier_continuation()}
+      {#if portalChannel.hasPassphrase}
+        <Chip class="passphrase-chip" outline>
+          {m.ticket_tier_passphrase_toggle()}
+        </Chip>
+      {/if}
+    </p>
+    <p class="tier-provenance" data-testid="continuation-provenance">
+      {m.ticket_tier_continuation_provenance()}
+    </p>
+    <p class="tier-meta">
+      <span>{formatRelativeTime(new Date(portalChannel.createdAt))}</span>
+      {#if portalChannel.lastSeenAt}
+        <span class="meta-sep" aria-hidden="true"></span>
+        <span>{formatRelativeTime(new Date(portalChannel.lastSeenAt))}</span>
+      {/if}
+    </p>
+    <div class="offer-row">
+      <span class="offer-label">{m.ticket_tier_offer_toggle()}</span>
+      <Toggle
+        checked={portalChannel.accountOffer}
+        disabled={offerUpdating}
+        onchange={() => void handleOfferToggle()}
+        aria-label={m.ticket_tier_offer_toggle()}
+      />
+    </div>
+    <p class="offer-hint">{m.ticket_tier_offer_hint(withTerms())}</p>
+    <div class="tier-actions">
+      <Button small outline onclick={openRegenerate}>
+        {m.ticket_tier_regenerate()}
+      </Button>
+      <Button small outline class="tier-revoke-btn" onclick={openRevokeDialog}>
+        {m.ticket_tier_revoke()}
+      </Button>
+    </div>
+  </Block>
 {:else if isAccount && portalChannel}
   <Block class="!my-3">
     <p class="tier-name">{m.ticket_tier_account()}</p>
@@ -240,6 +285,7 @@
 <SecureLinkSheet
   opened={secureLinkSheetOpen}
   {ticketId}
+  {clientId}
   mode={secureLinkMode}
   hasPhone={clientPhone != null && clientPhone !== ""}
   ondismiss={handleSheetDismiss}
@@ -314,6 +360,13 @@
 
   :global(.passphrase-chip) {
     font-size: 0.6875rem !important;
+  }
+
+  .tier-provenance {
+    color: var(--care);
+    font-size: var(--text-xs);
+    margin: 0.25rem 0 0;
+    line-height: 1.4;
   }
 
   .tier-meta {

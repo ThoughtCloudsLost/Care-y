@@ -10,7 +10,7 @@ const en_intake_avail_day_wednesday = /** @type {(inputs: Intake_Avail_Day_Wedne
 };
 
 const es_intake_avail_day_wednesday = /** @type {(inputs: Intake_Avail_Day_WednesdayInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Miercoles`)
+	return /** @type {LocalizedString} */ (`Miércoles`)
 };
 
 /**

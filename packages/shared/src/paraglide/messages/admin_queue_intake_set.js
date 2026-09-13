@@ -10,7 +10,7 @@ const en_admin_queue_intake_set = /** @type {(inputs: Admin_Queue_Intake_SetInpu
 };
 
 const es_admin_queue_intake_set = /** @type {(inputs: Admin_Queue_Intake_SetInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Usar como ${i?.queue} de recepcion`)
+	return /** @type {LocalizedString} */ (`Usar como ${i?.queue} de recepción`)
 };
 
 /**

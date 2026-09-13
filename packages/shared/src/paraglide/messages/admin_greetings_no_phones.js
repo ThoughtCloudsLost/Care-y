@@ -10,7 +10,7 @@ const en_admin_greetings_no_phones = /** @type {(inputs: Admin_Greetings_No_Phon
 };
 
 const es_admin_greetings_no_phones = /** @type {(inputs: Admin_Greetings_No_PhonesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configure los numeros de telefono en la seccion de Telefonia antes de agregar saludos.`)
+	return /** @type {LocalizedString} */ (`Configure los números de teléfono en la sección de Telefonía antes de agregar saludos.`)
 };
 
 /**

@@ -15,8 +15,10 @@ test.describe.serial("Desktop Responsive Layout", () => {
     await login(page);
     sidebar = page.getByRole("navigation", { name: "Sidebar navigation" });
 
-    // Wait for dashboard to render with decrypted content.
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    // Wait for dashboard to render with decrypted content. .first(): the
+    // same ticket renders in both the needs-attention and my-tickets
+    // dashboard regions.
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
@@ -479,7 +481,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
   test("desktop layout passes axe accessibility audit on dashboard", async () => {
     await sidebar.locator('[data-sidebar-id="home"]').click();
     await expect(page).toHaveURL("/");
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
 

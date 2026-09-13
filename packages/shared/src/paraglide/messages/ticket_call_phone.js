@@ -10,7 +10,7 @@ const en_ticket_call_phone = /** @type {(inputs: Ticket_Call_PhoneInputs) => Loc
 };
 
 const es_ticket_call_phone = /** @type {(inputs: Ticket_Call_PhoneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Llamar a mi telefono`)
+	return /** @type {LocalizedString} */ (`Llamar a mi teléfono`)
 };
 
 /**

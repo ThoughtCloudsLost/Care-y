@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
-import { createBrandingService } from "./branding-service.js";
+import { createBrandingService, readSafeExitUrl } from "./branding-service.js";
 import type { BlobStore } from "../storage/store.js";
 import {
   createTestDb,
@@ -33,6 +33,7 @@ const SEED = {
   encryptedPrimaryColor: Buffer.from("enc-color"),
   encryptedAccentColor: Buffer.from("enc-accent"),
   encryptedClientText: Buffer.from("enc-text"),
+  encryptedClientSupportLabel: Buffer.from("enc-support-label"),
   clientEncryptedBranding: Buffer.from("enc-client-blob"),
   encryptedTerminology: Buffer.from("enc-terminology"),
 };
@@ -47,6 +48,7 @@ async function seedOrgConfig(db: Kysely<TenantDatabase>): Promise<void> {
       encrypted_primary_color: SEED.encryptedPrimaryColor,
       encrypted_accent_color: SEED.encryptedAccentColor,
       encrypted_client_text: SEED.encryptedClientText,
+      encrypted_client_support_label: SEED.encryptedClientSupportLabel,
       client_encrypted_branding: SEED.clientEncryptedBranding,
       encrypted_terminology: SEED.encryptedTerminology,
     })
@@ -62,6 +64,7 @@ async function resetOrgConfig(db: Kysely<TenantDatabase>): Promise<void> {
       encrypted_primary_color: SEED.encryptedPrimaryColor,
       encrypted_accent_color: SEED.encryptedAccentColor,
       encrypted_client_text: SEED.encryptedClientText,
+      encrypted_client_support_label: SEED.encryptedClientSupportLabel,
       client_encrypted_branding: SEED.clientEncryptedBranding,
       encrypted_terminology: SEED.encryptedTerminology,
       icon_192_blob_key: null,
@@ -106,6 +109,8 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
         encryptedPrimaryColor: SEED.encryptedPrimaryColor.toString("base64url"),
         encryptedAccentColor: SEED.encryptedAccentColor.toString("base64url"),
         encryptedClientText: SEED.encryptedClientText.toString("base64url"),
+        encryptedClientSupportLabel:
+          SEED.encryptedClientSupportLabel.toString("base64url"),
         clientEncryptedBranding:
           SEED.clientEncryptedBranding.toString("base64url"),
         encryptedTerminology: SEED.encryptedTerminology.toString("base64url"),
@@ -159,6 +164,75 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       expect(result.hasIcons).toBe(false);
       expect(result.iconVersion).toBeNull();
     });
+
+    it("returns no exit URL when the org has configured none", async () => {
+      const svc = createBrandingService(db);
+      const result = await svc.getPublicBranding();
+      expect(result.safeExitUrl).toBeNull();
+    });
+
+    // Intake and share links reach no portal bootstrap, so this payload is
+    // the only way the org's configured URL gets to them.
+    it("returns the org's configured exit URL", async () => {
+      await db
+        .updateTable("org_config")
+        .set({ portal_safe_exit_url: "https://weather.gov" })
+        .execute();
+
+      const svc = createBrandingService(db);
+      const result = await svc.getPublicBranding();
+
+      expect(result.safeExitUrl).toBe("https://weather.gov");
+      await db
+        .updateTable("org_config")
+        .set({ portal_safe_exit_url: null })
+        .execute();
+    });
+
+    // The write boundary rejects these, so a stored one predates the rule
+    // or arrived by a path that skipped it. Either way it must not reach
+    // location.replace().
+    it("drops a stored exit URL that is no longer valid", async () => {
+      await db
+        .updateTable("org_config")
+        .set({ portal_safe_exit_url: "javascript:alert(1)" })
+        .execute();
+
+      const svc = createBrandingService(db);
+      const result = await svc.getPublicBranding();
+
+      expect(result.safeExitUrl).toBeNull();
+      await db
+        .updateTable("org_config")
+        .set({ portal_safe_exit_url: null })
+        .execute();
+    });
+  });
+
+  describe("readSafeExitUrl", () => {
+    it("passes an absolute https URL through", () => {
+      expect(readSafeExitUrl("https://weather.gov")).toBe(
+        "https://weather.gov",
+      );
+    });
+
+    it("returns null for no configured URL", () => {
+      expect(readSafeExitUrl(null)).toBeNull();
+    });
+
+    const rejected = [
+      "javascript:alert(1)",
+      "data:text/html,<script>alert(1)</script>",
+      "http://weather.gov",
+      "/weather",
+      "not a url",
+    ];
+
+    for (const stored of rejected) {
+      it(`returns null for ${stored}`, () => {
+        expect(readSafeExitUrl(stored)).toBeNull();
+      });
+    }
   });
 
   describe("saveBrandingField", () => {
@@ -173,6 +247,28 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
         .executeTakeFirstOrThrow();
 
       expect(row.encrypted_name).toEqual(Buffer.from("new-name"));
+
+      await resetOrgConfig(db);
+    });
+
+    it("saves support_label field to correct column", async () => {
+      const svc = createBrandingService(db);
+      const newValue = Buffer.from("the-night-team").toString("base64");
+      await svc.saveBrandingField({
+        field: "support_label",
+        encryptedValue: newValue,
+      });
+
+      const row = await db
+        .selectFrom("org_config")
+        .select(["encrypted_client_support_label", "encrypted_client_text"])
+        .executeTakeFirstOrThrow();
+
+      expect(row.encrypted_client_support_label).toEqual(
+        Buffer.from("the-night-team"),
+      );
+      // The neighbouring client-text column must not be collateral.
+      expect(row.encrypted_client_text).toEqual(SEED.encryptedClientText);
 
       await resetOrgConfig(db);
     });

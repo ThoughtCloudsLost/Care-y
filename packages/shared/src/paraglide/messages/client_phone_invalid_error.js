@@ -10,7 +10,7 @@ const en_client_phone_invalid_error = /** @type {(inputs: Client_Phone_Invalid_E
 };
 
 const es_client_phone_invalid_error = /** @type {(inputs: Client_Phone_Invalid_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Introduce un numero como +1 555 000 1234`)
+	return /** @type {LocalizedString} */ (`Introduce un número como +1 555 000 1234`)
 };
 
 /**

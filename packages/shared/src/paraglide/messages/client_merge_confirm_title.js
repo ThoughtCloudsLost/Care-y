@@ -10,7 +10,7 @@ const en_client_merge_confirm_title = /** @type {(inputs: Client_Merge_Confirm_T
 };
 
 const es_client_merge_confirm_title = /** @type {(inputs: Client_Merge_Confirm_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Confirmar fusion`)
+	return /** @type {LocalizedString} */ (`Confirmar fusión`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_branding_compromise = /** @type {(inputs: 
 };
 
 const es_onboarding_briefing_practice_branding_compromise = /** @type {(inputs: Onboarding_Briefing_Practice_Branding_CompromiseInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo identidad visual. Es intencionalmente legible para que los clientes reconozcan tu organizacion.`)
+	return /** @type {LocalizedString} */ (`Solo identidad visual. Es intencionalmente legible para que los clientes reconozcan tu organización.`)
 };
 
 /**

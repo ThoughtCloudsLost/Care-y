@@ -10,7 +10,7 @@ const en_hub_analytics_deep_subtitle = /** @type {(inputs: Hub_Analytics_Deep_Su
 };
 
 const es_hub_analytics_deep_subtitle = /** @type {(inputs: Hub_Analytics_Deep_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Reportes mas lentos y pesados, a partir de conversaciones descifradas, para entender lo que necesita tu comunidad`)
+	return /** @type {LocalizedString} */ (`Reportes más lentos y pesados, a partir de conversaciones descifradas, para entender lo que necesita tu comunidad`)
 };
 
 /**

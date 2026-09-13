@@ -128,6 +128,15 @@ const baseSecureLinkChannel = {
   accountOffer: false,
 };
 
+const baseContinuationChannel = {
+  clientPublic: "pk-base64",
+  hasPassphrase: false,
+  createdAt: "2026-03-15T08:00:00Z",
+  lastSeenAt: "2026-03-20T12:00:00Z",
+  kind: "intake_continuation",
+  accountOffer: false,
+};
+
 const baseAccountChannel = {
   clientPublic: "pk-base64",
   hasPassphrase: false,
@@ -155,6 +164,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "sms_email",
         portalChannel: null,
         clientPhone: null,
@@ -170,6 +180,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseSecureLinkChannel },
         clientPhone: null,
@@ -186,6 +197,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseSecureLinkChannel, hasPassphrase: true },
         clientPhone: null,
@@ -200,6 +212,7 @@ describe("PortalTierSection", () => {
     const { container } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: undefined,
         portalChannel: null,
         clientPhone: null,
@@ -215,6 +228,7 @@ describe("PortalTierSection", () => {
     const { container } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "sms_email",
         portalChannel: null,
         clientPhone: null,
@@ -234,6 +248,7 @@ describe("PortalTierSection", () => {
     const { container: slContainer } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseSecureLinkChannel },
         clientPhone: null,
@@ -248,6 +263,7 @@ describe("PortalTierSection", () => {
     const { container: smsContainer } = render(PortalTierSection, {
       props: {
         ticketId: "t-2",
+        clientId: "c-1",
         clientTier: "sms_email",
         portalChannel: null,
         clientPhone: null,
@@ -262,6 +278,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseSecureLinkChannel, accountOffer: false },
         clientPhone: null,
@@ -294,6 +311,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseSecureLinkChannel, accountOffer: false },
         clientPhone: null,
@@ -319,6 +337,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -336,6 +355,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -352,6 +372,7 @@ describe("PortalTierSection", () => {
     const { container } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -368,6 +389,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -389,6 +411,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -422,6 +445,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -450,6 +474,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -473,10 +498,62 @@ describe("PortalTierSection", () => {
     expect(mockHaptic).not.toHaveBeenCalled();
   });
 
+  // --- Continuation (intake_continuation) tier ---
+
+  it("renders continuation branch for secure_link tier with intake_continuation kind", () => {
+    render(PortalTierSection, {
+      props: {
+        ticketId: "t-1",
+        clientId: "c-1",
+        clientTier: "secure_link",
+        portalChannel: { ...baseContinuationChannel },
+        clientPhone: null,
+        isLoading: false,
+      },
+    });
+
+    expect(screen.getByText(m.ticket_tier_continuation())).toBeTruthy();
+    expect(screen.getByTestId("continuation-provenance")).toBeTruthy();
+    expect(screen.getByText(m.ticket_tier_regenerate())).toBeTruthy();
+    expect(screen.getByText(m.ticket_tier_revoke())).toBeTruthy();
+  });
+
+  it("shows offer toggle for continuation tier", () => {
+    const { container } = render(PortalTierSection, {
+      props: {
+        ticketId: "t-1",
+        clientId: "c-1",
+        clientTier: "secure_link",
+        portalChannel: { ...baseContinuationChannel },
+        clientPhone: null,
+        isLoading: false,
+      },
+    });
+
+    expect(container.querySelector(".offer-row")).toBeTruthy();
+  });
+
+  it("renders created/last-seen times for continuation channel", () => {
+    render(PortalTierSection, {
+      props: {
+        ticketId: "t-1",
+        clientId: "c-1",
+        clientTier: "secure_link",
+        portalChannel: { ...baseContinuationChannel },
+        clientPhone: null,
+        isLoading: false,
+      },
+    });
+
+    expect(screen.getByText("2026-03-15T08:00:00.000Z")).toBeTruthy();
+    expect(screen.getByText("2026-03-20T12:00:00.000Z")).toBeTruthy();
+  });
+
   it("uses InlineSkeleton for account tier meta while loading", () => {
     const { container } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: undefined,
         portalChannel: null,
         clientPhone: null,

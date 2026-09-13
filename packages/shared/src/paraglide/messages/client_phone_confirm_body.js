@@ -10,7 +10,7 @@ const en_client_phone_confirm_body = /** @type {(inputs: Client_Phone_Confirm_Bo
 };
 
 const es_client_phone_confirm_body = /** @type {(inputs: Client_Phone_Confirm_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Esto cambia el telefono de ${i?.alias} en todos sus ${i?.tickets}.`)
+	return /** @type {LocalizedString} */ (`Esto cambia el teléfono de ${i?.alias} en todos sus ${i?.tickets}.`)
 };
 
 /**

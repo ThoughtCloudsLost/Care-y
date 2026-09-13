@@ -19,7 +19,7 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
     page = await context.newPage();
     await startCoverage(page);
     await login(page);
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
     await openTicketByTitle(page, "Help with housing");

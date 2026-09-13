@@ -20,7 +20,8 @@ import { hkdfSync } from "./node-crypto-shim.js";
 import { appendToOutbox } from "../outbox.js";
 import type { FieldEncryptor, BlindIndexer } from "./field-encryptor-shim.js";
 import type { SecretsEncryptor } from "./secrets-shim.js";
-import type { OrgId, UserId } from "@care-y/shared";
+import type { OrgId, UserId, E164 } from "@care-y/shared";
+import { e164Schema } from "@care-y/shared";
 import type { OrgRecord } from "../../../../../server/src/org/service.js";
 
 import type { TenantDatabase } from "../../../../../server/src/db/types.js";
@@ -250,9 +251,12 @@ export async function buildServiceStubs(
     },
   };
 
-  // Phone resolver stub (returns a demo caller ID for SMS delivery)
-  const phoneResolverStub = async (): Promise<string | null> =>
-    Promise.resolve("+15550001234");
+  // Phone resolver stub (returns a demo caller ID for SMS delivery).
+  // Parsed through e164Schema rather than cast, so the stub proves the same
+  // format the real resolver reads off provisioned numbers.
+  const DEMO_CALLER_ID = e164Schema.parse("+15550001234");
+  const phoneResolverStub = async (): Promise<E164 | null> =>
+    Promise.resolve(DEMO_CALLER_ID);
 
   // TOTP replay cache stub
   const totpReplayCacheStub = {
@@ -374,9 +378,8 @@ export async function buildServiceStubs(
     oprfDeps: { oprfService },
     orgService: orgServiceStub,
     providerFactory: rejectingProviderFactory,
-    includeReports: true,
-    includeConsultant: true,
-    includeTelephonyContent: true,
+    reports: true,
+    consultant: true,
     telephonyContentDeps: {
       createService: createTelephonyContentService,
       blobStore,
@@ -446,8 +449,17 @@ export async function buildServiceStubs(
       blobStore,
       pendingClients,
     },
-    // HARD CONSTRAINT: devDeps is undefined (NODE_ENV=production)
-    devDeps: undefined,
+    // Declined here, not forgotten: the client portal and the intake-forms
+    // admin API are wired on the demo track's own branch, and this branch
+    // predates that. Until it lands, the portal pages in the phone render
+    // against no API, which is exactly the failure that made these keys
+    // required rather than optional.
+    clientPortalDeps: null,
+    intakeFormDeps: null,
+    clientDeps: null,
+    escalationDeps: null,
+    // HARD CONSTRAINT: devDeps is null (NODE_ENV=production)
+    devDeps: null,
   });
 
   return { appRouter, pendingClients };

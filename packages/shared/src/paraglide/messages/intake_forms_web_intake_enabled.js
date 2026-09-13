@@ -10,7 +10,7 @@ const en_intake_forms_web_intake_enabled = /** @type {(inputs: Intake_Forms_Web_
 };
 
 const es_intake_forms_web_intake_enabled = /** @type {(inputs: Intake_Forms_Web_Intake_EnabledInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Recepcion en linea habilitada`)
+	return /** @type {LocalizedString} */ (`Recepción en línea habilitada`)
 };
 
 /**

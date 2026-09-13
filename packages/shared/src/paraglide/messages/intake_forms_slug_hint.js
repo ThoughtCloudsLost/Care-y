@@ -10,7 +10,7 @@ const en_intake_forms_slug_hint = /** @type {(inputs: Intake_Forms_Slug_HintInpu
 };
 
 const es_intake_forms_slug_hint = /** @type {(inputs: Intake_Forms_Slug_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Se usa en la URL para compartir. Solo letras minusculas, numeros y guiones.`)
+	return /** @type {LocalizedString} */ (`Se usa en la URL para compartir. Solo letras minúsculas, números y guiones.`)
 };
 
 /**

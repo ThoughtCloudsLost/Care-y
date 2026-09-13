@@ -10,7 +10,7 @@ const en_admin_invite_pending_revoke_body = /** @type {(inputs: Admin_Invite_Pen
 };
 
 const es_admin_invite_pending_revoke_body = /** @type {(inputs: Admin_Invite_Pending_Revoke_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esto invalidara el enlace de invitacion. Cualquier persona que tenga el enlace ya no podra usarlo.`)
+	return /** @type {LocalizedString} */ (`Esto invalidará el enlace de invitación. Cualquier persona que tenga el enlace ya no podrá usarlo.`)
 };
 
 /**

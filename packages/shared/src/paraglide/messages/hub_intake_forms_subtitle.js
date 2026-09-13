@@ -10,7 +10,7 @@ const en_hub_intake_forms_subtitle = /** @type {(inputs: Hub_Intake_Forms_Subtit
 };
 
 const es_hub_intake_forms_subtitle = /** @type {(inputs: Hub_Intake_Forms_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Personaliza los campos de la pagina publica de admision`)
+	return /** @type {LocalizedString} */ (`Personaliza los campos de la página pública de admisión`)
 };
 
 /**

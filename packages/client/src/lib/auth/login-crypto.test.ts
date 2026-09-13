@@ -7,6 +7,8 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import type * as TrpcModule from "$lib/trpc/index.js";
+import type * as CryptoPkg from "@care-y/crypto";
 import type {
   LoginCryptoCallbacks,
   loginCrypto as LoginCryptoFn,
@@ -16,13 +18,15 @@ import type {
 
 // vi.mock required: $lib/trpc/index.js resolves to a SvelteKit $lib alias
 // that creates a live tRPC HTTP client on import. Without a running server
-// the import fails. vi.spyOn requires a successful import first.
+// the import fails. vi.spyOn requires a successful import first. The
+// satisfies guard tracks the module surface; the inner cast is confined
+// to the proxy client, whose deep type cannot be satisfied structurally.
 const mockGetSalt = vi.fn();
 const mockOprfEvaluate = vi.fn();
 const mockGetWrappedOrgKey = vi.fn();
 
-vi.mock("$lib/trpc/index.js", () => ({
-  trpc: {
+vi.mock("$lib/trpc/index.js", () => {
+  const mockTrpc = {
     auth: {
       getSalt: { query: mockGetSalt },
     },
@@ -32,14 +36,21 @@ vi.mock("$lib/trpc/index.js", () => ({
     keys: {
       getWrappedOrgKey: { query: mockGetWrappedOrgKey },
     },
-  },
-}));
+  } as unknown as typeof TrpcModule.trpc;
+  return {
+    trpc: mockTrpc,
+    setDevDelay: vi.fn(),
+    isDevDelayEnabled: vi.fn(() => false),
+  } satisfies typeof TrpcModule;
+});
 
-// vi.mock required: @care-y/crypto barrel import triggers libsodium WASM
-// initialization via the getSodium() lazy singleton. In the Node test
-// environment this loads the JS fallback (~500ms) or fails. This test
-// only needs the `decode` utility, but the barrel re-exports everything.
-vi.mock("@care-y/crypto", () => ({
+// vi.mock required: this test only needs the `decode` utility, but the
+// barrel re-exports everything and libsodium loads through the lazy
+// getSodium() singleton. The factory spreads importOriginal so unstubbed
+// exports stay real and the mock cannot drift from the module surface;
+// getSodium stays untouched and lazy, so no WASM init runs here.
+vi.mock("@care-y/crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoPkg>()),
   decode: (s: string): Uint8Array => {
     return new TextEncoder().encode(s);
   },
@@ -180,6 +191,7 @@ describe("loginCrypto", () => {
       );
 
       expect(mockOprfEvaluate).toHaveBeenCalledWith({
+        kind: "volunteer",
         userId: "550e8400-e29b-41d4-a716-446655440000",
         blindedElement: "test-blinded-element-b64",
       });
@@ -268,6 +280,7 @@ describe("loginCrypto", () => {
 
       expect(mockOprfEvaluate).toHaveBeenCalledTimes(2);
       expect(mockOprfEvaluate).toHaveBeenLastCalledWith({
+        kind: "volunteer",
         userId: "550e8400-e29b-41d4-a716-446655440000",
         blindedElement: "test-blinded-element-b64",
         powChallenge: "challenge-hex",

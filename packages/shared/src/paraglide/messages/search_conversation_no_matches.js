@@ -10,7 +10,7 @@ const en_search_conversation_no_matches = /** @type {(inputs: Search_Conversatio
 };
 
 const es_search_conversation_no_matches = /** @type {(inputs: Search_Conversation_No_MatchesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sin coincidencias en esta conversacion`)
+	return /** @type {LocalizedString} */ (`Sin coincidencias en esta conversación`)
 };
 
 /**

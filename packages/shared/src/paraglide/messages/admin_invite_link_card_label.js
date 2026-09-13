@@ -10,7 +10,7 @@ const en_admin_invite_link_card_label = /** @type {(inputs: Admin_Invite_Link_Ca
 };
 
 const es_admin_invite_link_card_label = /** @type {(inputs: Admin_Invite_Link_Card_LabelInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Enlace de invitacion ${i?.index}`)
+	return /** @type {LocalizedString} */ (`Enlace de invitación ${i?.index}`)
 };
 
 /**

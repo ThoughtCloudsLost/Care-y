@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
-import { Kysely, PostgresDialect, sql } from "kysely";
+import { Kysely, sql } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import { createOrgService, type OrgService } from "./service.js";
+// Provisioning migrates a fresh org schema, and Kysely's stock introspector
+// reads the whole database to decide whether the migration table exists. A
+// schema dropped by a concurrently running test file fails that read, so these
+// tests supply an introspector that only reads the catalog. The runtime path
+// builds its own instance and still carries the exposure; it is tracked
+// separately.
+import { SafeIntrospectionPostgresDialect } from "../test-utils.js";
 import { ValidationError, ConflictError, InternalError } from "../errors.js";
 import type { OrgId, OrgSchema, OrgSlug } from "@care-y/shared";
 
@@ -26,7 +33,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
       max: 5,
     });
     platformDb = new Kysely<PlatformDatabase>({
-      dialect: new PostgresDialect({ pool }),
+      dialect: new SafeIntrospectionPostgresDialect({ pool }),
     });
 
     function tenantDbFactory(schema: string): Kysely<TenantDatabase> {
@@ -251,7 +258,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         max: 5,
       });
       platformDb = new Kysely<PlatformDatabase>({
-        dialect: new PostgresDialect({ pool }),
+        dialect: new SafeIntrospectionPostgresDialect({ pool }),
       });
     });
 
@@ -290,7 +297,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         idleTimeoutMillis: 0,
       });
       const db = new Kysely<PlatformDatabase>({
-        dialect: new PostgresDialect({ pool }),
+        dialect: new SafeIntrospectionPostgresDialect({ pool }),
       });
       try {
         await sql`SET ROLE ${sql.id(roleName)}`.execute(db);

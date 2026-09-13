@@ -10,7 +10,7 @@ const en_intake_error_email_format = /** @type {(inputs: Intake_Error_Email_Form
 };
 
 const es_intake_error_email_format = /** @type {(inputs: Intake_Error_Email_FormatInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ingresa un correo electronico valido.`)
+	return /** @type {LocalizedString} */ (`Ingresa un correo electrónico válido.`)
 };
 
 /**

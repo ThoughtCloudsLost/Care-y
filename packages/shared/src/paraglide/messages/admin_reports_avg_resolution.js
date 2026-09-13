@@ -10,7 +10,7 @@ const en_admin_reports_avg_resolution = /** @type {(inputs: Admin_Reports_Avg_Re
 };
 
 const es_admin_reports_avg_resolution = /** @type {(inputs: Admin_Reports_Avg_ResolutionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Resolucion prom.`)
+	return /** @type {LocalizedString} */ (`Resolución prom.`)
 };
 
 /**

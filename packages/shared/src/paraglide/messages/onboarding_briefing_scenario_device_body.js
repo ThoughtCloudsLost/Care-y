@@ -10,7 +10,7 @@ const en_onboarding_briefing_scenario_device_body = /** @type {(inputs: Onboardi
 };
 
 const es_onboarding_briefing_scenario_device_body = /** @type {(inputs: Onboarding_Briefing_Scenario_Device_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mientras ese voluntario esta autenticado, el atacante puede ver todo lo que el voluntario puede ver. Este es el unico escenario que CARE-Y no puede prevenir completamente. Puedes limitar el dano asignando voluntarios solo a los tickets necesarios, requiriendo llaves de seguridad fisicas y capacitando a los voluntarios para reconocer dispositivos comprometidos.`)
+	return /** @type {LocalizedString} */ (`Mientras ese voluntario esta autenticado, el atacante puede ver todo lo que el voluntario puede ver. Este es el único escenario que CARE-Y no puede prevenir completamente. Puedes limitar el dano asignando voluntarios solo a los tickets necesarios, requiriendo llaves de seguridad fisicas y capacitando a los voluntarios para reconocer dispositivos comprometidos.`)
 };
 
 /**

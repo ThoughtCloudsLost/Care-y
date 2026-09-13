@@ -11,10 +11,11 @@
  */
 
 import { timingSafeEqual } from "node:crypto";
-import type { Kysely, Selectable } from "kysely";
+import type { Kysely, Selectable, Transaction } from "kysely";
 import type { TenantDatabase, PortalChannelsTable } from "../db/types.js";
 import { hashChannelAuth } from "@care-y/crypto";
 import { ChannelAlreadyActiveError } from "./portal-errors.js";
+import { PORTAL_SURFACE_KINDS } from "@care-y/shared";
 import type { ClientId, ChannelSecret } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -112,9 +113,10 @@ export async function createChannel(
 }
 
 /**
- * Regenerate a channel: revoke the old active channel (if any), delete
- * its portal_messages, and insert a new registration. All in one
- * transaction. No-op-safe when no active channel exists (plain create).
+ * Regenerate a channel: revoke the old active channel (if any), purge
+ * its portal carriers (messages, attachments, recordings), and insert
+ * a new registration. All in one transaction. No-op-safe when no
+ * active channel exists (plain create).
  */
 export async function regenerateChannel(
   db: Kysely<TenantDatabase>,
@@ -122,7 +124,7 @@ export async function regenerateChannel(
   reg: ChannelRegistration,
 ): Promise<void> {
   await db.transaction().execute(async (trx) => {
-    // Find the current active channel (if any).
+    // Kind-agnostic: regeneration replaces any active channel regardless of kind
     const active = await trx
       .selectFrom("portal_channels")
       .select("id")
@@ -131,7 +133,19 @@ export async function regenerateChannel(
       .executeTakeFirst();
 
     if (active) {
-      // Delete portal_messages for the old channel before revoking.
+      // Purge portal carriers for the old channel. The expiry-bounded
+      // copy lifetime (ADR-092) means no carrier row should outlive
+      // the channel it was sealed to.
+      await trx
+        .deleteFrom("portal_attachments")
+        .where("channel_id", "=", active.id)
+        .execute();
+
+      await trx
+        .deleteFrom("portal_recordings")
+        .where("channel_id", "=", active.id)
+        .execute();
+
       await trx
         .deleteFrom("portal_messages")
         .where("channel_id", "=", active.id)
@@ -157,14 +171,16 @@ export async function regenerateChannel(
 }
 
 /**
- * Revoke the active channel, delete its portal_messages, and reset the
- * client's tier back to sms_email. No-op if no active channel exists.
+ * Revoke the active channel, purge its portal carriers (messages,
+ * attachments, recordings), and reset the client's tier back to
+ * sms_email. No-op if no active channel exists.
  */
 export async function revokeChannel(
   db: Kysely<TenantDatabase>,
   clientId: ClientId,
 ): Promise<void> {
   await db.transaction().execute(async (trx) => {
+    // Kind-agnostic: revocation applies to any active channel regardless of kind
     const active = await trx
       .selectFrom("portal_channels")
       .select("id")
@@ -173,6 +189,19 @@ export async function revokeChannel(
       .executeTakeFirst();
 
     if (active) {
+      // Purge portal carriers for the old channel. The expiry-bounded
+      // copy lifetime (ADR-092) means no carrier row should outlive
+      // the channel it was sealed to.
+      await trx
+        .deleteFrom("portal_attachments")
+        .where("channel_id", "=", active.id)
+        .execute();
+
+      await trx
+        .deleteFrom("portal_recordings")
+        .where("channel_id", "=", active.id)
+        .execute();
+
       await trx
         .deleteFrom("portal_messages")
         .where("channel_id", "=", active.id)
@@ -183,13 +212,14 @@ export async function revokeChannel(
         .set({ status: "revoked", revoked_at: new Date() })
         .where("id", "=", active.id)
         .execute();
-    }
 
-    await trx
-      .updateTable("clients")
-      .set({ communication_tier: "sms_email" })
-      .where("id", "=", clientId)
-      .execute();
+      // Only reset tier when a channel was actually revoked
+      await trx
+        .updateTable("clients")
+        .set({ communication_tier: "sms_email" })
+        .where("id", "=", clientId)
+        .execute();
+    }
   });
 }
 
@@ -217,7 +247,7 @@ export async function resolveAuthedChannel(
     .selectAll()
     .where("channel_id", "=", channelId)
     .where("status", "=", "active")
-    .where("kind", "=", "secure_link")
+    .where("kind", "in", [...PORTAL_SURFACE_KINDS])
     .executeTakeFirst();
 
   if (!row) {
@@ -244,4 +274,106 @@ export async function resolveAuthedChannel(
   }
 
   return row;
+}
+
+// ---------------------------------------------------------------------------
+// Channel status lookup for OPRF gating (ADR-091)
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal row returned by lookupChannelForOprf: status and auth_hash
+ * regardless of channel status. The OPRF evaluate path uses this to
+ * decide whether to allow, require auth, or refuse evaluation.
+ */
+export interface ChannelOprfLookup {
+  readonly status: string;
+  readonly auth_hash: Buffer;
+}
+
+/**
+ * Look up a channel row by channel_id, returning status and auth_hash
+ * regardless of channel status. Returns null when no row exists for
+ * the given channelId (the mint path, where evaluation is allowed).
+ *
+ * This is intentionally status-agnostic: the caller (OPRF evaluate
+ * service) decides the gating rules per status.
+ */
+export async function lookupChannelForOprf(
+  db: Kysely<TenantDatabase>,
+  channelId: ChannelSecret,
+): Promise<ChannelOprfLookup | null> {
+  const row = await db
+    .selectFrom("portal_channels")
+    .select(["status", "auth_hash"])
+    .where("channel_id", "=", channelId)
+    .executeTakeFirst();
+
+  if (!row) return null;
+
+  return {
+    status: row.status,
+    auth_hash: Buffer.isBuffer(row.auth_hash)
+      ? row.auth_hash
+      : Buffer.from(row.auth_hash),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Active channel lookup (shared by inbound-sms, followup-service, etc.)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the client's active portal channel, or undefined when none exists.
+ *
+ * The partial unique index uq_portal_channels_active_client guarantees at
+ * most one row matches, so executeTakeFirst is correct.
+ *
+ * Accepts a plain Kysely handle or a transaction so callers inside a
+ * transaction can reuse the same DB session.
+ */
+export async function findActiveChannel(
+  db: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
+  clientId: ClientId,
+): Promise<PortalChannelRow | undefined> {
+  return db
+    .selectFrom("portal_channels")
+    .selectAll()
+    .where("client_id", "=", clientId)
+    .where("status", "=", "active")
+    .executeTakeFirst();
+}
+
+// ---------------------------------------------------------------------------
+// Active channel summary (used by merge UI)
+// ---------------------------------------------------------------------------
+
+export interface ActiveChannelSummary {
+  readonly kind: string;
+  readonly createdAt: Date;
+  readonly hasPassphrase: boolean;
+}
+
+/**
+ * Returns metadata for the client's active portal channel, or null when
+ * no active channel exists. Used by the merge confirmation UI to surface
+ * channel collision info.
+ */
+export async function getActiveChannelSummary(
+  db: Kysely<TenantDatabase>,
+  clientId: ClientId,
+): Promise<ActiveChannelSummary | null> {
+  const row = await db
+    .selectFrom("portal_channels")
+    .select(["kind", "created_at", "has_passphrase"])
+    .where("client_id", "=", clientId)
+    .where("status", "=", "active")
+    .executeTakeFirst();
+
+  if (!row) return null;
+
+  return {
+    kind: row.kind,
+    createdAt: row.created_at,
+    hasPassphrase: row.has_passphrase,
+  };
 }

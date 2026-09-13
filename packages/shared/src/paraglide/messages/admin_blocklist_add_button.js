@@ -10,7 +10,7 @@ const en_admin_blocklist_add_button = /** @type {(inputs: Admin_Blocklist_Add_Bu
 };
 
 const es_admin_blocklist_add_button = /** @type {(inputs: Admin_Blocklist_Add_ButtonInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Agregar numero bloqueado`)
+	return /** @type {LocalizedString} */ (`Agregar número bloqueado`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_error_intake_disabled = /** @type {(inputs: Error_Intake_DisabledInputs
 };
 
 const es_error_intake_disabled = /** @type {(inputs: Error_Intake_DisabledInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La recepcion en linea esta desactivada.`)
+	return /** @type {LocalizedString} */ (`La recepción en línea está desactivada.`)
 };
 
 /**

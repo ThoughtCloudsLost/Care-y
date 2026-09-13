@@ -10,7 +10,7 @@ const en_hub_keys_subtitle = /** @type {(inputs: Hub_Keys_SubtitleInputs) => Loc
 };
 
 const es_hub_keys_subtitle = /** @type {(inputs: Hub_Keys_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Estado de claves de cifrado y rotacion`)
+	return /** @type {LocalizedString} */ (`Estado de claves de cifrado y rotación`)
 };
 
 /**

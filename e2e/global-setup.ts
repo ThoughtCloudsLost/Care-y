@@ -62,39 +62,24 @@ export default async function globalSetup(): Promise<void> {
     `${SERVER_EXEC} tsx src/db/migrate.ts --all-schemas`,
   );
 
-  // Delete stale E2E-created tickets to prevent TICKET_ALREADY_OPEN collisions
-  // and count drift in dashboard assertions. Seed tickets are created by
-  // devSeedTickets and always have user-authored followups (source != 'system').
-  // E2E-created tickets either have zero followups or only system followups
-  // (from take/assign actions). Delete both patterns.
-  console.log("[e2e] Cleaning stale E2E tickets...");
+  // Delete ALL tickets. Same reasoning as the KB wipe below: tickets
+  // created by specs (lifecycle, create, intake) accumulate across runs
+  // because a surgical "non-seed ticket" discriminator cannot keep up
+  // with every path that adds followups. The accumulated OPEN tickets
+  // make createTicket churn through client search terms (every seeded
+  // client already has an open ticket) and drift dashboard counts.
+  // Every ticket-rooted table (followups, wraps, watchers, cursors,
+  // attachments, recordings, portal_messages via followups) is ON
+  // DELETE CASCADE, and seed-data.setup.ts re-creates the 14 seed
+  // tickets each run (devSeedTickets seeds per-client when the client
+  // has no ticket).
+  console.log("[e2e] Cleaning E2E tickets...");
   try {
     const sql = [
       "DO $fn$ DECLARE s TEXT; BEGIN",
       `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
       "IF s IS NOT NULL THEN",
-      // Identify non-seed tickets: those with no user-authored followups.
-      "EXECUTE format('DELETE FROM %I.followups WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id AND f.source != ''system''))', s, s, s);",
-      "EXECUTE format('DELETE FROM %I.ticket_key_wraps WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
-      "EXECUTE format('DELETE FROM %I.ticket_watchers WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
-      "EXECUTE format('DELETE FROM %I.ticket_read_cursors WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
-      "EXECUTE format('DELETE FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id)', s, s);",
-      // Stale web-intake tickets escape the sweep above (they carry a
-      // client-authored intake followup) and their unconverted interim
-      // wraps break the intake spec's wrap-count probes. An
-      // intake_key_wraps row exactly identifies "unconverted web-intake
-      // ticket from a prior run": seed tickets never have one and this
-      // run has not submitted yet. Children first, then the tickets.
-      "EXECUTE format('DELETE FROM %I.followups WHERE ticket_id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
-      "EXECUTE format('DELETE FROM %I.ticket_watchers WHERE ticket_id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
-      "EXECUTE format('DELETE FROM %I.ticket_read_cursors WHERE ticket_id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
-      "EXECUTE format('DELETE FROM %I.tickets WHERE id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
-      // Stale pending-convergence follow-ups (non-null key_generation)
-      // from prior runs are sealed under rotated org keys and can never
-      // converge; they break the specs' wrap-count probes and render as
-      // permanent decrypt errors. Nothing is legitimately pending at
-      // setup time. portal_reply_key_wraps and portal_messages cascade.
-      "EXECUTE format('DELETE FROM %I.followups WHERE key_generation IS NOT NULL', s);",
+      "EXECUTE format('DELETE FROM %I.tickets', s);",
       "END IF; END $fn$;",
     ].join("\n");
     execSync(`${COMPOSE} exec -T db psql -U care_y -d care_y`, {

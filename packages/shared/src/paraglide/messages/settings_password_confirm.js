@@ -10,7 +10,7 @@ const en_settings_password_confirm = /** @type {(inputs: Settings_Password_Confi
 };
 
 const es_settings_password_confirm = /** @type {(inputs: Settings_Password_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Confirmar nueva contrasena`)
+	return /** @type {LocalizedString} */ (`Confirmar nueva contraseña`)
 };
 
 /**

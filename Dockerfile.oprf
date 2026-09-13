@@ -9,8 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Minimal install: only sodium-native runtime dep. All workspace package.json
-# files are needed for pnpm resolution, but --filter limits actual installation.
+# Minimal install: sodium-native plus the @care-y/shared deps (zod) that the
+# @care-y/crypto barrel reaches. All workspace package.json files are needed
+# for pnpm resolution, but --filter limits actual installation. Plain --filter
+# selects only the named projects, so shared must be listed explicitly for its
+# own node_modules to exist in the image.
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY patches/ ./patches/
 COPY packages/server/package.json ./packages/server/
@@ -20,7 +23,7 @@ COPY packages/crypto/package.json ./packages/crypto/
 
 ENV COREPACK_HOME=/app/.corepack
 RUN corepack enable pnpm \
-    && pnpm install --frozen-lockfile --ignore-scripts --filter @care-y/server --filter @care-y/crypto \
+    && pnpm install --frozen-lockfile --ignore-scripts --filter @care-y/server --filter @care-y/crypto --filter @care-y/shared \
     && pnpm rebuild sodium-native
 
 # Copy the files the OPRF process needs. Includes @care-y/crypto source

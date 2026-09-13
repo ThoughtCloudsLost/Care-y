@@ -10,7 +10,7 @@ const en_tickets_sort_followups = /** @type {(inputs: Tickets_Sort_FollowupsInpu
 };
 
 const es_tickets_sort_followups = /** @type {(inputs: Tickets_Sort_FollowupsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mas seguimientos`)
+	return /** @type {LocalizedString} */ (`Más seguimientos`)
 };
 
 /**

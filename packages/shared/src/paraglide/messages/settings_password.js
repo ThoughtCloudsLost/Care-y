@@ -10,7 +10,7 @@ const en_settings_password = /** @type {(inputs: Settings_PasswordInputs) => Loc
 };
 
 const es_settings_password = /** @type {(inputs: Settings_PasswordInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Contrasena`)
+	return /** @type {LocalizedString} */ (`Contraseña`)
 };
 
 /**

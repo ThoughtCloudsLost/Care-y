@@ -10,7 +10,7 @@ const en_intake_noscript = /** @type {(inputs: Intake_NoscriptInputs) => Localiz
 };
 
 const es_intake_noscript = /** @type {(inputs: Intake_NoscriptInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este formulario necesita JavaScript para cifrar tu informacion antes de enviarla. Por favor activa JavaScript, o llamanos en su lugar.`)
+	return /** @type {LocalizedString} */ (`Este formulario necesita JavaScript para cifrar tu información antes de enviarla. Por favor activa JavaScript, o llamanos en su lugar.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_hub_branding_subtitle = /** @type {(inputs: Hub_Branding_SubtitleInputs
 };
 
 const es_hub_branding_subtitle = /** @type {(inputs: Hub_Branding_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre, colores y tema de la organizacion`)
+	return /** @type {LocalizedString} */ (`Nombre, colores y tema de la organización`)
 };
 
 /**

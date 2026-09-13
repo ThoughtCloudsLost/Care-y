@@ -10,7 +10,7 @@ const en_onboarding_briefing_choices_intro = /** @type {(inputs: Onboarding_Brie
 };
 
 const es_onboarding_briefing_choices_intro = /** @type {(inputs: Onboarding_Briefing_Choices_IntroInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las decisiones que tomes durante la configuracion afectan la seguridad de cada voluntario y cliente en tu organizacion.`)
+	return /** @type {LocalizedString} */ (`Las decisiones que tomes durante la configuración afectan la seguridad de cada voluntario y cliente en tu organización.`)
 };
 
 /**

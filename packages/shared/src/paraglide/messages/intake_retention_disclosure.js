@@ -10,7 +10,7 @@ const en_intake_retention_disclosure = /** @type {(inputs: Intake_Retention_Disc
 };
 
 const es_intake_retention_disclosure = /** @type {(inputs: Intake_Retention_DisclosureInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cuando llamas o envias un mensaje de texto a esta linea de ayuda, tu numero de telefono se usa para conectar la llamada o entregar el mensaje. El sistema de la linea cifra tu informacion de inmediato, pero el proveedor de servicio telefonico conserva un registro de tu numero de telefono por hasta 150 dias. Esto es requerido por las politicas del proveedor y la linea de ayuda no puede cambiarlo. Tus mensajes son conservados por el proveedor por hasta 60 dias. El operador de la linea esta evaluando alternativas que eliminen esta retencion por parte de terceros.`)
+	return /** @type {LocalizedString} */ (`Cuando llamas o envias un mensaje de texto a esta línea de ayuda, tu número de teléfono se usa para conectar la llamada o entregar el mensaje. El sistema de la línea cifra tu información de inmediato, pero el proveedor de servicio telefónico conserva un registro de tu número de teléfono por hasta 150 días. Esto es requerido por las políticas del proveedor y la línea de ayuda no puede cambiarlo. Tus mensajes son conservados por el proveedor por hasta 60 días. El operador de la línea esta evaluando alternativas que eliminen esta retención por parte de terceros.`)
 };
 
 /**

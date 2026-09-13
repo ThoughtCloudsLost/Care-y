@@ -10,7 +10,7 @@ const en_intake_reference_label = /** @type {(inputs: Intake_Reference_LabelInpu
 };
 
 const es_intake_reference_label = /** @type {(inputs: Intake_Reference_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu codigo de referencia:`)
+	return /** @type {LocalizedString} */ (`Tu código de referencia:`)
 };
 
 /**

@@ -61,6 +61,7 @@
     onmergedismiss: () => void;
     onmerged: () => void;
     hasVerifiedPhone: boolean;
+    correctionPending?: boolean;
     currentAssigneeId: string | null;
     deleteConfirm: DeleteConfirmState;
     noteEdit: NoteEditState;
@@ -83,6 +84,7 @@
     oncomposedismiss: () => void;
     onreply?: () => void;
     ontextclient?: () => void;
+    onattach?: (file: File) => void;
     ondraftset: (body: string) => void;
   }
 
@@ -109,6 +111,7 @@
     onmergedismiss,
     onmerged,
     hasVerifiedPhone,
+    correctionPending = false,
     currentAssigneeId,
     deleteConfirm,
     noteEdit,
@@ -131,6 +134,7 @@
     oncomposedismiss,
     onreply,
     ontextclient,
+    onattach,
     ondraftset,
   }: Props = $props();
 </script>
@@ -157,7 +161,11 @@
   ondismiss={oncalldismiss}
   ariaLabel={m.ticket_call_options()}
 >
-  <CallOptionsContent {hasVerifiedPhone} onaction={oncallaction} />
+  <CallOptionsContent
+    {hasVerifiedPhone}
+    hasUnacknowledgedCorrection={correctionPending}
+    onaction={oncallaction}
+  />
 </ShellActionSheet>
 
 <ComposeActions
@@ -168,6 +176,7 @@
   onpresetselect={ondraftset}
   {onreply}
   {ontextclient}
+  {onattach}
 />
 
 <ShellPopover

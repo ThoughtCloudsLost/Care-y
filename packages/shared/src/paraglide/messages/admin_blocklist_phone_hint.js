@@ -10,7 +10,7 @@ const en_admin_blocklist_phone_hint = /** @type {(inputs: Admin_Blocklist_Phone_
 };
 
 const es_admin_blocklist_phone_hint = /** @type {(inputs: Admin_Blocklist_Phone_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ingrese el numero completo sin el codigo de pais.`)
+	return /** @type {LocalizedString} */ (`Ingrese el número completo sin el código de país.`)
 };
 
 /**

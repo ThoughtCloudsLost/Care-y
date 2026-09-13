@@ -10,7 +10,7 @@ const en_onboarding_org_country_placeholder = /** @type {(inputs: Onboarding_Org
 };
 
 const es_onboarding_org_country_placeholder = /** @type {(inputs: Onboarding_Org_Country_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Seleccione un pais`)
+	return /** @type {LocalizedString} */ (`Seleccione un país`)
 };
 
 /**

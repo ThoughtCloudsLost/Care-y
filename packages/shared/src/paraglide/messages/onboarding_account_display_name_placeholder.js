@@ -10,7 +10,7 @@ const en_onboarding_account_display_name_placeholder = /** @type {(inputs: Onboa
 };
 
 const es_onboarding_account_display_name_placeholder = /** @type {(inputs: Onboarding_Account_Display_Name_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Como te veran los demas`)
+	return /** @type {LocalizedString} */ (`Cómo te verán los demas`)
 };
 
 /**

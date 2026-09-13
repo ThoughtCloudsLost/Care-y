@@ -10,7 +10,7 @@ const en_user_field_display_name_info = /** @type {(inputs: User_Field_Display_N
 };
 
 const es_user_field_display_name_info = /** @type {(inputs: User_Field_Display_Name_InfoInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Visible para otros ${i?.volunteers} en tu organizacion. Cifrado de extremo a extremo.`)
+	return /** @type {LocalizedString} */ (`Visible para otros ${i?.volunteers} en tu organización. Cifrado de extremo a extremo.`)
 };
 
 /**

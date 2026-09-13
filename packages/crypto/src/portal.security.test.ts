@@ -6,7 +6,8 @@ import {
   deriveChannelId,
   deriveChannelAuth,
   hashChannelAuth,
-  derivePortalKeypair,
+  portalOprfInput,
+  derivePortalKeypairFromOprf,
 } from "./portal.js";
 import { eciesEncrypt, eciesDecrypt } from "./ecies.js";
 import {
@@ -181,46 +182,50 @@ describe("portal security invariants", () => {
     }
   }
 
-  describe("scalar canonicality", () => {
+  describe("scalar canonicality (derivePortalKeypairFromOprf)", () => {
     it("derived scalar is a canonical reduced ristretto255 scalar", () => {
       // A canonical scalar, when reduced again, equals itself.
       // This confirms scalar_reduce was applied (not a raw HKDF slice).
       fc.assert(
-        fc.property(fc.uint8Array({ minLength: 24, maxLength: 24 }), (seed) => {
-          const kp = derivePortalKeypair(seed);
-          const reReduced = real.crypto_core_ristretto255_scalar_reduce(
-            // Pad the 32-byte scalar to 64 bytes for scalar_reduce input
-            (() => {
-              const padded = new Uint8Array(64);
-              padded.set(kp.clientPrivate);
-              return padded;
-            })(),
-          );
-          expect(kp.clientPrivate).toEqual(reReduced);
-        }),
+        fc.property(
+          fc.uint8Array({ minLength: 64, maxLength: 64 }),
+          (oprfOut) => {
+            const kp = derivePortalKeypairFromOprf(oprfOut);
+            const reReduced = real.crypto_core_ristretto255_scalar_reduce(
+              (() => {
+                const padded = new Uint8Array(64);
+                padded.set(kp.clientPrivate);
+                return padded;
+              })(),
+            );
+            expect(kp.clientPrivate).toEqual(reReduced);
+          },
+        ),
         { numRuns: FC_MEDIUM },
       );
     });
 
     it("derived scalar is non-zero", () => {
       fc.assert(
-        fc.property(fc.uint8Array({ minLength: 24, maxLength: 24 }), (seed) => {
-          const kp = derivePortalKeypair(seed);
-          expect(kp.clientPrivate.every((b) => b === 0)).toBe(false);
-        }),
+        fc.property(
+          fc.uint8Array({ minLength: 64, maxLength: 64 }),
+          (oprfOut) => {
+            const kp = derivePortalKeypairFromOprf(oprfOut);
+            expect(kp.clientPrivate.every((b) => b === 0)).toBe(false);
+          },
+        ),
         { numRuns: FC_MEDIUM },
       );
     });
   });
 
   describe("output uniqueness", () => {
-    it("outputs for two random seeds never collide", () => {
+    it("outputs for two random seeds never collide (channelId, auth)", () => {
       fc.assert(
         fc.property(
           fc.uint8Array({ minLength: 24, maxLength: 24 }),
           fc.uint8Array({ minLength: 24, maxLength: 24 }),
           (seed1, seed2) => {
-            // Skip when seeds happen to be identical
             if (
               seed1.length === seed2.length &&
               seed1.every((b, i) => b === seed2[i])
@@ -235,9 +240,22 @@ describe("portal security invariants", () => {
             const auth1 = deriveChannelAuth(seed1);
             const auth2 = deriveChannelAuth(seed2);
             expect(auth1).not.toEqual(auth2);
+          },
+        ),
+        { numRuns: FC_MEDIUM },
+      );
+    });
 
-            const kp1 = derivePortalKeypair(seed1);
-            const kp2 = derivePortalKeypair(seed2);
+    it("different OPRF outputs produce different keypairs", () => {
+      fc.assert(
+        fc.property(
+          fc.uint8Array({ minLength: 64, maxLength: 64 }),
+          fc.uint8Array({ minLength: 64, maxLength: 64 }),
+          (oprf1, oprf2) => {
+            if (oprf1.every((b, i) => b === oprf2[i])) return;
+
+            const kp1 = derivePortalKeypairFromOprf(oprf1);
+            const kp2 = derivePortalKeypairFromOprf(oprf2);
             expect(kp1.clientPrivate).not.toEqual(kp2.clientPrivate);
             expect(kp1.clientPublic).not.toEqual(kp2.clientPublic);
           },
@@ -248,17 +266,17 @@ describe("portal security invariants", () => {
   });
 
   describe("cross-recipient isolation", () => {
-    it("a wrap to one portal keypair never decrypts under another seed's keypair", () => {
+    it("a wrap to one OPRF-derived keypair never decrypts under another", () => {
       fc.assert(
         fc.property(
-          fc.uint8Array({ minLength: 24, maxLength: 24 }),
-          fc.uint8Array({ minLength: 24, maxLength: 24 }),
+          fc.uint8Array({ minLength: 64, maxLength: 64 }),
+          fc.uint8Array({ minLength: 64, maxLength: 64 }),
           fc.uint8Array({ minLength: 1, maxLength: 128 }),
-          (seed1, seed2, plaintext) => {
-            if (seed1.every((b, i) => b === seed2[i])) return;
+          (oprf1, oprf2, plaintext) => {
+            if (oprf1.every((b, i) => b === oprf2[i])) return;
 
-            const kp1 = derivePortalKeypair(seed1);
-            const kp2 = derivePortalKeypair(seed2);
+            const kp1 = derivePortalKeypairFromOprf(oprf1);
+            const kp2 = derivePortalKeypairFromOprf(oprf2);
             const encrypted = eciesEncrypt(plaintext, kp1.clientPublic);
 
             expect(() =>
@@ -276,11 +294,11 @@ describe("portal security invariants", () => {
     });
   });
 
-  describe("intermediate zeroing (no passphrase)", () => {
+  describe("intermediate zeroing (derivePortalKeypairFromOprf)", () => {
     it("zeroes the HKDF intermediates and the 64-byte expansion", () => {
       withInstrumented((log) => {
-        const seed = generatePortalSeed();
-        derivePortalKeypair(seed);
+        const fakeOprf = real.randombytes_buf(64);
+        derivePortalKeypairFromOprf(fakeOprf);
 
         // HKDF finals include PRK and expand blocks from the keypair derivation
         expectAllZeroed(log.hmacFinals);
@@ -292,21 +310,14 @@ describe("portal security invariants", () => {
     });
   });
 
-  describe("intermediate zeroing (with passphrase)", () => {
-    it("zeroes the Argon2id output, ikm, HKDF intermediates, and expansion", () => {
+  describe("intermediate zeroing (portalOprfInput with passphrase)", () => {
+    it("zeroes the Argon2id output via portalOprfInput", () => {
       withInstrumented((log) => {
         const seed = generatePortalSeed();
-        derivePortalKeypair(seed, "zeroing test passphrase words five");
+        portalOprfInput(seed, "zeroing test passphrase words five");
 
-        // Argon2id output must be zeroed
+        // Argon2id output must be zeroed (the stretched passphrase)
         expectAllZeroed(log.pwhashKeys);
-
-        // HKDF finals (PRK + expand blocks from salt derivation and keypair derivation)
-        expectAllZeroed(log.hmacFinals);
-
-        // The 64-byte expansion must be zeroed
-        expect(log.scalarReduceInputs.length).toBeGreaterThan(0);
-        expectAllZeroed(log.scalarReduceInputs);
       });
     }, 60_000);
   });
@@ -331,13 +342,16 @@ describe("portal security invariants", () => {
   describe("public key derivation consistency", () => {
     it("clientPublic equals scalarmult_base(clientPrivate)", () => {
       fc.assert(
-        fc.property(fc.uint8Array({ minLength: 24, maxLength: 24 }), (seed) => {
-          const kp = derivePortalKeypair(seed);
-          const recomputedPublic = real.crypto_scalarmult_ristretto255_base(
-            kp.clientPrivate,
-          );
-          expect(kp.clientPublic).toEqual(recomputedPublic);
-        }),
+        fc.property(
+          fc.uint8Array({ minLength: 64, maxLength: 64 }),
+          (oprfOut) => {
+            const kp = derivePortalKeypairFromOprf(oprfOut);
+            const recomputedPublic = real.crypto_scalarmult_ristretto255_base(
+              kp.clientPrivate,
+            );
+            expect(kp.clientPublic).toEqual(recomputedPublic);
+          },
+        ),
         { numRuns: FC_MEDIUM },
       );
     });

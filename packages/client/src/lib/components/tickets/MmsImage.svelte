@@ -1,9 +1,15 @@
 <!--
-  MMS image thumbnail for the chat timeline.
+  Image thumbnail for the chat timeline (MMS, portal, and file-key paths).
 
-  Renders inside a Konsta Message `text` snippet. Self-fetching: receives
-  attachment metadata as props, fetches encrypted blob via tRPC, decrypts
-  via CryptoBridge.decryptBlob, creates a blob URL for the thumbnail.
+  Two modes:
+
+  1. Bridge mode (default): receives attachment metadata as props, fetches
+     encrypted blob via the blob API, decrypts via CryptoBridge.decryptBlob,
+     creates a blob URL for the thumbnail. Requires a live CryptoBridge.
+
+  2. Injected-decrypt mode: the caller provides a `decrypt` function and
+     optionally a `blobUrl` path. Used by the portal thread, which has no
+     Worker and decrypts on the main thread.
 
   Thumbnail constrained to 240x180 max. Tap emits `onopen` with the image
   blob URL so the route file can open a full-size lightbox via ShellPopup.
@@ -15,8 +21,8 @@
   import { blobSlot } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
-  import { getCryptoBridge } from "$lib/crypto/context.js";
   import { fetchBlob } from "$lib/utils/fetch-blob.js";
+  import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 
   interface Props {
@@ -24,24 +30,86 @@
     attachmentId: string;
     /** Ticket UUID (for tk resolution). */
     ticketId: string;
-    /** ECIES key wrap for this ticket's tk. */
-    keyWrap: TicketKeyWrap | null;
+    /** ECIES key wrap for this ticket's tk (bridge mode). */
+    keyWrap?: TicketKeyWrap | null;
+    /**
+     * CryptoBridge for bridge mode, resolved by the org-side caller
+     * (FollowUpMedia, PanelMediaSection), which already holds it. The
+     * component reads no context itself, so it mounts on the portal
+     * surface unchanged. Same injection pattern as FileKeyMmsImage.
+     */
+    bridge?: CryptoBridge | null;
     /** Alt text for the image. */
     alt: string;
     /** Called when the thumbnail is tapped. Route file opens lightbox. */
     onopen: (imageUrl: string) => void;
+    /**
+     * Optional decrypt callback. When provided, the component skips the
+     * CryptoBridge entirely and calls this instead. The portal thread
+     * supplies one because it has no Worker.
+     */
+    decrypt?: (ciphertext: ArrayBuffer) => ArrayBuffer | Promise<ArrayBuffer>;
+    /**
+     * Override the blob fetch URL. Defaults to the volunteer attachment
+     * endpoint; the portal side passes the portal-scoped path instead.
+     */
+    blobUrl?: string;
+    /** MIME content type for the resulting blob URL. Falls back to image/png. */
+    contentType?: string;
+    /** Extra headers to send with the blob fetch (portal credentials). */
+    fetchHeaders?: Record<string, string>;
   }
 
-  let { attachmentId, ticketId, keyWrap, alt, onopen }: Props = $props();
-
-  const bridge = getCryptoBridge();
+  let {
+    attachmentId,
+    ticketId,
+    keyWrap = null,
+    bridge = null,
+    alt,
+    onopen,
+    decrypt,
+    blobUrl,
+    contentType,
+    fetchHeaders,
+  }: Props = $props();
 
   let thumbnailUrl: string | null = $state(null);
   let hasError = $state(false);
 
+  /**
+   * The decrypt this mount should use, or null when it cannot decrypt yet.
+   *
+   * Bridge mode needs a key wrap, and null there means the key has not
+   * arrived rather than that something failed. Returning one callback for
+   * both modes keeps the fetch path from re-deciding per attempt.
+   */
+  function resolveDecrypt():
+    ((ciphertext: ArrayBuffer) => ArrayBuffer | Promise<ArrayBuffer>) | null {
+    if (decrypt !== undefined) return decrypt;
+    if (bridge == null || keyWrap === null) return null;
+    const wrap = keyWrap;
+    const b = bridge;
+    // Annotated with the same union the prop declares. The bridge branch
+    // is always a promise and the portal branch never is, and the caller
+    // awaits either, so the shared shape belongs on both.
+    return (ciphertext: ArrayBuffer): ArrayBuffer | Promise<ArrayBuffer> =>
+      b.decryptBlob(
+        ticketId,
+        blobSlot(attachmentId),
+        wrap.ephemeralPoint,
+        wrap.nonce,
+        wrap.wrappedKey,
+        ciphertext,
+      );
+  }
+
   // --- Fetch + decrypt + create blob URL on mount ---
   $effect(() => {
-    if (keyWrap === null) {
+    // Resolve which decrypt this mount uses once, up front. Narrowing here
+    // rather than at the call site is what keeps the bridge branch from
+    // needing a non-null assertion on both the bridge and the key wrap.
+    const open = resolveDecrypt();
+    if (open === null) {
       hasError = true;
       return;
     }
@@ -52,26 +120,18 @@
 
     void (async () => {
       try {
-        const ciphertext = await fetchBlob(
-          `/api/blobs/attachments/${attachmentId}`,
-          ac.signal,
-        );
+        const fetchPath = blobUrl ?? `/api/blobs/attachments/${attachmentId}`;
+        const ciphertext = await fetchBlob(fetchPath, ac.signal, fetchHeaders);
         if (aborted()) return;
 
-        const decryptedBuf = await bridge.decryptBlob(
-          ticketId,
-          blobSlot(attachmentId),
-          keyWrap.ephemeralPoint,
-          keyWrap.nonce,
-          keyWrap.wrappedKey,
-          ciphertext,
-        );
+        const decryptedBuf = await open(ciphertext);
         if (aborted()) return;
 
-        const blob = new Blob([decryptedBuf], { type: "image/png" });
-        const url = URL.createObjectURL(blob);
-        createdUrl = url;
-        thumbnailUrl = url;
+        const mimeType = contentType ?? "image/png";
+        const blob = new Blob([decryptedBuf], { type: mimeType });
+        const objectUrl = URL.createObjectURL(blob);
+        createdUrl = objectUrl;
+        thumbnailUrl = objectUrl;
       } catch {
         if (!aborted()) hasError = true;
       }

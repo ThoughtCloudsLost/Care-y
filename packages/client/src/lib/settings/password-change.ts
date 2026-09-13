@@ -99,6 +99,7 @@ export async function changePassword(deps: PasswordChangeDeps): Promise<void> {
 
     const { blindedElement } = await tempBridge.oprfBlind();
     const evaluatedB64 = await evaluateWithPowRetry(
+      "volunteer",
       userId,
       blindedElement,
       onPowRequired,
@@ -189,6 +190,7 @@ export async function changePassword(deps: PasswordChangeDeps): Promise<void> {
 
   const { blindedElement: blindedElement2 } = await primaryBridge.oprfBlind();
   const evaluated2B64 = await evaluateWithPowRetry(
+    "volunteer",
     userId,
     blindedElement2,
     onPowRequired,

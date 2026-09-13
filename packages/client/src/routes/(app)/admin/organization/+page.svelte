@@ -70,11 +70,22 @@
       component: NoteTypesSection,
     },
     {
+      // The section requests navigation; the route performs it, so the
+      // component stays mountable where no router is running.
       id: "intake-forms",
       label: m.intake_forms_title,
       icon: ClipboardList,
       permission: Permission.MANAGE_QUEUES,
       component: IntakeFormsSection,
+      props: {
+        onopenform: (formId: string) =>
+          void goto(resolve(`/admin/forms?id=${encodeURIComponent(formId)}`)),
+        onopenresponses: (formId: string) =>
+          void goto(
+            resolve(`/admin/forms/responses?id=${encodeURIComponent(formId)}`),
+          ),
+        oncreateform: () => void goto(resolve("/admin/forms")),
+      },
     },
   ];
 

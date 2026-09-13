@@ -10,7 +10,7 @@ const en_audit_metadata_title_changed = /** @type {(inputs: Audit_Metadata_Title
 };
 
 const es_audit_metadata_title_changed = /** @type {(inputs: Audit_Metadata_Title_ChangedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Titulo cambiado`)
+	return /** @type {LocalizedString} */ (`Título cambiado`)
 };
 
 /**

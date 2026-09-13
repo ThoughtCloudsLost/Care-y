@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/svelte";
+import * as m from "$lib/paraglide/messages.js";
 import AccountSettings from "./AccountSettings.svelte";
 
 if (typeof Element.prototype.animate !== "function") {
@@ -15,24 +16,19 @@ function renderSettings(overrides: Record<string, unknown> = {}) {
   return render(AccountSettings, {
     props: {
       onchangepassword: vi.fn(),
-      onlogout: vi.fn(),
       pending: false,
       ...overrides,
     },
   });
 }
 
-function getInput(container: HTMLElement, testId: string): HTMLInputElement {
-  const wrapper = container.querySelector(`[data-testid="${testId}"]`);
-  const input = wrapper?.querySelector("input") ?? wrapper;
-  return input as HTMLInputElement;
-}
-
-async function expandSettings(container: HTMLElement): Promise<void> {
-  const toggle = container.querySelector(
-    "[data-testid='account-settings-toggle']",
-  ) as HTMLElement;
-  await fireEvent.click(toggle);
+// PasswordInput and PasswordConfirmPair render through ListInput's input
+// snippet and carry no testid, so the fields are addressed by their
+// accessible name, which is the contract a screen reader uses too.
+function getInput(container: HTMLElement, label: string): HTMLInputElement {
+  return container.querySelector(
+    `input[aria-label="${label}"]`,
+  ) as HTMLInputElement;
 }
 
 describe("AccountSettings", () => {
@@ -40,12 +36,11 @@ describe("AccountSettings", () => {
 
   it("blocks change-password submit when current password is empty", async () => {
     const { container } = renderSettings();
-    await expandSettings(container);
 
-    const newPw = getInput(container, "account-new-password");
+    const newPw = getInput(container, m.account_new_password());
     await fireEvent.input(newPw, { target: { value: "newpassword1" } });
 
-    const confirmPw = getInput(container, "account-confirm-new-password");
+    const confirmPw = getInput(container, m.account_confirm_new_password());
     await fireEvent.input(confirmPw, { target: { value: "newpassword1" } });
 
     const btn = container.querySelector(
@@ -59,15 +54,14 @@ describe("AccountSettings", () => {
 
   it("blocks change-password submit when new password is too short", async () => {
     const { container } = renderSettings();
-    await expandSettings(container);
 
-    const current = getInput(container, "account-current-password");
+    const current = getInput(container, m.account_change_current());
     await fireEvent.input(current, { target: { value: "oldpassword" } });
 
-    const newPw = getInput(container, "account-new-password");
+    const newPw = getInput(container, m.account_new_password());
     await fireEvent.input(newPw, { target: { value: "short" } });
 
-    const confirmPw = getInput(container, "account-confirm-new-password");
+    const confirmPw = getInput(container, m.account_confirm_new_password());
     await fireEvent.input(confirmPw, { target: { value: "short" } });
 
     const btn = container.querySelector(
@@ -81,15 +75,14 @@ describe("AccountSettings", () => {
 
   it("blocks change-password submit when new passwords do not match", async () => {
     const { container } = renderSettings();
-    await expandSettings(container);
 
-    const current = getInput(container, "account-current-password");
+    const current = getInput(container, m.account_change_current());
     await fireEvent.input(current, { target: { value: "oldpassword" } });
 
-    const newPw = getInput(container, "account-new-password");
+    const newPw = getInput(container, m.account_new_password());
     await fireEvent.input(newPw, { target: { value: "newpassword1" } });
 
-    const confirmPw = getInput(container, "account-confirm-new-password");
+    const confirmPw = getInput(container, m.account_confirm_new_password());
     await fireEvent.input(confirmPw, { target: { value: "different99" } });
 
     const btn = container.querySelector(
@@ -104,15 +97,14 @@ describe("AccountSettings", () => {
   it("allows submit when all fields valid and not pending", async () => {
     const onchangepassword = vi.fn();
     const { container } = renderSettings({ onchangepassword });
-    await expandSettings(container);
 
-    const current = getInput(container, "account-current-password");
+    const current = getInput(container, m.account_change_current());
     await fireEvent.input(current, { target: { value: "oldpassword" } });
 
-    const newPw = getInput(container, "account-new-password");
+    const newPw = getInput(container, m.account_new_password());
     await fireEvent.input(newPw, { target: { value: "newpassword1" } });
 
-    const confirmPw = getInput(container, "account-confirm-new-password");
+    const confirmPw = getInput(container, m.account_confirm_new_password());
     await fireEvent.input(confirmPw, { target: { value: "newpassword1" } });
 
     const btn = container.querySelector(
@@ -129,45 +121,44 @@ describe("AccountSettings", () => {
 
   it("shows mismatch only when both new password fields have content and differ", async () => {
     const { container } = renderSettings();
-    await expandSettings(container);
 
-    const mismatch = (): Element | null =>
-      container.querySelector("[data-testid='settings-mismatch']");
-    const newPw = getInput(container, "account-new-password");
-    const confirmPw = getInput(container, "account-confirm-new-password");
+    const mismatch = (): boolean =>
+      container.textContent.includes(m.account_create_mismatch());
+    const newPw = getInput(container, m.account_new_password());
+    const confirmPw = getInput(container, m.account_confirm_new_password());
 
     await fireEvent.input(newPw, { target: { value: "newpassword1" } });
-    expect(mismatch()).toBeNull();
+    expect(mismatch()).toBe(false);
 
     await fireEvent.input(confirmPw, { target: { value: "different99" } });
-    expect(mismatch()).toBeTruthy();
+    expect(mismatch()).toBe(true);
 
     await fireEvent.input(confirmPw, { target: { value: "newpassword1" } });
-    expect(mismatch()).toBeNull();
-  });
-
-  it("calls onlogout when sign-out button is clicked", async () => {
-    const onlogout = vi.fn();
-    const { container } = renderSettings({ onlogout });
-    await expandSettings(container);
-
-    const logoutBtn = container.querySelector(
-      "[data-testid='account-logout']",
-    ) as HTMLElement;
-    await fireEvent.click(logoutBtn);
-    expect(onlogout).toHaveBeenCalled();
+    expect(mismatch()).toBe(false);
   });
 
   it("shows error message when errorMessage is provided", async () => {
     const { container } = renderSettings({
       errorMessage: "Wrong password",
     });
-    await expandSettings(container);
 
     const errorEl = container.querySelector(
       "[data-testid='account-settings-error']",
     );
     expect(errorEl).toBeTruthy();
     expect(errorEl?.textContent).toContain("Wrong password");
+  });
+
+  // Shared-device threat: the reveal toggle must be a deliberate tap, never
+  // the starting state.
+  it("starts with every password field hidden", () => {
+    const { container } = renderSettings();
+    for (const label of [
+      m.account_change_current(),
+      m.account_new_password(),
+      m.account_confirm_new_password(),
+    ]) {
+      expect(getInput(container, label).getAttribute("type")).toBe("password");
+    }
   });
 });

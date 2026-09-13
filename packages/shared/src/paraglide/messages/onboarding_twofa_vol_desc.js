@@ -10,7 +10,7 @@ const en_onboarding_twofa_vol_desc = /** @type {(inputs: Onboarding_Twofa_Vol_De
 };
 
 const es_onboarding_twofa_vol_desc = /** @type {(inputs: Onboarding_Twofa_Vol_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Antes de acceder al Resumen, configura un segundo metodo de verificacion. Esto te protege a ti y a las personas que atiendes.`)
+	return /** @type {LocalizedString} */ (`Antes de acceder al Resumen, configura un segundo método de verificación. Esto te protege a ti y a las personas que atiendes.`)
 };
 
 /**

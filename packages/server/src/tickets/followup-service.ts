@@ -26,6 +26,8 @@ import type {
   NoteTypeId,
   KeyGeneration,
   CallSid,
+  AttachmentId,
+  ChannelRowId,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import {
@@ -33,7 +35,14 @@ import {
   nudgeClient,
   type PortalMessageServiceDeps,
 } from "../portal/portal-message-service.js";
-import type { PortalChannelRow } from "../portal/channel-service.js";
+import {
+  attachToFollowUp,
+  insertClientWrap,
+} from "../portal/portal-attachment-service.js";
+import {
+  findActiveChannel,
+  type PortalChannelRow,
+} from "../portal/channel-service.js";
 
 export interface FollowUpKeyWrap {
   readonly ephemeralPoint: Buffer;
@@ -93,6 +102,17 @@ export interface CreateFollowUpInput {
   readonly callDurationSeconds?: number;
   /** ECIES copy for the client's active portal channel. */
   readonly portalCopy?: PortalCopyInput;
+  /**
+   * Files already uploaded for this ticket, tied to the follow-up here.
+   *
+   * `portalCopy` on an entry is the file key sealed to the client's public
+   * key (ADR-089). Present, the client can open the file; absent, it stays
+   * readable by the org alone.
+   */
+  readonly attachments?: readonly {
+    readonly attachmentId: AttachmentId;
+    readonly portalCopy?: PortalCopyInput;
+  }[];
 }
 
 /** Lightweight follow-up for timeline rendering. Plain messages omit encryptedContent. */
@@ -412,6 +432,14 @@ function hasActiveFilters(opts: FollowUpListOpts): boolean {
 
 export interface FollowUpServiceDeps {
   readonly portalMessageDeps?: PortalMessageServiceDeps;
+  /**
+   * Fires after a follow-up commits with a client copy on an active
+   * channel. An org reply is the signal that the conversation is
+   * legitimate, so the portal reply limiter clears that channel's
+   * window here. Startup-scoped (needs no org context), unlike
+   * portalMessageDeps.
+   */
+  readonly onPortalOrgReply?: (channelRowId: ChannelRowId) => void;
 }
 
 export function createFollowUpService(
@@ -462,26 +490,59 @@ export function createFollowUpService(
 
           // When portalCopy is present, resolve the client's ACTIVE channel
           // inside the transaction and store the client copy atomically.
-          if (input.portalCopy) {
-            const activeChannel = await trx
-              .selectFrom("portal_channels")
-              .selectAll()
-              .where("client_id", "=", ticket.client_id)
-              .where("status", "=", "active")
-              .executeTakeFirst();
+          // Kind-agnostic: volunteer reply copies must reach secure_link,
+          // intake_continuation, and account channels alike.
+          const attachments = input.attachments ?? [];
+          // A message may carry a client copy of its text, of its files, or
+          // of both, and any of the three needs the channel resolved.
+          const wantsClientCopy =
+            input.portalCopy !== undefined ||
+            attachments.some((a) => a.portalCopy !== undefined);
+
+          if (wantsClientCopy) {
+            const activeChannel = await findActiveChannel(
+              trx,
+              ticket.client_id,
+            );
 
             if (activeChannel) {
               channel = activeChannel;
-              await storeClientCopy(
-                trx,
-                activeChannel.id,
-                input.id,
-                input.portalCopy,
-              );
+              if (input.portalCopy) {
+                await storeClientCopy(
+                  trx,
+                  activeChannel.id,
+                  input.id,
+                  input.portalCopy,
+                );
+              }
             } else {
               // Channel revoked between page load and send; silent drop with warn log.
               // The org copy (follow-up) is the truth.
               console.warn("Portal copy dropped: no active channel for client");
+            }
+          }
+
+          // Tie uploads to this follow-up. An id that matches no pending
+          // upload on this ticket fails the whole write rather than
+          // producing a message that silently lost its file.
+          for (const att of attachments) {
+            const linked = await attachToFollowUp(
+              trx,
+              att.attachmentId,
+              input.ticketId,
+              input.id,
+            );
+            if (!linked) {
+              throw new NotFoundError(ErrorCode.ATTACHMENT_NOT_FOUND);
+            }
+            if (att.portalCopy && channel !== null) {
+              await insertClientWrap(trx, {
+                attachmentId: att.attachmentId,
+                channelRowId: channel.id,
+                followupId: input.id,
+                direction: "to_client",
+                copy: att.portalCopy,
+              });
             }
           }
 
@@ -491,6 +552,13 @@ export function createFollowUpService(
       // After commit: fire-and-forget nudge when a channel was resolved
       if (resolvedChannel !== null && deps?.portalMessageDeps) {
         void nudgeClient(db, deps.portalMessageDeps, resolvedChannel);
+      }
+
+      // After commit: an org reply landed on the channel, so the client's
+      // reply window clears. Independent of portalMessageDeps: the reset
+      // must fire even where nudge deps are not wired.
+      if (resolvedChannel !== null) {
+        deps?.onPortalOrgReply?.(resolvedChannel.id);
       }
 
       return toRecord(row);

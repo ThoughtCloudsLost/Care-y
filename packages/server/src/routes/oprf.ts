@@ -7,6 +7,9 @@
  * This is a publicProcedure (no auth required) because OPRF evaluation
  * happens during login before any session exists. The OPRF key is
  * platform-wide (one key for all orgs), so no org context is needed.
+ *
+ * Per ADR-091, every evaluation carries a kind ("volunteer" | "account")
+ * used server-side to construct the per-identity tag.
  */
 
 import {
@@ -33,6 +36,7 @@ export function createOprfRouter(deps: OprfRouterDeps) {
           ctx.session !== null && ctx.user !== null ? ctx.user.id : null;
 
         return deps.oprfService.evaluate({
+          kind: input.kind,
           userId: input.userId,
           blindedElement: input.blindedElement,
           ip,
@@ -53,6 +57,7 @@ export function createOprfRouter(deps: OprfRouterDeps) {
         const ip = extractClientIp(ctx.req);
 
         return deps.oprfService.adminEvaluate({
+          kind: input.kind,
           userId: input.userId,
           blindedElement: input.blindedElement,
           ip,

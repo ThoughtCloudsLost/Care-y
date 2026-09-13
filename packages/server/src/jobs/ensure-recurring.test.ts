@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import pg from "pg";
-import { Kysely, PostgresDialect, sql } from "kysely";
+import { Kysely, sql } from "kysely";
 import { FileMigrationProvider, Migrator } from "kysely/migration";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
@@ -11,7 +11,11 @@ import {
   ESCALATION_RULES_QUEUE,
   DEFAULT_ESCALATION_RULES_INTERVAL_MS,
 } from "./escalation-checker.js";
-import { TestSetupError, createMockJobQueue } from "../test-utils.js";
+import {
+  SafeIntrospectionPostgresDialect,
+  TestSetupError,
+  createMockJobQueue,
+} from "../test-utils.js";
 
 // ---------------------------------------------------------------------------
 // registerEscalationRulesHandler (unit tests)
@@ -101,7 +105,7 @@ async function createPlatformTestDb(): Promise<PlatformTestDb> {
   }
 
   const pool = new pg.Pool({ connectionString, max: 5 });
-  const dialect = new PostgresDialect({ pool });
+  const dialect = new SafeIntrospectionPostgresDialect({ pool }, "public");
   const testDb = new Kysely<PlatformDatabase>({ dialect });
 
   const platformDir = path.join(

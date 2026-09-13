@@ -10,7 +10,7 @@ const en_settings_password_recovery_title = /** @type {(inputs: Settings_Passwor
 };
 
 const es_settings_password_recovery_title = /** @type {(inputs: Settings_Password_Recovery_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Completar rotacion de claves`)
+	return /** @type {LocalizedString} */ (`Completar rotación de claves`)
 };
 
 /**

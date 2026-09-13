@@ -10,7 +10,7 @@ const en_admin_note_types_min_create_role = /** @type {(inputs: Admin_Note_Types
 };
 
 const es_admin_note_types_min_create_role = /** @type {(inputs: Admin_Note_Types_Min_Create_RoleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Rol minimo para crear`)
+	return /** @type {LocalizedString} */ (`Rol mínimo para crear`)
 };
 
 /**

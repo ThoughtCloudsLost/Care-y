@@ -10,7 +10,7 @@ const en_admin_escrow_error = /** @type {(inputs: Admin_Escrow_ErrorInputs) => L
 };
 
 const es_admin_escrow_error = /** @type {(inputs: Admin_Escrow_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La exportacion fallo`)
+	return /** @type {LocalizedString} */ (`La exportación fallo`)
 };
 
 /**

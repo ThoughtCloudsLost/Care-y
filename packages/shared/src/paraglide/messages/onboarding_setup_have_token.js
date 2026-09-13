@@ -10,7 +10,7 @@ const en_onboarding_setup_have_token = /** @type {(inputs: Onboarding_Setup_Have
 };
 
 const es_onboarding_setup_have_token = /** @type {(inputs: Onboarding_Setup_Have_TokenInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tienes un token de configuracion?`)
+	return /** @type {LocalizedString} */ (`¿Tienes un token de configuración?`)
 };
 
 /**

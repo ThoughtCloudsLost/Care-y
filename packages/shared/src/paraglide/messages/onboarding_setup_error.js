@@ -10,7 +10,7 @@ const en_onboarding_setup_error = /** @type {(inputs: Onboarding_Setup_ErrorInpu
 };
 
 const es_onboarding_setup_error = /** @type {(inputs: Onboarding_Setup_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No se pudo verificar el estado de configuracion. Intenta de nuevo.`)
+	return /** @type {LocalizedString} */ (`No se pudo verificar el estado de configuración. Intenta de nuevo.`)
 };
 
 /**

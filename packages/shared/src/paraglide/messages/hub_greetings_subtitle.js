@@ -10,7 +10,7 @@ const en_hub_greetings_subtitle = /** @type {(inputs: Hub_Greetings_SubtitleInpu
 };
 
 const es_hub_greetings_subtitle = /** @type {(inputs: Hub_Greetings_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Saludos grabados y musica en espera`)
+	return /** @type {LocalizedString} */ (`Saludos grabados y música en espera`)
 };
 
 /**

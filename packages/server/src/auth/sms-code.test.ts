@@ -18,14 +18,14 @@ import {
   createMockTelephonyProvider,
   type TestDb,
 } from "../test-utils.js";
-import {
-  createSmsCodeService,
-  type SmsCodeService,
-  type CallerIdResolver,
-} from "./sms-code.js";
-import type { OrgIdentifiers } from "../telephony/phone-resolver.js";
+import { createSmsCodeService, type SmsCodeService } from "./sms-code.js";
+import type {
+  CallerIdResolver,
+  OrgIdentifiers,
+} from "../telephony/phone-resolver.js";
 import { RateLimitError, ValidationError } from "../errors.js";
-import type { OrgId, OrgSchema, CodeHash } from "@care-y/shared";
+import type { OrgId, OrgSchema, CodeHash, E164 } from "@care-y/shared";
+import { e164Schema } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
   let testDb: TestDb;
@@ -49,7 +49,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
   };
 
   function mockResolver(
-    number: string | null = "+15551234567",
+    number: E164 | null = e164Schema.parse("+15551234567"),
   ): CallerIdResolver {
     return vi.fn<CallerIdResolver>().mockResolvedValue(number);
   }

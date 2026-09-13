@@ -10,7 +10,7 @@ const en_intake_error_contact_required = /** @type {(inputs: Intake_Error_Contac
 };
 
 const es_intake_error_contact_required = /** @type {(inputs: Intake_Error_Contact_RequiredInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Por favor ingresa tu informacion de contacto.`)
+	return /** @type {LocalizedString} */ (`Por favor ingresa tu información de contacto.`)
 };
 
 /**

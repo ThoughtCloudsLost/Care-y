@@ -10,7 +10,7 @@ const en_logs_audit_empty_title = /** @type {(inputs: Logs_Audit_Empty_TitleInpu
 };
 
 const es_logs_audit_empty_title = /** @type {(inputs: Logs_Audit_Empty_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No se encontraron eventos de auditoria`)
+	return /** @type {LocalizedString} */ (`No se encontraron eventos de auditoría`)
 };
 
 /**

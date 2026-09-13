@@ -12,6 +12,7 @@
     NotepadTextDashed,
     MessageSquare,
   } from "@lucide/svelte";
+  import { PORTAL_ALLOWED_CONTENT_TYPES } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
@@ -30,6 +31,8 @@
     onreply?: () => void;
     /** Called when "Text Client" is tapped. Caller handles exposure hint + SMS. */
     ontextclient?: () => void;
+    /** Called when a file is picked. The caller owns encryption and upload. */
+    onattach?: (file: File) => void;
   }
 
   let {
@@ -40,7 +43,10 @@
     onpresetselect,
     onreply,
     ontextclient,
+    onattach,
   }: ComposeActionsProps = $props();
+
+  let fileInputEl = $state<HTMLInputElement | null>(null);
 
   let presetSheetOpen = $state(false);
   let noteSheetOpen = $state(false);
@@ -52,7 +58,18 @@
 
   function handleAttach(): void {
     ondismiss();
-    // Stub: file attachment wired separately.
+    fileInputEl?.click();
+  }
+
+  function handleFileChange(e: Event): void {
+    const input = e.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    const file = input.files?.[0];
+    if (file) {
+      onattach?.(file);
+    }
+    // Reset so the same file can be re-picked after removal.
+    input.value = "";
   }
 
   function handlePreset(): void {
@@ -116,6 +133,18 @@
     {/if}
   </KList>
 </ShellPopover>
+
+<!-- Hidden file input triggered programmatically from the Attach menu item.
+     The accept attribute restricts the picker to the shared allowlist. -->
+<input
+  bind:this={fileInputEl}
+  type="file"
+  accept={PORTAL_ALLOWED_CONTENT_TYPES.join(",")}
+  onchange={handleFileChange}
+  class="sr-only"
+  tabindex={-1}
+  aria-hidden="true"
+/>
 
 <ShellSheet
   opened={presetSheetOpen}

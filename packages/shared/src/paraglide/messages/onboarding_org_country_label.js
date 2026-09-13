@@ -10,7 +10,7 @@ const en_onboarding_org_country_label = /** @type {(inputs: Onboarding_Org_Count
 };
 
 const es_onboarding_org_country_label = /** @type {(inputs: Onboarding_Org_Country_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Codigo de pais`)
+	return /** @type {LocalizedString} */ (`Código de país`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_org_no_access = /** @type {(inputs: Admin_Org_No_AccessInputs) =>
 };
 
 const es_admin_org_no_access = /** @type {(inputs: Admin_Org_No_AccessInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No tienes permiso para acceder a la configuracion de la organizacion.`)
+	return /** @type {LocalizedString} */ (`No tienes permiso para acceder a la configuración de la organización.`)
 };
 
 /**

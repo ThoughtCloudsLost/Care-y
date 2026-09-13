@@ -10,7 +10,7 @@ const en_hub_telephony_subtitle = /** @type {(inputs: Hub_Telephony_SubtitleInpu
 };
 
 const es_hub_telephony_subtitle = /** @type {(inputs: Hub_Telephony_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numeros de telefono y enrutamiento de llamadas`)
+	return /** @type {LocalizedString} */ (`Números de teléfono y enrutamiento de llamadas`)
 };
 
 /**

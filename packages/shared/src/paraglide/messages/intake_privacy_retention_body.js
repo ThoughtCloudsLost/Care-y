@@ -10,7 +10,7 @@ const en_intake_privacy_retention_body = /** @type {(inputs: Intake_Privacy_Rete
 };
 
 const es_intake_privacy_retention_body = /** @type {(inputs: Intake_Privacy_Retention_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu informacion cifrada se conserva mientras tu caso este abierto, mas cualquier periodo de retencion establecido por la organizacion. Consulta la divulgacion de datos telefonicos a continuacion para la retencion de llamadas y mensajes de texto por parte del proveedor telefonico.`)
+	return /** @type {LocalizedString} */ (`Tu información cifrada se conserva mientras tu caso este abierto, más cualquier periodo de retención establecido por la organización. Consulta la divulgación de datos telefónicos a continuación para la retención de llamadas y mensajes de texto por parte del proveedor telefónico.`)
 };
 
 /**

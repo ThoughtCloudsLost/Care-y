@@ -10,7 +10,7 @@ const en_onboarding_org_heading = /** @type {(inputs: Onboarding_Org_HeadingInpu
 };
 
 const es_onboarding_org_heading = /** @type {(inputs: Onboarding_Org_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Detalles de la organizacion`)
+	return /** @type {LocalizedString} */ (`Detalles de la organización`)
 };
 
 /**

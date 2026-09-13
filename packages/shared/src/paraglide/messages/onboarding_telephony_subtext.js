@@ -10,7 +10,7 @@ const en_onboarding_telephony_subtext = /** @type {(inputs: Onboarding_Telephony
 };
 
 const es_onboarding_telephony_subtext = /** @type {(inputs: Onboarding_Telephony_SubtextInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Elija como su organizacion maneja las llamadas telefonicas.`)
+	return /** @type {LocalizedString} */ (`Elija como su organización maneja las llamadas telefonicas.`)
 };
 
 /**

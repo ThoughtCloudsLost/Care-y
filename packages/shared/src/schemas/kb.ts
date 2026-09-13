@@ -10,6 +10,9 @@
 import { z } from "zod";
 import { base64String } from "./validators.js";
 import { sortDirectionSchema } from "./tickets.js";
+import { KB_ATTACHMENT_MAX_BYTES } from "./limits.js";
+
+export { KB_ATTACHMENT_MAX_BYTES } from "./limits.js";
 import {
   kbCategoryIdSchema,
   kbItemIdSchema,
@@ -95,9 +98,6 @@ export const kbSavedFilterStateSchema = z.object({
 export type KbSavedFilterState = z.infer<typeof kbSavedFilterStateSchema>;
 
 // --- Attachment schemas ---
-
-/** 10MB in bytes. Enforced client-side and server-side. */
-export const KB_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 /** Hard cap on attachments per article. Prevents storage exhaustion. */
 export const KB_MAX_ATTACHMENTS_PER_ARTICLE = 50;

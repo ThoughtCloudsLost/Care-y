@@ -3,7 +3,7 @@ import { createServer, type Socket, type Server } from "node:net";
 import { chmodSync } from "node:fs";
 import { timingSafeEqual, randomBytes } from "node:crypto";
 import { getSodium } from "@care-y/crypto";
-import { blindEvaluate } from "./oprf-server.js";
+import { taggedBlindEvaluate } from "./oprf-server.js";
 import { CryptoError } from "../errors.js";
 import {
   frameMessage,
@@ -89,7 +89,32 @@ export function zeroAndExit(secure: SecureShare, reason: string): never {
 }
 
 /**
- * Evaluates a single blinded element against the share.
+ * Parse a tagged IPC payload.
+ *
+ * Wire format: [uint16BE tagLen][tag UTF-8 bytes][32-byte blinded element]
+ * A payload of exactly POINT_BYTES (32) with no tag prefix is rejected
+ * because all evaluations now require a tag (ADR-091).
+ */
+function parseTaggedPayload(
+  payload: Buffer,
+): { tag: string; blindedElement: Buffer } | null {
+  const TAG_LEN_BYTES = 2;
+  if (payload.length < TAG_LEN_BYTES + POINT_BYTES) return null;
+
+  const tagLen = payload.readUInt16BE(0);
+  if (tagLen === 0) return null;
+  if (payload.length !== TAG_LEN_BYTES + tagLen + POINT_BYTES) return null;
+
+  const tag = payload
+    .subarray(TAG_LEN_BYTES, TAG_LEN_BYTES + tagLen)
+    .toString("utf8");
+  const blindedElement = payload.subarray(TAG_LEN_BYTES + tagLen);
+  return { tag, blindedElement };
+}
+
+/**
+ * Evaluates a single blinded element against the share, deriving a
+ * per-tag working share in-process (the master share never leaves).
  * Returns the framed response (success or error).
  */
 function evaluatePayload(payload: Buffer, secure: SecureShare): Buffer {
@@ -97,12 +122,16 @@ function evaluatePayload(payload: Buffer, secure: SecureShare): Buffer {
     zeroAndExit(secure, "Canary corruption detected");
   }
 
-  const isInvalidSize = payload.length !== POINT_BYTES;
-  if (isInvalidSize) return frameError();
+  const parsed = parseTaggedPayload(payload);
+  if (parsed === null) return frameError();
 
   try {
     const share = getShare(secure);
-    const result = blindEvaluate(share, payload);
+    const result = taggedBlindEvaluate(
+      share,
+      parsed.tag,
+      parsed.blindedElement,
+    );
     return frameMessage(new Uint8Array(result));
   } catch {
     return frameError();

@@ -10,7 +10,7 @@ const en_admin_invite_password_label = /** @type {(inputs: Admin_Invite_Password
 };
 
 const es_admin_invite_password_label = /** @type {(inputs: Admin_Invite_Password_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Contrasena Temporal`)
+	return /** @type {LocalizedString} */ (`Contraseña Temporal`)
 };
 
 /**

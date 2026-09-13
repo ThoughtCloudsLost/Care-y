@@ -10,7 +10,7 @@ const en_intake_privacy_encrypted = /** @type {(inputs: Intake_Privacy_Encrypted
 };
 
 const es_intake_privacy_encrypted = /** @type {(inputs: Intake_Privacy_EncryptedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Su respuesta esta cifrada. El servicio no puede leerla.`)
+	return /** @type {LocalizedString} */ (`Su respuesta está cifrada. El servicio no puede leerla.`)
 };
 
 /**

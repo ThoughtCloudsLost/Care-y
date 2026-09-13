@@ -11,7 +11,7 @@ test.describe.serial("New Ticket (Create Flow)", () => {
     page = await browser.newPage();
     await startCoverage(page);
     await login(page);
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });

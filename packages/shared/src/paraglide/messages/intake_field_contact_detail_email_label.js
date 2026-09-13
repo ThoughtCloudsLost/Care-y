@@ -10,7 +10,7 @@ const en_intake_field_contact_detail_email_label = /** @type {(inputs: Intake_Fi
 };
 
 const es_intake_field_contact_detail_email_label = /** @type {(inputs: Intake_Field_Contact_Detail_Email_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Correo electronico`)
+	return /** @type {LocalizedString} */ (`Correo electrónico`)
 };
 
 /**

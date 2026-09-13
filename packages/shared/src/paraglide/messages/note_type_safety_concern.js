@@ -10,7 +10,7 @@ const en_note_type_safety_concern = /** @type {(inputs: Note_Type_Safety_Concern
 };
 
 const es_note_type_safety_concern = /** @type {(inputs: Note_Type_Safety_ConcernInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Preocupacion de seguridad`)
+	return /** @type {LocalizedString} */ (`Preocupación de seguridad`)
 };
 
 /**

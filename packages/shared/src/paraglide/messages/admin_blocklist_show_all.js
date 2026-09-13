@@ -10,7 +10,7 @@ const en_admin_blocklist_show_all = /** @type {(inputs: Admin_Blocklist_Show_All
 };
 
 const es_admin_blocklist_show_all = /** @type {(inputs: Admin_Blocklist_Show_AllInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Mostrar ${i?.count} mas`)
+	return /** @type {LocalizedString} */ (`Mostrar ${i?.count} más`)
 };
 
 /**

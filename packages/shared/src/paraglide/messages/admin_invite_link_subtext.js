@@ -10,7 +10,7 @@ const en_admin_invite_link_subtext = /** @type {(inputs: Admin_Invite_Link_Subte
 };
 
 const es_admin_invite_link_subtext = /** @type {(inputs: Admin_Invite_Link_SubtextInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Genere un enlace de invitacion de un solo uso. Compartalo con el nuevo miembro del equipo para que cree su propia cuenta.`)
+	return /** @type {LocalizedString} */ (`Genere un enlace de invitación de un solo uso. Compartalo con el nuevo miembro del equipo para que cree su propia cuenta.`)
 };
 
 /**

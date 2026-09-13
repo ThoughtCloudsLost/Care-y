@@ -10,7 +10,7 @@ const en_client_phone_label = /** @type {(inputs: Client_Phone_LabelInputs) => L
 };
 
 const es_client_phone_label = /** @type {(inputs: Client_Phone_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Telefono`)
+	return /** @type {LocalizedString} */ (`Teléfono`)
 };
 
 /**

@@ -2,17 +2,21 @@
  * HTTP handler for downloading encrypted blobs as application/octet-stream.
  *
  * Path: /api/blobs/<category>/<uuid>
- * Categories: recordings, attachments, kb-attachments
+ * Categories: recordings, attachments, kb-attachments, portal-attachments,
+ *             portal-recordings
  *
- * Authenticated. The handler validates the session, checks role permissions,
- * delegates to the appropriate media service for record lookup and access
- * control, then streams the encrypted blob from BlobStore.
+ * Authenticated, by one of two credentials. A volunteer presents a session
+ * cookie and must hold VIEW_TICKETS; the handler delegates to a media
+ * service for record lookup and access control. A portal client presents a
+ * channel secret or an account session and may read only files a wrap ties
+ * to their own channel (ADR-089). Either way the handler streams
+ * ciphertext and decrypts nothing.
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Kysely } from "kysely";
 import { Permission } from "@care-y/shared";
-import type { OrgSchema, UserId, BlobKey } from "@care-y/shared";
+import type { OrgSchema, UserId, BlobKey, ChannelRowId } from "@care-y/shared";
 import {
   recordingIdSchema,
   attachmentIdSchema,
@@ -30,8 +34,16 @@ import {
   type OrgResolver,
 } from "./relay-utils.js";
 import type { SessionRepository } from "../auth/session-repository.js";
+import { resolvePortalBlobChannel } from "../portal/portal-blob-auth.js";
+import { resolveChannelBlobKey } from "../portal/portal-attachment-service.js";
+import { resolveChannelRecordingBlobKey } from "../portal/portal-recording-service.js";
 
-type BlobCategory = "recordings" | "attachments" | "kb-attachments";
+type BlobCategory =
+  | "recordings"
+  | "attachments"
+  | "kb-attachments"
+  | "portal-attachments"
+  | "portal-recordings";
 
 const PATH_PREFIX = "/api/blobs/";
 
@@ -42,6 +54,8 @@ const VALID_CATEGORIES: ReadonlySet<string> = new Set<BlobCategory>([
   "recordings",
   "attachments",
   "kb-attachments",
+  "portal-attachments",
+  "portal-recordings",
 ]);
 
 export interface BlobDownloadHandlerDeps {
@@ -109,6 +123,43 @@ export function createBlobDownloadHandler(
       return;
     }
 
+    // The portal branch takes a different credential and a different
+    // authorization question, so it answers before the volunteer path
+    // rather than borrowing a session it will never have.
+    if (category === "portal-attachments") {
+      await servePortalBlob(
+        req,
+        res,
+        id,
+        attachmentIdSchema,
+        resolveChannelBlobKey,
+        {
+          orgResolver,
+          createTenantDb,
+          blobStore,
+          corsHeaders,
+        },
+      );
+      return;
+    }
+
+    if (category === "portal-recordings") {
+      await servePortalBlob(
+        req,
+        res,
+        id,
+        recordingIdSchema,
+        resolveChannelRecordingBlobKey,
+        {
+          orgResolver,
+          createTenantDb,
+          blobStore,
+          corsHeaders,
+        },
+      );
+      return;
+    }
+
     const auth = await authenticateRelay(req, orgResolver, createSessionRepo);
     if (!auth.ok) {
       sendJsonResponse(res, auth.status, { error: "unauthorized" });
@@ -152,20 +203,7 @@ export function createBlobDownloadHandler(
         blobKey = record.blobKey;
       }
 
-      const blob = await blobStore.get(blobKey);
-      if (blob === null) {
-        sendJsonResponse(res, 404, { error: "blob_not_found" });
-        return;
-      }
-
-      res.writeHead(200, {
-        ...corsHeaders,
-        "Content-Type": "application/octet-stream",
-        "Content-Length": String(blob.length),
-        "X-Content-Type-Options": "nosniff",
-        "Cache-Control": "private, no-store",
-      });
-      res.end(blob);
+      await streamBlob(res, blobStore, blobKey, corsHeaders);
     } catch (err: unknown) {
       if (err instanceof NotFoundError) {
         sendJsonResponse(res, 404, { error: "not_found" });
@@ -176,4 +214,89 @@ export function createBlobDownloadHandler(
       }
     }
   };
+}
+
+/** Write an encrypted blob as an opaque octet stream, or 404 if it is gone. */
+async function streamBlob(
+  res: ServerResponse,
+  blobStore: BlobStore,
+  blobKey: BlobKey,
+  corsHeaders: Readonly<Record<string, string>>,
+): Promise<void> {
+  const blob = await blobStore.get(blobKey);
+  if (blob === null) {
+    sendJsonResponse(res, 404, { error: "blob_not_found" });
+    return;
+  }
+
+  res.writeHead(200, {
+    ...corsHeaders,
+    "Content-Type": "application/octet-stream",
+    "Content-Length": String(blob.length),
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "private, no-store",
+  });
+  res.end(blob);
+}
+
+/** A function that resolves a blob key given a channel and a parsed id. */
+type PortalBlobResolver<TId> = (
+  db: Kysely<TenantDatabase>,
+  channelRowId: ChannelRowId,
+  id: TId,
+) => Promise<BlobKey | null>;
+
+/**
+ * Serve one blob to the portal channel that asked for it.
+ *
+ * Two checks, and both are needed. The credential says which channel is
+ * asking. The resolver says whether that channel may read this file:
+ * an id is a uuid a client could hold from another context, so it
+ * authorizes nothing on its own (ADR-089).
+ *
+ * Every failure answers 401 or 404 with no detail. A response that
+ * distinguished "no such file" from "not yours" would let anyone holding
+ * a channel enumerate what other files exist.
+ */
+async function servePortalBlob<TId>(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: string,
+  idSchema: { parse: (v: string) => TId },
+  resolver: PortalBlobResolver<TId>,
+  deps: {
+    orgResolver: OrgResolver;
+    createTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>;
+    blobStore: BlobStore;
+    corsHeaders: Readonly<Record<string, string>>;
+  },
+): Promise<void> {
+  const resolved = await deps.orgResolver(req);
+  if (resolved === null) {
+    sendJsonResponse(res, 401, { error: "unauthorized" });
+    return;
+  }
+
+  const tDb = deps.createTenantDb(resolved.orgSchema);
+
+  try {
+    const channel = await resolvePortalBlobChannel(tDb, req);
+    if (channel === null) {
+      sendJsonResponse(res, 401, { error: "unauthorized" });
+      return;
+    }
+
+    const parsedId = idSchema.parse(id);
+    const blobKey = await resolver(tDb, channel.id, parsedId);
+    if (blobKey === null) {
+      sendJsonResponse(res, 404, { error: "not_found" });
+      return;
+    }
+
+    await streamBlob(res, deps.blobStore, blobKey, deps.corsHeaders);
+  } catch {
+    // Nothing here distinguishes a bad id from a storage failure to the
+    // caller, and the reason never reaches a log that could carry it.
+    sendJsonResponse(res, 500, { error: "internal_error" });
+  }
 }

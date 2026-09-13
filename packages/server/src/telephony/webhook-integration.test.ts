@@ -301,621 +301,618 @@ function buildEncryptedTwilioConfig(encryptor: SecretsEncryptor): Buffer {
 // Integration test suite
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!process.env.DATABASE_URL)(
-  "Webhook-to-DB integration (D1)",
-  () => {
-    // Shared state across tests
-    let testDb: TestDb;
-    let tDb: Kysely<TenantDatabase>;
-    let secretsEncryptor: SecretsEncryptor;
-    let blobStore: CapturingBlobStore;
-    let handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
-    let mockJobQueue: JobQueue;
-    let sendSmsSpy: ReturnType<
-      typeof vi.fn<
+describe.skipIf(!process.env.DATABASE_URL)("Webhook-to-DB integration", () => {
+  // Shared state across tests
+  let testDb: TestDb;
+  let tDb: Kysely<TenantDatabase>;
+  let secretsEncryptor: SecretsEncryptor;
+  let blobStore: CapturingBlobStore;
+  let handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+  let mockJobQueue: JobQueue;
+  let sendSmsSpy: ReturnType<
+    typeof vi.fn<
+      (to: string, body: string, callerId: string) => Promise<SendSmsResult>
+    >
+  >;
+  let deleteMessageLogSpy: ReturnType<
+    typeof vi.fn<(messageId: string) => Promise<void>>
+  >;
+  let dedupStore: ReturnType<typeof createDedupStore>;
+  let mockNotificationService: NotificationService;
+
+  beforeAll(async () => {
+    // Initialize sodium (required by @care-y/crypto before sync crypto ops)
+    const { getSodium } = await import("@care-y/crypto");
+    await getSodium();
+
+    // 1. Create isolated test schema (fast, designed for concurrent use)
+    testDb = await createTestDb();
+    tDb = testDb.db;
+
+    // 2. Insert default org_config row with intake_queue_id.
+    //    createTestDb runs migrations but doesn't insert the default row;
+    //    that's done by createOrg in production.
+    const intakeQueue = await tDb
+      .insertInto("queues")
+      .values({
+        encrypted_name: Buffer.from("Intake"),
+        sort_order: 1,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+
+    await tDb
+      .insertInto("org_config")
+      .values({
+        pii_retention_days: null,
+        intake_queue_id: intakeQueue.id,
+      })
+      .execute();
+    await seedOrgPublicKey(tDb);
+
+    // 3. Seed an SMS auto-reply response
+    await tDb
+      .insertInto("sms_responses")
+      .values({
+        response_type: "new_client",
+        locale: "en-US",
+        text: "Thank you for reaching out. A volunteer will follow up.",
+      })
+      .execute();
+
+    // 3b. Seed a minimal admin user so the quarantine notification path fires
+    await tDb
+      .insertInto("users")
+      .values({
+        identifier_hash: "integ-admin-hash" as IdentifierHash,
+        encrypted_identifier: Buffer.from("integ-admin"),
+        password_hash: "not-a-real-hash" as PasswordHash,
+        encrypted_display_name: Buffer.from("Admin"),
+        role_id: RoleId.ADMIN,
+        is_active: true,
+      })
+      .execute();
+
+    // 4. Insert an org row in the platform DB pointing to our test schema.
+    //    resolveOrgForWebhook looks up orgs by ID and checks isActive.
+    await testDb.platformDb
+      .insertInto("orgs")
+      .values({
+        id: WEBHOOK_INTEG_ORG_ID,
+        slug: `integ-${testDb.schemaName}` as OrgSlug,
+        schema_name: testDb.schemaName as OrgSchema,
+      })
+      .execute();
+
+    // 5. Secrets encryptor (for telephony config in platform DB)
+    const secretsKey = deriveSecretsKey(TEST_OPS_KEY);
+    secretsEncryptor = createSecretsEncryptor(secretsKey);
+
+    // 6. Seed telephony_config with encrypted Twilio config.
+    //    Encryption is done inside buildEncryptedTwilioConfig so that
+    //    plaintext variables stay out of scope of the DB write below.
+    const encryptedConfig = buildEncryptedTwilioConfig(secretsEncryptor);
+
+    await testDb.platformDb
+      .insertInto("telephony_config")
+      .values({
+        org_id: WEBHOOK_INTEG_ORG_ID,
+        provider: "twilio",
+        config: encryptedConfig,
+      })
+      .execute();
+
+    // 7. Capturing BlobStore (inspectable mock, avoids filesystem + org_ prefix requirement)
+    blobStore = createCapturingBlobStore();
+
+    // 8. Mock JobQueue
+    mockJobQueue = {
+      enqueue: vi.fn().mockResolvedValue("job-1"),
+      process: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    };
+
+    // 9. Build a hybrid provider with real webhook validation + real SMS
+    //    parsing, but mock send/delete (can't call real Twilio).
+    sendSmsSpy = vi
+      .fn<
         (to: string, body: string, callerId: string) => Promise<SendSmsResult>
-      >
-    >;
-    let deleteMessageLogSpy: ReturnType<
-      typeof vi.fn<(messageId: string) => Promise<void>>
-    >;
-    let dedupStore: ReturnType<typeof createDedupStore>;
-    let mockNotificationService: NotificationService;
+      >()
+      .mockResolvedValue({ messageId: "SM_SENT_001" });
+    deleteMessageLogSpy = vi
+      .fn<(messageId: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
 
-    beforeAll(async () => {
-      // Initialize sodium (required by @care-y/crypto before sync crypto ops)
-      const { getSodium } = await import("@care-y/crypto");
-      await getSodium();
-
-      // 1. Create isolated test schema (fast, designed for concurrent use)
-      testDb = await createTestDb();
-      tDb = testDb.db;
-
-      // 2. Insert default org_config row with intake_queue_id.
-      //    createTestDb runs migrations but doesn't insert the default row;
-      //    that's done by createOrg in production.
-      const intakeQueue = await tDb
-        .insertInto("queues")
-        .values({
-          encrypted_name: Buffer.from("Intake"),
-          sort_order: 1,
-        })
-        .returning("id")
-        .executeTakeFirstOrThrow();
-
-      await tDb
-        .insertInto("org_config")
-        .values({
-          pii_retention_days: null,
-          intake_queue_id: intakeQueue.id,
-        })
-        .execute();
-      await seedOrgPublicKey(tDb);
-
-      // 3. Seed an SMS auto-reply response
-      await tDb
-        .insertInto("sms_responses")
-        .values({
-          response_type: "new_client",
-          locale: "en-US",
-          text: "Thank you for reaching out. A volunteer will follow up.",
-        })
-        .execute();
-
-      // 3b. Seed a minimal admin user so the quarantine notification path fires
-      await tDb
-        .insertInto("users")
-        .values({
-          identifier_hash: "integ-admin-hash" as IdentifierHash,
-          encrypted_identifier: Buffer.from("integ-admin"),
-          password_hash: "not-a-real-hash" as PasswordHash,
-          encrypted_display_name: Buffer.from("Admin"),
-          role_id: RoleId.ADMIN,
-          is_active: true,
-        })
-        .execute();
-
-      // 4. Insert an org row in the platform DB pointing to our test schema.
-      //    resolveOrgForWebhook looks up orgs by ID and checks isActive.
-      await testDb.platformDb
-        .insertInto("orgs")
-        .values({
-          id: WEBHOOK_INTEG_ORG_ID,
-          slug: `integ-${testDb.schemaName}` as OrgSlug,
-          schema_name: testDb.schemaName as OrgSchema,
-        })
-        .execute();
-
-      // 5. Secrets encryptor (for telephony config in platform DB)
-      const secretsKey = deriveSecretsKey(TEST_OPS_KEY);
-      secretsEncryptor = createSecretsEncryptor(secretsKey);
-
-      // 6. Seed telephony_config with encrypted Twilio config.
-      //    Encryption is done inside buildEncryptedTwilioConfig so that
-      //    plaintext variables stay out of scope of the DB write below.
-      const encryptedConfig = buildEncryptedTwilioConfig(secretsEncryptor);
-
-      await testDb.platformDb
-        .insertInto("telephony_config")
-        .values({
-          org_id: WEBHOOK_INTEG_ORG_ID,
+    const hybridProvider: TelephonyProvider = {
+      providerId: "twilio",
+      validateWebhook(request) {
+        return twilioHmacValidator.validate(
+          request.url,
+          request.body,
+          request.authToken,
+          request.signature,
+        );
+      },
+      parseIncomingSms(body) {
+        const messageId = body.MessageSid;
+        const from = body.From;
+        const to = body.To;
+        const smsBody = body.Body;
+        if (
+          messageId === undefined ||
+          from === undefined ||
+          to === undefined ||
+          smsBody === undefined
+        ) {
+          throw new TestSetupError("Missing required SMS fields");
+        }
+        const numMedia = parseInt(body.NumMedia ?? "0", 10);
+        const { mediaUrls, mediaContentTypes } = extractMediaFromWebhookBody(
+          body,
+          numMedia,
+        );
+        return {
+          messageId,
+          from: from as E164,
+          to: to as E164,
+          body: smsBody,
+          numMedia,
+          mediaUrls,
+          mediaContentTypes,
+        };
+      },
+      sendSms: sendSmsSpy,
+      deleteMessageLog: deleteMessageLogSpy,
+      async initiateOutboundCall() {
+        throw new TestSetupError("Not expected in SMS flow");
+      },
+      async initiateWebRtcCall() {
+        throw new TestSetupError("Not expected in SMS flow");
+      },
+      parseIncomingCall() {
+        throw new TestSetupError("Not expected in SMS flow");
+      },
+      generateVoiceResponse() {
+        return ""; // Recording-complete callbacks return null TwiML
+      },
+      async getRecording() {
+        return Buffer.from("fake-audio-for-quarantine");
+      },
+      async getCallDetails() {
+        return { from: "+15551112222" as E164, to: "+15553334444" as E164 };
+      },
+      async deleteRecording() {
+        // Best-effort deletion after quarantine
+      },
+      async deleteCallLog() {
+        // Best-effort deletion after quarantine
+      },
+      maskConfig() {
+        return {
           provider: "twilio",
-          config: encryptedConfig,
-        })
-        .execute();
+          mode: "byot",
+          maskedAccountId: "AC***",
+          maskedAuthToken: "****",
+          phoneNumbers: [],
+        };
+      },
+    };
 
-      // 7. Capturing BlobStore (inspectable mock, avoids filesystem + org_ prefix requirement)
-      blobStore = createCapturingBlobStore();
+    const providerFactory: ProviderFactory = {
+      getProvider: vi.fn().mockResolvedValue(hybridProvider),
+      invalidate: vi.fn(),
+      invalidateAll: vi.fn(),
+    };
 
-      // 8. Mock JobQueue
-      mockJobQueue = {
-        enqueue: vi.fn().mockResolvedValue("job-1"),
-        process: vi.fn(),
-        start: vi.fn(),
-        stop: vi.fn(),
-      };
+    // 10. Real config service (reads encrypted config from DB)
+    const configService = createTelephonyConfigService({
+      db: testDb.platformDb,
+      secretsEncryptor,
+      providerFactory,
+      providerStatics: new Map(),
+    });
 
-      // 9. Build a hybrid provider with real webhook validation + real SMS
-      //    parsing, but mock send/delete (can't call real Twilio).
-      sendSmsSpy = vi
-        .fn<
-          (to: string, body: string, callerId: string) => Promise<SendSmsResult>
-        >()
-        .mockResolvedValue({ messageId: "SM_SENT_001" });
-      deleteMessageLogSpy = vi
-        .fn<(messageId: string) => Promise<void>>()
-        .mockResolvedValue(undefined);
-
-      const hybridProvider: TelephonyProvider = {
-        providerId: "twilio",
-        validateWebhook(request) {
-          return twilioHmacValidator.validate(
-            request.url,
-            request.body,
-            request.authToken,
-            request.signature,
-          );
-        },
-        parseIncomingSms(body) {
-          const messageId = body.MessageSid;
-          const from = body.From;
-          const to = body.To;
-          const smsBody = body.Body;
-          if (
-            messageId === undefined ||
-            from === undefined ||
-            to === undefined ||
-            smsBody === undefined
-          ) {
-            throw new TestSetupError("Missing required SMS fields");
-          }
-          const numMedia = parseInt(body.NumMedia ?? "0", 10);
-          const { mediaUrls, mediaContentTypes } = extractMediaFromWebhookBody(
-            body,
-            numMedia,
-          );
+    // 11. Stub OrgService that returns our test org.
+    //     resolveOrgForWebhook calls orgService.findById, then reads
+    //     org_config.org_public_key from the tenant DB.
+    const orgService: OrgService = {
+      async createOrg() {
+        throw new TestSetupError("Not expected");
+      },
+      async findBySlug() {
+        return null;
+      },
+      async findById(id: OrgId) {
+        if (id === WEBHOOK_INTEG_ORG_ID) {
           return {
-            messageId,
-            from: from as E164,
-            to: to as E164,
-            body: smsBody,
-            numMedia,
-            mediaUrls,
-            mediaContentTypes,
+            id: WEBHOOK_INTEG_ORG_ID,
+            slug: `integ-${testDb.schemaName}` as OrgSlug,
+            schemaName: testDb.schemaName as OrgSchema,
+            isActive: true,
           };
-        },
-        sendSms: sendSmsSpy,
-        deleteMessageLog: deleteMessageLogSpy,
-        async initiateOutboundCall() {
-          throw new TestSetupError("Not expected in SMS flow");
-        },
-        async initiateWebRtcCall() {
-          throw new TestSetupError("Not expected in SMS flow");
-        },
-        parseIncomingCall() {
-          throw new TestSetupError("Not expected in SMS flow");
-        },
-        generateVoiceResponse() {
-          return ""; // Recording-complete callbacks return null TwiML
-        },
-        async getRecording() {
-          return Buffer.from("fake-audio-for-quarantine");
-        },
-        async getCallDetails() {
-          return { from: "+15551112222" as E164, to: "+15553334444" as E164 };
-        },
-        async deleteRecording() {
-          // Best-effort deletion after quarantine
-        },
-        async deleteCallLog() {
-          // Best-effort deletion after quarantine
-        },
-        maskConfig() {
-          return {
-            provider: "twilio",
-            mode: "byot",
-            maskedAccountId: "AC***",
-            maskedAuthToken: "****",
-            phoneNumbers: [],
-          };
-        },
-      };
+        }
+        return null;
+      },
+      async validateSetupToken() {
+        return false;
+      },
+      async consumeSetupToken() {
+        /* no-op in test */
+      },
+    };
 
-      const providerFactory: ProviderFactory = {
-        getProvider: vi.fn().mockResolvedValue(hybridProvider),
-        invalidate: vi.fn(),
-        invalidateAll: vi.fn(),
-      };
+    // 12. Real webhook dispatch (wires org resolution, repos, handlers)
+    function tenantDbFactory(schema: string): Kysely<TenantDatabase> {
+      return testDb.platformDb.withSchema(
+        schema,
+      ) as unknown as Kysely<TenantDatabase>;
+    }
 
-      // 10. Real config service (reads encrypted config from DB)
-      const configService = createTelephonyConfigService({
-        db: testDb.platformDb,
-        secretsEncryptor,
+    mockNotificationService = {
+      dispatch: vi.fn().mockResolvedValue(undefined),
+      dispatchTicketless: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const dispatch: WebhookDispatch = createWebhookDispatch({
+      orgService,
+      tenantDb: tenantDbFactory,
+      providerFactory,
+      indexer: testBlindIndexer,
+      blobStore,
+      jobQueue: mockJobQueue,
+      webhookBaseUrl: WEBHOOK_BASE_URL,
+      callTracker: createCallTracker(),
+      notificationService: mockNotificationService,
+    });
+
+    // 13. Real webhook handler (rate limiter, dedup, signature validation)
+    dedupStore = createDedupStore();
+    const rateLimiter = createInMemoryRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 200,
+    });
+
+    handler = createWebhookHandler(
+      {
+        configService,
         providerFactory,
-        providerStatics: new Map(),
-      });
+        rateLimiter,
+        dedupStore,
+      },
+      dispatch,
+      WEBHOOK_BASE_URL,
+    );
+  });
 
-      // 11. Stub OrgService that returns our test org.
-      //     resolveOrgForWebhook calls orgService.findById, then reads
-      //     org_config.org_public_key from the tenant DB.
-      const orgService: OrgService = {
-        async createOrg() {
-          throw new TestSetupError("Not expected");
-        },
-        async findBySlug() {
-          return null;
-        },
-        async findById(id: OrgId) {
-          if (id === WEBHOOK_INTEG_ORG_ID) {
-            return {
-              id: WEBHOOK_INTEG_ORG_ID,
-              slug: `integ-${testDb.schemaName}` as OrgSlug,
-              schemaName: testDb.schemaName as OrgSchema,
-              isActive: true,
-            };
-          }
-          return null;
-        },
-        async validateSetupToken() {
-          return false;
-        },
-        async consumeSetupToken() {
-          /* no-op in test */
-        },
-      };
+  afterAll(async () => {
+    // Clean up platform rows seeded for this test
+    await testDb.platformDb
+      .deleteFrom("telephony_config")
+      .where("org_id", "=", WEBHOOK_INTEG_ORG_ID)
+      .execute();
+    await testDb.platformDb
+      .deleteFrom("orgs")
+      .where("id", "=", WEBHOOK_INTEG_ORG_ID)
+      .execute();
+    // Stop dedup cleanup interval
+    dedupStore.stop();
+    // Drop test schema and close pool
+    await testDb.cleanup();
+  });
 
-      // 12. Real webhook dispatch (wires org resolution, repos, handlers)
-      function tenantDbFactory(schema: string): Kysely<TenantDatabase> {
-        return testDb.platformDb.withSchema(
-          schema,
-        ) as unknown as Kysely<TenantDatabase>;
-      }
+  // -----------------------------------------------------------------
+  // Full chain test
+  // -----------------------------------------------------------------
 
-      mockNotificationService = {
-        dispatch: vi.fn().mockResolvedValue(undefined),
-        dispatchTicketless: vi.fn().mockResolvedValue(undefined),
-      };
+  it("signed SMS webhook creates encrypted blob and client record in DB", async () => {
+    const senderPhone = "+15559876543";
+    const hotlineNumber = "+15551234567";
+    const messageText = "I need help with my situation";
+    const messageSid = "SM_INTEG_FULL_CHAIN";
 
-      const dispatch: WebhookDispatch = createWebhookDispatch({
-        orgService,
-        tenantDb: tenantDbFactory,
-        providerFactory,
-        indexer: testBlindIndexer,
-        blobStore,
-        jobQueue: mockJobQueue,
-        webhookBaseUrl: WEBHOOK_BASE_URL,
-        callTracker: createCallTracker(),
-        notificationService: mockNotificationService,
-      });
-
-      // 13. Real webhook handler (rate limiter, dedup, signature validation)
-      dedupStore = createDedupStore();
-      const rateLimiter = createInMemoryRateLimiter({
-        windowMs: 60_000,
-        maxRequests: 200,
-      });
-
-      handler = createWebhookHandler(
-        {
-          configService,
-          providerFactory,
-          rateLimiter,
-          dedupStore,
-        },
-        dispatch,
-        WEBHOOK_BASE_URL,
-      );
+    const { url, body, signature } = buildSignedSmsRequest({
+      orgId: WEBHOOK_INTEG_ORG_ID,
+      from: senderPhone,
+      to: hotlineNumber,
+      messageBody: messageText,
+      messageSid,
     });
 
-    afterAll(async () => {
-      // Clean up platform rows seeded for this test
-      await testDb.platformDb
-        .deleteFrom("telephony_config")
-        .where("org_id", "=", WEBHOOK_INTEG_ORG_ID)
-        .execute();
-      await testDb.platformDb
-        .deleteFrom("orgs")
-        .where("id", "=", WEBHOOK_INTEG_ORG_ID)
-        .execute();
-      // Stop dedup cleanup interval
-      dedupStore.stop();
-      // Drop test schema and close pool
-      await testDb.cleanup();
+    const req = createMockReq({
+      url,
+      body,
+      headers: { "x-twilio-signature": signature },
+    });
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    // --- Assert: 200 OK (dispatch succeeded) ---
+    expect(res.statusCode).toBe(200);
+
+    // --- Assert: auto-reply SMS was sent ---
+    expect(sendSmsSpy).toHaveBeenCalledOnce();
+    expect(sendSmsSpy).toHaveBeenCalledWith(
+      senderPhone,
+      "Thank you for reaching out. A volunteer will follow up.",
+      hotlineNumber,
+    );
+
+    // --- Assert: deleteMessageLog was called ---
+    expect(deleteMessageLogSpy).toHaveBeenCalledOnce();
+    expect(deleteMessageLogSpy).toHaveBeenCalledWith(messageSid);
+
+    // --- Assert: client record exists in DB with blind index hash ---
+    const expectedHash = testBlindIndexer.hash(
+      senderPhone,
+      WEBHOOK_INTEG_ORG_ID,
+    ) as PhoneHash;
+    const phoneRow = await tDb
+      .selectFrom("phones")
+      .selectAll()
+      .where("phone_hash", "=", expectedHash)
+      .executeTakeFirst();
+
+    expect(phoneRow).toBeDefined();
+    expect(phoneRow!.phone_hash).toBe(expectedHash);
+    // encrypted_number must NOT be the plaintext phone
+    expect(phoneRow!.encrypted_number.toString("utf-8")).not.toContain(
+      senderPhone,
+    );
+    // Sealed box adds 48 bytes overhead; plaintext "+15559876543" is 12 bytes
+    expect(phoneRow!.encrypted_number.length).toBeGreaterThanOrEqual(48 + 12);
+
+    const clientRow = await tDb
+      .selectFrom("clients")
+      .selectAll()
+      .where("phone_id", "=", phoneRow!.id)
+      .executeTakeFirst();
+
+    expect(clientRow).toBeDefined();
+    expect(clientRow!.encrypted_alias).toBeTruthy(); // auto-generated pseudonym (sealed)
+
+    // --- Assert: ticket created for this client ---
+    const tickets = await tDb
+      .selectFrom("tickets")
+      .selectAll()
+      .where("client_id", "=", clientRow!.id)
+      .execute();
+    expect(tickets).toHaveLength(1);
+    expect(tickets[0]!.status).toBe("open");
+
+    // --- Assert: follow-up created with ECIES-encrypted content ---
+    const followups = await tDb
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", tickets[0]!.id)
+      .where("type", "=", "sms_inbound")
+      .execute();
+    expect(followups).toHaveLength(1);
+    // Encrypted content must NOT contain plaintext
+    expect(followups[0]!.encrypted_content.toString("utf-8")).not.toContain(
+      messageText,
+    );
+    // Content is encrypted with crypto_secretbox: nonce(24) + ciphertext(plaintext + MAC(16))
+    expect(followups[0]!.encrypted_content.length).toBeGreaterThanOrEqual(
+      24 + 16 + messageText.length,
+    );
+  });
+
+  it("second message from the same phone finds existing client (not a duplicate)", async () => {
+    const senderPhone = "+15559876543";
+    const hotlineNumber = "+15551234567";
+
+    const { url, body, signature } = buildSignedSmsRequest({
+      orgId: WEBHOOK_INTEG_ORG_ID,
+      from: senderPhone,
+      to: hotlineNumber,
+      messageBody: "Follow-up question",
+      messageSid: "SM_INTEG_FOLLOWUP",
     });
 
-    // -----------------------------------------------------------------
-    // D1: Full chain test
-    // -----------------------------------------------------------------
+    const req = createMockReq({
+      url,
+      body,
+      headers: { "x-twilio-signature": signature },
+    });
+    const res = createMockRes();
 
-    it("signed SMS webhook creates encrypted blob and client record in DB", async () => {
-      const senderPhone = "+15559876543";
-      const hotlineNumber = "+15551234567";
-      const messageText = "I need help with my situation";
-      const messageSid = "SM_INTEG_FULL_CHAIN";
+    await handler(req, res);
 
-      const { url, body, signature } = buildSignedSmsRequest({
+    expect(res.statusCode).toBe(200);
+
+    // Only one phone record should exist for this hash
+    const expectedHash = testBlindIndexer.hash(
+      senderPhone,
+      WEBHOOK_INTEG_ORG_ID,
+    ) as PhoneHash;
+    const phoneRows = await tDb
+      .selectFrom("phones")
+      .selectAll()
+      .where("phone_hash", "=", expectedHash)
+      .execute();
+
+    // The first test already created a phone. There should still be exactly
+    // one because findOrCreateByPhoneHash finds the existing record.
+    expect(phoneRows).toHaveLength(1);
+
+    // And exactly one client for that phone
+    const clientRows = await tDb
+      .selectFrom("clients")
+      .selectAll()
+      .where("phone_id", "=", phoneRows[0]!.id)
+      .execute();
+
+    expect(clientRows).toHaveLength(1);
+
+    // Still one ticket (existing open ticket reused)
+    const tickets = await tDb
+      .selectFrom("tickets")
+      .selectAll()
+      .where("client_id", "=", clientRows[0]!.id)
+      .execute();
+    expect(tickets).toHaveLength(1);
+
+    // But two follow-ups (one per SMS)
+    const followups = await tDb
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", tickets[0]!.id)
+      .where("type", "=", "sms_inbound")
+      .execute();
+    expect(followups).toHaveLength(2);
+  });
+
+  it("invalid signature is rejected before any DB writes occur", async () => {
+    const { url, body } = buildSignedSmsRequest({
+      orgId: WEBHOOK_INTEG_ORG_ID,
+      from: "+15550000000",
+      messageBody: "Should not be stored",
+      messageSid: "SM_INTEG_BAD_SIG",
+    });
+
+    const req = createMockReq({
+      url,
+      body,
+      headers: { "x-twilio-signature": "invalid-signature-value" },
+    });
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(403);
+
+    // No phone record for this number
+    const hash = testBlindIndexer.hash(
+      "+15550000000",
+      WEBHOOK_INTEG_ORG_ID,
+    ) as PhoneHash;
+    const phoneRow = await tDb
+      .selectFrom("phones")
+      .selectAll()
+      .where("phone_hash", "=", hash)
+      .executeTakeFirst();
+
+    expect(phoneRow).toBeUndefined();
+
+    // Response must not contain any PII from the request
+    expect(res.body).not.toContain("+15550000000");
+    expect(res.body).not.toContain("Should not be stored");
+  });
+
+  it("enqueues log deletion retry when deleteMessageLog fails", async () => {
+    deleteMessageLogSpy.mockRejectedValueOnce(new Error("Twilio 500"));
+
+    const { url, body, signature } = buildSignedSmsRequest({
+      orgId: WEBHOOK_INTEG_ORG_ID,
+      from: "+15558887777",
+      messageBody: "Delete should fail",
+      messageSid: "SM_INTEG_DEL_FAIL",
+    });
+
+    const req = createMockReq({
+      url,
+      body,
+      headers: { "x-twilio-signature": signature },
+    });
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    // Handler should still succeed (log deletion is best-effort)
+    expect(res.statusCode).toBe(200);
+
+    // JobQueue.enqueue should have been called for the retry
+    expect(mockJobQueue.enqueue).toHaveBeenCalledWith(
+      "log-deletion",
+      expect.objectContaining({
         orgId: WEBHOOK_INTEG_ORG_ID,
-        from: senderPhone,
-        to: hotlineNumber,
-        messageBody: messageText,
-        messageSid,
-      });
+        resourceType: "message",
+        resourceId: "SM_INTEG_DEL_FAIL",
+      }),
+      expect.objectContaining({
+        maxRetries: 3,
+        backoff: "exponential",
+      }),
+    );
+  });
 
-      const req = createMockReq({
-        url,
-        body,
-        headers: { "x-twilio-signature": signature },
-      });
-      const res = createMockRes();
+  // -----------------------------------------------------------------
+  // Tracker-miss recording quarantine
+  // -----------------------------------------------------------------
 
-      await handler(req, res);
+  it("quarantines a recording on tracker miss with audit row and notification job", async () => {
+    const callSid = "CA_INTEG_Q_MISS";
+    const recordingSid = "RE_INTEG_Q_MISS" as RecordingSid;
 
-      // --- Assert: 200 OK (dispatch succeeded) ---
-      expect(res.statusCode).toBe(200);
-
-      // --- Assert: auto-reply SMS was sent ---
-      expect(sendSmsSpy).toHaveBeenCalledOnce();
-      expect(sendSmsSpy).toHaveBeenCalledWith(
-        senderPhone,
-        "Thank you for reaching out. A volunteer will follow up.",
-        hotlineNumber,
-      );
-
-      // --- Assert: deleteMessageLog was called ---
-      expect(deleteMessageLogSpy).toHaveBeenCalledOnce();
-      expect(deleteMessageLogSpy).toHaveBeenCalledWith(messageSid);
-
-      // --- Assert: client record exists in DB with blind index hash ---
-      const expectedHash = testBlindIndexer.hash(
-        senderPhone,
-        WEBHOOK_INTEG_ORG_ID,
-      ) as PhoneHash;
-      const phoneRow = await tDb
-        .selectFrom("phones")
-        .selectAll()
-        .where("phone_hash", "=", expectedHash)
-        .executeTakeFirst();
-
-      expect(phoneRow).toBeDefined();
-      expect(phoneRow!.phone_hash).toBe(expectedHash);
-      // encrypted_number must NOT be the plaintext phone
-      expect(phoneRow!.encrypted_number.toString("utf-8")).not.toContain(
-        senderPhone,
-      );
-      // Sealed box adds 48 bytes overhead; plaintext "+15559876543" is 12 bytes
-      expect(phoneRow!.encrypted_number.length).toBeGreaterThanOrEqual(48 + 12);
-
-      const clientRow = await tDb
-        .selectFrom("clients")
-        .selectAll()
-        .where("phone_id", "=", phoneRow!.id)
-        .executeTakeFirst();
-
-      expect(clientRow).toBeDefined();
-      expect(clientRow!.encrypted_alias).toBeTruthy(); // auto-generated pseudonym (sealed)
-
-      // --- Assert: ticket created for this client ---
-      const tickets = await tDb
-        .selectFrom("tickets")
-        .selectAll()
-        .where("client_id", "=", clientRow!.id)
-        .execute();
-      expect(tickets).toHaveLength(1);
-      expect(tickets[0]!.status).toBe("open");
-
-      // --- Assert: follow-up created with ECIES-encrypted content ---
-      const followups = await tDb
-        .selectFrom("followups")
-        .selectAll()
-        .where("ticket_id", "=", tickets[0]!.id)
-        .where("type", "=", "sms_inbound")
-        .execute();
-      expect(followups).toHaveLength(1);
-      // Encrypted content must NOT contain plaintext
-      expect(followups[0]!.encrypted_content.toString("utf-8")).not.toContain(
-        messageText,
-      );
-      // Content is encrypted with crypto_secretbox: nonce(24) + ciphertext(plaintext + MAC(16))
-      expect(followups[0]!.encrypted_content.length).toBeGreaterThanOrEqual(
-        24 + 16 + messageText.length,
-      );
+    const { url, body, signature } = buildSignedVoiceRecordingRequest({
+      orgId: WEBHOOK_INTEG_ORG_ID,
+      callSid,
+      recordingSid,
+      recordingDuration: "15",
     });
 
-    it("second message from the same phone finds existing client (not a duplicate)", async () => {
-      const senderPhone = "+15559876543";
-      const hotlineNumber = "+15551234567";
-
-      const { url, body, signature } = buildSignedSmsRequest({
-        orgId: WEBHOOK_INTEG_ORG_ID,
-        from: senderPhone,
-        to: hotlineNumber,
-        messageBody: "Follow-up question",
-        messageSid: "SM_INTEG_FOLLOWUP",
-      });
-
-      const req = createMockReq({
-        url,
-        body,
-        headers: { "x-twilio-signature": signature },
-      });
-      const res = createMockRes();
-
-      await handler(req, res);
-
-      expect(res.statusCode).toBe(200);
-
-      // Only one phone record should exist for this hash
-      const expectedHash = testBlindIndexer.hash(
-        senderPhone,
-        WEBHOOK_INTEG_ORG_ID,
-      ) as PhoneHash;
-      const phoneRows = await tDb
-        .selectFrom("phones")
-        .selectAll()
-        .where("phone_hash", "=", expectedHash)
-        .execute();
-
-      // The first test already created a phone. There should still be exactly
-      // one because findOrCreateByPhoneHash finds the existing record.
-      expect(phoneRows).toHaveLength(1);
-
-      // And exactly one client for that phone
-      const clientRows = await tDb
-        .selectFrom("clients")
-        .selectAll()
-        .where("phone_id", "=", phoneRows[0]!.id)
-        .execute();
-
-      expect(clientRows).toHaveLength(1);
-
-      // Still one ticket (existing open ticket reused)
-      const tickets = await tDb
-        .selectFrom("tickets")
-        .selectAll()
-        .where("client_id", "=", clientRows[0]!.id)
-        .execute();
-      expect(tickets).toHaveLength(1);
-
-      // But two follow-ups (one per SMS)
-      const followups = await tDb
-        .selectFrom("followups")
-        .selectAll()
-        .where("ticket_id", "=", tickets[0]!.id)
-        .where("type", "=", "sms_inbound")
-        .execute();
-      expect(followups).toHaveLength(2);
+    const req = createMockReq({
+      url,
+      body,
+      headers: { "x-twilio-signature": signature },
     });
+    const res = createMockRes();
 
-    it("invalid signature is rejected before any DB writes occur", async () => {
-      const { url, body } = buildSignedSmsRequest({
-        orgId: WEBHOOK_INTEG_ORG_ID,
-        from: "+15550000000",
-        messageBody: "Should not be stored",
-        messageSid: "SM_INTEG_BAD_SIG",
-      });
+    await handler(req, res);
 
-      const req = createMockReq({
-        url,
-        body,
-        headers: { "x-twilio-signature": "invalid-signature-value" },
-      });
-      const res = createMockRes();
+    // Webhook handler returns 200 (quarantine succeeded, no TwiML needed)
+    expect(res.statusCode).toBe(200);
 
-      await handler(req, res);
+    // Quarantine row exists with correct reason
+    const quarantineRows = await tDb
+      .selectFrom("voicemail_quarantine")
+      .selectAll()
+      .where("recording_sid", "=", recordingSid)
+      .execute();
 
-      expect(res.statusCode).toBe(403);
+    expect(quarantineRows).toHaveLength(1);
+    expect(quarantineRows[0]!.reason).toBe("tracker_miss");
+    expect(quarantineRows[0]!.call_sid).toBe(callSid);
+    expect(quarantineRows[0]!.duration_seconds).toBe(15);
+    expect(quarantineRows[0]!.status).toBe("pending");
+    // Sealed blob was stored (blob_key is non-empty)
+    expect(quarantineRows[0]!.blob_key).toBeTruthy();
+    // Encrypted caller numbers are present (getCallDetails succeeded)
+    expect(quarantineRows[0]!.encrypted_caller_number).not.toBeNull();
+    expect(quarantineRows[0]!.encrypted_called_number).not.toBeNull();
 
-      // No phone record for this number
-      const hash = testBlindIndexer.hash(
-        "+15550000000",
-        WEBHOOK_INTEG_ORG_ID,
-      ) as PhoneHash;
-      const phoneRow = await tDb
-        .selectFrom("phones")
-        .selectAll()
-        .where("phone_hash", "=", hash)
-        .executeTakeFirst();
+    // Audit row with SYSTEM_ACTOR_ID
+    const auditRows = await tDb
+      .selectFrom("audit_log")
+      .selectAll()
+      .where("event_type", "=", "voicemail_quarantined")
+      .where("actor_id", "=", SYSTEM_ACTOR_ID as UserId)
+      .execute();
 
-      expect(phoneRow).toBeUndefined();
+    const matchingAudit = auditRows.find(
+      (r) => (r.metadata as Record<string, unknown>).callSid === callSid,
+    );
+    expect(matchingAudit).toBeDefined();
+    expect((matchingAudit!.metadata as Record<string, unknown>).reason).toBe(
+      "tracker_miss",
+    );
 
-      // Response must not contain any PII from the request
-      expect(res.body).not.toContain("+15550000000");
-      expect(res.body).not.toContain("Should not be stored");
-    });
-
-    it("enqueues log deletion retry when deleteMessageLog fails", async () => {
-      deleteMessageLogSpy.mockRejectedValueOnce(new Error("Twilio 500"));
-
-      const { url, body, signature } = buildSignedSmsRequest({
-        orgId: WEBHOOK_INTEG_ORG_ID,
-        from: "+15558887777",
-        messageBody: "Delete should fail",
-        messageSid: "SM_INTEG_DEL_FAIL",
-      });
-
-      const req = createMockReq({
-        url,
-        body,
-        headers: { "x-twilio-signature": signature },
-      });
-      const res = createMockRes();
-
-      await handler(req, res);
-
-      // Handler should still succeed (log deletion is best-effort)
-      expect(res.statusCode).toBe(200);
-
-      // JobQueue.enqueue should have been called for the retry
-      expect(mockJobQueue.enqueue).toHaveBeenCalledWith(
-        "log-deletion",
-        expect.objectContaining({
-          orgId: WEBHOOK_INTEG_ORG_ID,
-          resourceType: "message",
-          resourceId: "SM_INTEG_DEL_FAIL",
-        }),
-        expect.objectContaining({
-          maxRetries: 3,
-          backoff: "exponential",
-        }),
-      );
-    });
-
-    // -----------------------------------------------------------------
-    // D2: Tracker-miss recording quarantine
-    // -----------------------------------------------------------------
-
-    it("quarantines a recording on tracker miss with audit row and notification job", async () => {
-      const callSid = "CA_INTEG_Q_MISS";
-      const recordingSid = "RE_INTEG_Q_MISS" as RecordingSid;
-
-      const { url, body, signature } = buildSignedVoiceRecordingRequest({
-        orgId: WEBHOOK_INTEG_ORG_ID,
-        callSid,
-        recordingSid,
-        recordingDuration: "15",
-      });
-
-      const req = createMockReq({
-        url,
-        body,
-        headers: { "x-twilio-signature": signature },
-      });
-      const res = createMockRes();
-
-      await handler(req, res);
-
-      // Webhook handler returns 200 (quarantine succeeded, no TwiML needed)
-      expect(res.statusCode).toBe(200);
-
-      // Quarantine row exists with correct reason
-      const quarantineRows = await tDb
-        .selectFrom("voicemail_quarantine")
-        .selectAll()
-        .where("recording_sid", "=", recordingSid)
-        .execute();
-
-      expect(quarantineRows).toHaveLength(1);
-      expect(quarantineRows[0]!.reason).toBe("tracker_miss");
-      expect(quarantineRows[0]!.call_sid).toBe(callSid);
-      expect(quarantineRows[0]!.duration_seconds).toBe(15);
-      expect(quarantineRows[0]!.status).toBe("pending");
-      // Sealed blob was stored (blob_key is non-empty)
-      expect(quarantineRows[0]!.blob_key).toBeTruthy();
-      // Encrypted caller numbers are present (getCallDetails succeeded)
-      expect(quarantineRows[0]!.encrypted_caller_number).not.toBeNull();
-      expect(quarantineRows[0]!.encrypted_called_number).not.toBeNull();
-
-      // Audit row with SYSTEM_ACTOR_ID
-      const auditRows = await tDb
-        .selectFrom("audit_log")
-        .selectAll()
-        .where("event_type", "=", "voicemail_quarantined")
-        .where("actor_id", "=", SYSTEM_ACTOR_ID as UserId)
-        .execute();
-
-      const matchingAudit = auditRows.find(
-        (r) => (r.metadata as Record<string, unknown>).callSid === callSid,
-      );
-      expect(matchingAudit).toBeDefined();
-      expect((matchingAudit!.metadata as Record<string, unknown>).reason).toBe(
-        "tracker_miss",
-      );
-
-      // dispatchTicketless was called on the notification service mock.
-      // The mock does not actually enqueue jobs, but the call proves
-      // the quarantine path attempted admin notification.
-      // orgId and orgSchema are adjacent strings, so matching orgId on UUID
-      // shape rather than on type is what catches a swap between them.
-      expect(mockNotificationService.dispatchTicketless).toHaveBeenCalledWith(
-        expect.anything(), // tDb
-        expect.stringMatching(
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-        ), // orgId
-        expect.any(String), // orgSchema
-        expect.any(String), // orgSlug
-        "voicemail_quarantined",
-        expect.any(Array), // adminIds
-      );
-    });
-  },
-);
+    // dispatchTicketless was called on the notification service mock.
+    // The mock does not actually enqueue jobs, but the call proves
+    // the quarantine path attempted admin notification.
+    // orgId and orgSchema are adjacent strings, so matching orgId on UUID
+    // shape rather than on type is what catches a swap between them.
+    expect(mockNotificationService.dispatchTicketless).toHaveBeenCalledWith(
+      expect.anything(), // tDb
+      expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      ), // orgId
+      expect.any(String), // orgSchema
+      expect.any(String), // orgSlug
+      "voicemail_quarantined",
+      expect.any(Array), // adminIds
+    );
+  });
+});

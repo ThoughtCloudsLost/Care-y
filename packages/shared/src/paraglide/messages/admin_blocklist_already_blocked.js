@@ -10,7 +10,7 @@ const en_admin_blocklist_already_blocked = /** @type {(inputs: Admin_Blocklist_A
 };
 
 const es_admin_blocklist_already_blocked = /** @type {(inputs: Admin_Blocklist_Already_BlockedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este numero ya esta bloqueado.`)
+	return /** @type {LocalizedString} */ (`Este número ya está bloqueado.`)
 };
 
 /**

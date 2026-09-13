@@ -10,7 +10,7 @@ const en_panel_group_analytics = /** @type {(inputs: Panel_Group_AnalyticsInputs
 };
 
 const es_panel_group_analytics = /** @type {(inputs: Panel_Group_AnalyticsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Analiticas`)
+	return /** @type {LocalizedString} */ (`Analíticas`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_getting_started_retention_desc = /** @type {(inputs: Getting_Started_Re
 };
 
 const es_getting_started_retention_desc = /** @type {(inputs: Getting_Started_Retention_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Establece cuanto tiempo se conservan los datos personales antes de su eliminacion automatica.`)
+	return /** @type {LocalizedString} */ (`Establece cuánto tiempo se conservan los datos personales antes de su eliminación automática.`)
 };
 
 /**

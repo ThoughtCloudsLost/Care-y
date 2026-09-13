@@ -10,7 +10,7 @@ const en_intake_avail_specific_title = /** @type {(inputs: Intake_Avail_Specific
 };
 
 const es_intake_avail_specific_title = /** @type {(inputs: Intake_Avail_Specific_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Fechas especificas`)
+	return /** @type {LocalizedString} */ (`Fechas específicas`)
 };
 
 /**

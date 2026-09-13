@@ -10,7 +10,7 @@ const en_admin_queue_intake_set_success = /** @type {(inputs: Admin_Queue_Intake
 };
 
 const es_admin_queue_intake_set_success = /** @type {(inputs: Admin_Queue_Intake_Set_SuccessInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.queue} de recepcion actualizada`)
+	return /** @type {LocalizedString} */ (`${i?.queue} de recepción actualizada`)
 };
 
 /**

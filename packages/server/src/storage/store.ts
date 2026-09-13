@@ -12,7 +12,8 @@ export type BlobCategory =
   | "export"
   | "kb-attachment"
   | "branding"
-  | "quarantine";
+  | "quarantine"
+  | "form-asset";
 
 /** Dumb byte store. Callers handle encryption, validation, and access control. */
 export interface BlobStore {

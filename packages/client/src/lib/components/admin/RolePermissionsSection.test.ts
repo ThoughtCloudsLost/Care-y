@@ -112,6 +112,9 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   permission_manage_org_config: () => "Manage organization settings",
   permission_manage_keys: () => "Manage encryption keys",
   permission_manage_infrastructure: () => "Manage server and infrastructure",
+  permission_view_intake_responses: () => "View intake responses",
+  permission_view_intake_responses_hint: () =>
+    "Grants cross-queue access to intake form submissions.",
   roles_toggle_aria: ({
     permission,
     role,
@@ -139,6 +142,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   roles_group_volunteer: () => "Volunteer level",
   roles_group_manager: () => "Manager level",
   roles_group_admin: () => "Admin level",
+  roles_group_high_trust: () => "High trust",
   error_generic: () => "Something went wrong",
   common_cancel: () => "Cancel",
   register_note: () => "Note",
@@ -292,7 +296,7 @@ describe("RolePermissionsSection", () => {
 
   afterEach(cleanup);
 
-  it("renders all Permission rows across three groups", async () => {
+  it("renders all Permission rows across four groups", async () => {
     renderSection();
     await vi.waitFor(() => {
       expect(screen.getByText("View cases")).toBeTruthy();
@@ -312,6 +316,10 @@ describe("RolePermissionsSection", () => {
     expect(screen.getByText("Manage encryption keys")).toBeTruthy();
     expect(screen.getByText("Manage roles")).toBeTruthy();
     expect(screen.getByText("Manage server and infrastructure")).toBeTruthy();
+
+    // High-trust group
+    expect(screen.getByText("High trust")).toBeTruthy();
+    expect(screen.getByText("View intake responses")).toBeTruthy();
   });
 
   it("renders three role column headers per group", async () => {
@@ -319,13 +327,14 @@ describe("RolePermissionsSection", () => {
     await vi.waitFor(() => {
       expect(screen.getByText("View cases")).toBeTruthy();
     });
-    // Three groups, each with Volunteer/Manager/Admin headers = 9 total
+    // Four groups (volunteer, manager, admin, high_trust),
+    // each with Volunteer/Manager/Admin column headers = 12 total
     const volHeaders = screen.getAllByText("Volunteer");
-    expect(volHeaders.length).toBe(3);
+    expect(volHeaders.length).toBe(4);
     const mgrHeaders = screen.getAllByText("Manager");
-    expect(mgrHeaders.length).toBe(3);
+    expect(mgrHeaders.length).toBe(4);
     const admHeaders = screen.getAllByText("Admin");
-    expect(admHeaders.length).toBe(3);
+    expect(admHeaders.length).toBe(4);
   });
 
   it("renders locked cells as disabled toggles", async () => {

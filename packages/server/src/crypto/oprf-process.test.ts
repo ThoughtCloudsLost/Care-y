@@ -179,17 +179,42 @@ describe.skipIf(!IS_LINUX)("IPC protocol (Linux only)", () => {
     cleanup?.();
   });
 
-  it("returns 32-byte evaluated point for valid 32-byte input", async () => {
+  /** Build a tagged IPC payload: [uint16BE tagLen][tag UTF-8][32-byte point] */
+  function buildTaggedPayload(point: Uint8Array, tag: string): Buffer {
+    const tagBuf = Buffer.from(tag, "utf8");
+    const payload = Buffer.alloc(2 + tagBuf.length + POINT_BYTES);
+    payload.writeUInt16BE(tagBuf.length, 0);
+    tagBuf.copy(payload, 2);
+    Buffer.from(point).copy(payload, 2 + tagBuf.length);
+    return payload;
+  }
+
+  it("returns 32-byte evaluated point for valid tagged input", async () => {
     const { requireSodium } = await import("@care-y/crypto");
     const s = requireSodium();
     const scalar = s.crypto_core_ristretto255_scalar_random();
     const point = s.crypto_scalarmult_ristretto255_base(scalar);
 
-    const response = await sendIpc(socketPath, Buffer.from(point));
+    const payload = buildTaggedPayload(point, "volunteer:test-user");
+    const response = await sendIpc(socketPath, payload);
     const respLen = response.readUInt32BE(0);
 
     expect(respLen).toBe(POINT_BYTES);
     expect(response.length).toBe(LENGTH_PREFIX_BYTES + POINT_BYTES);
+  });
+
+  it("returns zero-length error for bare 32-byte point (no tag prefix)", async () => {
+    const { requireSodium } = await import("@care-y/crypto");
+    const s = requireSodium();
+    const scalar = s.crypto_core_ristretto255_scalar_random();
+    const point = s.crypto_scalarmult_ristretto255_base(scalar);
+
+    // Send bare point without tag prefix; process rejects it
+    const response = await sendIpc(socketPath, Buffer.from(point));
+    const respLen = response.readUInt32BE(0);
+
+    expect(respLen).toBe(0);
+    expect(response.length).toBe(LENGTH_PREFIX_BYTES);
   });
 
   it("returns zero-length error for wrong-size payload", async () => {
@@ -201,12 +226,12 @@ describe.skipIf(!IS_LINUX)("IPC protocol (Linux only)", () => {
     expect(response.length).toBe(LENGTH_PREFIX_BYTES);
   });
 
-  it("returns consistent results for the same input", async () => {
+  it("returns consistent results for the same tagged input", async () => {
     const { requireSodium } = await import("@care-y/crypto");
     const s = requireSodium();
     const scalar = s.crypto_core_ristretto255_scalar_random();
     const point = s.crypto_scalarmult_ristretto255_base(scalar);
-    const payload = Buffer.from(point);
+    const payload = buildTaggedPayload(point, "account:consistency-test");
 
     const resp1 = await sendIpc(socketPath, payload);
     const resp2 = await sendIpc(socketPath, payload);
@@ -215,19 +240,48 @@ describe.skipIf(!IS_LINUX)("IPC protocol (Linux only)", () => {
     const result2 = resp2.subarray(LENGTH_PREFIX_BYTES);
     expect(result1.equals(result2)).toBe(true);
   });
+
+  it("returns different results for different tags", async () => {
+    const { requireSodium } = await import("@care-y/crypto");
+    const s = requireSodium();
+    const scalar = s.crypto_core_ristretto255_scalar_random();
+    const point = s.crypto_scalarmult_ristretto255_base(scalar);
+
+    const payloadA = buildTaggedPayload(point, "volunteer:user-a");
+    const payloadB = buildTaggedPayload(point, "volunteer:user-b");
+
+    const respA = await sendIpc(socketPath, payloadA);
+    const respB = await sendIpc(socketPath, payloadB);
+
+    const resultA = respA.subarray(LENGTH_PREFIX_BYTES);
+    const resultB = respB.subarray(LENGTH_PREFIX_BYTES);
+    expect(resultA.equals(resultB)).toBe(false);
+  });
 });
 
-// Wire format: [uint32BE length][payload]. Guards backward compatibility with oprf-ipc client.
+// Wire format: [uint32BE length][uint16BE tagLen][tag][point].
+// Docker containers must be rebuilt with the tagged protocol before these pass.
 describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
   "IPC protocol (Docker OPRF containers)",
   () => {
-    it("returns 32-byte evaluated point for valid 32-byte input", async () => {
+    /** Build a tagged IPC payload: [uint16BE tagLen][tag UTF-8][32-byte point] */
+    function buildTaggedPayload(point: Uint8Array, tag: string): Buffer {
+      const tagBuf = Buffer.from(tag, "utf8");
+      const payload = Buffer.alloc(2 + tagBuf.length + POINT_BYTES);
+      payload.writeUInt16BE(tagBuf.length, 0);
+      tagBuf.copy(payload, 2);
+      Buffer.from(point).copy(payload, 2 + tagBuf.length);
+      return payload;
+    }
+
+    it("returns 32-byte evaluated point for valid tagged input", async () => {
       const { requireSodium } = await import("@care-y/crypto");
       const s = requireSodium();
       const scalar = s.crypto_core_ristretto255_scalar_random();
       const point = s.crypto_scalarmult_ristretto255_base(scalar);
 
-      const response = await sendIpc(DOCKER_SOCKET_A, Buffer.from(point));
+      const payload = buildTaggedPayload(point, "volunteer:docker-test");
+      const response = await sendIpc(DOCKER_SOCKET_A, payload);
       const respLen = response.readUInt32BE(0);
 
       expect(respLen).toBe(POINT_BYTES);
@@ -243,12 +297,12 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
       expect(response.length).toBe(LENGTH_PREFIX_BYTES);
     });
 
-    it("returns consistent results for the same input", async () => {
+    it("returns consistent results for the same tagged input", async () => {
       const { requireSodium } = await import("@care-y/crypto");
       const s = requireSodium();
       const scalar = s.crypto_core_ristretto255_scalar_random();
       const point = s.crypto_scalarmult_ristretto255_base(scalar);
-      const payload = Buffer.from(point);
+      const payload = buildTaggedPayload(point, "volunteer:docker-consistency");
 
       const resp1 = await sendIpc(DOCKER_SOCKET_A, payload);
       const resp2 = await sendIpc(DOCKER_SOCKET_A, payload);

@@ -10,7 +10,7 @@ const en_onboarding_reauth_password_placeholder = /** @type {(inputs: Onboarding
 };
 
 const es_onboarding_reauth_password_placeholder = /** @type {(inputs: Onboarding_Reauth_Password_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Su contrasena`)
+	return /** @type {LocalizedString} */ (`Su contraseña`)
 };
 
 /**

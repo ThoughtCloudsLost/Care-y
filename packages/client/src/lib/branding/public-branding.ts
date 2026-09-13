@@ -19,12 +19,27 @@ export interface PublicBranding {
   accentColor: string | null;
   iconUrl: string | null;
   orgSlug: string;
+  /**
+   * Name clients see above messages from the org. Empty when the org has
+   * set nothing, in which case the portal keeps its built-in wording.
+   */
+  supportLabel: string;
+  /**
+   * Where quick exit sends a client, or null when the org has configured
+   * nothing. Validated as an absolute https URL server-side, so a page can
+   * hand it straight to the shell.
+   *
+   * It arrives here rather than only through the portal bootstrap, which
+   * needs a channel and therefore never reached intake or share links.
+   */
+  safeExitUrl: string | null;
 }
 
 interface ClientBrandingPayload {
   name?: string;
   primaryColor?: string;
   accentColor?: string;
+  supportLabel?: string;
 }
 
 async function fetchPublicBranding(): Promise<PublicBranding | null> {
@@ -57,6 +72,10 @@ async function fetchPublicBranding(): Promise<PublicBranding | null> {
     accentColor: payload.accentColor ?? null,
     iconUrl,
     orgSlug: data.orgSlug,
+    // Same untrusted-text treatment as the org name: this is admin-authored
+    // content decrypted in the browser and rendered into the page.
+    supportLabel: sanitizeOrgName(payload.supportLabel ?? ""),
+    safeExitUrl: data.safeExitUrl,
   };
 }
 
@@ -66,6 +85,11 @@ export function createPublicBrandingQuery() {
     queryKey: brandingKeys.public(),
     queryFn: fetchPublicBranding,
     staleTime: 5 * 60 * 1000,
-    retry: false,
+    // A single no-retry attempt meant one dropped request left a client
+    // page without the org's name, colors, or exit URL for the rest of
+    // the session. Server injection covers the common case now, and the
+    // backoff covers the case where injection had nothing cached either.
+    retry: 3,
+    retryDelay: (attempt: number) => Math.min(500 * 2 ** attempt, 8_000),
   }));
 }

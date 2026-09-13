@@ -10,7 +10,7 @@ const en_intake_protected_server_what = /** @type {(inputs: Intake_Protected_Ser
 };
 
 const es_intake_protected_server_what = /** @type {(inputs: Intake_Protected_Server_WhatInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El servidor almacena tu informacion como datos codificados que no puede descifrar.`)
+	return /** @type {LocalizedString} */ (`El servidor almacena tu información como datos codificados que no puede descifrar.`)
 };
 
 /**

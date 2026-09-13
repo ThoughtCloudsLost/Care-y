@@ -14,6 +14,10 @@
 <div role="alert" class="error-page">
   <h1 class="error-status">{page.status}</h1>
   <p class="error-message">{message}</p>
+  <!-- An error boundary can render when the router itself has failed, so a
+       real document navigation is the reliable way out rather than an
+       oversight. This is the one internal anchor that stays an anchor. -->
+  <!-- eslint-disable-next-line care-y/no-raw-internal-anchor -->
   <a href={resolve("/")} class="error-home touch-feedback"
     >{m.error_go_home()}</a
   >

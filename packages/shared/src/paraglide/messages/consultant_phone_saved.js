@@ -10,7 +10,7 @@ const en_consultant_phone_saved = /** @type {(inputs: Consultant_Phone_SavedInpu
 };
 
 const es_consultant_phone_saved = /** @type {(inputs: Consultant_Phone_SavedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Telefono verificado`)
+	return /** @type {LocalizedString} */ (`Teléfono verificado`)
 };
 
 /**

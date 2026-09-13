@@ -15,7 +15,10 @@
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
-  import { getNavbarOverrideCtx } from "$lib/shell/context.js";
+  import {
+    getNavbarOverrideCtx,
+    getSectionRailCtx,
+  } from "$lib/shell/context.js";
   import {
     getCurrentPermissions,
     getOrgDecryptCache,
@@ -88,14 +91,21 @@
   const scroll = createSectionScroll(() => SECTIONS);
 
   const navbarCtx = getNavbarOverrideCtx();
+  const sectionRailCtx = getSectionRailCtx();
 
   $effect(() => {
     navbarCtx.current = {
       title: m.mgr_page_title(withTerms()),
       subnavbar: mgrSubnavbar,
     };
+    sectionRailCtx.current = {
+      sections: SECTIONS,
+      active: scroll.active,
+      scrollTo: (id: string) => scroll.scrollTo(id),
+    };
     return () => {
       navbarCtx.current = undefined;
+      sectionRailCtx.current = undefined;
     };
   });
 </script>

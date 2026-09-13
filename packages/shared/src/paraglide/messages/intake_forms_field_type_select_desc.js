@@ -10,7 +10,7 @@ const en_intake_forms_field_type_select_desc = /** @type {(inputs: Intake_Forms_
 };
 
 const es_intake_forms_field_type_select_desc = /** @type {(inputs: Intake_Forms_Field_Type_Select_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Elegir una opcion`)
+	return /** @type {LocalizedString} */ (`Elegir una opción`)
 };
 
 /**

@@ -12,11 +12,7 @@
 
 import { sql, type Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import type { NotificationService } from "../notifications/service.js";
-import type {
-  NotificationRecipient,
-  NotificationRecipientList,
-} from "./notification-recipients.js";
+import { enqueueNotificationDurable } from "../notifications/outbox.js";
 import {
   escalationActionSchema,
   escalationRuleTypeSchema,
@@ -26,9 +22,6 @@ import type {
   QueueId,
   TicketId,
   UserId,
-  OrgId,
-  OrgSchema,
-  OrgSlug,
 } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -46,7 +39,8 @@ export interface EscalationRule {
 }
 
 export interface EscalationServiceDeps {
-  readonly notificationService: NotificationService;
+  /** @deprecated Unused since outbox conversion. Retained for wiring compatibility. */
+  readonly notificationService?: unknown;
   readonly getManagerIds: (tDb: Kysely<TenantDatabase>) => Promise<UserId[]>;
   readonly getQueueWatcherIds: (
     tDb: Kysely<TenantDatabase>,
@@ -145,13 +139,22 @@ async function findInactiveCandidates(
 // Core evaluation
 // ---------------------------------------------------------------------------
 
-/** Evaluate all active rules for one tenant and execute matching actions. */
+/**
+ * Evaluate all active rules for one tenant and execute matching actions.
+ *
+ * orgId, orgSchema, and orgSlug are retained in the signature for
+ * caller compatibility but are no longer read here. The outbox drainer
+ * resolves org context at dispatch time.
+ */
 export async function runEscalationCheck(
   tDb: Kysely<TenantDatabase>,
-  orgId: OrgId,
-  orgSchema: OrgSchema,
-  orgSlug: OrgSlug,
-  deps: EscalationServiceDeps,
+  _orgId: unknown,
+  _orgSchema: unknown,
+  _orgSlug: unknown,
+  // Unused since dispatch moved to the outbox, kept so callers do not all
+  // have to change at once. The whole vestigial tail of this signature
+  // (_orgId, _orgSchema, _orgSlug, _deps) should go in one pass.
+  _deps: EscalationServiceDeps,
 ): Promise<EscalationCheckResult> {
   const rules = await tDb
     .selectFrom("escalation_rules")
@@ -197,32 +200,17 @@ export async function runEscalationCheck(
 
       if (!didInsert) continue;
 
-      // Build recipients directly (no acting user to exclude).
-      const recipientUserIds =
-        rule.action === "notify_managers"
-          ? await deps.getManagerIds(tDb)
-          : await deps.getQueueWatcherIds(tDb, rule.queue_id);
-
-      const source: "note_escalation" | "queue_watcher" =
-        rule.action === "notify_managers" ? "note_escalation" : "queue_watcher";
-
-      const recipients: NotificationRecipientList = {
-        recipients: recipientUserIds.map((userId): NotificationRecipient => ({
-          userId,
-          source,
-        })),
-      };
-
-      await deps.notificationService.dispatch(
-        tDb,
-        orgId,
-        orgSchema,
-        orgSlug,
-        "ticket_escalated",
-        ticket.id,
-        ticket.queue_id,
-        recipients,
-      );
+      // Enqueue into the outbox for durable delivery. The drainer
+      // re-resolves recipients (managers or queue watchers per rule
+      // action) at dispatch time using the escalation_rule_id.
+      await enqueueNotificationDurable(tDb, {
+        eventType: "ticket_escalated",
+        ticketId: ticket.id,
+        queueId: ticket.queue_id,
+        formId: null,
+        actorUserId: null,
+        escalationRuleId: rule.id,
+      });
 
       firings++;
     }

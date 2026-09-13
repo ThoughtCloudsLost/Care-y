@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import fc from "fast-check";
 import {
   generateOrgKeypair,
@@ -6,12 +6,76 @@ import {
   buildContentAad,
   followupSlot,
   getSodium,
+  deriveChannelId,
+  deriveChannelAuth,
+  hashChannelAuth,
+  eciesDecrypt,
+  PORTAL_KEY_CHECK,
+  encode,
+  requireSodium,
+  oprfBlind,
+  oprfFinalize,
+  portalOprfInput,
+  derivePortalKeypairFromOprf,
+  toRistrettoPoint,
   type SodiumBackend,
   type SymmetricKey,
   type Ciphertext,
+  type Nonce,
+  type RistrettoPoint,
   decode,
 } from "@care-y/crypto";
-import { encryptIntake, type IntakeAnswer } from "./intake-crypto.js";
+import type { ChannelEvaluateCallback } from "$lib/portal/portal-crypto.js";
+import {
+  encryptIntake,
+  buildContinuationPayload,
+  type IntakeAnswer,
+} from "./intake-crypto.js";
+
+/** Fixed test "server key" for local OPRF evaluation. */
+const TEST_SERVER_KEY = new Uint8Array(32).fill(0xaa);
+
+function localEvaluate(blindedB64: string): string {
+  const sodium = requireSodium();
+  const blinded = decode(blindedB64);
+  const evaluated = sodium.crypto_scalarmult_ristretto255(
+    TEST_SERVER_KEY,
+    blinded,
+  );
+  return encode(evaluated);
+}
+
+/** Derive a keypair through local OPRF simulation (for test assertions). */
+function deriveViaLocalOprf(
+  seed: Uint8Array,
+): ReturnType<typeof derivePortalKeypairFromOprf> {
+  const input = portalOprfInput(seed);
+  const { blindedElement, blindState } = oprfBlind(input);
+  const evaluatedB64 = localEvaluate(encode(blindedElement));
+  const evaluatedBytes = decode(evaluatedB64);
+  const oprfOutput = oprfFinalize(
+    blindState,
+    toRistrettoPoint(evaluatedBytes),
+    input,
+  );
+  const kp = derivePortalKeypairFromOprf(oprfOutput);
+  requireSodium().memzero(input);
+  requireSodium().memzero(oprfOutput);
+  return kp;
+}
+
+function makeStubEvaluate(): ChannelEvaluateCallback {
+  return vi.fn(
+    (
+      _channelId: string,
+      blindedB64: string,
+      _auth?: string,
+    ): Promise<{ evaluated: string }> =>
+      Promise.resolve({ evaluated: localEvaluate(blindedB64) }),
+  );
+}
+
+const noopPow = vi.fn().mockResolvedValue("noop");
 
 describe("intake-crypto", () => {
   let sodium: SodiumBackend;
@@ -64,25 +128,25 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "default:name",
+          fieldKey: "default:name",
           fieldType: "text",
           label: "Your name",
           value: "Alice",
         },
         {
-          fieldId: "default:contact-method",
+          fieldKey: "default:contact-method",
           fieldType: "text",
           label: "How should we reach you?",
           value: "Text or call my phone",
         },
         {
-          fieldId: "default:contact-detail",
+          fieldKey: "default:contact-detail",
           fieldType: "text",
           label: "Phone number",
           value: "+1-555-0123",
         },
         {
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
           label: "Your message",
           value: "I need help with housing.",
@@ -134,19 +198,19 @@ describe("intake-crypto", () => {
       expect(response).toEqual({
         formId: null,
         answers: [
-          { fieldId: "default:name", fieldType: "text", value: "Alice" },
+          { fieldKey: "default:name", fieldType: "text", value: "Alice" },
           {
-            fieldId: "default:contact-method",
+            fieldKey: "default:contact-method",
             fieldType: "text",
             value: "Text or call my phone",
           },
           {
-            fieldId: "default:contact-detail",
+            fieldKey: "default:contact-detail",
             fieldType: "text",
             value: "+1-555-0123",
           },
           {
-            fieldId: "default:message",
+            fieldKey: "default:message",
             fieldType: "textarea",
             value: "I need help with housing.",
           },
@@ -158,13 +222,13 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "default:name",
+          fieldKey: "default:name",
           fieldType: "text",
           label: "Your name",
           value: "",
         },
         {
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
           label: "Your message",
           value: "Help.",
@@ -189,7 +253,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "custom-1",
+          fieldKey: "custom-1",
           fieldType: "textarea",
           label: "Situation",
           value: "Need assistance.",
@@ -214,13 +278,13 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "field-1",
+          fieldKey: "field-1",
           fieldType: "text",
           label: "Full name",
           value: "Bob",
         },
         {
-          fieldId: "field-2",
+          fieldKey: "field-2",
           fieldType: "select",
           label: "Service",
           value: "housing",
@@ -239,7 +303,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "field-ms",
+          fieldKey: "field-ms",
           fieldType: "multiselect",
           label: "Services",
           value: ["Housing", "Legal", "Medical"],
@@ -278,7 +342,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "field-av",
+          fieldKey: "field-av",
           fieldType: "availability",
           label: "When available",
           value: {
@@ -324,7 +388,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
           label: "Message",
           value: "Hello",
@@ -356,7 +420,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
           label: "Message",
           value: "Hello",
@@ -391,13 +455,13 @@ describe("intake-crypto", () => {
             const ids = makeIds();
             const answers: IntakeAnswer[] = [
               {
-                fieldId: "default:name",
+                fieldKey: "default:name",
                 fieldType: "text",
                 label: "Name",
                 value: name,
               },
               {
-                fieldId: "default:message",
+                fieldKey: "default:message",
                 fieldType: "textarea",
                 label: "Message",
                 value: message,
@@ -442,7 +506,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
           label: "Message",
           value: "test",
@@ -456,6 +520,124 @@ describe("intake-crypto", () => {
 
       const sealedBytes = decode(result.wrappedTk);
       expect(sealedBytes).toHaveLength(80);
+    });
+  });
+
+  describe("buildContinuationPayload", () => {
+    it("produces a channelId matching deriveChannelId of the decoded seed", async () => {
+      const { payload, channelId, encodedSeed } =
+        await buildContinuationPayload(
+          "Test message",
+          makeStubEvaluate(),
+          noopPow,
+        );
+      const decodedSeed = decode(encodedSeed);
+      expect(channelId).toBe(deriveChannelId(decodedSeed));
+      expect(payload.channelId).toBe(channelId);
+    });
+
+    it("produces an authHash matching hashChannelAuth(deriveChannelAuth(seed))", async () => {
+      const { payload, encodedSeed } = await buildContinuationPayload(
+        "Test message",
+        makeStubEvaluate(),
+        noopPow,
+      );
+      const decodedSeed = decode(encodedSeed);
+      const expectedAuth = hashChannelAuth(deriveChannelAuth(decodedSeed));
+      expect(decode(payload.authHash)).toEqual(expectedAuth);
+    });
+
+    it("keyCheck decrypts to PORTAL_KEY_CHECK with the OPRF-derived keypair", async () => {
+      const { payload, encodedSeed } = await buildContinuationPayload(
+        "Test message",
+        makeStubEvaluate(),
+        noopPow,
+      );
+      const decodedSeed = decode(encodedSeed);
+      const keypair = deriveViaLocalOprf(decodedSeed);
+
+      try {
+        const plaintext = eciesDecrypt(
+          decode(payload.keyCheck.ephemeralPoint) as RistrettoPoint,
+          decode(payload.keyCheck.nonce) as Nonce,
+          decode(payload.keyCheck.ciphertext),
+          keypair.clientPrivate,
+        );
+        expect(new TextDecoder().decode(plaintext)).toBe(PORTAL_KEY_CHECK);
+      } finally {
+        sodium.memzero(keypair.clientPrivate);
+      }
+    });
+
+    it("selfCopy decrypts to the message text", async () => {
+      const message = "I need to correct my phone number.";
+      const { payload, encodedSeed } = await buildContinuationPayload(
+        message,
+        makeStubEvaluate(),
+        noopPow,
+      );
+      const decodedSeed = decode(encodedSeed);
+      const keypair = deriveViaLocalOprf(decodedSeed);
+
+      try {
+        expect(payload.selfCopy).toBeDefined();
+        const plaintext = eciesDecrypt(
+          decode(payload.selfCopy!.ephemeralPoint) as RistrettoPoint,
+          decode(payload.selfCopy!.nonce) as Nonce,
+          decode(payload.selfCopy!.ciphertext),
+          keypair.clientPrivate,
+        );
+        expect(new TextDecoder().decode(plaintext)).toBe(message);
+      } finally {
+        sodium.memzero(keypair.clientPrivate);
+      }
+    });
+
+    it("selfCopy is absent when message is null", async () => {
+      const { payload } = await buildContinuationPayload(
+        null,
+        makeStubEvaluate(),
+        noopPow,
+      );
+      expect(payload.selfCopy).toBeUndefined();
+    });
+
+    it("selfCopy is absent when message is empty", async () => {
+      const { payload } = await buildContinuationPayload(
+        "",
+        makeStubEvaluate(),
+        noopPow,
+      );
+      expect(payload.selfCopy).toBeUndefined();
+    });
+
+    it("channelId is 48 lowercase hex chars", async () => {
+      const { channelId } = await buildContinuationPayload(
+        null,
+        makeStubEvaluate(),
+        noopPow,
+      );
+      expect(channelId).toMatch(/^[0-9a-f]{48}$/);
+    });
+
+    it("authHash is base64url of 32 bytes", async () => {
+      const { payload } = await buildContinuationPayload(
+        null,
+        makeStubEvaluate(),
+        noopPow,
+      );
+      const decoded = decode(payload.authHash);
+      expect(decoded).toHaveLength(32);
+    });
+
+    it("clientPublic is base64url of 32 bytes", async () => {
+      const { payload } = await buildContinuationPayload(
+        null,
+        makeStubEvaluate(),
+        noopPow,
+      );
+      const decoded = decode(payload.clientPublic);
+      expect(decoded).toHaveLength(32);
     });
   });
 });

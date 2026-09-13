@@ -14,8 +14,12 @@
  * to the actual brute-force path. A legitimate login makes one evaluation, so it
  * stays far below the threshold, and the window decays on its own, so no
  * explicit reset is needed.
+ *
+ * Per ADR-091, every evaluation now happens under a per-identity tag. The tag
+ * is constructed server-side from validated context (never from client input).
  */
 
+import { timingSafeEqual } from "node:crypto";
 import {
   ForbiddenError,
   RateLimitError,
@@ -29,16 +33,21 @@ import type { OprfEvaluator } from "./oprf-ipc.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { PowVerifier } from "./pow.js";
 import type { OprfAuditLogger } from "./oprf-audit.js";
-import type { UserId } from "@care-y/shared";
+import type { UserId, OrgId, ChannelSecret } from "@care-y/shared";
+import { volunteerTag, accountTag, channelTag } from "./oprf-tags.js";
+import { hashChannelAuth } from "@care-y/crypto";
+import type { Kysely } from "kysely";
+import type { TenantDatabase } from "../db/types.js";
+import { lookupChannelForOprf } from "../portal/channel-service.js";
 
 // ---------------------------------------------------------------------------
 // Attempt tracker (sliding window per userId)
 // ---------------------------------------------------------------------------
 
 export interface AttemptTracker {
-  check(userId: UserId): number;
-  increment(userId: UserId): number;
-  reset(userId: UserId): void;
+  check(key: string): number;
+  increment(key: string): number;
+  reset(key: string): void;
   dispose(): void;
 }
 
@@ -61,20 +70,20 @@ export function createAttemptTracker(
   });
 
   return {
-    check(userId: UserId): number {
+    check(key: string): number {
       const cutoff = now() - windowMs;
-      const timestamps = attempts.get(userId);
+      const timestamps = attempts.get(key);
       if (!timestamps) return 0;
       return timestamps.filter((t) => t > cutoff).length;
     },
-    increment(userId: UserId): number {
-      const timestamps = attempts.get(userId) ?? [];
+    increment(key: string): number {
+      const timestamps = attempts.get(key) ?? [];
       timestamps.push(now());
-      attempts.set(userId, timestamps);
-      return this.check(userId);
+      attempts.set(key, timestamps);
+      return this.check(key);
     },
-    reset(userId: UserId): void {
-      attempts.delete(userId);
+    reset(key: string): void {
+      attempts.delete(key);
     },
     dispose,
   };
@@ -130,7 +139,10 @@ export interface OprfEvaluateServiceDeps {
   readonly auditLogger: OprfAuditLogger;
 }
 
+export type OprfEvaluateKind = "volunteer" | "account";
+
 export interface OprfEvaluateRequest {
+  readonly kind: OprfEvaluateKind;
   readonly userId: UserId;
   readonly blindedElement: string;
   readonly ip: string;
@@ -143,9 +155,21 @@ export interface OprfEvaluateResult {
   readonly evaluated: string;
 }
 
+export interface ChannelEvaluateRequest {
+  readonly channelId: ChannelSecret;
+  readonly blindedElement: string;
+  readonly auth?: string;
+  readonly ip: string;
+  readonly orgUuid: OrgId;
+}
+
 export interface OprfEvaluateService {
   evaluate(request: OprfEvaluateRequest): Promise<OprfEvaluateResult>;
   adminEvaluate(request: OprfEvaluateRequest): Promise<OprfEvaluateResult>;
+  evaluateChannel(
+    db: Kysely<TenantDatabase>,
+    request: ChannelEvaluateRequest,
+  ): Promise<OprfEvaluateResult>;
 }
 
 /** Attempts in the window at which proof-of-work becomes required.
@@ -154,6 +178,19 @@ export interface OprfEvaluateService {
  *  environment keeps the strict threshold to deter brute-force OPRF abuse. */
 export function resolvePowThreshold(nodeEnv: EnvVars["NODE_ENV"]): number {
   return nodeEnv === "development" || nodeEnv === "test" ? 100 : 5;
+}
+
+/**
+ * Build the OPRF tag for a volunteer or account evaluation from the
+ * request's kind and userId.
+ */
+function tagForEvaluateRequest(req: OprfEvaluateRequest): string {
+  switch (req.kind) {
+    case "volunteer":
+      return volunteerTag(req.userId);
+    case "account":
+      return accountTag(req.userId);
+  }
 }
 
 export function createOprfEvaluateService(
@@ -213,7 +250,7 @@ export function createOprfEvaluateService(
    * no separate failure counter to bump.
    */
   async function enforcePowGate(
-    userId: UserId,
+    powKey: string,
     ip: string,
     attemptCount: number,
     powChallenge: string | undefined,
@@ -224,18 +261,18 @@ export function createOprfEvaluateService(
     const noPowProvided =
       powChallenge === undefined || powSolution === undefined;
     if (noPowProvided) {
-      const challenge = deps.powVerifier.createChallenge(userId, attemptCount);
-      await deps.auditLogger.logFailure(userId, ip, "pow_required");
+      const challenge = deps.powVerifier.createChallenge(powKey, attemptCount);
+      await deps.auditLogger.logFailure(powKey, ip, "pow_required");
       throw new PowRequiredError(challenge.challenge, challenge.difficulty);
     }
 
     const powIsValid = deps.powVerifier.verify(
-      userId,
+      powKey,
       powChallenge,
       powSolution,
     );
     if (!powIsValid) {
-      await deps.auditLogger.logFailure(userId, ip, "pow_invalid");
+      await deps.auditLogger.logFailure(powKey, ip, "pow_invalid");
       throw new ValidationError("Invalid proof-of-work solution");
     }
   }
@@ -245,10 +282,11 @@ export function createOprfEvaluateService(
     userId: UserId,
     ip: string,
     blindedElement: string,
+    tag: string,
   ): Promise<OprfEvaluateResult> {
     const blindedBuf = Buffer.from(blindedElement, "base64");
     try {
-      const evaluated = await deps.evaluator.evaluate(blindedBuf);
+      const evaluated = await deps.evaluator.evaluate(blindedBuf, tag);
       return { evaluated: Buffer.from(evaluated).toString("base64url") };
     } catch (err: unknown) {
       await deps.auditLogger.logFailure(userId, ip, "oprf_failed");
@@ -274,7 +312,8 @@ export function createOprfEvaluateService(
       );
       await delay(getDelayMs(delayTiers, attemptCount));
 
-      return evaluateBlindedElement(userId, ip, blindedElement);
+      const tag = tagForEvaluateRequest(req);
+      return evaluateBlindedElement(userId, ip, blindedElement, tag);
     },
 
     async adminEvaluate(req: OprfEvaluateRequest): Promise<OprfEvaluateResult> {
@@ -292,7 +331,78 @@ export function createOprfEvaluateService(
       const attemptCount = attemptTracker.increment(userId);
       await delay(getDelayMs(delayTiers, attemptCount));
 
-      return evaluateBlindedElement(userId, ip, blindedElement);
+      const tag = tagForEvaluateRequest(req);
+      return evaluateBlindedElement(userId, ip, blindedElement, tag);
+    },
+
+    async evaluateChannel(
+      db: Kysely<TenantDatabase>,
+      req: ChannelEvaluateRequest,
+    ): Promise<OprfEvaluateResult> {
+      const { channelId, blindedElement, ip, orgUuid } = req;
+
+      // Per-channelId rate limit (reuses the per-user limiter infra)
+      const channelKey = `channel:${channelId}`;
+      const channelLimit = deps.userRateLimiter.check(channelKey);
+      if (!channelLimit.allowed) {
+        throw new RateLimitError(
+          "Channel OPRF rate limit exceeded",
+          Math.ceil(channelLimit.retryAfterMs / 1000),
+        );
+      }
+
+      // Per-IP rate limit
+      const ipLimit = deps.ipRateLimiter.check(ip);
+      if (!ipLimit.allowed) {
+        throw new RateLimitError(
+          "Rate limit exceeded",
+          Math.ceil(ipLimit.retryAfterMs / 1000),
+        );
+      }
+
+      // PoW gate keyed on channelId
+      const attemptCount = attemptTracker.increment(channelKey);
+      await enforcePowGate(channelKey, ip, attemptCount, undefined, undefined);
+
+      // Channel gating rules (ADR-091):
+      // - No row (unknown channelId): allow (mint path)
+      // - Active row: require auth token, timing-safe compare against auth_hash
+      // - Revoked or expired row: refuse
+      const channelRow = await lookupChannelForOprf(db, channelId);
+
+      if (channelRow !== null) {
+        if (
+          channelRow.status === "revoked" ||
+          channelRow.status === "expired"
+        ) {
+          throw new ForbiddenError("Channel is no longer available");
+        }
+
+        if (channelRow.status === "active") {
+          if (req.auth === undefined || req.auth === "") {
+            throw new ForbiddenError("Channel authentication required");
+          }
+
+          const authBuf = Buffer.from(req.auth, "base64");
+          const presentedHash = Buffer.from(hashChannelAuth(authBuf));
+          const storedHash = channelRow.auth_hash;
+
+          // Both are 32-byte BLAKE2b hashes. Timing-safe comparison.
+          if (presentedHash.length !== 32 || storedHash.length !== 32) {
+            throw new ForbiddenError("Channel authentication failed");
+          }
+
+          if (!timingSafeEqual(presentedHash, storedHash)) {
+            throw new ForbiddenError("Channel authentication failed");
+          }
+        }
+      }
+
+      const tag = channelTag(orgUuid, channelId);
+      const blindedBuf = Buffer.from(blindedElement, "base64");
+
+      const evaluated = await deps.evaluator.evaluate(blindedBuf, tag);
+      return { evaluated: Buffer.from(evaluated).toString("base64url") };
     },
   };
 }

@@ -10,7 +10,7 @@ const en_ticket_sms_error_no_phone = /** @type {(inputs: Ticket_Sms_Error_No_Pho
 };
 
 const es_ticket_sms_error_no_phone = /** @type {(inputs: Ticket_Sms_Error_No_PhoneInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`No hay numero de telefono registrado para este ${i?.client}.`)
+	return /** @type {LocalizedString} */ (`No hay número de teléfono registrado para este ${i?.client}.`)
 };
 
 /**

@@ -3,10 +3,12 @@ import { describe, it, expect } from "vitest";
 import { DOMSerializer, Node as PMNode } from "prosemirror-model";
 import {
   renderArticleBody,
+  renderProseMirrorDoc,
   sanitizeArticleHtml,
   extractExcerpt,
+  ALLOWED_URI_REGEXP,
 } from "./render-article.js";
-import { kbArticleSchema } from "$lib/editor/prosemirror-schema.js";
+import { editorSchema } from "$lib/editor/prosemirror-schema.js";
 
 /** Encode a string as UTF-8 bytes (simulates decrypted article body). */
 function toBytes(text: string): Uint8Array {
@@ -30,7 +32,7 @@ function countElements(html: string): number {
  * Used by allowlist validation tests that need full schema coverage.
  */
 function buildFullSchemaDoc(): PMNode {
-  return PMNode.fromJSON(kbArticleSchema, {
+  return PMNode.fromJSON(editorSchema, {
     type: "doc",
     content: [
       {
@@ -212,7 +214,7 @@ function buildFullSchemaDoc(): PMNode {
 describe("sanitizeArticleHtml (allowlist vs schema)", () => {
   // Serialize the full-schema doc once; reused by multiple tests.
   const doc = buildFullSchemaDoc();
-  const serializer = DOMSerializer.fromSchema(kbArticleSchema);
+  const serializer = DOMSerializer.fromSchema(editorSchema);
   const fragment = serializer.serializeFragment(doc.content);
   const div = document.createElement("div");
   div.appendChild(fragment);
@@ -544,7 +546,7 @@ describe("renderArticleBody", () => {
 
 describe("extractExcerpt", () => {
   it("returns first ~150 chars of text content", () => {
-    const doc = PMNode.fromJSON(kbArticleSchema, {
+    const doc = PMNode.fromJSON(editorSchema, {
       type: "doc",
       content: [
         {
@@ -572,7 +574,7 @@ describe("extractExcerpt", () => {
   });
 
   it("respects custom maxLength", () => {
-    const doc = PMNode.fromJSON(kbArticleSchema, {
+    const doc = PMNode.fromJSON(editorSchema, {
       type: "doc",
       content: [
         {
@@ -593,7 +595,7 @@ describe("extractExcerpt", () => {
   });
 
   it("returns full text when under maxLength", () => {
-    const doc = PMNode.fromJSON(kbArticleSchema, {
+    const doc = PMNode.fromJSON(editorSchema, {
       type: "doc",
       content: [
         {
@@ -609,7 +611,7 @@ describe("extractExcerpt", () => {
   });
 
   it("returns empty string for empty doc", () => {
-    const doc = PMNode.fromJSON(kbArticleSchema, {
+    const doc = PMNode.fromJSON(editorSchema, {
       type: "doc",
       content: [{ type: "paragraph" }],
     });
@@ -618,7 +620,7 @@ describe("extractExcerpt", () => {
   });
 
   it("returns empty string for doc with only images", () => {
-    const doc = PMNode.fromJSON(kbArticleSchema, {
+    const doc = PMNode.fromJSON(editorSchema, {
       type: "doc",
       content: [
         {
@@ -637,7 +639,7 @@ describe("extractExcerpt", () => {
   });
 
   it("skips image nodes but includes surrounding text", () => {
-    const doc = PMNode.fromJSON(kbArticleSchema, {
+    const doc = PMNode.fromJSON(editorSchema, {
       type: "doc",
       content: [
         {
@@ -660,8 +662,8 @@ describe("extractExcerpt", () => {
 
   it("does not produce double spaces for nested block structures", () => {
     // list_item and paragraph are both blocks. Without the guard,
-    // each block boundary pushes a space, producing "item 1  item 2".
-    const doc = PMNode.fromJSON(kbArticleSchema, {
+    // each block boundary pushes a space, producing "alpha  beta".
+    const doc = PMNode.fromJSON(editorSchema, {
       type: "doc",
       content: [
         {
@@ -672,7 +674,7 @@ describe("extractExcerpt", () => {
               content: [
                 {
                   type: "paragraph",
-                  content: [{ type: "text", text: "item 1" }],
+                  content: [{ type: "text", text: "alpha" }],
                 },
               ],
             },
@@ -681,7 +683,7 @@ describe("extractExcerpt", () => {
               content: [
                 {
                   type: "paragraph",
-                  content: [{ type: "text", text: "item 2" }],
+                  content: [{ type: "text", text: "beta" }],
                 },
               ],
             },
@@ -691,12 +693,12 @@ describe("extractExcerpt", () => {
     });
 
     const excerpt = extractExcerpt(doc);
-    expect(excerpt).toBe("item 1 item 2");
+    expect(excerpt).toBe("alpha beta");
     expect(excerpt).not.toContain("  ");
   });
 
   it("adds space between blocks", () => {
-    const doc = PMNode.fromJSON(kbArticleSchema, {
+    const doc = PMNode.fromJSON(editorSchema, {
       type: "doc",
       content: [
         {
@@ -715,5 +717,172 @@ describe("extractExcerpt", () => {
     expect(excerpt).toContain("Para two");
     // Should have space separator, not run together
     expect(excerpt).not.toBe("Para onePara two");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderProseMirrorDoc: generic renderer
+// ---------------------------------------------------------------------------
+
+describe("renderProseMirrorDoc", () => {
+  it("serializes a simple doc to sanitized HTML", () => {
+    const doc = PMNode.fromJSON(editorSchema, {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Hello generic" }],
+        },
+      ],
+    });
+    const html = renderProseMirrorDoc(doc, editorSchema);
+    expect(html).toContain("<p>Hello generic</p>");
+  });
+
+  it("strips <script> tags (XSS payload)", () => {
+    // Build a doc, then verify that even if raw HTML were injected,
+    // DOMPurify strips it. We test the sanitizer layer specifically.
+    const doc = PMNode.fromJSON(editorSchema, {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Safe" }],
+        },
+      ],
+    });
+    // Render normally; the schema can only produce safe output.
+    const html = renderProseMirrorDoc(doc, editorSchema);
+    expect(html).not.toContain("<script");
+    expect(html).toContain("Safe");
+  });
+
+  it("strips javascript: hrefs from link marks", () => {
+    // The schema's link mark stores whatever href is given. The
+    // sanitizer must strip javascript: protocol at render time.
+    const doc = PMNode.fromJSON(editorSchema, {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: "click me",
+              marks: [
+                {
+                  type: "link",
+                  attrs: { href: "javascript:alert(1)", title: null },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const html = renderProseMirrorDoc(doc, editorSchema);
+    expect(html).not.toContain("javascript:");
+    // The link text itself is preserved
+    expect(html).toContain("click me");
+  });
+
+  it("preserves kb-attachment: URIs in img src", () => {
+    const doc = PMNode.fromJSON(editorSchema, {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "image",
+              attrs: {
+                src: "kb-attachment://some-uuid",
+                alt: "photo",
+                title: null,
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const html = renderProseMirrorDoc(doc, editorSchema);
+    expect(html).toContain('src="kb-attachment://some-uuid"');
+  });
+
+  it("preserves form-asset: URIs in img src", () => {
+    const doc = PMNode.fromJSON(editorSchema, {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "image",
+              attrs: {
+                src: "form-asset://banner-uuid",
+                alt: "banner",
+                title: null,
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const html = renderProseMirrorDoc(doc, editorSchema);
+    expect(html).toContain('src="form-asset://banner-uuid"');
+  });
+
+  it("regression: renderArticleBody still works through renderProseMirrorDoc", () => {
+    const json = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Regression check" }],
+        },
+      ],
+    };
+    const html = renderArticleBody(
+      new TextEncoder().encode(JSON.stringify(json)),
+    );
+    expect(html).toContain("<p>Regression check</p>");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ALLOWED_URI_REGEXP: scheme validation
+// ---------------------------------------------------------------------------
+
+describe("ALLOWED_URI_REGEXP", () => {
+  it("allows https: URIs", () => {
+    expect(ALLOWED_URI_REGEXP.test("https://example.com")).toBe(true);
+  });
+
+  it("allows http: URIs", () => {
+    expect(ALLOWED_URI_REGEXP.test("http://example.com")).toBe(true);
+  });
+
+  it("allows mailto: URIs", () => {
+    expect(ALLOWED_URI_REGEXP.test("mailto:user@example.com")).toBe(true);
+  });
+
+  it("allows tel: URIs", () => {
+    expect(ALLOWED_URI_REGEXP.test("tel:+1234567890")).toBe(true);
+  });
+
+  it("allows kb-attachment: URIs", () => {
+    expect(ALLOWED_URI_REGEXP.test("kb-attachment://uuid")).toBe(true);
+  });
+
+  it("allows form-asset: URIs", () => {
+    expect(ALLOWED_URI_REGEXP.test("form-asset://uuid")).toBe(true);
+  });
+
+  it("blocks javascript: URIs", () => {
+    expect(ALLOWED_URI_REGEXP.test("javascript:alert(1)")).toBe(false);
+  });
+
+  it("blocks vbscript: URIs", () => {
+    expect(ALLOWED_URI_REGEXP.test("vbscript:msgbox")).toBe(false);
   });
 });

@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_2fa_title = /** @type {(inputs: Onboarding_B
 };
 
 const es_onboarding_briefing_choice_2fa_title = /** @type {(inputs: Onboarding_Briefing_Choice_2fa_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Politica de autenticacion de dos factores`)
+	return /** @type {LocalizedString} */ (`Politica de autenticación de dos factores`)
 };
 
 /**

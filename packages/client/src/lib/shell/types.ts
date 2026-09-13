@@ -15,6 +15,8 @@ import type {
   PillDefinition,
   FilterToggleConfig,
 } from "$lib/components/filters/filter-types.js";
+import type { ScrollSection } from "$lib/components/useSectionScroll.svelte.js";
+import type { Locale } from "$lib/paraglide/runtime.js";
 
 // ── Tab identifiers ──────────────────────────────────────────────────
 
@@ -65,26 +67,38 @@ export interface TabbarNavProps {
   onareatap: (areaId: AreaId) => void;
 }
 
-export interface ShellNavbarProps {
-  /** Page title shown in the center (iOS) or left-aligned (Material). */
-  title?: string;
-  /** Show a back arrow that calls onback. */
-  backLink?: boolean;
-  /** Callback when the back arrow is tapped. */
-  onback?: () => void;
-  /** Snippet rendered in the left slot (after back arrow if present). */
-  left?: Snippet;
-  /** Snippet rendered in the right slot. */
-  right?: Snippet;
-}
-
 export interface PageLayoutProps {
   /** Lock the page to viewport height (no body scroll). For chat views. */
   lockScroll?: boolean;
   /** Snippet rendered as a sticky bar at the bottom (Messagebar, action bar). */
   bottomBar?: Snippet;
+  /**
+   * Render the bottom bar as a glass overlay instead of a flex sibling.
+   *
+   * When true (requires lockScroll), the bar is position:absolute at the
+   * bottom of the layout with a translucent glass backdrop. The scroll
+   * region gets matching padding-bottom via a ResizeObserver-measured CSS
+   * variable so content can scroll beneath the bar without being clipped.
+   */
+  overlayBottomBar?: boolean;
   /** CSS touch-action value for the scroll container. Default: 'auto'. */
   touchAction?: string;
+  /**
+   * Requires lockScroll. Applies the shared `.chrome-underlap` class to
+   * the scroll region so a chat thread scrolls behind the navbar/subnavbar
+   * glass.
+   */
+  underChrome?: boolean;
+  /**
+   * Bindable handle on the scroll region, when lockScroll owns the scroll.
+   *
+   * A chat page needs the scrolling element to anchor position on prepend
+   * and to know whether the reader is at the bottom. The org thread owns
+   * its own scroller and binds it directly; a page whose scroll lives here
+   * has no other way to reach it, and a second scroller inside the content
+   * would swallow this one.
+   */
+  scrollEl?: HTMLDivElement | undefined;
   /** Page content. */
   children: Snippet;
 }
@@ -229,6 +243,10 @@ export interface ShellMessagebarProps {
   /** Snippet rendered below the Messagebar inside the anchor div. Used by
    *  consumers for character counters, hints, etc. */
   footer?: Snippet;
+  /** Snippet rendered inside the anchor div regardless of collapsed state.
+   *  Used for absolutely positioned floating content (e.g., the
+   *  jump-to-latest pill) that needs the anchor as its positioned ancestor. */
+  floating?: Snippet;
 }
 
 // ── Navbar override ─────────────────────────────────────────────────
@@ -385,4 +403,71 @@ export interface DesktopSidebarProps {
   readonly roleId: string;
   /** Called with the role's admin hub path when the role badge is activated. */
   readonly onNavigate: (path: `/${string}`) => void;
+  /** Hover-reveal: called when the mouse enters a tab/admin button that
+   *  has sections in the registry. Returns sections to display in the
+   *  hover rail, or undefined to suppress the rail. */
+  readonly getHoverSections?: (route: string) => HoverRevealData | undefined;
+  /** Called when the user clicks a section in the hover rail. */
+  readonly onHoverNavigate?: (route: string, sectionId: string) => void;
+}
+
+export interface HoverRevealData {
+  readonly sections: readonly ScrollSection[];
+  readonly pageLabel: string;
+}
+
+// ── Shared navbar chrome ─────────────────────────────────────────────
+// ShellNavbar owns the Konsta Navbar, its glass layers, and the row that
+// can sit below it. Both shells compose it, so identity, the language
+// picker, and a subnavbar land in the same slot on each surface.
+
+export interface ShellNavbarIdentity {
+  /** Org logo URL, or null when the org has set none. */
+  readonly logoUrl: string | null;
+  /** Org name, rendered in the navbar center beside the language picker. */
+  readonly orgName: string;
+  /** Accessible name for the identity control. */
+  readonly label: string;
+  /** Opens whatever this shell puts behind identity: a panel or a drawer. */
+  readonly onIdentityTap: () => void;
+}
+
+export interface ShellNavbarProps {
+  readonly identity: ShellNavbarIdentity;
+  /** Rendered inside the identity avatar when the org has set no logo. */
+  readonly identityFallback: Snippet;
+  /** Drops the identity control while keeping the org name in the center.
+   *  The org app sets it on desktop, where the sidebar carries identity. */
+  readonly identityHidden?: boolean;
+  /** True while the org name is still being fetched. The center holds a
+   *  skeleton in its place, never a stand-in name. */
+  readonly orgNamePending?: boolean;
+  readonly locale: Locale;
+  readonly onlocalechange: (locale: Locale) => void;
+  /** Measured Navbar height. The chrome mask extends the glass by it. */
+  readonly navbarHeight?: number;
+  /** Replaces the identity control in the left slot. */
+  readonly leading?: Snippet;
+  /** Replaces the org name and language picker in the center. */
+  readonly title?: string | Snippet;
+  /** Fades the org name group out, as when a search overlay covers it. */
+  readonly titleHidden?: boolean;
+  /** Right slot content. */
+  readonly actions?: Snippet;
+  /** Overlay rendered inside the Navbar, above its slots. */
+  readonly children?: Snippet;
+  /** Row below the Navbar. The navbar glass extends over it. */
+  readonly subnavbar?: Snippet;
+  /** Reactive getter: true while the subnavbar row should be collapsed. */
+  readonly subnavbarHidden?: () => boolean;
+  /** Reports the measured subnavbar height back to the shell. */
+  readonly onsubnavbarheight?: (height: number) => void;
+  /** Second subnavbar pane pinned to the trailing edge, for split view. */
+  readonly subnavbarTrailing?: Snippet;
+  /** CSS width reserved at the trailing edge of the subnavbar row. Set it
+   *  whenever a detail pane overlaps the row, with or without a pane of
+   *  its own to render there. */
+  readonly trailingWidth?: string;
+  /** Reports the measured trailing pane height back to the shell. */
+  readonly ontrailingheight?: (height: number) => void;
 }

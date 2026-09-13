@@ -10,7 +10,7 @@ const en_client_merge_undo = /** @type {(inputs: Client_Merge_UndoInputs) => Loc
 };
 
 const es_client_merge_undo = /** @type {(inputs: Client_Merge_UndoInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Deshacer fusion`)
+	return /** @type {LocalizedString} */ (`Deshacer fusión`)
 };
 
 /**

@@ -7,6 +7,7 @@ import {
   getSodium,
   oprfBlind,
   oprfFinalize,
+  deriveTaggedShare,
   type SodiumBackend,
   type EvaluatedElement,
 } from "@care-y/crypto";
@@ -29,43 +30,105 @@ beforeAll(async () => {
   sodium = await getSodium();
 });
 
-describe("createMockEvaluator", () => {
-  it("produces same output as direct blindEvaluate", async () => {
+/**
+ * Generate 2-of-2 Shamir shares of a ristretto255 scalar.
+ * Polynomial f(x) = k + a*x where k is the secret, a is random.
+ * shareA = f(1) = k + a, shareB = f(2) = k + 2a
+ */
+function shamirSplit(key: Uint8Array): {
+  shareA: Uint8Array;
+  shareB: Uint8Array;
+} {
+  const a = sodium.crypto_core_ristretto255_scalar_random();
+
+  // shareA = k + a
+  const shareA = sodium.crypto_core_ristretto255_scalar_add(key, a);
+
+  // shareB = k + 2a
+  const twoA = sodium.crypto_core_ristretto255_scalar_add(a, a);
+  const shareB = sodium.crypto_core_ristretto255_scalar_add(key, twoA);
+
+  return { shareA, shareB };
+}
+
+/**
+ * The combined tagged key is defined by the Lagrange combination of the
+ * tagged shares (2*kA(tag) - kB(tag)), NOT by tagging the full key:
+ * HKDF is nonlinear, so deriveTaggedShare(fullKey, tag) is a different
+ * scalar by design (ADR-091).
+ */
+function combinedTaggedKey(
+  shareA: Uint8Array,
+  shareB: Uint8Array,
+  tag: string,
+): Uint8Array {
+  const kATagged = deriveTaggedShare(shareA, tag);
+  const kBTagged = deriveTaggedShare(shareB, tag);
+  const twoKA = sodium.crypto_core_ristretto255_scalar_add(kATagged, kATagged);
+  return sodium.crypto_core_ristretto255_scalar_sub(twoKA, kBTagged);
+}
+
+describe("createMockEvaluator (two-share, tagged)", () => {
+  it("combines tagged partials correctly for a volunteer tag", async () => {
     const fullKey = sodium.crypto_core_ristretto255_scalar_random();
-    const evaluator = createMockEvaluator(fullKey);
+    const { shareA, shareB } = shamirSplit(fullKey);
+    const evaluator = createMockEvaluator(shareA, shareB);
+    const tag = "volunteer:mock-eval-test";
 
     const point = sodium.crypto_scalarmult_ristretto255_base(
       sodium.crypto_core_ristretto255_scalar_random(),
     );
 
-    const direct = blindEvaluate(fullKey, point);
-    const viaEvaluator = await evaluator.evaluate(point);
+    const result = await evaluator.evaluate(point, tag);
 
-    expect(Buffer.from(viaEvaluator).equals(Buffer.from(direct))).toBe(true);
+    // Verify against the true combined tagged scalar
+    const derivedKey = combinedTaggedKey(shareA, shareB, tag);
+    const directResult = blindEvaluate(derivedKey, point);
+
+    expect(Buffer.from(result).equals(Buffer.from(directResult))).toBe(true);
   });
 
-  it("produces consistent results", async () => {
+  it("produces different results for different tags", async () => {
     const fullKey = sodium.crypto_core_ristretto255_scalar_random();
-    const evaluator = createMockEvaluator(fullKey);
+    const { shareA, shareB } = shamirSplit(fullKey);
+    const evaluator = createMockEvaluator(shareA, shareB);
 
     const point = sodium.crypto_scalarmult_ristretto255_base(
       sodium.crypto_core_ristretto255_scalar_random(),
     );
 
-    const result1 = await evaluator.evaluate(point);
-    const result2 = await evaluator.evaluate(point);
+    const result1 = await evaluator.evaluate(point, "account:acct-1");
+    const result2 = await evaluator.evaluate(point, "account:acct-2");
+
+    expect(Buffer.from(result1).equals(Buffer.from(result2))).toBe(false);
+  });
+
+  it("produces consistent results for the same tag", async () => {
+    const fullKey = sodium.crypto_core_ristretto255_scalar_random();
+    const { shareA, shareB } = shamirSplit(fullKey);
+    const evaluator = createMockEvaluator(shareA, shareB);
+    const tag = "volunteer:consistency-test";
+
+    const point = sodium.crypto_scalarmult_ristretto255_base(
+      sodium.crypto_core_ristretto255_scalar_random(),
+    );
+
+    const result1 = await evaluator.evaluate(point, tag);
+    const result2 = await evaluator.evaluate(point, tag);
 
     expect(Buffer.from(result1).equals(Buffer.from(result2))).toBe(true);
   });
 
   it("works end-to-end with oprfBlind and oprfFinalize", async () => {
     const fullKey = sodium.crypto_core_ristretto255_scalar_random();
-    const evaluator = createMockEvaluator(fullKey);
+    const { shareA, shareB } = shamirSplit(fullKey);
+    const evaluator = createMockEvaluator(shareA, shareB);
+    const tag = "volunteer:e2e-finalize";
 
-    const input = new TextEncoder().encode("mock-evaluator-e2e");
+    const input = new TextEncoder().encode("mock-evaluator-e2e-tagged");
     const { blindedElement, blindState } = oprfBlind(input);
 
-    const evaluated = await evaluator.evaluate(blindedElement);
+    const evaluated = await evaluator.evaluate(blindedElement, tag);
     const output = oprfFinalize(
       blindState,
       evaluated as EvaluatedElement,
@@ -75,9 +138,40 @@ describe("createMockEvaluator", () => {
     expect(output.length).toBe(64);
   });
 
+  it("mock and direct tagged evaluation agree", async () => {
+    const fullKey = sodium.crypto_core_ristretto255_scalar_random();
+    const { shareA, shareB } = shamirSplit(fullKey);
+    const evaluator = createMockEvaluator(shareA, shareB);
+    const tag = "channel:org-uuid:channel-id";
+
+    const input = new TextEncoder().encode("mock-vs-direct-tagged");
+    const { blindedElement } = oprfBlind(input);
+
+    // Mock evaluator path
+    const mockResult = await evaluator.evaluate(blindedElement, tag);
+
+    // Direct tagged evaluation path: the true combined tagged scalar
+    const derivedFullKey = combinedTaggedKey(shareA, shareB, tag);
+    const directResult = blindEvaluate(derivedFullKey, blindedElement);
+
+    // Both should produce the same evaluated element
+    expect(Buffer.from(mockResult).equals(Buffer.from(directResult))).toBe(
+      true,
+    );
+
+    // A second blind round should agree with the direct evaluation too
+    const { blindedElement: blindedElement2 } = oprfBlind(input);
+    const mockResult2 = await evaluator.evaluate(blindedElement2, tag);
+    const directResult2 = blindEvaluate(derivedFullKey, blindedElement2);
+    expect(Buffer.from(mockResult2).equals(Buffer.from(directResult2))).toBe(
+      true,
+    );
+  });
+
   it("close is callable without error", () => {
     const fullKey = sodium.crypto_core_ristretto255_scalar_random();
-    const evaluator = createMockEvaluator(fullKey);
+    const { shareA, shareB } = shamirSplit(fullKey);
+    const evaluator = createMockEvaluator(shareA, shareB);
 
     expect(() => {
       evaluator.close();
@@ -88,71 +182,59 @@ describe("createMockEvaluator", () => {
 describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
   "createIpcEvaluator (Docker OPRF containers)",
   () => {
-    it("evaluates a blinded element via Docker OPRF processes", async () => {
+    it("evaluates a blinded element via Docker OPRF processes with tag", async () => {
       const evaluator = createIpcEvaluator({
         socketPathA: DOCKER_SOCKET_A,
         socketPathB: DOCKER_SOCKET_B,
       });
 
-      const input = new TextEncoder().encode("docker-ipc-threshold-test");
+      const input = new TextEncoder().encode("docker-ipc-threshold-tagged");
       const { blindedElement } = oprfBlind(input);
 
-      const result = await evaluator.evaluate(blindedElement);
+      const result = await evaluator.evaluate(
+        blindedElement,
+        "volunteer:docker-test",
+      );
 
       expect(result).toBeInstanceOf(Uint8Array);
       expect(result.length).toBe(POINT_BYTES);
       evaluator.close();
     });
 
-    it("produces deterministic results for the same input", async () => {
+    it("produces deterministic results for the same input and tag", async () => {
       const evaluator = createIpcEvaluator({
         socketPathA: DOCKER_SOCKET_A,
         socketPathB: DOCKER_SOCKET_B,
       });
 
-      const input = new TextEncoder().encode("docker-determinism-test");
+      const input = new TextEncoder().encode("docker-determinism-tagged");
       const { blindedElement } = oprfBlind(input);
+      const tag = "account:docker-determinism";
 
-      const result1 = await evaluator.evaluate(blindedElement);
-      const result2 = await evaluator.evaluate(blindedElement);
+      const result1 = await evaluator.evaluate(blindedElement, tag);
+      const result2 = await evaluator.evaluate(blindedElement, tag);
 
       expect(Buffer.from(result1).equals(Buffer.from(result2))).toBe(true);
       evaluator.close();
     });
 
-    it("end-to-end blind/evaluate/finalize produces 64-byte output", async () => {
+    it("produces different results for different tags", async () => {
       const evaluator = createIpcEvaluator({
         socketPathA: DOCKER_SOCKET_A,
         socketPathB: DOCKER_SOCKET_B,
       });
 
-      const input = new TextEncoder().encode("docker-e2e-finalize-test");
-      const { blindedElement, blindState } = oprfBlind(input);
+      const input = new TextEncoder().encode("docker-distinct-tags");
+      const { blindedElement } = oprfBlind(input);
 
-      const evaluated = await evaluator.evaluate(blindedElement);
-      const output = oprfFinalize(
-        blindState,
-        evaluated as EvaluatedElement,
-        input,
+      const resultA = await evaluator.evaluate(
+        blindedElement,
+        "volunteer:tag-a",
       );
-
-      expect(output.length).toBe(64);
-      evaluator.close();
-    });
-
-    it("produces different results for different inputs", async () => {
-      const evaluator = createIpcEvaluator({
-        socketPathA: DOCKER_SOCKET_A,
-        socketPathB: DOCKER_SOCKET_B,
-      });
-
-      const inputA = new TextEncoder().encode("docker-distinct-a");
-      const inputB = new TextEncoder().encode("docker-distinct-b");
-      const { blindedElement: blindedA } = oprfBlind(inputA);
-      const { blindedElement: blindedB } = oprfBlind(inputB);
-
-      const resultA = await evaluator.evaluate(blindedA);
-      const resultB = await evaluator.evaluate(blindedB);
+      const resultB = await evaluator.evaluate(
+        blindedElement,
+        "volunteer:tag-b",
+      );
 
       expect(Buffer.from(resultA).equals(Buffer.from(resultB))).toBe(false);
       evaluator.close();
@@ -164,9 +246,9 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
         socketPathB: DOCKER_SOCKET_B,
       });
 
-      await expect(evaluator.evaluate(new Uint8Array(16))).rejects.toThrow(
-        OprfError,
-      );
+      await expect(
+        evaluator.evaluate(new Uint8Array(16), "volunteer:wrong-len"),
+      ).rejects.toThrow(OprfError);
       evaluator.close();
     });
   },
@@ -183,7 +265,9 @@ describe.skipIf(!IS_LINUX)("IPC error handling (Linux only)", () => {
       sodium.crypto_core_ristretto255_scalar_random(),
     );
 
-    await expect(evaluator.evaluate(point)).rejects.toThrow(OprfError);
+    await expect(
+      evaluator.evaluate(point, "volunteer:nonexistent"),
+    ).rejects.toThrow(OprfError);
     evaluator.close();
   });
 
@@ -211,7 +295,9 @@ describe.skipIf(!IS_LINUX)("IPC error handling (Linux only)", () => {
       sodium.crypto_core_ristretto255_scalar_random(),
     );
 
-    await expect(evaluator.evaluate(point)).rejects.toThrow(OprfError);
+    await expect(
+      evaluator.evaluate(point, "volunteer:mock-error"),
+    ).rejects.toThrow(OprfError);
 
     mockServer.close();
     evaluator.close();

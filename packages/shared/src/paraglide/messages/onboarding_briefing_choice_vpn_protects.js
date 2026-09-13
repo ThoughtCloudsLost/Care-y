@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_vpn_protects = /** @type {(inputs: Onboardin
 };
 
 const es_onboarding_briefing_choice_vpn_protects = /** @type {(inputs: Onboarding_Briefing_Choice_Vpn_ProtectsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Que tu proveedor de internet u operador de red local vea que los voluntarios se conectan a este servicio, y que descubra su ubicacion fisica por su direccion IP.`)
+	return /** @type {LocalizedString} */ (`Que tu proveedor de internet u operador de red local vea que los voluntarios se conectan a este servicio, y que descubra su ubicación fisica por su dirección IP.`)
 };
 
 /**

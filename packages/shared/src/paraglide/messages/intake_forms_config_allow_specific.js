@@ -10,7 +10,7 @@ const en_intake_forms_config_allow_specific = /** @type {(inputs: Intake_Forms_C
 };
 
 const es_intake_forms_config_allow_specific = /** @type {(inputs: Intake_Forms_Config_Allow_SpecificInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Permitir fechas especificas`)
+	return /** @type {LocalizedString} */ (`Permitir fechas específicas`)
 };
 
 /**

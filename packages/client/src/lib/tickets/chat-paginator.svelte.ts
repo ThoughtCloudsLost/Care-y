@@ -1,14 +1,17 @@
 /**
- * Pagination state for the ticket detail chat view.
+ * Pagination state for a chat view, on either side of the product.
  *
  * Owns the page array, older-page fetching, scroll-position preservation
  * on prepend, and the "load until read boundary" loop for unread messages.
  * The component provides the initial query data via seed() and the scroll
  * container via a getter; the paginator handles the rest.
+ *
+ * The cache key arrives as a getter rather than being built here, so the
+ * volunteer ticket thread and the client portal thread page through one
+ * implementation instead of two that drift apart.
  */
 
 import type { QueryClient } from "@tanstack/svelte-query";
-import { ticketKeys } from "$lib/query/keys";
 
 /** Minimal constraint for records managed by the paginator. */
 export interface PaginatedRecord {
@@ -19,11 +22,19 @@ export interface PaginatedRecord {
 interface ChatPaginatorOptions<T extends PaginatedRecord> {
   pageSize: number;
   queryClient: QueryClient;
-  /** Getter to read the current ticketId (avoids stale prop capture). */
-  getTicketId: () => string;
+  /** Cache key for the older page starting at `cursor`. */
+  getPageQueryKey: (cursor: string) => readonly unknown[];
   fetchPage: (cursor: string) => Promise<T[]>;
   /** Getter for the scroll container element (avoids stale closures). */
   getScrollContainer: () => HTMLDivElement | undefined;
+  /**
+   * Total messages the conversation holds, when the transport reports one.
+   *
+   * Checked alongside the short-page signal because a partial page must not
+   * read as the end of history on its own: a page can come back short for
+   * reasons that have nothing to do with reaching the beginning.
+   */
+  getTotalCount?: () => number | undefined;
 }
 
 export interface ChatPaginator<T extends PaginatedRecord> {
@@ -45,6 +56,13 @@ export function createChatPaginator<T extends PaginatedRecord>(
   options: ChatPaginatorOptions<T>,
 ): ChatPaginator<T> {
   const { pageSize, queryClient, fetchPage, getScrollContainer } = options;
+
+  /** True once either signal says there is no earlier history to fetch. */
+  function reachedStart(pageLength: number, loadedCount: number): boolean {
+    if (pageLength < pageSize) return true;
+    const total = options.getTotalCount?.();
+    return total !== undefined && loadedCount >= total;
+  }
 
   let olderPages = $state<T[][]>([]);
   let hasMore = $state(true);
@@ -83,11 +101,13 @@ export function createChatPaginator<T extends PaginatedRecord>(
 
     try {
       const older = await queryClient.fetchQuery({
-        queryKey: ticketKeys.followUpsPage(options.getTicketId(), oldestId),
+        queryKey: options.getPageQueryKey(oldestId),
         queryFn: async () => fetchPage(oldestId),
       });
 
-      if (older.length < pageSize) hasMore = false;
+      if (reachedStart(older.length, items.length + older.length)) {
+        hasMore = false;
+      }
       if (older.length > 0) {
         // Preserve scroll position: measure before prepend, restore after.
         const el = getScrollContainer();
@@ -115,11 +135,13 @@ export function createChatPaginator<T extends PaginatedRecord>(
         if (oldestId === undefined) break;
 
         const older = await queryClient.fetchQuery({
-          queryKey: ticketKeys.followUpsPage(options.getTicketId(), oldestId),
+          queryKey: options.getPageQueryKey(oldestId),
           queryFn: async () => fetchPage(oldestId),
         });
 
-        if (older.length < pageSize) hasMore = false;
+        if (reachedStart(older.length, items.length + older.length)) {
+          hasMore = false;
+        }
         if (older.length > 0) {
           olderPages = [older, ...olderPages];
         }

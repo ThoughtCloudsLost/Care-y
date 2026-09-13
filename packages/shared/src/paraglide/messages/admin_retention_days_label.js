@@ -10,7 +10,7 @@ const en_admin_retention_days_label = /** @type {(inputs: Admin_Retention_Days_L
 };
 
 const es_admin_retention_days_label = /** @type {(inputs: Admin_Retention_Days_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Periodo de retencion (dias)`)
+	return /** @type {LocalizedString} */ (`Periodo de retención (días)`)
 };
 
 /**

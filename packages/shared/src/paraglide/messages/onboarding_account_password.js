@@ -10,7 +10,7 @@ const en_onboarding_account_password = /** @type {(inputs: Onboarding_Account_Pa
 };
 
 const es_onboarding_account_password = /** @type {(inputs: Onboarding_Account_PasswordInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Contrasena`)
+	return /** @type {LocalizedString} */ (`Contraseña`)
 };
 
 /**

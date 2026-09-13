@@ -10,7 +10,7 @@ const en_intake_field_message_placeholder = /** @type {(inputs: Intake_Field_Mes
 };
 
 const es_intake_field_message_placeholder = /** @type {(inputs: Intake_Field_Message_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Que esta pasando?`)
+	return /** @type {LocalizedString} */ (`¿Qué está pasando?`)
 };
 
 /**

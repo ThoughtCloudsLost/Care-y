@@ -10,7 +10,7 @@ const en_admin_branding_text_hint = /** @type {(inputs: Admin_Branding_Text_Hint
 };
 
 const es_admin_branding_text_hint = /** @type {(inputs: Admin_Branding_Text_HintInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Mostrado en el formulario de admision de ${i?.clients}.`)
+	return /** @type {LocalizedString} */ (`Mostrado en el formulario de admisión de ${i?.clients}.`)
 };
 
 /**

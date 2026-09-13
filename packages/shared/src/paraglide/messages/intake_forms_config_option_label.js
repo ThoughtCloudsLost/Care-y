@@ -10,7 +10,7 @@ const en_intake_forms_config_option_label = /** @type {(inputs: Intake_Forms_Con
 };
 
 const es_intake_forms_config_option_label = /** @type {(inputs: Intake_Forms_Config_Option_LabelInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Opcion ${i?.n}`)
+	return /** @type {LocalizedString} */ (`Opción ${i?.n}`)
 };
 
 /**

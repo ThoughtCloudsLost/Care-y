@@ -10,7 +10,7 @@ const en_admin_queue_delete_confirm_empty = /** @type {(inputs: Admin_Queue_Dele
 };
 
 const es_admin_queue_delete_confirm_empty = /** @type {(inputs: Admin_Queue_Delete_Confirm_EmptyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Esta ${i?.queue} no tiene ${i?.tickets} y sera eliminada permanentemente.`)
+	return /** @type {LocalizedString} */ (`Esta ${i?.queue} no tiene ${i?.tickets} y será eliminada permanentemente.`)
 };
 
 /**

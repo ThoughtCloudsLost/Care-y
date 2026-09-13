@@ -10,7 +10,7 @@ const en_admin_invite_credential_instructions = /** @type {(inputs: Admin_Invite
 };
 
 const es_admin_invite_credential_instructions = /** @type {(inputs: Admin_Invite_Credential_InstructionsInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Comparta estas credenciales de forma segura con el nuevo ${i?.volunteer}. Esta es la unica vez que se mostraran.`)
+	return /** @type {LocalizedString} */ (`Comparta estas credenciales de forma segura con el nuevo ${i?.volunteer}. Esta es la única vez que se mostraran.`)
 };
 
 /**

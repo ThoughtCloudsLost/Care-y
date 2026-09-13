@@ -2,15 +2,13 @@ import type { QueryClient } from "@tanstack/svelte-query";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { AsyncDecryptCache } from "$lib/crypto/async-decrypt-cache.js";
 import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
+import { followupSlot } from "@care-y/crypto";
 import {
-  followupSlot,
-  eciesEncrypt,
-  toRistrettoPoint,
-  decode,
-  encode,
-} from "@care-y/crypto";
+  sealPortalCopy,
+  type PortalCopy,
+} from "$lib/crypto/seal-portal-copy.js";
 import { newFollowupId, newPendingFollowupId } from "@care-y/shared";
-import type { FollowupId } from "@care-y/shared";
+import type { FollowupId, AttachmentLink } from "@care-y/shared";
 import { ticketKeys } from "$lib/query/keys.js";
 import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -23,6 +21,8 @@ export interface PendingEntryOpts {
   readonly ticketId: string;
   readonly mentionedPseudonyms: string[];
   readonly currentUserId: string | null;
+  /** Trimmed plaintext being sent, for callers rendering their own optimistic bubble. */
+  readonly text: string;
 }
 
 export interface SendMessageConfig<TFollowUp> {
@@ -40,6 +40,12 @@ export interface SendMessageConfig<TFollowUp> {
    * client can read the reply in the portal (dual-copy write).
    */
   readonly getClientPublic: () => string | null;
+  /**
+   * Already-uploaded attachment links to include in the follow-up.
+   * Defaults to an empty-array getter so callers without attachments
+   * keep working unchanged.
+   */
+  readonly getAttachmentLinks?: () => AttachmentLink[];
   readonly createFollowUpMutate: (args: {
     id: string;
     ticketId: string;
@@ -48,12 +54,13 @@ export interface SendMessageConfig<TFollowUp> {
     type: "message";
     isPrivate: false;
     mentionedPseudonyms: string[];
-    portalCopy?: {
-      ephemeralPoint: string;
-      nonce: string;
-      ciphertext: string;
-    };
+    portalCopy?: PortalCopy;
+    attachments?: AttachmentLink[];
   }) => Promise<unknown>;
+  /** Runs after a successful send and cache invalidation (haptics, toasts, dismissal). */
+  readonly onSuccess?: () => void;
+  /** Runs after a failed send, once rollback and the error toast are done. */
+  readonly onError?: () => void;
 }
 
 export interface SendMessage {
@@ -74,7 +81,10 @@ export function createSendMessage<TFollowUp extends { id: string }>(
     queryClient,
     buildPendingEntry,
     getClientPublic,
+    getAttachmentLinks,
     createFollowUpMutate,
+    onSuccess,
+    onError,
   } = config;
 
   let sending = $state(false);
@@ -106,6 +116,7 @@ export function createSendMessage<TFollowUp extends { id: string }>(
         ticketId,
         mentionedPseudonyms: mentions,
         currentUserId: getCurrentUserId(),
+        text,
       });
 
       queryClient.setQueryData<TFollowUp[]>(followUpsKey, (old) =>
@@ -114,24 +125,11 @@ export function createSendMessage<TFollowUp extends { id: string }>(
 
       followUpCache.seed(pendingId, text);
 
-      // Dual-copy write: when the client has an active portal channel,
-      // the same text is also sealed to the client's public key so the
-      // reply is readable in the portal. Without it the server writes
-      // only the org copy and the client never sees the message.
-      const clientPublic = getClientPublic();
-      let portalCopy:
-        | { ephemeralPoint: string; nonce: string; ciphertext: string }
-        | undefined;
-      if (clientPublic != null && clientPublic !== "") {
-        const pubBytes = toRistrettoPoint(decode(clientPublic));
-        const textBytes = new TextEncoder().encode(text);
-        const ecies = eciesEncrypt(textBytes, pubBytes);
-        portalCopy = {
-          ephemeralPoint: encode(ecies.ephemeralPoint),
-          nonce: encode(ecies.nonce),
-          ciphertext: encode(ecies.ciphertext),
-        };
-      }
+      // Dual-copy write: seal to the client's portal key so the reply
+      // is readable in the portal thread, not only on the org side.
+      const portalCopy = sealPortalCopy(getClientPublic(), text);
+
+      const attachments = getAttachmentLinks?.() ?? [];
 
       await createFollowUpMutate({
         id: followUpId,
@@ -142,12 +140,14 @@ export function createSendMessage<TFollowUp extends { id: string }>(
         isPrivate: false,
         mentionedPseudonyms: mentions,
         portalCopy,
+        attachments: attachments.length > 0 ? attachments : undefined,
       });
 
       await queryClient.invalidateQueries({
         queryKey: ticketKeys.followUps(ticketId),
       });
       invalidateReadState(queryClient);
+      onSuccess?.();
     } catch (err: unknown) {
       followUpCache.deleteByPrefix(pendingId);
       queryClient.setQueryData<TFollowUp[]>(followUpsKey, (old) =>
@@ -160,6 +160,7 @@ export function createSendMessage<TFollowUp extends { id: string }>(
           ? m.ticket_reply_error_encrypt()
           : m.ticket_reply_error_send();
       toastStore.show(msg, 3000);
+      onError?.();
     } finally {
       sending = false;
     }

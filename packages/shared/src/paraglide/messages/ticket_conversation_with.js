@@ -10,7 +10,7 @@ const en_ticket_conversation_with = /** @type {(inputs: Ticket_Conversation_With
 };
 
 const es_ticket_conversation_with = /** @type {(inputs: Ticket_Conversation_WithInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Conversacion con ${i?.alias}`)
+	return /** @type {LocalizedString} */ (`Conversación con ${i?.alias}`)
 };
 
 /**

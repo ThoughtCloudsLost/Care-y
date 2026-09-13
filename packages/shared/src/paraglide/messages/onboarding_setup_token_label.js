@@ -10,7 +10,7 @@ const en_onboarding_setup_token_label = /** @type {(inputs: Onboarding_Setup_Tok
 };
 
 const es_onboarding_setup_token_label = /** @type {(inputs: Onboarding_Setup_Token_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Token de configuracion`)
+	return /** @type {LocalizedString} */ (`Token de configuración`)
 };
 
 /**

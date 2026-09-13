@@ -10,7 +10,7 @@ const en_onboarding_communications_subtext = /** @type {(inputs: Onboarding_Comm
 };
 
 const es_onboarding_communications_subtext = /** @type {(inputs: Onboarding_Communications_SubtextInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configure el servicio telefonico, saludos, plantillas SMS y numeros bloqueados. Puede omitir esto y configurarlo despues desde los ajustes de administracion.`)
+	return /** @type {LocalizedString} */ (`Configure el servicio telefónico, saludos, plantillas SMS y números bloqueados. Puede omitir esto y configurarlo después desde los ajustes de administración.`)
 };
 
 /**

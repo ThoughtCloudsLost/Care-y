@@ -10,7 +10,7 @@ const en_admin_keys_org_key_missing = /** @type {(inputs: Admin_Keys_Org_Key_Mis
 };
 
 const es_admin_keys_org_key_missing = /** @type {(inputs: Admin_Keys_Org_Key_MissingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Clave de la organizacion no configurada`)
+	return /** @type {LocalizedString} */ (`Clave de la organización no configurada`)
 };
 
 /**

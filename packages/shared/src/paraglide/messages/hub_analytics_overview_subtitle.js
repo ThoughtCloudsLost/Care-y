@@ -10,7 +10,7 @@ const en_hub_analytics_overview_subtitle = /** @type {(inputs: Hub_Analytics_Ove
 };
 
 const es_hub_analytics_overview_subtitle = /** @type {(inputs: Hub_Analytics_Overview_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Metricas clave y tendencias de volumen`)
+	return /** @type {LocalizedString} */ (`Métricas clave y tendencias de volumen`)
 };
 
 /**

@@ -73,11 +73,11 @@ export interface ReportsService {
 }
 
 function twelveMonthCutoff(): Date {
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - 11);
-  cutoff.setDate(1);
-  cutoff.setHours(0, 0, 0, 0);
-  return cutoff;
+  // Built from year/month directly rather than setMonth on today's date:
+  // setMonth from a day-31 date rolls into the following month, which
+  // silently drops the oldest month's rows when viewed on the 29th-31st.
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() - 11, 1, 0, 0, 0, 0);
 }
 
 function buildMonthlyGrid<T>(fill: (key: string) => T): T[] {

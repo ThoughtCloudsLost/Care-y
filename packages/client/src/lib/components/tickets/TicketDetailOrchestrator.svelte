@@ -16,7 +16,7 @@
     setDraftForMode,
     clearDraftForMode,
   } from "$lib/tickets/draft-store.svelte.js";
-  import { Link, Button } from "konsta/svelte";
+  import { Link, Button, Chip } from "konsta/svelte";
   import {
     ChevronLeft,
     MessageSquareText,
@@ -34,7 +34,7 @@
     getTabbarHiddenCtx,
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
-  import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
+  import { useThreadChrome } from "$lib/shell/use-thread-chrome.svelte.js";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
   import SplitView from "$lib/shell/SplitView.svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
@@ -65,6 +65,7 @@
     lookupCachedFollowUpCount,
   } from "$lib/tickets/ticket-detail-utils.js";
   import TicketCompose from "$lib/components/tickets/TicketCompose.svelte";
+  import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
   import type { TicketComposeHandle } from "$lib/components/tickets/ticket-compose-types.js";
   import type { TicketAction } from "$lib/tickets/types.js";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
@@ -93,6 +94,7 @@
   import { requireRouter } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { createSendMessage } from "$lib/composables/ticket-detail/create-send-message.svelte.js";
+  import { createAttachmentUpload } from "$lib/composables/ticket-detail/create-attachment-upload.svelte.js";
   import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
   import { createCallDispatch } from "$lib/composables/ticket-detail/create-call-dispatch.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -108,7 +110,7 @@
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import { untrack } from "svelte";
   import { recentViews } from "$lib/search/recent-views.js";
-  import { ticketIdSchema, userIdSchema } from "@care-y/shared";
+  import { buildPendingFollowUpEntry } from "$lib/composables/ticket-detail/pending-follow-up.js";
 
   let {
     ticketId,
@@ -307,13 +309,27 @@
 
   // Scroll container ref from TicketDetail (for scroll-direction tracking).
   let chatScrollEl = $state<HTMLElement | undefined>();
+  let chatNearBottom = $state(true);
+
+  /** Return to the newest message, matching the client threads. */
+  function jumpToLatest(): void {
+    chatScrollEl?.scrollTo({
+      top: chatScrollEl.scrollHeight,
+      behavior: "smooth",
+    });
+  }
   let chatScrollReady = $state(false);
 
-  const scrollDir = useScrollDirection({
+  const threadChrome = useThreadChrome({
     get scrollEl() {
       return chatScrollEl;
     },
-    invert: true,
+    get ready() {
+      return chatScrollReady;
+    },
+    get pinned() {
+      return overlay.active;
+    },
   });
 
   // Tabbar: hidden (the compose bar occupies the bottom area).
@@ -338,9 +354,7 @@
           title: navTitle,
           right: navRight,
           subnavbar: ticketSubnavbar,
-          subnavbarHidden: () =>
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- $state/$derived values read lazily inside callback
-            chatScrollReady && scrollDir.hidden && !overlay.active,
+          subnavbarHidden: () => threadChrome.subnavbarHidden,
         };
     return () => {
       navbarCtx.current = undefined;
@@ -461,6 +475,15 @@
     },
   });
 
+  // --- Attachment upload (composable) ---
+
+  const attachmentUpload = createAttachmentUpload({
+    getTicketId: () => ticketId,
+    getClientPublic: () => ticket?.portalChannel?.clientPublic ?? null,
+    cryptoBridge,
+    uploadMutate: async (args) => ticketRouter.uploadAttachment.mutate(args),
+  });
+
   // --- Send message (composable) ---
 
   const messenger = createSendMessage<FollowUpList[number]>({
@@ -473,38 +496,15 @@
     cryptoBridge,
     followUpCache,
     queryClient,
-    buildPendingEntry: ({
-      pendingId,
-      ticketId: tid,
-      mentionedPseudonyms,
-      currentUserId: uid,
-    }) =>
-      ({
-        id: pendingId,
-        ticketId: ticketIdSchema.parse(tid),
-        source: "volunteer",
-        type: "message",
-        isPrivate: false,
-        mentionedPseudonyms,
-        encryptedContent: "",
-        createdBy: uid == null ? null : userIdSchema.parse(uid),
-        createdAt: new Date().toISOString(),
-        hasRecording: false,
-        hasImage: false,
-        hasFile: false,
-        noteTypeId: null,
-        callSid: null,
-        callStatus: null,
-        callDurationSeconds: null,
-        keyGeneration: null,
-        keyWrap: null,
-        portalWrap: null,
-        editedAt: null,
-        eventParams: null,
-      }) satisfies FollowUpList[number],
+    buildPendingEntry: buildPendingFollowUpEntry,
     getClientPublic: () => ticket?.portalChannel?.clientPublic ?? null,
-    createFollowUpMutate: async (args) =>
-      ticketRouter.createFollowUp.mutate(args),
+    getAttachmentLinks: () => attachmentUpload.links(),
+    createFollowUpMutate: async (args) => {
+      const result = await ticketRouter.createFollowUp.mutate(args);
+      // Clear pending attachments only after the mutation resolves.
+      attachmentUpload.clear();
+      return result;
+    },
   });
 
   // --- SMS send (composable) ---
@@ -513,6 +513,7 @@
     getTicketId: () => ticketId,
     cryptoBridge,
     queryClient,
+    getClientPublic: () => ticket?.portalChannel?.clientPublic ?? null,
     createFollowUpMutate: async (args) =>
       ticketRouter.createFollowUp.mutate(args),
     onSuccess: () => {
@@ -578,6 +579,7 @@
   let hasMoreMessages = $state(false);
   let loadOlderPage = $state<(() => Promise<void>) | undefined>(undefined);
   let loadedFollowUpCount = $state(0);
+  let correctionPending = $state(false);
 
   const deepSearch = createDeepSearch({
     getOverlayTerm: () => overlay.term,
@@ -724,9 +726,8 @@
     closeCallSheet();
     if (action === "cancel" || callInProgress) return;
 
-    exposureHint.show("call", () => {
-      void callDispatch.executeCall();
-    });
+    exposureHint.show("call");
+    void callDispatch.executeCall();
   }
 
   // --- Delete confirm + note edit (composables) ---
@@ -900,12 +901,13 @@
     title={decryptedTitle}
     smallTitle
     hideTitle
-    headerRight={detailViewToggle}
+    statsRight={detailViewToggle}
     stats={detailStats}
     selectLabel={m.ticket_select_mode()}
     onselect={selectMode.active
       ? () => selectMode.exit()
       : () => selectMode.enter()}
+    selectInFilterRow
     filterPills={detailFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     bulkActions={selectMode.active ? selectActionsRow : undefined}
@@ -977,6 +979,7 @@
     bind:searchableFollowUps
     bind:scrollContainerEl={chatScrollEl}
     bind:scrollReady={chatScrollReady}
+    bind:isNearBottom={chatNearBottom}
     searchTerm={overlay.term}
     searchActiveMatchId={overlay.activeId}
     searchScrollRequested={overlay.scrollRequested}
@@ -984,17 +987,61 @@
     bind:hasMoreMessages
     bind:loadOlderPage
     bind:loadedFollowUpCount
+    bind:correctionPending
+  />
+{/snippet}
+
+{#snippet jumpPill()}
+  <JumpToLatest
+    visible={!chatNearBottom && !selectMode.active}
+    onclick={jumpToLatest}
   />
 {/snippet}
 
 {#snippet ticketCompose()}
   <div class="detail-compose">
+    {#if attachmentUpload.pending.length > 0}
+      <div
+        class="pending-attachments"
+        role="list"
+        aria-label={m.attachment_pending_list()}
+      >
+        {#each attachmentUpload.pending as entry (entry.attachmentId)}
+          <Chip
+            class="attachment-chip"
+            outline={entry.status === "failed"}
+            role="listitem"
+          >
+            <span class="attachment-chip-name">{entry.filename}</span>
+            {#if entry.status === "encrypting" || entry.status === "uploading"}
+              <span class="attachment-chip-status">
+                {m.attachment_uploading()}
+              </span>
+            {:else if entry.status === "failed"}
+              <span class="attachment-chip-status attachment-chip-failed">
+                {m.attachment_failed()}
+              </span>
+            {/if}
+          </Chip>
+          <button
+            type="button"
+            class="attachment-remove-btn"
+            onclick={() => attachmentUpload.remove(entry.attachmentId)}
+            aria-label={m.attachment_remove({ name: entry.filename })}
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
+        {/each}
+      </div>
+    {/if}
     <TicketCompose
       bind:this={compose}
       {ticketId}
       inline={desktopFull || onexpand != null}
       hidden={selectMode.active}
-      sending={messenger.sending || sms.sending}
+      sending={messenger.sending || sms.sending || attachmentUpload.busy}
+      hasUnacknowledgedCorrection={correctionPending}
+      floatingPill={jumpPill}
       onsendreply={() => void messenger.handleSend()}
       onsendsms={(text: string) => void sms.handleSmsSend(text)}
       onplus={openComposeActions}
@@ -1007,12 +1054,13 @@
     title={decryptedTitle}
     smallTitle
     hideTitle
-    headerRight={detailViewToggle}
+    statsRight={detailViewToggle}
     stats={detailStats}
     selectLabel={m.ticket_select_mode()}
     onselect={selectMode.active
       ? () => selectMode.exit()
       : () => selectMode.enter()}
+    selectInFilterRow
     filterPills={detailFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     bulkActions={selectMode.active ? selectActionsRow : undefined}
@@ -1137,6 +1185,7 @@
     });
   }}
   {hasVerifiedPhone}
+  {correctionPending}
   currentAssigneeId={ticket?.assignedTo ?? null}
   {deleteConfirm}
   {noteEdit}
@@ -1179,8 +1228,17 @@
     ? () => compose?.activateReply()
     : undefined}
   ontextclient={ticket?.hasPhone === true
-    ? () => exposureHint.show("sms", () => compose?.activateSms())
+    ? () => {
+        exposureHint.show("sms");
+        compose?.activateSms();
+      }
     : undefined}
+  onattach={(file: File) => {
+    // Activate reply mode so the volunteer sees the compose bar with
+    // the pending attachment chip.
+    compose?.activateReply();
+    void attachmentUpload.attach(file);
+  }}
   ondraftset={(body: string) => {
     setDraftForMode(ticketId, "reply", body);
     compose?.activateReply();
@@ -1239,5 +1297,45 @@
       -webkit-backdrop-filter: none !important;
       background: Canvas !important;
     }
+  }
+
+  .pending-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 16px;
+    align-items: center;
+  }
+
+  .attachment-chip-name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .attachment-chip-status {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  .attachment-chip-failed {
+    color: var(--danger);
+  }
+
+  .attachment-remove-btn {
+    appearance: none;
+    border: none;
+    background: none;
+    padding: 6px;
+    margin: -6px 0 -6px -2px;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
   }
 </style>

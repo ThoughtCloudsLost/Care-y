@@ -1,34 +1,34 @@
 /**
- * Client-side portal cryptography. Runs on the main thread.
+ * Client-side portal cryptography utilities that remain on the main thread.
  *
- * The portal page has no session, no Worker, no CryptoBridge.
- * All key material lives in module-scope closures, zeroed on
- * quick exit and pagehide. The fragment never reaches any server
- * (RFC 3986). Same main-thread justification as intake-crypto.ts:
- * no session secrets to protect, plaintext is already in the DOM.
+ * ADR-091 posture: key custody lives in the portal Worker (portal-core.ts).
+ * The main thread holds no channel or account key material after session
+ * start. This module retains only:
+ *
+ *   - parseFragment: URL fragment parsing (no secrets, runs before the worker)
+ *   - performChannelOprf: channel OPRF pipeline wrapping tRPC + PoW plumbing
+ *     (now used only by mint paths; channel sessions use the bridge)
+ *   - decodeEciesTriple: base64url wire decode (used by upgrade re-encrypt)
+ *   - Type exports consumed by callers
+ *
+ * Functions that moved into the portal worker and are consumed via the
+ * bridge: verifyKeyCheck, decryptPortalMessage, encryptReply,
+ * encryptAttachment, decryptAttachmentKey, decryptAttachmentBlob,
+ * createPortalSession.
  */
 
 import {
   deriveChannelId,
   deriveChannelAuth,
-  PORTAL_KEY_CHECK,
-  eciesEncrypt,
-  eciesDecrypt,
-  generateContentKey,
-  encryptContent,
-  sealForOrgKey,
-  buildContentAad,
-  followupSlot,
+  portalOprfInput,
+  oprfBlind,
+  oprfFinalize,
+  derivePortalKeypairFromOprf,
   encode,
   decode,
-  requireSodium,
-  DecryptionError,
+  zeroAll,
   type PortalKeypair,
-  type EciesOutput,
-  type SymmetricKey,
-  toNonce,
   toRistrettoPoint,
-  type Scalar,
   type RistrettoPoint,
 } from "@care-y/crypto";
 
@@ -43,24 +43,146 @@ export interface EciesTripleDecoded {
   readonly ciphertext: Uint8Array;
 }
 
-/** Payload produced by encryptReply, ready for the portalReply mutation. */
-export interface PortalReplyPayload {
-  readonly encryptedContent: string;
-  readonly wrappedTkTemp: string;
-  readonly selfCopy: {
-    readonly ephemeralPoint: string;
-    readonly nonce: string;
-    readonly ciphertext: string;
-  };
+/** ECIES triple in the base64url form the wire uses. */
+export interface EciesTripleWire {
+  readonly ephemeralPoint: string;
+  readonly nonce: string;
+  readonly ciphertext: string;
 }
 
-/** Mutable session state. The page holds one of these in module scope. */
-export interface PortalSession {
-  readonly channelId: string;
-  readonly auth: Uint8Array;
-  readonly keypair: PortalKeypair;
-  /** Zero auth, clientPrivate, and any retained seed. */
-  destroy(): void;
+// ---------------------------------------------------------------------------
+// Channel OPRF round (ADR-091)
+// ---------------------------------------------------------------------------
+
+/**
+ * Callback that sends a blinded element to the server's
+ * evaluateChannelOprf procedure and returns the evaluated element
+ * as a base64url string. The caller wires this to the tRPC mutation;
+ * this module stays free of tRPC.
+ */
+export type ChannelEvaluateCallback = (
+  channelId: string,
+  blindedElementB64: string,
+  auth?: string,
+) => Promise<{ evaluated: string }>;
+
+/** Options for performChannelOprf. */
+export interface ChannelOprfOptions {
+  /** Passphrase spoken on the verification call (omit for plain links). */
+  readonly passphrase?: string;
+  /** Base64url channel auth token (required for active rows). */
+  readonly auth?: string;
+  /** Server evaluate callback (tRPC wiring). */
+  readonly evaluate: ChannelEvaluateCallback;
+  /** PoW callback matching the evaluateWithPowRetry pattern. */
+  readonly onPowRequired: (
+    challenge: string,
+    difficulty: number,
+  ) => Promise<string>;
+}
+
+/**
+ * Type guard for tRPC errors carrying a PoW challenge.
+ * Mirrors the guard in crypto-helpers.ts for the channel evaluate path.
+ */
+function isChannelPowRequired(
+  err: unknown,
+): err is { data: { code: string; challenge: string; difficulty: number } } {
+  if (typeof err !== "object" || err === null || !("data" in err)) {
+    return false;
+  }
+  const { data } = err;
+  if (typeof data !== "object" || data === null) {
+    return false;
+  }
+  return (
+    "code" in data &&
+    data.code === "POW_REQUIRED" &&
+    "challenge" in data &&
+    typeof data.challenge === "string" &&
+    "difficulty" in data &&
+    typeof data.difficulty === "number"
+  );
+}
+
+/**
+ * Run the full channel OPRF round: portalOprfInput, blind,
+ * evaluate (with PoW retry), finalize, derive keypair.
+ *
+ * The module stays tRPC-free by accepting the evaluate callback
+ * as a parameter, the same pattern evaluateWithPowRetry uses for
+ * its onPowRequired callback.
+ *
+ * All intermediate key material is zeroed in a finally block.
+ * The returned PortalKeypair is owned by the caller, who must
+ * zero clientPrivate when done.
+ *
+ * @param seed - Portal seed (>= 18 bytes)
+ * @param channelId - Hex channel identifier derived from the seed
+ * @param opts - Evaluate callback, optional passphrase, optional auth
+ * @returns PortalKeypair derived through the OPRF pipeline
+ */
+export async function performChannelOprf(
+  seed: Uint8Array,
+  channelId: string,
+  opts: ChannelOprfOptions,
+): Promise<PortalKeypair> {
+  let input: Uint8Array | null = null;
+  let oprfOutput: Uint8Array | null = null;
+
+  try {
+    // 1. Build pre-blind input (seed, or seed || Argon2id(passphrase))
+    input = portalOprfInput(seed, opts.passphrase);
+
+    // 2. Blind
+    const { blindedElement, blindState } = oprfBlind(input);
+
+    // 3. Evaluate with PoW retry
+    const result = await evaluateChannelWithPowRetry(
+      channelId,
+      encode(blindedElement),
+      opts.auth,
+      opts.evaluate,
+      opts.onPowRequired,
+    );
+
+    // 4. Finalize
+    const evaluatedBytes = decode(result);
+    oprfOutput = oprfFinalize(
+      blindState,
+      toRistrettoPoint(evaluatedBytes),
+      input,
+    );
+
+    // 5. Derive keypair from OPRF output
+    return derivePortalKeypairFromOprf(oprfOutput);
+  } finally {
+    zeroAll(input, oprfOutput);
+  }
+}
+
+/**
+ * Channel evaluate with PoW retry, mirroring the pattern in
+ * crypto-helpers.ts for volunteer/account OPRF.
+ */
+async function evaluateChannelWithPowRetry(
+  channelId: string,
+  blindedElementB64: string,
+  auth: string | undefined,
+  evaluate: ChannelEvaluateCallback,
+  onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
+): Promise<string> {
+  try {
+    const result = await evaluate(channelId, blindedElementB64, auth);
+    return result.evaluated;
+  } catch (err: unknown) {
+    if (!isChannelPowRequired(err)) throw err;
+
+    // Solve the PoW challenge, then retry the evaluate call.
+    await onPowRequired(err.data.challenge, err.data.difficulty);
+    const result = await evaluate(channelId, blindedElementB64, auth);
+    return result.evaluated;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -102,131 +224,8 @@ export function parseFragment(
 }
 
 // ---------------------------------------------------------------------------
-// Key check verification
+// Wire decode helper
 // ---------------------------------------------------------------------------
-
-const textDecoder = new TextDecoder();
-
-/**
- * Verify a derived keypair against the server-stored key check.
- * Returns true iff the decrypted plaintext matches PORTAL_KEY_CHECK.
- * A DecryptionError (wrong passphrase, corrupt triple) returns false.
- */
-export function verifyKeyCheck(
-  keypair: PortalKeypair,
-  keyCheck: EciesTripleDecoded,
-): boolean {
-  try {
-    const plaintext = eciesDecrypt(
-      keyCheck.ephemeralPoint,
-      toNonce(keyCheck.nonce),
-      keyCheck.ciphertext,
-      keypair.clientPrivate,
-    );
-    const text = textDecoder.decode(plaintext);
-    return text === PORTAL_KEY_CHECK;
-  } catch (err: unknown) {
-    if (err instanceof DecryptionError) return false;
-    throw err;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Message decryption
-// ---------------------------------------------------------------------------
-
-/**
- * Decrypt a single portal message (ECIES triple encrypted to clientPublic).
- *
- * @throws DecryptionError on tampered or wrong-key ciphertext
- */
-export function decryptPortalMessage(
-  msg: EciesTripleDecoded,
-  clientPrivate: Scalar,
-): string {
-  const plaintext = eciesDecrypt(
-    msg.ephemeralPoint,
-    toNonce(msg.nonce),
-    msg.ciphertext,
-    clientPrivate,
-  );
-  return textDecoder.decode(plaintext);
-}
-
-// ---------------------------------------------------------------------------
-// Reply encryption
-// ---------------------------------------------------------------------------
-
-const textEncoder = new TextEncoder();
-
-/**
- * Encrypt a client reply:
- *   1. Generate tk_temp, encrypt content with AAD binding
- *   2. Seal tk_temp to org public key
- *   3. ECIES self-copy to clientPublic
- *   4. Zero tk_temp in finally
- *
- * @returns Base64url-encoded payload ready for the portalReply mutation
- */
-export function encryptReply(
-  text: string,
-  orgPublicKey: Uint8Array,
-  clientPublic: RistrettoPoint,
-  ids: { ticketId: string; followUpId: string; keyGeneration: string },
-): PortalReplyPayload {
-  const tkTemp: SymmetricKey = generateContentKey();
-  try {
-    const aad = buildContentAad(ids.ticketId, followupSlot(ids.followUpId));
-    const encrypted = encryptContent(textEncoder.encode(text), tkTemp, aad);
-    const wrapped = sealForOrgKey(tkTemp, orgPublicKey);
-    const selfCopy: EciesOutput = eciesEncrypt(
-      textEncoder.encode(text),
-      clientPublic,
-    );
-
-    return {
-      encryptedContent: encode(encrypted),
-      wrappedTkTemp: encode(wrapped),
-      selfCopy: {
-        ephemeralPoint: encode(selfCopy.ephemeralPoint),
-        nonce: encode(selfCopy.nonce),
-        ciphertext: encode(selfCopy.ciphertext),
-      },
-    };
-  } finally {
-    requireSodium().memzero(tkTemp);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Session lifecycle helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Build a PortalSession from already-derived material.
- * The caller provides seed ownership; destroy() zeroes what it holds.
- */
-export function createPortalSession(
-  channelId: string,
-  auth: Uint8Array,
-  keypair: PortalKeypair,
-  seed: Uint8Array | null,
-): PortalSession {
-  let destroyed = false;
-  return {
-    channelId,
-    auth,
-    keypair,
-    destroy(): void {
-      if (destroyed) return;
-      destroyed = true;
-      const sodium = requireSodium();
-      sodium.memzero(auth);
-      sodium.memzero(keypair.clientPrivate);
-      if (seed) sodium.memzero(seed);
-    },
-  };
-}
 
 /**
  * Decode a base64url ECIES triple from the wire into binary form.

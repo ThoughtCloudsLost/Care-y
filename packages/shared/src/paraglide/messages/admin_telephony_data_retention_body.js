@@ -10,7 +10,7 @@ const en_admin_telephony_data_retention_body = /** @type {(inputs: Admin_Telepho
 };
 
 const es_admin_telephony_data_retention_body = /** @type {(inputs: Admin_Telephony_Data_Retention_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Su proveedor telefonico conserva sus propios registros de llamadas y mensajes hasta por 30 dias. CARE-Y solicita la eliminacion despues del procesamiento, pero el proveedor puede retenerlos durante ese periodo.`)
+	return /** @type {LocalizedString} */ (`Su proveedor telefónico conserva sus propios registros de llamadas y mensajes hasta por 30 días. CARE-Y solicita la eliminación después del procesamiento, pero el proveedor puede retenerlos durante ese periodo.`)
 };
 
 /**

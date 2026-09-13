@@ -141,6 +141,31 @@ export interface RewrapBlobRequest {
   readonly category: "attachment" | "recording";
 }
 
+/**
+ * Converge one attachment's file key from tk_temp to the ticket's tk.
+ *
+ * An attachment sent from the portal is encrypted under a key of its own,
+ * and only that key is wrapped with the reply's tk_temp (ADR-089). So
+ * convergence re-wraps 32 bytes and never touches the file, which is why
+ * this carries strings where rewrapBlob carries the whole blob.
+ */
+export interface RewrapFileKeyRequest {
+  readonly type: "rewrapFileKey";
+  readonly id: number;
+  readonly followUpId: string;
+  readonly ticketId: string;
+  /** Attachments row id: the AAD component that survives the rewrap. */
+  readonly attachmentId: string;
+  /** The file key wrapped under tk_temp, base64. */
+  readonly fileKeyWrap: string;
+  /**
+   * The filename encrypted under tk_temp, base64, when the row has one.
+   * Converged alongside the key so the name stays readable after the
+   * temp wraps are deleted.
+   */
+  readonly encryptedFilename?: string;
+}
+
 export interface EncryptContentRequest {
   readonly type: "encryptContent";
   readonly id: number;
@@ -243,6 +268,49 @@ export interface DecryptBlobRequest {
   readonly slot: string;
 }
 
+/**
+ * Encrypt a file attachment under a fresh file key (ADR-089). The Worker
+ * mints, uses, and zeroes the file key. The main thread never holds it.
+ *
+ * The blob is encrypted under the file key, the file key is wrapped under
+ * the cached tk, and optionally the file key + filename payload is
+ * ECIES-sealed to a portal client's public key.
+ */
+export interface EncryptAttachmentRequest {
+  readonly type: "encryptAttachment";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Key-cache identity (same convention decryptBlob uses). */
+  readonly keyCacheId?: string;
+  /** Browser-minted attachment row id, bound into the AAD. */
+  readonly attachmentId: string;
+  /** Original filename, encrypted under tk for the org side. */
+  readonly filename: string;
+  /** Plaintext file bytes. Transferable: neutered on main thread after send. */
+  readonly data: ArrayBuffer;
+  /** Base64url ristretto point. When present, produce a portal copy. */
+  readonly clientPublic?: string;
+}
+
+/**
+ * Decrypt a file attachment using a wrapped file key (ADR-089). The org's
+ * wrap holds the raw file key (not the JSON payload), because the org
+ * already has the filename in attachments.encrypted_filename.
+ */
+export interface DecryptAttachmentRequest {
+  readonly type: "decryptAttachment";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Key-cache identity (same convention decryptBlob uses). */
+  readonly keyCacheId?: string;
+  /** Wrapped file key, base64url (encrypted under tk with fileKeySlot AAD). */
+  readonly fileKeyWrap: string;
+  /** Encrypted blob (nonce || ciphertext), raw bytes. Transferable. */
+  readonly ciphertext: ArrayBuffer;
+  /** Attachment row id, bound into the AAD. */
+  readonly attachmentId: string;
+}
+
 export interface UnwrapTkRequest {
   readonly type: "unwrapTk";
   readonly id: number;
@@ -315,6 +383,101 @@ export interface CreateTicketKeyRequest {
   readonly fields: readonly { name: string; plaintext: string }[];
 }
 
+// ── Portal thread reseed batch operations ─────────────────────────
+
+/** ECIES triple in base64url wire form, used by portal copy outputs. */
+export interface PortalCopyTriple {
+  readonly ephemeralPoint: string;
+  readonly nonce: string;
+  readonly ciphertext: string;
+}
+
+/**
+ * Key wrap triple for resolving a ticket key via ECIES with volPrivate.
+ * Extracted from DecryptContentRequest for reuse in batch items.
+ */
+export interface KeyWrapTriple {
+  readonly ephemeralPoint: string;
+  readonly nonce: string;
+  readonly wrappedKey: string;
+}
+
+/**
+ * Re-seal follow-up content to a new portal channel's public key.
+ *
+ * Per item: resolve tk via keyWrap (ECIES) or portalWrap (org-key unseal),
+ * decrypt content at followupSlot AAD, then ECIES-encrypt the plaintext
+ * bytes to clientPublic (no AAD on the ECIES triple).
+ *
+ * Items whose decrypt fails land in `failed`. The batch never aborts.
+ */
+export interface SealFollowUpsToPublicRequest {
+  readonly type: "sealFollowUpsToPublic";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Base64url ristretto255 point of the new portal channel. */
+  readonly clientPublic: string;
+  readonly items: readonly {
+    readonly followUpId: string;
+    /** Encrypted content (nonce || ciphertext), base64. */
+    readonly ciphertext: string;
+    /** ECIES key wrap, when the follow-up was written by a volunteer. */
+    readonly keyWrap?: KeyWrapTriple;
+    /** Org-sealed tk_temp, when the follow-up was a portal reply (crypto_box_seal). */
+    readonly portalWrap?: string;
+  }[];
+}
+
+/**
+ * Re-seal file keys (attachment or recording) to a new portal channel.
+ *
+ * Per item: unwrap file key under tk at fileKeySlot(rowId), optionally
+ * decrypt the filename under filenameSlot(rowId), then ECIES-encrypt
+ * encodeFileKeyPayload(fileKey, filename) to clientPublic.
+ */
+export interface SealFileKeysToPublicRequest {
+  readonly type: "sealFileKeysToPublic";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Base64url ristretto255 point. */
+  readonly clientPublic: string;
+  /** Optional key wrap to warm the tk cache when no prior decrypt primed it. */
+  readonly keyWrap?: KeyWrapTriple;
+  readonly items: readonly {
+    readonly kind: "attachment" | "recording";
+    readonly rowId: string;
+    /** File key wrapped under tk at fileKeySlot, base64. */
+    readonly fileKeyWrap: string;
+    /** Filename encrypted under tk at filenameSlot, base64. Absent for recordings. */
+    readonly encryptedFilename?: string;
+  }[];
+}
+
+/**
+ * Decrypt a blob, mint a fresh file key, re-encrypt under it, wrap the
+ * file key under tk, and seal the file key + filename to clientPublic.
+ *
+ * Used for media that was encrypted directly under tk (MMS ingest) and
+ * must be converted to the file-key envelope before portal delivery.
+ */
+export interface ConvertBlobForPortalRequest {
+  readonly type: "convertBlobForPortal";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Base64url ristretto255 point. */
+  readonly clientPublic: string;
+  /**
+   * Named category, not "kind": a top-level "kind" field would defeat
+   * the dispatcher's `"kind" in req` event-vs-request discrimination.
+   */
+  readonly category: "attachment" | "recording";
+  readonly rowId: string;
+  /** Encrypted filename under tk at filenameSlot, base64. Absent for recordings. */
+  readonly encryptedFilename?: string;
+  /** Encrypted blob (nonce || ciphertext), raw bytes. Transferable. */
+  readonly ciphertext: ArrayBuffer;
+}
+
 // ── Merge candidate detection ──────────────────────────────────────
 
 /**
@@ -324,7 +487,7 @@ export interface CreateTicketKeyRequest {
  * normalizes contact values, and returns ONLY candidate pairs (client
  * ids + match kind). Matched contact values never leave the Worker.
  *
- * fieldRoleMap maps fieldId -> role so the Worker can extract
+ * fieldRoleMap maps fieldKey -> role so the Worker can extract
  * phone-contact / email-contact answers from custom-form responses
  * without pattern matching.
  */
@@ -359,7 +522,7 @@ export interface MergeScanIntakeResponse {
   readonly intakeWrap: string | null;
   /** Encrypted form response blob (nonce || ciphertext), base64. */
   readonly encryptedResponse: string;
-  /** Field-id-to-role map from the form definition. */
+  /** Field-key-to-role map from the form definition. */
   readonly fieldRoles: ReadonlyMap<string, string>;
 }
 
@@ -367,6 +530,49 @@ export interface MergeCandidate {
   readonly clientIdA: string;
   readonly clientIdB: string;
   readonly matchKind: "phone" | "email";
+}
+
+// ── Intake response viewer operations ──────────────────────────────
+
+/**
+ * Decrypt an intake form response blob and return parsed answers keyed
+ * by fieldKey. Supports two decrypt paths:
+ *   (a) callerKeyWrap present: ECIES unwrap with volPrivate
+ *   (b) orgSealWrap present: crypto_box_seal_open with orgSecret
+ * The AAD binding uses the same slot as submit: "intake-form-response".
+ * Plaintext is parsed as JSON inside the Worker and returned as a
+ * serialized answer map. The raw plaintext is zeroed immediately.
+ */
+export interface DecryptIntakeResponseRequest {
+  readonly type: "decryptIntakeResponse";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Base64url encrypted response blob (nonce || ciphertext). */
+  readonly encryptedResponse: string;
+  /** ECIES key wrap from ticket_key_wraps, when caller holds one. */
+  readonly callerKeyWrap: {
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly wrappedKey: string;
+  } | null;
+  /** Org-sealed wrap (crypto_box_seal of tk), when unconverted. */
+  readonly orgSealWrap: {
+    readonly wrappedTk: string;
+  } | null;
+}
+
+/**
+ * Mint ECIES wraps for missing principals using a tk the Worker already
+ * recovered from a prior decryptIntakeResponse call (cached in tkCache).
+ */
+export interface MintBackfillWrapsRequest {
+  readonly type: "mintBackfillWraps";
+  readonly id: number;
+  readonly ticketId: string;
+  readonly targets: readonly {
+    readonly volunteerId: string;
+    readonly volPublic: string;
+  }[];
 }
 
 // ── SharedWorker lifecycle requests ─────────────────────────────────
@@ -434,8 +640,11 @@ export type WorkerRequest =
   | DecryptContentRequest
   | DecryptAndRewrapRequest
   | RewrapBlobRequest
+  | RewrapFileKeyRequest
   | EncryptContentRequest
+  | EncryptAttachmentRequest
   | DecryptBlobRequest
+  | DecryptAttachmentRequest
   | EvictTkRequest
   | ZeroAllRequest
   | GetVolPublicRequest
@@ -443,6 +652,8 @@ export type WorkerRequest =
   | UnwrapTkRequest
   | UnwrapIntakeTkRequest
   | DecryptPortalReplyRequest
+  | DecryptIntakeResponseRequest
+  | MintBackfillWrapsRequest
   | WrapWithVolPublicRequest
   | SealSelfBlobRequest
   | OpenSelfBlobRequest
@@ -456,6 +667,9 @@ export type WorkerRequest =
   | AliasHashRequest
   | PhoneMatchHashRequest
   | DetectMergeCandidatesRequest
+  | SealFollowUpsToPublicRequest
+  | SealFileKeysToPublicRequest
+  | ConvertBlobForPortalRequest
   | ConnectRequest
   | DisconnectRequest;
 
@@ -519,6 +733,15 @@ export interface RewrapBlobResponse extends SuccessBase {
   readonly category: "attachment" | "recording";
 }
 
+export interface RewrapFileKeyResponse extends SuccessBase {
+  readonly type: "rewrapFileKey";
+  readonly attachmentId: string;
+  /** The same file key, now wrapped under the canonical tk, base64. */
+  readonly fileKeyWrap: string;
+  /** The same filename, now encrypted under the canonical tk, base64. */
+  readonly encryptedFilename?: string;
+}
+
 export interface EncryptContentResponse extends SuccessBase {
   readonly type: "encryptContent";
   /** Encrypted content (nonce || ciphertext), base64. */
@@ -540,6 +763,32 @@ export interface UnwrapOrgKeyResponse extends SuccessBase {
 export interface DecryptBlobResponse extends SuccessBase {
   readonly type: "decryptBlob";
   /** Decrypted binary data. Transferable: neutered in Worker after send. */
+  readonly data: ArrayBuffer;
+}
+
+export interface EncryptAttachmentResponse extends SuccessBase {
+  readonly type: "encryptAttachment";
+  /** Encrypted blob (nonce || ciphertext). Transferable. */
+  readonly blob: ArrayBuffer;
+  /** File key wrapped under tk (fileKeySlot AAD), base64url. */
+  readonly fileKeyWrap: string;
+  /** Filename encrypted under tk (filenameSlot AAD), base64url. */
+  readonly encryptedFilename: string;
+  /**
+   * Present only when clientPublic was supplied. The sealed payload carries
+   * both the file key and the filename (encodeFileKeyPayload) so the
+   * client gets both from one unwrap.
+   */
+  readonly portalCopy?: {
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly ciphertext: string;
+  };
+}
+
+export interface DecryptAttachmentResponse extends SuccessBase {
+  readonly type: "decryptAttachment";
+  /** Decrypted file bytes. Transferable: neutered in Worker after send. */
   readonly data: ArrayBuffer;
 }
 
@@ -676,6 +925,59 @@ export interface DetectMergeCandidatesResponse extends SuccessBase {
   readonly candidates: readonly MergeCandidate[];
 }
 
+/** A single answer in the decrypted response, keyed by fieldKey. */
+export interface DecryptedIntakeAnswer {
+  readonly fieldKey: string;
+  readonly value: unknown;
+  readonly fieldType?: string;
+}
+
+export interface DecryptIntakeResponseResponse extends SuccessBase {
+  readonly type: "decryptIntakeResponse";
+  /** JSON-serialized array of DecryptedIntakeAnswer objects. */
+  readonly answersJson: string;
+}
+
+export interface MintBackfillWrapsResponse extends SuccessBase {
+  readonly type: "mintBackfillWraps";
+  readonly wraps: readonly {
+    readonly volunteerId: string;
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly wrappedKey: string;
+  }[];
+}
+
+// ── Portal reseed batch responses ──────────────────────────────────
+
+export interface SealFollowUpsToPublicResponse extends SuccessBase {
+  readonly type: "sealFollowUpsToPublic";
+  readonly items: readonly {
+    readonly followUpId: string;
+    readonly copy: PortalCopyTriple;
+  }[];
+  readonly failed: readonly string[];
+}
+
+export interface SealFileKeysToPublicResponse extends SuccessBase {
+  readonly type: "sealFileKeysToPublic";
+  readonly items: readonly {
+    readonly rowId: string;
+    readonly copy: PortalCopyTriple;
+  }[];
+  readonly failed: readonly string[];
+}
+
+export interface ConvertBlobForPortalResponse extends SuccessBase {
+  readonly type: "convertBlobForPortal";
+  /** Re-encrypted blob under the fresh file key. Transferable. */
+  readonly encryptedData: ArrayBuffer;
+  /** File key wrapped under tk at fileKeySlot. */
+  readonly fileKeyWrap: string;
+  /** File key + filename sealed to clientPublic. */
+  readonly copy: PortalCopyTriple;
+}
+
 // ── SharedWorker lifecycle responses ────────────────────────────────
 
 export type SharedWorkerState = "READY" | "KEYED";
@@ -701,14 +1003,22 @@ export type WorkerSuccessResponse =
   | DecryptContentResponse
   | DecryptAndRewrapResponse
   | RewrapBlobResponse
+  | RewrapFileKeyResponse
   | EncryptContentResponse
+  | EncryptAttachmentResponse
   | DecryptBlobResponse
+  | DecryptAttachmentResponse
   | GetVolPublicResponse
   | UnwrapOrgKeyResponse
   | UnwrapTkResponse
   | UnwrapIntakeTkResponse
   | DecryptPortalReplyResponse
+  | DecryptIntakeResponseResponse
+  | MintBackfillWrapsResponse
   | DetectMergeCandidatesResponse
+  | SealFollowUpsToPublicResponse
+  | SealFileKeysToPublicResponse
+  | ConvertBlobForPortalResponse
   | WrapWithVolPublicResponse
   | SealSelfBlobResponse
   | OpenSelfBlobResponse

@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_branding_access = /** @type {(inputs: Onbo
 };
 
 const es_onboarding_briefing_practice_branding_access = /** @type {(inputs: Onboarding_Briefing_Practice_Branding_AccessInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cualquier persona que visite tu pagina de contacto`)
+	return /** @type {LocalizedString} */ (`Cualquier persona que visite tu página de contacto`)
 };
 
 /**

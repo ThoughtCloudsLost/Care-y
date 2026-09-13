@@ -10,7 +10,7 @@ const en_audit_event_intake_form_bound = /** @type {(inputs: Audit_Event_Intake_
 };
 
 const es_audit_event_intake_form_bound = /** @type {(inputs: Audit_Event_Intake_Form_BoundInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Asignacion del formulario de admision cambiada`)
+	return /** @type {LocalizedString} */ (`Asignación del formulario de admisión cambiada`)
 };
 
 /**

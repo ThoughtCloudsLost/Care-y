@@ -10,7 +10,7 @@ const en_intake_forms_delete_has_responses = /** @type {(inputs: Intake_Forms_De
 };
 
 const es_intake_forms_delete_has_responses = /** @type {(inputs: Intake_Forms_Delete_Has_ResponsesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este formulario ha sido usado para envios de admision y no se puede eliminar. Puedes desactivarlo en su lugar.`)
+	return /** @type {LocalizedString} */ (`Este formulario ha sido usado para envíos de admisión y no se puede eliminar. Puedes desactivarlo en su lugar.`)
 };
 
 /**

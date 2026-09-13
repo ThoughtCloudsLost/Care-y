@@ -1,22 +1,33 @@
 <!--
-  Quick-exit control for portal pages.
+  Quick-exit control for client pages.
 
-  Icon-only 44px native button, deliberately unlabeled on screen.
-  A visible "exit" word is suspicious when glimpsed on a shared device.
+  Rendered once by the (client) layout in the Navbar's right slot, so it is
+  present in every state of every client page. The Navbar is a non-scrolling
+  row of PageShell's flex column, which is why this no longer needs the fixed
+  positioning and z-index it carried when each page rendered its own copy.
+
+  Icon-only and deliberately unlabeled on screen. A visible "exit" word is
+  suspicious when glimpsed on a shared device.
 
   Activation (tap or Escape anywhere on the page):
     1. Scrub document.title
-    2. session.destroy() (zero seed, auth, private key)
+    2. ondestroy() (zero seed, auth, private key)
     3. location.replace(safeUrl) (no back-button entry)
+
+  Escape fires even while the drawer is open. The panel's focus trap also
+  handles Escape, but exiting takes precedence over closing a panel: the
+  whole point of the control is leaving fast, and it navigates away either
+  way. Do not gate this behind an "is anything open" check.
 
   pagehide zeroes key material as a fallback.
 -->
 <script lang="ts">
+  import { Link } from "konsta/svelte";
   import { LogOut } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   interface QuickExitProps {
-    /** Called to zero all key material before navigation. */
+    /** Zero all key material before navigation. No-op on pages without a session. */
     ondestroy: () => void;
     /** Org-configured safe URL, or the default weather site. */
     safeUrl: string;
@@ -50,37 +61,28 @@
   });
 </script>
 
-<button
+<Link
+  component="button"
   type="button"
+  role="button"
+  iconOnly
   class="quick-exit"
   aria-label={m.portal_quick_exit_label()}
   onclick={exit}
   data-testid="quick-exit"
 >
   <LogOut size={20} aria-hidden="true" />
-</button>
+</Link>
 
 <style>
-  .quick-exit {
-    position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 6px);
-    right: 12px;
-    z-index: 30;
-    width: 44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: none;
+  :global(.quick-exit) {
+    min-width: 44px;
+    min-height: 44px;
     color: var(--ink);
-    cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    border-radius: 50%;
-    padding: 0;
   }
 
-  .quick-exit:active {
+  :global(.quick-exit:active) {
     opacity: 0.5;
   }
 </style>

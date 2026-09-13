@@ -35,6 +35,8 @@ import type {
   StateChangeEvent,
   MergeScanClient,
   MergeCandidate,
+  PortalCopyTriple,
+  KeyWrapTriple,
 } from "./crypto-protocol.js";
 
 export type BridgeState = "LOADING" | "READY" | "KEYED" | "DESTROYED";
@@ -421,6 +423,43 @@ export class CryptoBridge {
   }
 
   /**
+   * Converge one attachment's file key from tk_temp to the canonical tk.
+   *
+   * Nothing is downloaded and nothing is re-uploaded: the file stays as it
+   * was written and only its 32-byte key moves (ADR-089). Attachments with
+   * no file key wrap, the ones MMS ingest writes, go through rewrapBlob
+   * instead.
+   */
+  async rewrapFileKey(
+    followUpId: string,
+    ticketId: string,
+    attachmentId: string,
+    fileKeyWrap: string,
+    encryptedFilename?: string,
+  ): Promise<{
+    attachmentId: string;
+    fileKeyWrap: string;
+    encryptedFilename?: string;
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "rewrapFileKey",
+        followUpId,
+        ticketId,
+        attachmentId,
+        fileKeyWrap,
+        encryptedFilename,
+      }),
+      "rewrapFileKey",
+    );
+    return {
+      attachmentId: resp.attachmentId,
+      fileKeyWrap: resp.fileKeyWrap,
+      encryptedFilename: resp.encryptedFilename,
+    };
+  }
+
+  /**
    * Encrypt plaintext with the cached tk for this ticket.
    * Returns base64 ciphertext. The tk must have been cached by a prior decrypt.
    */
@@ -469,6 +508,81 @@ export class CryptoBridge {
         [ciphertext],
       ),
       "decryptBlob",
+    );
+    return resp.data;
+  }
+
+  /**
+   * Encrypt a file attachment under a fresh file key (ADR-089). Returns
+   * the blob ciphertext, the file key wrap (under tk), the encrypted
+   * filename, and optionally a portal copy sealed to clientPublic.
+   *
+   * The data ArrayBuffer is transferred to the Worker and neutered on
+   * the main thread.
+   */
+  async encryptAttachment(
+    ticketId: string,
+    attachmentId: string,
+    filename: string,
+    data: ArrayBuffer,
+    clientPublic?: string,
+  ): Promise<{
+    blob: ArrayBuffer;
+    fileKeyWrap: string;
+    encryptedFilename: string;
+    portalCopy?: {
+      ephemeralPoint: string;
+      nonce: string;
+      ciphertext: string;
+    };
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest(
+        {
+          type: "encryptAttachment",
+          ticketId,
+          attachmentId,
+          filename,
+          data,
+          clientPublic,
+        },
+        [data],
+      ),
+      "encryptAttachment",
+    );
+    return {
+      blob: resp.blob,
+      fileKeyWrap: resp.fileKeyWrap,
+      encryptedFilename: resp.encryptedFilename,
+      portalCopy: resp.portalCopy,
+    };
+  }
+
+  /**
+   * Decrypt a file attachment using a wrapped file key (ADR-089). Returns
+   * the decrypted file bytes as an ArrayBuffer (transferred from Worker).
+   *
+   * The ciphertext ArrayBuffer is transferred to the Worker and neutered
+   * on the main thread.
+   */
+  async decryptAttachment(
+    ticketId: string,
+    attachmentId: string,
+    fileKeyWrap: string,
+    ciphertext: ArrayBuffer,
+  ): Promise<ArrayBuffer> {
+    const resp = expectResponse(
+      await this.sendRequest(
+        {
+          type: "decryptAttachment",
+          ticketId,
+          attachmentId,
+          fileKeyWrap,
+          ciphertext,
+        },
+        [ciphertext],
+      ),
+      "decryptAttachment",
     );
     return resp.data;
   }
@@ -780,6 +894,169 @@ export class CryptoBridge {
       "detectMergeCandidates",
     );
     return resp.candidates;
+  }
+
+  /**
+   * Decrypt an intake form response blob. Supports two paths:
+   *   (a) callerKeyWrap: ECIES unwrap with the Worker's volPrivate
+   *   (b) orgSealWrap: crypto_box_seal_open with orgSecret
+   * Returns the JSON-serialized answers string. The caller parses and
+   * narrows per-element types (the Worker produced the JSON, so the
+   * shape is trusted, but JSON.parse returns unknown and the bridge
+   * avoids unsafe assertions).
+   */
+  async decryptIntakeResponse(
+    ticketId: string,
+    encryptedResponse: string,
+    callerKeyWrap: {
+      ephemeralPoint: string;
+      nonce: string;
+      wrappedKey: string;
+    } | null,
+    orgSealWrap: { wrappedTk: string } | null,
+  ): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "decryptIntakeResponse",
+        ticketId,
+        encryptedResponse,
+        callerKeyWrap,
+        orgSealWrap,
+      }),
+      "decryptIntakeResponse",
+    );
+    return resp.answersJson;
+  }
+
+  /**
+   * Mint ECIES wraps for missing principals using a tk already cached
+   * in the Worker from a prior decryptIntakeResponse call.
+   */
+  async mintBackfillWraps(
+    ticketId: string,
+    targets: readonly { volunteerId: string; volPublic: string }[],
+  ): Promise<
+    readonly {
+      volunteerId: string;
+      ephemeralPoint: string;
+      nonce: string;
+      wrappedKey: string;
+    }[]
+  > {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "mintBackfillWraps",
+        ticketId,
+        targets,
+      }),
+      "mintBackfillWraps",
+    );
+    return resp.wraps;
+  }
+
+  /**
+   * Batch re-seal follow-up content to a new portal channel's public key.
+   * Each item is decrypted inside the Worker (tk via keyWrap or portalWrap)
+   * and ECIES-sealed to clientPublic. Failed items land in `failed`.
+   */
+  async sealFollowUpsToPublic(
+    ticketId: string,
+    clientPublic: string,
+    items: readonly {
+      followUpId: string;
+      ciphertext: string;
+      keyWrap?: KeyWrapTriple;
+      portalWrap?: string;
+    }[],
+  ): Promise<{
+    items: readonly { followUpId: string; copy: PortalCopyTriple }[];
+    failed: readonly string[];
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "sealFollowUpsToPublic",
+        ticketId,
+        clientPublic,
+        items,
+      }),
+      "sealFollowUpsToPublic",
+    );
+    return { items: resp.items, failed: resp.failed };
+  }
+
+  /**
+   * Batch re-seal file keys to a new portal channel's public key. Each
+   * item's file key is unwrapped under the cached tk and sealed to
+   * clientPublic as an encodeFileKeyPayload envelope. Failed items land
+   * in `failed`.
+   */
+  async sealFileKeysToPublic(
+    ticketId: string,
+    clientPublic: string,
+    items: readonly {
+      kind: "attachment" | "recording";
+      rowId: string;
+      fileKeyWrap: string;
+      encryptedFilename?: string;
+    }[],
+    keyWrap?: KeyWrapTriple,
+  ): Promise<{
+    items: readonly { rowId: string; copy: PortalCopyTriple }[];
+    failed: readonly string[];
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "sealFileKeysToPublic",
+        ticketId,
+        clientPublic,
+        keyWrap,
+        items,
+      }),
+      "sealFileKeysToPublic",
+    );
+    return { items: resp.items, failed: resp.failed };
+  }
+
+  /**
+   * Decrypt a blob encrypted under tk, re-encrypt under a fresh file key,
+   * wrap the file key under tk, and seal the file key + filename to
+   * clientPublic for portal delivery.
+   *
+   * The ciphertext ArrayBuffer is transferred and neutered on the main
+   * thread. The returned encryptedData is also transferred back.
+   */
+  async convertBlobForPortal(
+    ticketId: string,
+    clientPublic: string,
+    kind: "attachment" | "recording",
+    rowId: string,
+    ciphertext: ArrayBuffer,
+    encryptedFilename?: string,
+  ): Promise<{
+    encryptedData: ArrayBuffer;
+    fileKeyWrap: string;
+    copy: PortalCopyTriple;
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest(
+        {
+          type: "convertBlobForPortal",
+          ticketId,
+          clientPublic,
+          category: kind,
+          rowId,
+          ciphertext,
+          encryptedFilename,
+        },
+        [ciphertext],
+      ),
+      "convertBlobForPortal",
+    );
+    return {
+      encryptedData: resp.encryptedData,
+      fileKeyWrap: resp.fileKeyWrap,
+      copy: resp.copy,
+    };
   }
 
   /** Get the org public key (base64) from the Worker. */

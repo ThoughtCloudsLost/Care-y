@@ -10,7 +10,7 @@ const en_admin_retention_confirm = /** @type {(inputs: Admin_Retention_ConfirmIn
 };
 
 const es_admin_retention_confirm = /** @type {(inputs: Admin_Retention_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Establecer retencion`)
+	return /** @type {LocalizedString} */ (`Establecer retención`)
 };
 
 /**

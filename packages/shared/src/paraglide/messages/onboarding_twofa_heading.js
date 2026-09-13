@@ -10,7 +10,7 @@ const en_onboarding_twofa_heading = /** @type {(inputs: Onboarding_Twofa_Heading
 };
 
 const es_onboarding_twofa_heading = /** @type {(inputs: Onboarding_Twofa_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configurar autenticacion de dos factores`)
+	return /** @type {LocalizedString} */ (`Configurar autenticación de dos factores`)
 };
 
 /**

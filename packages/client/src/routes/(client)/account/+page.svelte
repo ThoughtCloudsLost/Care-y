@@ -6,11 +6,14 @@
   All key material lives in module-scope state, zeroed on quick exit,
   logout, idle timeout, and pagehide.
 
-  Four states (in order):
+  Three states (in order):
     1. Login (default): AccountLoginForm
     2. Thread: PortalThread + PortalComposer reused unchanged
-    3. Settings: AccountSettings collapsible section
-    4. Quick exit: always visible, every state
+    3. Settings: AccountSettings in a sheet, opened from the drawer
+
+  Quick exit and the drawer belong to the (client) layout. This page
+  publishes its session-zeroing callback, safe URL, and drawer entries
+  through the client shell context.
 
   4-branch data pattern: isLoading -> placeholders, isError -> fall
   back to login with generic message, empty -> empty-thread text,
@@ -25,48 +28,94 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
+  import { SvelteSet } from "svelte/reactivity";
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { encode, requireSodium } from "@care-y/crypto";
+  import { encode } from "@care-y/crypto";
   import { newFollowupId, newKeyGeneration } from "@care-y/shared";
   import { requireRouter } from "$lib/errors.js";
   import {
-    encryptReply,
-    decodeEciesTriple,
-    verifyKeyCheck,
-    decryptPortalMessage,
-  } from "$lib/portal/portal-crypto.js";
-  import {
-    accountLogin as doAccountLogin,
     buildAccountRegistration,
-    deriveAuthProof,
     rewrapMessages,
-    type AccountSession,
-    type AccountAuthProof,
   } from "$lib/portal/account-crypto.js";
-  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
   import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
+  import type { LoginPhaseId } from "$lib/components/onboarding/login-phase.js";
+  import { PortalBridge } from "$lib/workers/portal-bridge.js";
+  import type { DerivationPhase } from "$lib/workers/portal-protocol.js";
+  import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
-  import QuickExit from "$lib/components/portal/QuickExit.svelte";
-  import PortalHint from "$lib/components/portal/PortalHint.svelte";
+  import PortalHint from "$lib/shell/PortalHint.svelte";
+  import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import PortalThread from "$lib/portal/PortalThread.svelte";
+  import { portalMessageElementId } from "$lib/portal/portal-message-ids.js";
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
+  import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
+  import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
+  import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import AccountLoginForm from "$lib/portal/AccountLoginForm.svelte";
   import AccountSettings from "$lib/portal/AccountSettings.svelte";
+  import PageLayout from "$lib/shell/PageLayout.svelte";
+  import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import { Settings as Cog, LogOut } from "@lucide/svelte";
+  import {
+    getClientShellCtx,
+    DEFAULT_SAFE_URL,
+    type ClientDrawerAction,
+  } from "$lib/client-shell/context.js";
+  import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
 
-  const DEFAULT_SAFE_URL = "https://weather.gov";
+  // ---------------------------------------------------------------------------
+  // Account session handle (ADR-091: bridge-backed, key material in the worker)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Live account session. The bridge owns key material in the worker.
+   * The main thread holds only the public key (for optimistic self-copy
+   * rendering) and bridge-backed async crypto methods.
+   */
+  interface AccountSessionHandle {
+    readonly clientPublic: string;
+    readonly bridge: PortalBridge;
+    destroy(): void;
+    decryptMessage(ep: string, n: string, ct: string): Promise<string>;
+    decryptAttachmentKey(
+      ep: string,
+      n: string,
+      ct: string,
+    ): Promise<{ fileKey: string; filename: string }>;
+    decryptAttachmentBlob(
+      ct: ArrayBuffer,
+      fk: string,
+      tid: string,
+      aid: string,
+    ): Promise<ArrayBuffer>;
+    encryptReply(
+      text: string,
+      orgPub: string,
+      tid: string,
+      fid: string,
+      kg: string,
+    ): Promise<{
+      encryptedContent: string;
+      wrappedTkTemp: string;
+      selfCopy: { ephemeralPoint: string; nonce: string; ciphertext: string };
+    }>;
+  }
 
   // ---------------------------------------------------------------------------
   // Session state (module scope, zeroed on exit)
   // ---------------------------------------------------------------------------
 
-  let session = $state<AccountSession | null>(null);
+  let session = $state<AccountSessionHandle | null>(null);
   // Held in page memory only for the life of the session (change-password
   // re-runs the salt lookup); never persisted or auto-filled.
   let loginUsername = $state<string | null>(null);
   let loginPending = $state(false);
   let loginError = $state(false);
+  let loginPhase = $state<LoginPhaseId>("idle");
   let signedOutMessage = $state("");
   let changePasswordPending = $state(false);
   let changePasswordError = $state("");
@@ -78,6 +127,8 @@
   // Optimistic messages appended after send
   interface OptimisticMsg {
     readonly id: string;
+    /** Groups any files sent with this message under the same bubble. */
+    readonly followupId: string;
     readonly direction: string;
     readonly ephemeralPoint: string;
     readonly nonce: string;
@@ -145,16 +196,28 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Crypto phase callbacks (reused across login, create, change-password)
+  // Derivation phase mapping: bridge events -> LoginPhaseId
   // ---------------------------------------------------------------------------
 
-  function makeCryptoCallbacks(): LoginCryptoCallbacks {
-    // Single indeterminate progressbar; phases are not surfaced separately.
-    return buildLoginCallbacks(() => undefined);
+  function derivationPhaseToLoginPhase(phase: DerivationPhase): LoginPhaseId {
+    switch (phase) {
+      case "argon2id-start":
+        return "argon2id";
+      case "argon2id-done":
+        return "oprf";
+      case "oprf-start":
+        return "oprf";
+      case "oprf-done":
+        return "derive";
+      case "derive-start":
+        return "derive";
+      case "derive-done":
+        return "done";
+    }
   }
 
   // ---------------------------------------------------------------------------
-  // Login handler
+  // Login handler (ADR-091: bridge-backed)
   // ---------------------------------------------------------------------------
 
   function handleLogin(username: string, password: string): void {
@@ -162,22 +225,77 @@
     loginPending = true;
     loginError = false;
     signedOutMessage = "";
+    loginPhase = "auth";
 
-    const callbacks = makeCryptoCallbacks();
+    void (async () => {
+      const bridge = new PortalBridge();
+      try {
+        await bridge.waitReady();
 
-    void doAccountLogin(username, password, callbacks)
-      .then((newSession: AccountSession) => {
-        session = newSession;
+        // Wire derivation progress events to the phase display
+        bridge.onDerivationProgress((event) => {
+          loginPhase = derivationPhaseToLoginPhase(event.phase);
+        });
+
+        // 1. Get salt + accountId from server (fake-salt defense for unknowns)
+        const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+        const { salt: saltB64, accountId } =
+          await portalRouter.getAccountSalt.query({ username });
+
+        // 2. Post password to bridge (Argon2id + blind happen in the worker)
+        const passwordBuf = new TextEncoder().encode(password).buffer;
+        const { blindedElement } = await bridge.accountSessionStart(
+          passwordBuf,
+          saltB64,
+        );
+
+        // 3. OPRF evaluate via tRPC (main thread)
+        const callbacks = buildLoginCallbacks(() => undefined);
+        const evaluatedB64 = await evaluateWithPowRetry(
+          "account",
+          accountId,
+          blindedElement,
+          callbacks.onPowRequired,
+        );
+
+        // 4. Finalize in the worker
+        const { clientPublic, authToken } =
+          await bridge.accountSessionFinish(evaluatedB64);
+
+        // 5. Login mutation (cookie arrives via Set-Cookie)
+        await portalRouter.accountLogin.mutate({
+          accountId,
+          authToken,
+        });
+
+        // Build the session handle
+        const handle: AccountSessionHandle = {
+          clientPublic,
+          bridge,
+          destroy(): void {
+            bridge.destroy();
+          },
+          decryptMessage: async (ep, n, ct) => bridge.decryptMessage(ep, n, ct),
+          decryptAttachmentKey: async (ep, n, ct) =>
+            bridge.decryptAttachmentKey(ep, n, ct),
+          decryptAttachmentBlob: async (ct, fk, tid, aid) =>
+            bridge.decryptAttachmentBlob(ct, fk, tid, aid),
+          encryptReply: async (text, orgPub, tid, fid, kg) =>
+            bridge.encryptReply(text, orgPub, tid, fid, kg),
+        };
+
+        session = handle;
         loginUsername = username;
         loginError = false;
         startIdleTimer();
-      })
-      .catch(() => {
+      } catch {
+        bridge.destroy();
         loginError = true;
-      })
-      .finally(() => {
+      } finally {
         loginPending = false;
-      });
+        loginPhase = "idle";
+      }
+    })();
   }
 
   // ---------------------------------------------------------------------------
@@ -229,6 +347,11 @@
 
   const orgPublicKey = $derived(orgKeyQuery.data ?? null);
 
+  // Org-set name shown above messages from the organization, inherited from
+  // the same public branding blob the portal reads.
+  const brandingQuery = createPublicBrandingQuery();
+  const supportLabel = $derived(brandingQuery.data?.supportLabel ?? "");
+
   // 4-branch: failed cookie session falls back to login
   $effect(() => {
     if (bootstrapQuery.isError && session !== null) {
@@ -265,6 +388,7 @@
         nonce: string;
         ciphertext: string;
       };
+      kind?: "message" | "contact_correction";
     }) => {
       return requireRouter(
         trpc.clientPortal,
@@ -289,7 +413,10 @@
 
   let lastSentText = "";
 
-  function handleSend(text: string): void {
+  function handleSend(
+    text: string,
+    kind?: "message" | "contact_correction",
+  ): void {
     sendError = "";
     const ticketId = bootstrapQuery.data?.ticketId;
     if (!session || !orgPublicKey || ticketId == null || ticketId === "") {
@@ -300,34 +427,47 @@
     const followUpId = newFollowupId();
     const keyGeneration = newKeyGeneration();
 
-    const payload = encryptReply(
-      text,
-      orgPublicKey,
-      session.keypair.clientPublic,
-      { ticketId, followUpId, keyGeneration },
-    );
+    void session
+      .encryptReply(
+        text,
+        encode(orgPublicKey),
+        ticketId,
+        followUpId,
+        keyGeneration,
+      )
+      .then((payload) => {
+        optimisticMessages = [
+          ...optimisticMessages,
+          {
+            id: followUpId,
+            // The optimistic bubble stands in for a row the server has not
+            // written yet, and the thread groups files by follow-up, so it
+            // carries the same id the reply was minted with.
+            followupId: followUpId,
+            direction: "from_client",
+            ephemeralPoint: payload.selfCopy.ephemeralPoint,
+            nonce: payload.selfCopy.nonce,
+            ciphertext: payload.selfCopy.ciphertext,
+            createdAt: new Date().toISOString(),
+            editedAt: null,
+          },
+        ];
 
-    optimisticMessages = [
-      ...optimisticMessages,
-      {
-        id: followUpId,
-        direction: "from_client",
-        ephemeralPoint: payload.selfCopy.ephemeralPoint,
-        nonce: payload.selfCopy.nonce,
-        ciphertext: payload.selfCopy.ciphertext,
-        createdAt: new Date().toISOString(),
-        editedAt: null,
-      },
-    ];
-
-    replyMutation.mutate({
-      ticketId,
-      followUpId,
-      keyGeneration,
-      encryptedContent: payload.encryptedContent,
-      wrappedTkTemp: payload.wrappedTkTemp,
-      selfCopy: payload.selfCopy,
-    });
+        replyMutation.mutate({
+          ticketId,
+          followUpId,
+          keyGeneration,
+          encryptedContent: payload.encryptedContent,
+          wrappedTkTemp: payload.wrappedTkTemp,
+          selfCopy: payload.selfCopy,
+          kind: kind ?? undefined,
+        });
+      })
+      .catch(() => {
+        composerRef?.restoreDraft(lastSentText);
+        sendError = m.portal_send_failed();
+        announceToLiveRegion("polite", m.portal_send_failed());
+      });
   }
 
   // ---------------------------------------------------------------------------
@@ -342,19 +482,50 @@
     changePasswordPending = true;
     changePasswordError = "";
 
-    const callbacks = makeCryptoCallbacks();
-    let proof: AccountAuthProof | null = null;
+    // Change-password runs the full derivation pipeline for the current
+    // password (proof of knowledge) and the new password (re-keying).
+    // Both use buildAccountRegistration's main-thread pipeline (mint
+    // path, stays main-thread by design). The bridge is used only for
+    // key-check verification and message re-decryption.
+    const callbacks = buildLoginCallbacks(() => undefined);
+
+    // Proof bridge: a temporary worker for the current-password proof
+    const proofBridge = new PortalBridge();
 
     try {
-      // 1. Prove knowledge of the current password: same pipeline as
-      //    login, minus the login mutation
-      proof = await deriveAuthProof(loginUsername, currentPassword, callbacks);
+      await proofBridge.waitReady();
 
-      // Verify the key check with the current keys before touching anything
+      // 1. Prove knowledge of the current password via bridge
+      const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+      const { salt: saltB64, accountId } =
+        await portalRouter.getAccountSalt.query({ username: loginUsername });
+
+      const passwordBuf = new TextEncoder().encode(currentPassword).buffer;
+      const { blindedElement } = await proofBridge.accountSessionStart(
+        passwordBuf,
+        saltB64,
+      );
+
+      const evaluatedB64 = await evaluateWithPowRetry(
+        "account",
+        accountId,
+        blindedElement,
+        callbacks.onPowRequired,
+      );
+
+      const { authToken } =
+        await proofBridge.accountSessionFinish(evaluatedB64);
+
+      // Verify the key check with the derived keys
       const bootstrapData = bootstrapQuery.data;
       if (bootstrapData) {
-        const keyCheck = decodeEciesTriple(bootstrapData.keyCheck);
-        if (!verifyKeyCheck(proof.keypair, keyCheck)) {
+        const kc = bootstrapData.keyCheck;
+        const passed = await proofBridge.verifyKeyCheck(
+          kc.ephemeralPoint,
+          kc.nonce,
+          kc.ciphertext,
+        );
+        if (!passed) {
           changePasswordError = m.account_login_failed();
           return;
         }
@@ -362,21 +533,17 @@
 
       // 2. Build new registration material (fresh salt, same accountId)
       const { payload: newPayload, keypair: newKeypair } =
-        await buildAccountRegistration(
-          null,
-          newPassword,
-          proof.accountId,
-          callbacks,
-        );
+        await buildAccountRegistration(null, newPassword, accountId, callbacks);
 
-      // 3. Re-encrypt existing messages to the new key
-      const decryptedMsgs = collectDecryptedMessages();
+      // 3. Re-encrypt existing messages to the new key. Decrypt each
+      //    message through the current session's bridge, then re-encrypt
+      //    to the new public key using rewrapMessages (main-thread, mint path).
+      const decryptedMsgs = await collectDecryptedMessages();
       const rewrapped = rewrapMessages(decryptedMsgs, newKeypair.clientPublic);
 
       // 4. Submit change-password mutation
-      const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
       await portalRouter.accountChangePassword.mutate({
-        currentAuthToken: encode(proof.authToken),
+        currentAuthToken: authToken,
         account: {
           salt: newPayload.salt,
           publicKey: newPayload.publicKey,
@@ -386,16 +553,46 @@
         rewrappedMessages: rewrapped,
       });
 
-      // Zero the old session keypair, install the new one
+      // Zero the old session, install a new bridge-backed session
       session.destroy();
-      let destroyed = false;
+      proofBridge.destroy();
+
+      // Log back in with the new password to establish a new bridge session
+      // with the new keys. This is the cleanest path: the new keypair lives
+      // in the new bridge's worker memory, not on the main thread.
+      const { requireSodium } = await import("@care-y/crypto");
+      requireSodium().memzero(newKeypair.clientPrivate);
+
+      // The new session is established by re-logging in (the cookie is
+      // still valid from the change-password mutation). Build a new bridge.
+      const newBridge = new PortalBridge();
+      await newBridge.waitReady();
+
+      const newPwBuf = new TextEncoder().encode(newPassword).buffer;
+      const { blindedElement: newBlinded } =
+        await newBridge.accountSessionStart(newPwBuf, newPayload.salt);
+      const newEval = await evaluateWithPowRetry(
+        "account",
+        accountId,
+        newBlinded,
+        callbacks.onPowRequired,
+      );
+      const newFinish = await newBridge.accountSessionFinish(newEval);
+
       session = {
-        keypair: newKeypair,
+        clientPublic: newFinish.clientPublic,
+        bridge: newBridge,
         destroy(): void {
-          if (destroyed) return;
-          destroyed = true;
-          requireSodium().memzero(newKeypair.clientPrivate);
+          newBridge.destroy();
         },
+        decryptMessage: async (ep, n, ct) =>
+          newBridge.decryptMessage(ep, n, ct),
+        decryptAttachmentKey: async (ep, n, ct) =>
+          newBridge.decryptAttachmentKey(ep, n, ct),
+        decryptAttachmentBlob: async (ct, fk, tid, aid) =>
+          newBridge.decryptAttachmentBlob(ct, fk, tid, aid),
+        encryptReply: async (text, orgPub, tid, fid, kg) =>
+          newBridge.encryptReply(text, orgPub, tid, fid, kg),
       };
 
       // Invalidate and refetch messages
@@ -410,17 +607,19 @@
     } catch {
       changePasswordError = m.account_login_failed();
     } finally {
-      proof?.destroy();
+      proofBridge.destroy();
       changePasswordPending = false;
     }
   }
 
   /**
    * Collect decrypted messages from the thread for re-encryption.
-   * Reads from messagesQuery.data and the PortalThread's decryption cache.
-   * This operates on already-decrypted plaintexts, never re-fetches.
+   * Decrypts each message through the current session's bridge.
+   * Operates on ciphertext from the server, never re-fetches.
    */
-  function collectDecryptedMessages(): readonly { id: string; text: string }[] {
+  async function collectDecryptedMessages(): Promise<
+    readonly { id: string; text: string }[]
+  > {
     const msgs = messagesQuery.data?.messages ?? [];
     if (!session) return [];
 
@@ -428,10 +627,10 @@
     for (const msg of msgs) {
       if (!("id" in msg) || typeof msg.id !== "string") continue;
       try {
-        const triple = decodeEciesTriple(msg);
-        const text = decryptPortalMessage(
-          triple,
-          session.keypair.clientPrivate,
+        const text = await session.decryptMessage(
+          msg.ephemeralPoint,
+          msg.nonce,
+          msg.ciphertext,
         );
         result.push({ id: msg.id, text });
       } catch {
@@ -466,66 +665,335 @@
     hintShown = false;
     hintDismissed = true;
   }
+
+  // ---------------------------------------------------------------------------
+  // Client shell registration
+  // ---------------------------------------------------------------------------
+
+  // The layout owns quick exit and the drawer; this page owns the session.
+  // Only the zeroing callback crosses the boundary, never key material.
+  const shellContainer = getClientShellCtx();
+
+  let settingsOpen = $state(false);
+
+  // Locale-reactive title (the read establishes a $derived dependency)
+  const pageTitle = $derived.by((): string => {
+    void uiLocaleStore.locale;
+    return m.account_title();
+  });
+
+  const drawerActions = $derived.by((): readonly ClientDrawerAction[] => {
+    // Reading the locale establishes a dependency so labels recompute on switch
+    void uiLocaleStore.locale;
+    if (!session) return [];
+    return [
+      {
+        id: "settings",
+        label: m.account_settings_title(),
+        icon: Cog,
+        onclick: () => (settingsOpen = true),
+      },
+      {
+        id: "logout",
+        label: m.account_logout(),
+        icon: LogOut,
+        destructive: true,
+        onclick: handleLogout,
+      },
+    ];
+  });
+
+  // --- In-thread search ---
+  // Same overlay, navigator, and subnavbar row as the secure-link thread, so
+  // the two client surfaces put search in one place and one shape.
+
+  /** One account holds one conversation, so one draft slot. */
+  const ACCOUNT_DRAFT_KEY = "client-account";
+
+  const scroll = createScrollManager();
+
+  // PageLayout binds a plain state variable; the manager exposes its
+  // container through a getter/setter pair, which bind: cannot target.
+  let threadScrollEl = $state<HTMLDivElement | undefined>(undefined);
+  $effect(() => {
+    scroll.scrollContainerEl = threadScrollEl;
+  });
+
+  let searchActive = $state(false);
+  let matchIds = $state<readonly string[]>([]);
+
+  const overlay = createSearchOverlay({
+    matches: () => matchIds,
+    getElementId: portalMessageElementId,
+    scrollContainer: () => scroll.scrollContainerEl,
+  });
+
+  // Near-bottom tracking is the only thing the manager is doing here. The
+  // account thread has no cursor endpoint yet, so there is no older page to
+  // pull in at the top.
+  $effect(() => {
+    const el = scroll.scrollContainerEl;
+    if (el == null) return;
+    const handleScroll = (): void => {
+      scroll.onScroll([], undefined);
+    };
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", handleScroll);
+    };
+  });
+
+  $effect(() => scroll.cleanup);
+
+  function jumpToLatest(): void {
+    const el = scroll.scrollContainerEl;
+    if (el == null) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }
+
+  function openSearch(): void {
+    searchActive = true;
+    overlay.enter("");
+  }
+
+  function closeSearch(): void {
+    overlay.exit();
+    searchActive = false;
+  }
+
+  // --- Attachments, recordings, and call entries ---
+
+  const accountAttachments = $derived(bootstrapQuery.data?.attachments ?? []);
+  const accountRecordings = $derived(bootstrapQuery.data?.recordings ?? []);
+  const accountCallEntries = $derived(bootstrapQuery.data?.callEntries ?? []);
+
+  // --- Filter pills (images / files) ---
+
+  type AttachmentFilter = "images" | "files" | null;
+  let activeFilter = $state<AttachmentFilter>(null);
+
+  const imageFollowupIds = $derived.by((): ReadonlySet<string> => {
+    const ids = new SvelteSet<string>();
+    for (const att of accountAttachments) {
+      if (att.contentType?.startsWith("image/") === true) {
+        ids.add(att.followupId);
+      }
+    }
+    return ids;
+  });
+
+  const fileFollowupIds = $derived.by((): ReadonlySet<string> => {
+    const ids = new SvelteSet<string>();
+    for (const att of accountAttachments) {
+      if (att.contentType !== null && !att.contentType.startsWith("image/")) {
+        ids.add(att.followupId);
+      }
+    }
+    return ids;
+  });
+
+  const filteredMessages = $derived.by(() => {
+    if (activeFilter === null) return allMessages;
+    const targetIds =
+      activeFilter === "images" ? imageFollowupIds : fileFollowupIds;
+    return allMessages.filter(
+      (msg) =>
+        "followupId" in msg &&
+        typeof msg.followupId === "string" &&
+        targetIds.has(msg.followupId),
+    );
+  });
+
+  function handleFilterToggle(pillId: string): void {
+    // The layout hands back the id of a pill this page defined, so anything
+    // else is a wiring mistake rather than a filter nobody selected.
+    const next: AttachmentFilter =
+      pillId === "images" || pillId === "files" ? pillId : null;
+    activeFilter = activeFilter === next ? null : next;
+  }
+
+  const filterPillDefs = $derived.by(() => {
+    if (accountAttachments.length === 0) return [];
+
+    const pills: {
+      id: string;
+      label: string;
+      mode: "multi" | "single" | "date";
+      options: { value: string; label: string }[];
+      selected: ReadonlySet<string> | string | null;
+    }[] = [];
+
+    if (imageFollowupIds.size > 0) {
+      pills.push({
+        id: "images",
+        label: m.portal_filter_images(),
+        mode: "single",
+        options: [{ value: "images", label: m.portal_filter_images() }],
+        selected: activeFilter === "images" ? "images" : null,
+      });
+    }
+
+    if (fileFollowupIds.size > 0) {
+      pills.push({
+        id: "files",
+        label: m.portal_filter_files(),
+        mode: "single",
+        options: [{ value: "files", label: m.portal_filter_files() }],
+        selected: activeFilter === "files" ? "files" : null,
+      });
+    }
+
+    return pills;
+  });
+
+  const filterActiveCount = $derived(activeFilter !== null ? 1 : 0);
+
+  function clearFilters(): void {
+    activeFilter = null;
+  }
+
+  const noop = (): void => undefined;
+
+  $effect(() => {
+    shellContainer.current = {
+      ondestroy: destroySession,
+      safeUrl,
+      actions: drawerActions,
+      // Chat shape only once signed in; the login screen scrolls normally.
+      lockScroll: session !== null,
+      ...(session !== null ? { subnavbar: threadSubnavbar } : {}),
+    };
+    return () => {
+      shellContainer.current = undefined;
+    };
+  });
 </script>
 
 <svelte:head>
-  <title>{m.account_title()}</title>
+  <title>{pageTitle}</title>
 </svelte:head>
 
-<!-- Quick exit (always visible, every state) -->
-<QuickExit ondestroy={destroySession} {safeUrl} />
+<!-- The shell owns the navbar, so the row reaches it through the context
+     rather than being rendered here. Snippets stay outside the locale key
+     block: the script's shell-context effect references threadSubnavbar,
+     and a snippet declared inside a block is scoped to it. -->
+{#snippet searchNavigatorRow()}
+  <SearchNavigator
+    term={overlay.term ?? ""}
+    position={overlay.position}
+    total={overlay.matchCount}
+    onup={overlay.up}
+    ondown={overlay.down}
+    onexit={closeSearch}
+    ontermchange={overlay.setTerm}
+  />
+{/snippet}
 
-{#if !session}
-  <!-- State 1: Login -->
-  <AccountLoginForm
-    onsubmit={handleLogin}
-    pending={loginPending}
-    error={loginError}
-    {signedOutMessage}
+{#snippet threadSubnavbar()}
+  <SubNavbarFilterLayout
+    title={m.account_title()}
+    hideTitle
+    filterPills={{
+      pills: filterPillDefs,
+      activeCount: filterActiveCount,
+      ontoggle: handleFilterToggle,
+      onselect: handleFilterToggle,
+      ondatechange: noop,
+      onclearall: clearFilters,
+    }}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    onsearch={searchActive ? undefined : openSearch}
+    searchLabel={m.portal_search_label()}
   />
-{:else if bootstrapQuery.isLoading || messagesQuery.isLoading}
-  <!-- Loading -->
-  <Block>
-    <div class="account-loading" role="status">
-      <span
-        class="account-spinner"
-        role="progressbar"
-        aria-label={m.account_unlocking()}
-      ></span>
-    </div>
-  </Block>
-{:else if session}
-  <!-- State 2 + 3: Thread + Settings -->
-  <PortalThread
-    messages={allMessages}
-    clientPrivate={session.keypair.clientPrivate}
-    loading={messagesQuery.isLoading}
-  />
+{/snippet}
 
-  <PortalComposer
-    bind:this={composerRef}
-    onsend={handleSend}
-    pending={replyMutation.isPending}
-    onfirstfocus={handleFirstFocus}
-    errorMessage={sendError || undefined}
-  />
+{#key uiLocaleStore.locale}
+  {#if !session}
+    <!-- State 1: Login -->
+    <AccountLoginForm
+      onsubmit={handleLogin}
+      pending={loginPending}
+      error={loginError}
+      phase={loginPhase}
+      {signedOutMessage}
+    />
+  {:else if bootstrapQuery.isLoading || messagesQuery.isLoading}
+    <!-- Loading -->
+    <Block>
+      <div class="account-loading" role="status">
+        <span
+          class="account-spinner"
+          role="progressbar"
+          aria-label={m.account_unlocking()}
+        ></span>
+      </div>
+    </Block>
+  {:else if session}
+    {@const activeSession = session}
+    <!-- State 2: Thread scrolls, composer pins to the bottom -->
+    <PageLayout lockScroll overlayBottomBar bind:scrollEl={threadScrollEl}>
+      {#snippet bottomBar()}
+        <JumpToLatest
+          visible={!scroll.isNearBottom && allMessages.length > 0}
+          onclick={jumpToLatest}
+        />
+        <PortalComposer
+          bind:this={composerRef}
+          onsend={handleSend}
+          pending={replyMutation.isPending}
+          onfirstfocus={handleFirstFocus}
+          errorMessage={sendError || undefined}
+          draftKey={ACCOUNT_DRAFT_KEY}
+        />
+      {/snippet}
 
-  <PortalHint
-    opened={hintShown}
-    ondismiss={dismissHint}
-    message={m.portal_web_chat_hint()}
-    dismissLabel={m.portal_hint_dismiss()}
-    dismissTestid="web-chat-hint-dismiss"
-  />
+      <PortalThread
+        messages={filteredMessages}
+        decryptMessage={async (ep: string, n: string, ct: string) =>
+          activeSession.decryptMessage(ep, n, ct)}
+        decryptAttachmentKey={async (ep: string, n: string, ct: string) =>
+          activeSession.decryptAttachmentKey(ep, n, ct)}
+        decryptAttachmentBlob={async (
+          ct: ArrayBuffer,
+          fk: string,
+          tid: string,
+          aid: string,
+        ) => activeSession.decryptAttachmentBlob(ct, fk, tid, aid)}
+        loading={messagesQuery.isLoading}
+        attachments={accountAttachments}
+        recordings={accountRecordings}
+        callEntries={accountCallEntries}
+        ticketId={bootstrapQuery.data?.ticketId ?? undefined}
+        {supportLabel}
+        searchTerm={overlay.term ?? undefined}
+        activeMatchId={overlay.activeId ?? undefined}
+        onmatches={(ids: readonly string[]) => {
+          matchIds = ids;
+        }}
+      />
+    </PageLayout>
 
-  <AccountSettings
-    onchangepassword={(current: string, newPw: string) =>
-      void handleChangePassword(current, newPw)}
-    onlogout={handleLogout}
-    pending={changePasswordPending}
-    errorMessage={changePasswordError || undefined}
-  />
-{/if}
+    <PortalHint
+      opened={hintShown}
+      ondismiss={dismissHint}
+      message={m.portal_web_chat_hint()}
+    />
+
+    <!-- State 3: Settings, opened from the drawer -->
+    <ShellSheet
+      opened={settingsOpen}
+      ondismiss={() => (settingsOpen = false)}
+      title={m.account_settings_title()}
+    >
+      <AccountSettings
+        onchangepassword={(current: string, newPw: string) =>
+          void handleChangePassword(current, newPw)}
+        pending={changePasswordPending}
+        errorMessage={changePasswordError || undefined}
+      />
+    </ShellSheet>
+  {/if}
+{/key}
 
 <style>
   .account-loading {

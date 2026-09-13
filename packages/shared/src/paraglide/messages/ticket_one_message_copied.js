@@ -10,7 +10,7 @@ const en_ticket_one_message_copied = /** @type {(inputs: Ticket_One_Message_Copi
 };
 
 const es_ticket_one_message_copied = /** @type {(inputs: Ticket_One_Message_CopiedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Se copio 1 mensaje`)
+	return /** @type {LocalizedString} */ (`Se copió 1 mensaje`)
 };
 
 /**

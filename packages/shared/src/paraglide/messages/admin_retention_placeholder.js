@@ -10,7 +10,7 @@ const en_admin_retention_placeholder = /** @type {(inputs: Admin_Retention_Place
 };
 
 const es_admin_retention_placeholder = /** @type {(inputs: Admin_Retention_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Disponible en una futura actualizacion`)
+	return /** @type {LocalizedString} */ (`Disponible en una futura actualización`)
 };
 
 /**

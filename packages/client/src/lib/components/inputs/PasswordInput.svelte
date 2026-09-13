@@ -75,6 +75,8 @@
      skin's padding shorthand on .k-list-input input. */
   .pw-field {
     padding-inline-end: 2.75rem !important;
+    /* 16px floor: iOS zooms focused controls styled smaller. */
+    font-size: 16px !important;
   }
 
   .eye-toggle {

@@ -1,11 +1,17 @@
 import { CONTENT_TYPE_REGISTRY, type ContentCategory } from "@care-y/shared";
-import type { ContentTypeMeta } from "@care-y/shared";
+import type { ContentTypeMeta, RenderVariant } from "@care-y/shared";
 
 const registry: Readonly<Record<string, ContentTypeMeta | undefined>> =
   CONTENT_TYPE_REGISTRY;
 
 export function followUpKind(fu: { type: string }): ContentCategory {
   return registry[fu.type]?.category ?? "message";
+}
+
+export function followUpRenderVariant(fu: {
+  type: string;
+}): RenderVariant | undefined {
+  return registry[fu.type]?.renderVariant;
 }
 
 // --- F6 grouping ---

@@ -1,9 +1,15 @@
 <!--
   Test-only stub for TicketCompose. Renders a textarea and send button
-  that call onsendreply with the entered text. Used by ReplySheet tests
-  to exercise the reply send pipeline without the full compose component.
+  that call onsendreply with the entered text. Mirrors the real compose
+  bar by persisting the reply draft to draft-store on input, since the
+  send pipeline reads the draft at send time rather than taking the text
+  as an argument. Used by ReplySheet tests to exercise the reply send
+  pipeline without the full compose component.
 -->
 <script lang="ts">
+  import * as m from "$lib/paraglide/messages.js";
+  import { setDraftForMode } from "$lib/tickets/draft-store.svelte.js";
+
   interface Props {
     ticketId: string;
     inline?: boolean;
@@ -14,14 +20,24 @@
     [key: string]: unknown;
   }
 
-  let { onsendreply, ..._rest }: Props = $props();
+  let { ticketId, onsendreply, ..._rest }: Props = $props();
 
   let text = $state("");
+
+  function handleInput(
+    event: Event & { currentTarget: EventTarget & HTMLTextAreaElement },
+  ): void {
+    text = event.currentTarget.value;
+    setDraftForMode(ticketId, "reply", text);
+  }
 </script>
 
 <div data-testid="compose-stub">
-  <textarea data-testid="compose-textarea" bind:value={text}></textarea>
-  <!-- Located by test id only; a label would need an i18n key this
-       test-only stub has no business adding. -->
-  <button data-testid="compose-send" onclick={() => onsendreply(text)}></button>
+  <textarea data-testid="compose-textarea" value={text} oninput={handleInput}
+  ></textarea>
+  <button
+    data-testid="compose-send"
+    aria-label={m.ticket_send()}
+    onclick={() => onsendreply(text)}
+  ></button>
 </div>

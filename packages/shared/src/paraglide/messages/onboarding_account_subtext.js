@@ -10,7 +10,7 @@ const en_onboarding_account_subtext = /** @type {(inputs: Onboarding_Account_Sub
 };
 
 const es_onboarding_account_subtext = /** @type {(inputs: Onboarding_Account_SubtextInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Seras el primer administrador de esta organizacion.`)
+	return /** @type {LocalizedString} */ (`Serás el primer administrador de esta organización.`)
 };
 
 /**

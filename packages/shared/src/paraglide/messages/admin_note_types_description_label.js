@@ -10,7 +10,7 @@ const en_admin_note_types_description_label = /** @type {(inputs: Admin_Note_Typ
 };
 
 const es_admin_note_types_description_label = /** @type {(inputs: Admin_Note_Types_Description_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Descripcion`)
+	return /** @type {LocalizedString} */ (`Descripción`)
 };
 
 /**

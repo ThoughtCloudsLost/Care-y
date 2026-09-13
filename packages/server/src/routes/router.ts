@@ -64,29 +64,47 @@ function healthCheck(): { status: "ok" } {
   return { status: "ok" };
 }
 
-export interface RouterDeps {
+/**
+ * Every router that a caller may decline to mount.
+ *
+ * All keys are required. `null` declines a router; omitting a key is a type
+ * error, never a silent absence. That distinction is the whole point of this
+ * interface: a caller that forgets a group used to get a router which
+ * type-checked, booted, and served every other surface, with the gap
+ * appearing only as `No procedure found on path "..."` from whichever page
+ * called first. Pages can render without their API, so nothing else catches
+ * it.
+ *
+ * Adding a key here is meant to break every real call site. Let it. Each
+ * site then states whether the new router belongs in that deployment.
+ */
+export interface OptionalRouterDeps {
+  readonly telephonyAdminDeps: TelephonyAdminRouterDeps | null;
+  readonly telephonyContentDeps: TelephonyContentRouterDeps | null;
+  /** Takes no deps, so a boolean is the only thing there is to state. */
+  readonly consultant: boolean;
+  /** Takes no deps, so a boolean is the only thing there is to state. */
+  readonly reports: boolean;
+  readonly ticketDeps: TicketRouterDeps | null;
+  readonly kbDeps: KBRouterDeps | null;
+  readonly notificationDeps: NotificationRouterDeps | null;
+  readonly brandingDeps: BrandingRouterDeps | null;
+  readonly onboardingDeps: OnboardingRouterDeps | null;
+  readonly voicemailQuarantineDeps: VoicemailQuarantineRouterDeps | null;
+  readonly clientDeps: ClientRouterDeps | null;
+  readonly escalationDeps: EscalationRouterDeps | null;
+  readonly intakeFormDeps: IntakeFormRouterDeps | null;
+  readonly clientPortalDeps: ClientPortalRouterDeps | null;
+  readonly devDeps: DevRouterDeps | null;
+}
+
+export interface RouterDeps extends OptionalRouterDeps {
   readonly authDeps: AuthRouterDeps;
   readonly profileDeps: ProfileRouterDeps;
   readonly twoFactorDeps: TwoFactorRouterDeps;
   readonly oprfDeps: OprfRouterDeps;
   readonly orgService: OrgService;
   readonly providerFactory: ProviderFactory;
-  readonly telephonyAdminDeps?: TelephonyAdminRouterDeps;
-  readonly telephonyContentDeps?: TelephonyContentRouterDeps;
-  readonly includeTelephonyContent?: boolean;
-  readonly includeConsultant?: boolean;
-  readonly includeReports?: boolean;
-  readonly ticketDeps?: TicketRouterDeps;
-  readonly kbDeps?: KBRouterDeps;
-  readonly notificationDeps?: NotificationRouterDeps;
-  readonly brandingDeps?: BrandingRouterDeps;
-  readonly onboardingDeps?: OnboardingRouterDeps;
-  readonly voicemailQuarantineDeps?: VoicemailQuarantineRouterDeps;
-  readonly clientDeps?: ClientRouterDeps;
-  readonly escalationDeps?: EscalationRouterDeps;
-  readonly intakeFormDeps?: IntakeFormRouterDeps;
-  readonly clientPortalDeps?: ClientPortalRouterDeps;
-  readonly devDeps?: DevRouterDeps;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -108,56 +126,52 @@ export function createAppRouter(deps: RouterDeps) {
     keys: keysRouter,
     dashboard: createDashboardRouter(),
     recentViews: createRecentViewsRouter(),
-    ...(deps.telephonyAdminDeps
+    ...(deps.telephonyAdminDeps !== null
       ? {
           telephonyAdmin: createTelephonyAdminRouter(deps.telephonyAdminDeps),
         }
       : {}),
-    ...(deps.includeTelephonyContent !== false
+    ...(deps.telephonyContentDeps !== null
       ? {
           telephonyContent: createTelephonyContentRouter(
             deps.telephonyContentDeps,
           ),
         }
       : {}),
-    ...(deps.includeConsultant !== false
-      ? { consultant: createConsultantRouter() }
-      : {}),
-    ...(deps.ticketDeps
+    ...(deps.consultant ? { consultant: createConsultantRouter() } : {}),
+    ...(deps.ticketDeps !== null
       ? { tickets: createTicketRouter(deps.ticketDeps) }
       : {}),
-    ...(deps.kbDeps ? { kb: createKbRouter(deps.kbDeps) } : {}),
-    ...(deps.notificationDeps
+    ...(deps.kbDeps !== null ? { kb: createKbRouter(deps.kbDeps) } : {}),
+    ...(deps.notificationDeps !== null
       ? { notifications: createNotificationRouter(deps.notificationDeps) }
       : {}),
-    ...(deps.brandingDeps
+    ...(deps.brandingDeps !== null
       ? { branding: createBrandingRouter(deps.brandingDeps) }
       : {}),
-    ...(deps.includeReports !== false
-      ? { reports: createReportsRouter() }
-      : {}),
-    ...(deps.onboardingDeps
+    ...(deps.reports ? { reports: createReportsRouter() } : {}),
+    ...(deps.onboardingDeps !== null
       ? { onboarding: createOnboardingRouter(deps.onboardingDeps) }
       : {}),
-    ...(deps.voicemailQuarantineDeps
+    ...(deps.voicemailQuarantineDeps !== null
       ? {
           voicemailQuarantine: createVoicemailQuarantineRouter(
             deps.voicemailQuarantineDeps,
           ),
         }
       : {}),
-    ...(deps.clientDeps
+    ...(deps.clientDeps !== null
       ? { clients: createClientRouter(deps.clientDeps) }
       : {}),
-    ...(deps.escalationDeps
+    ...(deps.escalationDeps !== null
       ? { escalation: createEscalationRouter(deps.escalationDeps) }
       : {}),
-    ...(deps.intakeFormDeps
+    ...(deps.intakeFormDeps !== null
       ? { intakeForms: createIntakeFormRouter(deps.intakeFormDeps) }
       : {}),
-    ...(deps.clientPortalDeps
+    ...(deps.clientPortalDeps !== null
       ? { clientPortal: createClientPortalRouter(deps.clientPortalDeps) }
       : {}),
-    ...(deps.devDeps ? { dev: createDevRouter(deps.devDeps) } : {}),
+    ...(deps.devDeps !== null ? { dev: createDevRouter(deps.devDeps) } : {}),
   });
 }

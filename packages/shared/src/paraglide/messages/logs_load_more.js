@@ -10,7 +10,7 @@ const en_logs_load_more = /** @type {(inputs: Logs_Load_MoreInputs) => Localized
 };
 
 const es_logs_load_more = /** @type {(inputs: Logs_Load_MoreInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cargar mas`)
+	return /** @type {LocalizedString} */ (`Cargar más`)
 };
 
 /**

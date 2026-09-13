@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_tor_tradeoff = /** @type {(inputs: Onboardin
 };
 
 const es_onboarding_briefing_choice_tor_tradeoff = /** @type {(inputs: Onboarding_Briefing_Choice_Tor_TradeoffInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Con Tor habilitado, los usuarios que se conectan a traves del Navegador Tor ocultan su conexion completamente. La desventaja es que Tor es notablemente mas lento, lo que puede frustrar a los voluntarios durante turnos ocupados.`)
+	return /** @type {LocalizedString} */ (`Con Tor habilitado, los usuarios que se conectan a traves del Navegador Tor ocultan su conexión completamente. La desventaja es que Tor es notablemente más lento, lo que puede frustrar a los voluntarios durante turnos ocupados.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_setup_invalid_link = /** @type {(inputs: Onboarding_Setup_In
 };
 
 const es_onboarding_setup_invalid_link = /** @type {(inputs: Onboarding_Setup_Invalid_LinkInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este enlace de configuracion no es valido o ya fue utilizado. Si necesita un nuevo enlace, contacte al operador de la plataforma.`)
+	return /** @type {LocalizedString} */ (`Este enlace de configuración no es válido o ya fue utilizado. Si necesita un nuevo enlace, contacte al operador de la plataforma.`)
 };
 
 /**

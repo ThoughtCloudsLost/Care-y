@@ -10,7 +10,7 @@ const en_getting_started_retention = /** @type {(inputs: Getting_Started_Retenti
 };
 
 const es_getting_started_retention = /** @type {(inputs: Getting_Started_RetentionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configurar retencion de datos`)
+	return /** @type {LocalizedString} */ (`Configurar retención de datos`)
 };
 
 /**

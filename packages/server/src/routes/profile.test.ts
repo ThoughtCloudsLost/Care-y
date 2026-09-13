@@ -26,6 +26,7 @@ import {
   createMockEmailSender,
   createMockOprfDeps,
   createThrowingProviderFactory,
+  NO_OPTIONAL_ROUTERS,
   type TestDb,
 } from "../test-utils.js";
 import { encode, getSodium } from "@care-y/crypto";
@@ -128,6 +129,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // Shared by authDeps and twoFactorDeps, matching production wiring.
       const totpReplayCache = createInMemoryTotpReplayCache();
       return createAppRouter({
+        ...NO_OPTIONAL_ROUTERS,
         authDeps: {
           hasher,
           loginLimiter,
@@ -822,6 +824,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           );
           const totpReplayCache = createInMemoryTotpReplayCache();
           return createAppRouter({
+            ...NO_OPTIONAL_ROUTERS,
             authDeps: {
               hasher,
               loginLimiter,

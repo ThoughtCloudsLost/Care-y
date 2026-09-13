@@ -10,7 +10,7 @@ const en_panel_telephony = /** @type {(inputs: Panel_TelephonyInputs) => Localiz
 };
 
 const es_panel_telephony = /** @type {(inputs: Panel_TelephonyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Telefonia`)
+	return /** @type {LocalizedString} */ (`Telefonía`)
 };
 
 /**

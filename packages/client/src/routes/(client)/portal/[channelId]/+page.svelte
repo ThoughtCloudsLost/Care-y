@@ -3,20 +3,24 @@
 
   This page is session-free. It imports neither CryptoBridge nor any
   session composable, and it touches no browser storage.
-  All key material lives in module-scope state, zeroed on quick exit
+  All key material lives in composable-scope state, zeroed on quick exit
   and pagehide. The fragment never reaches any server (RFC 3986).
 
-  Six orchestration states (in order):
+  Five orchestration states (in order):
     1. No/bad fragment: static explanation, no server call
     2. Bootstrap: TanStack Query with dead-link state on generic error
     3. Passphrase gate: when hasPassphrase, derive with Argon2id
     4. Thread: decrypted messages via Konsta Messages/Message
     5. Composer: ShellMessagebar via PortalComposer
-    6. Quick exit: always visible, every state
+
+  Quick exit and the drawer belong to the (client) layout. This page
+  publishes its session-zeroing callback, safe URL, and drawer entries
+  through the client shell context.
 -->
 <script lang="ts">
   import { page } from "$app/state";
   import { browser } from "$app/environment";
+  import { afterNavigate, goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { Block, BlockTitle, Card } from "konsta/svelte";
   import {
@@ -28,38 +32,42 @@
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import {
-    derivePortalKeypair,
-    decode,
-    encode,
-    getSodium,
-  } from "@care-y/crypto";
+  import { decode, encode } from "@care-y/crypto";
   import { newFollowupId, newKeyGeneration } from "@care-y/shared";
+  import { solveProofOfWork } from "$lib/auth/pow-solver.js";
+  import { requireRouter } from "$lib/errors.js";
+  import type { ChannelEvaluateCallback } from "$lib/composables/portal/create-portal-session.svelte.js";
+  import PortalHint from "$lib/shell/PortalHint.svelte";
+  import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
+  import PageLayout from "$lib/shell/PageLayout.svelte";
+  import { KeyRound, UserPen } from "@lucide/svelte";
   import {
-    parseFragment,
-    verifyKeyCheck,
-    encryptReply,
-    createPortalSession,
-    decodeEciesTriple,
-    decryptPortalMessage,
-    type PortalSession,
-  } from "$lib/portal/portal-crypto.js";
-  import {
-    buildAccountRegistration,
-    rewrapMessages,
-  } from "$lib/portal/account-crypto.js";
-  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
-  import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
-  import QuickExit from "$lib/components/portal/QuickExit.svelte";
-  import PortalHint from "$lib/components/portal/PortalHint.svelte";
+    getClientShellCtx,
+    DEFAULT_SAFE_URL,
+    type ClientDrawerAction,
+  } from "$lib/client-shell/context.js";
   import PortalPassphraseGate from "$lib/portal/PortalPassphraseGate.svelte";
   import PortalThread from "$lib/portal/PortalThread.svelte";
+  import { portalMessageElementId } from "$lib/portal/portal-message-ids.js";
+  import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
+  import ContactCorrectionSheet from "$lib/portal/ContactCorrectionSheet.svelte";
+  import { createChatPaginator } from "$lib/tickets/chat-paginator.svelte.js";
+  import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
   import AccountCreateForm from "$lib/portal/AccountCreateForm.svelte";
   import { X } from "@lucide/svelte";
-
-  // Default safe URL when the org has not configured one
-  const DEFAULT_SAFE_URL = "https://weather.gov";
+  import LinkErrorState from "$lib/portal/LinkErrorState.svelte";
+  import { readRateLimitError } from "$lib/portal/rate-limit-error.js";
+  import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
+  import { createPortalFragment } from "$lib/composables/portal/create-portal-fragment.svelte.js";
+  import { createPortalSessionState } from "$lib/composables/portal/create-portal-session.svelte.js";
+  // care-y-ignore-next-line route-no-db-import -- client composable, no database access; validator heuristic misreads the module
+  import { createPortalUpgrade } from "$lib/composables/portal/create-portal-upgrade.svelte.js";
+  import { createPortalFilters } from "$lib/composables/portal/create-portal-filters.svelte.js";
+  import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
+  import { useThreadChrome } from "$lib/shell/use-thread-chrome.svelte.js";
 
   // Route param; the fragment-derived channel id is the crypto authority,
   // this one only keys the queries.
@@ -67,75 +75,65 @@
 
   // ---------------------------------------------------------------------------
   // Fragment parsing (state 1)
-  //
-  // parseFragment calls decode/derive which need initialized libsodium.
-  // CryptoProvider fires getSodium() without awaiting it, so on a cold hard
-  // load the WASM may not be ready yet. hashPresent is a synchronous check
-  // that needs no sodium and guards the template, while fragmentData is
-  // populated by a one-shot $effect after getSodium() resolves.
   // ---------------------------------------------------------------------------
 
-  const hashPresent = $derived(
-    browser ? Boolean(location.hash && location.hash !== "#") : false,
+  const fragment = createPortalFragment(
+    browser,
+    () => location.hash,
+    () => routeChannelId,
   );
-  let fragmentData = $state<{
-    seed: Uint8Array;
-    auth: Uint8Array;
-    channelId: string;
-  } | null>(null);
-  let fragmentResolved = $state(false);
 
-  // One-shot async init: await sodium, then parse the fragment
-  let fragmentInitStarted = false;
-  $effect(() => {
-    if (!browser || !hashPresent || fragmentInitStarted) return;
-    fragmentInitStarted = true;
-
-    void (async () => {
-      await getSodium();
-      fragmentData = parseFragment(location.hash);
-      fragmentResolved = true;
-    })();
+  // Wire afterNavigate to mark router readiness (replaceState throws
+  // before router init; afterNavigate fires post-init on mount).
+  afterNavigate(() => {
+    fragment.markRouterReady();
   });
 
-  // No hash at all: resolve immediately so the missing-info state shows
+  // Strip the fragment from the address bar once both router and parse are ready.
+  // strippablePath is a readiness gate; the template literal satisfies
+  // SvelteKit's typed resolve() overload.
   $effect(() => {
-    if (!browser || hashPresent || fragmentResolved) return;
-    fragmentResolved = true;
+    if (fragment.strippablePath === null) return;
+    fragment.markStripped();
+    replaceState(resolve(`/portal/${routeChannelId}`), {});
   });
 
-  const hasValidFragment = $derived(fragmentResolved && fragmentData !== null);
-
   // ---------------------------------------------------------------------------
-  // Session state (module scope, zeroed on exit)
+  // Session state (composable scope, zeroed on exit)
   // ---------------------------------------------------------------------------
 
-  let session = $state<PortalSession | null>(null);
-  let passphraseError = $state(false);
-  let passphraseDerivePending = $state(false);
-  let keyCheckPassed = $state(false);
+  const portalSession = createPortalSessionState();
+
+  /** Channel OPRF evaluate wired to the clientPortal tRPC mutation. */
+  const channelEvaluate: ChannelEvaluateCallback = async (
+    chanId: string,
+    blindedB64: string,
+    chanAuth?: string,
+  ): Promise<{ evaluated: string }> => {
+    const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+    return portalRouter.evaluateChannelOprf.mutate({
+      channelId: chanId,
+      blindedElement: blindedB64,
+      ...(chanAuth !== undefined ? { auth: chanAuth } : {}),
+    });
+  };
+
   let hintShown = $state(false);
   let hintDismissed = $state(false);
 
+  // Anchored to what the procedure returns rather than mirrored by hand,
+  // so a change to the wire shape is a compile error here.
+  type ClientPortalRouter = NonNullable<typeof trpc.clientPortal>;
+  type PortalMessageWire = Awaited<
+    ReturnType<ClientPortalRouter["portalMessagePage"]["query"]>
+  >["messages"][number];
+
   // Optimistic messages appended after send
-  interface OptimisticMsg {
-    readonly id: string;
-    readonly direction: string;
-    readonly ephemeralPoint: string;
-    readonly nonce: string;
-    readonly ciphertext: string;
-    readonly createdAt: string;
-    readonly editedAt: string | null;
-  }
-  let optimisticMessages = $state<OptimisticMsg[]>([]);
+  let optimisticMessages = $state<PortalMessageWire[]>([]);
   let sendError = $state("");
   let lastSentText = "";
   let composerRef = $state<PortalComposer | null>(null);
-
-  function destroySession(): void {
-    session?.destroy();
-    session = null;
-  }
+  let correctionSheetOpen = $state(false);
 
   // Safe URL: org-configured exit target from bootstrap, else the default
   const safeUrl = $derived.by((): string => {
@@ -149,15 +147,15 @@
   const bootstrapQuery = createQuery(() => ({
     queryKey: portalKeys.bootstrap(routeChannelId),
     queryFn: async () => {
-      if (!trpc.clientPortal || !fragmentData) {
+      if (!trpc.clientPortal || !fragment.fragmentData) {
         throw new Error("Portal not available");
       }
       return trpc.clientPortal.portalBootstrap.query({
-        channelId: fragmentData.channelId,
-        auth: encode(fragmentData.auth),
+        channelId: fragment.fragmentData.channelId,
+        auth: encode(fragment.fragmentData.auth),
       });
     },
-    enabled: hasValidFragment,
+    enabled: fragment.hasValidFragment,
     retry: false,
     staleTime: 5 * 60 * 1000,
   }));
@@ -177,38 +175,222 @@
 
   const orgPublicKey = $derived(orgKeyQuery.data ?? null);
 
+  // Org-set name shown above messages from the organization. Rides the
+  // public branding blob so it is available before any account exists.
+  const brandingQuery = createPublicBrandingQuery();
+  const supportLabel = $derived(brandingQuery.data?.supportLabel ?? "");
+
   // Polling query for new messages (5-minute interval + focus refetch)
   const queryClient = useQueryClient();
 
+  const PAGE_SIZE = 50;
+
+  /** One page of the thread, newest-first from the server, oldest-first out. */
+  async function fetchMessagePage(
+    cursor?: string,
+  ): Promise<{ messages: PortalMessageWire[]; totalCount: number }> {
+    if (!trpc.clientPortal || !fragment.fragmentData) {
+      throw new Error("Portal not available");
+    }
+    return trpc.clientPortal.portalMessagePage.query({
+      channelId: fragment.fragmentData.channelId,
+      auth: encode(fragment.fragmentData.auth),
+      limit: PAGE_SIZE,
+      direction: "older",
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+  }
+
   const messagesQuery = createQuery(() => ({
     queryKey: portalKeys.messages(routeChannelId),
-    queryFn: async () => {
-      if (!trpc.clientPortal || !fragmentData) {
-        throw new Error("Portal not available");
-      }
-      return trpc.clientPortal.portalMessages.query({
-        channelId: fragmentData.channelId,
-        auth: encode(fragmentData.auth),
-      });
-    },
-    enabled: keyCheckPassed,
+    queryFn: async () => fetchMessagePage(),
+    enabled: portalSession.keyCheckPassed,
     refetchInterval: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
     retry: false,
   }));
 
-  // Combined messages: server messages + optimistic appends
-  const allMessages = $derived.by(() => {
-    const serverMsgs = messagesQuery.data?.messages ?? [];
-    return [...serverMsgs, ...optimisticMessages];
+  const scroll = createScrollManager();
+
+  // PageLayout binds a plain state variable; the manager exposes its
+  // container through a getter/setter pair, which bind: cannot target.
+  let threadScrollEl = $state<HTMLDivElement | undefined>(undefined);
+  $effect(() => {
+    scroll.scrollContainerEl = threadScrollEl;
   });
 
-  // Dead-link detection: bootstrap error means revoked/unknown/bad auth
-  const isDeadLink = $derived(bootstrapQuery.isError);
+  // The same paginator the volunteer thread runs on. It reads its cache key
+  // and its end-of-history total from here rather than assuming a ticket.
+  const paginator = createChatPaginator<PortalMessageWire>({
+    pageSize: PAGE_SIZE,
+    queryClient,
+    getPageQueryKey: (cursor: string) =>
+      portalKeys.messagePage(routeChannelId, cursor),
+    fetchPage: async (cursor: string) =>
+      (await fetchMessagePage(cursor)).messages,
+    getScrollContainer: () => scroll.scrollContainerEl,
+    getTotalCount: () => messagesQuery.data?.totalCount,
+  });
+
+  // Reaching the top pulls the previous page in. The paginator anchors
+  // scroll position across the prepend, so the message being read stays
+  // where it is instead of jumping.
+  const LOAD_OLDER_PX = 200;
+
+  $effect(() => {
+    const el = scroll.scrollContainerEl;
+    if (el == null) return;
+
+    const handleScroll = (): void => {
+      scroll.onScroll([], undefined);
+      if (
+        el.scrollTop < LOAD_OLDER_PX &&
+        paginator.hasMore &&
+        !paginator.loadingOlder
+      ) {
+        void paginator.loadOlderPage();
+      }
+    };
+
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", handleScroll);
+    };
+  });
+
+  $effect(() => scroll.cleanup);
+
+  // Follow the conversation only when the reader is already at the bottom.
+  $effect(() => {
+    scroll.autoScrollOnNew(allMessages.length, false);
+  });
+
+  // --- In-thread search ---
+  // The same overlay and navigator four org surfaces use, scoped to the one
+  // thread a client has. Matches come from PortalThread, which is where the
+  // decrypted text lives.
+
+  let searchActive = $state(false);
+  let matchIds = $state<readonly string[]>([]);
+
+  const overlay = createSearchOverlay({
+    matches: () => matchIds,
+    getElementId: portalMessageElementId,
+    scrollContainer: () => scroll.scrollContainerEl,
+  });
+
+  const threadChrome = useThreadChrome({
+    get scrollEl() {
+      return scroll.scrollContainerEl;
+    },
+    get ready() {
+      return threadScrollReady;
+    },
+    get pinned() {
+      return searchActive;
+    },
+  });
+
+  function openSearch(): void {
+    searchActive = true;
+    overlay.enter("");
+  }
+
+  function closeSearch(): void {
+    overlay.exit();
+    searchActive = false;
+  }
+
+  function jumpToLatest(): void {
+    const el = scroll.scrollContainerEl;
+    if (el == null) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }
+
+  // Open on the newest message. The thread used to render every message at
+  // once and start at the oldest; now that it opens on a page, starting at
+  // the top would show the middle of a conversation with no way to tell.
+  let didInitialScroll = false;
+  let threadScrollReady = $state(false);
+
+  $effect(() => {
+    if (didInitialScroll || paginator.items.length === 0) return;
+    const el = scroll.scrollContainerEl;
+    if (el == null) return;
+    didInitialScroll = true;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+      scroll.markScrolledInitially();
+      threadScrollReady = true;
+    });
+  });
+
+  $effect(() => {
+    const data = messagesQuery.data;
+    if (!data) return;
+    paginator.seed(data.messages);
+    paginator.syncInitialPage(data.messages);
+  });
+
+  // Combined messages: paged server messages + optimistic appends
+  const allMessages = $derived.by(() => [
+    ...paginator.items,
+    ...optimisticMessages,
+  ]);
+
+  // Rate limits get their own states: "Expired link" for a transient 429
+  // could make a client discard a working link.
+  const bootstrapRateLimit = $derived(
+    bootstrapQuery.isError ? readRateLimitError(bootstrapQuery.error) : null,
+  );
+
+  // Dead-link detection: any other bootstrap error means revoked/unknown/bad auth
+  const isDeadLink = $derived(
+    bootstrapQuery.isError && bootstrapRateLimit === null,
+  );
+
+  const messagesRateLimit = $derived(
+    messagesQuery.isError ? readRateLimitError(messagesQuery.error) : null,
+  );
+
+  // What the thread shows in place of the empty state when the query failed
+  const messagesLoadError = $derived.by(
+    (): "rate_limited" | "generic" | null => {
+      if (!messagesQuery.isError) return null;
+      return messagesRateLimit !== null ? "rate_limited" : "generic";
+    },
+  );
+
+  // Auto-retry on the server's hint. Without a hint, 60s is a guess that
+  // errs short: a failed retry just re-arms this timer with a fresh hint.
+  const RETRY_FALLBACK_SECONDS = 60;
+
+  $effect(() => {
+    if (bootstrapRateLimit === null) return;
+    const seconds =
+      bootstrapRateLimit.retryAfterSeconds ?? RETRY_FALLBACK_SECONDS;
+    const timer = setTimeout(() => {
+      void bootstrapQuery.refetch();
+    }, seconds * 1000);
+    return () => clearTimeout(timer);
+  });
+
+  // Rate-limited message fetches retry on the hint too; other errors are
+  // covered by the 5-minute refetch interval and the focus refetch.
+  $effect(() => {
+    if (messagesRateLimit === null) return;
+    const seconds =
+      messagesRateLimit.retryAfterSeconds ?? RETRY_FALLBACK_SECONDS;
+    const timer = setTimeout(() => {
+      void messagesQuery.refetch();
+    }, seconds * 1000);
+    return () => clearTimeout(timer);
+  });
 
   // Bootstrap succeeded but needs passphrase
   const needsPassphrase = $derived(
-    bootstrapQuery.data?.hasPassphrase === true && !keyCheckPassed,
+    bootstrapQuery.data?.hasPassphrase === true &&
+      !portalSession.keyCheckPassed,
   );
 
   // No-passphrase immediate derive
@@ -217,28 +399,18 @@
       !browser ||
       !bootstrapQuery.data ||
       bootstrapQuery.data.hasPassphrase ||
-      keyCheckPassed ||
-      !fragmentData
+      portalSession.keyCheckPassed ||
+      !fragment.fragmentData
     ) {
       return;
     }
 
-    // No passphrase: derive immediately and verify key check
-    try {
-      const keypair = derivePortalKeypair(fragmentData.seed);
-      const keyCheck = decodeEciesTriple(bootstrapQuery.data.keyCheck);
-      if (verifyKeyCheck(keypair, keyCheck)) {
-        session = createPortalSession(
-          fragmentData.channelId,
-          fragmentData.auth,
-          keypair,
-          fragmentData.seed,
-        );
-        keyCheckPassed = true;
-      }
-    } catch {
-      // Corrupt fragment or derivation failure; treat as dead link
-    }
+    void portalSession.tryNoPassphraseDerive(
+      fragment.fragmentData,
+      bootstrapQuery.data.keyCheck,
+      channelEvaluate,
+      solveProofOfWork,
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -247,34 +419,15 @@
 
   function handlePassphraseSubmit(passphrase: string): void {
     const data = bootstrapQuery.data;
-    const frag = fragmentData;
+    const frag = fragment.fragmentData;
     if (!data || !frag) return;
-    passphraseDerivePending = true;
-    passphraseError = false;
-
-    // Run Argon2id asynchronously (setTimeout to let the UI update first)
-    setTimeout(() => {
-      try {
-        const keypair = derivePortalKeypair(frag.seed, passphrase);
-        const keyCheck = decodeEciesTriple(data.keyCheck);
-        if (verifyKeyCheck(keypair, keyCheck)) {
-          session = createPortalSession(
-            frag.channelId,
-            frag.auth,
-            keypair,
-            frag.seed,
-          );
-          keyCheckPassed = true;
-          passphraseError = false;
-        } else {
-          passphraseError = true;
-        }
-      } catch {
-        passphraseError = true;
-      } finally {
-        passphraseDerivePending = false;
-      }
-    }, 0);
+    void portalSession.submitPassphrase(
+      passphrase,
+      frag,
+      data.keyCheck,
+      channelEvaluate,
+      solveProofOfWork,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -295,31 +448,40 @@
         nonce: string;
         ciphertext: string;
       };
+      kind?: "message" | "contact_correction";
     }) => {
       if (!trpc.clientPortal) throw new Error("Portal not available");
       return trpc.clientPortal.portalReply.mutate(input);
     },
     onSuccess: () => {
-      // Refetch messages after successful send
       void queryClient.invalidateQueries({
         queryKey: portalKeys.messages(routeChannelId),
       });
       announceToLiveRegion("polite", m.portal_send());
     },
-    onError: (_err, variables) => {
+    onError: (err, variables) => {
       optimisticMessages = optimisticMessages.filter(
         (msg) => msg.id !== variables.followUpId,
       );
       composerRef?.restoreDraft(lastSentText);
-      sendError = m.portal_send_failed();
-      announceToLiveRegion("polite", m.portal_send_failed());
+      // A rate-limited send names the fix (waiting, or a support reply,
+      // clears the pause) instead of the generic try-again copy.
+      sendError =
+        readRateLimitError(err) !== null
+          ? m.portal_send_rate_limited()
+          : m.portal_send_failed();
+      announceToLiveRegion("polite", sendError);
     },
   }));
 
-  function handleSend(text: string): void {
+  function handleSend(
+    text: string,
+    kind?: "message" | "contact_correction",
+  ): void {
     sendError = "";
+    const sess = portalSession.session;
     const ticketId = bootstrapQuery.data?.ticketId;
-    if (!session || !orgPublicKey || ticketId == null || ticketId === "") {
+    if (!sess || !orgPublicKey || ticketId == null || ticketId === "") {
       return;
     }
     lastSentText = text;
@@ -327,41 +489,54 @@
     const followUpId = newFollowupId();
     const keyGeneration = newKeyGeneration();
 
-    const payload = encryptReply(
-      text,
-      orgPublicKey,
-      session.keypair.clientPublic,
-      {
+    void sess
+      .encryptReply(
+        text,
+        encode(orgPublicKey),
         ticketId,
         followUpId,
         keyGeneration,
-      },
-    );
+      )
+      .then((payload) => {
+        optimisticMessages = [
+          ...optimisticMessages,
+          {
+            id: followUpId,
+            // The optimistic bubble stands in for a row the server has not
+            // written yet, and the thread groups files by follow-up, so it
+            // carries the same id the reply was minted with.
+            followupId: followUpId,
+            direction: "from_client",
+            ephemeralPoint: payload.selfCopy.ephemeralPoint,
+            nonce: payload.selfCopy.nonce,
+            ciphertext: payload.selfCopy.ciphertext,
+            createdAt: new Date().toISOString(),
+            editedAt: null,
+          },
+        ];
 
-    // Optimistic append: add self-copy for immediate display
-    optimisticMessages = [
-      ...optimisticMessages,
-      {
-        id: followUpId,
-        direction: "from_client",
-        ephemeralPoint: payload.selfCopy.ephemeralPoint,
-        nonce: payload.selfCopy.nonce,
-        ciphertext: payload.selfCopy.ciphertext,
-        createdAt: new Date().toISOString(),
-        editedAt: null,
-      },
-    ];
+        replyMutation.mutate({
+          channelId: sess.channelId,
+          auth: encode(sess.auth),
+          ticketId,
+          followUpId,
+          keyGeneration,
+          encryptedContent: payload.encryptedContent,
+          wrappedTkTemp: payload.wrappedTkTemp,
+          selfCopy: payload.selfCopy,
+          kind: kind ?? undefined,
+        });
+      })
+      .catch(() => {
+        composerRef?.restoreDraft(lastSentText);
+        sendError = m.portal_send_failed();
+        announceToLiveRegion("polite", m.portal_send_failed());
+      });
+  }
 
-    replyMutation.mutate({
-      channelId: session.channelId,
-      auth: encode(session.auth),
-      ticketId,
-      followUpId,
-      keyGeneration,
-      encryptedContent: payload.encryptedContent,
-      wrappedTkTemp: payload.wrappedTkTemp,
-      selfCopy: payload.selfCopy,
-    });
+  function handleCorrectionSubmit(phone: string): void {
+    handleSend(m.portal_correction_message({ phone }), "contact_correction");
+    correctionSheetOpen = false;
   }
 
   // Clear optimistic messages when server data refreshes
@@ -375,11 +550,14 @@
   // Web chat hint (state 5, session-once)
   // ---------------------------------------------------------------------------
 
-  function handleFirstFocus(): void {
-    if (!hintDismissed) {
-      hintShown = true;
-    }
-  }
+  // Show on thread entry (when the session is ready and thread renders),
+  // once per SPA session. The previous implementation only triggered on
+  // first composer input, which meant the hint never appeared if the user
+  // did not type. The spec calls for thread-entry appearance.
+  $effect(() => {
+    if (!threadShowing || hintDismissed) return;
+    hintShown = true;
+  });
 
   function dismissHint(): void {
     hintShown = false;
@@ -390,242 +568,367 @@
   // Upgrade card (shows when bootstrap.accountOffer is true)
   // ---------------------------------------------------------------------------
 
-  let upgradeCardDismissed = $state(false);
-  let upgradeCardExpanded = $state(false);
-  let upgradePending = $state(false);
-  let upgradeError = $state("");
-  let upgradeSuccess = $state(false);
-  let upgradeUsername = $state("");
+  const upgrade = createPortalUpgrade();
 
   const showAccountOffer = $derived(
-    bootstrapQuery.data?.accountOffer === true && !upgradeSuccess,
+    bootstrapQuery.data?.accountOffer === true && !upgrade.success,
   );
 
-  function dismissUpgradeCard(): void {
-    upgradeCardDismissed = true;
-  }
-
-  function expandUpgradeCard(): void {
-    upgradeCardExpanded = true;
-  }
-
-  function makeCryptoCallbacks(): LoginCryptoCallbacks {
-    // Single indeterminate progressbar; phases are not surfaced separately.
-    return buildLoginCallbacks(() => undefined);
-  }
-
   function handleUpgradeSubmit(username: string, password: string): void {
-    if (upgradePending || !session || !fragmentData) return;
-    upgradePending = true;
-    upgradeError = "";
+    const sess = portalSession.session;
+    const frag = fragment.fragmentData;
+    if (!sess || !frag) return;
+    if (!trpc.clientPortal) return;
 
-    const callbacks = makeCryptoCallbacks();
-
-    void (async () => {
-      try {
-        const { payload, keypair: newKeypair } = await buildAccountRegistration(
-          username,
-          password,
-          null,
-          callbacks,
-        );
-
-        // Re-encrypt already-decrypted thread messages to the new key
-        const decryptedMsgs = collectDecryptedMessagesForUpgrade();
-        const rewrapped = rewrapMessages(
-          decryptedMsgs,
-          newKeypair.clientPublic,
-        );
-
-        // Submit the upgrade mutation
-        if (!trpc.clientPortal) return;
-        await trpc.clientPortal.accountUpgrade.mutate({
-          channelId: fragmentData.channelId,
-          auth: encode(fragmentData.auth),
-          account: payload,
-          rewrappedMessages: rewrapped,
-        });
-
-        // Clean up new keypair (upgrade page shows success, not a session)
-        const { requireSodium } = await import("@care-y/crypto");
-        requireSodium().memzero(newKeypair.clientPrivate);
-
-        // Destroy the old session (channel is revoked server-side)
-        destroySession();
-
-        upgradeUsername = username;
-        upgradeSuccess = true;
-      } catch (err: unknown) {
-        // Check for CONFLICT (stale thread)
-        if (
-          typeof err === "object" &&
-          err !== null &&
-          "data" in err &&
-          typeof (err as Record<string, unknown>).data === "object"
-        ) {
-          upgradeError = m.account_stale_thread();
-          // Refetch messages so the client can try again
-          void queryClient.invalidateQueries({
-            queryKey: portalKeys.messages(routeChannelId),
-          });
-        } else {
-          upgradeError = m.account_login_failed();
-        }
-      } finally {
-        upgradePending = false;
-      }
-    })();
+    upgrade.submit(
+      username,
+      password,
+      sess,
+      frag.channelId,
+      frag.auth,
+      messagesQuery.data?.messages ?? [],
+      trpc.clientPortal,
+      queryClient,
+      portalKeys.messages(routeChannelId),
+      m.account_stale_thread(),
+      m.account_login_failed(),
+    );
   }
 
-  function collectDecryptedMessagesForUpgrade(): readonly {
-    id: string;
-    text: string;
-  }[] {
-    const msgs = messagesQuery.data?.messages ?? [];
-    if (!session) return [];
-    const result: { id: string; text: string }[] = [];
-    for (const msg of msgs) {
-      if (!("id" in msg) || typeof msg.id !== "string") continue;
-      try {
-        const triple = decodeEciesTriple(msg);
-        const text = decryptPortalMessage(
-          triple,
-          session.keypair.clientPrivate,
-        );
-        result.push({ id: msg.id, text });
-      } catch {
-        // Skip messages that fail to decrypt
-      }
+  // ---------------------------------------------------------------------------
+  // Locale-reactive title (the read establishes a $derived dependency)
+  // ---------------------------------------------------------------------------
+
+  const pageTitle = $derived.by((): string => {
+    void uiLocaleStore.locale;
+    return m.portal_title();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Client shell registration
+  // ---------------------------------------------------------------------------
+
+  // The layout owns quick exit and the drawer; this page owns the session.
+  // Only the zeroing callback crosses the boundary, never key material.
+  const shellContainer = getClientShellCtx();
+
+  // True once the thread is showing. Chat shape only: the other states are
+  // ordinary content that should scroll normally.
+  const threadShowing = $derived(
+    !upgrade.success &&
+      portalSession.keyCheckPassed &&
+      portalSession.session !== null,
+  );
+
+  // The in-thread card can be dismissed; the drawer entry cannot, which is
+  // the point. Both drive the same upgrade composable. Contact correction
+  // lives here rather than under the composer: nothing renders below the
+  // reply bar on a thread page, so the drawer is the entry point and the
+  // indicator's cancel button is the way back out.
+  const drawerActions = $derived.by((): readonly ClientDrawerAction[] => {
+    // Reading the locale establishes a dependency so labels recompute on switch
+    void uiLocaleStore.locale;
+    const actions: ClientDrawerAction[] = [];
+    if (showAccountOffer) {
+      actions.push({
+        id: "upgrade",
+        label: m.account_upgrade_card_title(),
+        icon: KeyRound,
+        onclick: () => upgrade.expand(),
+      });
     }
-    return result;
-  }
+    if (threadShowing) {
+      actions.push({
+        id: "correct-contact",
+        label: m.portal_correction_mode_button(),
+        icon: UserPen,
+        onclick: () => {
+          correctionSheetOpen = true;
+        },
+      });
+    }
+    return actions;
+  });
+
+  // --- Attachments, recordings, and call entries ---
+
+  const portalAttachments = $derived(bootstrapQuery.data?.attachments ?? []);
+  const portalRecordings = $derived(bootstrapQuery.data?.recordings ?? []);
+  const portalCallEntries = $derived(bootstrapQuery.data?.callEntries ?? []);
+
+  /** Channel auth encoded for request headers. */
+  const channelAuthHeader = $derived.by((): string | undefined => {
+    const frag = fragment.fragmentData;
+    if (frag === null) return undefined;
+    return encode(frag.auth);
+  });
+
+  // --- Filter composable (Type / Author / Date) ---
+
+  // A getter rather than a plain object: this script scope survives the
+  // locale {#key} teardown below, so labels captured once would keep the
+  // first locale forever. The locale read inside makes the composable's
+  // deriveds recompute on switch.
+  const portalFilters = createPortalFilters({
+    get labels() {
+      void uiLocaleStore.locale;
+      return {
+        filterType: m.ticket_filter_type(),
+        filterAuthor: m.ticket_filter_author(),
+        filterDate: m.ticket_filter_date(),
+        typeMessages: m.ticket_filter_type_messages(),
+        typeImages: m.ticket_filter_type_images(),
+        typeFiles: m.ticket_filter_type_files(),
+        authorYou: m.portal_you(),
+        authorSupport: m.portal_support_team(),
+      };
+    },
+  });
+
+  $effect(() => {
+    shellContainer.current = {
+      ondestroy: () => portalSession.destroySession(),
+      safeUrl,
+      actions: drawerActions,
+      lockScroll: threadShowing,
+      ...(threadShowing
+        ? {
+            subnavbar: threadSubnavbar,
+            subnavbarHidden: () => threadChrome.subnavbarHidden,
+          }
+        : {}),
+    };
+    return () => {
+      shellContainer.current = undefined;
+    };
+  });
 </script>
 
 <svelte:head>
-  <title>{m.portal_title()}</title>
+  <title>{pageTitle}</title>
 </svelte:head>
 
-<!-- State 6: Quick exit (always visible, every state) -->
-<QuickExit ondestroy={destroySession} {safeUrl} />
-
-{#if !fragmentResolved}
-  <!-- Sodium initializing with a fragment present; show the loading state -->
-  <Block>
-    <div class="portal-loading" role="status">
-      <span
-        class="portal-spinner"
-        role="progressbar"
-        aria-label={m.portal_unlocking()}
-      ></span>
-    </div>
-  </Block>
-{:else if !hasValidFragment}
-  <!-- State 1: No/bad fragment -->
-  <BlockTitle>{m.portal_incomplete_link()}</BlockTitle>
-  <Block>
-    <p class="portal-body-text">{m.portal_incomplete_link()}</p>
-  </Block>
-{:else if bootstrapQuery.isLoading}
-  <!-- Loading bootstrap -->
-  <Block>
-    <div class="portal-loading" role="status">
-      <span
-        class="portal-spinner"
-        role="progressbar"
-        aria-label={m.portal_unlocking()}
-      ></span>
-    </div>
-  </Block>
-{:else if isDeadLink}
-  <!-- State 2 error: Dead link -->
-  <BlockTitle>{m.portal_dead_link()}</BlockTitle>
-  <Block>
-    <p class="portal-body-text">{m.portal_dead_link()}</p>
-  </Block>
-{:else if needsPassphrase}
-  <!-- State 3: Passphrase gate -->
-  <PortalPassphraseGate
-    onsubmit={handlePassphraseSubmit}
-    pending={passphraseDerivePending}
-    error={passphraseError}
+<!-- The shell owns the navbar, so the row lands there through the context
+     rather than being rendered by this page. Same components, same slot,
+     and the same position the org app puts them in. Both snippets stay
+     outside the locale key block: the script's shell-context effect
+     references threadSubnavbar, and a snippet declared inside a block is
+     scoped to it. Locale re-render still reaches them because the shell
+     keys the navbar that renders the subnavbar. -->
+{#snippet searchNavigatorRow()}
+  <SearchNavigator
+    term={overlay.term ?? ""}
+    position={overlay.position}
+    total={overlay.matchCount}
+    onup={overlay.up}
+    ondown={overlay.down}
+    onexit={closeSearch}
+    ontermchange={overlay.setTerm}
   />
-{:else if upgradeSuccess}
-  <!-- Upgrade success state -->
-  <Block>
-    <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
-    <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
-    <p class="portal-body-text upgrade-username">
-      {m.account_login_username()}: {upgradeUsername}
-    </p>
-    <a
-      href={resolve("/account")}
-      class="upgrade-go-link"
-      data-testid="upgrade-go-to-login"
-    >
-      {m.account_login_submit()}
-    </a>
-  </Block>
-{:else if keyCheckPassed && session}
-  <!-- Upgrade offer card (above thread when offered, dismissible) -->
-  {#if showAccountOffer && !upgradeCardDismissed}
-    {#if !upgradeCardExpanded}
-      <Card data-testid="upgrade-card" class="upgrade-card">
-        <div class="upgrade-card-header">
-          <p class="upgrade-card-title">{m.account_upgrade_card_title()}</p>
-          <button
-            type="button"
-            class="upgrade-card-dismiss"
-            aria-label={m.account_upgrade_card_dismiss()}
-            onclick={dismissUpgradeCard}
-            data-testid="upgrade-card-dismiss"
-          >
-            <X size={16} aria-hidden="true" />
-          </button>
-        </div>
-        <p class="upgrade-card-body">{m.account_upgrade_card_body()}</p>
-        <button
-          type="button"
-          class="upgrade-card-action"
-          onclick={expandUpgradeCard}
-          data-testid="upgrade-card-setup"
-        >
-          {m.account_upgrade_setup()}
-        </button>
-      </Card>
-    {:else}
-      <AccountCreateForm
-        onsubmit={handleUpgradeSubmit}
-        pending={upgradePending}
-        errorMessage={upgradeError || undefined}
-        showLinkNote={true}
-        submitLabel={m.account_upgrade_setup()}
-      />
-    {/if}
+{/snippet}
+
+{#snippet portalStats()}
+  <!-- A failed fetch with nothing loaded must not read as "0 messages" -->
+  {#if messagesLoadError === null || allMessages.length > 0}
+    <span>
+      {allMessages.length === 1
+        ? m.ticket_detail_one_message_stat()
+        : m.ticket_detail_messages_stat({
+            count: String(allMessages.length),
+          })}
+    </span>
   {/if}
+{/snippet}
 
-  <!-- State 4 + 5: Thread + Composer -->
-  <PortalThread
-    messages={allMessages}
-    clientPrivate={session.keypair.clientPrivate}
-    loading={messagesQuery.isLoading}
+{#snippet threadSubnavbar()}
+  <SubNavbarFilterLayout
+    title={m.portal_title()}
+    hideTitle
+    stats={portalStats}
+    filterPills={portalFilters.pills}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    onsearch={searchActive ? undefined : openSearch}
+    searchLabel={m.portal_search_label()}
   />
+{/snippet}
 
-  <PortalComposer
-    bind:this={composerRef}
-    onsend={handleSend}
-    pending={replyMutation.isPending}
-    onfirstfocus={handleFirstFocus}
-    errorMessage={sendError || undefined}
-  />
+{#key uiLocaleStore.locale}
+  {#if !fragment.fragmentResolved}
+    <!-- Sodium initializing with a fragment present; show the loading state -->
+    <Block>
+      <div class="portal-loading" role="status">
+        <span
+          class="portal-spinner"
+          role="progressbar"
+          aria-label={m.portal_unlocking()}
+        ></span>
+      </div>
+    </Block>
+  {:else if !fragment.hasValidFragment}
+    <!-- State 1: No/bad fragment -->
+    <LinkErrorState
+      title={m.portal_incomplete_link_title()}
+      body={m.portal_incomplete_link()}
+    />
+  {:else if bootstrapQuery.isLoading}
+    <!-- Loading bootstrap -->
+    <Block>
+      <div class="portal-loading" role="status">
+        <span
+          class="portal-spinner"
+          role="progressbar"
+          aria-label={m.portal_unlocking()}
+        ></span>
+      </div>
+    </Block>
+  {:else if bootstrapRateLimit !== null}
+    <!-- State 2 rate limit: transient, the link still works. Auto-retries
+         on the server hint (effect above); never worded as expiry. -->
+    <LinkErrorState
+      title={m.portal_rate_limited_title()}
+      body={m.portal_rate_limited_body()}
+      testId="portal-rate-limited"
+    />
+  {:else if isDeadLink}
+    <!-- State 2 error: Dead link -->
+    <LinkErrorState
+      title={m.portal_dead_link_title()}
+      body={m.portal_dead_link()}
+    />
+  {:else if needsPassphrase}
+    <!-- State 3: Passphrase gate -->
+    <PortalPassphraseGate
+      onsubmit={handlePassphraseSubmit}
+      pending={portalSession.passphraseDerivePending}
+      error={portalSession.passphraseError}
+    />
+  {:else if upgrade.success}
+    <!-- Upgrade success state -->
+    <Block>
+      <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
+      <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
+      <p class="portal-body-text upgrade-username">
+        {m.account_login_username()}: {upgrade.username}
+      </p>
+      <button
+        type="button"
+        class="upgrade-go-link"
+        data-testid="upgrade-go-to-login"
+        onclick={() => void goto(resolve("/account"))}
+      >
+        {m.account_login_submit()}
+      </button>
+    </Block>
+  {:else if portalSession.keyCheckPassed && portalSession.session}
+    {@const activeSession = portalSession.session}
+    <!-- State 4 + 5: Thread scrolls, composer pins to the bottom -->
+    <PageLayout
+      lockScroll
+      overlayBottomBar
+      underChrome
+      bind:scrollEl={threadScrollEl}
+    >
+      {#snippet bottomBar()}
+        <JumpToLatest
+          visible={!scroll.isNearBottom && allMessages.length > 0}
+          onclick={jumpToLatest}
+        />
+        <PortalComposer
+          bind:this={composerRef}
+          onsend={handleSend}
+          pending={replyMutation.isPending}
+          errorMessage={sendError || undefined}
+          draftKey={routeChannelId}
+        />
+      {/snippet}
 
-  <PortalHint
-    opened={hintShown}
-    ondismiss={dismissHint}
-    message={m.portal_web_chat_hint()}
-    dismissLabel={m.portal_hint_dismiss()}
-    dismissTestid="web-chat-hint-dismiss"
-  />
-{/if}
+      <!-- Upgrade offer card (above thread when offered, dismissible).
+         Dismissing it does not remove the offer: the drawer keeps a
+         permanent entry to the same flow. -->
+      {#if showAccountOffer && !upgrade.dismissed}
+        {#if !upgrade.expanded}
+          <Card data-testid="upgrade-card" class="upgrade-card">
+            <div class="upgrade-card-header">
+              <p class="upgrade-card-title">{m.account_upgrade_card_title()}</p>
+              <button
+                type="button"
+                class="upgrade-card-dismiss"
+                aria-label={m.account_upgrade_card_dismiss()}
+                onclick={() => upgrade.dismiss()}
+                data-testid="upgrade-card-dismiss"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+            <p class="upgrade-card-body">{m.account_upgrade_card_body()}</p>
+            <button
+              type="button"
+              class="upgrade-card-action"
+              onclick={() => upgrade.expand()}
+              data-testid="upgrade-card-setup"
+            >
+              {m.account_upgrade_setup()}
+            </button>
+          </Card>
+        {:else}
+          <AccountCreateForm
+            onsubmit={handleUpgradeSubmit}
+            pending={upgrade.pending}
+            errorMessage={upgrade.error || undefined}
+            showLinkNote={true}
+            submitLabel={m.account_upgrade_setup()}
+          />
+        {/if}
+      {/if}
+
+      <PortalThread
+        messages={allMessages}
+        decryptMessage={async (ep: string, n: string, ct: string) =>
+          activeSession.decryptMessage(ep, n, ct)}
+        decryptAttachmentKey={async (ep: string, n: string, ct: string) =>
+          activeSession.decryptAttachmentKey(ep, n, ct)}
+        decryptAttachmentBlob={async (
+          ct: ArrayBuffer,
+          fk: string,
+          tid: string,
+          aid: string,
+        ) => activeSession.decryptAttachmentBlob(ct, fk, tid, aid)}
+        loading={messagesQuery.isLoading}
+        loadError={messagesLoadError}
+        attachments={portalAttachments}
+        recordings={portalRecordings}
+        callEntries={portalCallEntries}
+        channelId={fragment.fragmentData?.channelId}
+        channelAuth={channelAuthHeader}
+        ticketId={bootstrapQuery.data?.ticketId ?? undefined}
+        {supportLabel}
+        searchTerm={overlay.term ?? undefined}
+        activeMatchId={overlay.activeId ?? undefined}
+        onmatches={(ids: readonly string[]) => {
+          matchIds = ids;
+        }}
+        filterTypes={portalFilters.filterTypesArr}
+        filterAuthors={portalFilters.filterAuthorsArr}
+        filterDateFrom={portalFilters.filterDateFrom}
+        filterDateTo={portalFilters.filterDateTo}
+        onclearfilters={() => portalFilters.clearAll()}
+      />
+    </PageLayout>
+
+    <PortalHint
+      opened={hintShown}
+      ondismiss={dismissHint}
+      message={m.portal_web_chat_hint()}
+    />
+
+    <ContactCorrectionSheet
+      opened={correctionSheetOpen}
+      ondismiss={() => (correctionSheetOpen = false)}
+      pending={replyMutation.isPending}
+      onsubmit={handleCorrectionSubmit}
+    />
+  {/if}
+{/key}
 
 <style>
   .portal-body-text {
@@ -727,6 +1030,18 @@
     margin-top: var(--space-md);
     color: var(--brand-text);
     font-weight: 600;
-    text-decoration: none;
+    font-family: inherit;
+    font-size: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    min-height: 44px;
+  }
+
+  .upgrade-go-link:focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
   }
 </style>

@@ -10,7 +10,7 @@ const en_intake_privacy_voluntary_body = /** @type {(inputs: Intake_Privacy_Volu
 };
 
 const es_intake_privacy_voluntary_body = /** @type {(inputs: Intake_Privacy_Voluntary_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Proporcionar tu informacion es voluntario. Si decides no compartir datos de contacto, la organizacion no podra comunicarse contigo, pero puedes volver a consultar por tu cuenta.`)
+	return /** @type {LocalizedString} */ (`Proporcionar tu información es voluntario. Si decides no compartir datos de contacto, la organización no podrá comunicarse contigo, pero puedes volver a consultar por tu cuenta.`)
 };
 
 /**

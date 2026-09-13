@@ -10,7 +10,7 @@ const en_onboarding_wizard_complete_heading = /** @type {(inputs: Onboarding_Wiz
 };
 
 const es_onboarding_wizard_complete_heading = /** @type {(inputs: Onboarding_Wizard_Complete_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configuracion completa`)
+	return /** @type {LocalizedString} */ (`Configuración completa`)
 };
 
 /**

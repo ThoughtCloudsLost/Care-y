@@ -46,6 +46,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     name: string,
     opts?: {
       fields?: Array<{
+        fieldKey?: string;
         fieldType: string;
         encryptedLabel?: string;
         encryptedConfig?: string;
@@ -78,6 +79,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
         isDefault: opts?.isDefault ?? false,
         destinationQueueId: opts?.destinationQueueId ?? null,
         fields: defaultFields.map((f) => ({
+          fieldKey: f.fieldKey ?? crypto.randomUUID(),
           fieldType: f.fieldType as "text",
           encryptedLabel:
             f.encryptedLabel ?? Buffer.from("l").toString("base64"),
@@ -206,6 +208,88 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
 
       await svc.setActive(testDb.db, formId, false);
     });
+
+    it("returns builtinFormDisabled=false when no default DB form and builtin is enabled", async () => {
+      // Default state: builtin_default_enabled is true (migration default)
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+
+      const result = await svc.resolvePublicForm(testDb.db, null);
+      expect(result.formId).toBeNull();
+      expect(result.builtinFormDisabled).toBe(false);
+      expect(result.intakeDisabled).toBe(false);
+    });
+
+    it("returns builtinFormDisabled=true when no default DB form and builtin is disabled", async () => {
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: false })
+        .execute();
+
+      const result = await svc.resolvePublicForm(testDb.db, null);
+      expect(result.formId).toBeNull();
+      expect(result.builtinFormDisabled).toBe(true);
+      expect(result.intakeDisabled).toBe(false);
+
+      // Cleanup
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+    });
+
+    it("returns builtinFormDisabled=false when an active default DB form exists (setting irrelevant)", async () => {
+      const formId = await createForm("Default DB Form", {
+        isDefault: true,
+        slug: "builtin-test-default",
+      });
+      await svc.setActive(testDb.db, formId, true);
+
+      // Even when builtin is disabled, the DB form takes precedence
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: false })
+        .execute();
+
+      const result = await svc.resolvePublicForm(testDb.db, null);
+      expect(result.formId).toBe(formId);
+      expect(result.builtinFormDisabled).toBe(false);
+
+      // Cleanup
+      await svc.setActive(testDb.db, formId, false);
+      await testDb.db
+        .updateTable("intake_forms")
+        .set({ is_default: false })
+        .where("id", "=", formId)
+        .execute();
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+    });
+
+    it("does not set builtinFormDisabled for slug-based resolution", async () => {
+      // Builtin toggle should not affect slug routes
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: false })
+        .execute();
+
+      const result = await svc.resolvePublicForm(
+        testDb.db,
+        "nonexistent-slug-builtin",
+      );
+      expect(result.formId).toBeNull();
+      expect(result.builtinFormDisabled).toBe(false);
+
+      // Cleanup
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+    });
   });
 
   describe("saveForm", () => {
@@ -267,6 +351,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
         name: "Replace Test Updated",
         fields: [
           {
+            fieldKey: crypto.randomUUID(),
             fieldType: "select",
             encryptedLabel: Buffer.from("l").toString("base64"),
             encryptedConfig: Buffer.from("c").toString("base64"),
@@ -288,12 +373,14 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
           name: "Too Many Availability",
           fields: [
             {
+              fieldKey: crypto.randomUUID(),
               fieldType: "availability",
               encryptedLabel: Buffer.from("a1").toString("base64"),
               encryptedConfig: Buffer.from("c1").toString("base64"),
               isRequired: false,
             },
             {
+              fieldKey: crypto.randomUUID(),
               fieldType: "availability",
               encryptedLabel: Buffer.from("a2").toString("base64"),
               encryptedConfig: Buffer.from("c2").toString("base64"),
@@ -304,6 +391,61 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       ).rejects.toThrow(ValidationError);
     });
 
+    it("reports isActive false for a created form (saving never publishes)", async () => {
+      const result = await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId: null,
+          name: "Fresh Draft",
+          slug: "fresh-draft",
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+      );
+
+      expect(result.isActive).toBe(false);
+      // The state the caller is told about is the state the public sees.
+      expect(await svc.getPublicForm(testDb.db, "fresh-draft")).toBeNull();
+    });
+
+    it("reports isActive true when editing a live form, leaving it live", async () => {
+      const formId = await createForm("Live Edit", { slug: "live-edit" });
+      await svc.setActive(testDb.db, formId, true);
+
+      const result = await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Live Edit Renamed",
+          slug: "live-edit",
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+      );
+
+      expect(result.isActive).toBe(true);
+      // An edit must never take a public form down.
+      expect(await svc.getPublicForm(testDb.db, "live-edit")).not.toBeNull();
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
     it("throws NotFoundError when updating a nonexistent form", async () => {
       await expect(
         svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
@@ -311,6 +453,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
           name: "Ghost",
           fields: [
             {
+              fieldKey: crypto.randomUUID(),
               fieldType: "text",
               encryptedLabel: Buffer.from("l").toString("base64"),
               encryptedConfig: Buffer.from("c").toString("base64"),
@@ -319,6 +462,65 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
           ],
         }),
       ).rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe("fieldKey round-trip", () => {
+    it("persists and returns fieldKey on getForm", async () => {
+      const keyA = crypto.randomUUID();
+      const keyB = crypto.randomUUID();
+      const formId = await createForm("FieldKey RT", {
+        fields: [
+          { fieldKey: keyA, fieldType: "text" },
+          { fieldKey: keyB, fieldType: "textarea" },
+        ],
+      });
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.fields).toHaveLength(2);
+      expect(detail.fields[0]?.fieldKey).toBe(keyA);
+      expect(detail.fields[1]?.fieldKey).toBe(keyB);
+    });
+
+    it("persists and returns fieldKey on getPublicForm", async () => {
+      const keyA = crypto.randomUUID();
+      const formId = await createForm("FieldKey Public", {
+        slug: "fk-public",
+        fields: [{ fieldKey: keyA, fieldType: "text" }],
+      });
+      await svc.setActive(testDb.db, formId, true);
+
+      const result = await svc.getPublicForm(testDb.db, "fk-public");
+      expect(result).not.toBeNull();
+      expect(result?.fields[0]?.fieldKey).toBe(keyA);
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
+    it("preserves fieldKey across delete+insert save", async () => {
+      const stableKey = crypto.randomUUID();
+      const formId = await createForm("Stable Key", {
+        fields: [{ fieldKey: stableKey, fieldType: "text" }],
+      });
+
+      // Re-save with the same key but a different label
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Stable Key Updated",
+        fields: [
+          {
+            fieldKey: stableKey,
+            fieldType: "text",
+            encryptedLabel: Buffer.from("new-label").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: true,
+          },
+        ],
+      });
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.fields[0]?.fieldKey).toBe(stableKey);
+      expect(detail.fields[0]?.isRequired).toBe(true);
     });
   });
 
@@ -474,6 +676,153 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     });
   });
 
+  describe("encryptedFormMeta round-trip", () => {
+    it("saves with meta and reads it back on getForm", async () => {
+      const metaBlob = Buffer.from('{"description":"test"}').toString("base64");
+      const formId = await createForm("Meta RT", {
+        slug: "meta-rt",
+      });
+
+      // Re-save with encryptedFormMeta
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Meta RT",
+        slug: "meta-rt",
+        encryptedFormMeta: metaBlob,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.encryptedFormMeta).toBe(metaBlob);
+    });
+
+    it("saves with meta and reads it back on getPublicForm", async () => {
+      const metaBlob = Buffer.from('{"submitMessage":"thanks"}').toString(
+        "base64",
+      );
+      const formId = await createForm("Meta Public", {
+        slug: "meta-public",
+      });
+
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Meta Public",
+        slug: "meta-public",
+        encryptedFormMeta: metaBlob,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      await svc.setActive(testDb.db, formId, true);
+      const publicForm = await svc.getPublicForm(testDb.db, "meta-public");
+      expect(publicForm).not.toBeNull();
+      expect(publicForm?.encryptedFormMeta).toBe(metaBlob);
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
+    it("saves with meta and reads it back on resolvePublicForm", async () => {
+      const metaBlob = Buffer.from('{"closedMessage":"closed"}').toString(
+        "base64",
+      );
+      const formId = await createForm("Meta Resolve", {
+        slug: "meta-resolve",
+      });
+
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Meta Resolve",
+        slug: "meta-resolve",
+        encryptedFormMeta: metaBlob,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      await svc.setActive(testDb.db, formId, true);
+      const result = await svc.resolvePublicForm(testDb.db, "meta-resolve");
+      expect(result.encryptedFormMeta).toBe(metaBlob);
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
+    it("returns null when no meta is saved", async () => {
+      const formId = await createForm("No Meta");
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.encryptedFormMeta).toBeNull();
+    });
+
+    it("clears meta when saved without encryptedFormMeta", async () => {
+      const metaBlob = Buffer.from('{"description":"will clear"}').toString(
+        "base64",
+      );
+      const formId = await createForm("Clear Meta", {
+        slug: "clear-meta",
+      });
+
+      // Save with meta
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Clear Meta",
+        slug: "clear-meta",
+        encryptedFormMeta: metaBlob,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      let detail = await svc.getForm(testDb.db, formId);
+      expect(detail.encryptedFormMeta).toBe(metaBlob);
+
+      // Re-save without meta (omit encryptedFormMeta entirely)
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Clear Meta",
+        slug: "clear-meta",
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      detail = await svc.getForm(testDb.db, formId);
+      expect(detail.encryptedFormMeta).toBeNull();
+    });
+  });
+
   describe("escalation recipients round-trip", () => {
     it("encrypts on save and decrypts on read", async () => {
       const recipientA = crypto.randomUUID() as UserId;
@@ -561,6 +910,186 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       // in production it would be XSalsa20-Poly1305 ciphertext.
       const raw = rawField.encrypted_escalation_recipient_ids!;
       expect(raw.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("closesAt", () => {
+    it("getForm returns closesAt as ISO string when set", async () => {
+      const closesAt = new Date(Date.now() + 86_400_000).toISOString();
+      const formId = await createForm("Closes Future");
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Closes Future",
+        closesAt,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.closesAt).toBe(closesAt);
+    });
+
+    it("getForm returns null closesAt when not set", async () => {
+      const formId = await createForm("No Closing");
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.closesAt).toBeNull();
+    });
+
+    it("resolvePublicForm returns formClosed=true when closes_at is in the past", async () => {
+      const pastDate = new Date(Date.now() - 60_000).toISOString();
+      const formId = await createForm("Closed Form", {
+        slug: "closed-form-test",
+      });
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Closed Form",
+        slug: "closed-form-test",
+        closesAt: pastDate,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+      await svc.setActive(testDb.db, formId, true);
+
+      const result = await svc.resolvePublicForm(testDb.db, "closed-form-test");
+      expect(result.formClosed).toBe(true);
+      expect(result.intakeDisabled).toBe(false);
+      expect(result.formId).toBe(formId);
+      // Fields are null for a closed form (same shape as disabled)
+      expect(result.fields).toBeNull();
+      // encryptedFormMeta is included so the client can show the closed message
+      expect(result.encryptedFormMeta).not.toBeUndefined();
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
+    it("resolvePublicForm returns formClosed=false when closes_at is in the future", async () => {
+      const futureDate = new Date(Date.now() + 86_400_000).toISOString();
+      const formId = await createForm("Open Form", {
+        slug: "open-form-test",
+      });
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Open Form",
+        slug: "open-form-test",
+        closesAt: futureDate,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+      await svc.setActive(testDb.db, formId, true);
+
+      const result = await svc.resolvePublicForm(testDb.db, "open-form-test");
+      expect(result.formClosed).toBe(false);
+      expect(result.fields).not.toBeNull();
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
+    it("resolvePublicForm returns formClosed=false when closes_at is null", async () => {
+      const formId = await createForm("No Close Form", {
+        slug: "no-close-test",
+      });
+      await svc.setActive(testDb.db, formId, true);
+
+      const result = await svc.resolvePublicForm(testDb.db, "no-close-test");
+      expect(result.formClosed).toBe(false);
+      expect(result.fields).not.toBeNull();
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
+    it("saveForm clears closes_at when null is passed", async () => {
+      const closesAt = new Date(Date.now() + 86_400_000).toISOString();
+      const formId = await createForm("Clear Closes");
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Clear Closes",
+        closesAt,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      let detail = await svc.getForm(testDb.db, formId);
+      expect(detail.closesAt).not.toBeNull();
+
+      // Clear the closing date
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Clear Closes",
+        closesAt: null,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      detail = await svc.getForm(testDb.db, formId);
+      expect(detail.closesAt).toBeNull();
+    });
+
+    it("resolvePublicForm includes encryptedFormMeta when form is closed", async () => {
+      const metaBlob = Buffer.from(
+        '{"closedMessage":"We are closed"}',
+      ).toString("base64");
+      const pastDate = new Date(Date.now() - 60_000).toISOString();
+      const formId = await createForm("Closed With Meta", {
+        slug: "closed-meta-test",
+      });
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Closed With Meta",
+        slug: "closed-meta-test",
+        closesAt: pastDate,
+        encryptedFormMeta: metaBlob,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+      await svc.setActive(testDb.db, formId, true);
+
+      const result = await svc.resolvePublicForm(testDb.db, "closed-meta-test");
+      expect(result.formClosed).toBe(true);
+      expect(result.encryptedFormMeta).toBe(metaBlob);
+
+      await svc.setActive(testDb.db, formId, false);
     });
   });
 });

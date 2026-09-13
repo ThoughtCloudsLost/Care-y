@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_org_data = /** @type {(inputs: Onboarding_
 };
 
 const es_onboarding_briefing_practice_org_data = /** @type {(inputs: Onboarding_Briefing_Practice_Org_DataInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Recursos de la organizacion (base de conocimiento, configuracion)`)
+	return /** @type {LocalizedString} */ (`Recursos de la organización (base de conocimiento, configuración)`)
 };
 
 /**

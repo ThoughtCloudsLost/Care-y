@@ -10,7 +10,7 @@ const en_settings_password_new = /** @type {(inputs: Settings_Password_NewInputs
 };
 
 const es_settings_password_new = /** @type {(inputs: Settings_Password_NewInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nueva contrasena (16+ caracteres)`)
+	return /** @type {LocalizedString} */ (`Nueva contraseña (16+ caracteres)`)
 };
 
 /**

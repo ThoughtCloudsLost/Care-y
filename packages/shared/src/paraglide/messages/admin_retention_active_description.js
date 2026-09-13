@@ -10,7 +10,7 @@ const en_admin_retention_active_description = /** @type {(inputs: Admin_Retentio
 };
 
 const es_admin_retention_active_description = /** @type {(inputs: Admin_Retention_Active_DescriptionInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Los ${i?.tickets}, mensajes e informacion personal de los llamantes con mas de ${i?.days} dias se eliminan automaticamente.`)
+	return /** @type {LocalizedString} */ (`Los ${i?.tickets}, mensajes e información personal de los llamantes con más de ${i?.days} días se eliminan automáticamente.`)
 };
 
 /**

@@ -32,6 +32,9 @@ import {
   buildContentAad,
   followupSlot,
   blobSlot,
+  fileKeySlot,
+  filenameSlot,
+  decodeFileKeyPayload,
   type Ciphertext,
   type Nonce,
   type RistrettoPoint,
@@ -47,6 +50,8 @@ import type {
   DecryptContentResponse,
   DecryptBlobResponse,
   EncryptContentResponse,
+  EncryptAttachmentResponse,
+  DecryptAttachmentResponse,
   GetVolPublicResponse,
   CreateTicketKeyResponse,
   WrapWithVolPublicResponse,
@@ -60,7 +65,13 @@ import type {
   PhoneMatchHashResponse,
   RewrapTkResponse,
   RewrapBlobResponse,
+  RewrapFileKeyResponse,
   SharedWorkerState,
+  DecryptIntakeResponseResponse,
+  MintBackfillWrapsResponse,
+  SealFollowUpsToPublicResponse,
+  SealFileKeysToPublicResponse,
+  ConvertBlobForPortalResponse,
 } from "./crypto-protocol.js";
 import {
   createDispatcher,
@@ -1858,6 +1869,148 @@ describe("crypto-core rewrapBlob success", () => {
   });
 });
 
+describe("crypto-core rewrapFileKey success", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("rewrapfilekey-ok-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  async function primeKeys(
+    ticketId: string,
+    followUpId: string,
+    baseId: number,
+  ): Promise<{ canonicalTk: SymmetricKey; tkTemp: SymmetricKey }> {
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: baseId,
+      ticketId,
+      keyCacheId: ticketId,
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    const tkTemp = generateContentKey();
+    const wrapTemp = eciesEncrypt(tkTemp, volPub);
+    const tempCt = encryptContent(
+      new TextEncoder().encode("portal reply"),
+      tkTemp,
+      buildContentAad(ticketId, followupSlot(followUpId)),
+    );
+    await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: baseId + 1,
+      ticketId,
+      followUpId,
+      ephemeralPoint: encode(wrapTemp.ephemeralPoint),
+      nonce: encode(wrapTemp.nonce),
+      wrappedKey: encode(wrapTemp.ciphertext),
+      ciphertext: encode(tempCt),
+    });
+
+    return { canonicalTk: canonicalTk as SymmetricKey, tkTemp };
+  }
+
+  it("re-wraps the file key and re-encrypts the filename under the canonical tk", async () => {
+    const sodium = requireSodium();
+    const ticketId = "t-refk";
+    const followUpId = "fu-filekey-1";
+    const attachmentId = "att-fk-1";
+    const { canonicalTk, tkTemp } = await primeKeys(ticketId, followUpId, 1300);
+
+    const fileKey = generateContentKey();
+    const fileKeyWrapCt = encryptContent(
+      fileKey,
+      tkTemp,
+      buildContentAad(ticketId, fileKeySlot(attachmentId)),
+    );
+    const filenameCt = encryptContent(
+      new TextEncoder().encode("statement.pdf"),
+      tkTemp,
+      buildContentAad(ticketId, filenameSlot(attachmentId)),
+    );
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "rewrapFileKey",
+      id: 1302,
+      followUpId,
+      ticketId,
+      attachmentId,
+      fileKeyWrap: encode(fileKeyWrapCt),
+      encryptedFilename: encode(filenameCt),
+    })) as RewrapFileKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.attachmentId).toBe(attachmentId);
+
+    const keyAgain = decryptContent(
+      decode(resp.fileKeyWrap) as Ciphertext,
+      canonicalTk,
+      buildContentAad(ticketId, fileKeySlot(attachmentId)),
+    );
+    expect(keyAgain).toEqual(fileKey);
+
+    expect(resp.encryptedFilename).toBeDefined();
+    const nameAgain = decryptContent(
+      decode(resp.encryptedFilename!) as Ciphertext,
+      canonicalTk,
+      buildContentAad(ticketId, filenameSlot(attachmentId)),
+    );
+    expect(new TextDecoder().decode(nameAgain)).toBe("statement.pdf");
+
+    handleRewrapResult({ kind: "rewrap-result", followUpId, success: true });
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
+    sodium.memzero(fileKey);
+  });
+
+  it("omits the filename from the response when the request carries none", async () => {
+    const sodium = requireSodium();
+    const ticketId = "t-refk-noname";
+    const followUpId = "fu-filekey-2";
+    const attachmentId = "att-fk-2";
+    const { canonicalTk, tkTemp } = await primeKeys(ticketId, followUpId, 1310);
+
+    const fileKey = generateContentKey();
+    const fileKeyWrapCt = encryptContent(
+      fileKey,
+      tkTemp,
+      buildContentAad(ticketId, fileKeySlot(attachmentId)),
+    );
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "rewrapFileKey",
+      id: 1312,
+      followUpId,
+      ticketId,
+      attachmentId,
+      fileKeyWrap: encode(fileKeyWrapCt),
+    })) as RewrapFileKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.encryptedFilename).toBeUndefined();
+
+    handleRewrapResult({ kind: "rewrap-result", followUpId, success: true });
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
+    sodium.memzero(fileKey);
+  });
+});
+
 describe("crypto-core init when already KEYED", () => {
   beforeEach(async () => {
     handleZeroAll(-1, testSink);
@@ -2274,5 +2427,1338 @@ describe("crypto-core phoneMatchHash blind index", () => {
     });
 
     expect(resp.ok).toBe(false);
+  });
+});
+
+// ── Intake response viewer worker ops ──────────────────────────────
+
+describe("decryptIntakeResponse and mintBackfillWraps", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("intake-viewer-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  afterEach(() => {
+    handleZeroAll(-1, testSink);
+  });
+
+  /** Load the org key so the Worker can unseal intake wraps. */
+  async function loadOrgKeyForViewer(): Promise<string> {
+    const sodium = requireSodium();
+    const orgSecret = sodium.crypto_core_ristretto255_scalar_random();
+    const wrap = eciesEncrypt(
+      orgSecret,
+      decode(volPublicStr) as RistrettoPoint,
+    );
+
+    const resp = (await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 2000,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+    })) as UnwrapOrgKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    sodium.memzero(orgSecret);
+    return resp.orgPublicKey;
+  }
+
+  /** Build a test response blob encrypted with the given tk and ticketId. */
+  function buildEncryptedResponse(
+    tk: SymmetricKey,
+    ticketId: string,
+    answers: readonly { fieldKey: string; value: unknown }[],
+  ): string {
+    const json = JSON.stringify({ answers });
+    const plaintext = new TextEncoder().encode(json);
+    const aad = buildContentAad(ticketId, "intake-form-response");
+    const ct = encryptContent(plaintext, tk, aad);
+    return encode(ct);
+  }
+
+  it("decrypts a response via the caller's ECIES key wrap", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ticketId = "t-resp-ecies";
+    const encrypted = buildEncryptedResponse(tk, ticketId, [
+      { fieldKey: "f1", value: "hello" },
+      { fieldKey: "f2", value: 42 },
+    ]);
+
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = (await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2010,
+      ticketId,
+      encryptedResponse: encrypted,
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    })) as DecryptIntakeResponseResponse;
+
+    expect(resp.ok).toBe(true);
+    const answers = JSON.parse(resp.answersJson) as {
+      fieldKey: string;
+      value: unknown;
+    }[];
+    expect(answers).toHaveLength(2);
+    expect(answers[0]?.fieldKey).toBe("f1");
+    expect(answers[0]?.value).toBe("hello");
+    expect(answers[1]?.fieldKey).toBe("f2");
+    expect(answers[1]?.value).toBe(42);
+
+    sodium.memzero(tk);
+  });
+
+  it("decrypts a response via the org-seal wrap", async () => {
+    const sodium = requireSodium();
+    const orgPub = await loadOrgKeyForViewer();
+    const orgPubBytes = decode(orgPub);
+
+    const tk = generateContentKey();
+    const ticketId = "t-resp-seal";
+    const encrypted = buildEncryptedResponse(tk, ticketId, [
+      { fieldKey: "f1", value: "sealed value" },
+    ]);
+
+    // Seal the tk under the org public key
+    const sealedWrap = sodium.crypto_box_seal(tk, orgPubBytes);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2020,
+      ticketId,
+      encryptedResponse: encrypted,
+      callerKeyWrap: null,
+      orgSealWrap: { wrappedTk: encode(sealedWrap) },
+    })) as DecryptIntakeResponseResponse;
+
+    expect(resp.ok).toBe(true);
+    const answers = JSON.parse(resp.answersJson) as {
+      fieldKey: string;
+      value: unknown;
+    }[];
+    expect(answers).toHaveLength(1);
+    expect(answers[0]?.value).toBe("sealed value");
+
+    sodium.memzero(tk);
+  });
+
+  it("returns DECRYPT_FAILED for wrong key wrap", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ticketId = "t-resp-wrong";
+    const encrypted = buildEncryptedResponse(tk, ticketId, [
+      { fieldKey: "f1", value: "data" },
+    ]);
+
+    // Use a different key for the wrap
+    const wrongKey = generateContentKey();
+    const wrap = eciesEncrypt(wrongKey, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2030,
+      ticketId,
+      encryptedResponse: encrypted,
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+
+    sodium.memzero(tk);
+    sodium.memzero(wrongKey);
+  });
+
+  it("returns DECRYPT_FAILED for malformed response blob", async () => {
+    const tk = generateContentKey();
+    const ticketId = "t-resp-malformed";
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2040,
+      ticketId,
+      encryptedResponse: encode(new Uint8Array([1, 2, 3, 4])),
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+
+    requireSodium().memzero(tk);
+  });
+
+  it("returns empty answers for valid ciphertext with invalid JSON", async () => {
+    const tk = generateContentKey();
+    const ticketId = "t-resp-badjson";
+    // Encrypt non-JSON data
+    const plaintext = new TextEncoder().encode("not json at all");
+    const aad = buildContentAad(ticketId, "intake-form-response");
+    const ct = encryptContent(plaintext, tk, aad);
+
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = (await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2050,
+      ticketId,
+      encryptedResponse: encode(ct),
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    })) as DecryptIntakeResponseResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.answersJson).toBe("[]");
+
+    requireSodium().memzero(tk);
+  });
+
+  it("returns DECRYPT_FAILED when neither wrap nor seal is provided", async () => {
+    const resp = await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2060,
+      ticketId: "t-no-key",
+      encryptedResponse: encode(new Uint8Array(100)),
+      callerKeyWrap: null,
+      orgSealWrap: null,
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+  });
+
+  it("mints backfill wraps after a successful decrypt", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ticketId = "t-backfill";
+    const encrypted = buildEncryptedResponse(tk, ticketId, [
+      { fieldKey: "f1", value: "test" },
+    ]);
+
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    // First decrypt to cache the tk
+    const decResp = (await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2070,
+      ticketId,
+      encryptedResponse: encrypted,
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    })) as DecryptIntakeResponseResponse;
+    expect(decResp.ok).toBe(true);
+
+    // Generate a target volunteer keypair
+    const targetPriv = sodium.crypto_core_ristretto255_scalar_random();
+    const targetPub = sodium.crypto_scalarmult_ristretto255_base(targetPriv);
+
+    sinkMessages = [];
+    const mintResp = (await dispatchAndWait({
+      type: "mintBackfillWraps",
+      id: 2071,
+      ticketId,
+      targets: [{ volunteerId: "vol-target-1", volPublic: encode(targetPub) }],
+    })) as MintBackfillWrapsResponse;
+
+    expect(mintResp.ok).toBe(true);
+    expect(mintResp.wraps).toHaveLength(1);
+    expect(mintResp.wraps[0]?.volunteerId).toBe("vol-target-1");
+
+    // Verify the wrap can be opened with the target private key
+    const wrappedTk = eciesDecrypt(
+      decode(mintResp.wraps[0]!.ephemeralPoint) as RistrettoPoint,
+      decode(mintResp.wraps[0]!.nonce) as Nonce,
+      decode(mintResp.wraps[0]!.wrappedKey),
+      targetPriv as Scalar,
+    );
+
+    // Verify the recovered tk matches (decrypt the same response)
+    const aad = buildContentAad(ticketId, "intake-form-response");
+    const plaintext = decryptContent(
+      decode(encrypted) as Ciphertext,
+      wrappedTk as SymmetricKey,
+      aad,
+    );
+    const json = new TextDecoder().decode(plaintext);
+    expect(JSON.parse(json)).toEqual({
+      answers: [{ fieldKey: "f1", value: "test" }],
+    });
+
+    sodium.memzero(tk);
+    sodium.memzero(targetPriv);
+    sodium.memzero(wrappedTk);
+    sodium.memzero(plaintext);
+  });
+
+  it("returns TK_NOT_CACHED for mintBackfillWraps without a prior decrypt", async () => {
+    const resp = await dispatchAndWait({
+      type: "mintBackfillWraps",
+      id: 2080,
+      ticketId: "t-no-cache",
+      targets: [
+        { volunteerId: "vol-1", volPublic: encode(new Uint8Array(32)) },
+      ],
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+  });
+});
+
+// ── Attachment envelope operations (ADR-089) ─────────────────────
+
+describe("crypto-core encryptAttachment and decryptAttachment", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("attachment-test-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  /** Cache a tk for the given ticket, returning the raw key for assertions. */
+  async function cacheTk(ticketId: string, id: number): Promise<Uint8Array> {
+    const tk = generateContentKey();
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id,
+      ticketId,
+      keyCacheId: ticketId,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    });
+    return tk;
+  }
+
+  it("roundtrips: encrypt then decrypt returns the original bytes", async () => {
+    const sodium = requireSodium();
+    const tk = await cacheTk("t-att-rt", 3000);
+    const attachmentId = crypto.randomUUID();
+    const fileData = sodium.randombytes_buf(256);
+
+    const dataBuf = new ArrayBuffer(fileData.byteLength);
+    new Uint8Array(dataBuf).set(fileData);
+
+    sinkMessages = [];
+    const encResp = (await dispatchAndWait({
+      type: "encryptAttachment",
+      id: 3001,
+      ticketId: "t-att-rt",
+      attachmentId,
+      filename: "report.pdf",
+      data: dataBuf,
+    })) as EncryptAttachmentResponse;
+
+    expect(encResp.ok).toBe(true);
+    expect(encResp.blob).toBeInstanceOf(ArrayBuffer);
+    expect(encResp.fileKeyWrap).toBeDefined();
+    expect(encResp.encryptedFilename).toBeDefined();
+    expect(encResp.portalCopy).toBeUndefined();
+
+    // Now decrypt
+    const ctBuf = new ArrayBuffer(new Uint8Array(encResp.blob).byteLength);
+    new Uint8Array(ctBuf).set(new Uint8Array(encResp.blob));
+
+    sinkMessages = [];
+    const decResp = (await dispatchAndWait({
+      type: "decryptAttachment",
+      id: 3002,
+      ticketId: "t-att-rt",
+      attachmentId,
+      fileKeyWrap: encResp.fileKeyWrap,
+      ciphertext: ctBuf,
+    })) as DecryptAttachmentResponse;
+
+    expect(decResp.ok).toBe(true);
+    expect(decResp.data).toBeInstanceOf(ArrayBuffer);
+    expect(new Uint8Array(decResp.data)).toEqual(fileData);
+
+    sodium.memzero(tk);
+  });
+
+  it("rejects decrypt when the wrap belongs to a different attachment (AAD mismatch)", async () => {
+    const sodium = requireSodium();
+    const tk = await cacheTk("t-att-aad", 3010);
+    const attachmentA = crypto.randomUUID();
+    const attachmentB = crypto.randomUUID();
+    const fileData = sodium.randombytes_buf(64);
+
+    // Encrypt under attachment A
+    const dataBufA = new ArrayBuffer(fileData.byteLength);
+    new Uint8Array(dataBufA).set(fileData);
+    sinkMessages = [];
+    const encResp = (await dispatchAndWait({
+      type: "encryptAttachment",
+      id: 3011,
+      ticketId: "t-att-aad",
+      attachmentId: attachmentA,
+      filename: "a.pdf",
+      data: dataBufA,
+    })) as EncryptAttachmentResponse;
+    expect(encResp.ok).toBe(true);
+
+    // Try to decrypt with the wrap from A but claim attachment B
+    const ctBuf = new ArrayBuffer(new Uint8Array(encResp.blob).byteLength);
+    new Uint8Array(ctBuf).set(new Uint8Array(encResp.blob));
+
+    sinkMessages = [];
+    const decResp = await dispatchAndWait({
+      type: "decryptAttachment",
+      id: 3012,
+      ticketId: "t-att-aad",
+      attachmentId: attachmentB,
+      fileKeyWrap: encResp.fileKeyWrap,
+      ciphertext: ctBuf,
+    });
+
+    expect(decResp.ok).toBe(false);
+    expect((decResp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+
+    sodium.memzero(tk);
+  });
+
+  it("rejects decrypt when the blob ciphertext is tampered", async () => {
+    const sodium = requireSodium();
+    const tk = await cacheTk("t-att-tamper", 3020);
+    const attachmentId = crypto.randomUUID();
+    const fileData = sodium.randombytes_buf(128);
+
+    const dataBuf = new ArrayBuffer(fileData.byteLength);
+    new Uint8Array(dataBuf).set(fileData);
+    sinkMessages = [];
+    const encResp = (await dispatchAndWait({
+      type: "encryptAttachment",
+      id: 3021,
+      ticketId: "t-att-tamper",
+      attachmentId,
+      filename: "secret.doc",
+      data: dataBuf,
+    })) as EncryptAttachmentResponse;
+    expect(encResp.ok).toBe(true);
+
+    // Flip a bit in the blob ciphertext
+    const tampered = new Uint8Array(encResp.blob);
+    tampered[tampered.length - 1] = (tampered[tampered.length - 1] ?? 0) ^ 0xff;
+    const tamperedBuf = new ArrayBuffer(tampered.byteLength);
+    new Uint8Array(tamperedBuf).set(tampered);
+
+    sinkMessages = [];
+    const decResp = await dispatchAndWait({
+      type: "decryptAttachment",
+      id: 3022,
+      ticketId: "t-att-tamper",
+      attachmentId,
+      fileKeyWrap: encResp.fileKeyWrap,
+      ciphertext: tamperedBuf,
+    });
+
+    expect(decResp.ok).toBe(false);
+    expect((decResp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+
+    sodium.memzero(tk);
+  });
+
+  it("rejects encryptAttachment when the Worker is not keyed", async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    await dispatchAndWait({ type: "init", id: 3030 });
+
+    const resp = await dispatchAndWait({
+      type: "encryptAttachment",
+      id: 3031,
+      ticketId: "t-fail",
+      attachmentId: "att-fail",
+      filename: "f.txt",
+      data: new ArrayBuffer(8),
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("rejects decryptAttachment when the Worker is not keyed", async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    await dispatchAndWait({ type: "init", id: 3040 });
+
+    const resp = await dispatchAndWait({
+      type: "decryptAttachment",
+      id: 3041,
+      ticketId: "t-fail",
+      attachmentId: "att-fail",
+      fileKeyWrap: encode(new Uint8Array(64)),
+      ciphertext: new ArrayBuffer(64),
+    });
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+  });
+
+  it("produces a portal copy only when clientPublic is supplied", async () => {
+    const sodium = requireSodium();
+    const tk = await cacheTk("t-att-portal", 3050);
+    const attachmentId = crypto.randomUUID();
+    const fileData = sodium.randombytes_buf(32);
+
+    // Without clientPublic: no portal copy
+    const dataBuf1 = new ArrayBuffer(fileData.byteLength);
+    new Uint8Array(dataBuf1).set(fileData);
+    sinkMessages = [];
+    const noPortal = (await dispatchAndWait({
+      type: "encryptAttachment",
+      id: 3051,
+      ticketId: "t-att-portal",
+      attachmentId,
+      filename: "doc.txt",
+      data: dataBuf1,
+    })) as EncryptAttachmentResponse;
+    expect(noPortal.ok).toBe(true);
+    expect(noPortal.portalCopy).toBeUndefined();
+
+    // With clientPublic: portal copy is present
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    const dataBuf2 = new ArrayBuffer(fileData.byteLength);
+    new Uint8Array(dataBuf2).set(fileData);
+    sinkMessages = [];
+    const withPortal = (await dispatchAndWait({
+      type: "encryptAttachment",
+      id: 3052,
+      ticketId: "t-att-portal",
+      attachmentId: crypto.randomUUID(),
+      filename: "doc.txt",
+      data: dataBuf2,
+      clientPublic: encode(clientPub),
+    })) as EncryptAttachmentResponse;
+    expect(withPortal.ok).toBe(true);
+    expect(withPortal.portalCopy).toBeDefined();
+    expect(withPortal.portalCopy?.ephemeralPoint).toBeDefined();
+    expect(withPortal.portalCopy?.nonce).toBeDefined();
+    expect(withPortal.portalCopy?.ciphertext).toBeDefined();
+
+    sodium.memzero(tk);
+    sodium.memzero(clientPriv);
+  });
+
+  it("portal copy decrypts to the file key and filename", async () => {
+    const sodium = requireSodium();
+    const tk = await cacheTk("t-att-pcopy", 3060);
+    const attachmentId = crypto.randomUUID();
+    const fileData = sodium.randombytes_buf(48);
+    const filename = "important-file.pdf";
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    const dataBuf = new ArrayBuffer(fileData.byteLength);
+    new Uint8Array(dataBuf).set(fileData);
+    sinkMessages = [];
+    const encResp = (await dispatchAndWait({
+      type: "encryptAttachment",
+      id: 3061,
+      ticketId: "t-att-pcopy",
+      attachmentId,
+      filename,
+      data: dataBuf,
+      clientPublic: encode(clientPub),
+    })) as EncryptAttachmentResponse;
+    expect(encResp.ok).toBe(true);
+    expect(encResp.portalCopy).toBeDefined();
+
+    // Decrypt the portal copy with the client's private key (uses
+    // the top-level decodeFileKeyPayload import, not a dynamic one,
+    // to avoid shadowing in the test scope)
+    const payloadBytes = eciesDecrypt(
+      decode(encResp.portalCopy!.ephemeralPoint) as RistrettoPoint,
+      decode(encResp.portalCopy!.nonce) as Nonce,
+      decode(encResp.portalCopy!.ciphertext),
+      clientPriv,
+    );
+
+    const payload = decodeFileKeyPayload(payloadBytes);
+    expect(payload.filename).toBe(filename);
+    // The file key from the payload should decrypt the blob
+    const blobBuf = new Uint8Array(encResp.blob);
+    const decrypted = decryptContent(
+      blobBuf as Ciphertext,
+      payload.fileKey,
+      buildContentAad("t-att-pcopy", blobSlot(attachmentId)),
+    );
+    expect(new Uint8Array(decrypted)).toEqual(fileData);
+
+    sodium.memzero(tk);
+    sodium.memzero(clientPriv);
+    sodium.memzero(payloadBytes);
+    sodium.memzero(decrypted);
+  });
+});
+
+// ── Portal thread reseed batch ops ────────────────────────────────
+
+describe("crypto-core sealFollowUpsToPublic", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("seal-followups-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  async function cacheTk(
+    ticketId: string,
+    id: number,
+  ): Promise<{
+    tk: Uint8Array;
+    wrap: { ephemeralPoint: string; nonce: string; wrappedKey: string };
+  }> {
+    const tk = generateContentKey();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(tk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id,
+      ticketId,
+      keyCacheId: ticketId,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    });
+    return {
+      tk,
+      wrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+    };
+  }
+
+  it("seals follow-ups to a client public key and the portal can decrypt", async () => {
+    const sodium = requireSodium();
+    const { tk, wrap: keyWrap } = await cacheTk("t-seal-fu", 4000);
+
+    // Encrypt two follow-ups under tk
+    const plainA = "Hello from volunteer";
+    const plainB = "Second message";
+    const ctA = encryptContent(
+      new TextEncoder().encode(plainA),
+      tk as SymmetricKey,
+      buildContentAad("t-seal-fu", followupSlot("fu-a")),
+    );
+    const ctB = encryptContent(
+      new TextEncoder().encode(plainB),
+      tk as SymmetricKey,
+      buildContentAad("t-seal-fu", followupSlot("fu-b")),
+    );
+
+    // Generate client keypair (portal side)
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "sealFollowUpsToPublic",
+      id: 4001,
+      ticketId: "t-seal-fu",
+      clientPublic: encode(clientPub),
+      items: [
+        { followUpId: "fu-a", ciphertext: encode(ctA), keyWrap },
+        { followUpId: "fu-b", ciphertext: encode(ctB), keyWrap },
+      ],
+    })) as SealFollowUpsToPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.items).toHaveLength(2);
+    expect(resp.failed).toHaveLength(0);
+
+    // Verify the portal can ECIES-open each copy
+    for (const item of resp.items) {
+      const decrypted = eciesDecrypt(
+        decode(item.copy.ephemeralPoint) as RistrettoPoint,
+        decode(item.copy.nonce) as Nonce,
+        decode(item.copy.ciphertext),
+        clientPriv,
+      );
+      const text = new TextDecoder().decode(decrypted);
+      if (item.followUpId === "fu-a") expect(text).toBe(plainA);
+      else expect(text).toBe(plainB);
+      sodium.memzero(decrypted);
+    }
+
+    sodium.memzero(tk);
+    sodium.memzero(clientPriv);
+  });
+
+  it("routes portalWrap items through the org-key unseal path", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    // Load org key
+    const orgSecret = sodium.crypto_core_ristretto255_scalar_random();
+    const orgWrap = eciesEncrypt(orgSecret, volPub);
+    const orgResp = (await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 4100,
+      ephemeralPoint: encode(orgWrap.ephemeralPoint),
+      nonce: encode(orgWrap.nonce),
+      wrappedOrgKey: encode(orgWrap.ciphertext),
+    })) as UnwrapOrgKeyResponse;
+    const orgPub = decode(orgResp.orgPublicKey);
+
+    // Cache canonical tk
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 4101,
+      ticketId: "t-seal-portal",
+      keyCacheId: "t-seal-portal",
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    // Create a portal reply encrypted under a sealed tk_temp
+    const tkTemp = generateContentKey();
+    const sealedWrap = sodium.crypto_box_seal(tkTemp, orgPub);
+    const portalText = "portal reply text";
+    const portalCt = encryptContent(
+      new TextEncoder().encode(portalText),
+      tkTemp,
+      buildContentAad("t-seal-portal", followupSlot("fu-portal")),
+    );
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "sealFollowUpsToPublic",
+      id: 4102,
+      ticketId: "t-seal-portal",
+      clientPublic: encode(clientPub),
+      items: [
+        {
+          followUpId: "fu-portal",
+          ciphertext: encode(portalCt),
+          portalWrap: encode(sealedWrap),
+        },
+      ],
+    })) as SealFollowUpsToPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.items).toHaveLength(1);
+    expect(resp.failed).toHaveLength(0);
+
+    // Portal can read the sealed content
+    const decrypted = eciesDecrypt(
+      decode(resp.items[0]!.copy.ephemeralPoint) as RistrettoPoint,
+      decode(resp.items[0]!.copy.nonce) as Nonce,
+      decode(resp.items[0]!.copy.ciphertext),
+      clientPriv,
+    );
+    expect(new TextDecoder().decode(decrypted)).toBe(portalText);
+
+    sodium.memzero(orgSecret);
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
+    sodium.memzero(clientPriv);
+    sodium.memzero(decrypted);
+  });
+
+  it("isolates per-item failures: tampered item lands in failed, others succeed", async () => {
+    const sodium = requireSodium();
+    const { tk, wrap: keyWrap } = await cacheTk("t-seal-fail", 4200);
+
+    const goodCt = encryptContent(
+      new TextEncoder().encode("good"),
+      tk as SymmetricKey,
+      buildContentAad("t-seal-fail", followupSlot("fu-good")),
+    );
+    // Tampered ciphertext for the bad item
+    const badCt = sodium.randombytes_buf(64);
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "sealFollowUpsToPublic",
+      id: 4201,
+      ticketId: "t-seal-fail",
+      clientPublic: encode(clientPub),
+      items: [
+        { followUpId: "fu-good", ciphertext: encode(goodCt), keyWrap },
+        { followUpId: "fu-bad", ciphertext: encode(badCt), keyWrap },
+      ],
+    })) as SealFollowUpsToPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.items).toHaveLength(1);
+    expect(resp.items[0]!.followUpId).toBe("fu-good");
+    expect(resp.failed).toEqual(["fu-bad"]);
+
+    sodium.memzero(tk);
+    sodium.memzero(clientPriv);
+  });
+
+  it("rejects with tampered AAD (wrong followUpId slot)", async () => {
+    const sodium = requireSodium();
+    const { tk, wrap: keyWrap } = await cacheTk("t-seal-aad", 4300);
+
+    // Encrypt under fu-other's slot
+    const ct = encryptContent(
+      new TextEncoder().encode("wrong slot"),
+      tk as SymmetricKey,
+      buildContentAad("t-seal-aad", followupSlot("fu-other")),
+    );
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "sealFollowUpsToPublic",
+      id: 4301,
+      ticketId: "t-seal-aad",
+      clientPublic: encode(clientPub),
+      items: [{ followUpId: "fu-claimed", ciphertext: encode(ct), keyWrap }],
+    })) as SealFollowUpsToPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.items).toHaveLength(0);
+    expect(resp.failed).toEqual(["fu-claimed"]);
+
+    sodium.memzero(tk);
+    sodium.memzero(clientPriv);
+  });
+});
+
+describe("crypto-core sealFileKeysToPublic", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("seal-filekeys-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  async function cacheTkAndReturn(
+    ticketId: string,
+    id: number,
+  ): Promise<{
+    tk: Uint8Array;
+    keyWrap: { ephemeralPoint: string; nonce: string; wrappedKey: string };
+  }> {
+    const tk = generateContentKey();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(tk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id,
+      ticketId,
+      keyCacheId: ticketId,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    });
+    return {
+      tk,
+      keyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+    };
+  }
+
+  it("seals file keys to client public and the portal can decode the payload", async () => {
+    const sodium = requireSodium();
+    const { tk } = await cacheTkAndReturn("t-sfk", 5000);
+
+    const attachmentId = crypto.randomUUID();
+    const fileKey = generateContentKey();
+    const filename = "evidence.pdf";
+
+    // Wrap file key under tk
+    const fileKeyWrapCt = encryptContent(
+      fileKey,
+      tk as SymmetricKey,
+      buildContentAad("t-sfk", fileKeySlot(attachmentId)),
+    );
+    // Encrypt filename under tk
+    const filenameCt = encryptContent(
+      new TextEncoder().encode(filename),
+      tk as SymmetricKey,
+      buildContentAad("t-sfk", filenameSlot(attachmentId)),
+    );
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "sealFileKeysToPublic",
+      id: 5001,
+      ticketId: "t-sfk",
+      clientPublic: encode(clientPub),
+      items: [
+        {
+          kind: "attachment" as const,
+          rowId: attachmentId,
+          fileKeyWrap: encode(fileKeyWrapCt),
+          encryptedFilename: encode(filenameCt),
+        },
+      ],
+    })) as SealFileKeysToPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.items).toHaveLength(1);
+    expect(resp.failed).toHaveLength(0);
+
+    // Portal side: ECIES-open the copy and decode the payload
+    const payloadBytes = eciesDecrypt(
+      decode(resp.items[0]!.copy.ephemeralPoint) as RistrettoPoint,
+      decode(resp.items[0]!.copy.nonce) as Nonce,
+      decode(resp.items[0]!.copy.ciphertext),
+      clientPriv,
+    );
+    const payload = decodeFileKeyPayload(payloadBytes);
+    expect(payload.filename).toBe(filename);
+
+    // The file key from the payload should match the original
+    expect(encode(payload.fileKey)).toBe(encode(fileKey as SymmetricKey));
+
+    sodium.memzero(tk);
+    sodium.memzero(fileKey);
+    sodium.memzero(clientPriv);
+    sodium.memzero(payloadBytes);
+  });
+
+  it("uses empty filename for recordings (no encryptedFilename)", async () => {
+    const sodium = requireSodium();
+    const { tk } = await cacheTkAndReturn("t-sfk-rec", 5100);
+
+    const rowId = crypto.randomUUID();
+    const fileKey = generateContentKey();
+
+    const fileKeyWrapCt = encryptContent(
+      fileKey,
+      tk as SymmetricKey,
+      buildContentAad("t-sfk-rec", fileKeySlot(rowId)),
+    );
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "sealFileKeysToPublic",
+      id: 5101,
+      ticketId: "t-sfk-rec",
+      clientPublic: encode(clientPub),
+      items: [
+        {
+          kind: "recording" as const,
+          rowId,
+          fileKeyWrap: encode(fileKeyWrapCt),
+        },
+      ],
+    })) as SealFileKeysToPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.items).toHaveLength(1);
+
+    const payloadBytes = eciesDecrypt(
+      decode(resp.items[0]!.copy.ephemeralPoint) as RistrettoPoint,
+      decode(resp.items[0]!.copy.nonce) as Nonce,
+      decode(resp.items[0]!.copy.ciphertext),
+      clientPriv,
+    );
+    const payload = decodeFileKeyPayload(payloadBytes);
+    expect(payload.filename).toBe("");
+
+    sodium.memzero(tk);
+    sodium.memzero(fileKey);
+    sodium.memzero(clientPriv);
+    sodium.memzero(payloadBytes);
+  });
+
+  it("isolates per-item failures (tampered file key wrap)", async () => {
+    const sodium = requireSodium();
+    const { tk } = await cacheTkAndReturn("t-sfk-fail", 5200);
+
+    const goodId = crypto.randomUUID();
+    const badId = crypto.randomUUID();
+    const fileKey = generateContentKey();
+
+    const goodWrap = encryptContent(
+      fileKey,
+      tk as SymmetricKey,
+      buildContentAad("t-sfk-fail", fileKeySlot(goodId)),
+    );
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "sealFileKeysToPublic",
+      id: 5201,
+      ticketId: "t-sfk-fail",
+      clientPublic: encode(clientPub),
+      items: [
+        {
+          kind: "attachment" as const,
+          rowId: goodId,
+          fileKeyWrap: encode(goodWrap),
+        },
+        {
+          kind: "attachment" as const,
+          rowId: badId,
+          fileKeyWrap: encode(sodium.randombytes_buf(64)),
+        },
+      ],
+    })) as SealFileKeysToPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.items).toHaveLength(1);
+    expect(resp.items[0]!.rowId).toBe(goodId);
+    expect(resp.failed).toEqual([badId]);
+
+    sodium.memzero(tk);
+    sodium.memzero(fileKey);
+    sodium.memzero(clientPriv);
+  });
+
+  it("warms the tk cache via the keyWrap field", async () => {
+    const sodium = requireSodium();
+    // Do NOT pre-cache tk; let the keyWrap warm-up path handle it.
+    const tk = generateContentKey();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(tk, volPub);
+
+    const rowId = crypto.randomUUID();
+    const fileKey = generateContentKey();
+    const fileKeyWrapCt = encryptContent(
+      fileKey,
+      tk as SymmetricKey,
+      buildContentAad("t-sfk-warm", fileKeySlot(rowId)),
+    );
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "sealFileKeysToPublic",
+      id: 5300,
+      ticketId: "t-sfk-warm",
+      clientPublic: encode(clientPub),
+      keyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      items: [
+        {
+          kind: "attachment" as const,
+          rowId,
+          fileKeyWrap: encode(fileKeyWrapCt),
+        },
+      ],
+    })) as SealFileKeysToPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.items).toHaveLength(1);
+    expect(resp.failed).toHaveLength(0);
+
+    sodium.memzero(tk);
+    sodium.memzero(fileKey);
+    sodium.memzero(clientPriv);
+  });
+});
+
+describe("crypto-core convertBlobForPortal", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("convert-blob-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  async function cacheTk(ticketId: string, id: number): Promise<Uint8Array> {
+    const tk = generateContentKey();
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id,
+      ticketId,
+      keyCacheId: ticketId,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    });
+    return tk;
+  }
+
+  it("converts a tk-encrypted blob to file-key envelope and portal can read it", async () => {
+    const sodium = requireSodium();
+    const tk = await cacheTk("t-cvt", 6000);
+
+    const rowId = crypto.randomUUID();
+    const blobData = sodium.randombytes_buf(200);
+    const filename = "photo.jpg";
+
+    // Encrypt blob under tk at blobSlot
+    const blobCt = encryptContent(
+      blobData,
+      tk as SymmetricKey,
+      buildContentAad("t-cvt", blobSlot(rowId)),
+    );
+    // Encrypt filename under tk at filenameSlot
+    const filenameCt = encryptContent(
+      new TextEncoder().encode(filename),
+      tk as SymmetricKey,
+      buildContentAad("t-cvt", filenameSlot(rowId)),
+    );
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    const ctBuf = new ArrayBuffer(blobCt.byteLength);
+    new Uint8Array(ctBuf).set(blobCt);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "convertBlobForPortal",
+      id: 6001,
+      ticketId: "t-cvt",
+      clientPublic: encode(clientPub),
+      category: "attachment",
+      rowId,
+      ciphertext: ctBuf,
+      encryptedFilename: encode(filenameCt),
+    })) as ConvertBlobForPortalResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.encryptedData).toBeInstanceOf(ArrayBuffer);
+    expect(resp.fileKeyWrap).toBeDefined();
+    expect(resp.copy).toBeDefined();
+
+    // Portal side: ECIES-open the copy to get file key + filename
+    const payloadBytes = eciesDecrypt(
+      decode(resp.copy.ephemeralPoint) as RistrettoPoint,
+      decode(resp.copy.nonce) as Nonce,
+      decode(resp.copy.ciphertext),
+      clientPriv,
+    );
+    const payload = decodeFileKeyPayload(payloadBytes);
+    expect(payload.filename).toBe(filename);
+
+    // The file key from the portal copy should decrypt the re-encrypted blob
+    const reEncryptedBuf = new Uint8Array(resp.encryptedData);
+    const decryptedBlob = decryptContent(
+      reEncryptedBuf as Ciphertext,
+      payload.fileKey,
+      buildContentAad("t-cvt", blobSlot(rowId)),
+    );
+    expect(new Uint8Array(decryptedBlob)).toEqual(blobData);
+
+    // The file key wrap should unwrap under tk
+    const unwrappedFileKey = decryptContent(
+      decode(resp.fileKeyWrap) as Ciphertext,
+      tk as SymmetricKey,
+      buildContentAad("t-cvt", fileKeySlot(rowId)),
+    );
+    expect(encode(unwrappedFileKey as SymmetricKey)).toBe(
+      encode(payload.fileKey),
+    );
+
+    sodium.memzero(tk);
+    sodium.memzero(clientPriv);
+    sodium.memzero(payloadBytes);
+    sodium.memzero(decryptedBlob);
+    sodium.memzero(unwrappedFileKey);
+  });
+
+  it("uses empty filename for recordings (no encryptedFilename)", async () => {
+    const sodium = requireSodium();
+    const tk = await cacheTk("t-cvt-rec", 6100);
+
+    const rowId = crypto.randomUUID();
+    const blobData = sodium.randombytes_buf(64);
+
+    const blobCt = encryptContent(
+      blobData,
+      tk as SymmetricKey,
+      buildContentAad("t-cvt-rec", blobSlot(rowId)),
+    );
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    const ctBuf = new ArrayBuffer(blobCt.byteLength);
+    new Uint8Array(ctBuf).set(blobCt);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "convertBlobForPortal",
+      id: 6101,
+      ticketId: "t-cvt-rec",
+      clientPublic: encode(clientPub),
+      category: "recording",
+      rowId,
+      ciphertext: ctBuf,
+    })) as ConvertBlobForPortalResponse;
+
+    expect(resp.ok).toBe(true);
+
+    const payloadBytes = eciesDecrypt(
+      decode(resp.copy.ephemeralPoint) as RistrettoPoint,
+      decode(resp.copy.nonce) as Nonce,
+      decode(resp.copy.ciphertext),
+      clientPriv,
+    );
+    const payload = decodeFileKeyPayload(payloadBytes);
+    expect(payload.filename).toBe("");
+
+    sodium.memzero(tk);
+    sodium.memzero(clientPriv);
+    sodium.memzero(payloadBytes);
+  });
+
+  it("rejects when tk is not cached", async () => {
+    const sodium = requireSodium();
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = await dispatchAndWait({
+      type: "convertBlobForPortal",
+      id: 6200,
+      ticketId: "t-no-tk",
+      clientPublic: encode(clientPub),
+      category: "attachment",
+      rowId: "r1",
+      ciphertext: new ArrayBuffer(64),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+
+    sodium.memzero(clientPriv);
+  });
+
+  it("rejects when blob ciphertext is tampered", async () => {
+    const sodium = requireSodium();
+    const tk = await cacheTk("t-cvt-tamper", 6300);
+
+    const rowId = crypto.randomUUID();
+    const blobData = sodium.randombytes_buf(64);
+
+    const blobCt = encryptContent(
+      blobData,
+      tk as SymmetricKey,
+      buildContentAad("t-cvt-tamper", blobSlot(rowId)),
+    );
+
+    // Tamper the ciphertext
+    const tampered = new Uint8Array(blobCt);
+    tampered[tampered.length - 1] = (tampered[tampered.length - 1] ?? 0) ^ 0xff;
+    const tamperedBuf = new ArrayBuffer(tampered.byteLength);
+    new Uint8Array(tamperedBuf).set(tampered);
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = await dispatchAndWait({
+      type: "convertBlobForPortal",
+      id: 6301,
+      ticketId: "t-cvt-tamper",
+      clientPublic: encode(clientPub),
+      category: "attachment",
+      rowId,
+      ciphertext: tamperedBuf,
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+
+    sodium.memzero(tk);
+    sodium.memzero(clientPriv);
   });
 });

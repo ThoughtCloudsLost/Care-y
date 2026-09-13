@@ -490,6 +490,156 @@ describe("CryptoBridge", () => {
     });
   });
 
+  describe("encryptAttachment", () => {
+    it("sends data as Transferable and returns structured result", async () => {
+      const bridge = await createReadyBridge();
+
+      const data = new ArrayBuffer(64);
+      const promise = bridge.encryptAttachment(
+        "ticket-att-1",
+        "att-id-1",
+        "report.pdf",
+        data,
+      );
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const encCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "encryptAttachment",
+        ) as
+          | [
+              {
+                type: string;
+                id: number;
+                ticketId: string;
+                attachmentId: string;
+                filename: string;
+              },
+              { transfer: Transferable[] },
+            ]
+          | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      expect(encCall?.[0].ticketId).toBe("ticket-att-1");
+      expect(encCall?.[0].attachmentId).toBe("att-id-1");
+      expect(encCall?.[0].filename).toBe("report.pdf");
+      expect(encCall?.[1]).toEqual({ transfer: [data] });
+
+      const blobBuf = new ArrayBuffer(32);
+      respondFromWorker({
+        id: encCall?.[0].id ?? 0,
+        ok: true,
+        type: "encryptAttachment",
+        blob: blobBuf,
+        fileKeyWrap: "d3JhcA",
+        encryptedFilename: "ZmlsZW5hbWU",
+      });
+
+      const result = await promise;
+      expect(result.blob).toBe(blobBuf);
+      expect(result.fileKeyWrap).toBe("d3JhcA");
+      expect(result.encryptedFilename).toBe("ZmlsZW5hbWU");
+      expect(result.portalCopy).toBeUndefined();
+    });
+
+    it("passes through portal copy when present in response", async () => {
+      const bridge = await createReadyBridge();
+
+      const data = new ArrayBuffer(16);
+      const promise = bridge.encryptAttachment(
+        "ticket-att-2",
+        "att-id-2",
+        "doc.txt",
+        data,
+        "Y2xpZW50UHVibGlj",
+      );
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const encCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "encryptAttachment",
+        ) as [{ type: string; id: number }] | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      respondFromWorker({
+        id: encCall?.[0].id ?? 0,
+        ok: true,
+        type: "encryptAttachment",
+        blob: new ArrayBuffer(32),
+        fileKeyWrap: "d3JhcA",
+        encryptedFilename: "ZmlsZW5hbWU",
+        portalCopy: {
+          ephemeralPoint: "ZXBoZW1lcmFs",
+          nonce: "bm9uY2U",
+          ciphertext: "Y2lwaGVydGV4dA",
+        },
+      });
+
+      const result = await promise;
+      expect(result.portalCopy).toBeDefined();
+      expect(result.portalCopy?.ephemeralPoint).toBe("ZXBoZW1lcmFs");
+      expect(result.portalCopy?.nonce).toBe("bm9uY2U");
+      expect(result.portalCopy?.ciphertext).toBe("Y2lwaGVydGV4dA");
+    });
+  });
+
+  describe("decryptAttachment", () => {
+    it("sends ciphertext as Transferable and returns ArrayBuffer", async () => {
+      const bridge = await createReadyBridge();
+
+      const ciphertext = new ArrayBuffer(128);
+      const promise = bridge.decryptAttachment(
+        "ticket-att-3",
+        "att-id-3",
+        "d3JhcHBlZEZpbGVLZXk",
+        ciphertext,
+      );
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const decCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "decryptAttachment",
+        ) as
+          | [
+              {
+                type: string;
+                id: number;
+                ticketId: string;
+                attachmentId: string;
+                fileKeyWrap: string;
+              },
+              { transfer: Transferable[] },
+            ]
+          | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      expect(decCall?.[0].ticketId).toBe("ticket-att-3");
+      expect(decCall?.[0].attachmentId).toBe("att-id-3");
+      expect(decCall?.[0].fileKeyWrap).toBe("d3JhcHBlZEZpbGVLZXk");
+      expect(decCall?.[1]).toEqual({ transfer: [ciphertext] });
+
+      const resultBuf = new ArrayBuffer(64);
+      respondFromWorker({
+        id: decCall?.[0].id ?? 0,
+        ok: true,
+        type: "decryptAttachment",
+        data: resultBuf,
+      });
+
+      const result = await promise;
+      expect(result).toBe(resultBuf);
+    });
+  });
+
   describe("request queuing", () => {
     it("queues argon2id until init completes", async () => {
       const { CryptoBridge } = await import("./crypto-bridge.js");
@@ -778,6 +928,214 @@ describe("CryptoBridge (SharedWorker mode)", () => {
 
       expect(mockWorkerInstance?.terminate).toHaveBeenCalledOnce();
       expect(bridge.getState()).toBe("DESTROYED");
+    });
+  });
+});
+
+// ── Portal reseed batch bridge tests ──────────────────────────────
+
+describe("CryptoBridge portal reseed methods", () => {
+  beforeEach(() => {
+    mockWorkerInstance = null;
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe("sealFollowUpsToPublic", () => {
+    it("sends request with items and returns items + failed", async () => {
+      const bridge = await createReadyBridge();
+
+      const items = [
+        {
+          followUpId: "fu-1",
+          ciphertext: "Y3QtMQ",
+          keyWrap: { ephemeralPoint: "ZXA", nonce: "bm9u", wrappedKey: "d2s" },
+        },
+      ];
+      const promise = bridge.sealFollowUpsToPublic(
+        "tid",
+        "Y2xpZW50UHVi",
+        items,
+      );
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const sealCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "sealFollowUpsToPublic",
+        ) as
+          | [
+              {
+                type: string;
+                id: number;
+                ticketId: string;
+                clientPublic: string;
+              },
+            ]
+          | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      expect(sealCall?.[0].ticketId).toBe("tid");
+      expect(sealCall?.[0].clientPublic).toBe("Y2xpZW50UHVi");
+
+      respondFromWorker({
+        id: sealCall?.[0].id ?? 0,
+        ok: true,
+        type: "sealFollowUpsToPublic",
+        items: [
+          {
+            followUpId: "fu-1",
+            copy: { ephemeralPoint: "ep", nonce: "nn", ciphertext: "ct" },
+          },
+        ],
+        failed: [],
+      });
+
+      const result = await promise;
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]!.followUpId).toBe("fu-1");
+      expect(result.failed).toHaveLength(0);
+    });
+  });
+
+  describe("sealFileKeysToPublic", () => {
+    it("sends request with items and optional keyWrap, returns items + failed", async () => {
+      const bridge = await createReadyBridge();
+
+      const items = [
+        {
+          kind: "attachment" as const,
+          rowId: "row-1",
+          fileKeyWrap: "Zms",
+          encryptedFilename: "ZW5j",
+        },
+      ];
+      const keyWrap = {
+        ephemeralPoint: "ZXA",
+        nonce: "bm9u",
+        wrappedKey: "d2s",
+      };
+      const promise = bridge.sealFileKeysToPublic("tid", "Y3A", items, keyWrap);
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const sealCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "sealFileKeysToPublic",
+        ) as
+          | [{ type: string; id: number; ticketId: string; keyWrap: unknown }]
+          | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      expect(sealCall?.[0].ticketId).toBe("tid");
+      expect(sealCall?.[0].keyWrap).toEqual(keyWrap);
+
+      respondFromWorker({
+        id: sealCall?.[0].id ?? 0,
+        ok: true,
+        type: "sealFileKeysToPublic",
+        items: [
+          {
+            rowId: "row-1",
+            copy: { ephemeralPoint: "ep", nonce: "nn", ciphertext: "ct" },
+          },
+        ],
+        failed: [],
+      });
+
+      const result = await promise;
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]!.rowId).toBe("row-1");
+      expect(result.failed).toHaveLength(0);
+    });
+  });
+
+  describe("convertBlobForPortal", () => {
+    it("sends ciphertext as Transferable and returns encryptedData + copy", async () => {
+      const bridge = await createReadyBridge();
+
+      const ciphertext = new ArrayBuffer(128);
+      const promise = bridge.convertBlobForPortal(
+        "tid",
+        "Y3A",
+        "attachment",
+        "row-1",
+        ciphertext,
+        "ZW5j",
+      );
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const cvtCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "convertBlobForPortal",
+        ) as
+          | [
+              { type: string; id: number; ticketId: string; rowId: string },
+              { transfer: Transferable[] },
+            ]
+          | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      expect(cvtCall?.[0].ticketId).toBe("tid");
+      expect(cvtCall?.[0].rowId).toBe("row-1");
+      expect(cvtCall?.[1]).toEqual({ transfer: [ciphertext] });
+
+      const resultBuf = new ArrayBuffer(64);
+      respondFromWorker({
+        id: cvtCall?.[0].id ?? 0,
+        ok: true,
+        type: "convertBlobForPortal",
+        encryptedData: resultBuf,
+        fileKeyWrap: "ZmtX",
+        copy: { ephemeralPoint: "ep", nonce: "nn", ciphertext: "ct" },
+      });
+
+      const result = await promise;
+      expect(result.encryptedData).toBe(resultBuf);
+      expect(result.fileKeyWrap).toBe("ZmtX");
+      expect(result.copy.ephemeralPoint).toBe("ep");
+    });
+
+    it("rejects with CryptoWorkerError on Worker failure", async () => {
+      const bridge = await createReadyBridge();
+
+      const promise = bridge.convertBlobForPortal(
+        "tid",
+        "Y3A",
+        "recording",
+        "row-2",
+        new ArrayBuffer(16),
+      );
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const cvtCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "convertBlobForPortal",
+        ) as [{ type: string; id: number }] | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      respondFromWorker({
+        id: cvtCall?.[0].id ?? 0,
+        ok: false,
+        type: "convertBlobForPortal",
+        error: "No cached tk",
+        code: "TK_NOT_CACHED",
+      });
+
+      await expect(promise).rejects.toThrow(CryptoWorkerError);
     });
   });
 });

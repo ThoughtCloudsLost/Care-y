@@ -10,7 +10,7 @@ const en_settings_password_change = /** @type {(inputs: Settings_Password_Change
 };
 
 const es_settings_password_change = /** @type {(inputs: Settings_Password_ChangeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambiar contrasena`)
+	return /** @type {LocalizedString} */ (`Cambiar contraseña`)
 };
 
 /**

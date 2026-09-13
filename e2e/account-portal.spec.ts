@@ -10,7 +10,7 @@ import {
   openTicketByTitle,
   openTicketInfoPanel,
 } from "./helpers";
-import { countRows, queryDb } from "./db-probe";
+import { countRows, queryDb, resetCommunicationTiers } from "./db-probe";
 
 /**
  * Encrypted Account portal E2E roundtrip.
@@ -55,6 +55,10 @@ test.describe.serial("Encrypted Account Portal", () => {
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+    // All browser projects share one org: an earlier project's run left
+    // the upgrade-half client ("Safety planning session") upgraded, and
+    // its "Set up secure link" flow needs a fresh SMS/Email client.
+    resetCommunicationTiers();
     intakePage = await browser.newPage();
     await startCoverage(intakePage);
   });

@@ -10,7 +10,7 @@ const en_intake_forms_delete_confirm = /** @type {(inputs: Intake_Forms_Delete_C
 };
 
 const es_intake_forms_delete_confirm = /** @type {(inputs: Intake_Forms_Delete_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esto eliminara permanentemente este formulario y todos sus campos. Esto no se puede deshacer.`)
+	return /** @type {LocalizedString} */ (`Esto eliminará permanentemente este formulario y todos sus campos. Esto no se puede deshacer.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_setup_token_placeholder = /** @type {(inputs: Onboarding_Set
 };
 
 const es_onboarding_setup_token_placeholder = /** @type {(inputs: Onboarding_Setup_Token_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Pega tu token de configuracion`)
+	return /** @type {LocalizedString} */ (`Pega tu token de configuración`)
 };
 
 /**

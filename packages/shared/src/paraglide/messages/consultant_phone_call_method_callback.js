@@ -10,7 +10,7 @@ const en_consultant_phone_call_method_callback = /** @type {(inputs: Consultant_
 };
 
 const es_consultant_phone_call_method_callback = /** @type {(inputs: Consultant_Phone_Call_Method_CallbackInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Devolucion de llamada`)
+	return /** @type {LocalizedString} */ (`Devolución de llamada`)
 };
 
 /**

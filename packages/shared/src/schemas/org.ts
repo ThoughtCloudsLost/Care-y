@@ -62,6 +62,23 @@ export const createOrgInputSchema = z.object({
   slug: orgSlugSchema,
 });
 
+/**
+ * The org's quick-exit target.
+ *
+ * `z.url()` alone is not enough here. Zod validates through the `new URL()`
+ * constructor, which the library's own documentation calls "quite
+ * permissive", and it accepts any scheme that constructor accepts,
+ * `javascript:` included. This value becomes the argument to
+ * `location.replace()` on the client portal, so an unconstrained scheme is
+ * script execution on the surface a person reaches when they need to leave
+ * fast. Pin it to an absolute https URL with a real hostname.
+ *
+ * Source: https://zod.dev (Strings > URLs, and the `protocol` param)
+ */
+export const safeExitUrlSchema = z
+  .url({ protocol: /^https$/, hostname: z.regexes.domain })
+  .max(2048);
+
 export const updateOrgGeneralAdminInputSchema = z.object({
   encryptedOrgName: z.string().min(1),
   defaultLanguage: z.string().min(2).max(10),
@@ -70,5 +87,5 @@ export const updateOrgGeneralAdminInputSchema = z.object({
     .min(1)
     .max(5)
     .refine(isValidCountryCode, "Invalid country code"),
-  portalSafeExitUrl: z.url().max(2048).nullish(),
+  portalSafeExitUrl: safeExitUrlSchema.nullish(),
 });

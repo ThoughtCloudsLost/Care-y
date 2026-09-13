@@ -10,7 +10,7 @@ const en_ticket_panel_recent_coming_soon = /** @type {(inputs: Ticket_Panel_Rece
 };
 
 const es_ticket_panel_recent_coming_soon = /** @type {(inputs: Ticket_Panel_Recent_Coming_SoonInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`El historial de ${i?.tickets} recientes aparecera aqui.`)
+	return /** @type {LocalizedString} */ (`El historial de ${i?.tickets} recientes aparecerá aquí.`)
 };
 
 /**

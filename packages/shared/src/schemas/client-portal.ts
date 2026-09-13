@@ -10,11 +10,25 @@
  */
 
 import { z } from "zod";
-import { base64Bytes, base64String } from "./validators.js";
-import { intakeFieldRoleSchema } from "./intake-forms.js";
+import { base64Bytes, base64String, base64ByteLength } from "./validators.js";
+import { intakeFieldRoleSchema, fieldKeySchema } from "./intake-forms.js";
+import {
+  PORTAL_ATTACHMENT_MAX_BYTES,
+  PORTAL_ATTACHMENTS_PER_MESSAGE,
+} from "./limits.js";
+
+// Re-exported so consumers reach the caps through the portal schema module
+// they already import, the way schemas/kb.ts re-exports its own cap. The
+// definitions stay in the leaf module that breaks the import cycle.
+export {
+  PORTAL_ATTACHMENT_MAX_BYTES,
+  PORTAL_ATTACHMENT_MAX_PLAINTEXT_BYTES,
+  PORTAL_ATTACHMENTS_PER_MESSAGE,
+} from "./limits.js";
 import {
   ticketIdSchema,
   followupIdSchema,
+  attachmentIdSchema,
   clientAccountIdSchema,
   shareIdSchema,
   keyGenerationSchema,
@@ -22,10 +36,22 @@ import {
   intakeFormIdSchema,
   intakeFormFieldIdSchema,
   portalMessageIdSchema,
+  userIdSchema,
 } from "../ids.js";
 
 /** crypto_box_seal(32-byte tk) = 32 + 48 = 80 bytes (variant-agnostic exact-byte check). */
 export const intakeWrappedTkSchema = base64Bytes(80, "wrappedTk (sealed box)");
+
+/** EciesOutput on the wire: 32-byte point, 24-byte nonce, capped ciphertext. */
+export const eciesTripleSchema = z.object({
+  ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+  nonce: base64Bytes(24, "nonce"),
+  ciphertext: base64String("ciphertext").refine(
+    (s) => s.length <= 28_000,
+    "ciphertext too large",
+  ),
+});
+export type EciesTriple = z.infer<typeof eciesTripleSchema>;
 
 /**
  * Intake form submission from the anonymous client browser.
@@ -39,63 +65,69 @@ export const intakeWrappedTkSchema = base64Bytes(80, "wrappedTk (sealed box)");
  * server-minted id could never match the AAD the browser baked in, and
  * volunteer-side decrypt would fail with a context mismatch.
  */
-export const intakeSubmissionInputSchema = z.object({
-  ticketId: ticketIdSchema,
-  followUpId: followupIdSchema.nullable(),
-  formId: intakeFormIdSchema.nullable(),
-  encryptedTitle: base64String("encryptedTitle").refine(
-    (s) => s.length <= 1_400,
-    "encryptedTitle too large",
-  ),
-  encryptedDescription: base64String("encryptedDescription").refine(
-    (s) => s.length <= 88_000,
-    "encryptedDescription too large",
-  ),
-  encryptedMessage: base64String("encryptedMessage")
-    .refine((s) => s.length <= 28_000, "encryptedMessage too large")
-    .optional(),
-  encryptedFormResponse: base64String("encryptedFormResponse").refine(
-    (s) => s.length <= 88_000,
-    "encryptedFormResponse too large",
-  ),
-  wrappedTk: intakeWrappedTkSchema,
-  pow: z
-    .object({ challenge: z.string().max(128), solution: z.string().max(128) })
-    .optional(),
-  // Submit-time plaintext metadata resolved from encrypted field config
-  // by the submitter's browser (ADR-068 server-metadata roles).
-  resolvedQueueId: queueIdSchema.nullable().optional(),
-  resolvedPriority: z.enum(["low", "normal", "high", "urgent"]).optional(),
-  resolvedEscalationLevel: z.string().min(1).max(50).optional(),
-  /** Optional account registration branch (client opts into Encrypted Account at intake). */
-  account: z
-    .object({
-      accountId: clientAccountIdSchema,
-      username: z.string().min(3).max(64),
-      salt: base64Bytes(16, "argon2Salt"),
-      publicKey: base64Bytes(32, "accountPublicKey"),
-      authHash: base64Bytes(32, "authHash"),
-      keyCheck: z.object({
-        ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
-        nonce: base64Bytes(24, "nonce"),
-        ciphertext: base64String("ciphertext").refine(
-          (s) => s.length <= 28_000,
-          "ciphertext too large",
-        ),
-      }),
-      selfCopy: z
-        .object({
-          ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
-          nonce: base64Bytes(24, "nonce"),
-          ciphertext: base64String("ciphertext").refine(
-            (s) => s.length <= 28_000,
-            "ciphertext too large",
-          ),
-        })
-        .optional(),
-    })
-    .optional(),
-});
+export const intakeSubmissionInputSchema = z
+  .object({
+    ticketId: ticketIdSchema,
+    followUpId: followupIdSchema.nullable(),
+    formId: intakeFormIdSchema.nullable(),
+    encryptedTitle: base64String("encryptedTitle").refine(
+      (s) => s.length <= 1_400,
+      "encryptedTitle too large",
+    ),
+    encryptedDescription: base64String("encryptedDescription").refine(
+      (s) => s.length <= 88_000,
+      "encryptedDescription too large",
+    ),
+    encryptedMessage: base64String("encryptedMessage")
+      .refine((s) => s.length <= 28_000, "encryptedMessage too large")
+      .optional(),
+    encryptedFormResponse: base64String("encryptedFormResponse").refine(
+      (s) => s.length <= 88_000,
+      "encryptedFormResponse too large",
+    ),
+    wrappedTk: intakeWrappedTkSchema,
+    pow: z
+      .object({ challenge: z.string().max(128), solution: z.string().max(128) })
+      .optional(),
+    // Submit-time plaintext metadata resolved from encrypted field config
+    // by the submitter's browser (ADR-068 server-metadata roles).
+    resolvedQueueId: queueIdSchema.nullable().optional(),
+    resolvedPriority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+    resolvedEscalationLevel: z.string().min(1).max(50).optional(),
+    /** Optional account registration branch (client opts into Encrypted Account at intake). */
+    account: z
+      .object({
+        accountId: clientAccountIdSchema,
+        username: z.string().min(3).max(64),
+        salt: base64Bytes(16, "argon2Salt"),
+        publicKey: base64Bytes(32, "accountPublicKey"),
+        authHash: base64Bytes(32, "authHash"),
+        keyCheck: eciesTripleSchema,
+        selfCopy: eciesTripleSchema.optional(),
+      })
+      .optional(),
+    /** Optional continuation link branch (client opts into a portal channel for resubmission). */
+    continuation: z
+      .object({
+        channelId: z
+          .string()
+          .regex(/^[0-9a-f]{48}$/)
+          .brand<"ChannelSecret">(),
+        authHash: base64Bytes(32, "authHash"),
+        clientPublic: base64Bytes(32, "clientPublic"),
+        keyCheck: eciesTripleSchema,
+        selfCopy: eciesTripleSchema.optional(),
+      })
+      .optional(),
+  })
+  // Account strictly dominates continuation: when both are present the
+  // continuation branch is nullified (no error). The UI prevents co-selection,
+  // but the schema enforces it server-side as a defense-in-depth measure.
+  .transform((val) =>
+    val.account != null && val.continuation != null
+      ? { ...val, continuation: undefined }
+      : val,
+  );
 export type IntakeSubmissionInput = z.infer<typeof intakeSubmissionInputSchema>;
 
 export const intakeChallengeResponseSchema = z.object({
@@ -124,6 +156,7 @@ export type IntakeConfigResponse = z.infer<typeof intakeConfigResponseSchema>;
 /** Wire shape for a single field as seen by the public renderer. */
 export const publicIntakeFieldSchema = z.object({
   id: intakeFormFieldIdSchema,
+  fieldKey: fieldKeySchema,
   fieldType: z.string(),
   role: intakeFieldRoleSchema.nullable(),
   encryptedLabel: z.string(),
@@ -136,9 +169,22 @@ export type PublicIntakeField = z.infer<typeof publicIntakeFieldSchema>;
 export const publicIntakeFormSchema = z.object({
   id: intakeFormIdSchema,
   slug: z.string().nullable(),
+  encryptedFormMeta: z.string().nullable().optional(),
   fields: z.array(publicIntakeFieldSchema),
 });
 export type PublicIntakeForm = z.infer<typeof publicIntakeFormSchema>;
+
+/** Full resolution result from getIntakeForm (resolvePublicForm). */
+export const publicFormResultSchema = z.object({
+  formId: intakeFormIdSchema.nullable(),
+  slug: z.string().nullable(),
+  encryptedFormMeta: z.string().nullable(),
+  fields: z.array(publicIntakeFieldSchema).nullable(),
+  intakeDisabled: z.boolean(),
+  formClosed: z.boolean(),
+  builtinFormDisabled: z.boolean(),
+});
+export type PublicFormResult = z.infer<typeof publicFormResultSchema>;
 
 // ---------------------------------------------------------------------------
 // Secure Link portal schemas (8b)
@@ -153,8 +199,23 @@ export const communicationTierSchema = z.enum([
 export type CommunicationTier = z.infer<typeof communicationTierSchema>;
 
 /** Portal channel kind discriminator. */
-export const portalChannelKindSchema = z.enum(["secure_link", "account"]);
+export const portalChannelKindSchema = z.enum([
+  "secure_link",
+  "account",
+  "intake_continuation",
+]);
 export type PortalChannelKind = z.infer<typeof portalChannelKindSchema>;
+
+/**
+ * Channel kinds that participate in the portal surface (bearer-token auth,
+ * bootstrap/reply, account-offer gate). Derived from portalChannelKindSchema
+ * by excluding "account" (session-cookie auth) so the set stays correct if
+ * new kinds are added or the enum is reordered.
+ */
+export const PORTAL_SURFACE_KINDS: readonly Exclude<
+  PortalChannelKind,
+  "account"
+>[] = portalChannelKindSchema.exclude(["account"]).options;
 
 /** 48 lowercase hex chars: hex(sha512(seed)[0:24]). */
 // The brand makes this the bearer secret rather than a row key. The codebase
@@ -169,23 +230,113 @@ export const portalChannelIdSchema = z
 /** 32-byte bearer auth token, base64-encoded. */
 export const portalAuthSchema = base64Bytes(32, "channelAuth");
 
-/** EciesOutput on the wire: 32-byte point, 24-byte nonce, capped ciphertext. */
-export const eciesTripleSchema = z.object({
-  ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
-  nonce: base64Bytes(24, "nonce"),
-  ciphertext: base64String("ciphertext").refine(
-    (s) => s.length <= 28_000,
-    "ciphertext too large",
-  ),
-});
-export type EciesTriple = z.infer<typeof eciesTripleSchema>;
-
 /** Bootstrap request: resolve channel by id + auth, return key check and messages. */
 export const portalBootstrapInputSchema = z.object({
   channelId: portalChannelIdSchema,
   auth: portalAuthSchema,
 });
 export type PortalBootstrapInput = z.infer<typeof portalBootstrapInputSchema>;
+
+// ---------------------------------------------------------------------------
+// Attachment schemas
+//
+// One file is stored once, encrypted under a key of its own, and that key
+// is wrapped per reader (ADR-089). Every schema here therefore carries a
+// wrap rather than a second copy of the file. They sit above the reply
+// schema because the reply carries them.
+// ---------------------------------------------------------------------------
+
+/**
+ * Content types an attachment may declare.
+ *
+ * The server holds ciphertext and cannot check what a file actually is, so
+ * this bounds the claim rather than the bytes. It is still worth enforcing:
+ * the reader picks how to render from the declared type, and nothing here
+ * renders as script. SVG is deliberately absent, since an SVG opened
+ * directly rather than through an `<img>` executes.
+ */
+export const PORTAL_ALLOWED_CONTENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+] as const;
+
+export type PortalAllowedContentType =
+  (typeof PORTAL_ALLOWED_CONTENT_TYPES)[number];
+
+export const portalContentTypeSchema = z.enum(PORTAL_ALLOWED_CONTENT_TYPES);
+
+/**
+ * `encryptContent` of a 32-byte key: 24-byte nonce, 32 bytes, 16-byte tag.
+ * Exact rather than capped, because a wrap is one fixed shape and anything
+ * else is a caller bug.
+ */
+const fileKeyWrapSchema = base64Bytes(72, "fileKeyWrap");
+
+/** Ciphertext of one attachment, capped on decoded bytes. */
+const attachmentBlobSchema = base64String("blob").refine(
+  (s) => base64ByteLength(s) <= PORTAL_ATTACHMENT_MAX_BYTES,
+  "blob exceeds the attachment size limit",
+);
+
+/**
+ * What an upload carries, whichever side sends it.
+ *
+ * `attachmentId` is minted by the browser because the blob's AAD binds it
+ * (ADR-053): a server-minted id could never match what the encryptor baked
+ * in, and every later read would fail authentication.
+ */
+export const attachmentUploadSchema = z.object({
+  attachmentId: attachmentIdSchema,
+  blob: attachmentBlobSchema,
+  sizeBytes: z.number().int().min(1).max(PORTAL_ATTACHMENT_MAX_BYTES),
+  contentType: portalContentTypeSchema,
+  fileKeyWrap: fileKeyWrapSchema,
+  encryptedFilename: base64String("encryptedFilename").refine(
+    (s) => s.length <= 1_400,
+    "encryptedFilename too large",
+  ),
+});
+export type AttachmentUpload = z.infer<typeof attachmentUploadSchema>;
+
+/**
+ * An attachment sent from the portal, riding its reply.
+ *
+ * The client has no key until it composes: the reply mints `tk_temp`, which
+ * wraps both the message text and the file key, so the file cannot be
+ * uploaded ahead of the message it belongs to. `selfCopy` seals the same
+ * file key to the sender's own public key, because `tk_temp` is zeroed on
+ * send and without it they could not reopen what they sent.
+ */
+export const portalReplyAttachmentSchema = attachmentUploadSchema.extend({
+  selfCopy: eciesTripleSchema,
+});
+export type PortalReplyAttachment = z.infer<typeof portalReplyAttachmentSchema>;
+
+/**
+ * An already-uploaded attachment being tied to a follow-up.
+ *
+ * `portalCopy` is present when the client has an active channel, and seals
+ * the file key to `portal_channels.client_public`. Absent, the file stays
+ * readable by the org alone, which is correct for a ticket with no portal.
+ */
+export const attachmentLinkSchema = z.object({
+  attachmentId: attachmentIdSchema,
+  portalCopy: eciesTripleSchema.optional(),
+});
+export type AttachmentLink = z.infer<typeof attachmentLinkSchema>;
+
+/** Volunteer upload. Precedes the follow-up, so it names its ticket. */
+export const uploadTicketAttachmentInputSchema = attachmentUploadSchema.extend({
+  ticketId: ticketIdSchema,
+});
+export type UploadTicketAttachmentInput = z.infer<
+  typeof uploadTicketAttachmentInputSchema
+>;
 
 /** Client reply: encrypted content + sealed tk_temp wrap + self copy. */
 export const portalReplyInputSchema = z.object({
@@ -200,6 +351,17 @@ export const portalReplyInputSchema = z.object({
   ),
   wrappedTkTemp: base64Bytes(80, "wrappedTkTemp (sealed box)"),
   selfCopy: eciesTripleSchema,
+  /** Optional followup kind: "message" (default) or "contact_correction". */
+  kind: z.enum(["message", "contact_correction"]).optional(),
+  /**
+   * Files sent with this message. They ride the reply rather than a prior
+   * upload because the key that wraps them is this reply's `tk_temp`, which
+   * does not exist until the message is composed.
+   */
+  attachments: z
+    .array(portalReplyAttachmentSchema)
+    .max(PORTAL_ATTACHMENTS_PER_MESSAGE)
+    .default([]),
 });
 export type PortalReplyInput = z.infer<typeof portalReplyInputSchema>;
 
@@ -287,6 +449,7 @@ export const accountUpgradeInputSchema = z.object({
   rewrappedMessages: rewrappedMessagesSchema,
 });
 export type AccountUpgradeInput = z.infer<typeof accountUpgradeInputSchema>;
+export type AccountUpgradeWireInput = z.input<typeof accountUpgradeInputSchema>;
 
 export const accountChangePasswordInputSchema = z.object({
   currentAuthToken: base64Bytes(32, "currentAuthToken"),
@@ -295,4 +458,105 @@ export const accountChangePasswordInputSchema = z.object({
 });
 export type AccountChangePasswordInput = z.infer<
   typeof accountChangePasswordInputSchema
+>;
+
+// ---------------------------------------------------------------------------
+// Intake response listing schemas (T3.0)
+// ---------------------------------------------------------------------------
+
+/** Input for paginated response listing. */
+export const listIntakeResponsesInputSchema = z.object({
+  formId: intakeFormIdSchema,
+  cursor: ticketIdSchema.nullable().default(null),
+  pageSize: z.number().int().min(1).max(100).default(25),
+});
+export type ListIntakeResponsesInput = z.infer<
+  typeof listIntakeResponsesInputSchema
+>;
+
+/** ECIES key wrap triple on the wire (base64url strings). */
+export const wireKeyWrapSchema = z.object({
+  ephemeralPoint: z.string(),
+  nonce: z.string(),
+  wrappedKey: z.string(),
+});
+export type WireKeyWrap = z.infer<typeof wireKeyWrapSchema>;
+
+/** Missing principal reported for lazy backfill. */
+export const missingPrincipalSchema = z.object({
+  volunteerId: userIdSchema,
+  volPublic: z.string(),
+});
+export type MissingPrincipal = z.infer<typeof missingPrincipalSchema>;
+
+/** A single response row in the listing. */
+export const intakeResponseRowSchema = z.object({
+  ticketId: ticketIdSchema,
+  submittedAt: z.string(),
+  encryptedResponse: z.string(),
+  callerKeyWrap: wireKeyWrapSchema
+    .extend({ volunteerId: userIdSchema })
+    .nullable(),
+  orgSealWrap: z.object({ wrappedTk: z.string() }).nullable(),
+  missingPrincipals: z.array(missingPrincipalSchema),
+});
+export type IntakeResponseRowWire = z.infer<typeof intakeResponseRowSchema>;
+
+/** Paginated response listing output. */
+export const listIntakeResponsesOutputSchema = z.object({
+  rows: z.array(intakeResponseRowSchema),
+  nextCursor: ticketIdSchema.nullable(),
+  total: z.number().int(),
+});
+export type ListIntakeResponsesOutput = z.infer<
+  typeof listIntakeResponsesOutputSchema
+>;
+
+/** A single backfill wrap from the client. */
+export const backfillWrapInputSchema = z.object({
+  volunteerId: userIdSchema,
+  ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+  nonce: base64Bytes(24, "nonce"),
+  wrappedKey: base64String("wrappedKey").refine(
+    (s) => s.length <= 256,
+    "wrappedKey too large",
+  ),
+});
+export type BackfillWrapInput = z.infer<typeof backfillWrapInputSchema>;
+
+/** Input for the lazy wrap backfill mutation. */
+export const backfillWrapsInputSchema = z.object({
+  ticketId: ticketIdSchema,
+  wraps: z.array(backfillWrapInputSchema).min(1).max(200),
+});
+export type BackfillWrapsInput = z.infer<typeof backfillWrapsInputSchema>;
+
+/** Output of the backfill mutation. */
+export const backfillWrapsOutputSchema = z.object({
+  inserted: z.number().int(),
+});
+export type BackfillWrapsOutput = z.infer<typeof backfillWrapsOutputSchema>;
+
+/** Input for the CSV export audit log mutation. Carries counts only, never content. */
+export const logExportInputSchema = z.object({
+  formId: intakeFormIdSchema,
+  exportedCount: z.number().int().min(0),
+  skippedCount: z.number().int().min(0),
+});
+export type LogExportInput = z.infer<typeof logExportInputSchema>;
+
+// ---------------------------------------------------------------------------
+// Portal message pagination schemas
+// ---------------------------------------------------------------------------
+
+/** Input for cursor-paged portal message listing. */
+export const portalMessagePageInputSchema = z.object({
+  channelId: portalChannelIdSchema,
+  auth: portalAuthSchema,
+  limit: z.number().int().min(1).max(200).default(50),
+  cursor: portalMessageIdSchema.optional(),
+  direction: z.enum(["older", "newer"]).default("newer"),
+});
+export type PortalMessagePageInput = z.infer<
+  typeof portalMessagePageInputSchema
 >;

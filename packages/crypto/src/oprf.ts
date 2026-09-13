@@ -24,20 +24,18 @@
    runtime; casts are validated by length checks at the consumption boundary. */
 
 import { requireSodium } from "./sodium.js";
+import { hkdf } from "./hkdf.js";
 import { InvalidInputError } from "./errors.js";
 import { assertInputLength } from "./validation.js";
-import { scalarFromInt } from "./bytes.js";
+import { scalarFromInt, concatBytes, encodeLabel } from "./bytes.js";
+import { zeroAll } from "./mem.js";
 import {
   expandMessageXMD,
   HASH_TO_GROUP_DST,
   buildFinalizeInput,
 } from "./rfc.js";
-import type {
-  Scalar,
-  RistrettoPoint,
-  BlindResult,
-  EvaluatedElement,
-} from "./types.js";
+import { type Scalar, HKDF_LABELS } from "./types.js";
+import type { RistrettoPoint, BlindResult, EvaluatedElement } from "./types.js";
 
 /** RFC 9497 Section 4.1: expand_message_xmd output size for ristretto255_from_hash. */
 const HASH_TO_GROUP_EXPAND_BYTES = 64;
@@ -206,6 +204,68 @@ export function lagrangeInterpolate(
     scaledA,
     scaledB,
   ) as RistrettoPoint;
+}
+
+// --- Per-tag share derivation (ADR-091) ---
+
+/** Share size in bytes (ristretto255 scalar). */
+const SHARE_BYTES = 32;
+
+/**
+ * Derive a per-tag OPRF share from a master share.
+ *
+ * This is the OPAQUE per-credential key derivation pattern (SEC-227)
+ * applied per threshold share. Each tag produces an independent scalar
+ * that, when used by both share processes under the same tag, combines
+ * via Lagrange interpolation to a per-tag full key that exists nowhere.
+ *
+ * Per-tag keys bound the static-DH accumulation surface of SEC-224:
+ * queries against a given tag's key are gated by that tag's auth and
+ * lifetime, and the platform-wide accumulation target no longer exists.
+ *
+ * Derivation: HKDF(masterShare, OPRF_TAG_LABEL || tag, 64) then
+ * crypto_core_ristretto255_scalar_reduce to a Scalar. The HKDF info
+ * field is the concatenation of the fixed registry label and the
+ * caller's tag string, binding both injectively (the label is a
+ * fixed-length prefix, the tag is the remaining suffix).
+ *
+ * The 64-byte intermediate is zeroed in a finally block. The caller
+ * owns zeroing the returned scalar.
+ *
+ * @param masterShare - 32-byte OPRF master share (ristretto255 scalar)
+ * @param tag - Identity tag (e.g. "volunteer:<id>", "channel:<org>:<id>")
+ * @returns Per-tag derived scalar for use in BlindEvaluate
+ * @throws InvalidInputError if masterShare is not exactly 32 bytes
+ * @throws InvalidInputError if tag is empty
+ */
+export function deriveTaggedShare(
+  masterShare: Uint8Array,
+  tag: string,
+): Scalar {
+  if (masterShare.length !== SHARE_BYTES) {
+    throw new InvalidInputError(
+      `Master share must be ${String(SHARE_BYTES)} bytes, got ${String(masterShare.length)}`,
+    );
+  }
+  if (tag.length === 0) {
+    throw new InvalidInputError("Tag must not be empty");
+  }
+
+  const sodium = requireSodium();
+  let expanded: Uint8Array | null = null;
+
+  try {
+    // info = label || tag, injectively bound: the label is a fixed prefix
+    // from the HKDF_LABELS registry, the tag is the variable suffix.
+    const info = concatBytes(
+      encodeLabel(HKDF_LABELS.OPRF_TAG),
+      encodeLabel(tag),
+    );
+    expanded = hkdf(masterShare, info, 64);
+    return sodium.crypto_core_ristretto255_scalar_reduce(expanded) as Scalar;
+  } finally {
+    zeroAll(expanded);
+  }
 }
 
 // --- Proactive Share Refresh (tested here, deployed later) ---

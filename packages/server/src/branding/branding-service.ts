@@ -8,6 +8,7 @@ import type {
   UploadIconsInput,
   OrgSchema,
 } from "@care-y/shared";
+import { safeExitUrlSchema } from "@care-y/shared";
 import { validateMagicBytes } from "../telephony/attachment-validator.js";
 import { ValidationError } from "../errors.js";
 import { deriveBrandingKey, decryptBrandingBlob } from "./branding-crypto.js";
@@ -33,6 +34,7 @@ function brandingColumnUpdate(
     | "encrypted_primary_color"
     | "encrypted_accent_color"
     | "encrypted_client_text"
+    | "encrypted_client_support_label"
     | "encrypted_terminology"
   >
 > {
@@ -47,6 +49,8 @@ function brandingColumnUpdate(
       return { encrypted_accent_color: value };
     case "client_text":
       return { encrypted_client_text: value };
+    case "support_label":
+      return { encrypted_client_support_label: value };
     case "terminology":
       return { encrypted_terminology: value };
   }
@@ -57,6 +61,29 @@ export interface PublicBrandingData {
   readonly clientEncryptedBranding: string | null;
   readonly hasIcons: boolean;
   readonly iconVersion: string | null;
+  /**
+   * Where quick exit sends a client. Reaches the browser here rather than
+   * only through the portal bootstrap, which needs a channel and therefore
+   * never covered intake or share links.
+   *
+   * Not secret and not PII, so it rides beside the slug as a plain field
+   * rather than inside the encrypted blob.
+   */
+  readonly safeExitUrl: string | null;
+}
+
+/**
+ * Re-check the stored exit URL on the way out.
+ *
+ * The write boundary already pins the scheme, and this pins it again,
+ * because the value becomes the argument to `location.replace()` on a page
+ * whose whole purpose is leaving quickly. A row that predates the tighter
+ * write rule, or arrives by any path that skips it, degrades to the
+ * client's default rather than to script execution.
+ */
+export function readSafeExitUrl(stored: string | null): string | null {
+  if (stored === null) return null;
+  return safeExitUrlSchema.safeParse(stored).success ? stored : null;
 }
 
 export interface BrandingService {
@@ -83,6 +110,7 @@ export function createBrandingService(
           "encrypted_primary_color",
           "encrypted_accent_color",
           "encrypted_client_text",
+          "encrypted_client_support_label",
           "client_encrypted_branding",
           "encrypted_terminology",
           "icon_192_blob_key",
@@ -95,6 +123,9 @@ export function createBrandingService(
         encryptedPrimaryColor: bufferToBase64(config.encrypted_primary_color),
         encryptedAccentColor: bufferToBase64(config.encrypted_accent_color),
         encryptedClientText: bufferToBase64(config.encrypted_client_text),
+        encryptedClientSupportLabel: bufferToBase64(
+          config.encrypted_client_support_label,
+        ),
         clientEncryptedBranding: bufferToBase64(
           config.client_encrypted_branding,
         ),
@@ -111,6 +142,7 @@ export function createBrandingService(
           "org_public_key",
           "client_encrypted_branding",
           "icon_192_blob_key",
+          "portal_safe_exit_url",
         ])
         .executeTakeFirst();
 
@@ -121,6 +153,7 @@ export function createBrandingService(
         ),
         hasIcons: config?.icon_192_blob_key != null,
         iconVersion: config?.icon_192_blob_key?.slice(0, 8) ?? null,
+        safeExitUrl: readSafeExitUrl(config?.portal_safe_exit_url ?? null),
       };
     },
 

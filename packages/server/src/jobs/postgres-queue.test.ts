@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import pg from "pg";
-import { sql, Kysely, PostgresDialect } from "kysely";
+import { sql, Kysely } from "kysely";
 import { FileMigrationProvider, Migrator } from "kysely/migration";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
@@ -8,7 +8,10 @@ import type { PlatformDatabase } from "../db/types.js";
 import { computeBackoffMs, createPostgresJobQueue } from "./postgres-queue.js";
 import type { JobQueue } from "./queue.js";
 import { JobQueueError } from "./queue.js";
-import { TestSetupError } from "../test-utils.js";
+import {
+  SafeIntrospectionPostgresDialect,
+  TestSetupError,
+} from "../test-utils.js";
 
 pg.types.setTypeParser(pg.types.builtins.INT8, (val: string) =>
   parseInt(val, 10),
@@ -63,7 +66,7 @@ async function createPlatformTestDb(): Promise<PlatformTestDb> {
   }
 
   const pool = new pg.Pool({ connectionString, max: 5 });
-  const dialect = new PostgresDialect({ pool });
+  const dialect = new SafeIntrospectionPostgresDialect({ pool }, "public");
   const db = new Kysely<PlatformDatabase>({ dialect });
 
   // Run platform migrations against the public schema.

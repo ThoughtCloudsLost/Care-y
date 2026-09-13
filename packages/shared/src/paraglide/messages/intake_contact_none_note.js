@@ -10,7 +10,7 @@ const en_intake_contact_none_note = /** @type {(inputs: Intake_Contact_None_Note
 };
 
 const es_intake_contact_none_note = /** @type {(inputs: Intake_Contact_None_NoteInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La organizacion no podra comunicarse contigo.`)
+	return /** @type {LocalizedString} */ (`La organización no podrá comunicarse contigo.`)
 };
 
 /**

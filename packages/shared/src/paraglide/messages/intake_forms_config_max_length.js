@@ -10,7 +10,7 @@ const en_intake_forms_config_max_length = /** @type {(inputs: Intake_Forms_Confi
 };
 
 const es_intake_forms_config_max_length = /** @type {(inputs: Intake_Forms_Config_Max_LengthInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Largo maximo`)
+	return /** @type {LocalizedString} */ (`Largo máximo`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_search_refine_label = /** @type {(inputs: Search_Refine_LabelInputs) =>
 };
 
 const es_search_refine_label = /** @type {(inputs: Search_Refine_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Refinar busqueda`)
+	return /** @type {LocalizedString} */ (`Refinar búsqueda`)
 };
 
 /**

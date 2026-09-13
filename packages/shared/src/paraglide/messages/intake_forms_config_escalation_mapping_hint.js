@@ -10,7 +10,7 @@ const en_intake_forms_config_escalation_mapping_hint = /** @type {(inputs: Intak
 };
 
 const es_intake_forms_config_escalation_mapping_hint = /** @type {(inputs: Intake_Forms_Config_Escalation_Mapping_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Establezca un nivel de alerta para cada opcion.`)
+	return /** @type {LocalizedString} */ (`Establezca un nivel de alerta para cada opción.`)
 };
 
 /**

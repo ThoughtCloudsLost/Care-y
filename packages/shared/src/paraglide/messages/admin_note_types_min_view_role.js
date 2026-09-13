@@ -10,7 +10,7 @@ const en_admin_note_types_min_view_role = /** @type {(inputs: Admin_Note_Types_M
 };
 
 const es_admin_note_types_min_view_role = /** @type {(inputs: Admin_Note_Types_Min_View_RoleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Rol minimo para ver`)
+	return /** @type {LocalizedString} */ (`Rol mínimo para ver`)
 };
 
 /**

@@ -99,6 +99,7 @@ export const HKDF_LABELS = {
   PORTAL_ECIES: "care-y-portal-ecies-v1",
   CLIENT_ACCOUNT_ECIES: "care-y-client-ecies-v1",
   CLIENT_ACCOUNT_AUTH: "care-y-client-auth-v1",
+  OPRF_TAG: "care-y-oprf-tag-v1",
 } as const;
 
 /** BLAKE2b domain separation label for branding key derivation */
@@ -167,4 +168,27 @@ export function toNonce(buf: Uint8Array): Nonce {
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- length-checked branded newtype constructor
   return buf as Nonce;
+}
+
+/** Poly1305 authentication tag, appended by the AEAD. */
+const AEAD_TAG_BYTES = 16;
+
+/**
+ * Validates a buffer as a self-contained ciphertext and brands it.
+ *
+ * The floor is the shortest thing the format can produce: a 24-byte nonce
+ * and a 16-byte tag around an empty plaintext. Anything shorter cannot be
+ * a ciphertext at all, so catching it here turns a truncated or wrong-field
+ * value into an error at its source rather than a decrypt failure several
+ * frames away.
+ */
+export function toCiphertext(buf: Uint8Array): Ciphertext {
+  const minimum = NONCE_BYTES + AEAD_TAG_BYTES;
+  if (buf.length < minimum) {
+    throw new RangeError(
+      `Ciphertext must be at least ${String(minimum)} bytes, got ${String(buf.length)}`,
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- length-checked branded newtype constructor
+  return buf as Ciphertext;
 }

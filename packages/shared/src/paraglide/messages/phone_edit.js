@@ -10,7 +10,7 @@ const en_phone_edit = /** @type {(inputs: Phone_EditInputs) => LocalizedString} 
 };
 
 const es_phone_edit = /** @type {(inputs: Phone_EditInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Editar numero de telefono`)
+	return /** @type {LocalizedString} */ (`Editar número de teléfono`)
 };
 
 /**

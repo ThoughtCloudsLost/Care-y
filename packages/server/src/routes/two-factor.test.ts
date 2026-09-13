@@ -26,6 +26,7 @@ import {
   createMockEmailSender,
   createMockOprfDeps,
   createThrowingProviderFactory,
+  NO_OPTIONAL_ROUTERS,
   createMockProviderFactory,
   createMockTelephonyProvider,
   createTestUser,
@@ -155,6 +156,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // Shared by authDeps and twoFactorDeps, matching production wiring.
       const totpReplayCache = createInMemoryTotpReplayCache();
       return createAppRouter({
+        ...NO_OPTIONAL_ROUTERS,
         authDeps: {
           hasher,
           loginLimiter,
@@ -981,6 +983,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           getProvider: vi.fn().mockResolvedValue(mockProvider),
         });
         return createAppRouter({
+          ...NO_OPTIONAL_ROUTERS,
           authDeps: {
             hasher,
             loginLimiter: createInMemoryRateLimiter({
@@ -1193,6 +1196,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         );
         const totpReplayCache = createInMemoryTotpReplayCache();
         return createAppRouter({
+          ...NO_OPTIONAL_ROUTERS,
           authDeps: {
             hasher,
             loginLimiter: createInMemoryRateLimiter({

@@ -10,7 +10,7 @@ const en_admin_branding_logo_hint = /** @type {(inputs: Admin_Branding_Logo_Hint
 };
 
 const es_admin_branding_logo_hint = /** @type {(inputs: Admin_Branding_Logo_HintInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Aparece en la aplicacion y en las paginas para ${i?.clients}. Tambien se usa como icono de la app al guardarla en la pantalla de inicio.`)
+	return /** @type {LocalizedString} */ (`Aparece en la aplicación y en las páginas para ${i?.clients}. También se usa como icono de la app al guardarla en la pantalla de inicio.`)
 };
 
 /**

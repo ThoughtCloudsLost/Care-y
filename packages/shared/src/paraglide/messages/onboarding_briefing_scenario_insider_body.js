@@ -10,7 +10,7 @@ const en_onboarding_briefing_scenario_insider_body = /** @type {(inputs: Onboard
 };
 
 const es_onboarding_briefing_scenario_insider_body = /** @type {(inputs: Onboarding_Briefing_Scenario_Insider_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un voluntario puede leer cualquier ticket al que este asignado. Una vez que ha visto datos descifrados, ningun control tecnico puede deshacerlo. Limita el dano asignando el minimo de tickets necesarios, monitoreando registros de auditoria y removiendo el acceso cuando un voluntario se va.`)
+	return /** @type {LocalizedString} */ (`Un voluntario puede leer cualquier ticket al que este asignado. Una vez que ha visto datos descifrados, ningún control tecnico puede deshacerlo. Limita el dano asignando el mínimo de tickets necesarios, monitoreando registros de auditoría y removiendo el acceso cuando un voluntario se va.`)
 };
 
 /**

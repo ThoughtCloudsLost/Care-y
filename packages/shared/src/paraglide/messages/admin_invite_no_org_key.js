@@ -10,7 +10,7 @@ const en_admin_invite_no_org_key = /** @type {(inputs: Admin_Invite_No_Org_KeyIn
 };
 
 const es_admin_invite_no_org_key = /** @type {(inputs: Admin_Invite_No_Org_KeyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Clave de organizacion no cargada. No se puede invitar usuarios.`)
+	return /** @type {LocalizedString} */ (`Clave de organización no cargada. No se puede invitar usuarios.`)
 };
 
 /**

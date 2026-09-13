@@ -10,7 +10,7 @@ const en_onboarding_telephony_managed_label = /** @type {(inputs: Onboarding_Tel
 };
 
 const es_onboarding_telephony_managed_label = /** @type {(inputs: Onboarding_Telephony_Managed_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configurar telefonia por mi`)
+	return /** @type {LocalizedString} */ (`Configurar telefonía por mi`)
 };
 
 /**

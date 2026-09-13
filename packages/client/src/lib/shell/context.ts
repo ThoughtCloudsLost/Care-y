@@ -8,6 +8,7 @@
 
 import { createContext } from "svelte";
 import type { TabbarOverride, NavbarOverride } from "./types.js";
+import type { ScrollSection } from "$lib/components/useSectionScroll.svelte.js";
 
 /**
  * The Page scroll container element.
@@ -22,7 +23,7 @@ export const [getScrollContainer, setScrollContainer] =
   createContext<() => HTMLElement | undefined>();
 
 /**
- * Tabbar override: any route can temporarily replace the tab bar
+ * Tabbar override: a route can temporarily replace the tab bar
  * with custom left/middle/right snippet content by setting this
  * context. AppShell renders each slot in its own ToolbarPane with
  * tabbar={false}. Set to undefined to restore the normal tab bar.
@@ -40,7 +41,7 @@ export const [getTabbarOverrideCtx, setTabbarOverrideCtx] =
   createContext<TabbarOverrideContainer>();
 
 /**
- * Tabbar hidden: any route can hide the tab bar entirely by setting
+ * Tabbar hidden: a route can hide the tab bar entirely by setting
  * this to true. Used by the ticket detail route to give the full
  * viewport to the chat + compose bar.
  *
@@ -56,7 +57,7 @@ export const [getTabbarHiddenCtx, setTabbarHiddenCtx] =
   createContext<TabbarHiddenContainer>();
 
 /**
- * Navbar override: any route can replace the default Navbar content
+ * Navbar override: a route can replace the default Navbar content
  * (avatar + org name + search/new-ticket) with custom left/title/right
  * snippets. The real Konsta Navbar remains in AppShell (Glass blur,
  * safe-area handling, theme adaptation preserved). Only the slot
@@ -72,3 +73,26 @@ export interface NavbarOverrideContainer {
 
 export const [getNavbarOverrideCtx, setNavbarOverrideCtx] =
   createContext<NavbarOverrideContainer>();
+
+/**
+ * Section rail: a page with scroll sections can publish its section
+ * list so the desktop SectionRail renders between the sidebar and main
+ * content. The hover-reveal on DesktopSidebar also reads this for the
+ * active page.
+ *
+ * Flow: AppShell creates the reactive container and calls setSectionRailCtx().
+ * Pages publish {sections, active, scrollTo} from their existing $effect
+ * blocks (the same ones that set navbarCtx). Clear to undefined on unmount.
+ */
+export interface SectionRailState {
+  readonly sections: readonly ScrollSection[];
+  readonly active: string;
+  readonly scrollTo: (id: string) => void;
+}
+
+export interface SectionRailContainer {
+  current: SectionRailState | undefined;
+}
+
+export const [getSectionRailCtx, setSectionRailCtx] =
+  createContext<SectionRailContainer>();

@@ -10,7 +10,7 @@ const en_dashboard_encrypted_help_label = /** @type {(inputs: Dashboard_Encrypte
 };
 
 const es_dashboard_encrypted_help_label = /** @type {(inputs: Dashboard_Encrypted_Help_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Por que esta cifrado?`)
+	return /** @type {LocalizedString} */ (`¿Por qué está cifrado?`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_org_general_description = /** @type {(inputs: Admin_Org_General_D
 };
 
 const es_admin_org_general_description = /** @type {(inputs: Admin_Org_General_DescriptionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre de la organizacion, idioma predeterminado y codigo de pais.`)
+	return /** @type {LocalizedString} */ (`Nombre de la organización, idioma predeterminado y código de país.`)
 };
 
 /**

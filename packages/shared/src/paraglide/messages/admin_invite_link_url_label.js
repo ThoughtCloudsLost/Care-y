@@ -10,7 +10,7 @@ const en_admin_invite_link_url_label = /** @type {(inputs: Admin_Invite_Link_Url
 };
 
 const es_admin_invite_link_url_label = /** @type {(inputs: Admin_Invite_Link_Url_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Enlace de invitacion`)
+	return /** @type {LocalizedString} */ (`Enlace de invitación`)
 };
 
 /**

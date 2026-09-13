@@ -10,7 +10,7 @@ const en_admin_users_view_grid = /** @type {(inputs: Admin_Users_View_GridInputs
 };
 
 const es_admin_users_view_grid = /** @type {(inputs: Admin_Users_View_GridInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Vista de cuadricula`)
+	return /** @type {LocalizedString} */ (`Vista de cuadrícula`)
 };
 
 /**

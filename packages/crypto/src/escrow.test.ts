@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import fc from "fast-check";
-import { FC_HEAVY } from "./fc-config.js";
+import { FC_HEAVY, FC_LIGHT } from "./fc-config.js";
 import {
   encryptWithPassphrase,
   decryptWithPassphrase,
   serializeEscrowBlob,
   deserializeEscrowBlob,
+  serializeOprfShares,
+  deserializeOprfShares,
 } from "./escrow.js";
 import {
   getSodium,
@@ -206,6 +208,121 @@ describe("escrow encryption", () => {
       );
       expect(() => deserializeEscrowBlob(zeroVersion)).toThrow(
         /Unknown escrow version: 0/,
+      );
+    });
+  });
+
+  describe("OPRF shares payload", () => {
+    it("roundtrips both master shares", () => {
+      const shareA = sodium.crypto_core_ristretto255_scalar_random();
+      const shareB = sodium.crypto_core_ristretto255_scalar_random();
+
+      const payload = serializeOprfShares(shareA, shareB);
+      const parsed = deserializeOprfShares(payload);
+
+      expect(parsed.shareA).toEqual(shareA);
+      expect(parsed.shareB).toEqual(shareB);
+    });
+
+    it("serialized format is version || shareA || shareB (65 bytes)", () => {
+      const shareA = new Uint8Array(32).fill(0xaa);
+      const shareB = new Uint8Array(32).fill(0xbb);
+
+      const payload = serializeOprfShares(shareA, shareB);
+
+      expect(payload.length).toBe(65);
+      expect(payload[0]).toBe(0x01);
+      expect(payload.subarray(1, 33)).toEqual(shareA);
+      expect(payload.subarray(33)).toEqual(shareB);
+    });
+
+    it("throws InvalidInputError when share A is not 32 bytes", () => {
+      expect(() =>
+        serializeOprfShares(new Uint8Array(31), new Uint8Array(32)),
+      ).toThrow(InvalidInputError);
+    });
+
+    it("throws InvalidInputError when share B is not 32 bytes", () => {
+      expect(() =>
+        serializeOprfShares(new Uint8Array(32), new Uint8Array(33)),
+      ).toThrow(InvalidInputError);
+    });
+
+    it("throws InvalidInputError for truncated payload", () => {
+      const payload = serializeOprfShares(
+        new Uint8Array(32),
+        new Uint8Array(32),
+      );
+      expect(() => deserializeOprfShares(payload.subarray(0, 64))).toThrow(
+        InvalidInputError,
+      );
+    });
+
+    it("throws InvalidInputError for overlong payload", () => {
+      expect(() => deserializeOprfShares(new Uint8Array(66))).toThrow(
+        InvalidInputError,
+      );
+    });
+
+    it("throws InvalidInputError for empty payload", () => {
+      expect(() => deserializeOprfShares(new Uint8Array(0))).toThrow(
+        InvalidInputError,
+      );
+    });
+
+    it("throws InvalidInputError for unknown version", () => {
+      const payload = serializeOprfShares(
+        new Uint8Array(32),
+        new Uint8Array(32),
+      );
+      const tampered = new Uint8Array(payload);
+      tampered[0] = 0x02;
+      expect(() => deserializeOprfShares(tampered)).toThrow(InvalidInputError);
+      expect(() => deserializeOprfShares(tampered)).toThrow(
+        /Unknown OPRF shares payload version: 2/,
+      );
+    });
+
+    it("returns copies independent of the payload buffer", () => {
+      const shareA = new Uint8Array(32).fill(0x11);
+      const shareB = new Uint8Array(32).fill(0x22);
+      const payload = serializeOprfShares(shareA, shareB);
+
+      const parsed = deserializeOprfShares(payload);
+      payload.fill(0);
+
+      expect(parsed.shareA).toEqual(shareA);
+      expect(parsed.shareB).toEqual(shareB);
+    });
+
+    it("roundtrips through passphrase escrow encryption", () => {
+      const shareA = sodium.crypto_core_ristretto255_scalar_random();
+      const shareB = sodium.crypto_core_ristretto255_scalar_random();
+      const passphrase = new TextEncoder().encode("oprf-shares-escrow-test");
+
+      const payload = serializeOprfShares(shareA, shareB);
+      const blob = encryptWithPassphrase(payload, passphrase);
+      const decrypted = decryptWithPassphrase(blob, passphrase);
+      const parsed = deserializeOprfShares(decrypted);
+
+      expect(parsed.shareA).toEqual(shareA);
+      expect(parsed.shareB).toEqual(shareB);
+    }, 120_000);
+
+    it("roundtrips arbitrary 32-byte shares (property-based)", () => {
+      fc.assert(
+        fc.property(
+          fc.uint8Array({ minLength: 32, maxLength: 32 }),
+          fc.uint8Array({ minLength: 32, maxLength: 32 }),
+          (shareA, shareB) => {
+            const parsed = deserializeOprfShares(
+              serializeOprfShares(shareA, shareB),
+            );
+            expect(parsed.shareA).toEqual(shareA);
+            expect(parsed.shareB).toEqual(shareB);
+          },
+        ),
+        { numRuns: FC_LIGHT },
       );
     });
   });

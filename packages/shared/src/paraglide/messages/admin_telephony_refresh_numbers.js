@@ -10,7 +10,7 @@ const en_admin_telephony_refresh_numbers = /** @type {(inputs: Admin_Telephony_R
 };
 
 const es_admin_telephony_refresh_numbers = /** @type {(inputs: Admin_Telephony_Refresh_NumbersInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Actualizar numeros`)
+	return /** @type {LocalizedString} */ (`Actualizar números`)
 };
 
 /**

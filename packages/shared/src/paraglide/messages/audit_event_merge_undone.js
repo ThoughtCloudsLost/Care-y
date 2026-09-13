@@ -10,7 +10,7 @@ const en_audit_event_merge_undone = /** @type {(inputs: Audit_Event_Merge_Undone
 };
 
 const es_audit_event_merge_undone = /** @type {(inputs: Audit_Event_Merge_UndoneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Fusion deshecha`)
+	return /** @type {LocalizedString} */ (`Fusión deshecha`)
 };
 
 /**

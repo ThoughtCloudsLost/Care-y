@@ -10,7 +10,7 @@ const en_intake_forms_config_urgency_mapping_hint = /** @type {(inputs: Intake_F
 };
 
 const es_intake_forms_config_urgency_mapping_hint = /** @type {(inputs: Intake_Forms_Config_Urgency_Mapping_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Elija un nivel de prioridad para cada opcion.`)
+	return /** @type {LocalizedString} */ (`Elija un nivel de prioridad para cada opción.`)
 };
 
 /**

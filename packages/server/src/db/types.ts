@@ -69,9 +69,13 @@ import type {
   EscalationRuleId,
   IntakeFormId,
   IntakeFormFieldId,
+  FormAssetId,
+  NotificationOutboxId,
   ChannelRowId,
   ChannelSecret,
   PortalMessageId,
+  PortalAttachmentId,
+  PortalRecordingId,
   ShareId,
   ClientAccountId,
   ClientAccountSessionId,
@@ -111,7 +115,8 @@ export interface OprfConfigTable {
 
 export interface OprfAuditLogTable {
   id: Generated<OprfAuditId>;
-  user_id: UserId;
+  /** Evaluation audit subject: user uuid or tag string (ADR-091, migration platform/009). */
+  user_id: string;
   hashed_ip: HashedIp;
   reason: string;
   timestamp: Generated<Date>;
@@ -190,6 +195,8 @@ export interface OrgConfigTable {
   encrypted_primary_color: Buffer | null;
   encrypted_accent_color: Buffer | null;
   encrypted_client_text: Buffer | null;
+  // Name clients see above messages from the org. Ciphertext to the server.
+  encrypted_client_support_label: Buffer | null;
   client_encrypted_branding: Buffer | null;
   pii_retention_days: number | null;
   org_public_key: Buffer | null; // Curve25519 (32 bytes), null until first admin onboarding
@@ -218,6 +225,8 @@ export interface OrgConfigTable {
   >;
   setup_completed: ColumnType<boolean, boolean | undefined, boolean>;
   portal_safe_exit_url: string | null;
+  builtin_default_enabled: ColumnType<boolean, boolean | undefined, boolean>;
+  next_alias_suffix: ColumnType<number, number | undefined, number>;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -453,6 +462,13 @@ export interface RecordingsTable {
   duration_seconds: number | null;
   created_at: Generated<Date>;
   deleted_at: Date | null;
+  /**
+   * The file key encrypted under the follow-up's key. Null means the blob
+   * is encrypted directly under that key instead, the envelope voicemail
+   * ingest writes (ADR-089, ADR-092). Readers branch on this rather than
+   * on origin.
+   */
+  file_key_wrap: Buffer | null;
 }
 
 export interface AttachmentsTable {
@@ -465,6 +481,12 @@ export interface AttachmentsTable {
   content_type: string | null;
   created_at: Generated<Date>;
   deleted_at: Date | null;
+  /**
+   * The file key encrypted under the follow-up's key. Null means the blob
+   * is encrypted directly under that key instead, the envelope MMS ingest
+   * writes (ADR-089). Readers branch on this rather than on origin.
+   */
+  file_key_wrap: Buffer | null;
 }
 
 export interface TicketDependenciesTable {
@@ -742,6 +764,12 @@ export interface IntakeFormsTable {
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   is_default: ColumnType<boolean, boolean | undefined, boolean>;
   destination_queue_id: QueueId | null;
+  encrypted_form_meta: Buffer | null;
+  closes_at: ColumnType<
+    Date | null,
+    Date | string | null | undefined,
+    Date | string | null
+  >;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -750,6 +778,7 @@ export interface IntakeFormFieldsTable {
   id: Generated<IntakeFormFieldId>;
   form_id: IntakeFormId;
   position: number;
+  field_key: string;
   field_type: string;
   role: string | null;
   encrypted_label: Buffer;
@@ -779,6 +808,15 @@ export interface IntakeKeyWrapsTable {
   ticket_id: TicketId;
   wrapped_tk: Buffer;
   algorithm: Generated<string>;
+  created_at: Generated<Date>;
+}
+
+// --- Form assets (blob metadata for rich-text images and banners) ---
+
+export interface FormAssetsTable {
+  blob_id: FormAssetId;
+  blob_key: BlobKey;
+  content_type: string;
   created_at: Generated<Date>;
 }
 
@@ -832,6 +870,45 @@ export interface PortalReplyKeyWrapsTable {
   created_at: Generated<Date>;
 }
 
+/**
+ * The client's wrap of a file key, sealed to portal_channels.client_public.
+ *
+ * The ciphertext holds the key and the filename together, so a name never
+ * sits in plaintext beside the file it describes. The file lives once in
+ * the blob store, referenced through attachment_id.
+ */
+export interface PortalAttachmentsTable {
+  id: Generated<PortalAttachmentId>;
+  attachment_id: AttachmentId;
+  channel_id: ChannelRowId;
+  followup_id: FollowupId;
+  direction: string;
+  ephemeral_point: Buffer;
+  nonce: Buffer;
+  ciphertext: Buffer;
+  created_at: Generated<Date>;
+}
+
+/**
+ * The client's wrap of a recording file key, sealed to
+ * portal_channels.client_public.
+ *
+ * Mirrors portal_attachments but references recordings instead. The
+ * recording itself is stored once in the blob store; this row carries
+ * only the wrapped key that lets the channel's session open it.
+ */
+export interface PortalRecordingsTable {
+  id: Generated<PortalRecordingId>;
+  recording_id: RecordingId;
+  channel_id: ChannelRowId;
+  followup_id: FollowupId;
+  direction: string;
+  ephemeral_point: Buffer;
+  nonce: Buffer;
+  ciphertext: Buffer;
+  created_at: Generated<Date>;
+}
+
 // --- Client accounts (encrypted account portal) ---
 
 export interface ClientAccountsTable {
@@ -850,6 +927,29 @@ export interface ClientAccountSessionsTable {
   token_hash: Buffer;
   expires_at: Date;
   created_at: Generated<Date>;
+}
+
+// --- Notification outbox (transactional outbox for durable dispatch) ---
+
+export interface NotificationOutboxTable {
+  id: Generated<NotificationOutboxId>;
+  event_type: string;
+  ticket_id: TicketId;
+  queue_id: QueueId;
+  form_id: IntakeFormId | null;
+  actor_user_id: UserId | null;
+  status: ColumnType<string, string | undefined, string>;
+  attempt_count: ColumnType<number, number | undefined, number>;
+  max_attempts: ColumnType<number, number | undefined, number>;
+  next_attempt_at: ColumnType<Date, Date | undefined, Date>;
+  created_at: ColumnType<Date, Date | undefined, Date>;
+  completed_at: Date | null;
+  failed_at: Date | null;
+  last_error: string | null;
+  // Migration 101: lifecycle event columns
+  note_type_id: NoteTypeId | null;
+  encrypted_mentioned_pseudonyms: Buffer | null;
+  escalation_rule_id: EscalationRuleId | null;
 }
 
 export interface TenantDatabase {
@@ -921,13 +1021,19 @@ export interface TenantDatabase {
   intake_key_wraps: IntakeKeyWrapsTable;
   // Merge candidate dismissals
   merge_candidate_dismissals: MergeCandidateDismissalsTable;
+  // Form assets (rich-text images and banners)
+  form_assets: FormAssetsTable;
   // Client portal
   portal_channels: PortalChannelsTable;
   portal_messages: PortalMessagesTable;
+  portal_attachments: PortalAttachmentsTable;
+  portal_recordings: PortalRecordingsTable;
   portal_reply_key_wraps: PortalReplyKeyWrapsTable;
   // Client portal (share links)
   share_links: ShareLinksTable;
   // Client accounts (encrypted account portal)
   client_accounts: ClientAccountsTable;
   client_account_sessions: ClientAccountSessionsTable;
+  // Notification outbox (transactional outbox for durable dispatch)
+  notification_outbox: NotificationOutboxTable;
 }

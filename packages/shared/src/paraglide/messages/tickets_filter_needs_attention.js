@@ -10,7 +10,7 @@ const en_tickets_filter_needs_attention = /** @type {(inputs: Tickets_Filter_Nee
 };
 
 const es_tickets_filter_needs_attention = /** @type {(inputs: Tickets_Filter_Needs_AttentionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Necesita atencion`)
+	return /** @type {LocalizedString} */ (`Necesita atención`)
 };
 
 /**

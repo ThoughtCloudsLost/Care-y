@@ -10,7 +10,7 @@ const en_admin_quarantine_dismiss_confirm = /** @type {(inputs: Admin_Quarantine
 };
 
 const es_admin_quarantine_dismiss_confirm = /** @type {(inputs: Admin_Quarantine_Dismiss_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esto eliminara permanentemente la grabacion. Esta seguro?`)
+	return /** @type {LocalizedString} */ (`¿Esto eliminará permanentemente la grabación. Está seguro?`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_privacy_sharing_body = /** @type {(inputs: Intake_Privacy_Sharin
 };
 
 const es_intake_privacy_sharing_body = /** @type {(inputs: Intake_Privacy_Sharing_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los voluntarios asignados a tu caso pueden leer tu informacion despues de descifrarla en sus propios dispositivos. Si llamas o envias un mensaje de texto a la linea de ayuda, tu numero de telefono pasa por el proveedor de servicio telefonico (actualmente Twilio, una empresa estadounidense) para conectar la llamada o entregar el mensaje.`)
+	return /** @type {LocalizedString} */ (`Los voluntarios asignados a tu caso pueden leer tu información después de descifrarla en sus propios dispositivos. Si llamas o envias un mensaje de texto a la línea de ayuda, tu número de teléfono pasa por el proveedor de servicio telefónico (actualmente Twilio, una empresa estadounidense) para conectar la llamada o entregar el mensaje.`)
 };
 
 /**

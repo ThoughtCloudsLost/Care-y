@@ -10,7 +10,7 @@ const en_admin_templates_delete_confirm = /** @type {(inputs: Admin_Templates_De
 };
 
 const es_admin_templates_delete_confirm = /** @type {(inputs: Admin_Templates_Delete_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Estas seguro de que deseas eliminar esta plantilla?`)
+	return /** @type {LocalizedString} */ (`¿Estas seguro de que deseas eliminar esta plantilla?`)
 };
 
 /**

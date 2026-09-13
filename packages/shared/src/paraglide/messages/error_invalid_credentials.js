@@ -10,7 +10,7 @@ const en_error_invalid_credentials = /** @type {(inputs: Error_Invalid_Credentia
 };
 
 const es_error_invalid_credentials = /** @type {(inputs: Error_Invalid_CredentialsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usuario de inicio de sesion o contraseña incorrectos.`)
+	return /** @type {LocalizedString} */ (`Usuario de inicio de sesión o contraseña incorrectos.`)
 };
 
 /**

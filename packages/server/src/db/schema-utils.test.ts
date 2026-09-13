@@ -7,9 +7,10 @@ import {
   createPlatformMigrator,
 } from "./schema-utils.js";
 import type { MigrationResult } from "kysely/migration";
-import { Kysely, PostgresDialect, sql } from "kysely";
+import { Kysely, sql } from "kysely";
 import pg from "pg";
 import type { PlatformDatabase } from "./types.js";
+import { SafeIntrospectionPostgresDialect } from "../test-utils.js";
 
 describe("isValidOrgSchemaName", () => {
   it("accepts a valid org schema name", () => {
@@ -148,7 +149,7 @@ describe.skipIf(!process.env.DATABASE_URL)("schema-utils (DB)", () => {
       max: 3,
     });
     platformDb = new Kysely<PlatformDatabase>({
-      dialect: new PostgresDialect({ pool }),
+      dialect: new SafeIntrospectionPostgresDialect({ pool }),
     });
   });
 

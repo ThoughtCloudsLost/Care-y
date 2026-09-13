@@ -10,7 +10,7 @@ const en_admin_telephony_outbound_calls_helper = /** @type {(inputs: Admin_Telep
 };
 
 const es_admin_telephony_outbound_calls_helper = /** @type {(inputs: Admin_Telephony_Outbound_Calls_HelperInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`El numero que los ${i?.clients} ven cuando un ${i?.volunteer} les llama`)
+	return /** @type {LocalizedString} */ (`El número que los ${i?.clients} ven cuando un ${i?.volunteer} les llama`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_escrow_passphrase_guidance = /** @type {(inputs: Admin_Escrow_Pas
 };
 
 const es_admin_escrow_passphrase_guidance = /** @type {(inputs: Admin_Escrow_Passphrase_GuidanceInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Use una frase larga y memorable. Ejemplo: cuatro o mas palabras aleatorias como 'manana rio tranquilo farol'. Mas larga siempre es mejor.`)
+	return /** @type {LocalizedString} */ (`Use una frase larga y memorable. Ejemplo: cuatro o más palabras aleatorias como 'manana rio tranquilo farol'. Más larga siempre es mejor.`)
 };
 
 /**

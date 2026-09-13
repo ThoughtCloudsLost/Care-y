@@ -10,7 +10,7 @@ const en_dashboard_empty_section = /** @type {(inputs: Dashboard_Empty_SectionIn
 };
 
 const es_dashboard_empty_section = /** @type {(inputs: Dashboard_Empty_SectionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nada aqui ahora mismo`)
+	return /** @type {LocalizedString} */ (`Nada aquí ahora mismo`)
 };
 
 /**

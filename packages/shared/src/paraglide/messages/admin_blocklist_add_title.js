@@ -10,7 +10,7 @@ const en_admin_blocklist_add_title = /** @type {(inputs: Admin_Blocklist_Add_Tit
 };
 
 const es_admin_blocklist_add_title = /** @type {(inputs: Admin_Blocklist_Add_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Bloquear numero`)
+	return /** @type {LocalizedString} */ (`Bloquear número`)
 };
 
 /**

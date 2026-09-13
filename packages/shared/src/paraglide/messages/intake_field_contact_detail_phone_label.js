@@ -10,7 +10,7 @@ const en_intake_field_contact_detail_phone_label = /** @type {(inputs: Intake_Fi
 };
 
 const es_intake_field_contact_detail_phone_label = /** @type {(inputs: Intake_Field_Contact_Detail_Phone_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numero de telefono`)
+	return /** @type {LocalizedString} */ (`Número de teléfono`)
 };
 
 /**

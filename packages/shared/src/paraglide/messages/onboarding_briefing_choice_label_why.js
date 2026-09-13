@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_label_why = /** @type {(inputs: Onboarding_B
 };
 
 const es_onboarding_briefing_choice_label_why = /** @type {(inputs: Onboarding_Briefing_Choice_Label_WhyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Por que deberia importarte`)
+	return /** @type {LocalizedString} */ (`Por qué deberia importarte`)
 };
 
 /**

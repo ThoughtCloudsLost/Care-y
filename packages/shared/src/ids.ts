@@ -331,6 +331,10 @@ export type IntakeFormId = z.infer<typeof intakeFormIdSchema>;
 export const intakeFormFieldIdSchema = z.uuid().brand<"IntakeFormFieldId">();
 export type IntakeFormFieldId = z.infer<typeof intakeFormFieldIdSchema>;
 
+/** `form_assets.blob_id`. */
+export const formAssetIdSchema = z.uuid().brand<"FormAssetId">();
+export type FormAssetId = z.infer<typeof formAssetIdSchema>;
+
 // `intake_forms.slug` is deliberately not branded here. A validated
 // `intakeFormSlugSchema` already exists in `./schemas/intake-forms.js` with the
 // real kebab-case rules, and duplicating it weaker would be worse than leaving
@@ -366,6 +370,22 @@ export type ChannelSecret = z.infer<typeof channelSecretSchema>;
 export const portalMessageIdSchema = z.uuid().brand<"PortalMessageId">();
 export type PortalMessageId = z.infer<typeof portalMessageIdSchema>;
 
+/**
+ * `portal_attachments.id`. Distinct from `portal_attachments.attachment_id`,
+ * which is an AttachmentId referencing the shared blob row: one file has one
+ * AttachmentId and one client-copy row per channel that can read it.
+ */
+export const portalAttachmentIdSchema = z.uuid().brand<"PortalAttachmentId">();
+export type PortalAttachmentId = z.infer<typeof portalAttachmentIdSchema>;
+
+/**
+ * `portal_recordings.id`. Distinct from `portal_recordings.recording_id`,
+ * which is a RecordingId referencing the shared blob row: one recording has
+ * one RecordingId and one client-copy row per channel that can read it.
+ */
+export const portalRecordingIdSchema = z.uuid().brand<"PortalRecordingId">();
+export type PortalRecordingId = z.infer<typeof portalRecordingIdSchema>;
+
 /** `client_accounts.id`, `client_account_sessions.account_id`. */
 export const clientAccountIdSchema = z.uuid().brand<"ClientAccountId">();
 export type ClientAccountId = z.infer<typeof clientAccountIdSchema>;
@@ -385,6 +405,16 @@ export type ClientAccountSessionId = z.infer<
  */
 export const shareIdSchema = z.uuid().brand<"ShareId">();
 export type ShareId = z.infer<typeof shareIdSchema>;
+
+// ---------------------------------------------------------------------------
+// Notification outbox
+// ---------------------------------------------------------------------------
+
+/** `notification_outbox.id`. */
+export const notificationOutboxIdSchema = z
+  .uuid()
+  .brand<"NotificationOutboxId">();
+export type NotificationOutboxId = z.infer<typeof notificationOutboxIdSchema>;
 
 // ---------------------------------------------------------------------------
 // Telephony
@@ -613,6 +643,11 @@ export function newShareId(): ShareId {
 /** Mint a client account id. */
 export function newClientAccountId(): ClientAccountId {
   return randomId() as ClientAccountId;
+}
+
+/** Mint a form asset id. */
+export function newFormAssetId(): FormAssetId {
+  return randomId() as FormAssetId;
 }
 
 /**

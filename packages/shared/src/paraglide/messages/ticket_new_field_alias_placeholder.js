@@ -10,7 +10,7 @@ const en_ticket_new_field_alias_placeholder = /** @type {(inputs: Ticket_New_Fie
 };
 
 const es_ticket_new_field_alias_placeholder = /** @type {(inputs: Ticket_New_Field_Alias_PlaceholderInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Como te referiras a este ${i?.client}`)
+	return /** @type {LocalizedString} */ (`Cómo te referirás a este ${i?.client}`)
 };
 
 /**

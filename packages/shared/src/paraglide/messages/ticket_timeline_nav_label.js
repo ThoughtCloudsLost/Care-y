@@ -10,7 +10,7 @@ const en_ticket_timeline_nav_label = /** @type {(inputs: Ticket_Timeline_Nav_Lab
 };
 
 const es_ticket_timeline_nav_label = /** @type {(inputs: Ticket_Timeline_Nav_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cronologia de la conversacion`)
+	return /** @type {LocalizedString} */ (`Cronologia de la conversación`)
 };
 
 /**

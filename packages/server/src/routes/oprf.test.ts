@@ -41,6 +41,7 @@ import {
   expectTrpcError,
   createMockEmailSender,
   createThrowingProviderFactory,
+  NO_OPTIONAL_ROUTERS,
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
@@ -84,7 +85,10 @@ const EXPECTED_EVALUATED = BLINDED_BYTES.toString("base64url");
 /** Evaluator that returns the input unchanged (sufficient for service-level tests). */
 function createPassthroughEvaluator(): OprfEvaluator {
   return {
-    async evaluate(blindedElement: Uint8Array): Promise<Uint8Array> {
+    async evaluate(
+      blindedElement: Uint8Array,
+      _tag: string,
+    ): Promise<Uint8Array> {
       return blindedElement;
     },
     close(): void {
@@ -140,6 +144,7 @@ function makeRequest(
   overrides?: Partial<OprfEvaluateRequest>,
 ): OprfEvaluateRequest {
   return {
+    kind: "volunteer",
     userId: TEST_USER_ID,
     blindedElement: VALID_BLINDED_ELEMENT,
     ip: TEST_IP,
@@ -459,6 +464,7 @@ describe("OPRF tRPC route", () => {
   function buildCaller(ctxOverrides?: Partial<Context>) {
     const service = createOprfEvaluateService(makeServiceDeps());
     const appRouter = createAppRouter({
+      ...NO_OPTIONAL_ROUTERS,
       authDeps: {
         hasher: createScryptHasher(),
         loginLimiter: createInMemoryRateLimiter({
@@ -524,6 +530,7 @@ describe("OPRF tRPC route", () => {
   it("delegates to service and returns evaluated element", async () => {
     const caller = buildCaller();
     const result = await caller.oprf.evaluate({
+      kind: "volunteer",
       userId: TEST_USER_ID,
       blindedElement: VALID_BLINDED_ELEMENT,
     });
@@ -556,6 +563,7 @@ describe("OPRF tRPC route", () => {
 
     await expectTrpcError(
       caller.oprf.evaluate({
+        kind: "volunteer",
         userId: TEST_USER_ID,
         blindedElement: VALID_BLINDED_ELEMENT,
       }),
@@ -579,6 +587,7 @@ describe("OPRF adminEvaluate route", () => {
       adminEvaluate: mockAdminEvaluate,
     };
     const appRouter = createAppRouter({
+      ...NO_OPTIONAL_ROUTERS,
       authDeps: {
         hasher: createScryptHasher(),
         loginLimiter: createInMemoryRateLimiter({
@@ -667,6 +676,7 @@ describe("OPRF adminEvaluate route", () => {
   it("delegates to service.adminEvaluate with sessionUserId null", async () => {
     const { caller, mockAdminEvaluate } = buildAdminCaller();
     const result = await caller.oprf.adminEvaluate({
+      kind: "volunteer",
       userId: TEST_USER_ID,
       blindedElement: VALID_BLINDED_ELEMENT,
     });
@@ -708,6 +718,7 @@ describe("OPRF adminEvaluate route", () => {
 
     await expectTrpcError(
       caller.oprf.adminEvaluate({
+        kind: "volunteer",
         userId: TEST_USER_ID,
         blindedElement: VALID_BLINDED_ELEMENT,
       }),
@@ -723,6 +734,7 @@ describe("OPRF adminEvaluate route", () => {
 
     await expectTrpcError(
       caller.oprf.adminEvaluate({
+        kind: "volunteer",
         userId: TEST_USER_ID,
         blindedElement: VALID_BLINDED_ELEMENT,
       }),
@@ -844,6 +856,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
 
       const service = createOprfEvaluateService(makeServiceDeps({ evaluator }));
       const appRouter = createAppRouter({
+        ...NO_OPTIONAL_ROUTERS,
         authDeps: {
           hasher: createScryptHasher(),
           loginLimiter: createInMemoryRateLimiter({
@@ -914,6 +927,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
 
       const { caller, evaluator } = buildDockerCaller();
       const result = await caller.oprf.evaluate({
+        kind: "volunteer",
         userId: TEST_USER_ID,
         blindedElement: Buffer.from(blindedElement).toString("base64"),
       });

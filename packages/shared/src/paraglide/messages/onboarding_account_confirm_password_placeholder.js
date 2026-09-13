@@ -10,7 +10,7 @@ const en_onboarding_account_confirm_password_placeholder = /** @type {(inputs: O
 };
 
 const es_onboarding_account_confirm_password_placeholder = /** @type {(inputs: Onboarding_Account_Confirm_Password_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ingresa la contrasena otra vez`)
+	return /** @type {LocalizedString} */ (`Ingresa la contraseña otra vez`)
 };
 
 /**
