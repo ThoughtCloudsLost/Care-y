@@ -13,7 +13,10 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Reaching the test phase costs about 13 minutes on its own (install,
+    # type check, lint, format). The 20 minute ceiling left roughly 6 minutes
+    # for tests and coverage, which is less than the suite needs.
+    timeout-minutes: 35
     permissions:
       contents: read # checkout
       pull-requests: read
