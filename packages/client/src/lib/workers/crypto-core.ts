@@ -67,6 +67,7 @@ import type {
   EvictTkRequest,
   UnwrapOrgKeyRequest,
   UnwrapTkRequest,
+  UnwrapIntakeTkRequest,
   WrapWithVolPublicRequest,
   SealSelfBlobRequest,
   OpenSelfBlobRequest,
@@ -77,13 +78,22 @@ import type {
   OrgDecryptBatchRequest,
   ExportOrgSecretKeyRequest,
   AliasHashRequest,
+  PhoneMatchHashRequest,
+  DetectMergeCandidatesRequest,
+  MergeCandidate,
   WorkerRequest,
   WorkerRequestType,
   RewrapEvent,
   RewrapResultEvent,
   SharedWorkerState,
 } from "./crypto-protocol.js";
-import { normalizeAlias } from "@care-y/shared";
+import {
+  normalizeAlias,
+  normalizeContactPhone,
+  normalizeContactEmail,
+  looksLikePhone,
+  looksLikeEmail,
+} from "@care-y/shared";
 import { TkCache } from "./tk-cache.js";
 
 // ── Sink type ──────────────────────────────────────────────────────
@@ -107,6 +117,7 @@ let volPublic: RistrettoPoint | null = null;
 let orgSecret: Uint8Array | null = null;
 let orgPublicKey: Uint8Array | null = null;
 let aliasIndexKey: Uint8Array | null = null;
+let phoneMatchIndexKey: Uint8Array | null = null;
 
 const tkCache = new TkCache({
   maxEntries: 50,
@@ -729,6 +740,7 @@ export function handleZeroAll(id: number, sink: Sink): void {
   blindState = zeroAndClear(sodium, blindState);
   orgSecret = zeroAndClear(sodium, orgSecret);
   aliasIndexKey = zeroAndClear(sodium, aliasIndexKey);
+  phoneMatchIndexKey = zeroAndClear(sodium, phoneMatchIndexKey);
 
   volPublic = null;
   orgPublicKey = null;
@@ -769,6 +781,7 @@ function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest, sink: Sink): void {
 
     orgSecret = zeroAndClear(sodium, orgSecret);
     aliasIndexKey = zeroAndClear(sodium, aliasIndexKey);
+    phoneMatchIndexKey = zeroAndClear(sodium, phoneMatchIndexKey);
     orgPublicKey = null;
 
     orgSecret = new Uint8Array(unwrappedOrgSecret.byteLength);
@@ -1035,6 +1048,74 @@ function handleCreateTicketKey(req: CreateTicketKeyRequest, sink: Sink): void {
   }
 }
 
+// ── Intake wrap handler ────────────────────────────────────────────
+
+function handleUnwrapIntakeTk(req: UnwrapIntakeTkRequest, sink: Sink): void {
+  if (!requireOrgKeyed(sink, req.id, "unwrapIntakeTk")) return;
+
+  const sodium = requireSodium();
+  const sealedWrap = decode(req.sealedWrap);
+  const pk = assertPresent(orgPublicKey, "orgPublicKey");
+  const sk = assertPresent(orgSecret, "orgSecret");
+
+  let tk: Uint8Array;
+  try {
+    tk = sodium.crypto_box_seal_open(sealedWrap, pk, sk);
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "unwrapIntakeTk",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+    return;
+  }
+
+  // Cache tk so subsequent decryptContent calls (title, description,
+  // follow-ups) work immediately without another unseal.
+  tkCache.set(req.ticketId, tk);
+
+  // When targets are provided, produce ECIES wraps for conversion.
+  if (req.targets && req.targets.length > 0) {
+    try {
+      const wraps = req.targets.map((t) => {
+        const volPub = decode(t.volPublic);
+        const wrap = eciesEncrypt(tk, volPub as RistrettoPoint);
+        return {
+          volunteerId: t.volunteerId,
+          ephemeralPoint: encode(wrap.ephemeralPoint),
+          nonce: encode(wrap.nonce),
+          wrappedKey: encode(wrap.ciphertext),
+        };
+      });
+
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "unwrapIntakeTk",
+        wraps,
+      };
+      sink(msg);
+    } catch (err: unknown) {
+      postError(
+        sink,
+        req.id,
+        "unwrapIntakeTk",
+        err instanceof Error ? err.message : String(err),
+        "ENCRYPT_FAILED",
+      );
+    }
+  } else {
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "unwrapIntakeTk",
+    };
+    sink(msg);
+  }
+}
+
 // ── Org-tier sealed-box handlers ────────────────────────────────────
 
 function handleOrgDecrypt(req: OrgDecryptRequest, sink: Sink): void {
@@ -1134,6 +1215,48 @@ function handleAliasHash(req: AliasHashRequest, sink: Sink): void {
   sink(msg);
 }
 
+function ensurePhoneMatchIndexKey(): Uint8Array {
+  if (phoneMatchIndexKey) return phoneMatchIndexKey;
+  const secret = assertPresent(orgSecret, "orgSecret");
+  phoneMatchIndexKey = hkdfDerive32(secret, HKDF_LABELS.PHONE_MATCH_INDEX);
+  return phoneMatchIndexKey;
+}
+
+function handlePhoneMatchHash(req: PhoneMatchHashRequest, sink: Sink): void {
+  if (!requireOrgKeyed(sink, req.id, "phoneMatchHash")) return;
+
+  const normalized = normalizeContactPhone(req.phone);
+  if (normalized == null) {
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "phoneMatchHash",
+      hash: null,
+    };
+    sink(msg);
+    return;
+  }
+
+  const sodium = requireSodium();
+  const key = ensurePhoneMatchIndexKey();
+  const hmac = sodium.crypto_auth_hmacsha512(
+    textEncoder.encode(normalized),
+    key,
+  );
+
+  const hex = Array.from(hmac, (b) => b.toString(16).padStart(2, "0")).join("");
+
+  sodium.memzero(hmac);
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "phoneMatchHash",
+    hash: hex,
+  };
+  sink(msg);
+}
+
 function handleOrgDecryptBatch(req: OrgDecryptBatchRequest, sink: Sink): void {
   if (!requireOrgKeyed(sink, req.id, "orgDecryptBatch")) return;
 
@@ -1190,6 +1313,259 @@ function handleGetOrgPublicKey(id: number, sink: Sink): void {
     ok: true,
     type: "getOrgPublicKey",
     orgPublicKey: encode(assertPresent(orgPublicKey, "orgPublicKey")),
+  };
+  sink(msg);
+}
+
+// ── Merge candidate detection ──────────────────────────────────────
+
+/**
+ * Per-client contact fingerprint: normalized phone/email values extracted
+ * from decrypted intake responses and telephony phone records.
+ */
+interface ClientContactFingerprint {
+  readonly clientId: string;
+  readonly phones: readonly string[];
+  readonly emails: readonly string[];
+}
+
+/**
+ * Extracts contact values from a decrypted intake form response blob,
+ * using the field-id-to-role map for tagged extraction and falling back
+ * to pattern matching on untagged text fields.
+ */
+/** Exported for tests. */
+export function extractContactsFromResponse(
+  responseJson: string,
+  fieldRoles: ReadonlyMap<string, string>,
+): { phones: string[]; emails: string[] } {
+  const phones: string[] = [];
+  const emails: string[] = [];
+
+  let parsed: { answers?: unknown[] };
+  try {
+    parsed = JSON.parse(responseJson) as { answers?: unknown[] };
+  } catch {
+    return { phones, emails };
+  }
+
+  if (!Array.isArray(parsed.answers)) return { phones, emails };
+
+  for (const answer of parsed.answers) {
+    if (
+      typeof answer !== "object" ||
+      answer === null ||
+      !("fieldId" in answer) ||
+      !("value" in answer)
+    ) {
+      continue;
+    }
+    const a = answer as { fieldId: string; value: unknown; fieldType?: string };
+    if (typeof a.value !== "string") continue;
+
+    const role = fieldRoles.get(a.fieldId);
+
+    // Role-tagged extraction (priority)
+    if (role === "phone-contact") {
+      const norm = normalizeContactPhone(a.value);
+      if (norm != null) phones.push(norm);
+      continue;
+    }
+    if (role === "email-contact") {
+      const norm = normalizeContactEmail(a.value);
+      if (norm != null) emails.push(norm);
+      continue;
+    }
+
+    // Default-form stable ids: "default:phone" / "default:email"
+    if (a.fieldId === "default:phone") {
+      const norm = normalizeContactPhone(a.value);
+      if (norm != null) phones.push(norm);
+      continue;
+    }
+    if (a.fieldId === "default:email") {
+      const norm = normalizeContactEmail(a.value);
+      if (norm != null) emails.push(norm);
+      continue;
+    }
+
+    // Pattern-match fallback for untagged text fields only
+    if (role != null) continue; // tagged field with a non-contact role, skip
+    if (looksLikePhone(a.value)) {
+      const norm = normalizeContactPhone(a.value);
+      if (norm != null) phones.push(norm);
+    } else if (looksLikeEmail(a.value)) {
+      const norm = normalizeContactEmail(a.value);
+      if (norm != null) emails.push(norm);
+    }
+  }
+
+  return { phones, emails };
+}
+
+function handleDetectMergeCandidates(
+  req: DetectMergeCandidatesRequest,
+  sink: Sink,
+): void {
+  if (!requireKeyed(sink, req.id, "detectMergeCandidates")) return;
+
+  const sodium = requireSodium();
+  const phoneKey = ensurePhoneMatchIndexKey();
+  const fingerprints: ClientContactFingerprint[] = [];
+
+  for (const client of req.clients) {
+    const clientPhoneHashes: string[] = [];
+    const clientEmails: string[] = [];
+
+    // Stored phone match hash (server-persisted, browser-computed)
+    if (client.phoneMatchHash != null) {
+      clientPhoneHashes.push(client.phoneMatchHash);
+    }
+
+    // Decrypt intake response blobs and extract contacts
+    for (const resp of client.intakeResponses) {
+      let tk: Uint8Array | null = null;
+
+      // Try intake wrap first (sealed box), then vol-wrap (ECIES)
+      if (resp.intakeWrap != null && resp.intakeWrap !== "") {
+        const pk = orgPublicKey;
+        const sk = orgSecret;
+        if (pk != null && sk != null) {
+          try {
+            const sealedWrap = decode(resp.intakeWrap);
+            tk = sodium.crypto_box_seal_open(sealedWrap, pk, sk);
+            tkCache.set(resp.ticketId, tk);
+          } catch {
+            // Intake wrap unseal failed; skip this response
+            continue;
+          }
+        }
+      }
+
+      if (!tk) {
+        // Try ECIES vol-wrap
+        const cached = tkCache.get(resp.ticketId);
+        if (cached) {
+          tk = cached;
+        } else {
+          const vp = volPrivate;
+          if (!vp) continue;
+          try {
+            const ephemeralPoint = decode(resp.ephemeralPoint);
+            const nonce = decode(resp.nonce);
+            const wrappedKey = decode(resp.wrappedKey);
+            tk = eciesDecrypt(
+              ephemeralPoint as RistrettoPoint,
+              nonce as Nonce,
+              wrappedKey,
+              vp,
+            );
+            tkCache.set(resp.ticketId, tk);
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      // Decrypt the response blob
+      try {
+        const ciphertextBuf = decode(resp.encryptedResponse);
+        const aad = buildContentAad(resp.ticketId, "intake-response");
+        const plaintext = decryptContent(
+          ciphertextBuf as Ciphertext,
+          tk as SymmetricKey,
+          aad,
+        );
+
+        try {
+          const responseJson = textDecoder.decode(plaintext);
+          const contacts = extractContactsFromResponse(
+            responseJson,
+            resp.fieldRoles,
+          );
+          // Hash extracted phone numbers for comparison
+          for (const phone of contacts.phones) {
+            const hmac = sodium.crypto_auth_hmacsha512(
+              textEncoder.encode(phone),
+              phoneKey,
+            );
+            const hex = Array.from(hmac, (b) =>
+              b.toString(16).padStart(2, "0"),
+            ).join("");
+            sodium.memzero(hmac);
+            clientPhoneHashes.push(hex);
+          }
+          clientEmails.push(...contacts.emails);
+        } finally {
+          sodium.memzero(plaintext);
+        }
+      } catch {
+        // Decrypt failed for this response; continue with others
+      }
+    }
+
+    if (clientPhoneHashes.length > 0 || clientEmails.length > 0) {
+      fingerprints.push({
+        clientId: client.clientId,
+        phones: clientPhoneHashes,
+        emails: clientEmails,
+      });
+    }
+  }
+
+  // Compare all pairs for matching contacts
+  const candidates: MergeCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < fingerprints.length; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by fingerprints.length in the for-loop condition
+    const a = fingerprints[i];
+    if (!a) continue;
+    for (let j = i + 1; j < fingerprints.length; j++) {
+      // eslint-disable-next-line security/detect-object-injection -- j is bounded by fingerprints.length in the for-loop condition
+      const b = fingerprints[j];
+      if (!b) continue;
+
+      const pairKey =
+        a.clientId < b.clientId
+          ? `${a.clientId}:${b.clientId}`
+          : `${b.clientId}:${a.clientId}`;
+      if (seen.has(pairKey)) continue;
+
+      // Check phone hash match
+      for (const phoneHash of a.phones) {
+        if (b.phones.includes(phoneHash)) {
+          candidates.push({
+            clientIdA: a.clientId < b.clientId ? a.clientId : b.clientId,
+            clientIdB: a.clientId < b.clientId ? b.clientId : a.clientId,
+            matchKind: "phone",
+          });
+          seen.add(pairKey);
+          break;
+        }
+      }
+      if (seen.has(pairKey)) continue;
+
+      // Check email match
+      for (const email of a.emails) {
+        if (b.emails.includes(email)) {
+          candidates.push({
+            clientIdA: a.clientId < b.clientId ? a.clientId : b.clientId,
+            clientIdB: a.clientId < b.clientId ? b.clientId : a.clientId,
+            matchKind: "email",
+          });
+          seen.add(pairKey);
+          break;
+        }
+      }
+    }
+  }
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "detectMergeCandidates",
+    candidates,
   };
   sink(msg);
 }
@@ -1252,6 +1628,9 @@ export function createDispatcher(
         case "unwrapTk":
           handleUnwrapTk(req, sink);
           break;
+        case "unwrapIntakeTk":
+          handleUnwrapIntakeTk(req, sink);
+          break;
         case "wrapWithVolPublic":
           handleWrapWithVolPublic(req, sink);
           break;
@@ -1284,6 +1663,12 @@ export function createDispatcher(
           break;
         case "aliasHash":
           handleAliasHash(req, sink);
+          break;
+        case "phoneMatchHash":
+          handlePhoneMatchHash(req, sink);
+          break;
+        case "detectMergeCandidates":
+          handleDetectMergeCandidates(req, sink);
           break;
         case "connect":
         case "disconnect":

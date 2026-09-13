@@ -93,6 +93,7 @@ export const HKDF_LABELS = {
   ORG_UNWRAP: "care-y-org-key-unwrap-v1",
   ECIES_WRAP: "care-y-ecies-wrap-v1",
   ALIAS_INDEX: "care-y-alias-index-v1",
+  PHONE_MATCH_INDEX: "care-y-phone-match-index-v1",
 } as const;
 
 /** BLAKE2b domain separation label for branding key derivation */

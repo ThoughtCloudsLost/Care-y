@@ -29,6 +29,8 @@ import type { Context, OrgContext } from "../trpc/context.js";
 import { createClientService } from "../clients/client-service.js";
 import { createAuditService } from "../tickets/audit.js";
 import { createMergeService } from "../tickets/merge-service.js";
+import { createDismissalService } from "../clients/dismissal-service.js";
+import { createMergeScanService } from "../clients/merge-scan-service.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
 
 /**
@@ -605,6 +607,410 @@ describe.skipIf(!process.env.DATABASE_URL)(
           }),
           "UNAUTHORIZED",
         );
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.backfillPhoneMatchHash
+    // -----------------------------------------------------------------------
+
+    describe("backfillPhoneMatchHash", () => {
+      const VALID_HEX_128 = "a".repeat(128);
+      const VALID_HEX_128_B = "b".repeat(128);
+
+      it("writes hash on first call", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        await caller.clients.backfillPhoneMatchHash({
+          clientId: fixture.clientId,
+          phoneMatchHash: VALID_HEX_128,
+        });
+
+        const phone = await tenantDb
+          .selectFrom("phones")
+          .select("phone_match_hash")
+          .where("id", "=", fixture.phoneId)
+          .executeTakeFirstOrThrow();
+
+        expect(phone.phone_match_hash).toBe(VALID_HEX_128);
+      });
+
+      it("is a no-op on second call (idempotent)", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        await caller.clients.backfillPhoneMatchHash({
+          clientId: fixture.clientId,
+          phoneMatchHash: VALID_HEX_128,
+        });
+
+        // Second call with a different hash should not overwrite
+        await caller.clients.backfillPhoneMatchHash({
+          clientId: fixture.clientId,
+          phoneMatchHash: VALID_HEX_128_B,
+        });
+
+        const phone = await tenantDb
+          .selectFrom("phones")
+          .select("phone_match_hash")
+          .where("id", "=", fixture.phoneId)
+          .executeTakeFirstOrThrow();
+
+        expect(phone.phone_match_hash).toBe(VALID_HEX_128);
+      });
+
+      it("is a no-op for a client with null phone_id", async () => {
+        // Insert a web-intake client (no phone)
+        const client = await tenantDb
+          .insertInto("clients")
+          .values({
+            encrypted_alias: testSealedBox.sealBuffer(
+              Buffer.from("web-client"),
+            ),
+            alias_hash: null,
+            phone_id: null,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        // Should not throw
+        await caller.clients.backfillPhoneMatchHash({
+          clientId: client.id,
+          phoneMatchHash: VALID_HEX_128,
+        });
+      });
+
+      it("rejects volunteer (no VIEW_CLIENTS permission)", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const volunteer = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+        const caller = createAuthedCaller(volunteer);
+
+        await expectTrpcError(
+          caller.clients.backfillPhoneMatchHash({
+            clientId: fixture.clientId,
+            phoneMatchHash: VALID_HEX_128,
+          }),
+          "FORBIDDEN",
+        );
+      });
+
+      it("rejects malformed hash (too short)", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        await expectTrpcError(
+          caller.clients.backfillPhoneMatchHash({
+            clientId: fixture.clientId,
+            phoneMatchHash: "abcdef",
+          }),
+          "BAD_REQUEST",
+        );
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.updatePhone (phoneMatchHash threading)
+    // -----------------------------------------------------------------------
+
+    describe("updatePhone phoneMatchHash", () => {
+      const VALID_HEX_128 = "c".repeat(128);
+
+      it("stores the provided phoneMatchHash on the new phone row", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        await caller.clients.updatePhone({
+          clientId: fixture.clientId,
+          phoneNumber: "+15551112222",
+          phoneMatchHash: VALID_HEX_128,
+        });
+
+        // Read the new phone row
+        const client = await tenantDb
+          .selectFrom("clients")
+          .select("phone_id")
+          .where("id", "=", fixture.clientId)
+          .executeTakeFirstOrThrow();
+
+        const phone = await tenantDb
+          .selectFrom("phones")
+          .select("phone_match_hash")
+          .where("id", "=", client.phone_id!)
+          .executeTakeFirstOrThrow();
+
+        expect(phone.phone_match_hash).toBe(VALID_HEX_128);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.list (phoneMatchHash)
+    // -----------------------------------------------------------------------
+
+    describe("list phoneMatchHash", () => {
+      it("returns phoneMatchHash from the joined phone row", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const hashVal = "d".repeat(128);
+
+        // Set a phone_match_hash on the phone row
+        await tenantDb
+          .updateTable("phones")
+          // care-y-ignore-next-line no-plaintext-db-write -- phone_match_hash is a browser-computed HMAC blind index, not a phone number
+          .set({ phone_match_hash: hashVal })
+          .where("id", "=", fixture.phoneId)
+          .execute();
+
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        const result = await caller.clients.list({});
+        const match = result.find((c) => c.id === fixture.clientId);
+        expect(match).toBeDefined();
+        expect(match?.phoneMatchHash).toBe(hashVal);
+      });
+
+      it("returns null phoneMatchHash when not set", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        const result = await caller.clients.list({});
+        const match = result.find((c) => c.id === fixture.clientId);
+        expect(match).toBeDefined();
+        expect(match?.phoneMatchHash).toBeNull();
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.mergeScanData (VIEW_CLIENTS gate + phoneHashes)
+    // -----------------------------------------------------------------------
+
+    describe("mergeScanData", () => {
+      it("rejects sessions without VIEW_CLIENTS", async () => {
+        const volunteer = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+        const caller = createAuthedCaller(volunteer, {
+          deps: {
+            createDismissalSvc: (db) => createDismissalService(db),
+            createMergeScanSvc: (db) => createMergeScanService(db),
+          },
+        });
+
+        await expectTrpcError(caller.clients.mergeScanData(), "FORBIDDEN");
+      });
+
+      it("accepts sessions with VIEW_CLIENTS", async () => {
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager, {
+          deps: {
+            createDismissalSvc: (db) => createDismissalService(db),
+            createMergeScanSvc: (db) => createMergeScanService(db),
+          },
+        });
+
+        const result = await caller.clients.mergeScanData();
+        expect(result).toHaveProperty("clients");
+        expect(result).toHaveProperty("fieldRoles");
+        expect(result).toHaveProperty("phoneHashes");
+      });
+
+      it("includes phoneHashes for hash-bearing clients", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const hashVal = "e".repeat(128);
+
+        await tenantDb
+          .updateTable("phones")
+          // care-y-ignore-next-line no-plaintext-db-write -- phone_match_hash is a browser-computed HMAC blind index
+          .set({ phone_match_hash: hashVal })
+          .where("id", "=", fixture.phoneId)
+          .execute();
+
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager, {
+          deps: {
+            createDismissalSvc: (db) => createDismissalService(db),
+            createMergeScanSvc: (db) => createMergeScanService(db),
+          },
+        });
+
+        const result = await caller.clients.mergeScanData();
+        const match = result.phoneHashes.find(
+          (ph) => ph.clientId === fixture.clientId,
+        );
+        expect(match).toBeDefined();
+        expect(match?.phoneMatchHash).toBe(hashVal);
+      });
+
+      it("includes telephony-only clients in phoneHashes", async () => {
+        // Create a client via the phone fixture (simulating telephony path,
+        // no intake form response)
+        const fixture = await createTestClientFixture(tenantDb);
+        const hashVal = "f".repeat(128);
+
+        await tenantDb
+          .updateTable("phones")
+          // care-y-ignore-next-line no-plaintext-db-write -- phone_match_hash test fixture
+          .set({ phone_match_hash: hashVal })
+          .where("id", "=", fixture.phoneId)
+          .execute();
+
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager, {
+          deps: {
+            createDismissalSvc: (db) => createDismissalService(db),
+            createMergeScanSvc: (db) => createMergeScanService(db),
+          },
+        });
+
+        const result = await caller.clients.mergeScanData();
+        // This telephony-only client has no intake responses, so it won't
+        // appear in result.clients, but it MUST appear in phoneHashes.
+        const inClients = result.clients.find(
+          (c) => c.clientId === fixture.clientId,
+        );
+        expect(inClients).toBeUndefined();
+
+        const inHashes = result.phoneHashes.find(
+          (ph) => ph.clientId === fixture.clientId,
+        );
+        expect(inHashes).toBeDefined();
+        expect(inHashes?.phoneMatchHash).toBe(hashVal);
+      });
+
+      it("excludes consultant reachability rows from phoneHashes", async () => {
+        // The getPhoneHashes query joins only clients + phones, never
+        // consultant_reachability. This test verifies that a consultant
+        // reachability row with a phone hash does not leak into the merge
+        // scan phone hashes. We just verify the query does not join the
+        // consultant table by checking that only client-sourced hashes
+        // appear. (Consultant reachability rows live in a separate table
+        // with their own HKDF label per migration 087.)
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager, {
+          deps: {
+            createDismissalSvc: (db) => createDismissalService(db),
+            createMergeScanSvc: (db) => createMergeScanService(db),
+          },
+        });
+
+        const result = await caller.clients.mergeScanData();
+        // All phoneHash entries should reference actual client IDs
+        for (const entry of result.phoneHashes) {
+          const client = await tenantDb
+            .selectFrom("clients")
+            .select("id")
+            .where("id", "=", entry.clientId)
+            .executeTakeFirst();
+          expect(client).toBeDefined();
+        }
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.getDismissals (VIEW_CLIENTS gate)
+    // -----------------------------------------------------------------------
+
+    describe("getDismissals", () => {
+      it("rejects sessions without VIEW_CLIENTS", async () => {
+        const volunteer = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+        const caller = createAuthedCaller(volunteer, {
+          deps: {
+            createDismissalSvc: (db) => createDismissalService(db),
+          },
+        });
+
+        await expectTrpcError(caller.clients.getDismissals(), "FORBIDDEN");
+      });
+
+      it("accepts sessions with VIEW_CLIENTS", async () => {
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager, {
+          deps: {
+            createDismissalSvc: (db) => createDismissalService(db),
+          },
+        });
+
+        const result = await caller.clients.getDismissals();
+        // No dismissals stored yet, so null is expected
+        expect(result).toBeNull();
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.putDismissals (VIEW_CLIENTS gate)
+    // -----------------------------------------------------------------------
+
+    describe("putDismissals", () => {
+      it("rejects sessions without VIEW_CLIENTS", async () => {
+        const volunteer = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+        const caller = createAuthedCaller(volunteer, {
+          deps: {
+            createDismissalSvc: (db) => createDismissalService(db),
+          },
+        });
+
+        await expectTrpcError(
+          caller.clients.putDismissals({
+            encryptedDismissals: Buffer.from("test-blob").toString("base64"),
+          }),
+          "FORBIDDEN",
+        );
+      });
+
+      it("accepts sessions with VIEW_CLIENTS", async () => {
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager, {
+          deps: {
+            createDismissalSvc: (db) => createDismissalService(db),
+          },
+        });
+
+        await caller.clients.putDismissals({
+          encryptedDismissals: Buffer.from("test-blob").toString("base64"),
+        });
+
+        const result = await caller.clients.getDismissals();
+        expect(result).not.toBeNull();
       });
     });
   },

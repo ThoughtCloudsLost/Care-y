@@ -47,7 +47,8 @@
     readonly id: string;
     readonly encryptedAlias: string;
     readonly aliasHash: string | null;
-    readonly phone: string;
+    readonly phoneMatchHash: string | null;
+    readonly phone: string | null;
     readonly ticketCount: number;
     readonly createdAt: string;
     readonly mergedInto: string | null;
@@ -140,6 +141,50 @@
       backfilledIds.add(client.id);
       void orgKeyManager.aliasHash(plaintext).then((hash) => {
         backfillMutation.mutate({ clientId: client.id, aliasHash: hash });
+      });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Phone match hash backfill
+  // ---------------------------------------------------------------------------
+
+  // Known smell: rendering triggers a write. Same rationale as the alias
+  // hash backfill above. Phone rows created by inbound webhooks have no
+  // browser present to compute the org-derived phone match hash. The first
+  // session that sees the full (unmasked) phone number computes and stores
+  // the hash so cross-channel merge detection can compare it.
+  //
+  // Rows where the displayed phone is masked (manager sessions) will produce
+  // a normalizeContactPhone result under 7 digits, so the Worker returns
+  // null and the backfill skips them. Rows that already carry a non-null
+  // phoneMatchHash are skipped outright.
+  const phoneBackfilledIds = new SvelteSet<string>();
+
+  const phoneBackfillMutation = createMutation(() => ({
+    mutationFn: async (input: { clientId: string; phoneMatchHash: string }) =>
+      clientsRouter.backfillPhoneMatchHash.mutate(input),
+    onError: (
+      _err: Error,
+      variables: { clientId: string; phoneMatchHash: string },
+    ) => {
+      // Allow retry on next render for transient errors.
+      phoneBackfilledIds.delete(variables.clientId);
+    },
+  }));
+
+  $effect(() => {
+    for (const client of clients) {
+      if (client.phoneMatchHash !== null) continue;
+      if (client.phone === null) continue;
+      if (phoneBackfilledIds.has(client.id)) continue;
+      phoneBackfilledIds.add(client.id);
+      void orgKeyManager.phoneMatchHash(client.phone).then((computedIndex) => {
+        if (computedIndex === null) return;
+        phoneBackfillMutation.mutate({
+          clientId: client.id,
+          phoneMatchHash: computedIndex,
+        });
       });
     }
   });
@@ -311,8 +356,15 @@
   const phoneValid = $derived(E164_PATTERN.test(trimmedPhone));
 
   const updatePhoneMutation = createMutation(() => ({
-    mutationFn: async (input: { clientId: string; phoneNumber: string }) =>
-      clientsRouter.updatePhone.mutate(input),
+    mutationFn: async (input: { clientId: string; phoneNumber: string }) => {
+      const phoneMatchHash = await orgKeyManager.phoneMatchHash(
+        input.phoneNumber,
+      );
+      return clientsRouter.updatePhone.mutate({
+        ...input,
+        phoneMatchHash: phoneMatchHash ?? null,
+      });
+    },
     onSuccess: (result: {
       success: boolean;
       conflict: {
@@ -572,10 +624,12 @@
            takes a full replacement rather than an edit of what is shown. -->
       <div class="detail-section">
         <p class="section-label">{m.client_phone_label()}</p>
-        <p class="current-phone">
-          <Phone size={16} aria-hidden="true" />
-          {detail.phone}
-        </p>
+        {#if detail.phone !== null && detail.phone !== ""}
+          <p class="current-phone">
+            <Phone size={16} aria-hidden="true" />
+            {detail.phone}
+          </p>
+        {/if}
         <List nested>
           <ListInput
             label={m.client_phone_label()}

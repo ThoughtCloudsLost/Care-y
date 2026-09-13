@@ -14,7 +14,7 @@
     readonly clientId: string;
     readonly alias: string;
     /** Already formatted by the server, full for admins and masked otherwise. */
-    readonly phone: string;
+    readonly phone: string | null;
     readonly ticketCount: number;
     /** ISO timestamp. */
     readonly createdAt: string;

@@ -36,6 +36,8 @@ export interface TicketDecryptScopeDeps {
   orgCache: OrgDecryptCache;
   ticketId: string;
   keyWrap: TicketKeyWrap | null;
+  /** Org-key sealed wrap from intake_key_wraps, for pre-conversion decrypt. */
+  intakeWrap?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,13 +72,26 @@ export interface TicketDecryptScope {
 export function createTicketDecryptScope(
   deps: TicketDecryptScopeDeps,
 ): TicketDecryptScope {
-  const { ticketCache, followUpCache, orgCache, ticketId, keyWrap } = deps;
+  const {
+    ticketCache,
+    followUpCache,
+    orgCache,
+    ticketId,
+    keyWrap,
+    intakeWrap,
+  } = deps;
 
-  const hasAccess = keyWrap !== null;
+  const hasAccess =
+    keyWrap !== null || (intakeWrap != null && intakeWrap !== "");
 
   return {
     title(encryptedTitle: string): DecryptResult {
-      const raw = ticketCache.decryptTitle(ticketId, keyWrap, encryptedTitle);
+      const raw = ticketCache.decryptTitle(
+        ticketId,
+        keyWrap,
+        encryptedTitle,
+        intakeWrap,
+      );
       return resolveAsyncDecrypt(raw, hasAccess);
     },
 
@@ -85,6 +100,7 @@ export function createTicketDecryptScope(
         ticketId,
         keyWrap,
         encryptedDescription,
+        intakeWrap,
       );
       return resolveAsyncDecrypt(raw, hasAccess);
     },

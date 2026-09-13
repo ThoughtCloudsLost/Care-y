@@ -141,6 +141,7 @@ export interface TicketWireRecord {
   readonly followUpCount: number;
   readonly assignedDisplayName: string | null;
   readonly keyWrap: TicketKeyWrap | null;
+  readonly intakeWrap: string | null;
   readonly clientPhone: string | null;
 }
 
@@ -1665,6 +1666,54 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             deps.blobStore,
             ctx.org.orgSchema,
           );
+        }),
+      ),
+
+    // --- Intake wrap conversion ---
+    getIntakeConversionTargets: volunteerProcedure
+      .input(z.object({ ticketId: z.uuid() }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { getConversionTargets } =
+            await import("../portal/intake-conversion-service.js");
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          return getConversionTargets(
+            ctx.org.tenantDb,
+            access,
+            ctx.user.id,
+            input.ticketId,
+          );
+        }),
+      ),
+
+    convertIntakeKeyWrap: volunteerProcedure
+      .input(
+        z.object({
+          ticketId: z.uuid(),
+          wraps: z.array(
+            z.object({
+              volunteerId: z.uuid(),
+              ephemeralPoint: z.string().min(1),
+              nonce: z.string().min(1),
+              wrappedKey: z.string().min(1),
+            }),
+          ),
+        }),
+      )
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { convertIntakeKeyWrap } =
+            await import("../portal/intake-conversion-service.js");
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          return convertIntakeKeyWrap(ctx.org.tenantDb, access, ctx.user.id, {
+            ticketId: input.ticketId,
+            wraps: input.wraps.map((w) => ({
+              volunteerId: w.volunteerId,
+              ephemeralPoint: Buffer.from(w.ephemeralPoint, "base64"),
+              nonce: Buffer.from(w.nonce, "base64"),
+              wrappedKey: Buffer.from(w.wrappedKey, "base64"),
+            })),
+          });
         }),
       ),
 

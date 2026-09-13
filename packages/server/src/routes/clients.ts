@@ -2,10 +2,11 @@
  * Client management tRPC router.
  *
  * Role requirements per procedure.
- * The list, get, and suggestDuplicates queries run on viewClientsProcedure
- * (VIEW_CLIENTS, manager and above). updateAlias and backfillAliasHash run
- * on adminProcedure. updatePhone runs on volunteerProcedure with a custom
- * access check.
+ * The list, get, suggestDuplicates, mergeScanData, getDismissals, and
+ * putDismissals queries run on viewClientsProcedure (VIEW_CLIENTS,
+ * manager and above). updateAlias and backfillAliasHash run on
+ * adminProcedure. updatePhone runs on volunteerProcedure with a custom
+ * access check. backfillPhoneMatchHash runs on viewClientsProcedure.
  *
  * Client aliases are org-key encrypted. The server stores ciphertext and a
  * browser-supplied blind index hash. Phone values returned to the client
@@ -32,14 +33,18 @@ import {
   updateAliasInputSchema,
   backfillAliasHashInputSchema,
   updatePhoneInputSchema,
+  backfillPhoneMatchHashInputSchema,
   suggestDuplicatesInputSchema,
 } from "@care-y/shared";
 import type { ClientService } from "../clients/client-service.js";
+import type { DismissalService } from "../clients/dismissal-service.js";
+import type { MergeScanService } from "../clients/merge-scan-service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import { maskPhone, formatPhone } from "../utils/sql.js";
 import { ForbiddenError } from "../errors.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // Deps
@@ -60,6 +65,12 @@ export interface ClientRouterDeps {
     clientId: string,
     userId: string,
   ) => Promise<boolean>;
+  readonly createDismissalSvc?: (
+    db: Kysely<TenantDatabase>,
+  ) => DismissalService;
+  readonly createMergeScanSvc?: (
+    db: Kysely<TenantDatabase>,
+  ) => MergeScanService;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,10 +84,11 @@ export interface ClientRouterDeps {
  * formatPhone/maskPhone in their finally blocks.
  */
 function phoneForRole(
-  encryptedNumber: Buffer,
+  encryptedNumber: Buffer | null,
   roleId: string,
   encryptor: FieldEncryptor,
-): string {
+): string | null {
+  if (!encryptedNumber) return null;
   const buf = encryptor.decryptToBuffer(encryptedNumber);
   if (roleId === RoleId.ADMIN) {
     return formatPhone(buf);
@@ -103,6 +115,8 @@ export function createClientRouter(deps: ClientRouterDeps) {
      * Paginated client list with search and sort.
      * Phone numbers are role-masked strings. Aliases are base64 sealed
      * ciphertext, decrypted by the browser through the org decrypt cache.
+     * phoneMatchHash is the browser-computed blind index (or null for
+     * rows that have not been backfilled).
      */
     list: viewClientsProcedure.input(clientListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
@@ -118,6 +132,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
             ctx.user.roleId,
             deps.fieldEncryptor,
           ),
+          phoneMatchHash: r.phoneMatchHash,
           ticketCount: r.ticketCount,
           createdAt: r.createdAt.toISOString(),
           mergedInto: r.mergedInto,
@@ -203,6 +218,23 @@ export function createClientRouter(deps: ClientRouterDeps) {
       ),
 
     /**
+     * Lazy backfill of phone_match_hash for server-created phone rows.
+     * Idempotent: writes only when the phone row's hash is currently NULL.
+     * Tolerates clients with null phone_id (web-intake, no phone row).
+     */
+    backfillPhoneMatchHash: viewClientsProcedure
+      .input(backfillPhoneMatchHashInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
+          await svc.backfillPhoneMatchHash(
+            input.clientId,
+            input.phoneMatchHash,
+          );
+        }),
+      ),
+
+    /**
      * Phone number update.
      *
      * Uses volunteerProcedure (lowest role) with a custom in-handler
@@ -230,6 +262,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
           input.clientId,
           input.phoneNumber,
           ctx.user.id,
+          input.phoneMatchHash ?? null,
         );
         // The conflicting client's alias is ciphertext and leaves as base64,
         // matching suggestDuplicates. Returning the service result directly
@@ -270,5 +303,105 @@ export function createClientRouter(deps: ClientRouterDeps) {
           };
         }),
       ),
+
+    /**
+     * Get the encrypted merge candidate dismissals blob.
+     * Returns null when no dismissals have been stored yet.
+     * Gated on VIEW_CLIENTS so only sessions that can act on merge
+     * candidates see them.
+     */
+    getDismissals: viewClientsProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        if (!deps.createDismissalSvc) return null;
+        const svc = deps.createDismissalSvc(ctx.org.tenantDb);
+        const record = await svc.get();
+        if (!record) return null;
+        return {
+          encryptedDismissals: record.encryptedDismissals,
+          updatedAt: record.updatedAt.toISOString(),
+        };
+      }),
+    ),
+
+    /**
+     * Upsert the encrypted merge candidate dismissals blob.
+     * Ciphertext passthrough: the server never reads the content.
+     * Last-write-wins concurrency (see dismissal-service.ts).
+     * Gated on VIEW_CLIENTS to match getDismissals.
+     */
+    putDismissals: viewClientsProcedure
+      .input(
+        z.object({
+          encryptedDismissals: z.string().min(1).max(1_000_000),
+        }),
+      )
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (!deps.createDismissalSvc) return;
+          const svc = deps.createDismissalSvc(ctx.org.tenantDb);
+          const buf = Buffer.from(input.encryptedDismissals, "base64");
+          await svc.put(buf);
+        }),
+      ),
+
+    /**
+     * Returns intake form response blobs + field role maps for merge
+     * candidate detection, plus browser-computed phone blind index hashes
+     * for cross-channel matching. Ciphertext only; decryption is
+     * browser-side. Gated on VIEW_CLIENTS (merging itself requires that
+     * access level, so candidates shown to sessions that cannot act are
+     * dead UI).
+     */
+    mergeScanData: viewClientsProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        if (!deps.createMergeScanSvc) {
+          return {
+            clients: [] as readonly {
+              clientId: string;
+              responses: readonly {
+                ticketId: string;
+                formId: string;
+                encryptedResponse: string;
+              }[];
+            }[],
+            fieldRoles: [] as readonly {
+              formId: string;
+              fieldId: string;
+              role: string;
+            }[],
+            phoneHashes: [] as readonly {
+              clientId: string;
+              phoneMatchHash: string;
+            }[],
+          };
+        }
+        const svc = deps.createMergeScanSvc(ctx.org.tenantDb);
+        const [clients, fieldRoles, phoneHashes] = await Promise.all([
+          svc.getResponsesByClient(ctx.user.id),
+          svc.getFieldRoles(),
+          svc.getPhoneHashes(),
+        ]);
+
+        return {
+          clients: clients.map((c) => ({
+            clientId: c.clientId,
+            responses: c.responses.map((r) => ({
+              ticketId: r.ticketId,
+              formId: r.formId,
+              encryptedResponse: r.encryptedResponse.toString("base64url"),
+            })),
+          })),
+          fieldRoles: fieldRoles.map((fr) => ({
+            formId: fr.formId,
+            fieldId: fr.fieldId,
+            role: fr.role,
+          })),
+          phoneHashes: phoneHashes.map((ph) => ({
+            clientId: ph.clientId,
+            phoneMatchHash: ph.phoneMatchHash,
+          })),
+        };
+      }),
+    ),
   });
 }

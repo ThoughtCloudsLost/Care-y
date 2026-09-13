@@ -1719,6 +1719,7 @@ describe("createRelayHandler", () => {
         {
           phoneHash: string;
           opsEncryptedPhone: Buffer;
+          phoneMatchHash: string | null;
           orgSchema: string;
           createdAt: number;
         }
@@ -1726,6 +1727,7 @@ describe("createRelayHandler", () => {
       pendingClients.set("token-expired", {
         phoneHash: "hash-1",
         opsEncryptedPhone: encryptedPhone,
+        phoneMatchHash: null,
         orgSchema: "org_test",
         // Created 6 minutes ago (past the 5-minute TTL)
         createdAt: Date.now() - 6 * 60 * 1000,
@@ -1761,6 +1763,7 @@ describe("createRelayHandler", () => {
         {
           phoneHash: string;
           opsEncryptedPhone: Buffer;
+          phoneMatchHash: string | null;
           orgSchema: string;
           createdAt: number;
         }
@@ -1768,6 +1771,7 @@ describe("createRelayHandler", () => {
       pendingClients.set("token-fresh", {
         phoneHash: "hash-2",
         opsEncryptedPhone: freshEncrypted,
+        phoneMatchHash: null,
         orgSchema: "org_test",
         // Created just now (well within 5-minute TTL)
         createdAt: Date.now(),
@@ -1956,6 +1960,7 @@ describe("createRelayHandler", () => {
         {
           phoneHash: string;
           opsEncryptedPhone: Buffer;
+          phoneMatchHash: string | null;
           orgSchema: string;
           createdAt: number;
         }
@@ -2024,6 +2029,7 @@ describe("createRelayHandler", () => {
         {
           phoneHash: string;
           opsEncryptedPhone: Buffer;
+          phoneMatchHash: string | null;
           orgSchema: string;
           createdAt: number;
         }

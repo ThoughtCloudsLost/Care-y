@@ -218,6 +218,13 @@ export interface AliasHashRequest {
   readonly alias: string;
 }
 
+export interface PhoneMatchHashRequest {
+  readonly type: "phoneMatchHash";
+  readonly id: number;
+  /** Raw phone string. The Worker normalizes via normalizeContactPhone before HMAC. */
+  readonly phone: string;
+}
+
 export interface DecryptBlobRequest {
   readonly type: "decryptBlob";
   readonly id: number;
@@ -308,6 +315,60 @@ export interface CreateTicketKeyRequest {
   readonly fields: readonly { name: string; plaintext: string }[];
 }
 
+// ── Merge candidate detection ──────────────────────────────────────
+
+/**
+ * Batch-decrypt intake form responses and telephony phone numbers to
+ * detect likely duplicate clients. The Worker decrypts each blob with
+ * the corresponding tk (via the existing tkCache/wrap machinery),
+ * normalizes contact values, and returns ONLY candidate pairs (client
+ * ids + match kind). Matched contact values never leave the Worker.
+ *
+ * fieldRoleMap maps fieldId -> role so the Worker can extract
+ * phone-contact / email-contact answers from custom-form responses
+ * without pattern matching.
+ */
+export interface DetectMergeCandidatesRequest {
+  readonly type: "detectMergeCandidates";
+  readonly id: number;
+  readonly clients: readonly MergeScanClient[];
+}
+
+/** Per-client data needed by the merge scan Worker op. */
+export interface MergeScanClient {
+  readonly clientId: string;
+  /**
+   * Browser-computed phone match hash (HMAC-SHA512, org-derived key).
+   * Null for clients whose phone is unknown or too short to normalize.
+   * Used for cross-channel matching against hashes computed from intake
+   * form answers inside the Worker.
+   */
+  readonly phoneMatchHash: string | null;
+  /** Per-ticket intake response blobs for this client. */
+  readonly intakeResponses: readonly MergeScanIntakeResponse[];
+}
+
+export interface MergeScanIntakeResponse {
+  /** Ticket id that owns the response blob (AAD component). */
+  readonly ticketId: string;
+  /** ECIES key wrap for the ticket key. */
+  readonly ephemeralPoint: string;
+  readonly nonce: string;
+  readonly wrappedKey: string;
+  /** Intake wrap (sealed box). Null when the ticket has a vol-wrap. */
+  readonly intakeWrap: string | null;
+  /** Encrypted form response blob (nonce || ciphertext), base64. */
+  readonly encryptedResponse: string;
+  /** Field-id-to-role map from the form definition. */
+  readonly fieldRoles: ReadonlyMap<string, string>;
+}
+
+export interface MergeCandidate {
+  readonly clientIdA: string;
+  readonly clientIdB: string;
+  readonly matchKind: "phone" | "email";
+}
+
 // ── SharedWorker lifecycle requests ─────────────────────────────────
 
 /**
@@ -316,6 +377,21 @@ export interface CreateTicketKeyRequest {
  * and public keys if keyed. Used after F5 to detect a still-keyed Worker
  * and skip the password prompt.
  */
+/**
+ * Unseal an intake wrap (crypto_box_seal_open with orgSecret) and cache
+ * the recovered tk. When targets are provided, also produce ECIES wraps
+ * for the conversion mutation.
+ */
+export interface UnwrapIntakeTkRequest {
+  readonly type: "unwrapIntakeTk";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Base64-encoded 80-byte sealed box (crypto_box_seal output). */
+  readonly sealedWrap: string;
+  /** When present, the Worker also produces ECIES wraps for conversion. */
+  readonly targets?: readonly { volunteerId: string; volPublic: string }[];
+}
+
 export interface ConnectRequest {
   readonly type: "connect";
   readonly id: number;
@@ -346,6 +422,7 @@ export type WorkerRequest =
   | GetVolPublicRequest
   | UnwrapOrgKeyRequest
   | UnwrapTkRequest
+  | UnwrapIntakeTkRequest
   | WrapWithVolPublicRequest
   | SealSelfBlobRequest
   | OpenSelfBlobRequest
@@ -357,6 +434,8 @@ export type WorkerRequest =
   | ExportOrgSecretKeyRequest
   | GetOrgPublicKeyRequest
   | AliasHashRequest
+  | PhoneMatchHashRequest
+  | DetectMergeCandidatesRequest
   | ConnectRequest
   | DisconnectRequest;
 
@@ -545,6 +624,32 @@ export interface AliasHashResponse extends SuccessBase {
   readonly hash: string;
 }
 
+export interface PhoneMatchHashResponse extends SuccessBase {
+  readonly type: "phoneMatchHash";
+  /**
+   * Lowercase hex HMAC-SHA512 of the normalized phone, or null when the
+   * phone is too short to normalize (under 7 digits).
+   */
+  readonly hash: string | null;
+}
+
+export interface UnwrapIntakeTkResponse extends SuccessBase {
+  readonly type: "unwrapIntakeTk";
+  /** ECIES wraps for conversion, present only when targets were provided. */
+  readonly wraps?: readonly {
+    readonly volunteerId: string;
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly wrappedKey: string;
+  }[];
+}
+
+export interface DetectMergeCandidatesResponse extends SuccessBase {
+  readonly type: "detectMergeCandidates";
+  /** Candidate pairs. Contains only client ids and match kind, never contact values. */
+  readonly candidates: readonly MergeCandidate[];
+}
+
 // ── SharedWorker lifecycle responses ────────────────────────────────
 
 export type SharedWorkerState = "READY" | "KEYED";
@@ -575,6 +680,8 @@ export type WorkerSuccessResponse =
   | GetVolPublicResponse
   | UnwrapOrgKeyResponse
   | UnwrapTkResponse
+  | UnwrapIntakeTkResponse
+  | DetectMergeCandidatesResponse
   | WrapWithVolPublicResponse
   | SealSelfBlobResponse
   | OpenSelfBlobResponse
@@ -588,6 +695,7 @@ export type WorkerSuccessResponse =
   | ExportOrgSecretKeyResponse
   | GetOrgPublicKeyResponse
   | AliasHashResponse
+  | PhoneMatchHashResponse
   | ConnectResponse
   | DisconnectResponse;
 

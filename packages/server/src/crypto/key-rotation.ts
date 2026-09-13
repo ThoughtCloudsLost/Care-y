@@ -16,6 +16,7 @@ import { type Kysely, sql } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { KeyRotationError, ConflictError } from "../errors.js";
 import { isPgUniqueViolation } from "../db/pg-errors.js";
+import { PendingIntakeWrapsError } from "../portal/intake-conversion-service.js";
 
 export interface ReWrappedKey {
   readonly ticketId: string;
@@ -140,6 +141,18 @@ export function createKeyRotationService(
     },
 
     async applyRotation(input: KeyRotationInput): Promise<void> {
+      // Guard: refuse rotation while intake wraps sealed to the current org
+      // public key are pending conversion. Rotating the org key would make
+      // those sealed wraps unopenable.
+      const pendingIntakeWraps = await db
+        .selectFrom("intake_key_wraps")
+        .select("ticket_id")
+        .limit(1)
+        .executeTakeFirst();
+      if (pendingIntakeWraps) {
+        throw new PendingIntakeWrapsError();
+      }
+
       await db.transaction().execute(async (tx) => {
         // Replace salt and volPublic, then increment key_version
         await tx

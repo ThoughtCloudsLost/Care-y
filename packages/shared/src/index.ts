@@ -15,6 +15,12 @@ export {
 // --- Utilities ---
 export { extractSubdomain } from "./utils/subdomain.js";
 export { normalizeAlias } from "./utils/normalize-alias.js";
+export {
+  normalizeContactPhone,
+  normalizeContactEmail,
+  looksLikePhone,
+  looksLikeEmail,
+} from "./utils/normalize-contact.js";
 
 export {
   emailSchema,
@@ -343,6 +349,8 @@ export {
   type BackfillAliasHashInput,
   updatePhoneInputSchema,
   type UpdatePhoneInput,
+  backfillPhoneMatchHashInputSchema,
+  type BackfillPhoneMatchHashInput,
   suggestDuplicatesInputSchema,
   type SuggestDuplicatesInput,
 } from "./schemas/clients.js";
@@ -539,3 +547,47 @@ export {
   type DeleteEscalationRuleInput,
   type ListEscalationRulesInput,
 } from "./schemas/escalation.js";
+
+// --- Client portal schemas ---
+export {
+  intakeWrappedTkSchema,
+  intakeSubmissionInputSchema,
+  intakeChallengeResponseSchema,
+  intakeSubmitResponseSchema,
+  intakeConfigResponseSchema,
+  publicIntakeFieldSchema,
+  publicIntakeFormSchema,
+  type IntakeSubmissionInput,
+  type IntakeChallengeResponse,
+  type IntakeSubmitResponse,
+  type IntakeConfigResponse,
+  type PublicIntakeField,
+  type PublicIntakeForm,
+} from "./schemas/client-portal.js";
+
+// --- Intake form schemas ---
+export {
+  intakeFieldTypeSchema,
+  intakeFieldRoleSchema,
+  UNIQUE_ROLES_PER_FORM,
+  ROLE_WIDGET_COMPATIBILITY,
+  queueRoutingMappingSchema,
+  urgencyMappingSchema,
+  escalationMappingSchema,
+  intakeFieldConfigSchema,
+  dayOfWeekSchema,
+  availabilityDataSchema,
+  intakeFormResponseSchema,
+  intakeFormSlugSchema,
+  saveIntakeFormInputSchema,
+  type IntakeFieldType,
+  type IntakeFieldRole,
+  type QueueRoutingMapping,
+  type UrgencyMapping,
+  type EscalationMapping,
+  type IntakeFieldConfig,
+  type DayOfWeek,
+  type AvailabilityData,
+  type IntakeFormResponse,
+  type SaveIntakeFormInput,
+} from "./schemas/intake-forms.js";

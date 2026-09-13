@@ -10,6 +10,7 @@
   containers (split view), depending on the component tree ancestor.
 -->
 <script lang="ts">
+  import { intakeConversionInFlight } from "$lib/crypto/intake-conversion-state.js";
   import {
     getDraftForMode,
     setDraftForMode,
@@ -187,8 +188,60 @@
       ticket.id,
       ticket.keyWrap,
       ticket.encryptedTitle,
+      ticket.intakeWrap,
     );
     return typeof result === "string" ? result : "...";
+  });
+
+  // --- Intake wrap conversion (silent background maintenance) ---
+  // When a ticket has an org-key sealed intakeWrap but no volunteer ECIES
+  // wrap, convert the interim wrap into per-volunteer ECIES wraps on
+  // first detail open. The conversion is silent background maintenance
+  // with no user-facing feedback, matching the rewrapFollowUp precedent.
+  $effect(() => {
+    const t = ticket;
+    const wrap = t?.intakeWrap ?? null;
+    if (t === undefined || wrap === null || wrap === "") return;
+    const id = t.id;
+    if (intakeConversionInFlight.has(id)) return;
+
+    intakeConversionInFlight.add(id);
+
+    void (async (): Promise<void> => {
+      try {
+        const targets = await ticketRouter.getIntakeConversionTargets.query({
+          ticketId: id,
+        });
+        if (targets.length === 0) return;
+
+        const { wraps } = await cryptoBridge.unwrapIntakeTk(id, wrap, targets);
+        if (!wraps || wraps.length === 0) return;
+
+        await ticketRouter.convertIntakeKeyWrap.mutate({
+          ticketId: id,
+          wraps: wraps.map((w) => ({
+            volunteerId: w.volunteerId,
+            ephemeralPoint: w.ephemeralPoint,
+            nonce: w.nonce,
+            wrappedKey: w.wrappedKey,
+          })),
+        });
+
+        void queryClient.invalidateQueries({
+          queryKey: ticketKeys.detail(id),
+        });
+      } catch {
+        // Failure leaves the interim wrap in place for retry on next open.
+        if (import.meta.env.DEV) {
+          console.warn(
+            "[TicketDetailOrchestrator] intake wrap conversion failed for",
+            id,
+          );
+        }
+      } finally {
+        intakeConversionInFlight.delete(id);
+      }
+    })();
   });
 
   const cachedFollowUpCount = $derived(

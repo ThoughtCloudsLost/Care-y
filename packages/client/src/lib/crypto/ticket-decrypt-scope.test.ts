@@ -41,8 +41,14 @@ function createMocks(overrides?: {
   const orgDecrypt = vi.fn<() => string | null>();
   orgDecrypt.mockReturnValue(overrides?.orgReturn ?? null);
 
+  const decryptDescription = vi.fn<() => string | undefined>();
+  decryptDescription.mockReturnValue(overrides?.titleReturn);
+
   return {
-    ticketCache: { decryptTitle } as unknown as TicketDecryptCache,
+    ticketCache: {
+      decryptTitle,
+      decryptDescription,
+    } as unknown as TicketDecryptCache,
     followUpCache: { decryptContent } as unknown as FollowUpDecryptCache,
     orgCache: {
       decrypt: orgDecrypt,
@@ -50,7 +56,7 @@ function createMocks(overrides?: {
     } as unknown as OrgDecryptCache,
     ticketId: TICKET_ID,
     keyWrap: KEY_WRAP,
-    mocks: { decryptTitle, decryptContent, orgDecrypt },
+    mocks: { decryptTitle, decryptDescription, decryptContent, orgDecrypt },
   };
 }
 
@@ -67,7 +73,25 @@ describe("TicketDecryptScope", () => {
         TICKET_ID,
         KEY_WRAP,
         ENCRYPTED_TITLE,
+        undefined,
       );
+    });
+
+    it("passes intakeWrap to decryptTitle when provided in deps", () => {
+      const deps = createMocks({ titleReturn: "Web intake" });
+      deps.keyWrap = null;
+      deps.intakeWrap = "sealed-wrap-base64";
+      const scope = createTicketDecryptScope(deps);
+
+      const result = scope.title(ENCRYPTED_TITLE);
+
+      expect(deps.mocks.decryptTitle).toHaveBeenCalledWith(
+        TICKET_ID,
+        null,
+        ENCRYPTED_TITLE,
+        "sealed-wrap-base64",
+      );
+      expect(result).toEqual({ status: "ready", value: "Web intake" });
     });
 
     it("returns loading when cache returns undefined", () => {
@@ -254,6 +278,15 @@ describe("TicketDecryptScope", () => {
   describe("hasAccess", () => {
     it("is true when keyWrap is present", () => {
       const deps = createMocks();
+      const scope = createTicketDecryptScope(deps);
+
+      expect(scope.hasAccess).toBe(true);
+    });
+
+    it("is true when keyWrap is null but intakeWrap is present", () => {
+      const deps = createMocks();
+      deps.keyWrap = null;
+      deps.intakeWrap = "sealed-wrap-base64";
       const scope = createTicketDecryptScope(deps);
 
       expect(scope.hasAccess).toBe(true);

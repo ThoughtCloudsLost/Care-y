@@ -177,6 +177,9 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => {
       has: vi.fn().mockReturnValue(false),
       delete: vi.fn().mockReturnValue(true),
     }),
+    getOrgKeyManager: () => ({
+      phoneMatchHash: vi.fn().mockResolvedValue("ab".repeat(64)),
+    }),
   };
 });
 

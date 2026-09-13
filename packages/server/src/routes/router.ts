@@ -51,6 +51,14 @@ import {
 } from "./escalation.js";
 import type { OrgService } from "../org/service.js";
 import type { ProviderFactory } from "../telephony/factory.js";
+import {
+  createIntakeFormRouter,
+  type IntakeFormRouterDeps,
+} from "./intake-forms.js";
+import {
+  createClientPortalRouter,
+  type ClientPortalRouterDeps,
+} from "./client-portal.js";
 
 function healthCheck(): { status: "ok" } {
   return { status: "ok" };
@@ -76,6 +84,8 @@ export interface RouterDeps {
   readonly voicemailQuarantineDeps?: VoicemailQuarantineRouterDeps;
   readonly clientDeps?: ClientRouterDeps;
   readonly escalationDeps?: EscalationRouterDeps;
+  readonly intakeFormDeps?: IntakeFormRouterDeps;
+  readonly clientPortalDeps?: ClientPortalRouterDeps;
   readonly devDeps?: DevRouterDeps;
 }
 
@@ -141,6 +151,12 @@ export function createAppRouter(deps: RouterDeps) {
       : {}),
     ...(deps.escalationDeps
       ? { escalation: createEscalationRouter(deps.escalationDeps) }
+      : {}),
+    ...(deps.intakeFormDeps
+      ? { intakeForms: createIntakeFormRouter(deps.intakeFormDeps) }
+      : {}),
+    ...(deps.clientPortalDeps
+      ? { clientPortal: createClientPortalRouter(deps.clientPortalDeps) }
       : {}),
     ...(deps.devDeps ? { dev: createDevRouter(deps.devDeps) } : {}),
   });

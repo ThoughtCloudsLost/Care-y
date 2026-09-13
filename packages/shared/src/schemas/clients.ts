@@ -68,8 +68,24 @@ export type BackfillAliasHashInput = z.infer<
 export const updatePhoneInputSchema = z.object({
   clientId: z.uuid(),
   phoneNumber: z.string().regex(/^\+[1-9]\d{1,14}$/, "Must be E.164 format"),
+  /** Browser-computed HMAC-SHA512 blind index (128 hex chars), nullable. */
+  phoneMatchHash: z
+    .string()
+    .regex(/^[0-9a-f]{128}$/)
+    .nullable()
+    .optional(),
 });
 export type UpdatePhoneInput = z.infer<typeof updatePhoneInputSchema>;
+
+// --- Phone match hash backfill (browser supplies hash for server-created rows) ---
+
+export const backfillPhoneMatchHashInputSchema = z.object({
+  clientId: z.uuid(),
+  phoneMatchHash: z.string().regex(/^[0-9a-f]{128}$/),
+});
+export type BackfillPhoneMatchHashInput = z.infer<
+  typeof backfillPhoneMatchHashInputSchema
+>;
 
 // --- Duplicate suggestion (server-side phone hash match) ---
 

@@ -193,6 +193,24 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
     }
     return { isLoading: false, isError: false, error: null, data: undefined };
   },
+  createMutation: (optsFn: () => Record<string, unknown>) => {
+    const opts = optsFn();
+    const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
+    const onSuccess = opts.onSuccess as
+      ((data: unknown, variables: unknown) => void) | undefined;
+    const onError = opts.onError as ((err: unknown) => void) | undefined;
+    return {
+      get isPending() {
+        return false;
+      },
+      mutate(input: unknown) {
+        mutationFn(input).then(
+          (data: unknown) => onSuccess?.(data, input),
+          (err: unknown) => onError?.(err),
+        );
+      },
+    };
+  },
 }));
 
 // vi.mock required: tRPC client construction is lazy, but the mock

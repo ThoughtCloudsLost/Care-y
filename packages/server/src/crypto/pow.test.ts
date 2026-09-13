@@ -102,10 +102,25 @@ describe("PowVerifier", () => {
       verifier.dispose();
     });
 
-    it("returns correct difficulty based on failure count", () => {
+    it("returns correct difficulty based on failure count and config baseDifficulty", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
 
-      expect(verifier.createChallenge("u", 3).difficulty).toBe(16);
+      // TEST_CONFIG.baseDifficulty is 8; tiers escalate at 5 and 8 failures
+      expect(verifier.createChallenge("u", 3).difficulty).toBe(8);
+      expect(verifier.createChallenge("u", 5).difficulty).toBe(20);
+      expect(verifier.createChallenge("u", 8).difficulty).toBe(22);
+      verifier.dispose();
+    });
+
+    it("uses config baseDifficulty 18 for challenges at low failure counts", () => {
+      const verifier = createPowVerifier(
+        { baseDifficulty: 18, challengeTtlMs: 60_000 },
+        clock,
+      );
+
+      expect(verifier.createChallenge("u", 0).difficulty).toBe(18);
+      expect(verifier.createChallenge("u", 4).difficulty).toBe(18);
+      // Tiers still escalate above baseDifficulty
       expect(verifier.createChallenge("u", 5).difficulty).toBe(20);
       expect(verifier.createChallenge("u", 8).difficulty).toBe(22);
       verifier.dispose();

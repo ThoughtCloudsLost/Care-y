@@ -33,6 +33,8 @@ import type {
   WorkerEvent,
   RewrapResultEvent,
   StateChangeEvent,
+  MergeScanClient,
+  MergeCandidate,
 } from "./crypto-protocol.js";
 
 export type BridgeState = "LOADING" | "READY" | "KEYED" | "DESTROYED";
@@ -696,6 +698,63 @@ export class CryptoBridge {
       "aliasHash",
     );
     return resp.hash;
+  }
+
+  /**
+   * Compute the phone match blind index hash inside the Worker.
+   * The index key never leaves the Worker. Returns lowercase hex, or null
+   * when the phone is too short to normalize (under 7 digits).
+   */
+  async phoneMatchHash(phone: string): Promise<string | null> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "phoneMatchHash", phone }),
+      "phoneMatchHash",
+    );
+    return resp.hash;
+  }
+
+  /**
+   * Unseal an intake wrap (crypto_box_seal_open with orgSecret) and cache
+   * the recovered tk. When targets are provided, also produce ECIES wraps
+   * for the conversion mutation.
+   */
+  async unwrapIntakeTk(
+    ticketId: string,
+    sealedWrap: string,
+    targets?: readonly { volunteerId: string; volPublic: string }[],
+  ): Promise<{
+    wraps?: readonly {
+      volunteerId: string;
+      ephemeralPoint: string;
+      nonce: string;
+      wrappedKey: string;
+    }[];
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "unwrapIntakeTk",
+        ticketId,
+        sealedWrap,
+        targets,
+      }),
+      "unwrapIntakeTk",
+    );
+    return { wraps: resp.wraps };
+  }
+
+  /**
+   * Detect merge candidates by batch-decrypting intake responses and
+   * comparing normalized contact values. Returns only client-id pairs
+   * and match kind. Contact values never leave the Worker.
+   */
+  async detectMergeCandidates(
+    clients: readonly MergeScanClient[],
+  ): Promise<readonly MergeCandidate[]> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "detectMergeCandidates", clients }),
+      "detectMergeCandidates",
+    );
+    return resp.candidates;
   }
 
   /** Get the org public key (base64) from the Worker. */

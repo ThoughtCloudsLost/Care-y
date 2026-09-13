@@ -15,7 +15,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { requireRouter } from "$lib/errors.js";
-  import { getOrgDecryptCache } from "$lib/crypto/context.js";
+  import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import PhoneChangeSteps from "./PhoneChangeSteps.svelte";
 
@@ -50,6 +50,7 @@
 
   const clientsRouter = requireRouter(trpc.clients, "clients");
   const orgCache = getOrgDecryptCache();
+  const orgKeyManager = getOrgKeyManager();
   const queryClient = useQueryClient();
 
   let step = $state<Step>("input");
@@ -93,8 +94,15 @@
   // ---------------------------------------------------------------------------
 
   const updatePhoneMutation = createMutation(() => ({
-    mutationFn: async (input: { clientId: string; phoneNumber: string }) =>
-      clientsRouter.updatePhone.mutate(input),
+    mutationFn: async (input: { clientId: string; phoneNumber: string }) => {
+      const phoneMatchHash = await orgKeyManager.phoneMatchHash(
+        input.phoneNumber,
+      );
+      return clientsRouter.updatePhone.mutate({
+        ...input,
+        phoneMatchHash: phoneMatchHash ?? null,
+      });
+    },
     onSuccess: (result: {
       success: boolean;
       conflict: {

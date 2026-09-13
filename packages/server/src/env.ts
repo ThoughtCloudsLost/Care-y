@@ -81,6 +81,15 @@ const envSchema = z.object({
   // Escalation rules checker interval override (ms). Default 300000 (5 min).
   // Only set this in development or testing to speed up the check cycle.
   ESCALATION_RULES_INTERVAL_MS: z.coerce.number().int().positive().optional(),
+
+  // Public intake form proof-of-work difficulty (leading zero bits).
+  // 0 or unset disables PoW. Typical values: 16 (light), 18-20 (moderate).
+  INTAKE_POW_DIFFICULTY: z.coerce.number().int().min(0).default(0),
+
+  // Comma-separated list of trusted reverse proxy IP addresses.
+  // When set, X-Forwarded-For is honored only from these peers (plus loopback).
+  // Leave unset to trust only loopback peers (default for single-proxy setups).
+  TRUSTED_PROXIES: z.string().optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

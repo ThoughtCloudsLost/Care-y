@@ -1,8 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as crypto from "node:crypto";
-import { createTestDb, createTestUser, type TestDb } from "../test-utils.js";
+import {
+  createTestDb,
+  createTestUser,
+  createTestQueue,
+  type TestDb,
+} from "../test-utils.js";
 import { createKeyRotationService } from "./key-rotation.js";
 import { KeyRotationError } from "../errors.js";
+import { PendingIntakeWrapsError } from "../portal/intake-conversion-service.js";
 import type { KeyRotationService } from "./key-rotation.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
@@ -381,6 +387,67 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
       expect(Buffer.compare(row.wrapped_key, originalOrgWrap.wrapped_key)).toBe(
         0,
       );
+    });
+  });
+
+  describe("intake wrap rotation guard", () => {
+    it("throws PendingIntakeWrapsError when intake_key_wraps is non-empty", async () => {
+      const user = await createTestUser(testDb.db);
+      await seedUserKeys(user.id, {
+        vol_public: crypto.randomBytes(32),
+        rotation_lock: false,
+      });
+      await seedWrappedOrgKey(user.id);
+      await service.acquireLock(user.id);
+
+      // Seed an intake_key_wraps row (needs a ticket referencing a queue + client)
+      const q = await createTestQueue(testDb.db, { label: "Intake Guard Q" });
+      const clientAlias = `guard-${crypto.randomUUID().slice(0, 8)}`;
+      const client = await testDb.db
+        .insertInto("clients")
+        .values({
+          encrypted_alias: Buffer.from(clientAlias),
+          alias_hash: clientAlias,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      const ticketId = crypto.randomUUID();
+      await testDb.db
+        .insertInto("tickets")
+        .values({
+          id: ticketId,
+          client_id: client.id,
+          queue_id: q.id,
+          status: "open",
+          priority: "normal",
+          encrypted_title: Buffer.from("ct-title"),
+          encrypted_description: Buffer.from("ct-desc"),
+          key_generation: crypto.randomUUID(),
+        })
+        .execute();
+      await testDb.db
+        .insertInto("intake_key_wraps")
+        .values({
+          ticket_id: ticketId,
+          wrapped_tk: Buffer.alloc(80, 0xab),
+        })
+        .execute();
+
+      await expect(
+        service.applyRotation({
+          userId: user.id,
+          saltNew: crypto.randomBytes(32),
+          volPublicNew: crypto.randomBytes(32),
+          reWrappedKeys: [],
+        }),
+      ).rejects.toThrow(PendingIntakeWrapsError);
+
+      // Clean up: release lock and remove the intake wrap
+      await service.releaseLock(user.id);
+      await testDb.db
+        .deleteFrom("intake_key_wraps")
+        .where("ticket_id", "=", ticketId)
+        .execute();
     });
   });
 });

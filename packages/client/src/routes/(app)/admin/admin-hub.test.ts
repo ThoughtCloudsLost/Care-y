@@ -255,7 +255,9 @@ describe("Admin hub page", () => {
 
       expect(screen.getByText("People")).toBeTruthy();
       expect(screen.queryByText("Communications")).toBeNull();
-      expect(screen.queryByText("Organization")).toBeNull();
+      // Organization group now visible: the Forms destination gates on
+      // MANAGE_QUEUES and lives in the organization group.
+      expect(screen.getByText("Organization")).toBeTruthy();
     });
   });
 

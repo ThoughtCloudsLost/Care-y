@@ -25,6 +25,8 @@ const {
   mockLockMerge,
   mockToastShow,
   mockClientGet,
+  mockBackfillPhoneMatchHash,
+  mockPhoneMatchHash,
 } = vi.hoisted(() => ({
   mockUpdateAlias: vi.fn().mockResolvedValue(undefined),
   mockUpdatePhone: vi.fn().mockResolvedValue({ success: true, conflict: null }),
@@ -32,12 +34,15 @@ const {
   mockLockMerge: vi.fn().mockResolvedValue({}),
   mockToastShow: vi.fn(),
   mockClientGet: vi.fn(),
+  mockBackfillPhoneMatchHash: vi.fn().mockResolvedValue(undefined),
+  mockPhoneMatchHash: vi.fn().mockResolvedValue("aabbccdd" + "00".repeat(60)),
 }));
 
 interface ClientListItem {
   id: string;
   encryptedAlias: string;
   aliasHash: string | null;
+  phoneMatchHash: string | null;
   phone: string;
   ticketCount: number;
   createdAt: string;
@@ -145,6 +150,7 @@ vi.mock("$lib/trpc/index.js", () => ({
       updateAlias: { mutate: mockUpdateAlias },
       updatePhone: { mutate: mockUpdatePhone },
       backfillAliasHash: { mutate: vi.fn().mockResolvedValue(undefined) },
+      backfillPhoneMatchHash: { mutate: mockBackfillPhoneMatchHash },
     },
     tickets: {
       undoMerge: { mutate: mockUndoMerge },
@@ -232,6 +238,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
     encrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
     encryptText: vi.fn().mockResolvedValue("encrypted-base64"),
     aliasHash: vi.fn().mockResolvedValue("deadbeef"),
+    phoneMatchHash: mockPhoneMatchHash,
   }),
 }));
 
@@ -324,6 +331,7 @@ function makeClient(
     id,
     encryptedAlias: `enc-alias-${id}`,
     aliasHash: `hash-${id}`,
+    phoneMatchHash: `phone-hash-${id}`,
     phone: "***1234",
     ticketCount: 2,
     createdAt: "2026-01-15T00:00:00.000Z",
@@ -755,6 +763,7 @@ describe("ClientsSection", () => {
         expect(mockUpdatePhone).toHaveBeenCalledWith({
           clientId: "c-1",
           phoneNumber: "+15550001234",
+          phoneMatchHash: expect.stringMatching(/^[0-9a-f]+$/) as string,
         });
       });
     });
@@ -1036,6 +1045,58 @@ describe("ClientsSection", () => {
           locked: true,
         });
       });
+    });
+  });
+
+  describe("phone match hash backfill", () => {
+    it("fires backfill for a client with null phoneMatchHash and visible phone", async () => {
+      const clients = [
+        makeClient("c-1", { phoneMatchHash: null, phone: "+12125551234" }),
+      ];
+      render(ClientsSection, { props: { clients } });
+
+      await waitFor(() => {
+        expect(mockPhoneMatchHash).toHaveBeenCalledWith("+12125551234");
+      });
+
+      await waitFor(() => {
+        expect(mockBackfillPhoneMatchHash).toHaveBeenCalledWith({
+          clientId: "c-1",
+          phoneMatchHash: expect.stringMatching(/^[0-9a-f]+$/) as string,
+        });
+      });
+    });
+
+    it("skips backfill for a client that already has a phoneMatchHash", () => {
+      const clients = [makeClient("c-1", { phoneMatchHash: "existing-hash" })];
+      render(ClientsSection, { props: { clients } });
+
+      expect(mockBackfillPhoneMatchHash).not.toHaveBeenCalled();
+    });
+
+    it("skips backfill for a client with null phone", () => {
+      const clients = [
+        makeClient("c-1", { phoneMatchHash: null, phone: undefined }),
+      ];
+      render(ClientsSection, { props: { clients } });
+
+      expect(mockBackfillPhoneMatchHash).not.toHaveBeenCalled();
+    });
+
+    it("does not fire backfill twice for the same row", async () => {
+      const clients = [
+        makeClient("c-1", { phoneMatchHash: null, phone: "+12125551234" }),
+      ];
+      const { rerender } = render(ClientsSection, { props: { clients } });
+
+      await waitFor(() => {
+        expect(mockPhoneMatchHash).toHaveBeenCalledTimes(1);
+      });
+
+      // Re-render with the same data should not fire again.
+      await rerender({ clients });
+      // Still only one call.
+      expect(mockPhoneMatchHash).toHaveBeenCalledTimes(1);
     });
   });
 });

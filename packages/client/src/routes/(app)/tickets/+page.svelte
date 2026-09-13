@@ -422,7 +422,12 @@
       decryptTitle: (ticketId) => {
         const t = mapperRecordById.get(ticketId);
         return t
-          ? ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle)
+          ? ticketCache.decryptTitle(
+              t.id,
+              t.keyWrap,
+              t.encryptedTitle,
+              t.intakeWrap,
+            )
           : undefined;
       },
       currentUserId: currentUserId ?? "",
@@ -449,14 +454,24 @@
     for (const t of displayFiltered) {
       map.set(
         t.id,
-        ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
+        ticketCache.decryptTitle(
+          t.id,
+          t.keyWrap,
+          t.encryptedTitle,
+          t.intakeWrap,
+        ),
       );
     }
     for (const t of pinnedRecords) {
       if (!map.has(t.id)) {
         map.set(
           t.id,
-          ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
+          ticketCache.decryptTitle(
+            t.id,
+            t.keyWrap,
+            t.encryptedTitle,
+            t.intakeWrap,
+          ),
         );
       }
     }
