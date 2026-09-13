@@ -7,7 +7,8 @@
  * handleZeroAll between logical groups.
  */
 
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import * as cryptoPkg from "@care-y/crypto";
 import {
   getSodium,
   requireSodium,
@@ -56,6 +57,16 @@ const testSink: PortalSink = (msg) => {
 };
 
 // -- Helpers ------------------------------------------------------------------
+
+/**
+ * Throw a value that is not an Error, so a handler's catch takes its
+ * `String(err)` arm rather than `err.message`. The parameter is `unknown`
+ * because that is what a rogue throw looks like at the catch site, and
+ * because `only-throw-error` permits throwing `unknown` for exactly this case.
+ */
+function throwNonError(value: unknown): never {
+  throw value;
+}
 
 let dispatch: ReturnType<typeof createPortalDispatcher>;
 
@@ -1291,6 +1302,730 @@ describe("portal-core", () => {
       expect(resp.ok).toBe(false);
       expect((resp as PortalErrorResponse).code).toBe("ENCRYPT_FAILED");
 
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  // ---------- Failure-arm coverage (cold branches) ----------
+
+  describe("handleChannelSessionStart non-Error throw", () => {
+    it("stringifies a thrown non-Error value in channelSessionStart", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 410 });
+
+      const spy = vi
+        .spyOn(cryptoPkg, "deriveChannelId")
+        .mockImplementation(() => {
+          throwNonError("raw-string-channel-start-fault");
+        });
+
+      const seed = generatePortalSeed();
+      const seedCopy = new Uint8Array(seed.length);
+      seedCopy.set(seed);
+
+      const resp = await dispatchAndWait({
+        type: "channelSessionStart",
+        id: 411,
+        seed: seedCopy.buffer,
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("channelSessionStart");
+      expect(err.code).toBe("WORKER_ERROR");
+      expect(err.error).toBe("raw-string-channel-start-fault");
+      // Security: error message must not contain seed bytes
+      expect(err.error).not.toContain(encode(seed));
+
+      spy.mockRestore();
+    });
+  });
+
+  describe("handleChannelSessionRestart non-Error throw", () => {
+    it("stringifies a thrown non-Error value in channelSessionRestart", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      const spy = vi
+        .spyOn(cryptoPkg, "deriveChannelId")
+        .mockImplementation(() => {
+          throwNonError("raw-string-channel-restart-fault");
+        });
+
+      const resp = await dispatchAndWait({
+        type: "channelSessionRestart",
+        id: 421,
+        passphrase: "retry words",
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("channelSessionRestart");
+      expect(err.code).toBe("WORKER_ERROR");
+      expect(err.error).toBe("raw-string-channel-restart-fault");
+      // Security: no seed material in the error
+      expect(err.error).not.toContain(encode(seed));
+
+      spy.mockRestore();
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("handleChannelSessionFinish catch", () => {
+    it("reports WORKER_ERROR when the evaluated element is malformed", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 430 });
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const seedCopy = new Uint8Array(seed.length);
+      seedCopy.set(seed);
+
+      const startResp = (await dispatchAndWait({
+        type: "channelSessionStart",
+        id: 431,
+        seed: seedCopy.buffer,
+      })) as ChannelSessionStartResponse;
+      expect(startResp.ok).toBe(true);
+
+      // Feed a truncated evaluated element (5 bytes instead of 32)
+      const resp = await dispatchAndWait({
+        type: "channelSessionFinish",
+        id: 432,
+        evaluated: encode(new Uint8Array(5)),
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("channelSessionFinish");
+      expect(err.code).toBe("WORKER_ERROR");
+
+      sodium.memzero(seed);
+    });
+
+    it("stringifies a thrown non-Error value in channelSessionFinish", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 433 });
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      const seedCopy = new Uint8Array(seed.length);
+      seedCopy.set(seed);
+
+      const startResp = (await dispatchAndWait({
+        type: "channelSessionStart",
+        id: 434,
+        seed: seedCopy.buffer,
+      })) as ChannelSessionStartResponse;
+      expect(startResp.ok).toBe(true);
+
+      const spy = vi.spyOn(cryptoPkg, "oprfFinalize").mockImplementation(() => {
+        throwNonError("raw-string-finish-fault");
+      });
+
+      const evaluatedB64 = simulateOprfEvaluate(
+        startResp.blindedElement,
+        oprfKey,
+      );
+
+      const resp = await dispatchAndWait({
+        type: "channelSessionFinish",
+        id: 435,
+        evaluated: evaluatedB64,
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("channelSessionFinish");
+      expect(err.code).toBe("WORKER_ERROR");
+      expect(err.error).toBe("raw-string-finish-fault");
+
+      spy.mockRestore();
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("handleVerifyKeyCheck DecryptionError arm", () => {
+    it("returns passed=false (not an error) when eciesDecrypt throws DecryptionError", async () => {
+      // A DecryptionError means the passphrase was wrong, not that the
+      // system faulted. The handler treats it as a normal "did not pass"
+      // outcome rather than surfacing an error response.
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      // Encrypt to a different keypair so eciesDecrypt throws DecryptionError
+      const wrongScalar = sodium.crypto_core_ristretto255_scalar_random();
+      const wrongPub = sodium.crypto_scalarmult_ristretto255_base(wrongScalar);
+      const wrongTriple = eciesEncrypt(
+        new TextEncoder().encode(PORTAL_KEY_CHECK),
+        toRistrettoPoint(wrongPub),
+      );
+
+      const resp = (await dispatchAndWait({
+        type: "verifyKeyCheck",
+        id: 440,
+        ephemeralPoint: encode(wrongTriple.ephemeralPoint),
+        nonce: encode(wrongTriple.nonce),
+        ciphertext: encode(wrongTriple.ciphertext),
+      })) as VerifyKeyCheckResponse;
+
+      expect(resp.ok).toBe(true);
+      expect(resp.passed).toBe(false);
+
+      sodium.memzero(oprfKey);
+      sodium.memzero(wrongScalar);
+    });
+
+    it("reports DECRYPT_FAILED for a non-DecryptionError throw in verifyKeyCheck", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      const { clientPublic } = await fullChannelSessionFlow(seed, oprfKey);
+
+      const spy = vi.spyOn(cryptoPkg, "eciesDecrypt").mockImplementation(() => {
+        throw new TypeError("synthetic non-DecryptionError");
+      });
+
+      const clientPub = toRistrettoPoint(decode(clientPublic));
+      const triple = eciesEncrypt(
+        new TextEncoder().encode(PORTAL_KEY_CHECK),
+        clientPub,
+      );
+
+      const resp = await dispatchAndWait({
+        type: "verifyKeyCheck",
+        id: 441,
+        ephemeralPoint: encode(triple.ephemeralPoint),
+        nonce: encode(triple.nonce),
+        ciphertext: encode(triple.ciphertext),
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("verifyKeyCheck");
+      expect(err.code).toBe("DECRYPT_FAILED");
+      expect(err.error).toBe("synthetic non-DecryptionError");
+      // Security: error must not contain the plaintext key check value
+      expect(err.error).not.toContain(PORTAL_KEY_CHECK);
+
+      spy.mockRestore();
+      sodium.memzero(oprfKey);
+    });
+
+    it("stringifies a thrown non-Error value in verifyKeyCheck", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      const { clientPublic } = await fullChannelSessionFlow(seed, oprfKey);
+
+      const spy = vi.spyOn(cryptoPkg, "eciesDecrypt").mockImplementation(() => {
+        throwNonError("raw-string-verify-fault");
+      });
+
+      const clientPub = toRistrettoPoint(decode(clientPublic));
+      const triple = eciesEncrypt(
+        new TextEncoder().encode(PORTAL_KEY_CHECK),
+        clientPub,
+      );
+
+      const resp = await dispatchAndWait({
+        type: "verifyKeyCheck",
+        id: 442,
+        ephemeralPoint: encode(triple.ephemeralPoint),
+        nonce: encode(triple.nonce),
+        ciphertext: encode(triple.ciphertext),
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("verifyKeyCheck");
+      expect(err.code).toBe("DECRYPT_FAILED");
+      expect(err.error).toBe("raw-string-verify-fault");
+      // Security: no plaintext key check material in the error
+      expect(err.error).not.toContain(PORTAL_KEY_CHECK);
+
+      spy.mockRestore();
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("handleDecryptMessage non-Error throw", () => {
+    it("stringifies a thrown non-Error value in decryptMessage", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      const spy = vi.spyOn(cryptoPkg, "eciesDecrypt").mockImplementation(() => {
+        throwNonError("raw-string-decrypt-msg-fault");
+      });
+
+      const resp = await dispatchAndWait({
+        type: "decryptMessage",
+        id: 451,
+        ephemeralPoint: encode(sodium.randombytes_buf(32)),
+        nonce: encode(sodium.randombytes_buf(24)),
+        ciphertext: encode(sodium.randombytes_buf(64)),
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("decryptMessage");
+      expect(err.code).toBe("DECRYPT_FAILED");
+      expect(err.error).toBe("raw-string-decrypt-msg-fault");
+
+      spy.mockRestore();
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("handleEncryptReply non-Error throw", () => {
+    it("stringifies a thrown non-Error value in encryptReply", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      const spy = vi
+        .spyOn(cryptoPkg, "encryptContent")
+        .mockImplementation(() => {
+          throwNonError("raw-string-encrypt-reply-fault");
+        });
+
+      const orgPublic = sodium.crypto_scalarmult_base(
+        sodium.randombytes_buf(32),
+      );
+
+      const resp = await dispatchAndWait({
+        type: "encryptReply",
+        id: 461,
+        text: "test plaintext for encrypt",
+        orgPublicKey: encode(orgPublic),
+        ticketId: "t-enc-str",
+        followUpId: "fu-enc-str",
+        keyGeneration: "gen-enc-str",
+        attachments: [],
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("encryptReply");
+      expect(err.code).toBe("ENCRYPT_FAILED");
+      expect(err.error).toBe("raw-string-encrypt-reply-fault");
+      // Security: error must not leak the plaintext that was being encrypted
+      expect(err.error).not.toContain("test plaintext for encrypt");
+
+      spy.mockRestore();
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("handleDecryptAttachmentKey non-Error throw", () => {
+    it("stringifies a thrown non-Error value in decryptAttachmentKey", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      const spy = vi.spyOn(cryptoPkg, "eciesDecrypt").mockImplementation(() => {
+        throwNonError("raw-string-att-key-fault");
+      });
+
+      const resp = await dispatchAndWait({
+        type: "decryptAttachmentKey",
+        id: 471,
+        ephemeralPoint: encode(sodium.randombytes_buf(32)),
+        nonce: encode(sodium.randombytes_buf(24)),
+        ciphertext: encode(sodium.randombytes_buf(64)),
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("decryptAttachmentKey");
+      expect(err.code).toBe("DECRYPT_FAILED");
+      expect(err.error).toBe("raw-string-att-key-fault");
+
+      spy.mockRestore();
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("handleDecryptAttachmentBlob non-Error throw", () => {
+    it("stringifies a thrown non-Error value in decryptAttachmentBlob", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      const spy = vi
+        .spyOn(cryptoPkg, "decryptContent")
+        .mockImplementation(() => {
+          throwNonError("raw-string-att-blob-fault");
+        });
+
+      const resp = await dispatchAndWait({
+        type: "decryptAttachmentBlob",
+        id: 481,
+        ciphertext: new ArrayBuffer(64),
+        fileKey: encode(sodium.randombytes_buf(32)),
+        ticketId: "t-blob-str",
+        attachmentId: "att-blob-str",
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("decryptAttachmentBlob");
+      expect(err.code).toBe("DECRYPT_FAILED");
+      expect(err.error).toBe("raw-string-att-blob-fault");
+
+      spy.mockRestore();
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("handleChannelPassphraseDerive catch", () => {
+    it("stringifies a thrown non-Error value in channelPassphraseDerive", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      const spy = vi
+        .spyOn(cryptoPkg, "portalOprfInput")
+        .mockImplementation(() => {
+          throwNonError("raw-string-pp-derive-fault");
+        });
+
+      const resp = await dispatchAndWait({
+        type: "channelPassphraseDerive",
+        id: 491,
+        passphrase: "derive words",
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("channelPassphraseDerive");
+      expect(err.code).toBe("WORKER_ERROR");
+      expect(err.error).toBe("raw-string-pp-derive-fault");
+      // Security: error must not contain the seed
+      expect(err.error).not.toContain(encode(seed));
+
+      spy.mockRestore();
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("handleChannelPassphraseFinish catch and finally", () => {
+    it("reports WORKER_ERROR when the evaluated element is malformed", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      // Start a derive round to set ppDerivePending=true
+      const deriveResp = (await dispatchAndWait({
+        type: "channelPassphraseDerive",
+        id: 500,
+        passphrase: "pp finish test",
+      })) as ChannelPassphraseDeriveResponse;
+      expect(deriveResp.ok).toBe(true);
+
+      // Feed a truncated evaluated element to trigger the catch
+      const resp = await dispatchAndWait({
+        type: "channelPassphraseFinish",
+        id: 501,
+        evaluated: encode(new Uint8Array(5)),
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("channelPassphraseFinish");
+      expect(err.code).toBe("WORKER_ERROR");
+
+      // Verify finally ran: ppDerivePending should be reset, so a new
+      // derive is accepted
+      const deriveResp2 = (await dispatchAndWait({
+        type: "channelPassphraseDerive",
+        id: 502,
+        passphrase: "after failure",
+      })) as ChannelPassphraseDeriveResponse;
+      expect(deriveResp2.ok).toBe(true);
+
+      sodium.memzero(oprfKey);
+    });
+
+    it("stringifies a thrown non-Error value in channelPassphraseFinish", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      const deriveResp = (await dispatchAndWait({
+        type: "channelPassphraseDerive",
+        id: 510,
+        passphrase: "pp finish string test",
+      })) as ChannelPassphraseDeriveResponse;
+      expect(deriveResp.ok).toBe(true);
+
+      const spy = vi.spyOn(cryptoPkg, "oprfFinalize").mockImplementation(() => {
+        throwNonError("raw-string-pp-finish-fault");
+      });
+
+      const evaluatedB64 = simulateOprfEvaluate(
+        deriveResp.blindedElement,
+        oprfKey,
+      );
+
+      const resp = await dispatchAndWait({
+        type: "channelPassphraseFinish",
+        id: 511,
+        evaluated: evaluatedB64,
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("channelPassphraseFinish");
+      expect(err.code).toBe("WORKER_ERROR");
+      expect(err.error).toBe("raw-string-pp-finish-fault");
+
+      spy.mockRestore();
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("handleAccountSessionStart catch", () => {
+    it("stringifies a thrown non-Error value in accountSessionStart", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 520 });
+
+      const spy = vi
+        .spyOn(cryptoPkg, "deriveAccountKey")
+        .mockImplementation(() => {
+          throwNonError("raw-string-account-start-fault");
+        });
+
+      const password = new TextEncoder().encode("account-start-pw");
+      const pwBuf = new ArrayBuffer(password.byteLength);
+      new Uint8Array(pwBuf).set(password);
+
+      const resp = await dispatchAndWait({
+        type: "accountSessionStart",
+        id: 521,
+        password: pwBuf,
+        salt: encode(new Uint8Array(generateSalt())),
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("accountSessionStart");
+      expect(err.code).toBe("WORKER_ERROR");
+      expect(err.error).toBe("raw-string-account-start-fault");
+      // Security: error must not contain the password
+      expect(err.error).not.toContain("account-start-pw");
+
+      spy.mockRestore();
+    });
+  });
+
+  describe("handleAccountSessionFinish catch", () => {
+    it("reports WORKER_ERROR when the evaluated element is malformed", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 530 });
+
+      const sodium = requireSodium();
+      const salt = generateSalt();
+      const password = new TextEncoder().encode("account-finish-pw");
+      const pwBuf = new ArrayBuffer(password.byteLength);
+      new Uint8Array(pwBuf).set(password);
+
+      const startResp = (await dispatchAndWait({
+        type: "accountSessionStart",
+        id: 531,
+        password: pwBuf,
+        salt: encode(new Uint8Array(salt)),
+      })) as AccountSessionStartResponse;
+      expect(startResp.ok).toBe(true);
+
+      // Feed a truncated evaluated element
+      const resp = await dispatchAndWait({
+        type: "accountSessionFinish",
+        id: 532,
+        evaluated: encode(new Uint8Array(5)),
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("accountSessionFinish");
+      expect(err.code).toBe("WORKER_ERROR");
+
+      sodium.memzero(salt);
+    });
+
+    it("stringifies a thrown non-Error value in accountSessionFinish", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 533 });
+
+      const sodium = requireSodium();
+      const salt = generateSalt();
+      const password = new TextEncoder().encode("account-finish-str-pw");
+      const pwBuf = new ArrayBuffer(password.byteLength);
+      new Uint8Array(pwBuf).set(password);
+
+      const startResp = (await dispatchAndWait({
+        type: "accountSessionStart",
+        id: 534,
+        password: pwBuf,
+        salt: encode(new Uint8Array(salt)),
+      })) as AccountSessionStartResponse;
+      expect(startResp.ok).toBe(true);
+
+      const spy = vi.spyOn(cryptoPkg, "oprfFinalize").mockImplementation(() => {
+        throwNonError("raw-string-account-finish-fault");
+      });
+
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      const evaluatedB64 = simulateOprfEvaluate(
+        startResp.blindedElement,
+        oprfKey,
+      );
+
+      const resp = await dispatchAndWait({
+        type: "accountSessionFinish",
+        id: 535,
+        evaluated: evaluatedB64,
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("accountSessionFinish");
+      expect(err.code).toBe("WORKER_ERROR");
+      expect(err.error).toBe("raw-string-account-finish-fault");
+      // Security: error must not contain password material
+      expect(err.error).not.toContain("account-finish-str-pw");
+
+      spy.mockRestore();
+      sodium.memzero(oprfKey);
+      sodium.memzero(salt);
+    });
+  });
+
+  describe("createPortalDispatcher rejection handler (line 1018)", () => {
+    it("catches an async handler rejection and posts WORKER_ERROR", async () => {
+      // handleInit is the only async handler. Spy on getSodium to make
+      // the init handler reject with an Error.
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const spy = vi
+        .spyOn(cryptoPkg, "getSodium")
+        .mockRejectedValue(new Error("wasm init exploded"));
+
+      const resp = await dispatchAndWait({ type: "init", id: 600 });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("init");
+      expect(err.code).toBe("WORKER_ERROR");
+      expect(err.error).toBe("wasm init exploded");
+
+      spy.mockRestore();
+    });
+
+    it("stringifies a non-Error rejection in the dispatcher catch", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const spy = vi
+        .spyOn(cryptoPkg, "getSodium")
+        .mockRejectedValue("raw-string-dispatcher-rejection");
+
+      const resp = await dispatchAndWait({ type: "init", id: 601 });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("init");
+      expect(err.code).toBe("WORKER_ERROR");
+      expect(err.error).toBe("raw-string-dispatcher-rejection");
+
+      spy.mockRestore();
+    });
+  });
+
+  describe("handleChannelSessionRestart catch with bad input", () => {
+    it("reports WORKER_ERROR when channelSessionRestart throws an Error", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      // Spy on deriveChannelId to throw a real Error
+      const spy = vi
+        .spyOn(cryptoPkg, "deriveChannelId")
+        .mockImplementation(() => {
+          throw new Error("restart derivation failed");
+        });
+
+      const resp = await dispatchAndWait({
+        type: "channelSessionRestart",
+        id: 610,
+        passphrase: "restart fail words",
+      });
+
+      expect(resp.ok).toBe(false);
+      const err = resp as PortalErrorResponse;
+      expect(err.type).toBe("channelSessionRestart");
+      expect(err.code).toBe("WORKER_ERROR");
+      expect(err.error).toBe("restart derivation failed");
+
+      spy.mockRestore();
       sodium.memzero(oprfKey);
     });
   });
