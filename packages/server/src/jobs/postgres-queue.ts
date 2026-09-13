@@ -57,9 +57,17 @@ export function createPostgresJobQueue(db: Kysely<PlatformDatabase>): JobQueue {
     polling = true;
 
     try {
-      // Fetch pending jobs whose next_attempt has passed.
-      // FOR UPDATE SKIP LOCKED: multiple Node processes can poll the same
-      // table without conflicts. Each process picks up different jobs.
+      // Jobs for queues without a registered handler are never claimed,
+      // so they stay pending across rolling deploys where a new queue is
+      // enqueued before its handler exists.
+      const registeredQueues = [...handlers.keys()];
+      if (registeredQueues.length === 0) return;
+
+      // Claim in one statement so the row locks from FOR UPDATE SKIP
+      // LOCKED hold through the status flip (row locks last only to end
+      // of transaction, and a standalone SELECT is its own transaction).
+      // Multiple Node processes can poll the same table without
+      // double-claiming a job.
       const jobs = await sql<{
         id: string;
         queue: string;
@@ -69,29 +77,34 @@ export function createPostgresJobQueue(db: Kysely<PlatformDatabase>): JobQueue {
         backoff: BackoffStrategy;
         base_delay_ms: number;
       }>`
-        SELECT id, queue, payload, retry_count, max_retries, backoff, base_delay_ms
-        FROM pending_jobs
-        WHERE status = 'pending' AND next_attempt <= now()
-        ORDER BY next_attempt
-        FOR UPDATE SKIP LOCKED
-        LIMIT ${sql.lit(POLL_BATCH_SIZE)}
+        UPDATE pending_jobs
+        SET status = 'active', started_at = now()
+        WHERE id IN (
+          SELECT id
+          FROM pending_jobs
+          WHERE status = 'pending'
+            AND next_attempt <= now()
+            AND queue IN (${sql.join(registeredQueues)})
+          ORDER BY next_attempt
+          FOR UPDATE SKIP LOCKED
+          LIMIT ${sql.lit(POLL_BATCH_SIZE)}
+        )
+        RETURNING id, queue, payload, retry_count, max_retries, backoff, base_delay_ms
       `.execute(db);
 
       for (const job of jobs.rows) {
         const handler = handlers.get(job.queue);
         if (!handler) {
-          // No handler registered for this queue. Leave it pending.
-          // This happens during rolling deploys where a new queue is
-          // enqueued before the handler is registered.
+          // Unreachable in practice (the claim filters to registered
+          // queues and handlers are never unregistered), but a claimed
+          // row must never strand in active, so release it.
+          await sql`
+            UPDATE pending_jobs
+            SET status = 'pending', started_at = NULL
+            WHERE id = ${job.id}::uuid
+          `.execute(db);
           continue;
         }
-
-        // Mark active
-        await sql`
-          UPDATE pending_jobs
-          SET status = 'active', started_at = now()
-          WHERE id = ${job.id}::uuid
-        `.execute(db);
 
         inFlightCount++;
         try {
