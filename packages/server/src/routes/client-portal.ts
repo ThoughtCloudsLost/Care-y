@@ -261,7 +261,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           const retryAfterSeconds = Math.ceil(limitResult.retryAfterMs / 1000);
           console.warn("Intake submission rate limited", {
             orgSlug: ctx.org.orgSlug,
-            ip,
             reason: "rate_limit",
           });
           throw new TRPCError({
@@ -275,7 +274,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           if (!input.pow) {
             console.warn("Intake submission missing PoW", {
               orgSlug: ctx.org.orgSlug,
-              ip,
               reason: "pow_missing",
             });
             throw new TRPCError({
@@ -292,7 +290,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           if (!verified) {
             console.warn("Intake submission PoW verification failed", {
               orgSlug: ctx.org.orgSlug,
-              ip,
               reason: "pow_failed",
             });
             throw new TRPCError({
@@ -423,7 +420,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           if (err instanceof IntakeQueueNotConfiguredError) {
             console.warn("Intake queue not configured", {
               orgSlug: ctx.org.orgSlug,
-              ip,
               reason: "no_intake_queue",
             });
             throw new TRPCError({
@@ -434,7 +430,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           if (err instanceof IntakeDisabledError) {
             console.warn("Intake submission rejected (disabled)", {
               orgSlug: ctx.org.orgSlug,
-              ip,
               reason: "intake_disabled",
             });
             throw new TRPCError({
@@ -445,7 +440,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           if (err instanceof IntakeFormClosedError) {
             console.warn("Intake submission rejected (form closed)", {
               orgSlug: ctx.org.orgSlug,
-              ip,
               reason: "form_closed",
             });
             throw new TRPCError({
@@ -456,7 +450,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           if (err instanceof IntakeAccountUnavailableError) {
             console.warn("Intake account branch unavailable", {
               orgSlug: ctx.org.orgSlug,
-              ip,
               reason: "account_deps_missing",
             });
             throw new TRPCError({
@@ -651,7 +644,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           checkIpReadLimit(deps.accountLoginLimiter, ctx, "Account login");
         }
 
-        const ip = extractClientIp(ctx.req);
         const authTokenBuf = Buffer.from(input.authToken, "base64");
         const result = await accountService.login(
           ctx.org.tenantDb,
@@ -662,7 +654,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
         if (result === null) {
           console.warn("Account login failed", {
             orgSlug: ctx.org.orgSlug,
-            ip,
             reason: "auth_failed",
           });
           throw new TRPCError({
@@ -755,7 +746,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           if (!limitResult.allowed) {
             console.warn("Account upgrade rate limited", {
               orgSlug: ctx.org.orgSlug,
-              ip,
               reason: "rate_limit",
             });
             const retryAfterSeconds = Math.ceil(
@@ -994,7 +984,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           if (!limitResult.allowed) {
             console.warn("Add passphrase rate limited", {
               orgSlug: ctx.org.orgSlug,
-              ip,
               reason: "rate_limit",
             });
             const retryAfterSeconds = Math.ceil(
@@ -1130,7 +1119,7 @@ function buildExpiredClientSessionCookie(): string {
  * Throws one generic UNAUTHORIZED on any failure: missing cookie,
  * garbage token, expired session, no active channel.
  *
- * Logs only { orgSlug, ip, reason }, never the token or account id.
+ * Logs only { orgSlug, reason }, never the token, account id, or client address.
  */
 async function requireAccountSession(ctx: {
   org: { tenantDb: Kysely<TenantDatabase>; orgSlug: string };
@@ -1145,10 +1134,8 @@ async function requireAccountSession(ctx: {
   const sessionToken = cookies.get(CLIENT_SESSION_COOKIE);
 
   if (sessionToken === undefined || sessionToken === "") {
-    const ip = extractClientIp(ctx.req);
     console.warn("Account session missing", {
       orgSlug: ctx.org.orgSlug,
-      ip,
       reason: "no_cookie",
     });
     throw new TRPCError({
@@ -1163,10 +1150,8 @@ async function requireAccountSession(ctx: {
   );
 
   if (session === null) {
-    const ip = extractClientIp(ctx.req);
     console.warn("Account session resolution failed", {
       orgSlug: ctx.org.orgSlug,
-      ip,
       reason: "session_invalid",
     });
     throw new TRPCError({
@@ -1187,7 +1172,7 @@ async function requireAccountSession(ctx: {
  * Throws the generic NOT_FOUND error when the channel does not resolve
  * (unknown id, revoked status, or bad auth are indistinguishable).
  *
- * Logs only { orgSlug, ip, reason }, never channelId or auth.
+ * Logs only { orgSlug, reason }, never channelId, auth, or client address.
  */
 /**
  * Limiter key for a channel's reply window. Exported so the org-side
@@ -1251,7 +1236,6 @@ async function enforceReplyLimits(
         console.warn("Portal write rate limited", {
           surface,
           orgSlug: ctx.org.orgSlug,
-          ip,
           reason: "ip_rate_limit",
         });
         const retryAfterSeconds = Math.ceil(limitResult.retryAfterMs / 1000);
@@ -1283,7 +1267,6 @@ function checkReplyAuthGate(
     console.warn("Portal write rate limited", {
       surface,
       orgSlug: ctx.org.orgSlug,
-      ip,
       reason: "auth_gate_rate_limit",
     });
     const retryAfterSeconds = Math.ceil(limitResult.retryAfterMs / 1000);
@@ -1319,7 +1302,6 @@ function checkIpReadLimit(
   if (!limitResult.allowed) {
     console.warn(`${surface} rate limited`, {
       orgSlug: ctx.org.orgSlug,
-      ip,
       reason: "rate_limit",
     });
     const retryAfterSeconds = Math.ceil(limitResult.retryAfterMs / 1000);
@@ -1360,10 +1342,8 @@ async function requirePortalChannel(
   );
 
   if (channel === null) {
-    const ip = extractClientIp(ctx.req);
     console.warn("Portal channel resolution failed", {
       orgSlug: ctx.org.orgSlug,
-      ip,
       reason: "auth_failed",
     });
     throw new TRPCError({
