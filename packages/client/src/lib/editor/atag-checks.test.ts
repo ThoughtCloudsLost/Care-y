@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { Node as PMNode } from "prosemirror-model";
-import { kbArticleSchema } from "./prosemirror-schema.js";
+import { editorSchema } from "./prosemirror-schema.js";
 import { checkDocument, isGenericLinkText } from "./atag-checks.js";
 
 // ---------------------------------------------------------------------------
@@ -9,7 +9,7 @@ import { checkDocument, isGenericLinkText } from "./atag-checks.js";
 // ---------------------------------------------------------------------------
 
 function doc(content: unknown[]): PMNode {
-  return PMNode.fromJSON(kbArticleSchema, { type: "doc", content });
+  return PMNode.fromJSON(editorSchema, { type: "doc", content });
 }
 
 const t = (text: string, marks?: unknown[]) =>

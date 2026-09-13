@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { Node as PMNode } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
-import { kbArticleSchema } from "../prosemirror-schema.js";
+import { editorSchema } from "../prosemirror-schema.js";
 import {
   computeAllowedLevels,
   headingHierarchyPlugin,
@@ -15,7 +15,7 @@ import {
 // ---------------------------------------------------------------------------
 
 function doc(content: unknown[]): PMNode {
-  return PMNode.fromJSON(kbArticleSchema, { type: "doc", content });
+  return PMNode.fromJSON(editorSchema, { type: "doc", content });
 }
 
 const t = (text: string) => ({ type: "text", text });
@@ -36,7 +36,7 @@ function stateAt(content: unknown[], cursorPos?: number): EditorState {
   const d = doc(content);
   const state = EditorState.create({
     doc: d,
-    schema: kbArticleSchema,
+    schema: editorSchema,
     plugins: [headingHierarchyPlugin()],
   });
 
@@ -139,11 +139,11 @@ describe("headingHierarchyPlugin", () => {
     let state = stateAt([p("Hello")]);
 
     // Simulate inserting an H1 via transaction
-    const headingType = kbArticleSchema.nodes.heading;
+    const headingType = editorSchema.nodes.heading;
     if (headingType === undefined) throw new Error("heading not in schema");
     const headingNode = headingType.create(
       { level: 1 },
-      kbArticleSchema.text("Title"),
+      editorSchema.text("Title"),
     );
     const tr = state.tr.insert(1, headingNode);
     state = state.apply(tr);

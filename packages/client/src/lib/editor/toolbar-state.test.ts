@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { Node as PMNode } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
-import { kbArticleSchema, kbEditorPlugins } from "./prosemirror-schema.js";
+import { editorSchema, baseEditorPlugins } from "./prosemirror-schema.js";
 import {
   markActive,
   blockTypeActive,
@@ -10,25 +10,25 @@ import {
 } from "./toolbar-state.js";
 
 // ---------------------------------------------------------------------------
-// Schema type references (non-null: these all exist in kbArticleSchema)
+// Schema type references (non-null: these all exist in editorSchema)
 // ---------------------------------------------------------------------------
 
-// Non-null assertions: these mark/node types are defined in kbArticleSchema.
-const STRONG = kbArticleSchema.marks.strong!;
-const EM = kbArticleSchema.marks.em!;
-const CODE_MARK = kbArticleSchema.marks.code!;
-const STRIKETHROUGH = kbArticleSchema.marks.strikethrough!;
-const LINK = kbArticleSchema.marks.link!;
-const BLOCKQUOTE = kbArticleSchema.nodes.blockquote!;
-const BULLET_LIST = kbArticleSchema.nodes.bullet_list!;
-const HEADING = kbArticleSchema.nodes.heading!;
+// Non-null assertions: these mark/node types are defined in editorSchema.
+const STRONG = editorSchema.marks.strong!;
+const EM = editorSchema.marks.em!;
+const CODE_MARK = editorSchema.marks.code!;
+const STRIKETHROUGH = editorSchema.marks.strikethrough!;
+const LINK = editorSchema.marks.link!;
+const BLOCKQUOTE = editorSchema.nodes.blockquote!;
+const BULLET_LIST = editorSchema.nodes.bullet_list!;
+const HEADING = editorSchema.nodes.heading!;
 
 // ---------------------------------------------------------------------------
 // Test builders (same JSON format as prosemirror-schema.test.ts)
 // ---------------------------------------------------------------------------
 
 function doc(content: unknown[]): PMNode {
-  return PMNode.fromJSON(kbArticleSchema, { type: "doc", content });
+  return PMNode.fromJSON(editorSchema, { type: "doc", content });
 }
 
 const t = (text: string, marks?: unknown[]) =>
@@ -64,7 +64,7 @@ function stateAt(content: unknown[], pos: number): EditorState {
   const pmDoc = doc(content);
   const state = EditorState.create({
     doc: pmDoc,
-    plugins: [...kbEditorPlugins],
+    plugins: [...baseEditorPlugins],
   });
   const $pos = state.doc.resolve(pos);
   return state.apply(state.tr.setSelection(TextSelection.near($pos)));
@@ -75,7 +75,7 @@ function stateRange(content: unknown[], from: number, to: number): EditorState {
   const pmDoc = doc(content);
   const state = EditorState.create({
     doc: pmDoc,
-    plugins: [...kbEditorPlugins],
+    plugins: [...baseEditorPlugins],
   });
   return state.apply(
     state.tr.setSelection(TextSelection.create(state.doc, from, to)),

@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { Node as PMNode } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
-import { kbArticleSchema } from "../prosemirror-schema.js";
+import { editorSchema } from "../prosemirror-schema.js";
 import {
   atagDecorationsPlugin,
   atagDecorationsKey,
@@ -14,7 +14,7 @@ import {
 // ---------------------------------------------------------------------------
 
 function doc(content: unknown[]): PMNode {
-  return PMNode.fromJSON(kbArticleSchema, { type: "doc", content });
+  return PMNode.fromJSON(editorSchema, { type: "doc", content });
 }
 
 const t = (text: string, marks?: unknown[]) =>
@@ -62,7 +62,7 @@ describe("atagDecorationsPlugin: warning count", () => {
     const d = doc([heading(1, "Title"), p("Clean content")]);
     const state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
@@ -76,7 +76,7 @@ describe("atagDecorationsPlugin: warning count", () => {
     const d = doc([heading(1, "Title"), heading(3, "Skipped H2")]);
     const state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
@@ -89,7 +89,7 @@ describe("atagDecorationsPlugin: warning count", () => {
     const d = doc([heading(1, "Title"), emptyHeading(2)]);
     const state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
@@ -102,7 +102,7 @@ describe("atagDecorationsPlugin: warning count", () => {
     const d = doc([heading(1, "Title"), p("Text"), imageNoAlt()]);
     const state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
@@ -120,7 +120,7 @@ describe("atagDecorationsPlugin: warning count", () => {
     ]);
     const state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
@@ -141,7 +141,7 @@ describe("atagDecorationsPlugin: warning count", () => {
     ]);
     const state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
@@ -154,7 +154,7 @@ describe("atagDecorationsPlugin: warning count", () => {
     const d = doc([heading(1, "Title"), image("A descriptive alt")]);
     const state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
@@ -169,17 +169,14 @@ describe("atagDecorationsPlugin: warning count", () => {
     const d = doc([heading(1, "Title"), p("Clean")]);
     let state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
     expect(atagDecorationsKey.getState(state)!.warnings).toHaveLength(0);
 
     // Insert an empty heading
-    const emptyH2 = kbArticleSchema.nodes.heading!.createAndFill(
-      { level: 2 },
-      [],
-    );
+    const emptyH2 = editorSchema.nodes.heading!.createAndFill({ level: 2 }, []);
     if (emptyH2 === null) throw new Error("Failed to create heading node");
 
     const tr = state.tr.insert(state.doc.content.size, emptyH2);
@@ -200,7 +197,7 @@ describe("atagDecorationsPlugin: toggle", () => {
     const d = doc([heading(1, "Title"), heading(3, "Skipped")]);
     const state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
@@ -214,7 +211,7 @@ describe("atagDecorationsPlugin: toggle", () => {
     const d = doc([heading(1, "Title"), heading(3, "Skipped")]);
     let state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
@@ -230,7 +227,7 @@ describe("atagDecorationsPlugin: toggle", () => {
     const d = doc([heading(1, "Title"), heading(3, "Skipped")]);
     let state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
@@ -250,7 +247,7 @@ describe("atagDecorationsPlugin: toggle", () => {
     const d = doc([heading(1, "Title"), p("Clean")]);
     let state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 
@@ -259,7 +256,7 @@ describe("atagDecorationsPlugin: toggle", () => {
     expect(atagDecorationsKey.getState(state)!.active).toBe(true);
 
     // Doc change (insert text)
-    const textNode = kbArticleSchema.text("more content");
+    const textNode = editorSchema.text("more content");
     state = state.apply(state.tr.insert(state.doc.content.size - 1, textNode));
 
     // Still active after doc change
@@ -270,7 +267,7 @@ describe("atagDecorationsPlugin: toggle", () => {
     const d = doc([heading(1, "Title"), p("Text")]);
     const state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [atagDecorationsPlugin()],
     });
 

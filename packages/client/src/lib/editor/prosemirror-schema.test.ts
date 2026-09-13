@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { Node as PMNode } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 import { undo } from "prosemirror-history";
-import { kbArticleSchema, kbEditorPlugins } from "./prosemirror-schema.js";
+import { editorSchema, baseEditorPlugins } from "./prosemirror-schema.js";
 
 // ---------------------------------------------------------------------------
 // Test builders: cut JSON nesting so test intent is visible at a glance.
@@ -11,13 +11,13 @@ import { kbArticleSchema, kbEditorPlugins } from "./prosemirror-schema.js";
 // ---------------------------------------------------------------------------
 
 function doc(content: unknown[]): PMNode {
-  return PMNode.fromJSON(kbArticleSchema, { type: "doc", content });
+  return PMNode.fromJSON(editorSchema, { type: "doc", content });
 }
 
 /** Round-trip a JSON doc through fromJSON/toJSON and assert equality. */
 function roundTrip(content: unknown[]): void {
   const json = { type: "doc", content };
-  const node = PMNode.fromJSON(kbArticleSchema, json);
+  const node = PMNode.fromJSON(editorSchema, json);
   expect(node.toJSON()).toEqual(json);
 }
 
@@ -55,7 +55,7 @@ const tableRow = (cellType: string, text: string, attrs?: object) => ({
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("kbArticleSchema", () => {
+describe("editorSchema", () => {
   describe("round-trip serialization", () => {
     it("round-trips a paragraph", () => {
       roundTrip([p("hello")]);
@@ -206,7 +206,7 @@ describe("kbArticleSchema", () => {
         type: "doc",
         content: [{ type: "video", attrs: { src: "movie.mp4" } }],
       };
-      expect(() => PMNode.fromJSON(kbArticleSchema, json)).toThrow();
+      expect(() => PMNode.fromJSON(editorSchema, json)).toThrow();
     });
 
     it("rejects an unknown mark type", () => {
@@ -219,7 +219,7 @@ describe("kbArticleSchema", () => {
           },
         ],
       };
-      expect(() => PMNode.fromJSON(kbArticleSchema, json)).toThrow();
+      expect(() => PMNode.fromJSON(editorSchema, json)).toThrow();
     });
 
     it("validates heading level is a number", () => {
@@ -240,7 +240,7 @@ describe("kbArticleSchema", () => {
 
     it("code_block spec declares empty marks allowlist", () => {
       // marks: "" means the editing layer prevents mark application.
-      const codeBlockType = kbArticleSchema.nodes.code_block!;
+      const codeBlockType = editorSchema.nodes.code_block!;
       expect(codeBlockType.spec.marks).toBe("");
     });
   });
@@ -263,7 +263,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
       // ProseMirror can call getAttrs with a CSS string for style rules.
       // The production code rejects strings; verify that path. We access
       // via the parseDOM spec which calls asElement internally.
-      const olSpec = kbArticleSchema.nodes.ordered_list!.spec;
+      const olSpec = editorSchema.nodes.ordered_list!.spec;
       const parseDomRule = olSpec.parseDOM?.[0];
       const getAttrs = parseDomRule?.getAttrs;
       expect(getAttrs).toBeDefined();
@@ -285,7 +285,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
       ol.appendChild(liEl);
       fragment.appendChild(ol);
 
-      const node = kbArticleSchema.nodeFromJSON({
+      const node = editorSchema.nodeFromJSON({
         type: "doc",
         content: [
           {
@@ -306,7 +306,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
 
   describe("ordered_list toDOM", () => {
     it("omits start attr when order is 1", () => {
-      const node = PMNode.fromJSON(kbArticleSchema, {
+      const node = PMNode.fromJSON(editorSchema, {
         type: "doc",
         content: [
           {
@@ -323,7 +323,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
     });
 
     it("includes start attr when order is not 1", () => {
-      const node = PMNode.fromJSON(kbArticleSchema, {
+      const node = PMNode.fromJSON(editorSchema, {
         type: "doc",
         content: [
           {
@@ -341,7 +341,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
 
   describe("heading toDOM with numAttr fallback", () => {
     it("renders correct heading tag from level attr", () => {
-      const node = PMNode.fromJSON(kbArticleSchema, {
+      const node = PMNode.fromJSON(editorSchema, {
         type: "doc",
         content: [heading(3, "H3")],
       });
@@ -353,7 +353,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
 
   describe("table cell toDOM", () => {
     it("omits colspan/rowspan attrs when both are 1", () => {
-      const node = PMNode.fromJSON(kbArticleSchema, {
+      const node = PMNode.fromJSON(editorSchema, {
         type: "doc",
         content: [
           {
@@ -370,7 +370,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
     });
 
     it("includes colspan attr when greater than 1", () => {
-      const node = PMNode.fromJSON(kbArticleSchema, {
+      const node = PMNode.fromJSON(editorSchema, {
         type: "doc",
         content: [
           {
@@ -387,7 +387,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
     });
 
     it("includes rowspan attr when greater than 1", () => {
-      const node = PMNode.fromJSON(kbArticleSchema, {
+      const node = PMNode.fromJSON(editorSchema, {
         type: "doc",
         content: [
           {
@@ -404,7 +404,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
     });
 
     it("includes both attrs when both exceed 1", () => {
-      const node = PMNode.fromJSON(kbArticleSchema, {
+      const node = PMNode.fromJSON(editorSchema, {
         type: "doc",
         content: [
           {
@@ -423,7 +423,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
 
   describe("image toDOM", () => {
     it("includes title when attrs.title is a string", () => {
-      const imgNode = PMNode.fromJSON(kbArticleSchema, {
+      const imgNode = PMNode.fromJSON(editorSchema, {
         type: "image",
         attrs: { src: "test.png", alt: "photo", title: "My Photo" },
       });
@@ -435,7 +435,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
     });
 
     it("omits title when attrs.title is null", () => {
-      const imgNode = PMNode.fromJSON(kbArticleSchema, {
+      const imgNode = PMNode.fromJSON(editorSchema, {
         type: "image",
         attrs: { src: "test.png", alt: "photo", title: null },
       });
@@ -446,7 +446,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
 
   describe("link mark toDOM", () => {
     it("includes title in link attrs when present", () => {
-      const linkMark = kbArticleSchema.marks.link!;
+      const linkMark = editorSchema.marks.link!;
       const mark = linkMark.create({
         href: "https://example.com",
         title: "Example",
@@ -465,7 +465,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
     });
 
     it("omits title from link attrs when null", () => {
-      const linkMark = kbArticleSchema.marks.link!;
+      const linkMark = editorSchema.marks.link!;
       const mark = linkMark.create({
         href: "https://example.com",
         title: null,
@@ -483,7 +483,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
     });
 
     it("defaults href to empty string when attr is not a string", () => {
-      const linkMark = kbArticleSchema.marks.link!;
+      const linkMark = editorSchema.marks.link!;
       // Force non-string attrs through raw mark construction
       const mark = linkMark.create({ href: "https://test.com", title: null });
       // Mutate attrs to simulate non-string (e.g., from corrupted JSON).
@@ -508,7 +508,7 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
     it("parses <b> tag when font-weight is not 'normal'", () => {
       // The getAttrs for the <b> tag rule returns null (match) when
       // fontWeight !== "normal", and false (skip) when it is "normal".
-      const strongType = kbArticleSchema.marks.strong!;
+      const strongType = editorSchema.marks.strong!;
       const bRule = strongType.spec.parseDOM?.find(
         (r) => typeof r !== "string" && "tag" in r && r.tag === "b",
       );
@@ -534,20 +534,20 @@ describe("parseDOM getAttrs and toDOM branch coverage", () => {
   });
 });
 
-describe("kbEditorPlugins", () => {
+describe("baseEditorPlugins", () => {
   it("creates a valid EditorState with the base plugins", () => {
     const state = EditorState.create({
-      schema: kbArticleSchema,
-      plugins: [...kbEditorPlugins],
+      schema: editorSchema,
+      plugins: [...baseEditorPlugins],
     });
     expect(state.doc.type.name).toBe("doc");
-    expect(state.plugins).toHaveLength(kbEditorPlugins.length);
+    expect(state.plugins).toHaveLength(baseEditorPlugins.length);
   });
 
   it("undo reverts a transaction", () => {
     let state = EditorState.create({
-      schema: kbArticleSchema,
-      plugins: [...kbEditorPlugins],
+      schema: editorSchema,
+      plugins: [...baseEditorPlugins],
     });
 
     const tr = state.tr.insertText("hello", 1);

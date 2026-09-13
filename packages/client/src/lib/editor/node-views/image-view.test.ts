@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Node as PMNode } from "prosemirror-model";
-import { kbArticleSchema } from "../prosemirror-schema.js";
+import { editorSchema } from "../prosemirror-schema.js";
 import { createImageNodeView, type ImageViewDeps } from "./image-view.js";
 
 // ---------------------------------------------------------------------------
@@ -10,7 +10,7 @@ import { createImageNodeView, type ImageViewDeps } from "./image-view.js";
 
 /** Build a ProseMirror image node with the given attrs. */
 function imageNode(src: string, alt = "", title: string | null = null): PMNode {
-  return kbArticleSchema.nodes.image!.create({ src, alt, title });
+  return editorSchema.nodes.image!.create({ src, alt, title });
 }
 
 /** Stub EditorView and getPos (NodeView constructor requires them). */
@@ -263,7 +263,7 @@ describe("KbImageView (NodeView)", () => {
       const node = imageNode("blob:test");
       const nv = factory(node, fakeView, fakeGetPos);
 
-      const paragraph = kbArticleSchema.nodes.paragraph!.create();
+      const paragraph = editorSchema.nodes.paragraph!.create();
       expect((nv.update as (n: PMNode) => boolean)(paragraph)).toBe(false);
     });
 

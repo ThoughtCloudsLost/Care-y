@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { Node as PMNode } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
-import { kbArticleSchema } from "../prosemirror-schema.js";
+import { editorSchema } from "../prosemirror-schema.js";
 import {
   buildLinkDecorations,
   linkTextLintPlugin,
@@ -14,7 +14,7 @@ import {
 // ---------------------------------------------------------------------------
 
 function doc(content: unknown[]): PMNode {
-  return PMNode.fromJSON(kbArticleSchema, { type: "doc", content });
+  return PMNode.fromJSON(editorSchema, { type: "doc", content });
 }
 
 const t = (text: string, marks?: unknown[]) =>
@@ -96,7 +96,7 @@ describe("linkTextLintPlugin", () => {
     const d = doc([p(linkedText("click here", "https://example.com"))]);
     const state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [linkTextLintPlugin()],
     });
 
@@ -109,19 +109,19 @@ describe("linkTextLintPlugin", () => {
     const d = doc([p("Regular text")]);
     let state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [linkTextLintPlugin()],
     });
 
     expect(linkTextLintKey.getState(state)!.count).toBe(0);
 
     // Insert a text node with a link mark
-    const linkType = kbArticleSchema.marks.link;
+    const linkType = editorSchema.marks.link;
     if (linkType === undefined) throw new Error("link mark not in schema");
     const linkMark = linkType.create({
       href: "https://example.com",
     });
-    const linkedNode = kbArticleSchema.text("click here", [linkMark]);
+    const linkedNode = editorSchema.text("click here", [linkMark]);
     const tr = state.tr.insert(state.doc.content.size - 1, linkedNode);
     state = state.apply(tr);
 
@@ -135,7 +135,7 @@ describe("linkTextLintPlugin", () => {
     ]);
     const state = EditorState.create({
       doc: d,
-      schema: kbArticleSchema,
+      schema: editorSchema,
       plugins: [linkTextLintPlugin()],
     });
 

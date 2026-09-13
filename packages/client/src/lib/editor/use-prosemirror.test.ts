@@ -6,7 +6,7 @@ import { undo, redo, history } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
 import { Node as PMNode } from "prosemirror-model";
-import { kbArticleSchema } from "./prosemirror-schema.js";
+import { editorSchema } from "./prosemirror-schema.js";
 
 /**
  * These tests verify ProseMirror's EditorView lifecycle and transaction
@@ -37,8 +37,8 @@ function createContainer(): HTMLDivElement {
 
 function createEditorState(docJson?: Record<string, unknown>): EditorState {
   return EditorState.create({
-    schema: kbArticleSchema,
-    doc: docJson ? PMNode.fromJSON(kbArticleSchema, docJson) : undefined,
+    schema: editorSchema,
+    doc: docJson ? PMNode.fromJSON(editorSchema, docJson) : undefined,
     plugins: [
       keymap({ "Mod-z": undo, "Mod-Shift-z": redo, "Mod-y": redo }),
       keymap(baseKeymap),
