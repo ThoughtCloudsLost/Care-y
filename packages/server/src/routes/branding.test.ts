@@ -12,6 +12,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createBrandingRouter, type BrandingRouterDeps } from "./branding.js";
 import { createCallerFactory } from "../trpc/trpc.js";
+import { stubTenantDbDefaultRoles } from "../test-utils.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import { RoleId } from "@care-y/shared";
 
@@ -36,7 +37,7 @@ function createMockOrgContext(): OrgContext {
     orgId: "org-branding-test",
     orgSlug: "test-org",
     orgSchema: "org_test",
-    tenantDb: {} as OrgContext["tenantDb"],
+    tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
 }

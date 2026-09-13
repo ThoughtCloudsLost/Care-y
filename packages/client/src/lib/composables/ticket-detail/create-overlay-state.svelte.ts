@@ -152,3 +152,27 @@ export function createContentEdit(): ContentEditState {
     },
   };
 }
+
+// ── Notification channel sheet ──
+
+export interface NotificationSheetState {
+  readonly sheetOpen: boolean;
+  open(): void;
+  dismiss(): void;
+}
+
+export function createNotificationSheet(): NotificationSheetState {
+  let sheetOpen = $state(false);
+
+  return {
+    get sheetOpen(): boolean {
+      return sheetOpen;
+    },
+    open(): void {
+      sheetOpen = true;
+    },
+    dismiss(): void {
+      sheetOpen = false;
+    },
+  };
+}

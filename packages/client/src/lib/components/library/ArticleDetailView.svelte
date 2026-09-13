@@ -134,11 +134,7 @@
       : null,
   );
   const titleResult: DecryptResult = $derived(
-    resolveOrgDecrypt(
-      titleRaw,
-      orgKeyManager.isLoaded,
-      orgCache.isFailed(`kb-item:${articleId}`),
-    ),
+    resolveOrgDecrypt(titleRaw, orgCache.isFailed(`kb-item:${articleId}`)),
   );
 
   // ── Category name for navbar ──

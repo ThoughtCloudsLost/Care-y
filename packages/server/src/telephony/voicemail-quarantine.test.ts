@@ -569,12 +569,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .returning("id")
         .executeTakeFirstOrThrow();
 
-      const result = await getQuarantineBlob(
-        testDb.db,
-        blobStore,
-        testDb.schemaName,
-        inserted.id,
-      );
+      const result = await getQuarantineBlob(testDb.db, blobStore, inserted.id);
 
       expect(result.sealedBase64).toBe(sealedData.toString("base64url"));
       expect(result.durationSeconds).toBe(22);
@@ -585,7 +580,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const fakeId = crypto.randomUUID();
 
       await expect(
-        getQuarantineBlob(testDb.db, blobStore, testDb.schemaName, fakeId),
+        getQuarantineBlob(testDb.db, blobStore, fakeId),
       ).rejects.toThrow(NotFoundError);
     });
 
@@ -606,7 +601,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .executeTakeFirstOrThrow();
 
       await expect(
-        getQuarantineBlob(testDb.db, blobStore, testDb.schemaName, inserted.id),
+        getQuarantineBlob(testDb.db, blobStore, inserted.id),
       ).rejects.toThrow(NotFoundError);
     });
 

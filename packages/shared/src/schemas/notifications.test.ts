@@ -9,6 +9,11 @@ import {
   contentSearchInputSchema,
   auditEventTypeSchema,
   auditLogQueryInputSchema,
+  notificationChannelSchema,
+  preferenceScopeTypeSchema,
+  setPreferenceInputSchema,
+  resetPreferencesInputSchema,
+  preferenceRowSchema,
 } from "./notifications.js";
 
 const VALID_UUID = "550e8400-e29b-41d4-a716-446655440000";
@@ -415,5 +420,239 @@ describe("ticket_content_updated audit-only boundary", () => {
     expect(
       notificationEventTypeSchema.safeParse("ticket_content_updated").success,
     ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Notification preference schemas
+// ---------------------------------------------------------------------------
+
+describe("notificationChannelSchema", () => {
+  it.each(["push", "email", "sms"])("accepts '%s'", (ch) => {
+    expect(notificationChannelSchema.safeParse(ch).success).toBe(true);
+  });
+
+  it("rejects 'sse' (SSE is always delivered, not toggleable)", () => {
+    expect(notificationChannelSchema.safeParse("sse").success).toBe(false);
+  });
+
+  it("rejects unknown channel", () => {
+    expect(notificationChannelSchema.safeParse("carrier_pigeon").success).toBe(
+      false,
+    );
+  });
+
+  it("rejects empty string", () => {
+    expect(notificationChannelSchema.safeParse("").success).toBe(false);
+  });
+});
+
+describe("preferenceScopeTypeSchema", () => {
+  it.each(["global", "queue", "ticket"])("accepts '%s'", (scope) => {
+    expect(preferenceScopeTypeSchema.safeParse(scope).success).toBe(true);
+  });
+
+  it("rejects unknown scope type", () => {
+    expect(preferenceScopeTypeSchema.safeParse("org").success).toBe(false);
+  });
+});
+
+describe("setPreferenceInputSchema", () => {
+  it("accepts global scope with scopeId null", () => {
+    const result = setPreferenceInputSchema.safeParse({
+      scopeType: "global",
+      scopeId: null,
+      eventType: "ticket_created",
+      channel: "push",
+      enabled: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects global scope with a UUID scopeId", () => {
+    const result = setPreferenceInputSchema.safeParse({
+      scopeType: "global",
+      scopeId: VALID_UUID,
+      eventType: "ticket_created",
+      channel: "push",
+      enabled: false,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts queue scope with a UUID scopeId", () => {
+    const result = setPreferenceInputSchema.safeParse({
+      scopeType: "queue",
+      scopeId: VALID_UUID,
+      eventType: "followup_added",
+      channel: "email",
+      enabled: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects queue scope with null scopeId", () => {
+    const result = setPreferenceInputSchema.safeParse({
+      scopeType: "queue",
+      scopeId: null,
+      eventType: "followup_added",
+      channel: "email",
+      enabled: false,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts ticket scope with a UUID scopeId", () => {
+    const result = setPreferenceInputSchema.safeParse({
+      scopeType: "ticket",
+      scopeId: VALID_UUID,
+      eventType: "ticket_closed",
+      channel: "sms",
+      enabled: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects ticket scope with null scopeId", () => {
+    const result = setPreferenceInputSchema.safeParse({
+      scopeType: "ticket",
+      scopeId: null,
+      eventType: "ticket_closed",
+      channel: "sms",
+      enabled: true,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects sse as a channel", () => {
+    const result = setPreferenceInputSchema.safeParse({
+      scopeType: "global",
+      scopeId: null,
+      eventType: "ticket_created",
+      channel: "sse",
+      enabled: true,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects unknown event type", () => {
+    const result = setPreferenceInputSchema.safeParse({
+      scopeType: "global",
+      scopeId: null,
+      eventType: "unknown_event",
+      channel: "push",
+      enabled: true,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing enabled field", () => {
+    const result = setPreferenceInputSchema.safeParse({
+      scopeType: "global",
+      scopeId: null,
+      eventType: "ticket_created",
+      channel: "push",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("resetPreferencesInputSchema", () => {
+  it("accepts empty object (reset all scopes)", () => {
+    const result = resetPreferencesInputSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts global scope with null scopeId", () => {
+    const result = resetPreferencesInputSchema.safeParse({
+      scopeType: "global",
+      scopeId: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts queue scope with UUID scopeId", () => {
+    const result = resetPreferencesInputSchema.safeParse({
+      scopeType: "queue",
+      scopeId: VALID_UUID,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects global scope with UUID scopeId", () => {
+    const result = resetPreferencesInputSchema.safeParse({
+      scopeType: "global",
+      scopeId: VALID_UUID,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects queue scope with null scopeId", () => {
+    const result = resetPreferencesInputSchema.safeParse({
+      scopeType: "queue",
+      scopeId: null,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("preferenceRowSchema", () => {
+  it("accepts a valid global preference row", () => {
+    const result = preferenceRowSchema.safeParse({
+      scopeType: "global",
+      scopeId: null,
+      eventType: "ticket_assigned",
+      channel: "email",
+      enabled: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a valid ticket preference row", () => {
+    const result = preferenceRowSchema.safeParse({
+      scopeType: "ticket",
+      scopeId: VALID_UUID,
+      eventType: "mention",
+      channel: "push",
+      enabled: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid channel", () => {
+    const result = preferenceRowSchema.safeParse({
+      scopeType: "global",
+      scopeId: null,
+      eventType: "ticket_created",
+      channel: "sse",
+      enabled: true,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("auditEventTypeSchema (7.5c additions)", () => {
+  const newAuditTypes = [
+    "escalation_rule_created",
+    "escalation_rule_updated",
+    "escalation_rule_deleted",
+    "role_permission_changed",
+    "role_permissions_reset",
+  ] as const;
+
+  it.each(newAuditTypes)("accepts new audit event type '%s'", (eventType) => {
+    expect(auditEventTypeSchema.safeParse(eventType).success).toBe(true);
+  });
+
+  it("still accepts pre-existing audit event types", () => {
+    expect(auditEventTypeSchema.safeParse("ticket_created").success).toBe(true);
+    expect(auditEventTypeSchema.safeParse("queue_updated").success).toBe(true);
+    expect(
+      auditEventTypeSchema.safeParse("ticket_content_updated").success,
+    ).toBe(true);
+  });
+
+  it("rejects unknown audit event type", () => {
+    expect(auditEventTypeSchema.safeParse("user_deleted").success).toBe(false);
   });
 });

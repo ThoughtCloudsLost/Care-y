@@ -7,7 +7,7 @@
     PhoneCall,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
+  import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDuration } from "$lib/utils/time.js";
@@ -63,7 +63,6 @@
   // ---------------------------------------------------------------------------
 
   const orgCache = getOrgDecryptCache();
-  const orgKeyManager = getOrgKeyManager();
 
   function aliasResult(row: CallLogRow) {
     const raw = orgCache.decrypt(
@@ -72,7 +71,6 @@
     );
     return resolveOrgDecrypt(
       raw,
-      orgKeyManager.isLoaded,
       orgCache.isFailed(`client-alias:${row.clientId}`),
     );
   }

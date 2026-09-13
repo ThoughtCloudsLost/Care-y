@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Permission } from "../roles.js";
 import { ROLE_ID_VALUES_TUPLE } from "../roles.js";
 
 export const emailSchema = z
@@ -77,4 +78,26 @@ export const listUsersOutputItemSchema = z.object({
   hasKeys: z.boolean(),
   hasOrgKeyWrap: z.boolean(),
   volPublic: z.string().nullable(),
+});
+
+// --- Role permission overrides ---
+
+/** Validates a string against the Permission enum values. */
+export const permissionValueSchema = z.enum(Permission);
+
+export const setRolePermissionInputSchema = z.object({
+  roleId: z.enum(ROLE_ID_VALUES_TUPLE),
+  permission: permissionValueSchema,
+  enabled: z.boolean(),
+});
+
+export const rolePermissionsOutputSchema = z.object({
+  roles: z.array(
+    z.object({
+      roleId: z.enum(ROLE_ID_VALUES_TUPLE),
+      permissions: z.array(permissionValueSchema),
+      overridden: z.array(permissionValueSchema),
+    }),
+  ),
+  locked: z.array(permissionValueSchema),
 });

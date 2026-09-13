@@ -19,9 +19,11 @@ import {
   assignRoleInputSchema,
   setPiiRetentionInputSchema,
   setUserActiveInputSchema,
+  setRolePermissionInputSchema,
   RoleId,
   Permission,
   ErrorCode,
+  ROLE_ID_VALUES,
 } from "@care-y/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -33,11 +35,20 @@ import {
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import {
-  hasPermission,
   getDefaultRoleId,
   isValidRoleId,
-  ROLE_CONFIG,
+  hasPermissionForOrg,
+  getEffectivePermissions,
+  LOCKED_PERMISSIONS,
+  invalidateRolePermissionCache,
+  listAllOverrides,
+  computeOverridden,
+  isDefaultEnabled,
+  upsertOverride,
+  deleteOverride,
+  deleteAllOverrides,
 } from "../auth/roles.js";
+import type { AuditService } from "../tickets/audit.js";
 import { ForbiddenError, NotFoundError, RateLimitError } from "../errors.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { UserRecord, AuthService } from "../auth/service.js";
@@ -76,6 +87,8 @@ export interface AuthRouterDeps extends AuthServiceDeps {
    * replay on the other.
    */
   readonly totpReplayCache: TotpReplayCache;
+  /** Factory for audit logging. Optional to avoid breaking existing callers. */
+  readonly createAuditSvc?: (tDb: OrgContext["tenantDb"]) => AuditService;
 }
 
 /** Safe response shape: no password_hash, no internal fields. */
@@ -247,11 +260,16 @@ export function createAuthRouter(deps: AuthRouterDeps) {
           const effectiveRoleId = input.roleId ?? getDefaultRoleId();
 
           // Non-default roles require MANAGE_ROLES permission.
-          if (
-            effectiveRoleId !== getDefaultRoleId() &&
-            !hasPermission(ctx.user.roleId, Permission.MANAGE_ROLES)
-          ) {
-            throw new ForbiddenError(ErrorCode.ONLY_ADMINS_CAN_ASSIGN_ROLES);
+          if (effectiveRoleId !== getDefaultRoleId()) {
+            const canAssign = await hasPermissionForOrg(
+              ctx.org.tenantDb,
+              ctx.org.orgSchema,
+              ctx.user.roleId,
+              Permission.MANAGE_ROLES,
+            );
+            if (!canAssign) {
+              throw new ForbiddenError(ErrorCode.ONLY_ADMINS_CAN_ASSIGN_ROLES);
+            }
           }
 
           const authService = getAuthService(ctx.org, deps);
@@ -277,12 +295,17 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       return { success: true as const };
     }),
 
-    me: authedProcedure.query(({ ctx }) => {
+    me: authedProcedure.query(async ({ ctx }) => {
       const { roleId } = ctx.user;
-      const config = isValidRoleId(roleId)
-        ? ROLE_CONFIG.get(roleId)
-        : undefined;
-      const permissions = config ? [...config.permissions] : [];
+      let permissions: Permission[] = [];
+      if (isValidRoleId(roleId)) {
+        const effective = await getEffectivePermissions(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          roleId,
+        );
+        permissions = [...effective];
+      }
       return {
         user: toUserResponse(ctx.user),
         permissions,
@@ -363,6 +386,91 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       withErrorWrapping(async ({ ctx }) => {
         const authService = getAuthService(ctx.org, deps);
         return await authService.getHubStatus();
+      }),
+    ),
+
+    getRolePermissions: adminProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const overrideRows = await listAllOverrides(ctx.org.tenantDb);
+        const roles = [];
+        for (const roleId of ROLE_ID_VALUES) {
+          const effective = await getEffectivePermissions(
+            ctx.org.tenantDb,
+            ctx.org.orgSchema,
+            roleId,
+          );
+          const overridden = computeOverridden(roleId, overrideRows);
+          roles.push({
+            roleId,
+            permissions: [...effective],
+            overridden,
+          });
+        }
+        return {
+          roles,
+          locked: [...LOCKED_PERMISSIONS],
+        };
+      }),
+    ),
+
+    setRolePermission: adminProcedure
+      .input(setRolePermissionInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (LOCKED_PERMISSIONS.has(input.permission)) {
+            throw new ForbiddenError(ErrorCode.PERMISSION_LOCKED);
+          }
+
+          const matchesDefault =
+            isDefaultEnabled(input.roleId, input.permission) === input.enabled;
+
+          if (matchesDefault) {
+            await deleteOverride(
+              ctx.org.tenantDb,
+              input.roleId,
+              input.permission,
+            );
+          } else {
+            await upsertOverride(
+              ctx.org.tenantDb,
+              input.roleId,
+              input.permission,
+              input.enabled,
+            );
+          }
+
+          if (deps.createAuditSvc) {
+            const audit = deps.createAuditSvc(ctx.org.tenantDb);
+            void audit.log({
+              eventType: "role_permission_changed",
+              actorId: ctx.user.id,
+              metadata: {
+                roleId: input.roleId,
+                permission: input.permission,
+                enabled: input.enabled,
+              },
+            });
+          }
+
+          invalidateRolePermissionCache(ctx.org.orgSchema);
+          return { saved: true as const };
+        }),
+      ),
+
+    resetRolePermissions: adminProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => {
+        await deleteAllOverrides(ctx.org.tenantDb);
+
+        if (deps.createAuditSvc) {
+          const audit = deps.createAuditSvc(ctx.org.tenantDb);
+          void audit.log({
+            eventType: "role_permissions_reset",
+            actorId: ctx.user.id,
+          });
+        }
+
+        invalidateRolePermissionCache(ctx.org.orgSchema);
+        return { reset: true as const };
       }),
     ),
 

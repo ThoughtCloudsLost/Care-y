@@ -14,6 +14,7 @@
   import CloseResolutionSheet from "$lib/components/tickets/CloseResolutionSheet.svelte";
   import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
   import TicketContentEditSheet from "$lib/components/tickets/TicketContentEditSheet.svelte";
+  import TicketNotificationSheet from "$lib/components/tickets/TicketNotificationSheet.svelte";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import PhoneActionContent from "$lib/components/clients/PhoneActionContent.svelte";
@@ -25,6 +26,7 @@
     DeleteConfirmState,
     NoteEditState,
     ContentEditState,
+    NotificationSheetState,
   } from "$lib/composables/ticket-detail/create-overlay-state.svelte.js";
   import type { ExposureHintState } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
   import type { LightboxState } from "$lib/composables/ticket-detail/create-lightbox.svelte.js";
@@ -61,6 +63,7 @@
     deleteConfirm: DeleteConfirmState;
     noteEdit: NoteEditState;
     contentEdit: ContentEditState;
+    notificationSheet: NotificationSheetState;
     exposureHint: ExposureHintState;
     lightbox: LightboxState;
     contextMenu: ContextMenuState;
@@ -106,6 +109,7 @@
     deleteConfirm,
     noteEdit,
     contentEdit,
+    notificationSheet,
     exposureHint,
     lightbox,
     contextMenu,
@@ -255,6 +259,12 @@
 <TicketContentEditSheet
   opened={contentEdit.sheetOpen}
   ondismiss={() => contentEdit.dismiss()}
+  {ticketId}
+/>
+
+<TicketNotificationSheet
+  opened={notificationSheet.sheetOpen}
+  ondismiss={() => notificationSheet.dismiss()}
   {ticketId}
 />
 

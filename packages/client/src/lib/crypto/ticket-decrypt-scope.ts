@@ -23,7 +23,6 @@ import type {
 } from "./ticket-decrypt-cache.js";
 import type { FollowUpDecryptCache } from "./follow-up-decrypt-cache.js";
 import type { OrgDecryptCache } from "./org-decrypt-cache.js";
-import type { OrgKeyManager } from "./org-key.js";
 import type { DecryptResult } from "./decrypt-result.js";
 import { resolveAsyncDecrypt, resolveOrgDecrypt } from "./decrypt-result.js";
 
@@ -35,7 +34,6 @@ export interface TicketDecryptScopeDeps {
   ticketCache: TicketDecryptCache;
   followUpCache: FollowUpDecryptCache;
   orgCache: OrgDecryptCache;
-  orgKeyManager: OrgKeyManager;
   ticketId: string;
   keyWrap: TicketKeyWrap | null;
 }
@@ -72,14 +70,7 @@ export interface TicketDecryptScope {
 export function createTicketDecryptScope(
   deps: TicketDecryptScopeDeps,
 ): TicketDecryptScope {
-  const {
-    ticketCache,
-    followUpCache,
-    orgCache,
-    orgKeyManager,
-    ticketId,
-    keyWrap,
-  } = deps;
+  const { ticketCache, followUpCache, orgCache, ticketId, keyWrap } = deps;
 
   const hasAccess = keyWrap !== null;
 
@@ -118,11 +109,7 @@ export function createTicketDecryptScope(
 
     volunteerName(userId: string, encryptedName: string | null): DecryptResult {
       const raw = orgCache.decrypt(userId, encryptedName);
-      return resolveOrgDecrypt(
-        raw,
-        orgKeyManager.isLoaded,
-        orgCache.isFailed(userId),
-      );
+      return resolveOrgDecrypt(raw, orgCache.isFailed(userId));
     },
 
     hasAccess,

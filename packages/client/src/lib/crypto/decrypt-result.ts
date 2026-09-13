@@ -59,12 +59,11 @@ export function resolveAsyncDecrypt(
 /**
  * Normalize an org-tier cache result into a DecryptResult.
  *
- * @param raw         - The raw cache value (string | null from OrgDecryptCache)
- * @param isKeyLoaded - Whether the OrgKeyManager has been loaded with the org key
+ * @param raw    - The raw cache value (string | null from OrgDecryptCache)
+ * @param failed - Whether the cache recorded a decrypt failure for this key
  */
 export function resolveOrgDecrypt(
   raw: string | null,
-  isKeyLoaded: boolean,
   failed = false,
 ): DecryptResult {
   if (raw === null) {

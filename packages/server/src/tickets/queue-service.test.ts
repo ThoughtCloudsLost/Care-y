@@ -176,7 +176,7 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
   describe("listActive counts", () => {
     it("returns openCount, closedCount, holdCount, memberCount", async () => {
       const q = await createTestQueue(testDb.db, { label: "CountTest" });
-      const _fixture1 = await createTestTicketFixture(testDb.db, {
+      await createTestTicketFixture(testDb.db, {
         queueId: q.id,
       });
       const fixture2 = await createTestTicketFixture(testDb.db, {

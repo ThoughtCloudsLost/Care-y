@@ -22,7 +22,7 @@
     ListItem,
     Toggle,
   } from "konsta/svelte";
-  import { Phone, Pencil } from "@lucide/svelte";
+  import { Phone, Pencil, BellRing } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import StatusMark from "$lib/components/StatusMark.svelte";
@@ -35,7 +35,6 @@
     getTicketDecryptCache,
     getFollowUpDecryptCache,
     getOrgDecryptCache,
-    getOrgKeyManager,
     getCurrentUserId,
   } from "$lib/crypto/context.js";
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
@@ -74,7 +73,6 @@
   const ticketCache = getTicketDecryptCache();
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
-  const orgKeyManager = getOrgKeyManager();
   const currentUserIdGetter = getCurrentUserId();
 
   // --- TanStack queries (same keys as TicketDetail, deduplicated) ---
@@ -121,7 +119,6 @@
           ticketCache,
           followUpCache,
           orgCache,
-          orgKeyManager,
           ticketId: ticket.id,
           keyWrap: ticket.keyWrap,
         })
@@ -254,6 +251,18 @@
         <Pencil class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
       {/snippet}
     </ListItem>
+    {#if isWatching || isAssignedToMe}
+      <ListItem
+        link
+        chevron
+        title={m.notif_ticket_panel_action()}
+        onclick={() => onaction("notifications")}
+      >
+        {#snippet media()}
+          <BellRing class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/if}
     <ListItem
       link
       chevron

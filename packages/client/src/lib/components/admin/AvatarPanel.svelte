@@ -4,7 +4,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import type { Permission } from "@care-y/shared";
   import { getRoleInfo } from "$lib/admin/role-info.js";
-  import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
+  import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -35,17 +35,12 @@
   }: AvatarPanelProps = $props();
 
   const orgCache = getOrgDecryptCache();
-  const orgKeyManager = getOrgKeyManager();
 
   const displayNameRaw = $derived(
     orgCache.decrypt("me:display_name", encryptedDisplayName),
   );
   const nameResult = $derived(
-    resolveOrgDecrypt(
-      displayNameRaw,
-      orgKeyManager.isLoaded,
-      orgCache.isFailed("me:display_name"),
-    ),
+    resolveOrgDecrypt(displayNameRaw, orgCache.isFailed("me:display_name")),
   );
 
   const initials = $derived(

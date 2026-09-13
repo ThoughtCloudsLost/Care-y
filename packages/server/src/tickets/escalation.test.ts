@@ -139,7 +139,7 @@ describe.skipIf(!process.env.DATABASE_URL)("escalateTenantTickets (DB)", () => {
       priority: "urgent",
     });
 
-    const _result = await escalateTenantTickets(testDb.db);
+    await escalateTenantTickets(testDb.db);
 
     const ticket = await testDb.db
       .selectFrom("tickets")

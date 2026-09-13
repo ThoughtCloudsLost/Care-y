@@ -23,12 +23,15 @@ import { notificationEventTypeSchema } from "@care-y/shared";
 import { z } from "zod";
 import { getStrings, buildLoginUrl } from "./i18n.js";
 import type { NotificationRecipientList } from "../tickets/notification-recipients.js";
+import type { NotificationPreferencesService } from "./preferences.js";
+import type { DispatchAllowLists } from "./preferences.js";
 
 export interface NotificationServiceDeps {
   readonly sse: SseService;
   readonly emailSender: NotificationEmailSender;
   readonly pushSender: PushNotificationSender;
   readonly jobQueue: JobQueue;
+  readonly preferences: NotificationPreferencesService;
 }
 
 export interface NotificationService {
@@ -72,9 +75,24 @@ export function createNotificationService(
       const userIds = recipients.recipients.map((r) => r.userId);
       if (userIds.length === 0) return;
 
+      // Resolve per-channel allow lists from the preference cascade.
+      // Fail-open: if the preferences query throws, treat all channels as
+      // allowed. For an at-risk-population support tool, a missed escalation
+      // is worse than an unwanted email.
+      const allow = await resolveAllowListsSafe(
+        deps.preferences,
+        tDb,
+        userIds,
+        eventType,
+        ticketId,
+        queueId,
+      );
+
       const timestamp = new Date().toISOString();
 
       // 1. SSE (immediate, fire-and-forget)
+      // SSE is the in-app feed and is always delivered to all recipients
+      // regardless of preferences (design invariant).
       const sseEvent: SseEvent = {
         type: eventType,
         ticketId,
@@ -83,48 +101,116 @@ export function createNotificationService(
       };
       deps.sse.broadcast(orgSchema, userIds, sseEvent);
 
-      // 2. Web Push (immediate, fire-and-forget)
-      void deps.pushSender.sendToUsers(tDb, userIds).catch(() => {
-        // Push failures are non-critical. Expired subscriptions
-        // are cleaned up inside sendToUsers.
-      });
+      // 2. Web Push (filtered by preferences)
+      if (allow.pushAllowed.length > 0) {
+        void deps.pushSender
+          .sendToUsers(tDb, [...allow.pushAllowed])
+          .catch(() => {
+            // Push failures are non-critical. Expired subscriptions
+            // are cleaned up inside sendToUsers.
+          });
+      }
 
-      // 3. Email + SMS (via JobQueue for retry)
-      await deps.jobQueue.enqueue("notification-email", {
-        orgSchema,
-        orgSlug,
-        recipientUserIds: userIds,
-        eventType,
-      });
+      // 3. Email (via JobQueue for retry, filtered by preferences)
+      // Preference resolution happens at enqueue time, not at send time.
+      // A retried job re-sends to the same recipient set even if the user
+      // changed preferences between enqueue and retry. This is accepted:
+      // enqueue-time semantics keep the job handler simple and the payload
+      // PII-free (IDs only).
+      if (allow.emailAllowed.length > 0) {
+        await deps.jobQueue.enqueue("notification-email", {
+          orgSchema,
+          orgSlug,
+          recipientUserIds: [...allow.emailAllowed],
+          eventType,
+        });
+      }
+      // SMS: allow.smsAllowed is computed but unconsumed until the SMS
+      // dispatch leg is wired. Do not enqueue anything for it here.
     },
 
     async dispatchTicketless(tDb, orgSchema, orgSlug, eventType, userIds) {
       if (userIds.length === 0) return;
 
+      // Ticketless dispatch: no ticket or queue context, so preferences
+      // resolve from global scope only.
+      const allow = await resolveAllowListsSafe(
+        deps.preferences,
+        tDb,
+        [...userIds],
+        eventType,
+        undefined,
+        undefined,
+      );
+
       const timestamp = new Date().toISOString();
 
       // 1. SSE (system event, no ticket/queue context)
+      // Always delivered regardless of preferences.
       const sseEvent: SystemSseEvent = {
         type: "voicemail_quarantined",
         timestamp,
       };
       deps.sse.broadcast(orgSchema, userIds, sseEvent);
 
-      // 2. Web Push (immediate, fire-and-forget)
-      void deps.pushSender.sendToUsers(tDb, userIds).catch(() => {
-        // Push failures are non-critical. Expired subscriptions
-        // are cleaned up inside sendToUsers.
-      });
+      // 2. Web Push (filtered by preferences)
+      if (allow.pushAllowed.length > 0) {
+        void deps.pushSender
+          .sendToUsers(tDb, [...allow.pushAllowed])
+          .catch(() => {
+            // Push failures are non-critical. Expired subscriptions
+            // are cleaned up inside sendToUsers.
+          });
+      }
 
-      // 3. Email (via JobQueue for retry)
-      await deps.jobQueue.enqueue("notification-email", {
-        orgSchema,
-        orgSlug,
-        recipientUserIds: [...userIds],
-        eventType,
-      });
+      // 3. Email (via JobQueue for retry, filtered by preferences)
+      // Enqueue-time semantics (see dispatch() comment).
+      if (allow.emailAllowed.length > 0) {
+        await deps.jobQueue.enqueue("notification-email", {
+          orgSchema,
+          orgSlug,
+          recipientUserIds: [...allow.emailAllowed],
+          eventType,
+        });
+      }
     },
   };
+}
+
+/**
+ * Wraps `resolveForDispatch` with fail-open error handling. If the preferences
+ * query throws for any reason, all users are treated as allowed on every
+ * channel. This is the safe direction for a support tool serving at-risk
+ * populations: a missed escalation is worse than an unwanted notification.
+ * No PII is logged (user IDs are pseudonyms, event types are enum strings).
+ */
+async function resolveAllowListsSafe(
+  preferences: NotificationPreferencesService,
+  tDb: Kysely<TenantDatabase>,
+  userIds: readonly string[],
+  eventType: NotificationEventType,
+  ticketId: string | undefined,
+  queueId: string | undefined,
+): Promise<DispatchAllowLists> {
+  try {
+    return await preferences.resolveForDispatch(
+      tDb,
+      userIds,
+      eventType,
+      ticketId,
+      queueId,
+    );
+  } catch (err: unknown) {
+    console.error(
+      "Notification preference resolution failed, falling back to all-allowed:",
+      JSON.stringify(err),
+    );
+    return {
+      pushAllowed: [...userIds],
+      emailAllowed: [...userIds],
+      smsAllowed: [...userIds],
+    };
+  }
 }
 
 export interface NotificationJobHandlerDeps {

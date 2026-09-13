@@ -30,7 +30,7 @@ import {
   authedProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
-import { requirePermission } from "../auth/roles.js";
+import { requirePermissionForOrg } from "../auth/roles.js";
 import { createInviteService } from "../onboarding/invite-service.js";
 import {
   createOnboardingService,
@@ -277,7 +277,12 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
 
     generateInvite: authedProcedure.input(generateInviteInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
+        await requirePermissionForOrg(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          ctx.user.roleId,
+          Permission.MANAGE_ROLES,
+        );
 
         const inviteService = createInviteService(ctx.org.tenantDb);
 
@@ -304,7 +309,12 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
 
     listPendingInvites: authedProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
-        requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
+        await requirePermissionForOrg(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          ctx.user.roleId,
+          Permission.MANAGE_ROLES,
+        );
 
         const inviteService = createInviteService(ctx.org.tenantDb);
         const invites = await inviteService.listPending();
@@ -322,7 +332,12 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
 
     revokeInvite: authedProcedure.input(revokeInviteInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
+        await requirePermissionForOrg(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          ctx.user.roleId,
+          Permission.MANAGE_ROLES,
+        );
 
         const inviteService = createInviteService(ctx.org.tenantDb);
         await inviteService.revoke(input.tokenId);
@@ -335,7 +350,12 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
       .input(updateOrgGeneralInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
+          await requirePermissionForOrg(
+            ctx.org.tenantDb,
+            ctx.org.orgSchema,
+            ctx.user.roleId,
+            Permission.MANAGE_ROLES,
+          );
 
           const service = createOnboardingService(ctx.org.tenantDb, deps);
           await service.updateOrgGeneral(input);
@@ -348,7 +368,12 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
       .input(saveTelephonyChoiceInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
+          await requirePermissionForOrg(
+            ctx.org.tenantDb,
+            ctx.org.orgSchema,
+            ctx.user.roleId,
+            Permission.MANAGE_ROLES,
+          );
 
           const service = createOnboardingService(ctx.org.tenantDb, deps);
           const result = await service.saveTelephonyChoice(input);
@@ -432,7 +457,12 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
 
     completeSetup: authedProcedure.mutation(
       withErrorWrapping(async ({ ctx }) => {
-        requirePermission(ctx.user.roleId, Permission.MANAGE_ROLES);
+        await requirePermissionForOrg(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          ctx.user.roleId,
+          Permission.MANAGE_ROLES,
+        );
 
         const sessions = createTenantSessions(ctx.org, tokenizer);
         const authService = createScopedAuthService(ctx.org, sessions, deps);

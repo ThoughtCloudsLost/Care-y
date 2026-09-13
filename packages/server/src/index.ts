@@ -97,6 +97,7 @@ import { createDependencyService } from "./tickets/dependency-service.js";
 import {
   createMediaService,
   registerMediaCleanupHandler,
+  MEDIA_CLEANUP_QUEUE,
 } from "./tickets/media-service.js";
 import { createQueueService } from "./tickets/queue-service.js";
 import { createAssignmentService } from "./tickets/assignment.js";
@@ -106,6 +107,7 @@ import { createQueuePermissionsService } from "./tickets/queue-permissions.js";
 import {
   registerEscalationHandler,
   escalateTenantTickets,
+  ESCALATION_QUEUE,
 } from "./tickets/escalation.js";
 import { loadOrCreateVapidKeys } from "./notifications/vapid.js";
 import { createSseService } from "./notifications/sse.js";
@@ -116,6 +118,7 @@ import {
   createNotificationJobHandler,
   createNotificationService,
 } from "./notifications/service.js";
+import { createNotificationPreferencesService } from "./notifications/preferences.js";
 import { createSearchService } from "./tickets/search.js";
 import { createAuditService } from "./tickets/audit.js";
 import {
@@ -125,6 +128,17 @@ import {
 } from "./kb/service.js";
 import { createKBMediaService } from "./kb/kb-media-service.js";
 import { createClientService } from "./clients/client-service.js";
+import {
+  registerEscalationRulesHandler,
+  ESCALATION_RULES_QUEUE,
+  DEFAULT_ESCALATION_RULES_INTERVAL_MS,
+} from "./jobs/escalation-checker.js";
+import { ensureRecurringJob } from "./jobs/ensure-recurring.js";
+import {
+  runEscalationCheck,
+  type EscalationServiceDeps,
+} from "./tickets/escalation-service.js";
+import { RoleId } from "@care-y/shared";
 
 // --- DB startup probe ---
 
@@ -385,11 +399,14 @@ const pushSender = createPushNotificationSender(vapidKeys, "admin@care-y.app");
 // Job queue created early so NotificationService can use it during routing.
 const jobQueue = createJobQueue(db);
 
+const preferencesService = createNotificationPreferencesService();
+
 const notificationService = createNotificationService({
   sse: sseService,
   emailSender: notificationEmailSender,
   pushSender,
   jobQueue,
+  preferences: preferencesService,
 });
 
 const createContext = createContextFactory({
@@ -524,6 +541,10 @@ const appRouter = createAppRouter({
   notificationDeps: {
     createPushSubSvc: (tDb) => createPushSubscriptionService(tDb),
     vapidPublicKey: vapidKeys.publicKey,
+    preferencesService,
+  },
+  escalationDeps: {
+    createAuditSvc: (tDb) => createAuditService(tDb),
   },
   brandingDeps: {
     blobStore,
@@ -597,6 +618,18 @@ async function listActiveOrgSchemas(): Promise<string[]> {
   return orgs.map((o) => o.schema_name);
 }
 
+/** Lists schema + slug pairs for all active orgs (single query). */
+async function listActiveOrgSchemasWithSlugs(): Promise<
+  readonly { schema: string; slug: string }[]
+> {
+  const orgs = await db
+    .selectFrom("orgs")
+    .select(["schema_name", "slug"])
+    .where("is_active", "=", true)
+    .execute();
+  return orgs.map((o) => ({ schema: o.schema_name, slug: o.slug }));
+}
+
 registerLogDeletionHandler(jobQueue, providerFactory);
 registerMediaCleanupHandler(
   jobQueue,
@@ -618,6 +651,54 @@ registerEscalationHandler(jobQueue, async () => {
     await escalateTenantTickets(tenantDb(schema));
   }
 });
+
+// Escalation rules checker: evaluates time-based rules across all tenants
+const escalationRulesDeps: EscalationServiceDeps = {
+  notificationService,
+  async getManagerIds(tDb) {
+    const managerRows = await tDb
+      .selectFrom("users")
+      .select("id")
+      .where("is_active", "=", true)
+      .where("role_id", "in", [RoleId.MANAGER, RoleId.ADMIN])
+      .execute();
+    return managerRows.map((r) => r.id);
+  },
+  async getQueueWatcherIds(tDb, queueId) {
+    const watcherRows = await tDb
+      .selectFrom("queue_watchers")
+      .select("user_id")
+      .where("queue_id", "=", queueId)
+      .execute();
+    return watcherRows.map((r) => r.user_id);
+  },
+};
+
+registerEscalationRulesHandler(
+  jobQueue,
+  async () => {
+    const orgs = await listActiveOrgSchemasWithSlugs();
+    for (const org of orgs) {
+      try {
+        await runEscalationCheck(
+          tenantDb(org.schema),
+          org.schema,
+          org.slug,
+          escalationRulesDeps,
+        );
+      } catch (err: unknown) {
+        console.error(
+          `Escalation rules check failed for schema ${org.schema}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+  },
+  env.ESCALATION_RULES_INTERVAL_MS ?? DEFAULT_ESCALATION_RULES_INTERVAL_MS,
+);
+await ensureRecurringJob(db, jobQueue, ESCALATION_RULES_QUEUE);
+await ensureRecurringJob(db, jobQueue, ESCALATION_QUEUE);
+await ensureRecurringJob(db, jobQueue, MEDIA_CLEANUP_QUEUE);
 jobQueue.start();
 console.log("Job queue started");
 
@@ -838,6 +919,7 @@ const blobDownloadHandler = createBlobDownloadHandler({
       .executeTakeFirst();
     return row?.role_id ?? null;
   },
+  createTenantDb: (orgSchema) => tenantDb(orgSchema),
 });
 
 const manifestHandler = createManifestHandler({ orgService });

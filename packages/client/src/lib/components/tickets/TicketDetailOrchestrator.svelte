@@ -55,6 +55,7 @@
     createDeleteConfirm,
     createNoteEdit,
     createContentEdit,
+    createNotificationSheet,
   } from "$lib/composables/ticket-detail/create-overlay-state.svelte.js";
   import { copyToClipboard } from "$lib/composables/ticket-detail/clipboard-copy.js";
   import {
@@ -610,6 +611,7 @@
   });
 
   const contentEdit = createContentEdit();
+  const notificationSheet = createNotificationSheet();
 
   const panelActions = createPanelActions({
     getTicketId: () => ticketId,
@@ -638,6 +640,10 @@
     oneditcontent: () => {
       closePanel();
       contentEdit.open();
+    },
+    onnotifications: () => {
+      closePanel();
+      notificationSheet.open();
     },
   });
 
@@ -1048,6 +1054,7 @@
   {deleteConfirm}
   {noteEdit}
   {contentEdit}
+  {notificationSheet}
   {exposureHint}
   {lightbox}
   {contextMenu}

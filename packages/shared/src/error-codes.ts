@@ -111,6 +111,9 @@ export const ErrorCode = {
 
   // --- Ticket content editing (7.5b) ---
   TICKET_KEY_GENERATION_STALE: "TICKET_KEY_GENERATION_STALE",
+
+  // --- Role permission overrides ---
+  PERMISSION_LOCKED: "PERMISSION_LOCKED",
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];

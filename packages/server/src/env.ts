@@ -77,6 +77,10 @@ const envSchema = z.object({
   TWILIO_API_KEY_SID: z.string().optional(),
   TWILIO_API_KEY_SECRET: z.string().optional(),
   TWILIO_TWIML_APP_SID: z.string().optional(),
+
+  // Escalation rules checker interval override (ms). Default 300000 (5 min).
+  // Only set this in development or testing to speed up the check cycle.
+  ESCALATION_RULES_INTERVAL_MS: z.coerce.number().int().positive().optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

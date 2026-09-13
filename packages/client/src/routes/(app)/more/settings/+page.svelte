@@ -27,6 +27,7 @@
   import PasswordSheet from "$lib/components/settings/PasswordSheet.svelte";
   import TwoFactorSheet from "$lib/components/settings/TwoFactorSheet.svelte";
   import SecurityBriefingPopup from "$lib/components/settings/SecurityBriefingPopup.svelte";
+  import NotificationPreferencesSection from "$lib/components/settings/NotificationPreferencesSection.svelte";
 
   const orgCache = getOrgDecryptCache();
   const cryptoBridge = getCryptoBridge();
@@ -203,6 +204,8 @@
       }}
     />
   </List>
+
+  <NotificationPreferencesSection />
 
   {#if import.meta.env.DEV}
     <!-- eslint-disable care-y/no-hardcoded-strings -- dev-only UI, tree-shaken from production -->
