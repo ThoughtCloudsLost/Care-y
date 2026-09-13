@@ -173,10 +173,9 @@ export function resolveSubmitMetadata(
 
     if (field.role === "queue-routing" && typeof val === "string") {
       const cfg = field.config;
-      if (
-        (cfg.type === "select" || cfg.type === "multiselect") &&
-        cfg.queueRoutingMapping != null
-      ) {
+      // Single-pick only: a multiselect answer is an array, so it never
+      // reaches here, and the builder refuses to save that pairing.
+      if (cfg.type === "select" && cfg.queueRoutingMapping != null) {
         const mapping = cfg.queueRoutingMapping;
         const mapped = mapping[val]; // eslint-disable-line security/detect-object-injection -- val is the user-selected option from the form
         if (mapped !== undefined) {

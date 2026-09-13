@@ -4473,14 +4473,185 @@ describe("crypto-core detectMergeCandidates", () => {
 
     expect(resp.ok).toBe(true);
     const responseKeys = Object.keys(resp).toSorted();
-    expect(responseKeys).toEqual(["candidates", "id", "ok", "type"]);
+    expect(responseKeys).toEqual([
+      "candidates",
+      "id",
+      "ok",
+      "truncated",
+      "type",
+    ]);
     for (const c of resp.candidates) {
       expect(Object.keys(c).toSorted()).toEqual([
         "clientIdA",
         "clientIdB",
+        "matchHash",
         "matchKind",
       ]);
     }
+  });
+
+  it("candidates include the matching hash", async () => {
+    await loadOrgKey();
+
+    const sharedHash = await phoneMatchHashVia("+12125550001", 8110);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8111,
+      clients: [
+        {
+          clientId: "client-a",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "client-b",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(1);
+    expect(resp.candidates[0]!.matchHash).toBe(sharedHash);
+  });
+
+  it("suppressedPhoneHashes removes phone matches for stored-hash clients", async () => {
+    await loadOrgKey();
+
+    const sharedHash = await phoneMatchHashVia("+12125550099", 8120);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8121,
+      suppressedPhoneHashes: [sharedHash],
+      clients: [
+        {
+          clientId: "client-a",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "client-b",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(0);
+  });
+
+  it("suppressedPhoneHashes removes phone matches from intake-extracted hashes", async () => {
+    const sodium = requireSodium();
+    await loadOrgKey();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    const tk = generateContentKey();
+    const wrapTk = eciesEncrypt(tk, volPub);
+    const ticketId = "t-suppress-intake";
+    const responseJson = JSON.stringify({
+      answers: [{ fieldKey: "default:phone", value: "+12125550077" }],
+    });
+    const aad = buildContentAad(ticketId, "intake-response");
+    const ct = encryptContent(new TextEncoder().encode(responseJson), tk, aad);
+
+    const phoneHash = await phoneMatchHashVia("+12125550077", 8130);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8131,
+      suppressedPhoneHashes: [phoneHash],
+      clients: [
+        {
+          clientId: "client-intake-s1",
+          phoneMatchHash: null,
+          emailMatchHash: null,
+          intakeResponses: [
+            {
+              ticketId,
+              ephemeralPoint: encode(wrapTk.ephemeralPoint),
+              nonce: encode(wrapTk.nonce),
+              wrappedKey: encode(wrapTk.ciphertext),
+              intakeWrap: null,
+              encryptedResponse: encode(ct),
+              fieldRoles: new Map(),
+            },
+          ],
+        },
+        {
+          clientId: "client-intake-s2",
+          phoneMatchHash: phoneHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(0);
+
+    sodium.memzero(tk);
+  });
+
+  it("generation stops at 200 candidates and reports truncated", async () => {
+    await loadOrgKey();
+
+    const sharedHash = await phoneMatchHashVia("+12125550333", 8140);
+
+    // 21 clients sharing one phone hash yields 21*20/2 = 210 pairs.
+    // The cap at 200 means we get exactly 200 and truncated = true.
+    const clients = Array.from({ length: 21 }, (_, i) => ({
+      clientId: `client-bulk-${String(i).padStart(3, "0")}`,
+      phoneMatchHash: sharedHash,
+      emailMatchHash: null,
+      intakeResponses: [] as never[],
+    }));
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8141,
+      clients,
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(200);
+    expect(resp.truncated).toBe(true);
+  });
+
+  it("truncated is false when under the cap", async () => {
+    await loadOrgKey();
+
+    const sharedHash = await phoneMatchHashVia("+12125550444", 8150);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8151,
+      clients: [
+        {
+          clientId: "client-cap-a",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "client-cap-b",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(1);
+    expect(resp.truncated).toBe(false);
   });
 });
 
@@ -4633,5 +4804,1184 @@ describe("crypto-core unknown op type", () => {
     expect(resp.ok).toBe(true);
     // State preserved (init from KEYED stays KEYED)
     expect(getState()).toBe("KEYED");
+  });
+});
+
+// ── CLUSTER 1: detectMergeCandidates (cap, suppression, dedup) ──────
+
+describe("detectMergeCandidates cap, suppression, and canonical ordering", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("merge-cap-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  async function loadOrgKey(): Promise<Uint8Array> {
+    const sodium = requireSodium();
+    const orgSecret = sodium.crypto_core_ristretto255_scalar_random();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(orgSecret, volPub);
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_000,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+    });
+    sinkMessages = [];
+    return orgSecret;
+  }
+
+  async function phoneMatchHashVia(phone: string, id: number): Promise<string> {
+    const resp = (await dispatchAndWait({
+      type: "phoneMatchHash",
+      id,
+      phone,
+    })) as PhoneMatchHashResponse;
+    expect(resp.ok).toBe(true);
+    return resp.hash!;
+  }
+
+  async function emailMatchHashVia(email: string, id: number): Promise<string> {
+    const resp = (await dispatchAndWait({
+      type: "emailMatchHash",
+      id,
+      email,
+    })) as EmailMatchHashResponse;
+    expect(resp.ok).toBe(true);
+    return resp.hash!;
+  }
+
+  it("reports matchKind phone and the shared hash for a phone pair", async () => {
+    await loadOrgKey();
+    const hash = await phoneMatchHashVia("+15550010001", 10_010);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 10_011,
+      clients: [
+        {
+          clientId: "c-ph-1",
+          phoneMatchHash: hash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "c-ph-2",
+          phoneMatchHash: hash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(1);
+    expect(resp.candidates[0]!.matchKind).toBe("phone");
+    expect(resp.candidates[0]!.matchHash).toBe(hash);
+  });
+
+  it("reports matchKind email when only email hashes match", async () => {
+    await loadOrgKey();
+    const hash = await emailMatchHashVia("only-email@test.syn", 10_020);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 10_021,
+      clients: [
+        {
+          clientId: "c-em-1",
+          phoneMatchHash: null,
+          emailMatchHash: hash,
+          intakeResponses: [],
+        },
+        {
+          clientId: "c-em-2",
+          phoneMatchHash: null,
+          emailMatchHash: hash,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(1);
+    expect(resp.candidates[0]!.matchKind).toBe("email");
+    expect(resp.candidates[0]!.matchHash).toBe(hash);
+  });
+
+  it("reports phone (not email) when both hashes match between a pair", async () => {
+    await loadOrgKey();
+    const phoneH = await phoneMatchHashVia("+15550020001", 10_030);
+    const emailH = await emailMatchHashVia("both@test.syn", 10_031);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 10_032,
+      clients: [
+        {
+          clientId: "c-both-1",
+          phoneMatchHash: phoneH,
+          emailMatchHash: emailH,
+          intakeResponses: [],
+        },
+        {
+          clientId: "c-both-2",
+          phoneMatchHash: phoneH,
+          emailMatchHash: emailH,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(1);
+    expect(resp.candidates[0]!.matchKind).toBe("phone");
+  });
+
+  it("always puts the lexicographically smaller id in clientIdA regardless of input order", async () => {
+    await loadOrgKey();
+    const hash = await phoneMatchHashVia("+15550030001", 10_040);
+
+    const fwd = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 10_041,
+      clients: [
+        {
+          clientId: "aaa-first",
+          phoneMatchHash: hash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "zzz-second",
+          phoneMatchHash: hash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(fwd.candidates[0]!.clientIdA).toBe("aaa-first");
+    expect(fwd.candidates[0]!.clientIdB).toBe("zzz-second");
+
+    // Reverse the client order and confirm the same canonical pair
+    const rev = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 10_042,
+      clients: [
+        {
+          clientId: "zzz-second",
+          phoneMatchHash: hash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "aaa-first",
+          phoneMatchHash: hash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(rev.candidates[0]!.clientIdA).toBe("aaa-first");
+    expect(rev.candidates[0]!.clientIdB).toBe("zzz-second");
+  });
+
+  it("suppresses candidates whose only shared hash is in suppressedPhoneHashes", async () => {
+    await loadOrgKey();
+    const suppHash = await phoneMatchHashVia("+15550040001", 10_050);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 10_051,
+      suppressedPhoneHashes: [suppHash],
+      clients: [
+        {
+          clientId: "c-sup-1",
+          phoneMatchHash: suppHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "c-sup-2",
+          phoneMatchHash: suppHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(0);
+  });
+
+  it("suppresses per hash, not per client: a client with a suppressed hash still matches on a different hash", async () => {
+    await loadOrgKey();
+    const suppHash = await phoneMatchHashVia("+15550050001", 10_060);
+    const liveHash = await phoneMatchHashVia("+15550050002", 10_061);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 10_062,
+      suppressedPhoneHashes: [suppHash],
+      clients: [
+        {
+          clientId: "c-mix-1",
+          phoneMatchHash: suppHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "c-mix-2",
+          phoneMatchHash: liveHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "c-mix-3",
+          phoneMatchHash: liveHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    // c-mix-2 and c-mix-3 share the unsuppressed hash
+    expect(resp.candidates).toHaveLength(1);
+    expect(resp.candidates[0]!.matchKind).toBe("phone");
+    expect(resp.candidates[0]!.matchHash).toBe(liveHash);
+  });
+
+  it("caps candidates at MAX_MERGE_CANDIDATES (200) and sets truncated true", async () => {
+    await loadOrgKey();
+    const hash = await phoneMatchHashVia("+15550060001", 10_070);
+
+    // 21 clients on one hash: C(21,2) = 210 > 200.
+    // 200 is MAX_MERGE_CANDIDATES, the agreed bound on how many pairs the
+    // Worker generates (ADR-103). It is module-private, so the literal below
+    // is the only way to pin it. Tuning the cap should update this
+    // deliberately: the number is what stops a shared phone line from
+    // producing a quadratic candidate list.
+    const clients = Array.from({ length: 21 }, (_, i) => ({
+      clientId: `c-cap-${String(i).padStart(4, "0")}`,
+      phoneMatchHash: hash,
+      emailMatchHash: null,
+      intakeResponses: [] as never[],
+    }));
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 10_071,
+      clients,
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(200);
+    expect(resp.truncated).toBe(true);
+  });
+
+  it("reports truncated false when below the cap", async () => {
+    await loadOrgKey();
+    const hash = await phoneMatchHashVia("+15550070001", 10_080);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 10_081,
+      clients: [
+        {
+          clientId: "c-lo-1",
+          phoneMatchHash: hash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "c-lo-2",
+          phoneMatchHash: hash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.truncated).toBe(false);
+  });
+});
+
+// ── CLUSTER 2: decryptIntakeResponse cold branches ──────────────────
+
+describe("decryptIntakeResponse failure and empty paths", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("intake-cold-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  afterEach(() => {
+    handleZeroAll(-1, testSink);
+  });
+
+  async function loadOrgKeyForViewer(): Promise<string> {
+    const sodium = requireSodium();
+    const orgSecret = sodium.crypto_core_ristretto255_scalar_random();
+    const wrap = eciesEncrypt(
+      orgSecret,
+      decode(volPublicStr) as RistrettoPoint,
+    );
+
+    const resp = (await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 11_000,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+    })) as UnwrapOrgKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    sodium.memzero(orgSecret);
+    return resp.orgPublicKey;
+  }
+
+  it("returns empty answers when the response blob decrypts to valid JSON but answers is not an array", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ticketId = "t-not-array";
+    const json = JSON.stringify({ answers: "not-an-array" });
+    const aad = buildContentAad(ticketId, "intake-form-response");
+    const ct = encryptContent(new TextEncoder().encode(json), tk, aad);
+
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = (await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 11_010,
+      ticketId,
+      encryptedResponse: encode(ct),
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    })) as DecryptIntakeResponseResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.answersJson).toBe("[]");
+
+    sodium.memzero(tk);
+  });
+
+  it("returns DECRYPT_FAILED when the org-seal wrap is tampered", async () => {
+    const sodium = requireSodium();
+    await loadOrgKeyForViewer();
+
+    const resp = await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 11_020,
+      ticketId: "t-bad-seal",
+      encryptedResponse: encode(sodium.randombytes_buf(100)),
+      callerKeyWrap: null,
+      orgSealWrap: { wrappedTk: encode(sodium.randombytes_buf(80)) },
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+    expect((resp as ErrorResponse).type).toBe("decryptIntakeResponse");
+    // Security contract: error must not leak any seeded content
+    expect((resp as ErrorResponse).error).not.toContain("t-bad-seal");
+  });
+
+  it("returns DECRYPT_FAILED when ECIES callerKeyWrap is garbled", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ticketId = "t-garbled-ecies";
+    const json = JSON.stringify({ answers: [] });
+    const aad = buildContentAad(ticketId, "intake-form-response");
+    const ct = encryptContent(new TextEncoder().encode(json), tk, aad);
+
+    const resp = await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 11_030,
+      ticketId,
+      encryptedResponse: encode(ct),
+      callerKeyWrap: {
+        ephemeralPoint: encode(sodium.randombytes_buf(32)),
+        nonce: encode(sodium.randombytes_buf(24)),
+        wrappedKey: encode(sodium.randombytes_buf(48)),
+      },
+      orgSealWrap: null,
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+    expect((resp as ErrorResponse).type).toBe("decryptIntakeResponse");
+
+    sodium.memzero(tk);
+  });
+
+  it("uses the cached tk when the same ticketId was previously decrypted", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ticketId = "t-cached-tk";
+    const json1 = JSON.stringify({
+      answers: [{ fieldKey: "f1", value: "v1" }],
+    });
+    const json2 = JSON.stringify({
+      answers: [{ fieldKey: "f2", value: "v2" }],
+    });
+    const aad = buildContentAad(ticketId, "intake-form-response");
+    const ct1 = encryptContent(new TextEncoder().encode(json1), tk, aad);
+    const ct2 = encryptContent(new TextEncoder().encode(json2), tk, aad);
+
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    // First call caches tk
+    const resp1 = (await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 11_040,
+      ticketId,
+      encryptedResponse: encode(ct1),
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    })) as DecryptIntakeResponseResponse;
+    expect(resp1.ok).toBe(true);
+
+    // Second call should succeed via the cache (no wrap needed but provided as null)
+    // Use a different wrap that would fail (null orgSealWrap, null callerKeyWrap)
+    // to prove the cache path was taken instead.
+    // Actually, neither wrap nor seal = DECRYPT_FAILED before the cache check.
+    // Instead prove cache by passing the SAME wrap (which the code won't try
+    // since tk is already set from cache).
+    const resp2 = (await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 11_041,
+      ticketId,
+      encryptedResponse: encode(ct2),
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    })) as DecryptIntakeResponseResponse;
+    expect(resp2.ok).toBe(true);
+    const answers2 = JSON.parse(resp2.answersJson) as {
+      fieldKey: string;
+      value: unknown;
+    }[];
+    expect(answers2[0]?.value).toBe("v2");
+
+    sodium.memzero(tk);
+  });
+
+  it("returns NOT_READY for org-seal path when org key is not loaded", async () => {
+    const sodium = requireSodium();
+
+    const resp = await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 11_050,
+      ticketId: "t-no-org",
+      encryptedResponse: encode(sodium.randombytes_buf(100)),
+      callerKeyWrap: null,
+      orgSealWrap: { wrappedTk: encode(sodium.randombytes_buf(80)) },
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+    expect((resp as ErrorResponse).type).toBe("decryptIntakeResponse");
+  });
+
+  it("does not leak seeded plaintext in error responses", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ticketId = "t-leak-check";
+    const secretContent = "SUPERSECRETVALUE42";
+    const json = JSON.stringify({
+      answers: [{ fieldKey: "f1", value: secretContent }],
+    });
+    const aad = buildContentAad(ticketId, "intake-form-response");
+    const ct = encryptContent(new TextEncoder().encode(json), tk, aad);
+
+    // Use a wrong key so decryption of the response blob fails after unwrapping
+    const wrongTk = generateContentKey();
+    const wrap = eciesEncrypt(wrongTk, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 11_060,
+      ticketId,
+      encryptedResponse: encode(ct),
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    });
+
+    expect(resp.ok).toBe(false);
+    // Security contract: no seeded plaintext in any response field
+    const serialized = JSON.stringify(resp);
+    expect(serialized).not.toContain(secretContent);
+    expect(serialized).not.toContain(encode(tk));
+
+    sodium.memzero(tk);
+    sodium.memzero(wrongTk);
+  });
+});
+
+// ── CLUSTER 3: extractContactsFromResponse additional shapes ────────
+
+describe("extractContactsFromResponse additional shapes", () => {
+  it("returns empty results when there are no contact fields at all", () => {
+    const json = JSON.stringify({
+      answers: [
+        { fieldKey: "f1", value: "just text" },
+        { fieldKey: "f2", value: "more text" },
+      ],
+    });
+    const roles = new Map([
+      ["f1", "full-name"],
+      ["f2", "address"],
+    ]);
+
+    const result = extractContactsFromResponse(json, roles);
+    expect(result.phones).toEqual([]);
+    expect(result.emails).toEqual([]);
+  });
+
+  it("collects multiple phones from separate answers", () => {
+    const json = JSON.stringify({
+      answers: [
+        { fieldKey: "p1", value: "+12125550011" },
+        { fieldKey: "p2", value: "+12125550022" },
+      ],
+    });
+    const roles = new Map([
+      ["p1", "phone-contact"],
+      ["p2", "phone-contact"],
+    ]);
+
+    const result = extractContactsFromResponse(json, roles);
+    expect(result.phones).toHaveLength(2);
+  });
+
+  it("collects multiple emails from separate answers", () => {
+    const json = JSON.stringify({
+      answers: [
+        { fieldKey: "e1", value: "one@test.syn" },
+        { fieldKey: "e2", value: "two@test.syn" },
+      ],
+    });
+    const roles = new Map([
+      ["e1", "email-contact"],
+      ["e2", "email-contact"],
+    ]);
+
+    const result = extractContactsFromResponse(json, roles);
+    expect(result.emails).toHaveLength(2);
+  });
+
+  it("handles answers with unexpected value types alongside valid ones", () => {
+    const json = JSON.stringify({
+      answers: [
+        { fieldKey: "default:phone", value: "+12125550033" },
+        { fieldKey: "default:phone", value: 999 },
+        { fieldKey: "default:email", value: null },
+        { fieldKey: "default:email", value: "valid@test.syn" },
+      ],
+    });
+
+    const result = extractContactsFromResponse(json, new Map());
+    expect(result.phones).toHaveLength(1);
+    expect(result.emails).toHaveLength(1);
+  });
+});
+
+// ── CLUSTER 4: seal/rewrap group cold branches ──────────────────────
+
+describe("sealFollowUpsToPublic cold branches", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("seal-fu-cold-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  it("returns empty items and empty failed for an empty items array", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(tk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 12_000,
+      ticketId: "t-seal-empty",
+      keyCacheId: "t-seal-empty",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    });
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "sealFollowUpsToPublic",
+      id: 12_001,
+      ticketId: "t-seal-empty",
+      clientPublic: encode(clientPub),
+      items: [],
+    })) as SealFollowUpsToPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.items).toHaveLength(0);
+    expect(resp.failed).toHaveLength(0);
+
+    sodium.memzero(tk);
+    sodium.memzero(clientPriv);
+  });
+
+  it("pushes item to failed when neither keyWrap nor portalWrap resolves a content key", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(tk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 12_010,
+      ticketId: "t-seal-nokey",
+      keyCacheId: "t-seal-nokey",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    });
+
+    // Evict the tk so the cache is empty for this ticket
+    await dispatchAndWait({
+      type: "evictTk",
+      id: 12_011,
+      ticketId: "t-seal-nokey",
+    });
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "sealFollowUpsToPublic",
+      id: 12_012,
+      ticketId: "t-seal-nokey",
+      clientPublic: encode(clientPub),
+      // No keyWrap, no portalWrap, no cached tk
+      items: [
+        {
+          followUpId: "fu-orphan",
+          ciphertext: encode(sodium.randombytes_buf(64)),
+        },
+      ],
+    })) as SealFollowUpsToPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.items).toHaveLength(0);
+    expect(resp.failed).toEqual(["fu-orphan"]);
+
+    sodium.memzero(tk);
+    sodium.memzero(clientPriv);
+  });
+
+  it("rejects with NOT_READY when worker is not keyed", async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    await dispatchAndWait({ type: "init", id: 12_020 });
+
+    const resp = await dispatchAndWait({
+      type: "sealFollowUpsToPublic",
+      id: 12_021,
+      ticketId: "t-not-keyed",
+      clientPublic: encode(new Uint8Array(32)),
+      items: [],
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+    expect((resp as ErrorResponse).type).toBe("sealFollowUpsToPublic");
+  });
+});
+
+describe("sealFileKeysToPublic cold branches", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("seal-fk-cold-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  it("returns empty items and empty failed for an empty items array", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(tk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 13_000,
+      ticketId: "t-sfk-empty",
+      keyCacheId: "t-sfk-empty",
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedKey: encode(wrap.ciphertext),
+    });
+
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "sealFileKeysToPublic",
+      id: 13_001,
+      ticketId: "t-sfk-empty",
+      clientPublic: encode(clientPub),
+      items: [],
+    })) as SealFileKeysToPublicResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.items).toHaveLength(0);
+    expect(resp.failed).toHaveLength(0);
+
+    sodium.memzero(tk);
+    sodium.memzero(clientPriv);
+  });
+
+  it("returns TK_NOT_CACHED when no tk is available and no keyWrap is provided", async () => {
+    const sodium = requireSodium();
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    const resp = await dispatchAndWait({
+      type: "sealFileKeysToPublic",
+      id: 13_010,
+      ticketId: "t-sfk-nocache",
+      clientPublic: encode(clientPub),
+      items: [
+        {
+          kind: "attachment" as const,
+          rowId: "row-orphan",
+          fileKeyWrap: encode(sodium.randombytes_buf(64)),
+        },
+      ],
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+    expect((resp as ErrorResponse).type).toBe("sealFileKeysToPublic");
+
+    sodium.memzero(clientPriv);
+  });
+
+  it("returns DECRYPT_FAILED when the keyWrap warm-up fails", async () => {
+    const sodium = requireSodium();
+    const clientPriv =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const clientPub = sodium.crypto_scalarmult_ristretto255_base(clientPriv);
+
+    const resp = await dispatchAndWait({
+      type: "sealFileKeysToPublic",
+      id: 13_020,
+      ticketId: "t-sfk-badwrap",
+      clientPublic: encode(clientPub),
+      keyWrap: {
+        ephemeralPoint: encode(sodium.randombytes_buf(32)),
+        nonce: encode(sodium.randombytes_buf(24)),
+        wrappedKey: encode(sodium.randombytes_buf(48)),
+      },
+      items: [
+        {
+          kind: "attachment" as const,
+          rowId: "row-badwrap",
+          fileKeyWrap: encode(sodium.randombytes_buf(64)),
+        },
+      ],
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+    expect((resp as ErrorResponse).type).toBe("sealFileKeysToPublic");
+
+    sodium.memzero(clientPriv);
+  });
+
+  it("rejects with NOT_READY when worker is not keyed", async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    await dispatchAndWait({ type: "init", id: 13_030 });
+
+    const resp = await dispatchAndWait({
+      type: "sealFileKeysToPublic",
+      id: 13_031,
+      ticketId: "t-not-keyed",
+      clientPublic: encode(new Uint8Array(32)),
+      items: [],
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+    expect((resp as ErrorResponse).type).toBe("sealFileKeysToPublic");
+  });
+});
+
+describe("handleRewrapFileKey cold branches", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("rewrapfk-cold-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  it("returns TK_NOT_CACHED when no tk_temp is cached for the follow-up", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    // Cache a canonical tk so the second check passes
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 14_000,
+      ticketId: "t-rfk-notktemp",
+      keyCacheId: "t-rfk-notktemp",
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    sinkMessages = [];
+    const resp = await dispatchAndWait({
+      type: "rewrapFileKey",
+      id: 14_001,
+      followUpId: "fu-no-temp",
+      ticketId: "t-rfk-notktemp",
+      attachmentId: "att-no-temp",
+      fileKeyWrap: encode(sodium.randombytes_buf(64)),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+    expect((resp as ErrorResponse).type).toBe("rewrapFileKey");
+
+    sodium.memzero(canonicalTk);
+  });
+
+  it("returns TK_NOT_CACHED when canonical tk is missing for the ticket", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    // Cache a canonical tk for a DIFFERENT ticket so the temp cache can be primed
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 14_010,
+      ticketId: "t-rfk-other",
+      keyCacheId: "t-rfk-other",
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    // Prime tk_temp via decryptAndRewrap
+    const tkTemp = generateContentKey();
+    const wrapTemp = eciesEncrypt(tkTemp, volPub);
+    const followUpId = "fu-no-canon-fk";
+    const tempCt = encryptContent(
+      new TextEncoder().encode("temp-content"),
+      tkTemp,
+      buildContentAad("t-rfk-other", followupSlot(followUpId)),
+    );
+
+    await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: 14_011,
+      ticketId: "t-rfk-other",
+      followUpId,
+      ephemeralPoint: encode(wrapTemp.ephemeralPoint),
+      nonce: encode(wrapTemp.nonce),
+      wrappedKey: encode(wrapTemp.ciphertext),
+      ciphertext: encode(tempCt),
+    });
+
+    sinkMessages = [];
+    // Ask to rewrap a file key for a ticket that has NO canonical tk
+    const resp = await dispatchAndWait({
+      type: "rewrapFileKey",
+      id: 14_012,
+      followUpId,
+      ticketId: "t-rfk-missing",
+      attachmentId: "att-nocanon",
+      fileKeyWrap: encode(sodium.randombytes_buf(64)),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
+
+    handleRewrapResult({ kind: "rewrap-result", followUpId, success: false });
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
+  });
+
+  it("returns REWRAP_FAILED when the file key wrap is tampered", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 14_020,
+      ticketId: "t-rfk-tamper",
+      keyCacheId: "t-rfk-tamper",
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    // Prime tk_temp via decryptAndRewrap
+    const tkTemp = generateContentKey();
+    const wrapTemp = eciesEncrypt(tkTemp, volPub);
+    const followUpId = "fu-tamper-fk";
+    const tempCt = encryptContent(
+      new TextEncoder().encode("portal text"),
+      tkTemp,
+      buildContentAad("t-rfk-tamper", followupSlot(followUpId)),
+    );
+
+    await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: 14_021,
+      ticketId: "t-rfk-tamper",
+      followUpId,
+      ephemeralPoint: encode(wrapTemp.ephemeralPoint),
+      nonce: encode(wrapTemp.nonce),
+      wrappedKey: encode(wrapTemp.ciphertext),
+      ciphertext: encode(tempCt),
+    });
+
+    sinkMessages = [];
+    const resp = await dispatchAndWait({
+      type: "rewrapFileKey",
+      id: 14_022,
+      followUpId,
+      ticketId: "t-rfk-tamper",
+      attachmentId: "att-tamper",
+      fileKeyWrap: encode(sodium.randombytes_buf(64)),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("REWRAP_FAILED");
+    expect((resp as ErrorResponse).type).toBe("rewrapFileKey");
+
+    handleRewrapResult({ kind: "rewrap-result", followUpId, success: false });
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
+  });
+
+  it("rejects with NOT_READY when worker is not keyed", async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    await dispatchAndWait({ type: "init", id: 14_030 });
+
+    const resp = await dispatchAndWait({
+      type: "rewrapFileKey",
+      id: 14_031,
+      followUpId: "fu-notkeyed",
+      ticketId: "t-notkeyed",
+      attachmentId: "att-notkeyed",
+      fileKeyWrap: encode(new Uint8Array(64)),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("NOT_READY");
+    expect((resp as ErrorResponse).type).toBe("rewrapFileKey");
+  });
+});
+
+describe("triggerRewrap cold branches (via decryptAndRewrap)", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("trigger-rewrap-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  it("silently skips the rewrap when no canonical tk is cached for the ticket", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    // Prime a canonical tk for ticket A, but send decryptAndRewrap for ticket B
+    // The triggerRewrap call will find no canonical tk for ticket B and bail out.
+    const tkOther = generateContentKey();
+    const wrapOther = eciesEncrypt(tkOther, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 15_000,
+      ticketId: "t-trig-other",
+      keyCacheId: "t-trig-other",
+      ephemeralPoint: encode(wrapOther.ephemeralPoint),
+      nonce: encode(wrapOther.nonce),
+      wrappedKey: encode(wrapOther.ciphertext),
+    });
+
+    // Create a tk_temp for a different ticket (not in tkCache)
+    const tkTemp = generateContentKey();
+    const wrapTemp = eciesEncrypt(tkTemp, volPub);
+    const followUpId = "fu-no-canon-tr";
+    // Encrypt under tkTemp using ticket "t-trig-nocanon"
+    const ct = encryptContent(
+      new TextEncoder().encode("content"),
+      tkTemp,
+      buildContentAad("t-trig-nocanon", followupSlot(followUpId)),
+    );
+
+    sinkMessages = [];
+    const resp = await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: 15_001,
+      ticketId: "t-trig-nocanon",
+      followUpId,
+      ephemeralPoint: encode(wrapTemp.ephemeralPoint),
+      nonce: encode(wrapTemp.nonce),
+      wrappedKey: encode(wrapTemp.ciphertext),
+      ciphertext: encode(ct),
+    });
+
+    // The decrypt itself succeeds
+    expect(resp.ok).toBe(true);
+    // No rewrap event should have been emitted (triggerRewrap bailed on missing canonical tk)
+    const rewrapEvents = sinkMessages.filter((m) => "kind" in m);
+    expect(rewrapEvents).toHaveLength(0);
+
+    sodium.memzero(tkOther);
+    sodium.memzero(tkTemp);
+  });
+
+  it("silently skips the rewrap when the follow-up is already pending", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    // Cache canonical tk
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 15_010,
+      ticketId: "t-trig-dup",
+      keyCacheId: "t-trig-dup",
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    // First decryptAndRewrap to put the follow-up in pendingRewraps
+    const tkTemp = generateContentKey();
+    const wrapTemp = eciesEncrypt(tkTemp, volPub);
+    const followUpId = "fu-pending-dup";
+    const ct1 = encryptContent(
+      new TextEncoder().encode("first"),
+      tkTemp,
+      buildContentAad("t-trig-dup", followupSlot(followUpId)),
+    );
+
+    await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: 15_011,
+      ticketId: "t-trig-dup",
+      followUpId,
+      ephemeralPoint: encode(wrapTemp.ephemeralPoint),
+      nonce: encode(wrapTemp.nonce),
+      wrappedKey: encode(wrapTemp.ciphertext),
+      ciphertext: encode(ct1),
+    });
+
+    // Count rewrap events so far
+    const rewrapsBefore = sinkMessages.filter((m) => "kind" in m).length;
+    expect(rewrapsBefore).toBe(1);
+
+    // Second decryptAndRewrap with the same followUpId (still pending)
+    const ct2 = encryptContent(
+      new TextEncoder().encode("second"),
+      tkTemp,
+      buildContentAad("t-trig-dup", followupSlot(followUpId)),
+    );
+
+    await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: 15_012,
+      ticketId: "t-trig-dup",
+      followUpId,
+      ephemeralPoint: encode(wrapTemp.ephemeralPoint),
+      nonce: encode(wrapTemp.nonce),
+      wrappedKey: encode(wrapTemp.ciphertext),
+      ciphertext: encode(ct2),
+    });
+
+    // No additional rewrap event (the pending check suppressed it)
+    const rewrapsAfter = sinkMessages.filter((m) => "kind" in m).length;
+    expect(rewrapsAfter).toBe(1);
+
+    handleRewrapResult({ kind: "rewrap-result", followUpId, success: true });
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
   });
 });

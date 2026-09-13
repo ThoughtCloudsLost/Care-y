@@ -209,7 +209,9 @@ export const UNIQUE_ROLES_PER_FORM: readonly IntakeFieldRole[] = [
 export const ROLE_WIDGET_COMPATIBILITY: Readonly<
   Record<IntakeFieldRole, readonly IntakeFieldType[]>
 > = {
-  "queue-routing": ["select", "multiselect"],
+  // Single-pick only. A multiselect answer is an array, and a ticket has one
+  // queue, so there is no defined way to route on several chosen options.
+  "queue-routing": ["select"],
   urgency: ["select"],
   escalation: ["select", "checkbox"],
   "phone-contact": ["text"],
@@ -620,6 +622,46 @@ function isRoleCompatible(
   // eslint-disable-next-line security/detect-object-injection -- role is validated by intakeFieldRoleSchema enum
   const allowed = ROLE_WIDGET_COMPATIBILITY[role];
   return allowed.includes(fieldType);
+}
+
+/**
+ * Pairs the builder presents even though they are invalid, so it can explain
+ * the conflict rather than hide the option. An admin who cannot find queue
+ * routing on a checkbox list concludes the feature does not exist; one who
+ * picks it and is told why learns the actual rule.
+ *
+ * Every entry here must be rejected by isRoleCompatible. The builder blocks
+ * the save and offers a way out.
+ */
+const ROLE_WIDGET_OFFERED_BUT_INVALID: readonly (readonly [
+  IntakeFieldRole,
+  IntakeFieldType,
+])[] = [["queue-routing", "multiselect"]] as const;
+
+/**
+ * Whether the form builder should list this role for this widget type.
+ * Broader than isRoleCompatible: it also covers pairs the builder shows in
+ * order to explain why they will not work.
+ */
+export function isRoleOfferable(
+  role: IntakeFieldRole,
+  fieldType: IntakeFieldType,
+): boolean {
+  if (isRoleCompatible(role, fieldType)) return true;
+  return ROLE_WIDGET_OFFERED_BUT_INVALID.some(
+    ([r, t]) => r === role && t === fieldType,
+  );
+}
+
+/**
+ * Public form of the compatibility check, for surfaces that need to detect a
+ * conflict before the save schema does.
+ */
+export function isRoleValidForWidget(
+  role: IntakeFieldRole,
+  fieldType: IntakeFieldType,
+): boolean {
+  return isRoleCompatible(role, fieldType);
 }
 
 /**

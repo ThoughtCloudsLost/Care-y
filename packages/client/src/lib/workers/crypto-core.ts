@@ -1817,6 +1817,9 @@ export function extractContactsFromResponse(
   return { phones, emails };
 }
 
+// Quadratic worst case crosses the Worker bridge as one structured clone.
+const MAX_MERGE_CANDIDATES = 200;
+
 function handleDetectMergeCandidates(
   req: DetectMergeCandidatesRequest,
   sink: Sink,
@@ -1826,6 +1829,7 @@ function handleDetectMergeCandidates(
   const sodium = requireSodium();
   const phoneKey = ensurePhoneMatchIndexKey();
   const emailKey = ensureEmailMatchIndexKey();
+  const suppressed = new Set(req.suppressedPhoneHashes ?? []);
   const fingerprints: ClientContactFingerprint[] = [];
 
   for (const client of req.clients) {
@@ -1833,7 +1837,10 @@ function handleDetectMergeCandidates(
     const clientEmailHashes: string[] = [];
 
     // Stored phone match hash (server-persisted, browser-computed)
-    if (client.phoneMatchHash != null) {
+    if (
+      client.phoneMatchHash != null &&
+      !suppressed.has(client.phoneMatchHash)
+    ) {
       clientPhoneHashes.push(client.phoneMatchHash);
     }
 
@@ -1913,7 +1920,9 @@ function handleDetectMergeCandidates(
               b.toString(16).padStart(2, "0"),
             ).join("");
             sodium.memzero(hmac);
-            clientPhoneHashes.push(hex);
+            if (!suppressed.has(hex)) {
+              clientPhoneHashes.push(hex);
+            }
           }
           // Hash extracted email addresses for comparison
           for (const email of contacts.emails) {
@@ -1947,12 +1956,18 @@ function handleDetectMergeCandidates(
   // Compare all pairs for matching contacts
   const candidates: MergeCandidate[] = [];
   const seen = new Set<string>();
+  let truncated = false;
 
-  for (let i = 0; i < fingerprints.length; i++) {
+  outer: for (let i = 0; i < fingerprints.length; i++) {
     // eslint-disable-next-line security/detect-object-injection -- i is bounded by fingerprints.length in the for-loop condition
     const a = fingerprints[i];
     if (!a) continue;
     for (let j = i + 1; j < fingerprints.length; j++) {
+      if (candidates.length >= MAX_MERGE_CANDIDATES) {
+        truncated = true;
+        break outer;
+      }
+
       // eslint-disable-next-line security/detect-object-injection -- j is bounded by fingerprints.length in the for-loop condition
       const b = fingerprints[j];
       if (!b) continue;
@@ -1970,6 +1985,7 @@ function handleDetectMergeCandidates(
             clientIdA: a.clientId < b.clientId ? a.clientId : b.clientId,
             clientIdB: a.clientId < b.clientId ? b.clientId : a.clientId,
             matchKind: "phone",
+            matchHash: phoneHash,
           });
           seen.add(pairKey);
           break;
@@ -1984,6 +2000,7 @@ function handleDetectMergeCandidates(
             clientIdA: a.clientId < b.clientId ? a.clientId : b.clientId,
             clientIdB: a.clientId < b.clientId ? b.clientId : a.clientId,
             matchKind: "email",
+            matchHash: emailHash,
           });
           seen.add(pairKey);
           break;
@@ -1997,6 +2014,7 @@ function handleDetectMergeCandidates(
     ok: true,
     type: "detectMergeCandidates",
     candidates,
+    truncated,
   };
   sink(msg);
 }

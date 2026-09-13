@@ -902,17 +902,26 @@ export class CryptoBridge {
 
   /**
    * Detect merge candidates by batch-decrypting intake responses and
-   * comparing normalized contact values. Returns only client-id pairs
-   * and match kind. Contact values never leave the Worker.
+   * comparing normalized contact values. Returns only client-id pairs,
+   * match kind, and whether the generation cap was reached. Contact
+   * values never leave the Worker.
    */
   async detectMergeCandidates(
     clients: readonly MergeScanClient[],
-  ): Promise<readonly MergeCandidate[]> {
+    suppressedPhoneHashes?: readonly string[],
+  ): Promise<{
+    readonly candidates: readonly MergeCandidate[];
+    readonly truncated: boolean;
+  }> {
     const resp = expectResponse(
-      await this.sendRequest({ type: "detectMergeCandidates", clients }),
+      await this.sendRequest({
+        type: "detectMergeCandidates",
+        clients,
+        suppressedPhoneHashes,
+      }),
       "detectMergeCandidates",
     );
-    return resp.candidates;
+    return { candidates: resp.candidates, truncated: resp.truncated };
   }
 
   /**

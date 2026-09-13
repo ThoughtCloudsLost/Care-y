@@ -4,7 +4,8 @@
  * Tests for MergeCandidatesSection dashboard component.
  *
  * Verifies: hidden when no candidates, renders cards with aliases,
- * dismiss removes the card, review button navigates with prefill.
+ * dismiss removes the card, review button navigates with prefill,
+ * shared-line button, truncated notice, max 5 visible rows.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -30,6 +31,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     aliasB: string;
   }) => `${aliasA} / ${aliasB}`,
   mergeCandidates_coverage_notice: () => "Coverage notice text",
+  mergeCandidates_shared_line: () => "Shared line",
+  mergeCandidates_truncated_notice: () => "Truncated notice text",
 }));
 
 import MergeCandidatesSection from "./MergeCandidatesSection.svelte";
@@ -40,12 +43,14 @@ const CANDIDATE_PHONE: MergeCandidate = {
   clientIdA: "aaa-111",
   clientIdB: "bbb-222",
   matchKind: "phone",
+  matchHash: "phonehash-abc",
 };
 
 const CANDIDATE_EMAIL: MergeCandidate = {
   clientIdA: "ccc-333",
   clientIdB: "ddd-444",
   matchKind: "email",
+  matchHash: "emailhash-xyz",
 };
 
 function resolveAlias(clientId: string): string | null {
@@ -58,32 +63,32 @@ function resolveAlias(clientId: string): string | null {
   return aliases[clientId] ?? null;
 }
 
+function defaultProps(overrides?: Record<string, unknown>) {
+  return {
+    candidates: [CANDIDATE_PHONE],
+    expanded: true,
+    ontoggle: vi.fn(),
+    resolveAlias,
+    ondismiss: vi.fn(),
+    onreview: vi.fn(),
+    truncated: false,
+    onsharedline: vi.fn(),
+    ...overrides,
+  };
+}
+
 describe("MergeCandidatesSection", () => {
   it("renders candidate cards with aliases", () => {
-    render(MergeCandidatesSection, {
-      props: {
-        candidates: [CANDIDATE_PHONE],
-        expanded: true,
-        ontoggle: vi.fn(),
-        resolveAlias,
-        ondismiss: vi.fn(),
-        onreview: vi.fn(),
-      },
-    });
+    render(MergeCandidatesSection, { props: defaultProps() });
 
     expect(screen.getByText(/Alice.*Bob/)).toBeTruthy();
   });
 
   it("renders match kind label", () => {
     render(MergeCandidatesSection, {
-      props: {
+      props: defaultProps({
         candidates: [CANDIDATE_PHONE, CANDIDATE_EMAIL],
-        expanded: true,
-        ontoggle: vi.fn(),
-        resolveAlias,
-        ondismiss: vi.fn(),
-        onreview: vi.fn(),
-      },
+      }),
     });
 
     // The mock returns the function key name
@@ -95,14 +100,7 @@ describe("MergeCandidatesSection", () => {
     const ondismiss = vi.fn();
 
     render(MergeCandidatesSection, {
-      props: {
-        candidates: [CANDIDATE_PHONE],
-        expanded: true,
-        ontoggle: vi.fn(),
-        resolveAlias,
-        ondismiss,
-        onreview: vi.fn(),
-      },
+      props: defaultProps({ ondismiss }),
     });
 
     const dismissBtn = screen.getByText("Dismiss");
@@ -115,14 +113,7 @@ describe("MergeCandidatesSection", () => {
     const onreview = vi.fn();
 
     render(MergeCandidatesSection, {
-      props: {
-        candidates: [CANDIDATE_PHONE],
-        expanded: true,
-        ontoggle: vi.fn(),
-        resolveAlias,
-        ondismiss: vi.fn(),
-        onreview,
-      },
+      props: defaultProps({ onreview }),
     });
 
     const reviewBtn = screen.getByText("Review");
@@ -132,16 +123,7 @@ describe("MergeCandidatesSection", () => {
   });
 
   it("does not render contact values anywhere in the section", () => {
-    render(MergeCandidatesSection, {
-      props: {
-        candidates: [CANDIDATE_PHONE],
-        expanded: true,
-        ontoggle: vi.fn(),
-        resolveAlias,
-        ondismiss: vi.fn(),
-        onreview: vi.fn(),
-      },
-    });
+    render(MergeCandidatesSection, { props: defaultProps() });
 
     // No phone numbers or email addresses should appear in the DOM
     const html = document.body.innerHTML;
@@ -149,5 +131,58 @@ describe("MergeCandidatesSection", () => {
     expect(html).not.toContain("555");
     expect(html).not.toContain("1234");
     expect(html).not.toContain("@example.com");
+  });
+
+  it("renders at most 5 rows while header count shows the full total", () => {
+    const many: MergeCandidate[] = Array.from({ length: 8 }, (_, i) => ({
+      clientIdA: `a-${i}`,
+      clientIdB: `b-${i}`,
+      matchKind: "phone" as const,
+      matchHash: `hash-${i}`,
+    }));
+
+    const { container } = render(MergeCandidatesSection, {
+      props: defaultProps({ candidates: many }),
+    });
+
+    // The CollapsibleSection header badge shows the true count (8)
+    expect(container.textContent).toContain("8");
+
+    // Only 5 list items render (the first 5 pairs)
+    const listItems = container.querySelectorAll("li");
+    expect(listItems.length).toBeLessThanOrEqual(5);
+  });
+
+  it("shared-line button appears only on phone-match rows and calls onsharedline", async () => {
+    const onsharedline = vi.fn();
+
+    render(MergeCandidatesSection, {
+      props: defaultProps({
+        candidates: [CANDIDATE_PHONE, CANDIDATE_EMAIL],
+        onsharedline,
+      }),
+    });
+
+    const sharedBtns = screen.getAllByText("Shared line");
+    // Phone row has the button, email row does not
+    expect(sharedBtns).toHaveLength(1);
+
+    await fireEvent.click(sharedBtns[0]!);
+    expect(onsharedline).toHaveBeenCalledWith("phonehash-abc");
+  });
+
+  it("truncated notice renders only when truncated is true", () => {
+    const { container, unmount } = render(MergeCandidatesSection, {
+      props: defaultProps({ truncated: false }),
+    });
+
+    expect(container.textContent).not.toContain("Truncated notice text");
+    unmount();
+
+    const { container: container2 } = render(MergeCandidatesSection, {
+      props: defaultProps({ truncated: true }),
+    });
+
+    expect(container2.textContent).toContain("Truncated notice text");
   });
 });

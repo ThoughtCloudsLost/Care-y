@@ -384,6 +384,10 @@ export {
   type SuggestDuplicatesInput,
   updateEmailInputSchema,
   type UpdateEmailInput,
+  getPhoneSharedLineInputSchema,
+  type GetPhoneSharedLineInput,
+  setPhoneSharedLineInputSchema,
+  type SetPhoneSharedLineInput,
 } from "./schemas/clients.js";
 
 // --- Follow-up content-type registry ---
@@ -703,6 +707,8 @@ export {
   intakeFieldRoleSchema,
   UNIQUE_ROLES_PER_FORM,
   ROLE_WIDGET_COMPATIBILITY,
+  isRoleOfferable,
+  isRoleValidForWidget,
   intakeOptionSchema,
   queueRoutingMappingSchema,
   urgencyMappingSchema,

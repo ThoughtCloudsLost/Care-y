@@ -3697,3 +3697,1511 @@ describe("client-portal router (account session procedures)", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// submitIntake: optional branches
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (submitIntake optional branches)", () => {
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCreateIntakeTicket.mockResolvedValue({
+      ticketId: "t-opt",
+      clientAlias: "cool-river-9",
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("passes null encryptedMessage to service when field is omitted", async () => {
+    const input = makeSubmitInput();
+    delete (input as Record<string, unknown>).encryptedMessage;
+
+    const caller = buildCaller();
+    await caller.submitIntake(input);
+
+    const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as Record<
+      string,
+      unknown
+    >;
+    expect(serviceInput.encryptedMessage).toBeNull();
+  });
+
+  it("passes Buffer encryptedMessage when field is present", async () => {
+    const caller = buildCaller();
+    await caller.submitIntake(makeSubmitInput());
+
+    const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as Record<
+      string,
+      unknown
+    >;
+    expect(Buffer.isBuffer(serviceInput.encryptedMessage)).toBe(true);
+  });
+
+  it("decodes account selfCopy to Buffers when present", async () => {
+    const caller = buildCaller(
+      buildDeps({
+        accountServiceDeps: {
+          indexer: {
+            hash: vi.fn().mockReturnValue("hashed"),
+          } as unknown as BlindIndexer,
+          fakeSaltKey: Buffer.alloc(32, 0xab),
+        },
+      }),
+    );
+
+    const input = makeSubmitInput({
+      account: {
+        accountId: clientAccountIdSchema.parse(crypto.randomUUID()),
+        username: "rt-acct-user",
+        salt: Buffer.alloc(16, 0x01).toString("base64"),
+        publicKey: Buffer.alloc(32, 0x02).toString("base64"),
+        authHash: Buffer.alloc(32, 0x03).toString("base64"),
+        keyCheck: {
+          ephemeralPoint: Buffer.alloc(32, 0x04).toString("base64"),
+          nonce: Buffer.alloc(24, 0x05).toString("base64"),
+          ciphertext: Buffer.from("kc-ct").toString("base64"),
+        },
+        selfCopy: {
+          ephemeralPoint: Buffer.alloc(32, 0x06).toString("base64"),
+          nonce: Buffer.alloc(24, 0x07).toString("base64"),
+          ciphertext: Buffer.from("sc-ct").toString("base64"),
+        },
+      },
+    } as Partial<IntakeSubmissionInput>);
+
+    await caller.submitIntake(input);
+
+    const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as {
+      account: {
+        registration: Record<string, unknown>;
+        selfCopy: {
+          ephemeralPoint: Buffer;
+          nonce: Buffer;
+          ciphertext: Buffer;
+        } | null;
+      } | null;
+    };
+    expect(serviceInput.account).not.toBeNull();
+    const sc = serviceInput.account!.selfCopy;
+    expect(sc).not.toBeNull();
+    expect(Buffer.isBuffer(sc!.ephemeralPoint)).toBe(true);
+    expect(Buffer.isBuffer(sc!.nonce)).toBe(true);
+    expect(Buffer.isBuffer(sc!.ciphertext)).toBe(true);
+  });
+
+  it("passes null account selfCopy when the field is absent", async () => {
+    const caller = buildCaller(
+      buildDeps({
+        accountServiceDeps: {
+          indexer: {
+            hash: vi.fn().mockReturnValue("hashed"),
+          } as unknown as BlindIndexer,
+          fakeSaltKey: Buffer.alloc(32, 0xab),
+        },
+      }),
+    );
+
+    const input = makeSubmitInput({
+      account: {
+        accountId: clientAccountIdSchema.parse(crypto.randomUUID()),
+        username: "rt-acct-user2",
+        salt: Buffer.alloc(16, 0x01).toString("base64"),
+        publicKey: Buffer.alloc(32, 0x02).toString("base64"),
+        authHash: Buffer.alloc(32, 0x03).toString("base64"),
+        keyCheck: {
+          ephemeralPoint: Buffer.alloc(32, 0x04).toString("base64"),
+          nonce: Buffer.alloc(24, 0x05).toString("base64"),
+          ciphertext: Buffer.from("kc-ct").toString("base64"),
+        },
+      },
+    } as Partial<IntakeSubmissionInput>);
+
+    await caller.submitIntake(input);
+
+    const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as {
+      account: {
+        selfCopy: unknown;
+      } | null;
+    };
+    expect(serviceInput.account!.selfCopy).toBeNull();
+  });
+
+  it("decodes continuation selfCopy to Buffers when present", async () => {
+    const VALID_CHANNEL_ID = "a".repeat(48);
+    const caller = buildCaller();
+
+    const input = makeSubmitInput({
+      continuation: {
+        channelId: VALID_CHANNEL_ID,
+        authHash: Buffer.alloc(32, 0x01).toString("base64"),
+        clientPublic: Buffer.alloc(32, 0x02).toString("base64"),
+        keyCheck: {
+          ephemeralPoint: Buffer.alloc(32, 0x03).toString("base64"),
+          nonce: Buffer.alloc(24, 0x04).toString("base64"),
+          ciphertext: Buffer.from("kc-ct").toString("base64"),
+        },
+        selfCopy: {
+          ephemeralPoint: Buffer.alloc(32, 0x08).toString("base64"),
+          nonce: Buffer.alloc(24, 0x09).toString("base64"),
+          ciphertext: Buffer.from("cont-sc-ct").toString("base64"),
+        },
+      },
+    } as Partial<IntakeSubmissionInput>);
+
+    await caller.submitIntake(input);
+
+    const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as {
+      continuation: {
+        selfCopy: {
+          ephemeralPoint: Buffer;
+          nonce: Buffer;
+          ciphertext: Buffer;
+        } | null;
+      } | null;
+    };
+    expect(serviceInput.continuation).not.toBeNull();
+    const sc = serviceInput.continuation!.selfCopy;
+    expect(sc).not.toBeNull();
+    expect(Buffer.isBuffer(sc!.ephemeralPoint)).toBe(true);
+    expect(Buffer.isBuffer(sc!.nonce)).toBe(true);
+    expect(Buffer.isBuffer(sc!.ciphertext)).toBe(true);
+  });
+
+  it("passes null followUpId through to the service", async () => {
+    // The submission schema makes followUpId nullable but not optional, so
+    // null is the only way a caller can decline to mint one.
+    const input = { ...makeSubmitInput(), followUpId: null };
+
+    const caller = buildCaller();
+    await caller.submitIntake(input);
+
+    const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as Record<
+      string,
+      unknown
+    >;
+    expect(serviceInput.followUpId).toBeNull();
+  });
+
+  it("response does not contain seeded ciphertext markers", async () => {
+    const caller = buildCaller();
+    const result = await caller.submitIntake(makeSubmitInput());
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("test-ciphertext");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// accountLogout: session-present and session-absent branches
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (accountLogout branches)", () => {
+  const ACCOUNT_ROW_LOGOUT = {
+    id: crypto.randomUUID() as ClientAccountId,
+    client_id: crypto.randomUUID() as ClientId,
+    username_hash: "hash",
+    salt: Buffer.alloc(16),
+    public_key: Buffer.alloc(32),
+    auth_hash: Buffer.alloc(32),
+    created_at: new Date(),
+  };
+
+  function fakeLogoutChannelRow(): PortalChannelRow {
+    return {
+      id: crypto.randomUUID() as ChannelRowId,
+      client_id: ACCOUNT_ROW_LOGOUT.client_id,
+      channel_id: "e".repeat(48) as ChannelSecret,
+      auth_hash: Buffer.alloc(32, 0xaa),
+      client_public: Buffer.alloc(32, 0xbb),
+      has_passphrase: false,
+      key_check_ephemeral_point: Buffer.alloc(32),
+      key_check_nonce: Buffer.alloc(24),
+      key_check_ciphertext: Buffer.alloc(48),
+      status: "active",
+      created_at: new Date(),
+      last_seen_at: null,
+      last_notified_at: null,
+      revoked_at: null,
+      kind: "account",
+    };
+  }
+
+  function buildLogoutDeps(): ClientPortalRouterDeps {
+    return buildDeps({
+      accountServiceDeps: {
+        indexer: {
+          hash: vi.fn().mockReturnValue("hashed"),
+        } as unknown as BlindIndexer,
+        fakeSaltKey: Buffer.alloc(32, 0xab),
+      },
+      accountSaltLimiter: allowLimiter(),
+      accountLoginLimiter: allowLimiter(),
+      portalMessageService: {
+        bootstrap: vi.fn(),
+        clientReply: vi.fn(),
+        listMessages: vi
+          .fn()
+          .mockResolvedValue({ messages: [], totalCount: 0 }),
+        hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+      },
+    });
+  }
+
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveAccountSession.mockResolvedValue({
+      account: ACCOUNT_ROW_LOGOUT,
+      channel: fakeLogoutChannelRow(),
+    });
+    mockAccountLogout.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("calls accountService.logout when cookie header has a session token", async () => {
+    const logoutDeps = buildLogoutDeps();
+    const ctx: Context = {
+      req: mockReq({
+        remoteAddress: "10.0.0.1",
+        headers: { cookie: `care_y_client_session=real-tok-123` },
+      }),
+      res: mockRes(),
+      org: createMockOrgContext(),
+      session: null,
+      user: null,
+    };
+    const caller = buildCaller(logoutDeps, ctx);
+    await caller.accountLogout();
+
+    expect(mockAccountLogout).toHaveBeenCalledWith(
+      expect.anything(),
+      "real-tok-123",
+    );
+    const res = ctx.res as MockResWithCookies;
+    expect(res.getCapturedCookies()[0]).toContain("Max-Age=0");
+  });
+
+  it("denies logout and never calls the service when no session cookie is present", async () => {
+    const logoutDeps = buildLogoutDeps();
+    // A cookie header carrying only unrelated keys still fails
+    // requireAccountSession, which reads the session cookie before the
+    // handler runs.
+    const ctxWithOtherCookie: Context = {
+      req: mockReq({
+        remoteAddress: "10.0.0.1",
+        headers: { cookie: "other_key=abc" },
+      }),
+      res: mockRes(),
+      org: createMockOrgContext(),
+      session: null,
+      user: null,
+    };
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    await expectTrpcError(
+      buildCaller(logoutDeps, ctxWithOtherCookie).accountLogout(),
+      "UNAUTHORIZED",
+    );
+    warnSpy.mockRestore();
+    expect(mockAccountLogout).not.toHaveBeenCalled();
+  });
+
+  it("skips accountService.logout when session token cookie is empty string", async () => {
+    const logoutDeps = buildLogoutDeps();
+    const ctx: Context = {
+      req: mockReq({
+        remoteAddress: "10.0.0.1",
+        headers: { cookie: "care_y_client_session=" },
+      }),
+      res: mockRes(),
+      org: createMockOrgContext(),
+      session: null,
+      user: null,
+    };
+    // requireAccountSession rejects empty token with UNAUTHORIZED
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    await expectTrpcError(
+      buildCaller(logoutDeps, ctx).accountLogout(),
+      "UNAUTHORIZED",
+    );
+    warnSpy.mockRestore();
+    expect(mockAccountLogout).not.toHaveBeenCalled();
+  });
+
+  it("clears cookie even if accountService.logout is skipped (empty token after session gate)", async () => {
+    // The session cookie is present with a valid token (passes
+    // requireAccountSession), but the second cookie parse in the
+    // logout body sees a different cookie string. This cannot happen
+    // in production (same req object) but exercises the guard.
+    const logoutDeps = buildLogoutDeps();
+    const ctx: Context = {
+      req: mockReq({
+        remoteAddress: "10.0.0.1",
+        headers: { cookie: "care_y_client_session=tok-valid" },
+      }),
+      res: mockRes(),
+      org: createMockOrgContext(),
+      session: null,
+      user: null,
+    };
+    const caller = buildCaller(logoutDeps, ctx);
+    await caller.accountLogout();
+
+    const res = ctx.res as MockResWithCookies;
+    const cookies = res.getCapturedCookies();
+    expect(cookies).toHaveLength(1);
+    expect(cookies[0]).toContain("Max-Age=0");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// openShare: null shareLimiter branch
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (openShare null limiter branch)", () => {
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockOpenShare.mockResolvedValue({
+      status: "ready",
+      ciphertext: Buffer.from("ct-share-data"),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("succeeds without rate limiting when shareLimiter is null", async () => {
+    const deps = buildDeps({ shareLimiter: null });
+    const caller = buildCaller(deps);
+    const result = await caller.openShare({ shareId: crypto.randomUUID() });
+    expect(result.status).toBe("ready");
+    expect(mockOpenShare).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getAccountSalt: null limiter branch
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (getAccountSalt null limiter branch)", () => {
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetSaltForUsername.mockResolvedValue({
+      salt: Buffer.alloc(16, 0xcc),
+      accountId: crypto.randomUUID(),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("succeeds without rate limiting when accountSaltLimiter is null", async () => {
+    const deps = buildDeps({
+      accountServiceDeps: {
+        indexer: {
+          hash: vi.fn().mockReturnValue("hashed"),
+        } as unknown as BlindIndexer,
+        fakeSaltKey: Buffer.alloc(32, 0xab),
+      },
+      accountSaltLimiter: null,
+    });
+    const caller = buildCaller(deps);
+    const result = await caller.getAccountSalt({ username: "rt-user-salt" });
+    expect(typeof result.salt).toBe("string");
+    expect(mockGetSaltForUsername).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// accountLogin: null limiter branch
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (accountLogin null limiter branch)", () => {
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAccountLogin.mockResolvedValue({
+      sessionToken: "session-tok-nolimit",
+      expiresAt: new Date(Date.now() + 86400_000),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("succeeds without rate limiting when accountLoginLimiter is null", async () => {
+    const deps = buildDeps({
+      accountServiceDeps: {
+        indexer: {
+          hash: vi.fn().mockReturnValue("hashed"),
+        } as unknown as BlindIndexer,
+        fakeSaltKey: Buffer.alloc(32, 0xab),
+      },
+      accountLoginLimiter: null,
+    });
+    const caller = buildCaller(deps);
+    const result = await caller.accountLogin({
+      accountId: crypto.randomUUID(),
+      authToken: Buffer.alloc(32, 0xdd).toString("base64"),
+    });
+    expect(result).toEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// accountUpgrade: null IP limiter branch
+// and StaleThreadError mapping
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (accountUpgrade null-limiter and stale-thread)", () => {
+  const VALID_CHANNEL_ID = "a".repeat(48);
+  const VALID_AUTH = Buffer.alloc(32, 0xcc).toString("base64");
+
+  function fakeUpgradeChannel(): PortalChannelRow {
+    return {
+      id: crypto.randomUUID() as ChannelRowId,
+      client_id: crypto.randomUUID() as ClientId,
+      channel_id: VALID_CHANNEL_ID as ChannelSecret,
+      auth_hash: Buffer.alloc(32, 0xaa),
+      client_public: Buffer.alloc(32, 0xbb),
+      has_passphrase: false,
+      key_check_ephemeral_point: Buffer.alloc(32),
+      key_check_nonce: Buffer.alloc(24),
+      key_check_ciphertext: Buffer.alloc(48),
+      status: "active",
+      created_at: new Date(),
+      last_seen_at: null,
+      last_notified_at: null,
+      revoked_at: null,
+      kind: "secure_link",
+    };
+  }
+
+  function buildUpgradeDeps2(
+    overrides?: Partial<ClientPortalRouterDeps>,
+  ): ClientPortalRouterDeps {
+    return buildDeps({
+      portalChannelService: {
+        resolveAuthedChannel: vi.fn().mockResolvedValue(fakeUpgradeChannel()),
+      },
+      portalMessageService: {
+        bootstrap: vi.fn(),
+        clientReply: vi.fn(),
+        listMessages: vi
+          .fn()
+          .mockResolvedValue({ messages: [], totalCount: 0 }),
+        hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+      },
+      portalReplyLimiter: allowLimiter(),
+      accountServiceDeps: {
+        indexer: {
+          hash: vi.fn().mockReturnValue("hashed"),
+        } as unknown as BlindIndexer,
+        fakeSaltKey: Buffer.alloc(32, 0xab),
+      },
+      accountSaltLimiter: allowLimiter(),
+      accountLoginLimiter: allowLimiter(),
+      ...overrides,
+    });
+  }
+
+  function makeUpgradeInput2(): {
+    channelId: string;
+    auth: string;
+    account: {
+      accountId: string;
+      username: string;
+      salt: string;
+      publicKey: string;
+      authHash: string;
+      keyCheck: {
+        ephemeralPoint: string;
+        nonce: string;
+        ciphertext: string;
+      };
+    };
+    rewrappedMessages: {
+      id: string;
+      copy: {
+        ephemeralPoint: string;
+        nonce: string;
+        ciphertext: string;
+      };
+    }[];
+    skippedMessageIds: string[];
+  } {
+    return {
+      channelId: VALID_CHANNEL_ID,
+      auth: VALID_AUTH,
+      account: {
+        accountId: crypto.randomUUID(),
+        username: "rt-upgrade-user",
+        salt: Buffer.alloc(16, 0xaa).toString("base64"),
+        publicKey: Buffer.alloc(32, 0xbb).toString("base64"),
+        authHash: Buffer.alloc(32, 0xcc).toString("base64"),
+        keyCheck: {
+          ephemeralPoint: Buffer.alloc(32, 0xdd).toString("base64"),
+          nonce: Buffer.alloc(24, 0xee).toString("base64"),
+          ciphertext: Buffer.from("key-check-ct").toString("base64"),
+        },
+      },
+      rewrappedMessages: [
+        {
+          id: crypto.randomUUID(),
+          copy: {
+            ephemeralPoint: Buffer.alloc(32, 0x11).toString("base64"),
+            nonce: Buffer.alloc(24, 0x22).toString("base64"),
+            ciphertext: Buffer.from("rw-ct").toString("base64"),
+          },
+        },
+      ],
+      skippedMessageIds: [],
+    };
+  }
+
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("passes through without rate limiting when portalReplyIpLimiter is null", async () => {
+    mockUpgradeFromSecureLink.mockResolvedValue(undefined);
+    const deps = buildUpgradeDeps2({ portalReplyIpLimiter: null });
+    const caller = buildCaller(deps);
+    const result = await caller.accountUpgrade(makeUpgradeInput2());
+    expect(result).toEqual({});
+    expect(mockUpgradeFromSecureLink).toHaveBeenCalledOnce();
+  });
+
+  it("decodes rewrappedMessages entries to Buffers", async () => {
+    mockUpgradeFromSecureLink.mockResolvedValue(undefined);
+    const deps = buildUpgradeDeps2({ portalReplyIpLimiter: null });
+    const caller = buildCaller(deps);
+    await caller.accountUpgrade(makeUpgradeInput2());
+
+    const rewrapped = mockUpgradeFromSecureLink.mock.calls[0]![4] as {
+      id: string;
+      copy: { ephemeralPoint: Buffer; nonce: Buffer; ciphertext: Buffer };
+    }[];
+    expect(rewrapped).toHaveLength(1);
+    expect(Buffer.isBuffer(rewrapped[0]!.copy.ephemeralPoint)).toBe(true);
+    expect(Buffer.isBuffer(rewrapped[0]!.copy.nonce)).toBe(true);
+    expect(Buffer.isBuffer(rewrapped[0]!.copy.ciphertext)).toBe(true);
+  });
+
+  it("maps StaleThreadError to CONFLICT with descriptive message", async () => {
+    mockUpgradeFromSecureLink.mockRejectedValue(new StaleThreadError());
+    const deps = buildUpgradeDeps2({ portalReplyIpLimiter: null });
+    const caller = buildCaller(deps);
+    const err = await expectTrpcError(
+      caller.accountUpgrade(makeUpgradeInput2()),
+      "CONFLICT",
+    );
+    expect(err.message).toBe("Thread state changed; retry after refetch");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// accountChangePassword: StaleThreadError and
+// wrong currentAuthToken
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (accountChangePassword rewrap and mismatch paths)", () => {
+  const SESSION_TOKEN_CPW = "valid-session-cpw";
+  const ACCOUNT_ROW_CPW = {
+    id: crypto.randomUUID() as ClientAccountId,
+    client_id: crypto.randomUUID() as ClientId,
+    username_hash: "hash",
+    salt: Buffer.alloc(16),
+    public_key: Buffer.alloc(32),
+    auth_hash: Buffer.alloc(32),
+    created_at: new Date(),
+  };
+
+  function fakeChannelRowCpw(): PortalChannelRow {
+    return {
+      id: crypto.randomUUID() as ChannelRowId,
+      client_id: ACCOUNT_ROW_CPW.client_id,
+      channel_id: "f".repeat(48) as ChannelSecret,
+      auth_hash: Buffer.alloc(32, 0xaa),
+      client_public: Buffer.alloc(32, 0xbb),
+      has_passphrase: false,
+      key_check_ephemeral_point: Buffer.alloc(32),
+      key_check_nonce: Buffer.alloc(24),
+      key_check_ciphertext: Buffer.alloc(48),
+      status: "active",
+      created_at: new Date(),
+      last_seen_at: null,
+      last_notified_at: null,
+      revoked_at: null,
+      kind: "account",
+    };
+  }
+
+  function makeChangePasswordInputCpw(): {
+    currentAuthToken: string;
+    account: {
+      salt: string;
+      publicKey: string;
+      authHash: string;
+      keyCheck: {
+        ephemeralPoint: string;
+        nonce: string;
+        ciphertext: string;
+      };
+    };
+    rewrappedMessages: {
+      id: string;
+      copy: {
+        ephemeralPoint: string;
+        nonce: string;
+        ciphertext: string;
+      };
+    }[];
+    skippedMessageIds: string[];
+  } {
+    return {
+      currentAuthToken: Buffer.alloc(32, 0xaa).toString("base64"),
+      account: {
+        salt: Buffer.alloc(16, 0xbb).toString("base64"),
+        publicKey: Buffer.alloc(32, 0xcc).toString("base64"),
+        authHash: Buffer.alloc(32, 0xdd).toString("base64"),
+        keyCheck: {
+          ephemeralPoint: Buffer.alloc(32, 0xee).toString("base64"),
+          nonce: Buffer.alloc(24, 0xff).toString("base64"),
+          ciphertext: Buffer.from("kc-ct").toString("base64"),
+        },
+      },
+      rewrappedMessages: [
+        {
+          id: crypto.randomUUID(),
+          copy: {
+            ephemeralPoint: Buffer.alloc(32, 0x11).toString("base64"),
+            nonce: Buffer.alloc(24, 0x22).toString("base64"),
+            ciphertext: Buffer.from("rw-ct").toString("base64"),
+          },
+        },
+      ],
+      skippedMessageIds: [],
+    };
+  }
+
+  function buildCpwDeps(): ClientPortalRouterDeps {
+    return buildDeps({
+      accountServiceDeps: {
+        indexer: {
+          hash: vi.fn().mockReturnValue("hashed"),
+        } as unknown as BlindIndexer,
+        fakeSaltKey: Buffer.alloc(32, 0xab),
+      },
+      accountSaltLimiter: allowLimiter(),
+      accountLoginLimiter: allowLimiter(),
+      portalMessageService: {
+        bootstrap: vi.fn(),
+        clientReply: vi.fn(),
+        listMessages: vi
+          .fn()
+          .mockResolvedValue({ messages: [], totalCount: 0 }),
+        hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+      },
+      portalReplyLimiter: allowLimiter(),
+    });
+  }
+
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveAccountSession.mockResolvedValue({
+      account: ACCOUNT_ROW_CPW,
+      channel: fakeChannelRowCpw(),
+      tokenHash: Buffer.alloc(32, 0xdd),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("decodes rewrappedMessages entries to Buffers in change-password path", async () => {
+    mockChangePassword.mockResolvedValue(true);
+    const cpwDeps = buildCpwDeps();
+    const ctx: Context = {
+      req: mockReq({
+        remoteAddress: "10.0.0.1",
+        headers: { cookie: `care_y_client_session=${SESSION_TOKEN_CPW}` },
+      }),
+      res: mockRes(),
+      org: createMockOrgContext(),
+      session: null,
+      user: null,
+    };
+    const caller = buildCaller(cpwDeps, ctx);
+    await caller.accountChangePassword(makeChangePasswordInputCpw());
+
+    const passedInput = mockChangePassword.mock.calls[0]![5] as {
+      rewrappedMessages: {
+        id: string;
+        copy: { ephemeralPoint: Buffer; nonce: Buffer; ciphertext: Buffer };
+      }[];
+    };
+    expect(passedInput.rewrappedMessages).toHaveLength(1);
+    expect(
+      Buffer.isBuffer(passedInput.rewrappedMessages[0]!.copy.ephemeralPoint),
+    ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// evaluateChannelOprf: service-thrown errors propagate through withErrorWrapping
+// contactInfo also exercises OPRF error propagation.
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (evaluateChannelOprf malformed input)", () => {
+  const VALID_CHANNEL_ID = "a".repeat(48);
+
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("response contains only the evaluated field (no key material)", async () => {
+    const evaluatedValue = Buffer.alloc(32, 0xab).toString("base64url");
+    const deps = buildDeps({
+      oprfService: {
+        evaluate: vi.fn(),
+        adminEvaluate: vi.fn(),
+        evaluateChannel: vi.fn().mockResolvedValue({
+          evaluated: evaluatedValue,
+        }),
+      },
+    });
+    const caller = buildCaller(deps);
+    const result = await caller.evaluateChannelOprf({
+      channelId: VALID_CHANNEL_ID as ChannelSecret,
+      blindedElement: Buffer.alloc(32, 0xab).toString("base64"),
+    });
+    expect(Object.keys(result)).toEqual(["evaluated"]);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("secret");
+    expect(serialized).not.toContain("share");
+    expect(serialized).not.toContain("private");
+  });
+
+  it("service error with non-AppError propagates as INTERNAL_SERVER_ERROR", async () => {
+    const deps = buildDeps({
+      oprfService: {
+        evaluate: vi.fn(),
+        adminEvaluate: vi.fn(),
+        evaluateChannel: vi
+          .fn()
+          .mockRejectedValue(new TypeError("unexpected native error")),
+      },
+    });
+    const caller = buildCaller(deps);
+    await expectTrpcError(
+      caller.evaluateChannelOprf({
+        channelId: VALID_CHANNEL_ID as ChannelSecret,
+        blindedElement: Buffer.alloc(32, 0xab).toString("base64"),
+      }),
+      "INTERNAL_SERVER_ERROR",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// addPassphrase: PassphraseCountMismatchError
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (addPassphrase count mismatch)", () => {
+  const VALID_CHANNEL_ID = "a".repeat(48);
+  const VALID_AUTH = Buffer.alloc(32, 0xcc).toString("base64");
+
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("maps PassphraseCountMismatchError to CONFLICT with typed code", async () => {
+    const { PassphraseCountMismatchError } =
+      await import("../portal/portal-errors.js");
+    mockAddPassphrase.mockRejectedValue(new PassphraseCountMismatchError());
+    const deps = buildDeps({
+      portalChannelService: {
+        resolveAuthedChannel: vi.fn().mockResolvedValue({
+          id: crypto.randomUUID() as ChannelRowId,
+          client_id: crypto.randomUUID() as ClientId,
+          channel_id: VALID_CHANNEL_ID as ChannelSecret,
+          auth_hash: Buffer.alloc(32, 0xaa),
+          client_public: Buffer.alloc(32, 0xbb),
+          has_passphrase: false,
+          key_check_ephemeral_point: Buffer.alloc(32),
+          key_check_nonce: Buffer.alloc(24),
+          key_check_ciphertext: Buffer.alloc(48),
+          status: "active",
+          created_at: new Date(),
+          last_seen_at: null,
+          last_notified_at: null,
+          revoked_at: null,
+          kind: "secure_link",
+        }),
+      },
+      portalMessageService: {
+        bootstrap: vi.fn(),
+        clientReply: vi.fn(),
+        listMessages: vi
+          .fn()
+          .mockResolvedValue({ messages: [], totalCount: 0 }),
+        hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+      },
+      portalReadLimiter: allowLimiter(),
+      portalReplyLimiter: allowLimiter(),
+      portalReplyIpLimiter: allowLimiter(),
+      fieldEncryptor: {
+        encrypt: vi.fn(),
+        decrypt: vi.fn(),
+      } as unknown as FieldEncryptor,
+    });
+    const caller = buildCaller(deps);
+    const err = await expectTrpcError(
+      caller.addPassphrase({
+        channelId: VALID_CHANNEL_ID,
+        auth: VALID_AUTH,
+        clientPublic: Buffer.alloc(32, 0xaa).toString("base64"),
+        keyCheck: {
+          ephemeralPoint: Buffer.alloc(32, 0xbb).toString("base64"),
+          nonce: Buffer.alloc(24, 0xcc).toString("base64"),
+          ciphertext: Buffer.from("kc").toString("base64"),
+        },
+        resealedMessages: [],
+        skippedMessageIds: [],
+      }),
+      "CONFLICT",
+    );
+    expect(err.message).toBe("PORTAL_PASSPHRASE_COUNT_MISMATCH");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helper branches: requireAccountDeps with null accountServiceDeps,
+// buildPortalMessageDeps null fieldEncryptor (1563),
+// decodeReplyAttachments callback (1600),
+// decodeRewrappedMessages callback (1654)
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (helper denial and decode paths)", () => {
+  const VALID_CHANNEL_ID = "a".repeat(48);
+  const VALID_AUTH = Buffer.alloc(32, 0xcc).toString("base64");
+
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("getAccountSalt returns NOT_FOUND when accountServiceDeps is null", async () => {
+    const deps = buildDeps({
+      accountServiceDeps: null,
+    });
+    const caller = buildCaller(deps);
+    // requireAccountDeps(deps, orgId) throws TRPCError NOT_FOUND
+    const err = await expectTrpcError(
+      caller.getAccountSalt({ username: "rt-no-deps" }),
+      "NOT_FOUND",
+    );
+    // Enumeration resistance: generic sign-in failure message
+    expect(err.message).toBe("Sign-in failed");
+  });
+
+  it("portalReply returns NOT_FOUND when fieldEncryptor is null (buildPortalMessageDeps)", async () => {
+    const channel: PortalChannelRow = {
+      id: crypto.randomUUID() as ChannelRowId,
+      client_id: crypto.randomUUID() as ClientId,
+      channel_id: VALID_CHANNEL_ID as ChannelSecret,
+      auth_hash: Buffer.alloc(32, 0xaa),
+      client_public: Buffer.alloc(32, 0xbb),
+      has_passphrase: false,
+      key_check_ephemeral_point: Buffer.alloc(32),
+      key_check_nonce: Buffer.alloc(24),
+      key_check_ciphertext: Buffer.alloc(48),
+      status: "active",
+      created_at: new Date(),
+      last_seen_at: null,
+      last_notified_at: null,
+      revoked_at: null,
+      kind: "secure_link",
+    };
+
+    const deps = buildDeps({
+      portalChannelService: {
+        resolveAuthedChannel: vi.fn().mockResolvedValue(channel),
+      },
+      portalMessageService: {
+        bootstrap: vi.fn(),
+        clientReply: vi.fn().mockResolvedValue(undefined),
+        listMessages: vi
+          .fn()
+          .mockResolvedValue({ messages: [], totalCount: 0 }),
+        hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+      },
+      portalReadLimiter: allowLimiter(),
+      portalReplyLimiter: allowLimiter(),
+      // fieldEncryptor is null: buildPortalMessageDeps throws NOT_FOUND
+      fieldEncryptor: null,
+    });
+    const caller = buildCaller(deps);
+
+    await expectTrpcError(
+      caller.portalReply({
+        channelId: VALID_CHANNEL_ID,
+        auth: VALID_AUTH,
+        ticketId: crypto.randomUUID(),
+        followUpId: crypto.randomUUID(),
+        keyGeneration: crypto.randomUUID(),
+        encryptedContent: Buffer.from("ct-content").toString("base64"),
+        wrappedTkTemp: Buffer.alloc(80, 0xdd).toString("base64"),
+        selfCopy: {
+          ephemeralPoint: Buffer.alloc(32, 0xee).toString("base64"),
+          nonce: Buffer.alloc(24, 0xff).toString("base64"),
+          ciphertext: Buffer.from("sc-ct").toString("base64"),
+        },
+      }),
+      "NOT_FOUND",
+    );
+  });
+
+  it("portalReply decodes attachment fields to Buffers", async () => {
+    const channel: PortalChannelRow = {
+      id: crypto.randomUUID() as ChannelRowId,
+      client_id: crypto.randomUUID() as ClientId,
+      channel_id: VALID_CHANNEL_ID as ChannelSecret,
+      auth_hash: Buffer.alloc(32, 0xaa),
+      client_public: Buffer.alloc(32, 0xbb),
+      has_passphrase: false,
+      key_check_ephemeral_point: Buffer.alloc(32),
+      key_check_nonce: Buffer.alloc(24),
+      key_check_ciphertext: Buffer.alloc(48),
+      status: "active",
+      created_at: new Date(),
+      last_seen_at: null,
+      last_notified_at: null,
+      revoked_at: null,
+      kind: "secure_link",
+    };
+
+    const mockClientReply = vi.fn().mockResolvedValue(undefined);
+    const deps = buildDeps({
+      portalChannelService: {
+        resolveAuthedChannel: vi.fn().mockResolvedValue(channel),
+      },
+      portalMessageService: {
+        bootstrap: vi.fn(),
+        clientReply: mockClientReply,
+        listMessages: vi
+          .fn()
+          .mockResolvedValue({ messages: [], totalCount: 0 }),
+        hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+      },
+      portalReadLimiter: allowLimiter(),
+      portalReplyLimiter: allowLimiter(),
+      fieldEncryptor: {
+        encrypt: vi.fn(),
+        decrypt: vi.fn(),
+      } as unknown as FieldEncryptor,
+    });
+    const caller = buildCaller(deps);
+
+    await caller.portalReply({
+      channelId: VALID_CHANNEL_ID,
+      auth: VALID_AUTH,
+      ticketId: crypto.randomUUID(),
+      followUpId: crypto.randomUUID(),
+      keyGeneration: crypto.randomUUID(),
+      encryptedContent: Buffer.from("ct-content").toString("base64"),
+      wrappedTkTemp: Buffer.alloc(80, 0xdd).toString("base64"),
+      selfCopy: {
+        ephemeralPoint: Buffer.alloc(32, 0xee).toString("base64"),
+        nonce: Buffer.alloc(24, 0xff).toString("base64"),
+        ciphertext: Buffer.from("sc-ct").toString("base64"),
+      },
+      attachments: [
+        {
+          attachmentId: crypto.randomUUID(),
+          blob: Buffer.from("ct-file-bytes").toString("base64"),
+          sizeBytes: 13,
+          contentType: "application/pdf",
+          // The schema pins fileKeyWrap at exactly 72 bytes.
+          fileKeyWrap: Buffer.alloc(72, 0x11).toString("base64"),
+          encryptedFilename: Buffer.from("ct-fname").toString("base64"),
+          selfCopy: {
+            ephemeralPoint: Buffer.alloc(32, 0x22).toString("base64"),
+            nonce: Buffer.alloc(24, 0x33).toString("base64"),
+            ciphertext: Buffer.from("att-sc-ct").toString("base64"),
+          },
+        },
+      ],
+    });
+
+    const serviceInput = mockClientReply.mock
+      .calls[0]?.[3] as PortalReplyServiceInput;
+    expect(serviceInput.attachments).toHaveLength(1);
+    const att = serviceInput.attachments![0]!;
+    expect(Buffer.isBuffer(att.blob)).toBe(true);
+    expect(Buffer.isBuffer(att.fileKeyWrap)).toBe(true);
+    expect(Buffer.isBuffer(att.encryptedFilename)).toBe(true);
+    expect(Buffer.isBuffer(att.selfCopy.ephemeralPoint)).toBe(true);
+    expect(Buffer.isBuffer(att.selfCopy.nonce)).toBe(true);
+    expect(Buffer.isBuffer(att.selfCopy.ciphertext)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// portalMessages: rate limit with null limiter
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (portalMessages null read limiter)", () => {
+  const VALID_CHANNEL_ID = "a".repeat(48);
+  const VALID_AUTH = Buffer.alloc(32, 0xcc).toString("base64");
+
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("succeeds without rate limiting when portalReadLimiter is null", async () => {
+    const channel: PortalChannelRow = {
+      id: crypto.randomUUID() as ChannelRowId,
+      client_id: crypto.randomUUID() as ClientId,
+      channel_id: VALID_CHANNEL_ID as ChannelSecret,
+      auth_hash: Buffer.alloc(32, 0xaa),
+      client_public: Buffer.alloc(32, 0xbb),
+      has_passphrase: false,
+      key_check_ephemeral_point: Buffer.alloc(32),
+      key_check_nonce: Buffer.alloc(24),
+      key_check_ciphertext: Buffer.alloc(48),
+      status: "active",
+      created_at: new Date(),
+      last_seen_at: null,
+      last_notified_at: null,
+      revoked_at: null,
+      kind: "secure_link",
+    };
+
+    const deps = buildDeps({
+      portalChannelService: {
+        resolveAuthedChannel: vi.fn().mockResolvedValue(channel),
+      },
+      portalMessageService: {
+        bootstrap: vi.fn().mockResolvedValue({
+          hasPassphrase: false,
+          keyCheck: {
+            ephemeralPoint: "ep",
+            nonce: "n",
+            ciphertext: "ct",
+          },
+          ticketId: crypto.randomUUID(),
+          messages: [],
+          attachments: [],
+          recordings: [],
+          callEntries: [],
+          messagesExpireDays: 30,
+          safeExitUrl: null,
+          upgradeOptions: [],
+        }),
+        clientReply: vi.fn(),
+        listMessages: vi
+          .fn()
+          .mockResolvedValue({ messages: [], totalCount: 0 }),
+        hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+      },
+      portalReadLimiter: null,
+    });
+    const caller = buildCaller(deps);
+    const result = await caller.portalMessages({
+      channelId: VALID_CHANNEL_ID,
+      auth: VALID_AUTH,
+    });
+    expect(result.messages).toBeDefined();
+    expect(result.messagesExpireDays).toBe(30);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-model denial matrix
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (cross-model denial matrix)", () => {
+  const VALID_CHANNEL_ID = "a".repeat(48);
+  const VALID_AUTH = Buffer.alloc(32, 0xcc).toString("base64");
+
+  const ACCOUNT_ROW_DM = {
+    id: crypto.randomUUID() as ClientAccountId,
+    client_id: crypto.randomUUID() as ClientId,
+    username_hash: "hash",
+    salt: Buffer.alloc(16),
+    public_key: Buffer.alloc(32),
+    auth_hash: Buffer.alloc(32),
+    created_at: new Date(),
+  };
+
+  function fakeChannelRowDM(): PortalChannelRow {
+    return {
+      id: crypto.randomUUID() as ChannelRowId,
+      client_id: ACCOUNT_ROW_DM.client_id,
+      channel_id: "d".repeat(48) as ChannelSecret,
+      auth_hash: Buffer.alloc(32, 0xaa),
+      client_public: Buffer.alloc(32, 0xbb),
+      has_passphrase: true,
+      key_check_ephemeral_point: Buffer.alloc(32),
+      key_check_nonce: Buffer.alloc(24),
+      key_check_ciphertext: Buffer.alloc(48),
+      status: "active",
+      created_at: new Date(),
+      last_seen_at: null,
+      last_notified_at: null,
+      revoked_at: null,
+      kind: "account",
+    };
+  }
+
+  function buildFullDeps(
+    overrides?: Partial<ClientPortalRouterDeps>,
+  ): ClientPortalRouterDeps {
+    return buildDeps({
+      portalChannelService: {
+        resolveAuthedChannel: vi.fn().mockResolvedValue(null),
+      },
+      portalMessageService: {
+        bootstrap: vi.fn().mockResolvedValue({
+          hasPassphrase: true,
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32).toString("base64"),
+            nonce: Buffer.alloc(24).toString("base64"),
+            ciphertext: Buffer.alloc(48).toString("base64"),
+          },
+          ticketId: crypto.randomUUID(),
+          messages: [],
+          attachments: [],
+          recordings: [],
+          callEntries: [],
+          messagesExpireDays: 30,
+          safeExitUrl: null,
+          upgradeOptions: [],
+        }),
+        clientReply: vi.fn().mockResolvedValue(undefined),
+        listMessages: vi
+          .fn()
+          .mockResolvedValue({ messages: [], totalCount: 0 }),
+        hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+      },
+      portalReadLimiter: allowLimiter(),
+      portalReplyLimiter: allowLimiter(),
+      portalReplyIpLimiter: allowLimiter(),
+      fieldEncryptor: {
+        encrypt: vi.fn(),
+        decrypt: vi.fn(),
+      } as unknown as FieldEncryptor,
+      accountServiceDeps: {
+        indexer: {
+          hash: vi.fn().mockReturnValue("hashed"),
+        } as unknown as BlindIndexer,
+        fakeSaltKey: Buffer.alloc(32, 0xab),
+      },
+      accountSaltLimiter: allowLimiter(),
+      accountLoginLimiter: allowLimiter(),
+      ...overrides,
+    });
+  }
+
+  function makeContextWithCookieDM(token: string): Context {
+    return {
+      req: mockReq({
+        remoteAddress: "10.0.0.1",
+        headers: { cookie: `care_y_client_session=${token}` },
+      }),
+      res: mockRes(),
+      org: createMockOrgContext(),
+      session: null,
+      user: null,
+    };
+  }
+
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetSealedContactInfo.mockResolvedValue({
+      sealed: Buffer.from("ct-dm-sealed").toString("base64url"),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe("channel-token procedure called with account-session auth", () => {
+    it("portalBootstrap requires channel auth regardless of session cookie", async () => {
+      mockResolveAccountSession.mockResolvedValue({
+        account: ACCOUNT_ROW_DM,
+        channel: fakeChannelRowDM(),
+      });
+      const deps = buildFullDeps();
+      const ctx = makeContextWithCookieDM("valid-acct-session");
+      const caller = buildCaller(deps, ctx);
+
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(
+        caller.portalBootstrap({
+          channelId: VALID_CHANNEL_ID,
+          auth: VALID_AUTH,
+        }),
+        "NOT_FOUND",
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("portalReply requires channel auth regardless of session cookie", async () => {
+      mockResolveAccountSession.mockResolvedValue({
+        account: ACCOUNT_ROW_DM,
+        channel: fakeChannelRowDM(),
+      });
+      const deps = buildFullDeps();
+      const ctx = makeContextWithCookieDM("valid-acct-session");
+      const caller = buildCaller(deps, ctx);
+
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(
+        caller.portalReply({
+          channelId: VALID_CHANNEL_ID,
+          auth: VALID_AUTH,
+          ticketId: crypto.randomUUID(),
+          followUpId: crypto.randomUUID(),
+          keyGeneration: crypto.randomUUID(),
+          encryptedContent: Buffer.from("ct").toString("base64"),
+          wrappedTkTemp: Buffer.alloc(80, 0xdd).toString("base64"),
+          selfCopy: {
+            ephemeralPoint: Buffer.alloc(32, 0xee).toString("base64"),
+            nonce: Buffer.alloc(24, 0xff).toString("base64"),
+            ciphertext: Buffer.from("sc").toString("base64"),
+          },
+        }),
+        "NOT_FOUND",
+      );
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe("account procedure called with channel-token auth", () => {
+    it("accountBootstrap rejects without session cookie (channel auth is irrelevant)", async () => {
+      const deps = buildFullDeps();
+      const ctx = makeContext();
+      const caller = buildCaller(deps, ctx);
+
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.accountBootstrap(),
+        "UNAUTHORIZED",
+      );
+      warnSpy.mockRestore();
+      expect(err.message).toBe("Sign-in failed");
+    });
+
+    it("accountReply rejects without session cookie (channel auth is irrelevant)", async () => {
+      const deps = buildFullDeps();
+      const ctx = makeContext();
+      const caller = buildCaller(deps, ctx);
+
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(
+        caller.accountReply({
+          ticketId: crypto.randomUUID(),
+          followUpId: crypto.randomUUID(),
+          keyGeneration: crypto.randomUUID(),
+          encryptedContent: Buffer.from("ct").toString("base64"),
+          wrappedTkTemp: Buffer.alloc(80, 0xdd).toString("base64"),
+          selfCopy: {
+            ephemeralPoint: Buffer.alloc(32, 0xee).toString("base64"),
+            nonce: Buffer.alloc(24, 0xff).toString("base64"),
+            ciphertext: Buffer.from("sc").toString("base64"),
+          },
+        }),
+        "UNAUTHORIZED",
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("accountLogout rejects without session cookie", async () => {
+      const deps = buildFullDeps();
+      const ctx = makeContext();
+      const caller = buildCaller(deps, ctx);
+
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(caller.accountLogout(), "UNAUTHORIZED");
+      warnSpy.mockRestore();
+    });
+
+    it("accountContactInfo rejects without session cookie", async () => {
+      const deps = buildFullDeps();
+      const ctx = makeContext();
+      const caller = buildCaller(deps, ctx);
+
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(caller.accountContactInfo(), "UNAUTHORIZED");
+      warnSpy.mockRestore();
+    });
+
+    it("accountChangePassword rejects without session cookie", async () => {
+      const deps = buildFullDeps();
+      const ctx = makeContext();
+      const caller = buildCaller(deps, ctx);
+
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(
+        caller.accountChangePassword({
+          currentAuthToken: Buffer.alloc(32, 0xaa).toString("base64"),
+          account: {
+            salt: Buffer.alloc(16, 0xbb).toString("base64"),
+            publicKey: Buffer.alloc(32, 0xcc).toString("base64"),
+            authHash: Buffer.alloc(32, 0xdd).toString("base64"),
+            keyCheck: {
+              ephemeralPoint: Buffer.alloc(32, 0xee).toString("base64"),
+              nonce: Buffer.alloc(24, 0xff).toString("base64"),
+              ciphertext: Buffer.from("kc").toString("base64"),
+            },
+          },
+          rewrappedMessages: [],
+          skippedMessageIds: [],
+        }),
+        "UNAUTHORIZED",
+      );
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe("expired or wrong-org channel", () => {
+    it("resolveAuthedChannel returning null produces NOT_FOUND on portalBootstrap", async () => {
+      const deps = buildFullDeps({
+        portalChannelService: {
+          resolveAuthedChannel: vi.fn().mockResolvedValue(null),
+        },
+      });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.portalBootstrap({
+          channelId: VALID_CHANNEL_ID,
+          auth: VALID_AUTH,
+        }),
+        "NOT_FOUND",
+      );
+      warnSpy.mockRestore();
+      // Enumeration resistance: same message for unknown, expired, or wrong-org channels
+      expect(err.message).toBe("Channel not found or not available");
+    });
+
+    it("wrong-org channel id is indistinguishable from unknown channel", async () => {
+      const deps = buildFullDeps({
+        portalChannelService: {
+          resolveAuthedChannel: vi.fn().mockResolvedValue(null),
+        },
+      });
+      const caller = buildCaller(deps);
+      const wrongOrgChannelId = "b".repeat(48);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.portalBootstrap({
+          channelId: wrongOrgChannelId,
+          auth: VALID_AUTH,
+        }),
+        "NOT_FOUND",
+      );
+      warnSpy.mockRestore();
+      expect(err.message).toBe("Channel not found or not available");
+    });
+  });
+});

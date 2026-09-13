@@ -26,9 +26,11 @@ import {
   decode,
 } from "@care-y/crypto";
 import type { ChannelEvaluateCallback } from "$lib/portal/portal-crypto.js";
+import { queueIdSchema } from "@care-y/shared";
 import {
   encryptIntake,
   buildContinuationPayload,
+  resolveSubmitMetadata,
   type IntakeAnswer,
 } from "./intake-crypto.js";
 
@@ -638,6 +640,331 @@ describe("intake-crypto", () => {
       );
       const decoded = decode(payload.clientPublic);
       expect(decoded).toHaveLength(32);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveSubmitMetadata
+// ---------------------------------------------------------------------------
+
+type Fields = Parameters<typeof resolveSubmitMetadata>[0];
+type FieldEntry = Fields[number];
+type Values = Parameters<typeof resolveSubmitMetadata>[1];
+
+function testQueueId(): ReturnType<typeof queueIdSchema.parse> {
+  return queueIdSchema.parse(crypto.randomUUID());
+}
+
+function field(
+  overrides: Partial<FieldEntry> & Pick<FieldEntry, "config">,
+): FieldEntry {
+  return {
+    role: null,
+    fieldKey: `fk-${crypto.randomUUID().slice(0, 8)}`,
+    ...overrides,
+  };
+}
+
+const ALL_NULL = {
+  resolvedQueueId: null,
+  resolvedPriority: null,
+  resolvedEscalationLevel: null,
+};
+
+describe("resolveSubmitMetadata", () => {
+  describe("field skipping", () => {
+    it("skips a field with role null and leaves all results null", () => {
+      const fields: Fields = [
+        field({
+          fieldKey: "unroled-key",
+          config: {
+            type: "select",
+            options: [{ key: "opt-a", label: { en: "A" } }],
+            queueRoutingMapping: { "opt-a": testQueueId() },
+          },
+        }),
+      ];
+      const values: Values = { "unroled-key": "opt-a" };
+      expect(resolveSubmitMetadata(fields, values)).toEqual(ALL_NULL);
+    });
+
+    it("resolves nothing when a role-carrying field has no matching value", () => {
+      const queueId = testQueueId();
+      const fields: Fields = [
+        field({
+          role: "queue-routing",
+          fieldKey: "present-key",
+          config: {
+            type: "select",
+            options: [{ key: "opt-a", label: { en: "A" } }],
+            queueRoutingMapping: { "opt-a": queueId },
+          },
+        }),
+      ];
+      // "present-key" is absent from the values record
+      const values: Values = {};
+      expect(resolveSubmitMetadata(fields, values)).toEqual(ALL_NULL);
+    });
+
+    it("returns all three as null for an empty fields array", () => {
+      expect(resolveSubmitMetadata([], { x: "y" })).toEqual(ALL_NULL);
+    });
+  });
+
+  describe("queue-routing", () => {
+    it("resolves the mapped queue id when the selected option is in the mapping", () => {
+      const queueId = testQueueId();
+      const fields: Fields = [
+        field({
+          role: "queue-routing",
+          fieldKey: "q",
+          config: {
+            type: "select",
+            options: [
+              { key: "opt-x", label: { en: "X" } },
+              { key: "opt-y", label: { en: "Y" } },
+            ],
+            queueRoutingMapping: { "opt-x": queueId },
+          },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { q: "opt-x" });
+      expect(result.resolvedQueueId).toBe(queueId);
+      expect(result.resolvedPriority).toBeNull();
+      expect(result.resolvedEscalationLevel).toBeNull();
+    });
+
+    it("leaves the queue id null when the selected option is absent from the mapping", () => {
+      const fields: Fields = [
+        field({
+          role: "queue-routing",
+          fieldKey: "q",
+          config: {
+            type: "select",
+            options: [
+              { key: "opt-a", label: { en: "A" } },
+              { key: "opt-b", label: { en: "B" } },
+            ],
+            queueRoutingMapping: { "opt-a": testQueueId() },
+          },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { q: "opt-b" });
+      expect(result.resolvedQueueId).toBeNull();
+    });
+
+    it("leaves the queue id null when the select has no queueRoutingMapping", () => {
+      const fields: Fields = [
+        field({
+          role: "queue-routing",
+          fieldKey: "q",
+          config: {
+            type: "select",
+            options: [{ key: "opt-a", label: { en: "A" } }],
+          },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { q: "opt-a" });
+      expect(result.resolvedQueueId).toBeNull();
+    });
+
+    it("leaves the queue id null when the config type cannot hold a routing mapping", () => {
+      const fields: Fields = [
+        field({
+          role: "queue-routing",
+          fieldKey: "q",
+          config: { type: "text" },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { q: "anything" });
+      expect(result.resolvedQueueId).toBeNull();
+    });
+  });
+
+  describe("urgency", () => {
+    it("resolves the mapped priority when the selected option is in the mapping", () => {
+      const fields: Fields = [
+        field({
+          role: "urgency",
+          fieldKey: "u",
+          config: {
+            type: "select",
+            options: [
+              { key: "opt-lo", label: { en: "Low" } },
+              { key: "opt-ur", label: { en: "Urgent" } },
+            ],
+            urgencyMapping: { "opt-lo": "low", "opt-ur": "urgent" },
+          },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { u: "opt-ur" });
+      expect(result.resolvedPriority).toBe("urgent");
+    });
+
+    it("leaves the priority null when the selected option is absent from the mapping", () => {
+      const fields: Fields = [
+        field({
+          role: "urgency",
+          fieldKey: "u",
+          config: {
+            type: "select",
+            options: [
+              { key: "opt-a", label: { en: "A" } },
+              { key: "opt-b", label: { en: "B" } },
+            ],
+            urgencyMapping: { "opt-a": "high" },
+          },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { u: "opt-b" });
+      expect(result.resolvedPriority).toBeNull();
+    });
+
+    it("leaves the priority null when the select has no urgencyMapping", () => {
+      const fields: Fields = [
+        field({
+          role: "urgency",
+          fieldKey: "u",
+          config: {
+            type: "select",
+            options: [{ key: "opt-a", label: { en: "A" } }],
+          },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { u: "opt-a" });
+      expect(result.resolvedPriority).toBeNull();
+    });
+  });
+
+  describe("escalation (select)", () => {
+    it("resolves the mapped escalation level when the selected option is in the mapping", () => {
+      const fields: Fields = [
+        field({
+          role: "escalation",
+          fieldKey: "e",
+          config: {
+            type: "select",
+            options: [
+              { key: "opt-s", label: { en: "Standard" } },
+              { key: "opt-c", label: { en: "Critical" } },
+            ],
+            escalationMapping: { "opt-c": "critical-review" },
+          },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { e: "opt-c" });
+      expect(result.resolvedEscalationLevel).toBe("critical-review");
+    });
+
+    it("leaves the escalation level null when the selected option is absent from the mapping", () => {
+      const fields: Fields = [
+        field({
+          role: "escalation",
+          fieldKey: "e",
+          config: {
+            type: "select",
+            options: [
+              { key: "opt-a", label: { en: "A" } },
+              { key: "opt-b", label: { en: "B" } },
+            ],
+            escalationMapping: { "opt-a": "flagged" },
+          },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { e: "opt-b" });
+      expect(result.resolvedEscalationLevel).toBeNull();
+    });
+
+    it("leaves the escalation level null when the select has no escalationMapping", () => {
+      const fields: Fields = [
+        field({
+          role: "escalation",
+          fieldKey: "e",
+          config: {
+            type: "select",
+            options: [{ key: "opt-a", label: { en: "A" } }],
+          },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { e: "opt-a" });
+      expect(result.resolvedEscalationLevel).toBeNull();
+    });
+  });
+
+  describe("escalation (checkbox)", () => {
+    it("resolves the level to 'triggered' when the checkbox is checked", () => {
+      const fields: Fields = [
+        field({
+          role: "escalation",
+          fieldKey: "cb",
+          config: { type: "checkbox" },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { cb: true });
+      expect(result.resolvedEscalationLevel).toBe("triggered");
+    });
+
+    it("leaves the level null when the checkbox is unchecked", () => {
+      const fields: Fields = [
+        field({
+          role: "escalation",
+          fieldKey: "cb",
+          config: { type: "checkbox" },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, { cb: false });
+      expect(result.resolvedEscalationLevel).toBeNull();
+    });
+
+    it("leaves the level null when the checkbox value was never set", () => {
+      const fields: Fields = [
+        field({
+          role: "escalation",
+          fieldKey: "cb",
+          config: { type: "checkbox" },
+        }),
+      ];
+      const result = resolveSubmitMetadata(fields, {});
+      expect(result.resolvedEscalationLevel).toBeNull();
+    });
+  });
+
+  describe("combined", () => {
+    it("resolves all three signals in a single pass when the form carries all roles", () => {
+      const queueId = testQueueId();
+      const fields: Fields = [
+        field({
+          role: "queue-routing",
+          fieldKey: "route",
+          config: {
+            type: "select",
+            options: [{ key: "opt-r", label: { en: "Route" } }],
+            queueRoutingMapping: { "opt-r": queueId },
+          },
+        }),
+        field({
+          role: "urgency",
+          fieldKey: "prio",
+          config: {
+            type: "select",
+            options: [{ key: "opt-h", label: { en: "High" } }],
+            urgencyMapping: { "opt-h": "high" },
+          },
+        }),
+        field({
+          role: "escalation",
+          fieldKey: "esc",
+          config: { type: "checkbox" },
+        }),
+      ];
+      const values: Values = { route: "opt-r", prio: "opt-h", esc: true };
+      const result = resolveSubmitMetadata(fields, values);
+      expect(result).toEqual({
+        resolvedQueueId: queueId,
+        resolvedPriority: "high",
+        resolvedEscalationLevel: "triggered",
+      });
     });
   });
 });

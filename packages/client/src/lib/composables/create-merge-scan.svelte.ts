@@ -51,10 +51,12 @@ export interface MergeScanDeps {
 
 export interface MergeScanResult {
   readonly candidates: readonly MergeCandidate[];
+  readonly truncated: boolean;
   readonly isLoading: boolean;
   readonly dismissedKeys: ReadonlySet<string>;
   readonly undismissed: readonly MergeCandidate[];
   readonly dismiss: (clientIdA: string, clientIdB: string) => void;
+  readonly markSharedLine: (matchHash: string) => void;
   readonly invalidate: () => void;
 }
 
@@ -88,6 +90,19 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
       staleTime: Infinity,
       gcTime: Infinity,
     };
+  });
+
+  // Extract shared phone hashes from server data (same defensive pattern as phoneHashes)
+  const sharedPhoneHashes = $derived.by((): readonly string[] => {
+    const serverData = mergeScanDataQuery.data;
+    if (!serverData) return [];
+    if (
+      "sharedPhoneHashes" in serverData &&
+      Array.isArray(serverData.sharedPhoneHashes)
+    ) {
+      return serverData.sharedPhoneHashes as readonly string[];
+    }
+    return [];
   });
 
   // Build MergeScanClient[] from server data + dashboard ticket refs.
@@ -222,9 +237,13 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
   // Run Worker detection (session-cached via TanStack)
   const candidatesQuery = createQuery(() => {
     const clients = scanClients;
+    const suppressed = sharedPhoneHashes;
     return {
       queryKey: clientKeys.mergeCandidates(),
-      queryFn: async (): Promise<readonly MergeCandidate[]> => {
+      queryFn: async (): Promise<{
+        readonly candidates: readonly MergeCandidate[];
+        readonly truncated: boolean;
+      }> => {
         // Schedule at low priority to avoid blocking dashboard render
         await new Promise<void>((resolve) => {
           if (typeof requestIdleCallback === "function") {
@@ -233,7 +252,7 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
             setTimeout(resolve, 200);
           }
         });
-        return bridge.detectMergeCandidates(clients);
+        return bridge.detectMergeCandidates(clients, suppressed);
       },
       enabled: clients.length > 0,
       staleTime: Infinity,
@@ -268,7 +287,8 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
     gcTime: Infinity,
   }));
 
-  const candidates = $derived(candidatesQuery.data ?? []);
+  const candidates = $derived(candidatesQuery.data?.candidates ?? []);
+  const truncated = $derived(candidatesQuery.data?.truncated ?? false);
   const dismissedKeys = $derived(
     dismissalsQuery.data ?? new SvelteSet<string>(),
   );
@@ -305,9 +325,28 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
     },
   }));
 
+  // Mutation: mark a phone match hash as a shared line on the server
+  const markSharedLineMutation = createMutation(() => ({
+    mutationFn: async (matchHash: string): Promise<{ updated: number }> => {
+      return requireRouter(trpc.clients, "clients").setPhoneSharedLine.mutate({
+        matchHash,
+        shared: true,
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: clientKeys.mergeCandidates(),
+      });
+    },
+  }));
+
   function dismiss(clientIdA: string, clientIdB: string): void {
     const key = pairKey(clientIdA, clientIdB);
     dismissMutation.mutate(key);
+  }
+
+  function markSharedLine(matchHash: string): void {
+    markSharedLineMutation.mutate(matchHash);
   }
 
   function invalidate(): void {
@@ -323,6 +362,9 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
     get candidates(): readonly MergeCandidate[] {
       return candidates;
     },
+    get truncated(): boolean {
+      return truncated;
+    },
     get isLoading(): boolean {
       return (
         candidatesQuery.isLoading ||
@@ -337,6 +379,7 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
       return undismissed;
     },
     dismiss,
+    markSharedLine,
     invalidate,
   };
 }

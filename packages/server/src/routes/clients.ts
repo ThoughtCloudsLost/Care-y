@@ -37,6 +37,8 @@ import {
   updateEmailInputSchema,
   backfillPhoneMatchHashInputSchema,
   suggestDuplicatesInputSchema,
+  getPhoneSharedLineInputSchema,
+  setPhoneSharedLineInputSchema,
   aliasHashSchema,
   phoneHashSchema,
   phoneMatchHashSchema,
@@ -452,15 +454,17 @@ export function createClientRouter(deps: ClientRouterDeps) {
               clientId: string;
               emailMatchHash: string;
             }[],
+            sharedPhoneHashes: [] as readonly string[],
           };
         }
         const svc = deps.createMergeScanSvc(ctx.org.tenantDb);
-        const [clients, fieldRoles, phoneHashes, emailHashes] =
+        const [clients, fieldRoles, phoneHashes, emailHashes, sharedHashes] =
           await Promise.all([
             svc.getResponsesByClient(ctx.user.id),
             svc.getFieldRoles(),
             svc.getPhoneHashes(),
             svc.getEmailHashes(),
+            svc.getSharedPhoneMatchHashes(),
           ]);
 
         return {
@@ -485,9 +489,60 @@ export function createClientRouter(deps: ClientRouterDeps) {
             clientId: eh.clientId,
             emailMatchHash: eh.emailMatchHash,
           })),
+          sharedPhoneHashes: sharedHashes.map((sh) =>
+            String(sh.phoneMatchHash),
+          ),
         };
       }),
     ),
+
+    /**
+     * Returns the is_shared_line flag for a client's phone row,
+     * or null when the client has no phone.
+     */
+    getPhoneSharedLine: viewClientsProcedure
+      .input(getPhoneSharedLineInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (!deps.createMergeScanSvc) {
+            return { shared: null as boolean | null };
+          }
+          const svc = deps.createMergeScanSvc(ctx.org.tenantDb);
+          const shared = await svc.getSharedLineByClientId(input.clientId);
+          return { shared };
+        }),
+      ),
+
+    /**
+     * Marks or unmarks phone rows as shared lines.
+     *
+     * Two targeting modes: match-hash targeting flags every phones row
+     * bearing the matched hash (used from the dashboard candidate row);
+     * client-id targeting flags the client's own phone row (used from
+     * the phone edit sheet).
+     */
+    setPhoneSharedLine: viewClientsProcedure
+      .input(setPhoneSharedLineInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (!deps.createMergeScanSvc) {
+            return { updated: 0 };
+          }
+          const svc = deps.createMergeScanSvc(ctx.org.tenantDb);
+
+          if ("matchHash" in input) {
+            const parsed = phoneMatchHashSchema.parse(input.matchHash);
+            const n = await svc.setSharedLineByMatchHash(parsed, input.shared);
+            return { updated: n };
+          }
+
+          const didUpdate = await svc.setSharedLineByClientId(
+            input.clientId,
+            input.shared,
+          );
+          return { updated: didUpdate ? 1 : 0 };
+        }),
+      ),
 
     /**
      * Email address update.

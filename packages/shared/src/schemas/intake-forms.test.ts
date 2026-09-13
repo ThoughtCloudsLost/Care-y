@@ -7,6 +7,8 @@ import {
   intakeFieldTypeSchema,
   intakeFieldRoleSchema,
   intakeFieldConfigSchema,
+  isRoleOfferable,
+  isRoleValidForWidget,
   intakeOptionSchema,
   dayOfWeekSchema,
   availabilityDataSchema,
@@ -639,6 +641,10 @@ describe("intakeFieldConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  // The config shape still carries the mapping even though the role is not
+  // valid on this widget: the builder needs an in-progress mapping to parse so
+  // it can carry it across when converting the field to a dropdown. Role
+  // validity is enforced separately, on the save input.
   it("accepts multiselect config with queue-routing mapping", () => {
     const result = intakeFieldConfigSchema.safeParse({
       type: "multiselect",
@@ -1306,6 +1312,43 @@ describe("saveIntakeFormInputSchema", () => {
     };
     const result = saveIntakeFormInputSchema.safeParse(input);
     expect(result.success).toBe(false);
+  });
+
+  it("offers queue-routing on multiselect even though it is not valid there", () => {
+    // The builder lists this pair on purpose so it can explain the conflict
+    // instead of hiding the option. Offerable and valid must disagree here.
+    expect(isRoleOfferable("queue-routing", "multiselect")).toBe(true);
+    expect(isRoleValidForWidget("queue-routing", "multiselect")).toBe(false);
+  });
+
+  it("treats queue-routing on select as both offerable and valid", () => {
+    expect(isRoleOfferable("queue-routing", "select")).toBe(true);
+    expect(isRoleValidForWidget("queue-routing", "select")).toBe(true);
+  });
+
+  it("does not offer a role the widget cannot carry at all", () => {
+    expect(isRoleOfferable("queue-routing", "text")).toBe(false);
+    expect(isRoleOfferable("consent", "select")).toBe(false);
+  });
+
+  it("rejects queue-routing on a multiselect widget", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [
+        { ...validField(), fieldType: "multiselect", role: "queue-routing" },
+      ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts queue-routing on a select widget", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [{ ...validField(), fieldType: "select", role: "queue-routing" }],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
   });
 
   it("accepts consent role on checkbox widget", () => {

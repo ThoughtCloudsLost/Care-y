@@ -600,6 +600,10 @@
     mergeScan.dismiss(clientIdA, clientIdB);
   }
 
+  function handleSharedLine(matchHash: string): void {
+    mergeScan.markSharedLine(matchHash);
+  }
+
   // Login summary notification slot (6k provides content).
   let exposureNotificationVisible = $state(false);
 
@@ -701,6 +705,8 @@
         resolveAlias={resolveClientAlias}
         ondismiss={handleMergeDismiss}
         onreview={handleMergeReview}
+        truncated={mergeScan.truncated}
+        onsharedline={handleSharedLine}
       />
     </div>
   {/if}
