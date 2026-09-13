@@ -4,7 +4,11 @@ export default defineConfig({
   testDir: "e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // Coverage-mode runs carry V8-coverage overhead on an 8 GB machine and
+  // flake on tight timeouts under load (disjoint single-test failures per
+  // run); one retry absorbs that the same way CI's retries do. Plain local
+  // runs keep zero retries so regressions stay loud.
+  retries: process.env.CI ? 2 : process.env.E2E_COVERAGE ? 1 : 0,
   workers: 1,
   reporter: "html",
   globalSetup: "./e2e/global-setup.ts",
