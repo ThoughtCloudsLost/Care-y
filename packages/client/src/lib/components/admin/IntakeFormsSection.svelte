@@ -59,6 +59,7 @@
   import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
 
   let { onopenform, onopenresponses, oncreateform }: SectionProps = $props();
@@ -527,14 +528,12 @@
       {/if}
     {/if}
 
-    <button
-      type="button"
-      class="ifs-add-btn touch-feedback"
-      onclick={() => oncreateform?.()}
-    >
-      <Plus size={16} aria-hidden="true" />
-      {m.intake_forms_create()}
-    </button>
+    <div class="ifs-add-wrapper">
+      <SoftButton full onclick={() => oncreateform?.()}>
+        <Plus size={16} aria-hidden="true" />
+        {m.intake_forms_create()}
+      </SoftButton>
+    </div>
   </div>
 </Card>
 
@@ -734,33 +733,7 @@
     padding: var(--space-md) 0;
   }
 
-  /* Tonal anatomy matching SoftButton. */
-  .ifs-add-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-sm, 8px);
-    width: 100%;
+  .ifs-add-wrapper {
     margin-top: var(--space-sm);
-    padding: 0.625rem 1.25rem;
-    border-radius: 0.75rem;
-    border: none;
-    background: color-mix(in srgb, var(--ink) 8%, transparent);
-    color: var(--ink);
-    font-size: var(--text-sm, 0.875rem);
-    font-weight: 500;
-    font-family: inherit;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    min-height: 44px;
-  }
-
-  .ifs-add-btn:active {
-    background: color-mix(in srgb, var(--ink) 15%, transparent);
-  }
-
-  .ifs-add-btn:focus-visible {
-    outline: 2px solid var(--brand-text);
-    outline-offset: 2px;
   }
 </style>

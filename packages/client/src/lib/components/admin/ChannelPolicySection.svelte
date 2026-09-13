@@ -64,113 +64,85 @@
   }));
 
   const isMutating = $derived(updateMutation.isPending);
+
+  // Channel config rows driven by a single array so the template
+  // renders one {#each} instead of five copy-pasted blocks.
+  interface ChannelRow {
+    readonly key: keyof UpdateChannelPolicyInput;
+    readonly icon: typeof MessageSquare;
+    readonly label: () => string;
+    readonly offHint: () => string;
+    readonly checked: () => boolean;
+  }
+
+  const channelRows: readonly ChannelRow[] = [
+    {
+      key: "smsEnabled",
+      icon: MessageSquare,
+      label: m.admin_channel_sms_label,
+      offHint: m.admin_channel_sms_off_hint,
+      checked: () => smsEnabled,
+    },
+    {
+      key: "emailEnabled",
+      icon: Mail,
+      label: m.admin_channel_email_label,
+      offHint: m.admin_channel_email_off_hint,
+      checked: () => emailEnabled,
+    },
+    {
+      key: "secureLinkEnabled",
+      icon: Link2,
+      label: m.admin_channel_secure_link_label,
+      offHint: m.admin_channel_secure_link_off_hint,
+      checked: () => secureLinkEnabled,
+    },
+    {
+      key: "voiceEnabled",
+      icon: Phone,
+      label: m.admin_channel_voice_label,
+      offHint: m.admin_channel_voice_off_hint,
+      checked: () => voiceEnabled,
+    },
+    {
+      key: "shareLinkEnabled",
+      icon: Share2,
+      label: m.admin_channel_share_link_label,
+      offHint: m.admin_channel_share_link_off_hint,
+      checked: () => shareLinkEnabled,
+    },
+  ];
 </script>
 
 <Card raised contentWrap={false} class="cps-card">
   <div class="cps-card-inner">
     <p class="section-desc">{m.admin_channel_policy_subtitle()}</p>
 
-    <div class="cps-row">
-      <span class="cps-row-label">
-        <MessageSquare size={16} aria-hidden="true" class="cps-cfg-icon" />
-        <span class="cps-row-text">
-          <span>{m.admin_channel_sms_label()}</span>
-          {#if !smsEnabled}
-            <span class="cps-row-sub">
-              {m.admin_channel_sms_off_hint()}
-            </span>
-          {/if}
+    {#each channelRows as row (row.key)}
+      {@const checked = row.checked()}
+      <div class="cps-row">
+        <span class="cps-row-label">
+          <row.icon size={16} aria-hidden="true" class="cps-cfg-icon" />
+          <span class="cps-row-text">
+            <span>{row.label()}</span>
+            {#if !checked}
+              <span class="cps-row-sub">
+                {row.offHint()}
+              </span>
+            {/if}
+          </span>
         </span>
-      </span>
-      <Toggle
-        checked={smsEnabled}
-        disabled={isMutating}
-        onChange={() => updateMutation.mutate({ smsEnabled: !smsEnabled })}
-        aria-label={m.admin_channel_sms_label()}
-      />
-    </div>
-
-    <div class="cps-row">
-      <span class="cps-row-label">
-        <Mail size={16} aria-hidden="true" class="cps-cfg-icon" />
-        <span class="cps-row-text">
-          <span>{m.admin_channel_email_label()}</span>
-          {#if !emailEnabled}
-            <span class="cps-row-sub">
-              {m.admin_channel_email_off_hint()}
-            </span>
-          {/if}
-        </span>
-      </span>
-      <Toggle
-        checked={emailEnabled}
-        disabled={isMutating}
-        onChange={() => updateMutation.mutate({ emailEnabled: !emailEnabled })}
-        aria-label={m.admin_channel_email_label()}
-      />
-    </div>
-
-    <div class="cps-row">
-      <span class="cps-row-label">
-        <Link2 size={16} aria-hidden="true" class="cps-cfg-icon" />
-        <span class="cps-row-text">
-          <span>{m.admin_channel_secure_link_label()}</span>
-          {#if !secureLinkEnabled}
-            <span class="cps-row-sub">
-              {m.admin_channel_secure_link_off_hint()}
-            </span>
-          {/if}
-        </span>
-      </span>
-      <Toggle
-        checked={secureLinkEnabled}
-        disabled={isMutating}
-        onChange={() =>
-          updateMutation.mutate({ secureLinkEnabled: !secureLinkEnabled })}
-        aria-label={m.admin_channel_secure_link_label()}
-      />
-    </div>
-
-    <div class="cps-row">
-      <span class="cps-row-label">
-        <Phone size={16} aria-hidden="true" class="cps-cfg-icon" />
-        <span class="cps-row-text">
-          <span>{m.admin_channel_voice_label()}</span>
-          {#if !voiceEnabled}
-            <span class="cps-row-sub">
-              {m.admin_channel_voice_off_hint()}
-            </span>
-          {/if}
-        </span>
-      </span>
-      <Toggle
-        checked={voiceEnabled}
-        disabled={isMutating}
-        onChange={() => updateMutation.mutate({ voiceEnabled: !voiceEnabled })}
-        aria-label={m.admin_channel_voice_label()}
-      />
-    </div>
-
-    <div class="cps-row">
-      <span class="cps-row-label">
-        <Share2 size={16} aria-hidden="true" class="cps-cfg-icon" />
-        <span class="cps-row-text">
-          <span>{m.admin_channel_share_link_label()}</span>
-          {#if !shareLinkEnabled}
-            <span class="cps-row-sub">
-              {m.admin_channel_share_link_off_hint()}
-            </span>
-          {/if}
-        </span>
-      </span>
-      <Toggle
-        checked={shareLinkEnabled}
-        disabled={isMutating}
-        onChange={() =>
-          updateMutation.mutate({ shareLinkEnabled: !shareLinkEnabled })}
-        aria-label={m.admin_channel_share_link_label()}
-      />
-    </div>
+        <Toggle
+          {checked}
+          disabled={isMutating}
+          onChange={() =>
+            updateMutation.mutate({
+              [row.key]: !checked,
+            })}
+          aria-label={row.label()}
+        />
+      </div>
+    {/each}
   </div>
 </Card>
 

@@ -18,7 +18,7 @@
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { clientKeys, ticketsKeys } from "$lib/query/keys.js";
-  import { ErrorCode, updateEmailInputSchema } from "@care-y/shared";
+  import { ErrorCode } from "@care-y/shared";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -34,7 +34,7 @@
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ClientCard from "./ClientCard.svelte";
   import PhoneChangeSteps from "$lib/components/clients/PhoneChangeSteps.svelte";
-  import EmailChangeSteps from "$lib/components/clients/EmailChangeSteps.svelte";
+  import EmailEditSheet from "$lib/components/clients/EmailEditSheet.svelte";
   import MergeSheet from "$lib/components/clients/MergeSheet.svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -203,8 +203,7 @@
   // A phone or email change rewrites the value across every ticket for
   // the client, so it passes through a confirmation, and the server may
   // answer that another client already holds the value.
-  type SheetStep =
-    "edit" | "confirm" | "conflict" | "email-confirm" | "email-conflict";
+  type SheetStep = "edit" | "confirm" | "conflict";
   let sheetStep = $state<SheetStep>("edit");
 
   let mergeSheetOpened = $state(false);
@@ -264,9 +263,6 @@
     editPhone = "";
     phoneError = null;
     phoneConflict = null;
-    editEmail = "";
-    emailError = null;
-    emailConflict = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -400,86 +396,42 @@
   }));
 
   // ---------------------------------------------------------------------------
-  // Email editing
+  // Email editing (delegated to EmailEditSheet)
   // ---------------------------------------------------------------------------
 
-  // Same approach as phone: an empty field means "leave the address alone";
-  // anything typed is a full replacement. Not seeded from the detail response
-  // because managers see a masked address.
-  let editEmail = $state("");
-  let emailError = $state<string | null>(null);
-  let emailConflict = $state<{
-    conflictingClientId: string;
-    conflictingClientEncryptedAlias: string;
-  } | null>(null);
+  let emailSheetOpened = $state(false);
 
-  const emailConflictAlias = $derived(
-    emailConflict === null
-      ? null
-      : orgCache.decrypt(
-          `client-alias:${emailConflict.conflictingClientId}`,
-          emailConflict.conflictingClientEncryptedAlias,
-        ),
-  );
+  function openEmailSheet(): void {
+    emailSheetOpened = true;
+  }
 
-  const trimmedEmail = $derived(editEmail.trim());
-  const emailEntered = $derived(trimmedEmail !== "");
-  const emailValid = $derived.by((): boolean => {
-    if (!emailEntered) return false;
-    return updateEmailInputSchema.shape.emailAddress.safeParse(trimmedEmail)
-      .success;
-  });
+  function closeEmailSheet(): void {
+    emailSheetOpened = false;
+  }
 
-  const updateEmailMutation = createMutation(() => ({
-    mutationFn: async (input: { clientId: string; emailAddress: string }) => {
-      const emailMatchHash = await orgKeyManager.emailMatchHash(
-        input.emailAddress,
-      );
-      return clientsRouter.updateEmail.mutate({
-        ...input,
-        emailMatchHash: emailMatchHash ?? null,
-      });
-    },
-    onSuccess: (result: {
-      success: boolean;
-      conflict: {
-        conflictingClientId: string;
-        conflictingClientEncryptedAlias: string;
-      } | null;
-    }) => {
-      if (result.conflict) {
-        emailConflict = result.conflict;
-        sheetStep = "email-conflict";
-        return;
-      }
-      haptic();
-      void queryClient.invalidateQueries({ queryKey: clientKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ticketsKeys.all });
-      const msg = m.client_email_changed_toast();
-      toastStore.show(msg);
-      announceToLiveRegion("polite", msg);
-      closeSheet();
-    },
-    onError: () => {
-      toastStore.show(m.error_generic());
-      sheetStep = "edit";
-    },
-  }));
+  function handleEmailSuccess(): void {
+    const msg = m.client_email_changed_toast();
+    announceToLiveRegion("polite", msg);
+  }
+
+  function handleEmailMerge(
+    conflictingClientId: string,
+    conflictingAlias: string,
+  ): void {
+    closeEmailSheet();
+    openMerge(conflictingClientId, conflictingAlias);
+  }
 
   // ---------------------------------------------------------------------------
   // Saving
   // ---------------------------------------------------------------------------
 
   const savePending = $derived(
-    updateAliasMutation.isPending ||
-      updatePhoneMutation.isPending ||
-      updateEmailMutation.isPending,
+    updateAliasMutation.isPending || updatePhoneMutation.isPending,
   );
 
   const canSave = $derived(
-    (aliasChanged || phoneEntered || emailEntered) &&
-      (!phoneEntered || phoneValid) &&
-      (!emailEntered || emailValid),
+    (aliasChanged || phoneEntered) && (!phoneEntered || phoneValid),
   );
 
   function handleSave(): void {
@@ -489,12 +441,6 @@
       // warning is shown before anything is written.
       phoneError = null;
       sheetStep = "confirm";
-      return;
-    }
-    if (emailEntered) {
-      // Gate the email write behind the confirmation, alias included.
-      emailError = null;
-      sheetStep = "email-confirm";
       return;
     }
     handleSaveAlias();
@@ -534,31 +480,6 @@
     const conflict = phoneConflict;
     if (conflict === null) return;
     openMerge(conflict.conflictingClientId, phoneConflictAlias ?? "");
-  }
-
-  function handleConfirmEmail(): void {
-    if (sheetClientId === null) return;
-    if (aliasChanged) handleSaveAlias();
-    updateEmailMutation.mutate({
-      clientId: sheetClientId,
-      emailAddress: trimmedEmail,
-    });
-  }
-
-  function handleCancelEmail(): void {
-    sheetStep = "edit";
-  }
-
-  function handleTryAnotherEmail(): void {
-    emailConflict = null;
-    editEmail = "";
-    sheetStep = "edit";
-  }
-
-  function handleMergeFromEmailConflict(): void {
-    const conflict = emailConflict;
-    if (conflict === null) return;
-    openMerge(conflict.conflictingClientId, emailConflictAlias ?? "");
   }
 
   // ---------------------------------------------------------------------------
@@ -695,17 +616,6 @@
         onmerge={handleMergeFromConflict}
         ontryanother={handleTryAnotherPhone}
       />
-    {:else if sheetStep === "email-confirm" || sheetStep === "email-conflict"}
-      <EmailChangeSteps
-        step={sheetStep === "email-conflict" ? "conflict" : "confirm"}
-        clientAlias={detailDecryptedAlias ?? ""}
-        conflictAlias={emailConflictAlias}
-        pending={savePending}
-        onconfirm={handleConfirmEmail}
-        oncancel={handleCancelEmail}
-        onmerge={handleMergeFromEmailConflict}
-        ontryanother={handleTryAnotherEmail}
-      />
     {:else if clientDetailQuery.isLoading}
       <Block>
         <InlineSkeleton width="100%" />
@@ -774,8 +684,7 @@
         <FieldError message={phoneError ?? undefined} />
       </div>
 
-      <!-- Email section. Same approach as phone: read-only display of the
-           current email (masked for manager), empty input for replacement. -->
+      <!-- Email section. Editing is delegated to EmailEditSheet. -->
       <div class="detail-section">
         <p class="section-label">{m.client_email_label()}</p>
         {#if detail.email !== null && detail.email !== ""}
@@ -784,28 +693,10 @@
             {detail.email}
           </p>
         {/if}
-        <List nested>
-          <ListInput
-            label={m.client_email_label()}
-            type="email"
-            value={editEmail}
-            placeholder={m.client_email_placeholder()}
-            oninput={(e: Event) => {
-              if (e.target instanceof HTMLInputElement) {
-                editEmail = e.target.value;
-                emailError =
-                  e.target.value.trim() === "" ||
-                  updateEmailInputSchema.shape.emailAddress.safeParse(
-                    e.target.value.trim(),
-                  ).success
-                    ? null
-                    : m.client_email_invalid_error();
-              }
-            }}
-            disabled={savePending}
-          />
-        </List>
-        <FieldError message={emailError ?? undefined} />
+        <SoftButton onclick={openEmailSheet}>
+          <Mail size={14} aria-hidden="true" />
+          {m.client_email_edit()}
+        </SoftButton>
       </div>
 
       <!-- Tickets section -->
@@ -922,6 +813,15 @@
     {/if}
   </div>
 </ShellSheet>
+
+<EmailEditSheet
+  opened={emailSheetOpened}
+  clientId={sheetClientId ?? ""}
+  clientAlias={detailDecryptedAlias ?? ""}
+  ondismiss={closeEmailSheet}
+  onmerge={handleEmailMerge}
+  onsuccess={handleEmailSuccess}
+/>
 
 <MergeSheet
   opened={mergeSheetOpened}

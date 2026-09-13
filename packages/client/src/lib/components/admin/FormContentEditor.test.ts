@@ -34,8 +34,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   library_editor_link: () => "Link",
   library_editor_image: () => "Image",
   library_editor_horizontal_rule: () => "Horizontal rule",
-  library_editor_undo: () => "Undo",
-  library_editor_redo: () => "Redo",
+  library_editor_attach_file: () => "Attach file",
+  library_editor_table: () => "Table",
   library_editor_alt_text_title: () => "Describe this image",
   library_editor_alt_text_placeholder: () => "Description for screen readers",
   library_editor_decorative: () => "Decorative (no description needed)",
@@ -52,7 +52,6 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   library_image_upload_failed: () => "Image upload failed",
   library_file_too_large: () => "File must be under 10 MB",
   library_file_type_not_allowed: () => "This file type is not supported",
-  library_editor_ordered_list_symbol: () => "1.",
   common_cancel: () => "Cancel",
   error_generic: () => "Something went wrong",
   form_content_editor_image_no_key: () =>
@@ -138,7 +137,7 @@ describe("FormContentEditor", () => {
     expect(screen.getByText("Shown above the form.")).toBeTruthy();
   });
 
-  it("renders toolbar with formatting buttons", async () => {
+  it("renders shared EditorToolbar with formatting buttons", async () => {
     const onchange = vi.fn();
     render(FormContentEditor, {
       props: {
@@ -150,14 +149,13 @@ describe("FormContentEditor", () => {
       },
     });
 
-    // The toolbar renders once ProseMirror mounts (useProseMirror defers
-    // to onMount), so flush the mount before asserting.
+    // EditorToolbar renders with role="toolbar" via Bits UI Toolbar.Root
     const toolbar = await vi.waitFor(() => screen.getByRole("toolbar"));
     const buttons = within(toolbar);
     expect(buttons.getByRole("button", { name: "Bold" })).toBeTruthy();
     expect(buttons.getByRole("button", { name: "Italic" })).toBeTruthy();
-    expect(buttons.getByRole("button", { name: "Undo" })).toBeTruthy();
-    expect(buttons.getByRole("button", { name: "Redo" })).toBeTruthy();
+    expect(buttons.getByRole("button", { name: "Image" })).toBeTruthy();
+    expect(buttons.getByRole("button", { name: "Link" })).toBeTruthy();
   });
 
   it("loads initial value from plain string", () => {
@@ -271,7 +269,7 @@ describe("FormContentEditor", () => {
     expect(screen.queryByRole("note")).toBeNull();
   });
 
-  it("disables image button when orgPublicKey is null", async () => {
+  it("shows toast when image is clicked without orgPublicKey", async () => {
     const onchange = vi.fn();
     render(FormContentEditor, {
       props: {
@@ -283,10 +281,15 @@ describe("FormContentEditor", () => {
       },
     });
 
-    // Scope to the toolbar: the hidden file input shares the "Image"
-    // accessible name (input[type=file] maps to role button).
+    // The shared toolbar renders the image button enabled. The
+    // command handler shows a toast when orgPublicKey is null.
     const toolbar = await vi.waitFor(() => screen.getByRole("toolbar"));
     const imageBtn = within(toolbar).getByRole("button", { name: "Image" });
-    expect(imageBtn).toHaveProperty("disabled", true);
+    await fireEvent.click(imageBtn);
+
+    expect(mockToastShow).toHaveBeenCalledWith(
+      "Image upload requires the organization key to be loaded",
+      3000,
+    );
   });
 });

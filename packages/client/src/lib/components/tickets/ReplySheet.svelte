@@ -36,9 +36,8 @@
   import { createAttachmentUpload } from "$lib/composables/ticket-detail/create-attachment-upload.svelte.js";
   import { createExposureHint } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
   import { useQueryClient } from "@tanstack/svelte-query";
-  import { Chip } from "konsta/svelte";
-  import { X } from "@lucide/svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import PendingAttachmentStrip from "$lib/components/tickets/PendingAttachmentStrip.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
   import TicketCompose from "$lib/components/tickets/TicketCompose.svelte";
   import type { TicketComposeHandle } from "$lib/components/tickets/ticket-compose-types.js";
@@ -396,40 +395,10 @@
     </div>
   </div>
 
-  {#if attachmentUpload.pending.length > 0}
-    <div
-      class="pending-attachments"
-      role="list"
-      aria-label={m.attachment_pending_list()}
-    >
-      {#each attachmentUpload.pending as entry (entry.attachmentId)}
-        <Chip
-          class="attachment-chip"
-          outline={entry.status === "failed"}
-          role="listitem"
-        >
-          <span class="attachment-chip-name">{entry.filename}</span>
-          {#if entry.status === "encrypting" || entry.status === "uploading"}
-            <span class="attachment-chip-status">
-              {m.attachment_uploading()}
-            </span>
-          {:else if entry.status === "failed"}
-            <span class="attachment-chip-status attachment-chip-failed">
-              {m.attachment_failed()}
-            </span>
-          {/if}
-        </Chip>
-        <button
-          type="button"
-          class="attachment-remove-btn"
-          onclick={() => attachmentUpload.remove(entry.attachmentId)}
-          aria-label={m.attachment_remove({ name: entry.filename })}
-        >
-          <X size={14} aria-hidden="true" />
-        </button>
-      {/each}
-    </div>
-  {/if}
+  <PendingAttachmentStrip
+    entries={attachmentUpload.pending}
+    onremove={(id) => attachmentUpload.remove(id)}
+  />
   <TicketCompose
     bind:this={compose}
     {ticketId}
@@ -503,45 +472,5 @@
     font-size: var(--text-xs);
     color: var(--muted);
     margin: 0;
-  }
-
-  .pending-attachments {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 6px 16px;
-    align-items: center;
-  }
-
-  .attachment-chip-name {
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .attachment-chip-status {
-    font-size: var(--text-xs);
-    color: var(--muted);
-    margin-left: 4px;
-  }
-
-  .attachment-chip-failed {
-    color: var(--danger);
-  }
-
-  .attachment-remove-btn {
-    appearance: none;
-    border: none;
-    background: none;
-    padding: 6px;
-    margin: -6px 0 -6px -2px;
-    color: var(--muted);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
   }
 </style>

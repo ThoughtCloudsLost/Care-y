@@ -14,3 +14,14 @@ export function onKeyActivate(handler: () => void): (e: KeyboardEvent) => void {
     }
   };
 }
+
+/**
+ * Svelte action that finds the checkbox input inside a Konsta Toggle
+ * wrapper and sets its aria-label. Konsta Toggle renders an
+ * `<input type="checkbox">` without an accessible label; this action
+ * bridges the gap when the Toggle sits inside a ListItem.
+ */
+export function labelToggleInput(node: HTMLElement, label: string): void {
+  const input = node.querySelector<HTMLInputElement>('input[type="checkbox"]');
+  if (input) input.setAttribute("aria-label", label);
+}

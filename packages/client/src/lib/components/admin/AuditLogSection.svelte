@@ -4,7 +4,7 @@
     summarizeAuditMetadata,
   } from "$lib/admin/audit-log-labels.js";
   import * as m from "$lib/paraglide/messages.js";
-  import { List, ListItem, Preloader } from "konsta/svelte";
+  import { List, ListItem } from "konsta/svelte";
   import { ScrollText } from "@lucide/svelte";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import {
@@ -14,11 +14,8 @@
   } from "$lib/crypto/decrypt-result.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
-  import QueryError from "$lib/components/QueryError.svelte";
-  import EmptyState from "$lib/components/EmptyState.svelte";
-  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
-  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import LogListSection from "./LogListSection.svelte";
 
   // ---------------------------------------------------------------------------
   // Props
@@ -82,96 +79,65 @@
   }
 </script>
 
-<div class="audit-log-section pb-20">
-  {#if isLoading}
-    <List>
-      {#each { length: 3 } as _, i (i)}
-        <ListItem>
-          {#snippet title()}
-            <InlineSkeleton width="14ch" />
-          {/snippet}
-          {#snippet after()}
-            <InlineSkeleton width="8ch" />
-          {/snippet}
-          {#snippet subtitle()}
-            <InlineSkeleton width="20ch" />
-          {/snippet}
-        </ListItem>
-      {/each}
-    </List>
-  {:else if isError}
-    <QueryError {error} {onretry} />
-  {:else if rows.length === 0}
-    <EmptyState
-      icon={ScrollText}
-      title={m.logs_audit_empty_title()}
-      subtitle={m.logs_audit_empty_subtitle()}
-    />
-  {:else}
-    <List>
-      {#each rows as row (row.id)}
-        {@const ticketId = row.ticketId}
-        {@const isActivatable = ticketId !== null}
-        {@const summary = summarizeAuditMetadata(row.eventType, row.metadata)}
-        <ListItem
-          class={isActivatable ? "touch-feedback" : ""}
-          onclick={isActivatable ? () => onticketopen(ticketId) : undefined}
-          onkeydown={isActivatable
-            ? onKeyActivate(() => onticketopen(ticketId))
-            : undefined}
-          role={isActivatable ? "button" : undefined}
-          tabindex={isActivatable ? 0 : undefined}
-        >
-          {#snippet title()}
-            <span class="event-label">{auditEventLabel(row.eventType)}</span>
-          {/snippet}
-          {#snippet after()}
-            <span class="row-time">
-              {formatRelativeTime(new Date(row.createdAt))}
-            </span>
-          {/snippet}
-          {#snippet subtitle()}
-            <span class="row-meta">
-              {#if hasActor(row)}
-                <DecryptPlaceholder
-                  result={actorResult(row)}
-                  ciphertext={actorCiphertext(row)}
-                />
-              {:else}
-                <span class="actor-placeholder">-</span>
-              {/if}
-              {#if summary !== null}
-                <span class="meta-sep" aria-hidden="true">·</span><span
-                  class="summary-text">{summary}</span
-                >
-              {/if}
-            </span>
-          {/snippet}
-        </ListItem>
-      {/each}
-    </List>
-    {#if hasNextPage}
-      <div class="load-more">
-        <SoftButton onclick={onfetchnext} disabled={isFetchingNextPage}>
-          {#if isFetchingNextPage}
-            <Preloader class="w-4 h-4" />
-          {:else}
-            {m.logs_load_more()}
-          {/if}
-        </SoftButton>
-      </div>
-    {/if}
-  {/if}
-</div>
+<LogListSection
+  {isLoading}
+  {isError}
+  {error}
+  hasData={rows.length > 0}
+  {hasNextPage}
+  {isFetchingNextPage}
+  {onfetchnext}
+  {onretry}
+  emptyIcon={ScrollText}
+  emptyTitle={m.logs_audit_empty_title()}
+  emptySubtitle={m.logs_audit_empty_subtitle()}
+  wrapperClass="audit-log-section"
+>
+  <List>
+    {#each rows as row (row.id)}
+      {@const ticketId = row.ticketId}
+      {@const isActivatable = ticketId !== null}
+      {@const summary = summarizeAuditMetadata(row.eventType, row.metadata)}
+      <ListItem
+        class={isActivatable ? "touch-feedback" : ""}
+        onclick={isActivatable ? () => onticketopen(ticketId) : undefined}
+        onkeydown={isActivatable
+          ? onKeyActivate(() => onticketopen(ticketId))
+          : undefined}
+        role={isActivatable ? "button" : undefined}
+        tabindex={isActivatable ? 0 : undefined}
+      >
+        {#snippet title()}
+          <span class="event-label">{auditEventLabel(row.eventType)}</span>
+        {/snippet}
+        {#snippet after()}
+          <span class="row-time">
+            {formatRelativeTime(new Date(row.createdAt))}
+          </span>
+        {/snippet}
+        {#snippet subtitle()}
+          <span class="row-meta">
+            {#if hasActor(row)}
+              <DecryptPlaceholder
+                result={actorResult(row)}
+                ciphertext={actorCiphertext(row)}
+              />
+            {:else}
+              <span class="actor-placeholder">-</span>
+            {/if}
+            {#if summary !== null}
+              <span class="meta-sep" aria-hidden="true">·</span><span
+                class="summary-text">{summary}</span
+              >
+            {/if}
+          </span>
+        {/snippet}
+      </ListItem>
+    {/each}
+  </List>
+</LogListSection>
 
 <style>
-  .audit-log-section {
-    padding: 0.25rem var(--page-pad-x) 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-lg);
-  }
-
   .event-label {
     font-size: var(--text-sm);
   }
@@ -201,11 +167,5 @@
 
   .actor-placeholder {
     color: var(--muted);
-  }
-
-  .load-more {
-    display: flex;
-    justify-content: center;
-    padding: var(--space-md) 0;
   }
 </style>

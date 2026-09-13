@@ -34,6 +34,7 @@
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
   import { isDecryptReady } from "$lib/crypto/decrypt-result.js";
   import { requireRouter } from "$lib/errors.js";
+  import { enabledTicketId } from "$lib/tickets/queries.js";
   import {
     isCaseFolded,
     setCaseFolded,
@@ -60,7 +61,7 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
-    enabled: typeof ticketId === "string" && ticketId !== "",
+    enabled: enabledTicketId(ticketId),
   }));
 
   const ticket = $derived(ticketQuery.data);

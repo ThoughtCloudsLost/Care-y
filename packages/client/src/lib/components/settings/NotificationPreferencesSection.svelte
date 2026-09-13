@@ -4,7 +4,6 @@
     BlockTitle,
     List,
     ListItem,
-    Toggle,
     DialogButton,
   } from "konsta/svelte";
   import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
@@ -30,6 +29,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
+  import ToggleMatrix from "$lib/components/ToggleMatrix.svelte";
   import { decryptQueueAppearance } from "$lib/utils/queue-appearance.js";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
@@ -246,6 +246,86 @@
 
   const isLoading = $derived(preferencesQuery.isLoading);
   const isMutating = $derived(setPreferenceMutation.isPending);
+
+  // ── ToggleMatrix column/row mapping ──
+
+  const channelColumns = $derived(
+    NOTIFICATION_CHANNELS.map((ch) => ({ id: ch, label: channelLabel(ch) })),
+  );
+
+  const globalRows = $derived(
+    NOTIFICATION_EVENT_TYPES.map((eventType) => ({
+      id: eventType,
+      label: eventLabel(eventType),
+      cells: NOTIFICATION_CHANNELS.map((channel) => ({
+        columnId: channel,
+        checked: effectiveGlobalState(rows, eventType, channel),
+        disabled: isMutating,
+        ariaLabel: toggleAriaLabel(channel, eventType),
+      })),
+    })),
+  );
+
+  function buildQueueRows(queueId: string): readonly {
+    id: string;
+    label: string;
+    cells: readonly {
+      columnId: string;
+      checked: boolean;
+      overridden?: boolean;
+      disabled?: boolean;
+      ariaLabel?: string;
+    }[];
+  }[] {
+    return NOTIFICATION_EVENT_TYPES.map((eventType) => ({
+      id: eventType,
+      label: eventLabel(eventType),
+      cells: NOTIFICATION_CHANNELS.map((channel) => ({
+        columnId: channel,
+        ariaLabel: toggleAriaLabel(channel, eventType),
+        checked: effectiveQueueState(rows, queueId, eventType, channel),
+        overridden: hasExplicitOverride(
+          rows,
+          "queue",
+          queueId,
+          eventType,
+          channel,
+        ),
+        disabled: isMutating,
+      })),
+    }));
+  }
+
+  function matrixIds(
+    rowId: string,
+    columnId: string,
+  ): [NotificationEventType, NotificationChannel] | null {
+    const eventType = NOTIFICATION_EVENT_TYPES.find((e) => e === rowId);
+    const channel = NOTIFICATION_CHANNELS.find((c) => c === columnId);
+    if (eventType === undefined || channel === undefined) return null;
+    return [eventType, channel];
+  }
+
+  function handleGlobalMatrixToggle(
+    rowId: string,
+    columnId: string,
+    next: boolean,
+  ): void {
+    const ids = matrixIds(rowId, columnId);
+    if (ids === null) return;
+    handleGlobalToggle(ids[0], ids[1], !next);
+  }
+
+  function handleQueueMatrixToggle(
+    queueId: string,
+    rowId: string,
+    columnId: string,
+    next: boolean,
+  ): void {
+    const ids = matrixIds(rowId, columnId);
+    if (ids === null) return;
+    handleQueueToggle(queueId, ids[0], ids[1], !next);
+  }
 </script>
 
 <CollapsibleSection
@@ -256,23 +336,20 @@
 >
   {#if isLoading}
     <Block strong inset>
-      <div class="matrix">
-        <div class="matrix-header">
-          {#each NOTIFICATION_CHANNELS as channel (channel)}
-            <span class="channel-label">{channelLabel(channel)}</span>
-          {/each}
-        </div>
-        {#each NOTIFICATION_EVENT_TYPES as eventType (eventType)}
-          <div class="matrix-row">
-            <span class="event-label">{eventLabel(eventType)}</span>
-            {#each NOTIFICATION_CHANNELS as ch (ch)}
-              <span class="toggle-cell">
-                <Toggle disabled />
-              </span>
-            {/each}
-          </div>
-        {/each}
-      </div>
+      <ToggleMatrix
+        columns={channelColumns}
+        rows={NOTIFICATION_EVENT_TYPES.map((eventType) => ({
+          id: eventType,
+          label: eventLabel(eventType),
+          cells: NOTIFICATION_CHANNELS.map((ch) => ({
+            columnId: ch,
+            checked: false,
+            disabled: true,
+          })),
+        }))}
+        onToggle={() => undefined}
+        ariaLabel={m.notif_section_title()}
+      />
     </Block>
   {:else if preferencesQuery.isError}
     <QueryError
@@ -281,31 +358,12 @@
     />
   {:else}
     <Block strong inset>
-      <div class="matrix">
-        <div class="matrix-header">
-          {#each NOTIFICATION_CHANNELS as channel (channel)}
-            <span class="channel-label">{channelLabel(channel)}</span>
-          {/each}
-        </div>
-        {#each NOTIFICATION_EVENT_TYPES as eventType (eventType)}
-          {@const evLabel = eventLabel(eventType)}
-          <div class="matrix-row">
-            <span class="event-label" title={evLabel}>{evLabel}</span>
-            {#each NOTIFICATION_CHANNELS as channel (channel)}
-              {@const checked = effectiveGlobalState(rows, eventType, channel)}
-              <span class="toggle-cell">
-                <Toggle
-                  {checked}
-                  disabled={isMutating}
-                  onchange={() =>
-                    handleGlobalToggle(eventType, channel, checked)}
-                  aria-label={toggleAriaLabel(channel, eventType)}
-                />
-              </span>
-            {/each}
-          </div>
-        {/each}
-      </div>
+      <ToggleMatrix
+        columns={channelColumns}
+        rows={globalRows}
+        onToggle={handleGlobalMatrixToggle}
+        ariaLabel={m.notif_section_title()}
+      />
       <p class="explainer">{m.notif_sse_always_on()}</p>
     </Block>
 
@@ -349,53 +407,14 @@
           {#if queueExpanded}
             <li class="queue-matrix-wrapper">
               <Block>
-                <div class="matrix">
-                  <div class="matrix-header">
-                    {#each NOTIFICATION_CHANNELS as channel (channel)}
-                      <span class="channel-label">{channelLabel(channel)}</span>
-                    {/each}
-                  </div>
-                  {#each NOTIFICATION_EVENT_TYPES as eventType (eventType)}
-                    {@const evLabel = eventLabel(eventType)}
-                    <div class="matrix-row">
-                      <span class="event-label" title={evLabel}>{evLabel}</span>
-                      {#each NOTIFICATION_CHANNELS as channel (channel)}
-                        {@const cellChecked = effectiveQueueState(
-                          rows,
-                          queue.id,
-                          eventType,
-                          channel,
-                        )}
-                        {@const isOverridden = hasExplicitOverride(
-                          rows,
-                          "queue",
-                          queue.id,
-                          eventType,
-                          channel,
-                        )}
-                        <span class="toggle-cell">
-                          <Toggle
-                            checked={cellChecked}
-                            disabled={isMutating}
-                            onchange={() =>
-                              handleQueueToggle(
-                                queue.id,
-                                eventType,
-                                channel,
-                                cellChecked,
-                              )}
-                            aria-label={toggleAriaLabel(channel, eventType)}
-                          />
-                          {#if isOverridden}
-                            <span class="override-marker"
-                              >{m.notif_override_edited()}</span
-                            >
-                          {/if}
-                        </span>
-                      {/each}
-                    </div>
-                  {/each}
-                </div>
+                <ToggleMatrix
+                  columns={channelColumns}
+                  rows={buildQueueRows(queue.id)}
+                  onToggle={(rowId: string, columnId: string, next: boolean) =>
+                    handleQueueMatrixToggle(queue.id, rowId, columnId, next)}
+                  ariaLabel={queueName ?? queue.id}
+                  overrideText={m.notif_override_edited()}
+                />
                 <button
                   type="button"
                   class="touch-feedback reset-queue-btn"
@@ -472,60 +491,6 @@
 </ShellDialog>
 
 <style>
-  .matrix {
-    display: grid;
-    grid-template-columns: 1fr repeat(3, 52px);
-    gap: 0;
-    align-items: center;
-  }
-
-  .matrix-header {
-    display: contents;
-  }
-
-  .matrix-header::before {
-    content: "";
-  }
-
-  .channel-label {
-    font-size: 0.75rem;
-    color: var(--muted);
-    text-align: center;
-    padding-bottom: var(--space-sm);
-    font-weight: 500;
-  }
-
-  .matrix-row {
-    display: contents;
-  }
-
-  .event-label {
-    font-size: 0.875rem;
-    color: var(--ink);
-    padding: var(--space-sm) 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-    border-top: 1px solid var(--hair);
-  }
-
-  .toggle-cell {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-sm) 0;
-    border-top: 1px solid var(--hair);
-    min-height: 44px;
-  }
-
-  .override-marker {
-    font-size: 0.625rem;
-    color: var(--muted);
-    margin-top: 2px;
-  }
-
   .explainer {
     font-size: 0.8125rem;
     color: var(--muted);

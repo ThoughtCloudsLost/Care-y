@@ -1,7 +1,7 @@
 <!--
   Rich-text editor for form meta fields (description, submit message,
   closed message) and text-block form fields. Uses the shared editor
-  schema, plugins, and toolbar state so capabilities cannot drift from
+  schema, plugins, and EditorToolbar so capabilities cannot drift from
   ArticleEditor.
 
   Handles locale switching by serializing the current doc into a
@@ -11,8 +11,7 @@
 <script lang="ts">
   import { Node as PMNode } from "prosemirror-model";
   import { EditorState } from "prosemirror-state";
-  import { Button as KButton, Preloader, ListInput } from "konsta/svelte";
-  import Register from "$lib/components/Register.svelte";
+  import { Preloader } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
@@ -24,18 +23,18 @@
   import {
     deriveToolbarState,
     type ToolbarCommand,
-    type ToolbarState,
   } from "$lib/editor/toolbar-state.js";
   import {
     dispatchToolbarCommand,
     type EditorAction,
   } from "$lib/editor/toolbar-commands.js";
   import { createFormAssetImageView } from "$lib/editor/node-views/form-asset-image-view.js";
-  import { isGenericLinkText } from "$lib/editor/atag-checks.js";
   import { getOrgSlug } from "$lib/utils/org-slug.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
-  import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import EditorToolbar from "$lib/components/library/EditorToolbar.svelte";
+  import EditorLinkSheet from "$lib/components/library/EditorLinkSheet.svelte";
+  import EditorAltTextSheet from "$lib/components/library/EditorAltTextSheet.svelte";
   import {
     KB_ATTACHMENT_MAX_BYTES,
     FORM_ASSET_CONTENT_TYPES,
@@ -229,7 +228,7 @@
   // Toolbar state
   // ---------------------------------------------------------------------------
 
-  const toolbarState: ToolbarState | null = $derived(
+  const toolbarState = $derived(
     editor.state !== null ? deriveToolbarState(editor.state) : null,
   );
 
@@ -321,8 +320,6 @@
     linkText = "";
     view.focus();
   }
-
-  const linkTextIsGeneric = $derived(isGenericLinkText(linkText));
 
   // ---------------------------------------------------------------------------
   // Image upload (branding-tier encryption, form-asset:// URIs)
@@ -447,8 +444,6 @@
   // Derived
   // ---------------------------------------------------------------------------
 
-  const altCanInsert = $derived(altDecorative || altText.trim().length > 0);
-
   const IMAGE_ACCEPT = FORM_ASSET_CONTENT_TYPES.join(",");
 </script>
 
@@ -472,191 +467,16 @@
     {/if}
   </div>
 
-  <!-- Inline toolbar -->
+  <!-- Shared EditorToolbar -->
   {#if toolbarState !== null}
-    <div
-      class="fce-toolbar"
-      role="toolbar"
-      aria-label={m.library_editor_toolbar()}
-    >
-      <button
-        type="button"
-        class="fce-btn"
-        class:active={toolbarState.boldActive}
-        disabled={!toolbarState.canBold}
-        aria-label={m.library_editor_bold()}
-        aria-pressed={toolbarState.boldActive}
-        onclick={() => handleToolbarCommand({ kind: "toggleBold" })}>B</button
-      >
-
-      <button
-        type="button"
-        class="fce-btn fce-btn-italic"
-        class:active={toolbarState.italicActive}
-        disabled={!toolbarState.canItalic}
-        aria-label={m.library_editor_italic()}
-        aria-pressed={toolbarState.italicActive}
-        onclick={() => handleToolbarCommand({ kind: "toggleItalic" })}
-        ><em>I</em></button
-      >
-
-      <button
-        type="button"
-        class="fce-btn"
-        class:active={toolbarState.strikethroughActive}
-        disabled={!toolbarState.canStrikethrough}
-        aria-label={m.library_editor_strikethrough()}
-        aria-pressed={toolbarState.strikethroughActive}
-        onclick={() => handleToolbarCommand({ kind: "toggleStrikethrough" })}
-        ><s>S</s></button
-      >
-
-      <button
-        type="button"
-        class="fce-btn"
-        class:active={toolbarState.codeActive}
-        disabled={!toolbarState.canCode}
-        aria-label={m.library_editor_code()}
-        aria-pressed={toolbarState.codeActive}
-        onclick={() => handleToolbarCommand({ kind: "toggleCode" })}
-        >&lt;/&gt;</button
-      >
-
-      <span class="fce-sep" aria-hidden="true"></span>
-
-      <button
-        type="button"
-        class="fce-btn"
-        class:active={toolbarState.linkActive}
-        disabled={!toolbarState.canLink}
-        aria-label={m.library_editor_link()}
-        aria-pressed={toolbarState.linkActive}
-        onclick={() => handleToolbarCommand({ kind: "toggleLink" })}
-        >&#128279;</button
-      >
-
-      <span class="fce-sep" aria-hidden="true"></span>
-
-      <button
-        type="button"
-        class="fce-btn"
-        class:active={toolbarState.bulletListActive}
-        disabled={!toolbarState.canBulletList}
-        aria-label={m.library_editor_bullet_list()}
-        aria-pressed={toolbarState.bulletListActive}
-        onclick={() => handleToolbarCommand({ kind: "wrapInBulletList" })}
-        >&#8226;</button
-      >
-
-      <button
-        type="button"
-        class="fce-btn"
-        class:active={toolbarState.orderedListActive}
-        disabled={!toolbarState.canOrderedList}
-        aria-label={m.library_editor_ordered_list()}
-        aria-pressed={toolbarState.orderedListActive}
-        onclick={() => handleToolbarCommand({ kind: "wrapInOrderedList" })}
-        >{m.library_editor_ordered_list_symbol()}</button
-      >
-
-      <span class="fce-sep" aria-hidden="true"></span>
-
-      <!-- Heading select -->
-      <select
-        class="fce-heading-select"
-        aria-label={m.library_editor_heading()}
-        value={toolbarState.headingLevel !== null
-          ? String(toolbarState.headingLevel)
-          : "p"}
-        onchange={(e) => {
-          if (!(e.target instanceof HTMLSelectElement)) return;
-          const val = e.target.value;
-          if (val === "p") {
-            handleToolbarCommand({ kind: "setParagraph" });
-          } else {
-            handleToolbarCommand({ kind: "setHeading", level: Number(val) });
-          }
-        }}
-      >
-        <option value="p">{m.library_editor_paragraph()}</option>
-        <option value="1"
-          >{m.library_editor_heading_level({ level: "1" })}</option
-        >
-        <option value="2"
-          >{m.library_editor_heading_level({ level: "2" })}</option
-        >
-        <option value="3"
-          >{m.library_editor_heading_level({ level: "3" })}</option
-        >
-        <option value="4"
-          >{m.library_editor_heading_level({ level: "4" })}</option
-        >
-      </select>
-
-      <span class="fce-sep" aria-hidden="true"></span>
-
-      <button
-        type="button"
-        class="fce-btn"
-        class:active={toolbarState.blockquoteActive}
-        disabled={!toolbarState.canBlockquote}
-        aria-label={m.library_editor_blockquote()}
-        aria-pressed={toolbarState.blockquoteActive}
-        onclick={() => handleToolbarCommand({ kind: "wrapInBlockquote" })}
-        >&#10077;</button
-      >
-
-      <button
-        type="button"
-        class="fce-btn"
-        class:active={toolbarState.codeBlockActive}
-        disabled={!toolbarState.canCodeBlock}
-        aria-label={m.library_editor_code_block()}
-        aria-pressed={toolbarState.codeBlockActive}
-        onclick={() => handleToolbarCommand({ kind: "setCodeBlock" })}
-        >{"{}"}</button
-      >
-
-      <button
-        type="button"
-        class="fce-btn"
-        disabled={orgPublicKey === null}
-        aria-label={m.library_editor_image()}
-        onclick={() => handleToolbarCommand({ kind: "insertImage" })}
-        >&#128247;</button
-      >
-
-      <button
-        type="button"
-        class="fce-btn"
-        aria-label={m.library_editor_horizontal_rule()}
-        onclick={() => handleToolbarCommand({ kind: "insertHorizontalRule" })}
-        >&#8213;</button
-      >
-
-      <span class="fce-sep" aria-hidden="true"></span>
-
-      <button
-        type="button"
-        class="fce-btn"
-        disabled={!toolbarState.canUndo}
-        aria-label={m.library_editor_undo()}
-        onclick={() => handleToolbarCommand({ kind: "undo" })}>&#8617;</button
-      >
-
-      <button
-        type="button"
-        class="fce-btn"
-        disabled={!toolbarState.canRedo}
-        aria-label={m.library_editor_redo()}
-        onclick={() => handleToolbarCommand({ kind: "redo" })}>&#8618;</button
-      >
+    <div class="fce-toolbar-wrap">
+      <EditorToolbar {toolbarState} oncommand={handleToolbarCommand} />
     </div>
   {/if}
 
   <!-- Editor area -->
   <div
-    class="fce-editor-area"
+    class="fce-editor-area prose-quotes"
     bind:this={editorMountEl}
     role="textbox"
     aria-labelledby="fce-label"
@@ -674,98 +494,40 @@
   {/if}
 </div>
 
-<!-- Link sheet (matches ArticleEditor pattern) -->
-<ShellSheet
+<!-- Link sheet -->
+<EditorLinkSheet
   opened={linkSheetOpen}
+  url={linkUrl}
+  text={linkText}
+  onurlchange={(v: string) => {
+    linkUrl = v;
+  }}
+  ontextchange={(v: string) => {
+    linkText = v;
+  }}
+  onapply={applyLink}
   ondismiss={() => {
     linkSheetOpen = false;
   }}
-  title={linkUrl !== ""
-    ? m.library_editor_link_edit_title()
-    : m.library_editor_link_insert_title()}
->
-  <div class="link-form">
-    <ListInput
-      label={m.library_editor_link_url()}
-      type="url"
-      value={linkUrl}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) linkUrl = e.target.value;
-      }}
-      placeholder={m.library_editor_url_placeholder()}
-    />
-    <ListInput
-      label={m.library_editor_link_text()}
-      type="text"
-      value={linkText}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) linkText = e.target.value;
-      }}
-    />
-    {#if linkTextIsGeneric}
-      <Register kind="careful" role="alert">
-        {m.library_editor_link_generic_warning({ text: linkText.trim() })}
-      </Register>
-    {/if}
-    <div class="link-actions">
-      <KButton
-        clear
-        onclick={() => {
-          linkSheetOpen = false;
-        }}
-      >
-        {m.common_cancel()}
-      </KButton>
-      <KButton disabled={linkUrl.trim() === ""} onclick={applyLink}>
-        {m.library_editor_link_apply()}
-      </KButton>
-    </div>
-  </div>
-</ShellSheet>
+/>
 
-<!-- Alt text sheet (ATAG pattern matching ArticleEditor) -->
-<ShellSheet
+<!-- Alt text sheet -->
+<EditorAltTextSheet
   opened={altDialogOpen}
+  {altText}
+  decorative={altDecorative}
+  onalttextchange={(v: string) => {
+    altText = v;
+  }}
+  ondecorativechange={(v: boolean) => {
+    altDecorative = v;
+  }}
+  oninsert={() => void confirmImageInsert()}
   ondismiss={() => {
     altDialogOpen = false;
     pendingImageFile = null;
   }}
-  title={m.library_editor_alt_text_title()}
->
-  <div class="alt-form">
-    <ListInput
-      label={m.library_editor_alt_text_placeholder()}
-      type="textarea"
-      value={altText}
-      disabled={altDecorative}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLTextAreaElement) altText = e.target.value;
-        else if (e.target instanceof HTMLInputElement) altText = e.target.value;
-      }}
-    />
-    <label class="alt-decorative">
-      <input type="checkbox" bind:checked={altDecorative} />
-      {m.library_editor_decorative()}
-    </label>
-    <div class="alt-actions">
-      <KButton
-        clear
-        onclick={() => {
-          altDialogOpen = false;
-          pendingImageFile = null;
-        }}
-      >
-        {m.common_cancel()}
-      </KButton>
-      <KButton
-        disabled={!altCanInsert}
-        onclick={() => void confirmImageInsert()}
-      >
-        {m.library_editor_insert()}
-      </KButton>
-    </div>
-  </div>
-</ShellSheet>
+/>
 
 <style>
   .form-content-editor {
@@ -792,75 +554,12 @@
     color: var(--muted);
   }
 
-  /* Toolbar */
-  .fce-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 2px;
-    padding: var(--space-xs) var(--space-md);
+  /* EditorToolbar wrapper: connects visually to the editor area below. */
+  .fce-toolbar-wrap {
     border: 1px solid var(--hair, var(--divider));
     border-bottom: none;
     border-radius: var(--card-radius) var(--card-radius) 0 0;
     background: var(--paper-deep, var(--surface-1));
-  }
-
-  .fce-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 32px;
-    min-height: 32px;
-    padding: 2px 6px;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--ink);
-    font-size: var(--text-sm);
-    cursor: pointer;
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .fce-btn {
-      transition: background 0.15s;
-    }
-  }
-
-  .fce-btn:hover:not(:disabled) {
-    background: var(--surface-2, rgba(0, 0, 0, 0.06));
-  }
-
-  .fce-btn:disabled {
-    opacity: 0.35;
-    cursor: default;
-  }
-
-  .fce-btn.active {
-    background: var(--brand-primary-20, rgba(0, 0, 0, 0.1));
-    color: var(--brand-text, var(--ink));
-  }
-
-  .fce-btn-italic {
-    font-style: italic;
-  }
-
-  .fce-sep {
-    width: 1px;
-    height: 20px;
-    background: var(--hair, var(--divider));
-    margin: 0 4px;
-  }
-
-  .fce-heading-select {
-    height: 32px;
-    padding: 0 var(--space-xs);
-    border: 1px solid var(--hair, var(--divider));
-    border-radius: 4px;
-    background: transparent;
-    color: var(--ink);
-    /* 16px floor: iOS zooms focused controls styled smaller. */
-    font-size: 16px;
-    cursor: pointer;
   }
 
   /* Editor area */
@@ -925,13 +624,6 @@
   }
   .fce-editor-area :global(.ProseMirror h4) {
     font-size: 0.9375rem;
-  }
-
-  .fce-editor-area :global(.ProseMirror blockquote) {
-    border-left: 3px solid var(--hair, var(--divider));
-    padding-left: var(--space-md);
-    margin-bottom: 0.5em;
-    color: var(--muted);
   }
 
   .fce-editor-area :global(.ProseMirror code) {
@@ -1021,50 +713,6 @@
     font-size: var(--text-sm);
     color: var(--muted);
     padding: var(--space-sm) var(--space-md);
-  }
-
-  /* Link form */
-  .link-form {
-    padding: var(--space-lg);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-  }
-
-  .link-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-sm);
-  }
-
-  /* Alt text form */
-  .alt-form {
-    padding: var(--space-lg);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-  }
-
-  .alt-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-sm);
-  }
-
-  .alt-decorative {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    font-size: var(--text-sm);
-    color: var(--muted);
-    cursor: pointer;
-    padding: 0 var(--space-md);
-  }
-
-  .alt-decorative input[type="checkbox"] {
-    accent-color: var(--brand-accent);
-    width: 1.125rem;
-    height: 1.125rem;
   }
 
   /* Screen-reader only (hidden file inputs) */

@@ -8,16 +8,11 @@
 -->
 <script lang="ts">
   import { Node as PMNode } from "prosemirror-model";
-  import {
-    Button as KButton,
-    Preloader,
-    ListInput,
-    List as KList,
-    ListItem,
-  } from "konsta/svelte";
+  import { Preloader, List as KList, ListItem } from "konsta/svelte";
   import { Check } from "@lucide/svelte";
-  import Register from "$lib/components/Register.svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import EditorLinkSheet from "$lib/components/library/EditorLinkSheet.svelte";
+  import EditorAltTextSheet from "$lib/components/library/EditorAltTextSheet.svelte";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
@@ -45,12 +40,10 @@
   import { fetchBlob } from "$lib/utils/fetch-blob.js";
   import { extractExcerpt } from "$lib/utils/render-article.js";
   import type { EditorBridge } from "$lib/editor/editor-bridge.svelte.js";
-  import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { isGenericLinkText } from "$lib/editor/atag-checks.js";
   import {
     KB_ATTACHMENT_MAX_BYTES,
     KB_ALLOWED_CONTENT_TYPES,
@@ -443,8 +436,6 @@
     linkText = "";
     view.focus();
   }
-
-  const linkTextIsGeneric = $derived(isGenericLinkText(linkText));
 
   // ── Image upload ──
 
@@ -868,8 +859,6 @@
   // Accepted file types for inputs
   const IMAGE_ACCEPT = "image/png,image/jpeg,image/gif,image/webp";
   const FILE_ACCEPT = KB_ALLOWED_CONTENT_TYPES.join(",");
-
-  const altCanInsert = $derived(altDecorative || altText.trim().length > 0);
 </script>
 
 <!-- Hidden file inputs (triggered programmatically from toolbar buttons).
@@ -937,97 +926,39 @@
 </div>
 
 <!-- Link insert/edit sheet -->
-<ShellSheet
+<EditorLinkSheet
   opened={linkSheetOpen}
+  url={linkUrl}
+  text={linkText}
+  onurlchange={(v: string) => {
+    linkUrl = v;
+  }}
+  ontextchange={(v: string) => {
+    linkText = v;
+  }}
+  onapply={applyLink}
   ondismiss={() => {
     linkSheetOpen = false;
   }}
-  title={linkUrl !== ""
-    ? m.library_editor_link_edit_title()
-    : m.library_editor_link_insert_title()}
->
-  <div class="link-form">
-    <ListInput
-      label={m.library_editor_link_url()}
-      type="url"
-      value={linkUrl}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) linkUrl = e.target.value;
-      }}
-      placeholder={m.library_editor_url_placeholder()}
-    />
-    <ListInput
-      label={m.library_editor_link_text()}
-      type="text"
-      value={linkText}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) linkText = e.target.value;
-      }}
-    />
-    {#if linkTextIsGeneric}
-      <Register kind="careful" role="alert">
-        {m.library_editor_link_generic_warning({ text: linkText.trim() })}
-      </Register>
-    {/if}
-    <div class="link-actions">
-      <KButton
-        clear
-        onclick={() => {
-          linkSheetOpen = false;
-        }}
-      >
-        {m.common_cancel()}
-      </KButton>
-      <KButton disabled={linkUrl.trim() === ""} onclick={applyLink}>
-        {m.library_editor_link_apply()}
-      </KButton>
-    </div>
-  </div>
-</ShellSheet>
+/>
 
 <!-- Alt text sheet -->
-<ShellSheet
+<EditorAltTextSheet
   opened={altDialogOpen}
+  {altText}
+  decorative={altDecorative}
+  onalttextchange={(v: string) => {
+    altText = v;
+  }}
+  ondecorativechange={(v: boolean) => {
+    altDecorative = v;
+  }}
+  oninsert={() => void confirmImageInsert()}
   ondismiss={() => {
     altDialogOpen = false;
     pendingImageFile = null;
   }}
-  title={m.library_editor_alt_text_title()}
->
-  <div class="alt-form">
-    <ListInput
-      label={m.library_editor_alt_text_placeholder()}
-      type="textarea"
-      value={altText}
-      disabled={altDecorative}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLTextAreaElement) altText = e.target.value;
-        else if (e.target instanceof HTMLInputElement) altText = e.target.value;
-      }}
-    />
-    <label class="alt-decorative">
-      <input type="checkbox" bind:checked={altDecorative} />
-      {m.library_editor_decorative()}
-    </label>
-    <div class="alt-actions">
-      <KButton
-        clear
-        onclick={() => {
-          altDialogOpen = false;
-          pendingImageFile = null;
-        }}
-      >
-        {m.common_cancel()}
-      </KButton>
-      <KButton
-        disabled={!altCanInsert}
-        onclick={() => void confirmImageInsert()}
-      >
-        {m.library_editor_insert()}
-      </KButton>
-    </div>
-  </div>
-</ShellSheet>
+/>
 
 <!-- Category selector popover -->
 <ShellPopover
@@ -1305,50 +1236,6 @@
     border: none;
     border-top: 1px solid var(--hair, var(--divider));
     margin: 1.5em 0;
-  }
-
-  /* Link form */
-  .link-form {
-    padding: var(--space-lg);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-  }
-
-  .link-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-sm);
-  }
-
-  /* Alt text form */
-  .alt-form {
-    padding: var(--space-lg);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-  }
-
-  .alt-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-sm);
-  }
-
-  .alt-decorative {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    font-size: var(--text-sm);
-    color: var(--muted);
-    cursor: pointer;
-    padding: 0 var(--space-md);
-  }
-
-  .alt-decorative input[type="checkbox"] {
-    accent-color: var(--brand-accent);
-    width: 1.125rem;
-    height: 1.125rem;
   }
 
   /* Screen-reader only (hidden file inputs) */

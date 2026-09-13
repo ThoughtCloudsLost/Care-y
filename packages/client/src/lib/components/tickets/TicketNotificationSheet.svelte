@@ -7,7 +7,7 @@
   Visible only to watchers and assignees (gated in TicketPanelContent).
 -->
 <script lang="ts">
-  import { Block, Toggle } from "konsta/svelte";
+  import { Block } from "konsta/svelte";
   import {
     createQuery,
     createMutation,
@@ -26,6 +26,7 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import QueryError from "$lib/components/QueryError.svelte";
+  import ToggleMatrix from "$lib/components/ToggleMatrix.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import {
     effectiveState,
@@ -152,6 +153,54 @@
     setPreferenceMutation.isPending || resetMutation.isPending,
   );
 
+  // ── ToggleMatrix column/row mapping ──
+
+  const channelColumns = $derived(
+    NOTIFICATION_CHANNELS.map((ch) => ({ id: ch, label: channelLabel(ch) })),
+  );
+
+  const ticketRows = $derived(
+    TICKET_EVENT_TYPES.map((eventType) => ({
+      id: eventType,
+      label: eventLabel(eventType),
+      cells: NOTIFICATION_CHANNELS.map((channel) => ({
+        columnId: channel,
+        checked: effectiveState(
+          rows,
+          { scopeType: "ticket" as const, scopeId: ticketId },
+          eventType,
+          channel,
+        ),
+        disabled: isMutating,
+        ariaLabel: toggleAriaLabel(channel, eventType),
+      })),
+    })),
+  );
+
+  const loadingRows = $derived(
+    TICKET_EVENT_TYPES.map((eventType) => ({
+      id: eventType,
+      label: eventLabel(eventType),
+      cells: NOTIFICATION_CHANNELS.map((ch) => ({
+        columnId: ch,
+        checked: false,
+        disabled: true,
+        ariaLabel: toggleAriaLabel(ch, eventType),
+      })),
+    })),
+  );
+
+  function handleMatrixToggle(
+    rowId: string,
+    columnId: string,
+    next: boolean,
+  ): void {
+    const eventType = TICKET_EVENT_TYPES.find((e) => e === rowId);
+    const channel = NOTIFICATION_CHANNELS.find((c) => c === columnId);
+    if (eventType === undefined || channel === undefined) return;
+    handleToggle(eventType, channel, !next);
+  }
+
   // ---- Handlers ----
 
   function handleToggle(
@@ -185,23 +234,12 @@
   <div class="sheet-body">
     {#if isLoading}
       <Block strong inset>
-        <div class="matrix">
-          <div class="matrix-header">
-            {#each NOTIFICATION_CHANNELS as channel (channel)}
-              <span class="channel-label">{channelLabel(channel)}</span>
-            {/each}
-          </div>
-          {#each TICKET_EVENT_TYPES as eventType (eventType)}
-            <div class="matrix-row">
-              <span class="event-label">{eventLabel(eventType)}</span>
-              {#each NOTIFICATION_CHANNELS as ch (ch)}
-                <span class="toggle-cell">
-                  <Toggle disabled />
-                </span>
-              {/each}
-            </div>
-          {/each}
-        </div>
+        <ToggleMatrix
+          columns={channelColumns}
+          rows={loadingRows}
+          onToggle={() => undefined}
+          ariaLabel={m.notif_ticket_sheet_title(withTerms())}
+        />
       </Block>
     {:else if preferencesQuery.isError}
       <QueryError
@@ -210,35 +248,12 @@
       />
     {:else}
       <Block strong inset>
-        <div class="matrix">
-          <div class="matrix-header">
-            {#each NOTIFICATION_CHANNELS as channel (channel)}
-              <span class="channel-label">{channelLabel(channel)}</span>
-            {/each}
-          </div>
-          {#each TICKET_EVENT_TYPES as eventType (eventType)}
-            {@const evLabel = eventLabel(eventType)}
-            <div class="matrix-row">
-              <span class="event-label" title={evLabel}>{evLabel}</span>
-              {#each NOTIFICATION_CHANNELS as channel (channel)}
-                {@const checked = effectiveState(
-                  rows,
-                  { scopeType: "ticket", scopeId: ticketId },
-                  eventType,
-                  channel,
-                )}
-                <span class="toggle-cell">
-                  <Toggle
-                    {checked}
-                    disabled={isMutating}
-                    onchange={() => handleToggle(eventType, channel, checked)}
-                    aria-label={toggleAriaLabel(channel, eventType)}
-                  />
-                </span>
-              {/each}
-            </div>
-          {/each}
-        </div>
+        <ToggleMatrix
+          columns={channelColumns}
+          rows={ticketRows}
+          onToggle={handleMatrixToggle}
+          ariaLabel={m.notif_ticket_sheet_title(withTerms())}
+        />
       </Block>
       <div class="reset-row">
         <button
@@ -257,54 +272,6 @@
 <style>
   .sheet-body {
     padding: var(--space-md) 0;
-  }
-
-  .matrix {
-    display: grid;
-    grid-template-columns: 1fr repeat(3, 52px);
-    gap: 0;
-    align-items: center;
-  }
-
-  .matrix-header {
-    display: contents;
-  }
-
-  .matrix-header::before {
-    content: "";
-  }
-
-  .channel-label {
-    font-size: 0.75rem;
-    color: var(--muted);
-    text-align: center;
-    padding-bottom: var(--space-sm);
-    font-weight: 500;
-  }
-
-  .matrix-row {
-    display: contents;
-  }
-
-  .event-label {
-    font-size: 0.875rem;
-    color: var(--ink);
-    padding: var(--space-sm) 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-    border-top: 1px solid var(--hair);
-  }
-
-  .toggle-cell {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-sm) 0;
-    border-top: 1px solid var(--hair);
-    min-height: 44px;
   }
 
   .reset-row {

@@ -52,7 +52,8 @@
   import PanelNotesSection from "./PanelNotesSection.svelte";
   import PanelMediaSection from "./PanelMediaSection.svelte";
   import PortalTierSection from "./PortalTierSection.svelte";
-  import { onKeyActivate } from "$lib/utils/a11y.js";
+  import { onKeyActivate, labelToggleInput } from "$lib/utils/a11y.js";
+  import { enabledTicketId } from "$lib/tickets/queries.js";
   import type { TicketAction } from "$lib/tickets/types.js";
 
   interface TicketPanelContentProps {
@@ -100,13 +101,13 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
-    enabled: typeof ticketId === "string" && ticketId !== "",
+    enabled: enabledTicketId(ticketId),
   }));
 
   const watchingQuery = createQuery(() => ({
     queryKey: ticketKeys.isWatching(ticketId),
     queryFn: async () => ticketRouter.isWatching.query({ ticketId }),
-    enabled: typeof ticketId === "string" && ticketId !== "",
+    enabled: enabledTicketId(ticketId),
   }));
 
   // --- Derived ticket state ---
@@ -172,13 +173,6 @@
       ? descriptionResult.value
       : undefined,
   );
-
-  function labelToggleInput(node: HTMLElement, label: string): void {
-    const input = node.querySelector<HTMLInputElement>(
-      'input[type="checkbox"]',
-    );
-    if (input) input.setAttribute("aria-label", label);
-  }
 </script>
 
 <div class="panel-content">

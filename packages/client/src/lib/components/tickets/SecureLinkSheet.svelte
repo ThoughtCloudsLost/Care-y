@@ -46,6 +46,7 @@
   import { ErrorCode } from "@care-y/shared";
   import { EFF_WORDLIST } from "$lib/portal/eff-wordlist.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { labelToggleInput } from "$lib/utils/a11y.js";
   import { createPortalReseed } from "$lib/composables/tickets/create-portal-reseed.svelte.js";
   import type { PortalReseedStartArgs } from "$lib/composables/tickets/create-portal-reseed.svelte.js";
 
@@ -364,13 +365,6 @@
       resetState();
     }
   });
-
-  function labelToggleInput(node: HTMLElement, label: string): void {
-    const input = node.querySelector<HTMLInputElement>(
-      'input[type="checkbox"]',
-    );
-    if (input) input.setAttribute("aria-label", label);
-  }
 </script>
 
 <ShellSheet
@@ -439,11 +433,7 @@
     <Block class="!my-3">
       <Button large onclick={() => void handleGenerate()} disabled={generating}>
         {#if generating}
-          <span
-            class="inline-progress"
-            role="progressbar"
-            aria-label={m.ticket_tier_link_ready()}
-          ></span>
+          <Preloader class="w-4 h-4" />
         {/if}
         {m.ticket_tier_setup()}
       </Button>
@@ -634,30 +624,5 @@
     color: var(--danger);
     font-size: var(--text-sm);
     margin: 0 0 0.5rem;
-  }
-
-  .inline-progress {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2px solid currentColor;
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-right: 0.5rem;
-    vertical-align: middle;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .inline-progress {
-      animation: none;
-      opacity: 0.5;
-    }
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 </style>
