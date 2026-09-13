@@ -15,14 +15,18 @@ import { randomInt } from "node:crypto";
 import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, SmsCodesTable } from "../db/types.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
-import type { PhonePurpose } from "../telephony/phone-resolver.js";
+import type {
+  PhonePurpose,
+  OrgIdentifiers,
+} from "../telephony/phone-resolver.js";
 import { RateLimitError, ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { UserId, SmsCodeId } from "@care-y/shared";
 import { toCount } from "../db/query-utils.js";
-import { createScryptHasher } from "./scrypt-hash.js";
+import { createCodeHasher } from "./password.js";
 
 export type CallerIdResolver = (
-  orgSchema: string,
+  org: OrgIdentifiers,
   purpose: PhonePurpose,
 ) => Promise<string | null>;
 
@@ -33,9 +37,8 @@ const MAX_ATTEMPTS = 3;
 const COOLDOWN_MS = 90 * 1000; // 90 seconds between codes (stricter than email)
 const HOURLY_LIMIT = 3; // 3 per hour (stricter than email's 5)
 const HOURLY_WINDOW_MS = 60 * 60 * 1000;
-const CODE_KEY_BYTES = 32;
 
-const codeHasher = createScryptHasher(CODE_KEY_BYTES);
+const codeHasher = createCodeHasher();
 
 export interface SmsCodeService {
   /**
@@ -44,14 +47,14 @@ export interface SmsCodeService {
    * Enforces rate limiting (1/90s, 3/hour).
    * The caller ID (from number) is resolved via the phone purpose resolver.
    */
-  sendCode(userId: string, phone: string): Promise<void>;
+  sendCode(userId: UserId, phone: string): Promise<void>;
 
   /**
    * Verifies a code. Increments attempt counter on failure.
    * Deletes the code row on success or when max attempts exhausted.
    * Returns true if the code is valid.
    */
-  verifyCode(userId: string, code: string): Promise<boolean>;
+  verifyCode(userId: UserId, code: string): Promise<boolean>;
 }
 
 function generateCode(): string {
@@ -62,10 +65,10 @@ export function createSmsCodeService(
   db: Kysely<TenantDatabase>,
   provider: TelephonyProvider,
   resolveCallerId: CallerIdResolver,
-  orgSchema: string,
+  org: OrgIdentifiers,
 ): SmsCodeService {
   /** Throws RateLimitError if the most recent code was sent less than 90s ago. */
-  async function enforceCooldown(userId: string, now: Date): Promise<void> {
+  async function enforceCooldown(userId: UserId, now: Date): Promise<void> {
     const recentCode = await db
       .selectFrom("sms_codes")
       .select("expires_at")
@@ -87,7 +90,7 @@ export function createSmsCodeService(
   }
 
   /** Throws RateLimitError if the user has hit 3 codes in the last hour. */
-  async function enforceHourlyLimit(userId: string, now: Date): Promise<void> {
+  async function enforceHourlyLimit(userId: UserId, now: Date): Promise<void> {
     const hourAgo = new Date(now.getTime() - HOURLY_WINDOW_MS);
     // Since created_at = expires_at - EXPIRY_MS, a code created after hourAgo
     // has expires_at > hourAgo + EXPIRY_MS
@@ -105,7 +108,7 @@ export function createSmsCodeService(
   }
 
   /** Replaces any active codes with a fresh one. Returns the plaintext code. */
-  async function replaceActiveCode(userId: string, now: Date): Promise<string> {
+  async function replaceActiveCode(userId: UserId, now: Date): Promise<string> {
     await db
       .deleteFrom("sms_codes")
       .where("user_id", "=", userId)
@@ -113,7 +116,7 @@ export function createSmsCodeService(
       .execute();
 
     const code = generateCode();
-    const codeHash = await codeHasher.hash(code);
+    const codeHash = await codeHasher.hashCode(code);
     const expiresAt = new Date(now.getTime() + EXPIRY_MS);
 
     await db
@@ -129,13 +132,13 @@ export function createSmsCodeService(
   }
 
   /** Deletes a code row by ID. Used on success and max-attempts exhaustion. */
-  async function deleteCodeById(codeId: string): Promise<void> {
+  async function deleteCodeById(codeId: SmsCodeId): Promise<void> {
     await db.deleteFrom("sms_codes").where("id", "=", codeId).execute();
   }
 
   /** Finds the active (unconsumed, unexpired) code for a user, or throws. */
   async function findActiveCodeOrThrow(
-    userId: string,
+    userId: UserId,
   ): Promise<Selectable<SmsCodesTable>> {
     const row = await db
       .selectFrom("sms_codes")
@@ -158,13 +161,13 @@ export function createSmsCodeService(
   }
 
   return {
-    async sendCode(userId: string, phone: string): Promise<void> {
+    async sendCode(userId: UserId, phone: string): Promise<void> {
       const now = new Date();
 
       await enforceCooldown(userId, now);
       await enforceHourlyLimit(userId, now);
 
-      const callerId = await resolveCallerId(orgSchema, "system");
+      const callerId = await resolveCallerId(org, "system");
       if (callerId === null) {
         throw new ValidationError(ErrorCode.NO_PHONE_NUMBERS_CONFIGURED);
       }
@@ -178,7 +181,7 @@ export function createSmsCodeService(
       );
     },
 
-    async verifyCode(userId: string, code: string): Promise<boolean> {
+    async verifyCode(userId: UserId, code: string): Promise<boolean> {
       const row = await findActiveCodeOrThrow(userId);
       const valid = await codeHasher.verify(code, row.code_hash);
 

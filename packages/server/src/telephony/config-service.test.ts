@@ -5,6 +5,11 @@ import type { PlatformDatabase } from "../db/types.js";
 import type { SecretsEncryptor } from "../config/secrets.js";
 import { createProviderFactory, type ProviderFactory } from "./factory.js";
 import { createTwilioProvider } from "./twilio.js";
+import {
+  createMockProvider,
+  DEV_MOCK_ACCOUNT_SID,
+  DEV_MOCK_AUTH_TOKEN,
+} from "./mock-provider.js";
 import type {
   TelephonyProvider,
   TelephonyProviderStatic,
@@ -29,6 +34,14 @@ import {
 } from "../test-utils.js";
 import { createSecretsEncryptor } from "../config/secrets.js";
 import { twilioConfigSchema } from "./schemas.js";
+import {
+  orgIdSchema,
+  phoneSidSchema,
+  type OrgId,
+  type OrgSchema,
+  type OrgSlug,
+  type StoredProviderId,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Shared mock factories (used by both unit and DB integration tests)
@@ -129,7 +142,7 @@ describe("TelephonyConfigService", () => {
 
       await expect(
         service.saveConfig({
-          orgId: "org-unit-test",
+          orgId: "org-unit-test" as OrgId,
           provider: "unknown-provider",
           accountId: "AC123",
           authToken: "tok",
@@ -149,7 +162,7 @@ describe("TelephonyConfigService", () => {
       const deps = buildMockDeps({ factory });
       const service = createTelephonyConfigService(deps);
 
-      const result = await service.getMaskedConfig("org-test");
+      const result = await service.getMaskedConfig("org-test" as OrgId);
 
       expect(result).toEqual(MASKED_CONFIG);
     });
@@ -161,7 +174,7 @@ describe("TelephonyConfigService", () => {
       const deps = buildMockDeps({ factory });
       const service = createTelephonyConfigService(deps);
 
-      const result = await service.getMaskedConfig("org-test");
+      const result = await service.getMaskedConfig("org-test" as OrgId);
 
       expect(result).toBeNull();
     });
@@ -173,9 +186,9 @@ describe("TelephonyConfigService", () => {
       const deps = buildMockDeps({ factory });
       const service = createTelephonyConfigService(deps);
 
-      await expect(service.getMaskedConfig("org-test")).rejects.toThrow(
-        "DB down",
-      );
+      await expect(
+        service.getMaskedConfig("org-test" as OrgId),
+      ).rejects.toThrow("DB down");
     });
   });
 
@@ -185,7 +198,10 @@ describe("TelephonyConfigService", () => {
       const service = createTelephonyConfigService(deps);
 
       await expect(
-        service.provisionWebhooks("org-test", "https://api.example.com"),
+        service.provisionWebhooks(
+          "org-test" as OrgId,
+          "https://api.example.com",
+        ),
       ).rejects.toThrow(NotFoundError);
     });
 
@@ -202,7 +218,10 @@ describe("TelephonyConfigService", () => {
       const service = createTelephonyConfigService(deps);
 
       await expect(
-        service.provisionWebhooks("org-unit-test", "https://api.example.com"),
+        service.provisionWebhooks(
+          "org-unit-test" as OrgId,
+          "https://api.example.com",
+        ),
       ).rejects.toThrow(TelephonyConfigError);
     });
 
@@ -245,7 +264,7 @@ describe("TelephonyConfigService", () => {
       const service = createTelephonyConfigService(deps);
 
       const result = await service.provisionWebhooks(
-        "org-unit-test",
+        "org-unit-test" as OrgId,
         "https://api.example.com",
       );
 
@@ -280,7 +299,7 @@ describe("TelephonyConfigService", () => {
       const deps = buildMockDeps({ dbOptions: { selectResult: undefined } });
       const service = createTelephonyConfigService(deps);
 
-      const result = await service.lookupWebhookConfig("org-test");
+      const result = await service.lookupWebhookConfig("org-test" as OrgId);
 
       expect(result).toBeNull();
     });
@@ -302,9 +321,9 @@ describe("TelephonyConfigService", () => {
       });
       const service = createTelephonyConfigService(deps);
 
-      await expect(service.lookupWebhookConfig("org-test")).rejects.toThrow(
-        TelephonyConfigError,
-      );
+      await expect(
+        service.lookupWebhookConfig("org-test" as OrgId),
+      ).rejects.toThrow(TelephonyConfigError);
     });
   });
 });
@@ -318,8 +337,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
   () => {
     let testDb: TestDb;
     let secretsEncryptor: SecretsEncryptor;
-    const createdOrgIds: string[] = [];
-    const TEST_ORG_ID = "cafebabe-cafe-babe-cafe-cafebabe0001";
+    const createdOrgIds: OrgId[] = [];
+    const TEST_ORG_ID = orgIdSchema.parse(
+      "cafebabe-cafe-4abe-8afe-cafebabe0001",
+    );
 
     beforeAll(async () => {
       testDb = await createTestDb();
@@ -330,8 +351,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("orgs")
         .values({
           id: TEST_ORG_ID,
-          slug: "cfg-svc-test",
-          schema_name: testDb.schemaName,
+          slug: "cfg-svc-test" as OrgSlug,
+          schema_name: testDb.schemaName as OrgSchema,
         })
         .execute();
       createdOrgIds.push(TEST_ORG_ID);
@@ -380,14 +401,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     /** Inserts an orgs row (FK target for telephony_config) and registers
      *  it for cleanup. Returns the new org id. */
-    async function insertOrgRow(label: string): Promise<string> {
-      const id = randomUUID();
+    async function insertOrgRow(label: string): Promise<OrgId> {
+      const id = orgIdSchema.parse(randomUUID());
+      const slug = `cfg-svc-${label}-${id.slice(0, 8)}` as OrgSlug;
+      const schemaName = `test_cfg_${id.slice(0, 8)}` as OrgSchema;
       await testDb.platformDb
         .insertInto("orgs")
         .values({
           id,
-          slug: `cfg-svc-${label}-${id.slice(0, 8)}`,
-          schema_name: `test_cfg_${id.slice(0, 8)}`,
+          slug,
+          schema_name: schemaName,
         })
         .execute();
       createdOrgIds.push(id);
@@ -397,9 +420,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     /** Inserts a raw telephony_config row for read-path tests that need
      *  stored shapes saveConfig would never produce. Returns the org id. */
     async function insertRawConfigRow(
-      provider: string,
+      provider: StoredProviderId,
       config: Buffer,
-    ): Promise<string> {
+    ): Promise<OrgId> {
       const orgId = await insertOrgRow("raw");
       await testDb.platformDb
         .insertInto("telephony_config")
@@ -414,7 +437,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       return createProviderFactory({
         db: testDb.platformDb,
         secretsEncryptor,
-        providerConstructors: new Map([["twilio", createTwilioProvider]]),
+        providerConstructors: new Map([
+          ["twilio", createTwilioProvider],
+          ["mock", createMockProvider],
+        ]),
       });
     }
 
@@ -623,13 +649,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     describe("lookupWebhookConfig", () => {
       it("returns null for unconfigured org", async () => {
-        const unconfiguredOrgId = "cafebabe-cafe-babe-cafe-cafebabe0002";
+        const unconfiguredOrgId = orgIdSchema.parse(
+          "cafebabe-cafe-4abe-8afe-cafebabe0002",
+        );
         await testDb.platformDb
           .insertInto("orgs")
           .values({
             id: unconfiguredOrgId,
-            slug: "cfg-svc-unconfigured",
-            schema_name: `test_uncfg_${testDb.schemaName.slice(-8)}`,
+            slug: "cfg-svc-unconfigured" as OrgSlug,
+            schema_name:
+              `test_uncfg_${testDb.schemaName.slice(-8)}` as OrgSchema,
           })
           .execute();
         createdOrgIds.push(unconfiguredOrgId);
@@ -854,7 +883,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(await service.lookupProvisionedPhones(orgId)).toEqual([]);
       });
 
-      it("normalizes provider-specific phone ids to sid", async () => {
+      it("normalizes provider-specific phone ids to sid and drops entries without one", async () => {
         const orgId = await insertRawConfigRow(
           "signalwire",
           encryptJson({
@@ -866,10 +895,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         );
         const service = createTelephonyConfigService(buildDbDeps());
 
-        // sid falls back to the provider-specific id, then to the number.
+        // sid falls back to the provider-specific id. An entry with neither
+        // key is excluded rather than given the dialable number as a fake
+        // sid, which silently misroutes caller ID on multi-number orgs.
         expect(await service.lookupProvisionedPhones(orgId)).toEqual([
           { number: "+15550600001", sid: "SWID001" },
-          { number: "+15550600002", sid: "+15550600002" },
         ]);
       });
     });
@@ -895,27 +925,27 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
 
         await service.setPhonePurpose(testDb.db, {
-          outboundSid: "PNpurpose01",
-          systemSid: "PNpurpose02",
+          outboundSid: phoneSidSchema.parse("PNpurpose01"),
+          systemSid: phoneSidSchema.parse("PNpurpose02"),
         });
         expect(await service.getPhonePurpose(testDb.db)).toEqual({
-          outboundSid: "PNpurpose01",
-          systemSid: "PNpurpose02",
+          outboundSid: phoneSidSchema.parse("PNpurpose01"),
+          systemSid: phoneSidSchema.parse("PNpurpose02"),
         });
 
         await service.setPhonePurpose(testDb.db, {
-          outboundSid: "PNpurpose03",
+          outboundSid: phoneSidSchema.parse("PNpurpose03"),
           systemSid: null,
         });
         expect(await service.getPhonePurpose(testDb.db)).toEqual({
-          outboundSid: "PNpurpose03",
+          outboundSid: phoneSidSchema.parse("PNpurpose03"),
           systemSid: null,
         });
       });
     });
 
     describe("devSeedConfigWithPhones", () => {
-      it("seeds a valid provider config that serves the given phones (development only)", async () => {
+      it("seeds a valid mock provider config that serves the given phones (development only)", async () => {
         const orgId = await insertOrgRow("devseed");
         const factory = buildRealFactory();
         const service = createServiceInDevEnv({
@@ -934,18 +964,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
           { number: "+15550500002", sid: "PNseed002" },
         ]);
 
-        // The seeded blob must be a valid twilio config: a real provider is
+        // The seeded blob must be a valid mock config: a real provider is
         // constructible from it and serves the seeded numbers.
         const provider = await factory.getProvider(orgId);
+        expect(provider.providerId).toBe("mock");
         expect(provider.maskConfig().phoneNumbers).toEqual([
-          { number: "+15550500001" },
-          { number: "+15550500002" },
+          { number: "+15550500001", label: "Main" },
+          { number: "+15550500002", label: undefined },
         ]);
 
         const webhookCfg = await service.lookupWebhookConfig(orgId);
-        expect(webhookCfg?.provider).toBe("twilio");
-        expect(webhookCfg?.accountSid).toBeTruthy();
-        expect(webhookCfg?.authToken).toBeTruthy();
+        expect(webhookCfg?.provider).toBe("mock");
+        expect(webhookCfg?.accountSid).toBe(DEV_MOCK_ACCOUNT_SID);
+        expect(webhookCfg?.authToken).toBe(DEV_MOCK_AUTH_TOKEN);
       });
     });
   },

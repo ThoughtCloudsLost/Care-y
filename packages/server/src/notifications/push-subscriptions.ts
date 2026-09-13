@@ -3,6 +3,7 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { UserId } from "@care-y/shared";
 
 export interface PushSubscriptionRecord {
   readonly endpoint: string;
@@ -12,17 +13,17 @@ export interface PushSubscriptionRecord {
 export interface PushSubscriptionService {
   /** Upsert a push subscription. Idempotent on endpoint. */
   subscribe(
-    userId: string,
+    userId: UserId,
     endpoint: string,
     keyP256dh: string,
     keyAuth: string,
   ): Promise<void>;
 
   /** Remove a push subscription by endpoint, scoped to the requesting user. */
-  unsubscribe(userId: string, endpoint: string): Promise<void>;
+  unsubscribe(userId: UserId, endpoint: string): Promise<void>;
 
   /** List current user's push subscriptions (endpoints + timestamps). */
-  listForUser(userId: string): Promise<readonly PushSubscriptionRecord[]>;
+  listForUser(userId: UserId): Promise<readonly PushSubscriptionRecord[]>;
 }
 
 export function createPushSubscriptionService(

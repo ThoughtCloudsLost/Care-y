@@ -11,6 +11,8 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { SessionRepository } from "../auth/session-repository.js";
+import type { OrgId, OrgSchema, UserId } from "@care-y/shared";
+import { userIdSchema, sessionTokenSchema } from "@care-y/shared";
 
 /** Maximum relay request body size (64KB). */
 export const MAX_RELAY_BODY = 64 * 1024;
@@ -196,26 +198,39 @@ export function extractBooleanField(
 
 /** Session data extracted from the cookie for relay auth. */
 export interface RelaySession {
-  readonly userId: string;
-  readonly orgSchema: string;
+  readonly userId: UserId;
+  /** Platform-table key: the raw org UUID. */
+  readonly orgId: OrgId;
+  /** Tenant-schema name, of the form `org_<uuid>`. */
+  readonly orgSchema: OrgSchema;
   readonly sessionId: string;
 }
 
 export type RelayAuthResult =
   { ok: true; session: RelaySession } | { ok: false; status: 401 | 403 };
 
+/** Both org identifiers returned by the resolver. */
+export interface OrgResolved {
+  /** Platform-table key: the raw org UUID. */
+  readonly orgId: OrgId;
+  /** Tenant-schema name, of the form `org_<uuid>`. */
+  readonly orgSchema: OrgSchema;
+}
+
 /**
- * Resolves the org schema from the request Host header.
+ * Resolves the org identifiers from the request Host header.
  * Same logic as the tRPC context factory and hooks.server.ts:
  * - Production: extract subdomain from Host (slug.care-y.app -> org_slug)
  * - Dev: read X-Org-Slug header, then fall back to Host
  *
- * The orgResolver dependency is injected so relay-utils doesn't import
- * org resolution code directly (keeps it testable with a simple mock).
+ * Returns both the org UUID (for platform-table lookups) and the schema
+ * name (for tenant-scoped queries). The orgResolver dependency is injected
+ * so relay-utils doesn't import org resolution code directly (keeps it
+ * testable with a simple mock).
  */
 export type OrgResolver = (
   req: IncomingMessage,
-) => string | null | Promise<string | null>;
+) => OrgResolved | null | Promise<OrgResolved | null>;
 
 /**
  * Authenticates a relay request using the session cookie.
@@ -231,21 +246,24 @@ export async function authenticateRelay(
   req: IncomingMessage,
   orgResolver: OrgResolver,
   createSessionRepo: (
-    orgSchema: string,
+    orgSchema: OrgSchema,
   ) => SessionRepository | Promise<SessionRepository>,
 ): Promise<RelayAuthResult> {
   // Resolve org from Host header (same as tRPC context)
-  const orgSchema = await orgResolver(req);
-  if (orgSchema === null) return { ok: false, status: 401 };
+  const resolved = await orgResolver(req);
+  if (resolved === null) return { ok: false, status: 401 };
 
   // Extract session cookie from Cookie header
   const cookieHeader = req.headers.cookie ?? "";
-  const sessionToken = parseCookieValue(cookieHeader, "care_y_session");
-  if (sessionToken === null) return { ok: false, status: 401 };
+  const rawToken = parseCookieValue(cookieHeader, "care_y_session");
+  if (rawToken === null) return { ok: false, status: 401 };
+
+  const tokenResult = sessionTokenSchema.safeParse(rawToken);
+  if (!tokenResult.success) return { ok: false, status: 401 };
 
   // Look up session in the org's tenant schema
-  const sessionRepo = await createSessionRepo(orgSchema);
-  const session = await sessionRepo.findByToken(sessionToken);
+  const sessionRepo = await createSessionRepo(resolved.orgSchema);
+  const session = await sessionRepo.findByToken(tokenResult.data);
   if (!session) return { ok: false, status: 401 };
 
   // Check expiry
@@ -257,8 +275,9 @@ export async function authenticateRelay(
   return {
     ok: true,
     session: {
-      userId: session.userId,
-      orgSchema,
+      userId: userIdSchema.parse(session.userId),
+      orgId: resolved.orgId,
+      orgSchema: resolved.orgSchema,
       sessionId: session.id,
     },
   };

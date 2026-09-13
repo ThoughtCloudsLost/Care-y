@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { FollowUpSource, FollowUpType } from "./tickets.js";
 import { ticketPrioritySchema } from "./tickets.js";
+import { userIdSchema } from "../ids.js";
 
 export type ContentCategory = "message" | "system" | "note" | "article";
 
@@ -15,7 +16,7 @@ export interface ContentTypeMeta {
 }
 
 export const assignmentEventParamsSchema = z.object({
-  userId: z.uuid(),
+  userId: userIdSchema,
 });
 export type AssignmentEventParams = z.infer<typeof assignmentEventParamsSchema>;
 
@@ -136,6 +137,14 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     encryption: "none",
     hasEncryptedContent: false,
     hasEventParams: false,
+    groupable: false,
+  },
+  share_link: {
+    category: "message",
+    allowedSources: ["volunteer"],
+    encryption: "ticket-key",
+    hasEncryptedContent: true,
+    hasEventParams: true,
     groupable: false,
   },
 } as const;

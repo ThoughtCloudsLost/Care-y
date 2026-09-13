@@ -1,6 +1,7 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { ConflictError } from "../errors.js";
+import type { UserId } from "@care-y/shared";
 
 export interface WrappedOrgKeyRow {
   readonly ephemeralPoint: Buffer;
@@ -9,7 +10,7 @@ export interface WrappedOrgKeyRow {
 }
 
 export interface UnwrappedUserRow {
-  readonly userId: string;
+  readonly userId: UserId;
   readonly volPublic: Buffer;
 }
 
@@ -18,18 +19,18 @@ export interface UploadOrgPublicKeyInput {
   readonly ephemeralPoint: Buffer;
   readonly nonce: Buffer;
   readonly wrappedKey: Buffer;
-  readonly userId: string;
+  readonly userId: UserId;
 }
 
 export interface WrapOrgKeyForUserInput {
-  readonly userId: string;
+  readonly userId: UserId;
   readonly ephemeralPoint: Buffer;
   readonly nonce: Buffer;
   readonly wrappedKey: Buffer;
 }
 
 export interface OrgKeyQueryService {
-  getWrappedOrgKey(userId: string): Promise<WrappedOrgKeyRow | null>;
+  getWrappedOrgKey(userId: UserId): Promise<WrappedOrgKeyRow | null>;
   uploadOrgPublicKey(input: UploadOrgPublicKeyInput): Promise<void>;
   wrapOrgKeyForUser(input: WrapOrgKeyForUserInput): Promise<void>;
   listUnwrappedUsers(): Promise<readonly UnwrappedUserRow[]>;
@@ -39,7 +40,7 @@ export function createOrgKeyQueryService(
   db: Kysely<TenantDatabase>,
 ): OrgKeyQueryService {
   return {
-    async getWrappedOrgKey(userId: string): Promise<WrappedOrgKeyRow | null> {
+    async getWrappedOrgKey(userId: UserId): Promise<WrappedOrgKeyRow | null> {
       const wrap = await db
         .selectFrom("wrapped_org_keys")
         .selectAll()

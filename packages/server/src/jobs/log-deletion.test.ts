@@ -7,6 +7,11 @@ import {
   registerLogDeletionHandler,
   enqueueLogDeletion,
 } from "./log-deletion.js";
+import { orgIdSchema, type E164 } from "@care-y/shared";
+
+const ORG_1 = orgIdSchema.parse("00000001-0000-4000-8000-000000000001");
+const ORG_2 = orgIdSchema.parse("00000002-0000-4000-8000-000000000002");
+const ORG_3 = orgIdSchema.parse("00000003-0000-4000-8000-000000000003");
 
 function createMockProvider(): TelephonyProvider {
   return {
@@ -17,14 +22,14 @@ function createMockProvider(): TelephonyProvider {
     validateWebhook: vi.fn().mockReturnValue(true),
     parseIncomingCall: vi.fn().mockReturnValue({
       callId: "CA-in",
-      from: "+1",
-      to: "+2",
+      from: "+10000000000" as E164,
+      to: "+20000000000" as E164,
       direction: "inbound" as const,
     }),
     parseIncomingSms: vi.fn().mockReturnValue({
       messageId: "SM-in",
-      from: "+1",
-      to: "+2",
+      from: "+10000000000" as E164,
+      to: "+20000000000" as E164,
       body: "",
       numMedia: 0,
       mediaUrls: [],
@@ -32,9 +37,10 @@ function createMockProvider(): TelephonyProvider {
     }),
     generateVoiceResponse: vi.fn().mockReturnValue("<Response/>"),
     getRecording: vi.fn().mockResolvedValue(Buffer.alloc(0)),
-    getCallDetails: vi
-      .fn()
-      .mockResolvedValue({ from: "+15550000001", to: "+15550000002" }),
+    getCallDetails: vi.fn().mockResolvedValue({
+      from: "+15550000001" as E164,
+      to: "+15550000002" as E164,
+    }),
     deleteRecording: vi.fn().mockResolvedValue(undefined),
     deleteCallLog: vi.fn().mockResolvedValue(undefined),
     deleteMessageLog: vi.fn().mockResolvedValue(undefined),
@@ -87,12 +93,12 @@ describe("registerLogDeletionHandler", () => {
     expect(handler).toBeDefined();
 
     await handler!({
-      orgId: "org-001",
+      orgId: ORG_1,
       resourceType: "call",
       resourceId: "CA-abc123",
     });
 
-    expect(factory.getProvider).toHaveBeenCalledWith("org-001");
+    expect(factory.getProvider).toHaveBeenCalledWith(ORG_1);
     expect(mockProvider.deleteCallLog).toHaveBeenCalledWith("CA-abc123");
     expect(mockProvider.deleteMessageLog).not.toHaveBeenCalled();
     expect(mockProvider.deleteRecording).not.toHaveBeenCalled();
@@ -109,7 +115,7 @@ describe("registerLogDeletionHandler", () => {
     const handler = handlers.get("log-deletion")!;
 
     await handler({
-      orgId: "org-002",
+      orgId: ORG_2,
       resourceType: "message",
       resourceId: "SM-xyz789",
     });
@@ -130,7 +136,7 @@ describe("registerLogDeletionHandler", () => {
     const handler = handlers.get("log-deletion")!;
 
     await handler({
-      orgId: "org-003",
+      orgId: ORG_3,
       resourceType: "recording",
       resourceId: "RE-rec456",
     });
@@ -160,7 +166,7 @@ describe("registerLogDeletionHandler", () => {
     const handler = handlers.get("log-deletion")!;
 
     await expect(
-      handler({ orgId: "org-001", resourceType: "fax", resourceId: "FX-123" }),
+      handler({ orgId: ORG_1, resourceType: "fax", resourceId: "FX-123" }),
     ).rejects.toThrow(ValidationError);
   });
 });
@@ -170,7 +176,7 @@ describe("enqueueLogDeletion", () => {
     const { jobQueue } = createMockJobQueue();
 
     const jobId = await enqueueLogDeletion(jobQueue, {
-      orgId: "org-001",
+      orgId: ORG_1,
       resourceType: "call",
       resourceId: "CA-abc123",
     });
@@ -180,7 +186,7 @@ describe("enqueueLogDeletion", () => {
     // without pinning their values.
     expect(jobQueue.enqueue).toHaveBeenCalledWith(
       "log-deletion",
-      { orgId: "org-001", resourceType: "call", resourceId: "CA-abc123" },
+      { orgId: ORG_1, resourceType: "call", resourceId: "CA-abc123" },
       expect.anything(),
     );
   });

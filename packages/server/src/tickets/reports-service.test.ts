@@ -13,6 +13,7 @@ import {
   priorityToNumeric,
   type ReportsService,
 } from "./reports-service.js";
+import type { QueueId, TicketId } from "@care-y/shared";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -118,11 +119,11 @@ describe.skipIf(!process.env.DATABASE_URL)("ReportsService (DB)", () => {
   describe("with a seeded ticket dataset", () => {
     let testDb: TestDb;
     let svc: ReportsService;
-    let queueA: string;
-    let queueB: string;
+    let queueA: QueueId;
+    let queueB: QueueId;
 
     async function seedTicket(opts: {
-      queueId: string;
+      queueId: QueueId;
       status: "open" | "closed";
       priority: "low" | "normal" | "high" | "urgent";
       createdAt?: Date;
@@ -329,7 +330,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ReportsService (DB)", () => {
     let testDb: TestDb;
     let svc: ReportsService;
     let aliasBytes: Buffer;
-    let ticketId: string;
+    let ticketId: TicketId;
 
     beforeAll(async () => {
       testDb = await createTestDb();

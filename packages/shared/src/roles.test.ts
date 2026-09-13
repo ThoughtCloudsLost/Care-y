@@ -55,7 +55,7 @@ describe("meetsRoleThreshold", () => {
 
   for (const { label, userRoleId, minRoleId, expected } of cases) {
     it(label, () => {
-      expect(meetsRoleThreshold(userRoleId, minRoleId)).toBe(expected);
+      expect(meetsRoleThreshold({ userRoleId, minRoleId })).toBe(expected);
     });
   }
 });

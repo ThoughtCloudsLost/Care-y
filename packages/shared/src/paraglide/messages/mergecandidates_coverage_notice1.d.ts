@@ -1,4 +1,4 @@
-export { mergecandidates_coverage_notice1 as "mergeCandidates_coverage_notice" };
+export { mergecandidates_coverage_notice1 as mergeCandidates_coverage_notice };
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Mergecandidates_Coverage_Notice1Inputs = {};
 /**

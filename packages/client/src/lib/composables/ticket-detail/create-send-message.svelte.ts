@@ -3,6 +3,8 @@ import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { AsyncDecryptCache } from "$lib/crypto/async-decrypt-cache.js";
 import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
 import { followupSlot } from "@care-y/crypto";
+import { newFollowupId, newPendingFollowupId } from "@care-y/shared";
+import type { FollowupId } from "@care-y/shared";
 import { ticketKeys } from "$lib/query/keys.js";
 import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -10,7 +12,8 @@ import { extractMentions } from "$lib/utils/mentions.js";
 import * as m from "$lib/paraglide/messages.js";
 
 export interface PendingEntryOpts {
-  readonly pendingId: string;
+  /** Optimistic placeholder id (`pending-<uuid>`), never persisted. */
+  readonly pendingId: FollowupId;
   readonly ticketId: string;
   readonly mentionedPseudonyms: string[];
   readonly currentUserId: string | null;
@@ -65,9 +68,9 @@ export function createSendMessage<TFollowUp extends { id: string }>(
     sending = true;
     const ticketId = getTicketId();
     const followUpsKey = ticketKeys.followUpsInitial(ticketId);
-    const pendingId = `pending-${crypto.randomUUID()}`;
+    const pendingId = newPendingFollowupId();
 
-    const followUpId = crypto.randomUUID();
+    const followUpId = newFollowupId();
 
     try {
       const encryptedContent = await cryptoBridge.encrypt(

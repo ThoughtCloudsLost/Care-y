@@ -14,6 +14,15 @@ import { createRecentViewsRouter } from "./recent-views.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { UsersTable } from "../db/types.js";
+import type {
+  SessionId,
+  SessionToken,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+} from "@care-y/shared";
 import {
   createTestDb,
   createTestUser,
@@ -37,9 +46,9 @@ describe.skipIf(!process.env.DATABASE_URL)("recentViews router", () => {
 
   function orgContext(): OrgContext {
     return {
-      orgId: "org-recent-views-test",
-      orgSlug: "test-org",
-      orgSchema: testDb.schemaName,
+      orgId: "00000000-0000-4000-8000-000000003300" as OrgId,
+      orgSlug: "test-org" as OrgSlug,
+      orgSchema: testDb.schemaName as OrgSchema,
       tenantDb: testDb.db,
       sealedBox: {} as OrgContext["sealedBox"],
     };
@@ -51,11 +60,11 @@ describe.skipIf(!process.env.DATABASE_URL)("recentViews router", () => {
       res: mockRes(),
       org: orgContext(),
       session: {
-        id: `sess-${user.id}`,
-        token: `tok-${user.id}`,
+        id: `00000000-0000-0000-0000-${user.id.slice(-12)}` as SessionId,
+        token: `tok-${user.id}` as SessionToken,
         userId: user.id,
-        ipToken: "ip-tok",
-        uaToken: "ua-tok",
+        ipToken: "ip-tok" as IpToken,
+        uaToken: "ua-tok" as UaToken,
         expiresAt: new Date(Date.now() + 3_600_000),
         twofaVerified: true,
         webauthnChallenge: null,

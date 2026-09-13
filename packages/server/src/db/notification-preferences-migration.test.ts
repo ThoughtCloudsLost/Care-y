@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { sql } from "kysely";
 import { createTestDb, createTestUser, type TestDb } from "../test-utils.js";
+import type { QueueId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "084_create_notification_preferences migration",
@@ -76,7 +77,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("allows the same event+channel at different scopes for the same user", async () => {
       const user = await createTestUser(testDb.db);
-      const fakeQueueId = "a0000000-0000-0000-0000-000000000001";
+      const fakeQueueId = "a0000000-0000-4000-8000-000000000001" as QueueId;
 
       // Global scope
       await testDb.db
@@ -143,7 +144,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .values({
             user_id: user.id,
             scope_type: "global",
-            scope_id: "b0000000-0000-0000-0000-000000000001",
+            scope_id: "b0000000-0000-4000-8000-000000000001" as QueueId,
             event_type: "ticket_closed",
             channel: "email",
             enabled: false,

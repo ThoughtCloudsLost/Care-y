@@ -36,6 +36,7 @@ class TestDecryptCache extends AsyncDecryptCache {
       nonce,
       wrappedKey,
       ciphertext,
+      "ticket-test",
     );
   }
 
@@ -138,7 +139,7 @@ describe("AsyncDecryptCache", () => {
       expect(mockDecrypt).toHaveBeenCalledWith(
         "ticket-test",
         "title",
-        CACHE_KEY,
+        "ticket-test",
         EP,
         NONCE,
         WK,

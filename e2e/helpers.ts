@@ -332,6 +332,53 @@ async function enrollTotp(page: Page): Promise<void> {
   if (backupVisible) {
     await dismissBackupCodesSheet(page);
   }
+
+  await waitForKeysUnlocked(page);
+}
+
+/**
+ * Wait for the post-login key derivation to finish.
+ *
+ * Argon2id plus the OPRF round trip runs after the session is
+ * established, so a spec can reach the ticket list while the crypto
+ * session is still deriving. Surfaces that need decrypted state
+ * (PortalTierSection, the share-link row) render nothing until it
+ * lands, which reads as "element not found" rather than a timeout on a
+ * hidden node.
+ *
+ * The indicator is absent when keys are already warm, so its never
+ * appearing is a pass, not a failure.
+ */
+/**
+ * Open the ticket info panel regardless of layout.
+ *
+ * The panel is an aside in the full-view split layout but sits behind
+ * "More actions" in the detail overlay, and the overlay is what
+ * openTicketByTitle lands on at every width. Branching on viewport
+ * alone therefore misses it on desktop.
+ *
+ * `marker` is text that only appears once the panel is open; when it is
+ * already visible this is a no-op, so callers can use it defensively.
+ */
+export async function openTicketInfoPanel(
+  page: Page,
+  marker: string | RegExp,
+): Promise<void> {
+  const target = page.getByText(marker).first();
+  if (await target.isVisible().catch(() => false)) return;
+
+  const infoBtn = page
+    .getByRole("button", { name: /view info|more actions/i })
+    .first();
+  await expect(infoBtn).toBeVisible({ timeout: 15_000 });
+  await infoBtn.dispatchEvent("click");
+}
+
+export async function waitForKeysUnlocked(page: Page): Promise<void> {
+  await page
+    .getByText("Unlocking your keys...")
+    .waitFor({ state: "hidden", timeout: 45_000 })
+    .catch(() => undefined);
 }
 
 /**

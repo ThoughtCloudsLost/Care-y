@@ -13,6 +13,17 @@ import { createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { ConsultantService } from "../telephony/consultant-service.js";
 import { RoleId } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+  ConsultantId,
+} from "@care-y/shared";
 import { AuthError, NotFoundError } from "../errors.js";
 
 // --- Mock service ---
@@ -31,13 +42,16 @@ function createMockService(): ConsultantService {
 
 // --- Context helpers ---
 
-const USER_ID = "user-consultant-1";
+const USER_ID = "00000000-0000-4000-8000-000000000d01" as UserId;
+const FIXTURE_ORG_ID = "00000000-0000-4000-8000-00000000dd00" as OrgId;
+const FIXTURE_ORG_SCHEMA =
+  "org_00000000-0000-4000-8000-00000000dd00" as OrgSchema;
 
 function createMockOrgContext(): OrgContext {
   return {
-    orgId: "org-consultant-test",
-    orgSlug: "test-org",
-    orgSchema: "org_test",
+    orgId: FIXTURE_ORG_ID,
+    orgSlug: "test-org" as OrgSlug,
+    orgSchema: FIXTURE_ORG_SCHEMA,
     tenantDb: {} as OrgContext["tenantDb"],
     sealedBox: {} as OrgContext["sealedBox"],
   };
@@ -49,11 +63,11 @@ function createAuthed2faContext(): Context {
     res: {} as Context["res"],
     org: createMockOrgContext(),
     session: {
-      id: "sess-1",
-      token: "tok-1",
+      id: "00000000-0000-4000-8000-0000000d0010" as SessionId,
+      token: "tok-1" as SessionToken,
       userId: USER_ID,
-      ipToken: "ip-tok",
-      uaToken: "ua-tok",
+      ipToken: "ip-tok" as IpToken,
+      uaToken: "ua-tok" as UaToken,
       expiresAt: new Date(Date.now() + 3_600_000),
       twofaVerified: true,
       webauthnChallenge: null,
@@ -100,7 +114,7 @@ describe("createConsultantRouter", () => {
 
     it("returns consultant info after registration", async () => {
       const info = {
-        id: "consultant-1",
+        id: "consultant-1" as ConsultantId,
         isVerified: false,
         preferredCallMethod: "phone_callback",
         encryptedPhone: null as string | null,
@@ -118,7 +132,7 @@ describe("createConsultantRouter", () => {
   describe("register", () => {
     it("creates consultant with metadata only (ADR-065), returns id", async () => {
       vi.mocked(mockService.register).mockResolvedValue({
-        id: "consultant-1",
+        id: "consultant-1" as ConsultantId,
       });
 
       const result = await caller.register({
@@ -135,7 +149,7 @@ describe("createConsultantRouter", () => {
 
     it("passes smsPingsOptIn flag to service", async () => {
       vi.mocked(mockService.register).mockResolvedValue({
-        id: "consultant-2",
+        id: "consultant-2" as ConsultantId,
       });
 
       await caller.register({

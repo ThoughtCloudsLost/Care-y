@@ -1,4 +1,4 @@
-export { mergecandidates_pair1 as "mergeCandidates_pair" };
+export { mergecandidates_pair1 as mergeCandidates_pair };
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Mergecandidates_Pair1Inputs = {
     aliasA: NonNullable<unknown>;

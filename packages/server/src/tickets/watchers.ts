@@ -12,24 +12,25 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
+import type { TicketId, UserId, QueueId } from "@care-y/shared";
 
 export interface WatchersService {
   /** Subscribe a user to ticket updates (CC). Idempotent. */
-  subscribe(userId: string, ticketId: string): Promise<void>;
+  subscribe(userId: UserId, ticketId: TicketId): Promise<void>;
   /** Unsubscribe a user from ticket updates. Idempotent. */
-  unsubscribe(userId: string, ticketId: string): Promise<void>;
+  unsubscribe(userId: UserId, ticketId: TicketId): Promise<void>;
   /** Get all watcher user IDs for a specific ticket. */
-  getTicketWatchers(ticketId: string): Promise<string[]>;
+  getTicketWatchers(ticketId: TicketId): Promise<UserId[]>;
   /** Check if user is watching a ticket. */
-  isWatching(userId: string, ticketId: string): Promise<boolean>;
+  isWatching(userId: UserId, ticketId: TicketId): Promise<boolean>;
 
   // Queue-level watchers (admin-configured)
   /** Add a user as a queue watcher. Idempotent. Admin action. */
-  addQueueWatcher(queueId: string, userId: string): Promise<void>;
+  addQueueWatcher(queueId: QueueId, userId: UserId): Promise<void>;
   /** Remove a user from queue watchers. Idempotent. Admin action. */
-  removeQueueWatcher(queueId: string, userId: string): Promise<void>;
+  removeQueueWatcher(queueId: QueueId, userId: UserId): Promise<void>;
   /** Get all queue watcher user IDs for a queue. */
-  getQueueWatchers(queueId: string): Promise<string[]>;
+  getQueueWatchers(queueId: QueueId): Promise<UserId[]>;
 }
 
 export function createWatchersService(

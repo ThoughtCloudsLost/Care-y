@@ -14,21 +14,29 @@ import type { Kysely, Selectable } from "kysely";
 import type { SessionsTable, TenantDatabase } from "../db/types.js";
 import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  WebauthnChallenge,
+} from "@care-y/shared";
 
 export interface SessionData {
-  readonly id: string;
-  readonly token: string;
-  readonly userId: string;
-  readonly ipToken: string;
-  readonly uaToken: string;
+  readonly id: SessionId;
+  readonly token: SessionToken;
+  readonly userId: UserId;
+  readonly ipToken: IpToken;
+  readonly uaToken: UaToken;
   readonly expiresAt: Date;
   readonly twofaVerified: boolean;
-  readonly webauthnChallenge: string | null;
+  readonly webauthnChallenge: WebauthnChallenge | null;
 }
 
 export interface CreateSessionInput {
-  readonly token: string;
-  readonly userId: string;
+  readonly token: SessionToken;
+  readonly userId: UserId;
   readonly ipAddress: string; // plaintext input, tokenized + encrypted internally
   readonly userAgent: string;
   readonly expiresAt: Date;
@@ -36,17 +44,20 @@ export interface CreateSessionInput {
 
 export interface SessionRepository {
   create(input: CreateSessionInput): Promise<SessionData>;
-  findByToken(token: string): Promise<SessionData | null>;
-  deleteByToken(token: string): Promise<void>;
-  deleteByUserId(userId: string): Promise<void>;
+  findByToken(token: SessionToken): Promise<SessionData | null>;
+  deleteByToken(token: SessionToken): Promise<void>;
+  deleteByUserId(userId: UserId): Promise<void>;
   deleteByUserIdExceptToken(
-    userId: string,
-    exceptToken: string,
+    userId: UserId,
+    exceptToken: SessionToken,
   ): Promise<number>;
   deleteExpired(): Promise<number>;
-  markTwoFactorVerified(token: string): Promise<void>;
-  clearTwoFactorVerified(token: string): Promise<void>;
-  setWebauthnChallenge(token: string, challenge: string | null): Promise<void>;
+  markTwoFactorVerified(token: SessionToken): Promise<void>;
+  clearTwoFactorVerified(token: SessionToken): Promise<void>;
+  setWebauthnChallenge(
+    token: SessionToken,
+    challenge: WebauthnChallenge | null,
+  ): Promise<void>;
 }
 
 function toSessionData(row: Selectable<SessionsTable>): SessionData {
@@ -67,7 +78,7 @@ function toSessionData(row: Selectable<SessionsTable>): SessionData {
  *
  * Dependencies:
  * - tokenizer: computes HMAC tokens for drift detection
- * - sealedBox: seals IP/UA with org public key (Tier 1, server-blind)
+ * - sealedBox: seals IP/UA with org public key (server-blind org-key tier)
  */
 export function createDbSessionRepository(
   db: Kysely<TenantDatabase>,
@@ -76,8 +87,8 @@ export function createDbSessionRepository(
 ): SessionRepository {
   return {
     async create(input: CreateSessionInput): Promise<SessionData> {
-      const ipToken = tokenizer.tokenize(input.ipAddress);
-      const uaToken = tokenizer.tokenize(input.userAgent);
+      const ipToken = tokenizer.tokenizeIp(input.ipAddress);
+      const uaToken = tokenizer.tokenizeUa(input.userAgent);
 
       const encryptedIp = sealedBox.seal(input.ipAddress);
       const encryptedUa = sealedBox.seal(input.userAgent);
@@ -99,7 +110,7 @@ export function createDbSessionRepository(
       return toSessionData(row);
     },
 
-    async findByToken(token: string): Promise<SessionData | null> {
+    async findByToken(token: SessionToken): Promise<SessionData | null> {
       const row = await db
         .selectFrom("sessions")
         .selectAll()
@@ -110,17 +121,17 @@ export function createDbSessionRepository(
       return toSessionData(row);
     },
 
-    async deleteByToken(token: string): Promise<void> {
+    async deleteByToken(token: SessionToken): Promise<void> {
       await db.deleteFrom("sessions").where("token", "=", token).execute();
     },
 
-    async deleteByUserId(userId: string): Promise<void> {
+    async deleteByUserId(userId: UserId): Promise<void> {
       await db.deleteFrom("sessions").where("user_id", "=", userId).execute();
     },
 
     async deleteByUserIdExceptToken(
-      userId: string,
-      exceptToken: string,
+      userId: UserId,
+      exceptToken: SessionToken,
     ): Promise<number> {
       const result = await db
         .deleteFrom("sessions")
@@ -140,7 +151,7 @@ export function createDbSessionRepository(
       return Number(result.numDeletedRows);
     },
 
-    async markTwoFactorVerified(token: string): Promise<void> {
+    async markTwoFactorVerified(token: SessionToken): Promise<void> {
       await db
         .updateTable("sessions")
         .set({ twofa_verified: true })
@@ -148,7 +159,7 @@ export function createDbSessionRepository(
         .execute();
     },
 
-    async clearTwoFactorVerified(token: string): Promise<void> {
+    async clearTwoFactorVerified(token: SessionToken): Promise<void> {
       await db
         .updateTable("sessions")
         .set({ twofa_verified: false })
@@ -157,8 +168,8 @@ export function createDbSessionRepository(
     },
 
     async setWebauthnChallenge(
-      token: string,
-      challenge: string | null,
+      token: SessionToken,
+      challenge: WebauthnChallenge | null,
     ): Promise<void> {
       await db
         .updateTable("sessions")

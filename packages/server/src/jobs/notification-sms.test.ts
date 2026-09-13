@@ -11,13 +11,20 @@ import type {
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { ValidationError } from "../errors.js";
+import {
+  orgIdSchema,
+  orgSchemaNameSchema,
+  orgSlugIdSchema,
+  userIdSchema,
+  type E164,
+} from "@care-y/shared";
 
 // --- Stubs ---
 
 // notificationSmsPayloadSchema requires recipient ids to be UUIDs
 // (Zod v4 also validates version bytes, so hand-written ids fail).
-const USER_A = crypto.randomUUID();
-const USER_B = crypto.randomUUID();
+const USER_A = userIdSchema.parse(crypto.randomUUID());
+const USER_B = userIdSchema.parse(crypto.randomUUID());
 
 function stubEncryptor(phone: string): FieldEncryptor {
   const phoneBuf = Buffer.from(phone, "utf-8");
@@ -71,7 +78,7 @@ function stubProvider(
       return Buffer.alloc(0);
     },
     async getCallDetails() {
-      return { from: "+15550000001", to: "+15550000002" };
+      return { from: "+15550000001" as E164, to: "+15550000002" as E164 };
     },
     async deleteRecording() {
       // stub
@@ -146,9 +153,16 @@ function buildDeps(
   };
 }
 
+const TEST_ORG_ID = orgIdSchema.parse("00000000-0000-4000-8000-aaaaaaaaaaaa");
+const TEST_ORG_SCHEMA = orgSchemaNameSchema.parse(
+  "org_00000000-0000-4000-8000-aaaaaaaaaaaa",
+);
+const TEST_ORG_SLUG = orgSlugIdSchema.parse("test-org");
+
 const VALID_PAYLOAD = {
-  orgSchema: "org_abc",
-  orgSlug: "test-org",
+  orgId: TEST_ORG_ID,
+  orgSchema: TEST_ORG_SCHEMA,
+  orgSlug: TEST_ORG_SLUG,
   recipientUserIds: [USER_A],
   eventType: "ticket_assigned" as const,
 };
@@ -340,5 +354,39 @@ describe("notification-sms job handler", () => {
 
     // getTenantDb should not have been called (no DB work)
     expect(getTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("passes the org UUID to getProvider and OrgIdentifiers to the resolver", async () => {
+    const provider = stubProvider();
+    const enc = stubEncryptor("+15551234567");
+    const tDb = stubTenantDb([
+      {
+        user_id: USER_A,
+        ops_encrypted_phone: Buffer.from("encrypted-phone"),
+        sms_pings_enabled: true,
+      },
+    ]);
+
+    const getProvider = vi.fn(async () => provider);
+    const resolveCallerIdByPurpose = vi.fn(async () => "+15559990000");
+
+    const deps: NotificationSmsJobDeps = {
+      encryptor: enc,
+      getTenantDb: vi.fn(() => tDb),
+      getProvider,
+      resolveCallerIdByPurpose,
+    };
+
+    const handler = createNotificationSmsJobHandler(deps);
+    await handler(VALID_PAYLOAD);
+
+    // getProvider receives the org UUID, not the schema name
+    expect(getProvider).toHaveBeenCalledWith(TEST_ORG_ID);
+
+    // resolveCallerIdByPurpose receives OrgIdentifiers, not a bare string
+    expect(resolveCallerIdByPurpose).toHaveBeenCalledWith(
+      { orgId: TEST_ORG_ID, orgSchema: TEST_ORG_SCHEMA },
+      "outbound",
+    );
   });
 });

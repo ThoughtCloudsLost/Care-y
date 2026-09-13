@@ -11,6 +11,12 @@ import {
   type KBVoteService,
 } from "./service.js";
 import { NotFoundError } from "../errors.js";
+import type { KbCategoryId, KbItemId, UserId } from "@care-y/shared";
+
+// Branded test constants. KB uses its own id family (KbCategoryId, KbItemId,
+// KbVoteId), distinct from ticket ids (TicketId, AttachmentId).
+const NONEXISTENT_ID = "00000000-0000-4000-8000-000000000099";
+const TEST_AUTHOR = "00000000-0000-4000-8000-000000000001" as UserId;
 
 /** Helper: wrap a label string as a Buffer (test-only, not real org-key encryption). */
 function encName(label: string): Buffer {
@@ -118,7 +124,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBCategoryService (DB)", () => {
 
   it("update throws NotFoundError for non-existent category", async () => {
     await expect(
-      svc.update("00000000-0000-0000-0000-000000000099", {
+      svc.update(NONEXISTENT_ID as KbCategoryId, {
         encryptedName: encName("X"),
       }),
     ).rejects.toThrow(NotFoundError);
@@ -132,9 +138,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBCategoryService (DB)", () => {
   });
 
   it("delete throws NotFoundError for non-existent category", async () => {
-    await expect(
-      svc.delete("00000000-0000-0000-0000-000000000099"),
-    ).rejects.toThrow(NotFoundError);
+    await expect(svc.delete(NONEXISTENT_ID as KbCategoryId)).rejects.toThrow(
+      NotFoundError,
+    );
   });
 
   it("reorder swaps sort_order values", async () => {
@@ -158,7 +164,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   let testDb: TestDb;
   let catSvc: KBCategoryService;
   let svc: KBItemService;
-  let categoryId: string;
+  let categoryId: KbCategoryId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -176,7 +182,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("creates an article", async () => {
-    const item = await svc.create("user-1", {
+    const item = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("title-enc"),
       encryptedBody: Buffer.from("body-enc"),
@@ -184,7 +190,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     expect(item.id).toBeTruthy();
     expect(item.categoryId).toBe(categoryId);
     expect(Buffer.isBuffer(item.encryptedTitle)).toBe(true);
-    expect(item.createdBy).toBe("user-1");
+    expect(item.createdBy).toBe(TEST_AUTHOR);
     expect(item.voteUpCount).toBe(0);
     expect(item.voteDownCount).toBe(0);
     expect(item.rating).toBe(0);
@@ -192,8 +198,8 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
 
   it("throws NotFoundError for non-existent category", async () => {
     await expect(
-      svc.create("user-1", {
-        categoryId: "00000000-0000-0000-0000-000000000099",
+      svc.create(TEST_AUTHOR, {
+        categoryId: NONEXISTENT_ID as KbCategoryId,
         encryptedTitle: Buffer.from("t"),
         encryptedBody: Buffer.from("b"),
       }),
@@ -201,7 +207,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("findById returns article", async () => {
-    const item = await svc.create("user-1", {
+    const item = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("find-me"),
       encryptedBody: Buffer.from("body"),
@@ -211,15 +217,15 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("findById throws NotFoundError for non-existent article", async () => {
-    await expect(
-      svc.findById("00000000-0000-0000-0000-000000000099"),
-    ).rejects.toThrow(NotFoundError);
+    await expect(svc.findById(NONEXISTENT_ID as KbItemId)).rejects.toThrow(
+      NotFoundError,
+    );
   });
 
   it("lists with pagination", async () => {
     // Create 5 articles
     for (let i = 0; i < 5; i++) {
-      await svc.create("user-1", {
+      await svc.create(TEST_AUTHOR, {
         categoryId,
         encryptedTitle: Buffer.from(`page-test-${String(i)}`),
         encryptedBody: Buffer.from(`body-${String(i)}`),
@@ -255,7 +261,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     const cat2 = await catSvc.create({
       encryptedName: encName("Other Category"),
     });
-    await svc.create("user-1", {
+    await svc.create(TEST_AUTHOR, {
       categoryId: cat2.id,
       encryptedTitle: Buffer.from("other-cat"),
       encryptedBody: Buffer.from("other-body"),
@@ -272,7 +278,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("updates article fields", async () => {
-    const item = await svc.create("user-1", {
+    const item = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("old-title"),
       encryptedBody: Buffer.from("old-body"),
@@ -289,7 +295,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     const cat2 = await catSvc.create({
       encryptedName: encName("Move Target"),
     });
-    const item = await svc.create("user-1", {
+    const item = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("movable"),
       encryptedBody: Buffer.from("body"),
@@ -300,14 +306,14 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
 
   it("update throws NotFoundError for non-existent article", async () => {
     await expect(
-      svc.update("00000000-0000-0000-0000-000000000099", {
+      svc.update(NONEXISTENT_ID as KbItemId, {
         encryptedTitle: Buffer.from("x"),
       }),
     ).rejects.toThrow(NotFoundError);
   });
 
   it("deletes article", async () => {
-    const item = await svc.create("user-1", {
+    const item = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("delete-me"),
       encryptedBody: Buffer.from("body"),
@@ -317,16 +323,16 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("delete throws NotFoundError for non-existent article", async () => {
-    await expect(
-      svc.delete("00000000-0000-0000-0000-000000000099"),
-    ).rejects.toThrow(NotFoundError);
+    await expect(svc.delete(NONEXISTENT_ID as KbItemId)).rejects.toThrow(
+      NotFoundError,
+    );
   });
 
   it("category delete fails when articles exist (RESTRICT FK)", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("Has Articles"),
     });
-    await svc.create("user-1", {
+    await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("blocker"),
       encryptedBody: Buffer.from("body"),
@@ -340,7 +346,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedName: encName("Encrypt Check"),
     });
     const ciphertext = Buffer.from([0xde, 0xad, 0xbe, 0xef, 0x01, 0x02]);
-    await svc.create("user-1", {
+    await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: ciphertext,
       encryptedBody: Buffer.from("body-cipher"),
@@ -361,7 +367,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
 
   it("creates an article with encryptedExcerpt", async () => {
     const excerpt = Buffer.from("excerpt-cipher");
-    const item = await svc.create("user-1", {
+    const item = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("with-excerpt"),
       encryptedBody: Buffer.from("full-body"),
@@ -373,7 +379,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("creates an article without encryptedExcerpt (null)", async () => {
-    const item = await svc.create("user-1", {
+    const item = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("no-excerpt"),
       encryptedBody: Buffer.from("body"),
@@ -382,7 +388,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("update sets encryptedExcerpt", async () => {
-    const item = await svc.create("user-1", {
+    const item = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("update-excerpt"),
       encryptedBody: Buffer.from("body"),
@@ -398,7 +404,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
 
   it("list returns encryptedExcerpt but not encryptedBody", async () => {
     const excerpt = Buffer.from("list-excerpt");
-    await svc.create("user-1", {
+    await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("list-test"),
       encryptedBody: Buffer.from("list-body"),
@@ -421,7 +427,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("findById returns both encryptedBody and encryptedExcerpt", async () => {
-    const item = await svc.create("user-1", {
+    const item = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("detail-test"),
       encryptedBody: Buffer.from("detail-body"),
@@ -438,7 +444,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     const cat = await catSvc.create({
       encryptedName: encName("Recent Excerpt"),
     });
-    await svc.create("user-1", {
+    await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("recent-test"),
       encryptedBody: Buffer.from("recent-body"),
@@ -460,21 +466,30 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     });
     const voteSvc = createKBVoteService(testDb.db);
 
-    const low = await svc.create("user-1", {
+    const low = await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("low-rated"),
       encryptedBody: Buffer.from("body"),
     });
-    const high = await svc.create("user-1", {
+    const high = await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("high-rated"),
       encryptedBody: Buffer.from("body"),
     });
 
     // Give "high" 3 upvotes to push its rating above "low"
-    await voteSvc.castVote("v1", { itemId: high.id, direction: "up" });
-    await voteSvc.castVote("v2", { itemId: high.id, direction: "up" });
-    await voteSvc.castVote("v3", { itemId: high.id, direction: "up" });
+    await voteSvc.castVote("00000000-0000-4000-8000-00000000c001" as UserId, {
+      itemId: high.id,
+      direction: "up",
+    });
+    await voteSvc.castVote("00000000-0000-4000-8000-00000000c002" as UserId, {
+      itemId: high.id,
+      direction: "up",
+    });
+    await voteSvc.castVote("00000000-0000-4000-8000-00000000c003" as UserId, {
+      itemId: high.id,
+      direction: "up",
+    });
 
     const page = await svc.list({
       categoryId: cat.id,
@@ -491,12 +506,12 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedName: encName("UpdatedAt Sort"),
     });
 
-    const first = await svc.create("user-1", {
+    const first = await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("first"),
       encryptedBody: Buffer.from("body"),
     });
-    const second = await svc.create("user-1", {
+    const second = await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("second"),
       encryptedBody: Buffer.from("body"),
@@ -525,17 +540,20 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     });
     const voteSvc = createKBVoteService(testDb.db);
 
-    const noVotes = await svc.create("user-1", {
+    const noVotes = await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("no-votes"),
       encryptedBody: Buffer.from("body"),
     });
-    const upvoted = await svc.create("user-1", {
+    const upvoted = await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("upvoted"),
       encryptedBody: Buffer.from("body"),
     });
-    await voteSvc.castVote("v1", { itemId: upvoted.id, direction: "up" });
+    await voteSvc.castVote("00000000-0000-4000-8000-00000000c001" as UserId, {
+      itemId: upvoted.id,
+      direction: "up",
+    });
 
     const page = await svc.list({
       categoryId: cat.id,
@@ -553,13 +571,15 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     const cat = await catSvc.create({
       encryptedName: encName("CreatedBy Filter"),
     });
+    const authorA = "author-a" as UserId;
+    const authorB = "author-b" as UserId;
 
-    await svc.create("author-a", {
+    await svc.create(authorA, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("by-a"),
       encryptedBody: Buffer.from("body"),
     });
-    await svc.create("author-b", {
+    await svc.create(authorB, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("by-b"),
       encryptedBody: Buffer.from("body"),
@@ -570,9 +590,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       limit: 50,
       sortBy: "created_at",
       sortDirection: "desc",
-      createdBy: "author-a",
+      createdBy: authorA,
     });
-    expect(page.items.every((i) => i.createdBy === "author-a")).toBe(true);
+    expect(page.items.every((i) => i.createdBy === authorA)).toBe(true);
     expect(page.items.length).toBe(1);
   });
 
@@ -582,7 +602,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     });
 
     // All items created "now", so filtering with a future range should return none
-    await svc.create("user-1", {
+    await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("in-range"),
       encryptedBody: Buffer.from("body"),
@@ -621,34 +641,42 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedName: encName("Combined Sort+Filter"),
     });
     const voteSvc = createKBVoteService(testDb.db);
+    const targetAuthor = "target-author" as UserId;
+    const otherAuthor = "other-author" as UserId;
 
-    const itemA = await svc.create("target-author", {
+    const itemA = await svc.create(targetAuthor, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("combo-a"),
       encryptedBody: Buffer.from("body"),
     });
-    const itemB = await svc.create("target-author", {
+    const itemB = await svc.create(targetAuthor, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("combo-b"),
       encryptedBody: Buffer.from("body"),
     });
     // Different author, should be filtered out
-    await svc.create("other-author", {
+    await svc.create(otherAuthor, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("combo-c"),
       encryptedBody: Buffer.from("body"),
     });
 
     // Give itemA more votes
-    await voteSvc.castVote("v1", { itemId: itemA.id, direction: "up" });
-    await voteSvc.castVote("v2", { itemId: itemA.id, direction: "up" });
+    await voteSvc.castVote("00000000-0000-4000-8000-00000000c001" as UserId, {
+      itemId: itemA.id,
+      direction: "up",
+    });
+    await voteSvc.castVote("00000000-0000-4000-8000-00000000c002" as UserId, {
+      itemId: itemA.id,
+      direction: "up",
+    });
 
     const page = await svc.list({
       categoryId: cat.id,
       limit: 50,
       sortBy: "rating",
       sortDirection: "desc",
-      createdBy: "target-author",
+      createdBy: targetAuthor,
     });
 
     expect(page.items.length).toBe(2);
@@ -664,9 +692,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     });
     const voteSvc = createKBVoteService(testDb.db);
 
-    const ids: string[] = [];
+    const ids: KbItemId[] = [];
     for (let i = 0; i < 5; i++) {
-      const item = await svc.create("user-1", {
+      const item = await svc.create(TEST_AUTHOR, {
         categoryId: cat.id,
         encryptedTitle: Buffer.from(`rating-cursor-${String(i)}`),
         encryptedBody: Buffer.from("body"),
@@ -674,10 +702,13 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       ids.push(item.id);
       // Give each item a different number of upvotes for varied ratings
       for (let v = 0; v <= i; v++) {
-        await voteSvc.castVote(`cursor-voter-${String(i)}-${String(v)}`, {
-          itemId: item.id,
-          direction: "up",
-        });
+        await voteSvc.castVote(
+          `00000000-0000-0000-${String(i).padStart(4, "0")}-${String(v).padStart(12, "0")}` as UserId,
+          {
+            itemId: item.id,
+            direction: "up",
+          },
+        );
       }
     }
 
@@ -723,9 +754,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedName: encName("UpdatedAt Cursor"),
     });
 
-    const ids: string[] = [];
+    const ids: KbItemId[] = [];
     for (let i = 0; i < 4; i++) {
-      const item = await svc.create("user-1", {
+      const item = await svc.create(TEST_AUTHOR, {
         categoryId: cat.id,
         encryptedTitle: Buffer.from(`upd-cursor-${String(i)}`),
         encryptedBody: Buffer.from("body"),
@@ -765,9 +796,9 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedName: encName("Asc Cursor"),
     });
 
-    const ids: string[] = [];
+    const ids: KbItemId[] = [];
     for (let i = 0; i < 3; i++) {
-      const item = await svc.create("user-1", {
+      const item = await svc.create(TEST_AUTHOR, {
         categoryId: cat.id,
         encryptedTitle: Buffer.from(`asc-cursor-${String(i)}`),
         encryptedBody: Buffer.from("body"),
@@ -799,17 +830,17 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   // --- listBodies tests ---
 
   it("listBodies returns bodies for requested IDs", async () => {
-    const a = await svc.create("user-1", {
+    const a = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("body-a-title"),
       encryptedBody: Buffer.from("body-a-content"),
     });
-    const b = await svc.create("user-1", {
+    const b = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("body-b-title"),
       encryptedBody: Buffer.from("body-b-content"),
     });
-    const c = await svc.create("user-1", {
+    const c = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("body-c-title"),
       encryptedBody: Buffer.from("body-c-content"),
@@ -829,14 +860,12 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   });
 
   it("listBodies returns empty array for non-existent IDs", async () => {
-    const results = await svc.listBodies([
-      "00000000-0000-0000-0000-000000000099",
-    ]);
+    const results = await svc.listBodies([NONEXISTENT_ID as KbItemId]);
     expect(results).toHaveLength(0);
   });
 
   it("listBodies handles single item", async () => {
-    const item = await svc.create("user-1", {
+    const item = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("single-body"),
       encryptedBody: Buffer.from("single-content"),
@@ -855,7 +884,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let testDb: TestDb;
     let catSvc: KBCategoryService;
     let svc: KBItemService;
-    let categoryId: string;
+    let categoryId: KbCategoryId;
 
     beforeAll(async () => {
       testDb = await createTestDb();
@@ -942,7 +971,12 @@ describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {
   let catSvc: KBCategoryService;
   let itemSvc: KBItemService;
   let svc: KBVoteService;
-  let itemId: string;
+  let itemId: KbItemId;
+
+  const VOTER_1 = "00000000-0000-4000-8000-00000000a001" as UserId;
+  const VOTER_2 = "00000000-0000-4000-8000-00000000a002" as UserId;
+  const VOTER_X = "00000000-0000-4000-8000-00000000a003" as UserId;
+  const VOTER_NONE = "00000000-0000-4000-8000-00000000a099" as UserId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -953,7 +987,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {
     const cat = await catSvc.create({
       encryptedName: encName("Vote Category"),
     });
-    const item = await itemSvc.create("user-1", {
+    const item = await itemSvc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("vote-article"),
       encryptedBody: Buffer.from("body"),
@@ -966,7 +1000,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {
   });
 
   it("casts an upvote", async () => {
-    await svc.castVote("voter-1", { itemId, direction: "up" });
+    await svc.castVote(VOTER_1, { itemId, direction: "up" });
     const item = await itemSvc.findById(itemId);
     expect(item.voteUpCount).toBe(1);
     expect(item.voteDownCount).toBe(0);
@@ -974,14 +1008,14 @@ describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {
   });
 
   it("casts a downvote from a different voter", async () => {
-    await svc.castVote("voter-2", { itemId, direction: "down" });
+    await svc.castVote(VOTER_2, { itemId, direction: "down" });
     const item = await itemSvc.findById(itemId);
     expect(item.voteUpCount).toBe(1);
     expect(item.voteDownCount).toBe(1);
   });
 
   it("same direction vote is a no-op", async () => {
-    await svc.castVote("voter-1", { itemId, direction: "up" });
+    await svc.castVote(VOTER_1, { itemId, direction: "up" });
     const item = await itemSvc.findById(itemId);
     // Counts unchanged from previous test
     expect(item.voteUpCount).toBe(1);
@@ -989,46 +1023,46 @@ describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {
   });
 
   it("changes vote direction", async () => {
-    // voter-1 changes from up to down
-    await svc.castVote("voter-1", { itemId, direction: "down" });
+    // VOTER_1 changes from up to down
+    await svc.castVote(VOTER_1, { itemId, direction: "down" });
     const item = await itemSvc.findById(itemId);
     expect(item.voteUpCount).toBe(0);
     expect(item.voteDownCount).toBe(2);
   });
 
   it("getUserVote returns existing vote", async () => {
-    const vote = await svc.getUserVote("voter-1", itemId);
+    const vote = await svc.getUserVote(VOTER_1, itemId);
     expect(vote).not.toBeNull();
     expect(vote!.direction).toBe("down");
   });
 
   it("getUserVote returns null for no vote", async () => {
-    const vote = await svc.getUserVote("no-vote-user", itemId);
+    const vote = await svc.getUserVote(VOTER_NONE, itemId);
     expect(vote).toBeNull();
   });
 
   it("removes a vote and adjusts counts", async () => {
-    await svc.removeVote("voter-1", itemId);
+    await svc.removeVote(VOTER_1, itemId);
     const item = await itemSvc.findById(itemId);
-    expect(item.voteDownCount).toBe(1); // voter-2's downvote remains
+    expect(item.voteDownCount).toBe(1); // VOTER_2's downvote remains
     expect(item.voteUpCount).toBe(0);
 
     // Vote record should be gone
-    const vote = await svc.getUserVote("voter-1", itemId);
+    const vote = await svc.getUserVote(VOTER_1, itemId);
     expect(vote).toBeNull();
   });
 
   it("removeVote is idempotent", async () => {
-    // Already removed voter-1's vote above
-    await svc.removeVote("voter-1", itemId);
+    // Already removed VOTER_1's vote above
+    await svc.removeVote(VOTER_1, itemId);
     const item = await itemSvc.findById(itemId);
     expect(item.voteDownCount).toBe(1); // unchanged
   });
 
   it("castVote throws NotFoundError for non-existent article", async () => {
     await expect(
-      svc.castVote("voter-1", {
-        itemId: "00000000-0000-0000-0000-000000000099",
+      svc.castVote(VOTER_1, {
+        itemId: NONEXISTENT_ID as KbItemId,
         direction: "up",
       }),
     ).rejects.toThrow(NotFoundError);
@@ -1039,18 +1073,18 @@ describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {
     const cat = await catSvc.create({
       encryptedName: encName("Cascade Test"),
     });
-    const fresh = await itemSvc.create("u", {
+    const fresh = await itemSvc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("t"),
       encryptedBody: Buffer.from("b"),
     });
-    await svc.castVote("voter-x", { itemId: fresh.id, direction: "up" });
+    await svc.castVote(VOTER_X, { itemId: fresh.id, direction: "up" });
 
     // Delete the article
     await itemSvc.delete(fresh.id);
 
     // Vote should be gone (no orphaned rows)
-    const vote = await svc.getUserVote("voter-x", fresh.id);
+    const vote = await svc.getUserVote(VOTER_X, fresh.id);
     expect(vote).toBeNull();
   });
 });

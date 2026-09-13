@@ -19,16 +19,20 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { ForbiddenError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { TicketId, UserId } from "@care-y/shared";
 
 export interface TicketAccessChecker {
-  assertAccess(userId: string, ticketId: string): Promise<void>;
-  canAccess(userId: string, ticketId: string): Promise<boolean>;
+  assertAccess(userId: UserId, ticketId: TicketId): Promise<void>;
+  canAccess(userId: UserId, ticketId: TicketId): Promise<boolean>;
 }
 
 export function createTicketAccessChecker(
   db: Kysely<TenantDatabase>,
 ): TicketAccessChecker {
-  async function canAccess(userId: string, ticketId: string): Promise<boolean> {
+  async function canAccess(
+    userId: UserId,
+    ticketId: TicketId,
+  ): Promise<boolean> {
     // 1. Ticket must exist
     const ticket = await db
       .selectFrom("tickets")
@@ -62,7 +66,10 @@ export function createTicketAccessChecker(
     return queueMember !== undefined;
   }
 
-  async function assertAccess(userId: string, ticketId: string): Promise<void> {
+  async function assertAccess(
+    userId: UserId,
+    ticketId: TicketId,
+  ): Promise<void> {
     const allowed = await canAccess(userId, ticketId);
     if (!allowed) {
       throw new ForbiddenError(ErrorCode.INSUFFICIENT_PERMISSIONS);

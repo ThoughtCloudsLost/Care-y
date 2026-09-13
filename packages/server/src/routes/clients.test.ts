@@ -22,7 +22,25 @@ import {
   expectTrpcError,
   type TestDb,
 } from "../test-utils.js";
-import { RoleId } from "@care-y/shared";
+import { RoleId, type RoleIdValue } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+  ClientId,
+  QueueId,
+  KeyGeneration,
+  IdentifierHash,
+  UsernameHash,
+  PhoneHash,
+  OpsPhoneHash,
+  PhoneMatchHash,
+} from "@care-y/shared";
 import { createClientRouter, type ClientRouterDeps } from "./clients.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
@@ -39,11 +57,26 @@ import type { BlindIndexer } from "../crypto/field-encryptor.js";
  * createTestClientFixture.
  */
 const testNoopIndexer: BlindIndexer = {
-  hash(input: string, orgId: string): string {
+  hash(input: string, orgId: OrgId): string {
     return `hash(${input}:${orgId})`;
   },
-  hashBuffer(input: Buffer, orgId: string): string {
+  hashBuffer(input: Buffer, orgId: OrgId): string {
     return `hash(${input.toString("utf-8")}:${orgId})`;
+  },
+  hashIdentifier(input: string, orgId: OrgId): IdentifierHash {
+    return `id-hash(${input}:${orgId})` as IdentifierHash;
+  },
+  hashUsername(input: string, orgId: OrgId): UsernameHash {
+    return `user-hash(${input}:${orgId})` as UsernameHash;
+  },
+  hashPhone(input: string, orgId: OrgId): PhoneHash {
+    return `phone-hash(${input}:${orgId})` as PhoneHash;
+  },
+  hashPhoneBuffer(input: Buffer, orgId: OrgId): PhoneHash {
+    return `phone-hash(${input.toString("utf-8")}:${orgId})` as PhoneHash;
+  },
+  hashConsultantPhoneBuffer(input: Buffer, orgId: OrgId): OpsPhoneHash {
+    return `cons-hash(${input.toString("utf-8")}:${orgId})` as OpsPhoneHash;
   },
 };
 
@@ -71,8 +104,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       orgContext = {
         orgId: TEST_ORG_ID,
-        orgSlug: "test-clients",
-        orgSchema: testDb.schemaName,
+        orgSlug: "test-clients" as OrgSlug,
+        orgSchema: testDb.schemaName as OrgSchema,
         tenantDb,
         sealedBox: testSealedBox,
       };
@@ -120,8 +153,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     function createAuthedCaller(
       dbRow: {
-        id: string;
-        role_id: string;
+        id: UserId;
+        role_id: RoleIdValue;
         identifier_hash: string;
         encrypted_display_name: Buffer;
       },
@@ -134,11 +167,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         res: mockRes(),
         org: orgContext,
         session: {
-          id: "test-session",
-          token: "test-token",
+          id: "test-session" as SessionId,
+          token: "test-token" as SessionToken,
           userId: dbRow.id,
-          ipToken: "test-ip",
-          uaToken: "test-ua",
+          ipToken: "test-ip" as IpToken,
+          uaToken: "test-ua" as UaToken,
           expiresAt: new Date(Date.now() + 3_600_000),
           twofaVerified: opts?.twofaVerified ?? true,
           webauthnChallenge: null,
@@ -292,7 +325,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         await expectTrpcError(
           caller.clients.get({
-            clientId: "00000000-0000-0000-0000-000000000000",
+            clientId: "00000000-0000-0000-0000-000000000000" as ClientId,
           }),
           "NOT_FOUND",
         );
@@ -407,11 +440,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     describe("updatePhone", () => {
       async function createTicketForClient(
-        clientId: string,
-        queueId: string,
-        assignedTo: string | null,
+        clientId: ClientId,
+        queueId: QueueId,
+        assignedTo: UserId | null,
       ): Promise<string> {
-        const keyGen = crypto.randomUUID();
+        const keyGen = crypto.randomUUID() as KeyGeneration;
         // care-y-ignore-next-line no-plaintext-db-write -- test fixture: encrypted_title and encrypted_description are dummy ciphertext blobs, not real PII
         const ticket = await tenantDb
           .insertInto("tickets")
@@ -769,7 +802,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("list phoneMatchHash", () => {
       it("returns phoneMatchHash from the joined phone row", async () => {
         const fixture = await createTestClientFixture(tenantDb);
-        const hashVal = "d".repeat(128);
+        const hashVal = "d".repeat(128) as PhoneMatchHash;
 
         // Set a phone_match_hash on the phone row
         await tenantDb
@@ -842,7 +875,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("includes phoneHashes for hash-bearing clients", async () => {
         const fixture = await createTestClientFixture(tenantDb);
-        const hashVal = "e".repeat(128);
+        const hashVal = "e".repeat(128) as PhoneMatchHash;
 
         await tenantDb
           .updateTable("phones")
@@ -873,7 +906,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // Create a client via the phone fixture (simulating telephony path,
         // no intake form response)
         const fixture = await createTestClientFixture(tenantDb);
-        const hashVal = "f".repeat(128);
+        const hashVal = "f".repeat(128) as PhoneMatchHash;
 
         await tenantDb
           .updateTable("phones")
@@ -931,7 +964,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           const client = await tenantDb
             .selectFrom("clients")
             .select("id")
-            .where("id", "=", entry.clientId)
+            .where("id", "=", entry.clientId as ClientId)
             .executeTakeFirst();
           expect(client).toBeDefined();
         }

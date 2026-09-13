@@ -17,6 +17,13 @@ import {
   registerPortalExpiryHandler,
   PORTAL_EXPIRY_QUEUE,
 } from "./portal-message-expiry.js";
+import { channelSecretSchema, newFollowupId } from "@care-y/shared";
+import type {
+  ClientId,
+  ChannelRowId,
+  TicketId,
+  PortalMessageId,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -24,10 +31,12 @@ import {
 
 async function insertChannel(
   db: TestDb["db"],
-  clientId: string,
+  clientId: ClientId,
   lastSeenAt: Date | null,
-): Promise<string> {
-  const channelId = crypto.randomBytes(24).toString("hex");
+): Promise<ChannelRowId> {
+  const channelId = channelSecretSchema.parse(
+    crypto.randomBytes(24).toString("hex"),
+  );
   const row = await db
     .insertInto("portal_channels")
     .values({
@@ -53,10 +62,10 @@ async function insertChannel(
  */
 async function insertPortalMessage(
   db: TestDb["db"],
-  channelRowId: string,
-  ticketId: string,
-): Promise<string> {
-  const fuId = crypto.randomUUID();
+  channelRowId: ChannelRowId,
+  ticketId: TicketId,
+): Promise<PortalMessageId> {
+  const fuId = newFollowupId();
   await db
     .insertInto("followups")
     .values({

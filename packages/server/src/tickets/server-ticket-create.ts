@@ -10,12 +10,19 @@ import {
 } from "@care-y/crypto";
 import { eciesWrapAndStore } from "./key-wrap.js";
 import { reopenClosedTicket } from "./ticket-reopen.js";
+import type {
+  TicketId,
+  ClientId,
+  QueueId,
+  KeyGeneration,
+} from "@care-y/shared";
+import { newTicketId, newKeyGeneration } from "@care-y/shared";
 
 export interface ResolveTicketResult {
-  readonly ticketId: string;
+  readonly ticketId: TicketId;
   readonly isNew: boolean;
   readonly tk: SymmetricKey | null;
-  readonly keyGeneration: string | null;
+  readonly keyGeneration: KeyGeneration | null;
 }
 
 /**
@@ -27,8 +34,8 @@ export interface ResolveTicketResult {
  */
 export async function resolveOrCreateTicket(
   db: Kysely<TenantDatabase>,
-  clientId: string,
-  intakeQueueId: string,
+  clientId: ClientId,
+  intakeQueueId: QueueId,
   title: Buffer,
   description: Buffer,
 ): Promise<ResolveTicketResult> {
@@ -84,8 +91,8 @@ export async function resolveOrCreateTicket(
     const sodium = requireSodium();
     const tk = generateContentKey();
     try {
-      const keyGeneration = crypto.randomUUID();
-      const ticketId = crypto.randomUUID();
+      const keyGeneration = newKeyGeneration();
+      const ticketId = newTicketId();
 
       const encryptedTitle = encryptContent(
         new Uint8Array(title),

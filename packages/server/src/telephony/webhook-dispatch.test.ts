@@ -40,6 +40,19 @@ import {
   TestSetupError,
   type TestDb,
 } from "../test-utils.js";
+import {
+  orgIdSchema,
+  callSidSchema,
+  type OrgId,
+  type OrgSchema,
+  type OrgSlug,
+  type CallSid,
+  type QueueId,
+  type BlobKey,
+  type PhoneHash,
+  type RecordingSid,
+  type E164,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Local helpers
@@ -47,7 +60,7 @@ import {
 
 const WEBHOOK_BASE_URL = "https://api.example.test";
 
-function stubOrgService(orgs: ReadonlyMap<string, OrgRecord>): OrgService {
+function stubOrgService(orgs: ReadonlyMap<OrgId, OrgRecord>): OrgService {
   return {
     async createOrg(): Promise<never> {
       throw new TestSetupError("createOrg is not expected in webhook dispatch");
@@ -55,7 +68,7 @@ function stubOrgService(orgs: ReadonlyMap<string, OrgRecord>): OrgService {
     async findBySlug(): Promise<OrgRecord | null> {
       return null;
     },
-    async findById(id: string): Promise<OrgRecord | null> {
+    async findById(id: OrgId): Promise<OrgRecord | null> {
       return orgs.get(id) ?? null;
     },
     async validateSetupToken(): Promise<boolean> {
@@ -104,12 +117,12 @@ function createMemoryBlobStore(): MemoryBlobStore {
       return blobs;
     },
     async put(
-      orgSchema: string,
+      orgSchema: OrgSchema,
       category: BlobCategory,
       blob: Buffer,
-    ): Promise<string> {
+    ): Promise<BlobKey> {
       counter += 1;
-      const key = `${orgSchema}/${category}/blob-${String(counter)}`;
+      const key = `${orgSchema}/${category}/blob-${String(counter)}` as BlobKey;
       blobs.set(key, Buffer.from(blob));
       return key;
     },
@@ -146,19 +159,21 @@ function rejectAllTenantDb(): (schema: string) => Kysely<TenantDatabase> {
 // ---------------------------------------------------------------------------
 
 describe("webhook-dispatch (unit)", () => {
-  const UNKNOWN_ORG_ID = crypto.randomUUID();
-  const INACTIVE_ORG_ID = crypto.randomUUID();
+  const UNKNOWN_ORG_ID = orgIdSchema.parse(crypto.randomUUID());
+  const INACTIVE_ORG_ID = orgIdSchema.parse(crypto.randomUUID());
 
   const inactiveOrg: OrgRecord = {
     id: INACTIVE_ORG_ID,
-    slug: "inactive-org",
-    schemaName: "org_inactive",
+    slug: "inactive-org" as OrgSlug,
+    schemaName: "org_inactive" as OrgSchema,
     isActive: false,
   };
 
   function makeUnitDeps(callTracker?: CallTracker): WebhookDispatchDeps {
     return {
-      orgService: stubOrgService(new Map([[INACTIVE_ORG_ID, inactiveOrg]])),
+      orgService: stubOrgService(
+        new Map<OrgId, OrgRecord>([[INACTIVE_ORG_ID, inactiveOrg]]),
+      ),
       tenantDb: rejectAllTenantDb(),
       providerFactory: stubProviderFactory(),
       indexer: testBlindIndexer,
@@ -244,14 +259,14 @@ describe("webhook-dispatch (unit)", () => {
 describe.skipIf(!process.env.DATABASE_URL)(
   "webhook-dispatch (DB integration)",
   () => {
-    const ORG_FULL_ID = crypto.randomUUID();
-    const ORG_NO_KEY_ID = crypto.randomUUID();
-    const ORG_NO_INTAKE_ID = crypto.randomUUID();
+    const ORG_FULL_ID = orgIdSchema.parse(crypto.randomUUID());
+    const ORG_NO_KEY_ID = orgIdSchema.parse(crypto.randomUUID());
+    const ORG_NO_INTAKE_ID = orgIdSchema.parse(crypto.randomUUID());
 
     let dbFull: TestDb;
     let dbNoKey: TestDb;
     let dbNoIntake: TestDb;
-    let intakeQueueId: string;
+    let intakeQueueId: QueueId;
     let orgService: OrgService;
     let tenantDbFactory: (schema: string) => Kysely<TenantDatabase>;
 
@@ -283,13 +298,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await seedOrgPublicKey(dbNoIntake.db);
 
       orgService = stubOrgService(
-        new Map<string, OrgRecord>([
+        new Map<OrgId, OrgRecord>([
           [
             ORG_FULL_ID,
             {
               id: ORG_FULL_ID,
-              slug: "dispatch-full",
-              schemaName: dbFull.schemaName,
+              slug: "dispatch-full" as OrgSlug,
+              schemaName: dbFull.schemaName as OrgSchema,
               isActive: true,
             },
           ],
@@ -297,8 +312,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             ORG_NO_KEY_ID,
             {
               id: ORG_NO_KEY_ID,
-              slug: "dispatch-no-key",
-              schemaName: dbNoKey.schemaName,
+              slug: "dispatch-no-key" as OrgSlug,
+              schemaName: dbNoKey.schemaName as OrgSchema,
               isActive: true,
             },
           ],
@@ -306,8 +321,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             ORG_NO_INTAKE_ID,
             {
               id: ORG_NO_INTAKE_ID,
-              slug: "dispatch-no-intake",
-              schemaName: dbNoIntake.schemaName,
+              slug: "dispatch-no-intake" as OrgSlug,
+              schemaName: dbNoIntake.schemaName as OrgSchema,
               isActive: true,
             },
           ],
@@ -365,9 +380,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       return {
         ...createMockTelephonyProvider(),
         parseIncomingCall: (body: Record<string, string>) => ({
-          callId: body.CallSid ?? "CA_MISSING",
-          from: body.From ?? "+15550000000",
-          to: body.To ?? "+15550000001",
+          callId: (body.CallSid ?? "CA_MISSING") as CallSid,
+          from: (body.From ?? "+15550000000") as E164,
+          to: (body.To ?? "+15550000001") as E164,
           direction: "inbound" as const,
         }),
         generateVoiceResponse: () => VOICE_XML,
@@ -385,7 +400,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         expect(ctx).not.toBeNull();
         expect(ctx!.orgId).toBe(ORG_FULL_ID);
-        expect(ctx!.orgSchema).toBe(dbFull.schemaName);
+        expect(ctx!.orgSchema).toBe(dbFull.schemaName as OrgSchema);
         expect(ctx!.intakeQueueId).toBe(intakeQueueId);
         // The encryptor must seal against the org's stored public key: the
         // test org keypair can open the result.
@@ -458,7 +473,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         // A caller who has not picked a language yet gets the selection IVR
         // and no phone record is created for them.
-        const hash = testBlindIndexer.hash("+15550000021", ORG_FULL_ID);
+        const hash = testBlindIndexer.hash(
+          "+15550000021",
+          ORG_FULL_ID,
+        ) as PhoneHash;
         const phoneRow = await dbFull.db
           .selectFrom("phones")
           .select("id")
@@ -483,7 +501,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         expect(result).toBe(VOICE_XML);
 
-        const hash = testBlindIndexer.hash("+15550000022", ORG_FULL_ID);
+        const hash = testBlindIndexer.hash(
+          "+15550000022",
+          ORG_FULL_ID,
+        ) as PhoneHash;
         const phoneRow = await dbFull.db
           .selectFrom("phones")
           .selectAll()
@@ -502,24 +523,31 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         // The call is tracked so later status/recording callbacks can find
         // their ticket context.
-        const tracked = await tracker.get(dbFull.schemaName, "CA_DTMF_1");
+        const tracked = await tracker.get(
+          dbFull.schemaName as OrgSchema,
+          callSidSchema.parse("CA_DTMF_1"),
+        );
         expect(tracked).toBeDefined();
         expect(tracked!.clientId).toBe(clientRow.id);
         expect(tracked!.direction).toBe("inbound");
-        expect(tracked!.orgSchema).toBe(dbFull.schemaName);
+        expect(tracked!.orgSchema).toBe(dbFull.schemaName as OrgSchema);
       });
 
       it("routes a recording-ready callback into the recording pipeline", async () => {
         const fixture = await createTestTicketFixture(dbFull.db);
         const tracker = createCallTracker();
-        await tracker.track(dbFull.schemaName, "CA_REC_DISPATCH", {
-          ticketId: fixture.ticketId,
-          userId: null,
-          direction: "inbound",
-          orgSchema: dbFull.schemaName,
-          clientId: fixture.clientId,
-          createdAt: Date.now(),
-        });
+        await tracker.track(
+          dbFull.schemaName as OrgSchema,
+          callSidSchema.parse("CA_REC_DISPATCH"),
+          {
+            ticketId: fixture.ticketId,
+            userId: null,
+            direction: "inbound",
+            orgSchema: dbFull.schemaName as OrgSchema,
+            clientId: fixture.clientId,
+            createdAt: Date.now(),
+          },
+        );
 
         const blobStore = createMemoryBlobStore();
         const deleteRecording = vi.fn().mockResolvedValue(undefined);
@@ -574,9 +602,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const getRecording = vi
           .fn()
           .mockResolvedValue(Buffer.from("untracked-audio"));
-        const getCallDetails = vi
-          .fn()
-          .mockResolvedValue({ from: "+15551112222", to: "+15553334444" });
+        const getCallDetails = vi.fn().mockResolvedValue({
+          from: "+15551112222" as E164,
+          to: "+15553334444" as E164,
+        });
         const provider: TelephonyProvider = {
           ...createMockTelephonyProvider(),
           deleteRecording,
@@ -607,7 +636,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const rows = await dbFull.db
           .selectFrom("voicemail_quarantine")
           .selectAll()
-          .where("recording_sid", "=", "RE_UNTRACKED")
+          .where("recording_sid", "=", "RE_UNTRACKED" as RecordingSid)
           .execute();
         expect(rows).toHaveLength(1);
         expect(rows[0]!.reason).toBe("tracker_miss");
@@ -623,14 +652,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
           createUser: true,
         });
         const tracker = createCallTracker();
-        await tracker.track(dbFull.schemaName, "CA_STATUS_DONE", {
-          ticketId: fixture.ticketId,
-          userId: fixture.userId,
-          direction: "outbound",
-          orgSchema: dbFull.schemaName,
-          clientId: null,
-          createdAt: Date.now(),
-        });
+        await tracker.track(
+          dbFull.schemaName as OrgSchema,
+          callSidSchema.parse("CA_STATUS_DONE"),
+          {
+            ticketId: fixture.ticketId,
+            userId: fixture.userId,
+            direction: "outbound",
+            orgSchema: dbFull.schemaName as OrgSchema,
+            clientId: null,
+            createdAt: Date.now(),
+          },
+        );
         const dispatch = makeDispatch({ callTracker: tracker });
 
         await dispatch.onStatusCallback!(ORG_FULL_ID, {
@@ -642,7 +675,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const row = await dbFull.db
           .selectFrom("followups")
           .selectAll()
-          .where("call_sid", "=", "CA_STATUS_DONE")
+          .where("call_sid", "=", "CA_STATUS_DONE" as CallSid)
           .executeTakeFirstOrThrow();
         expect(row.ticket_id).toBe(fixture.ticketId);
         expect(row.type).toBe("phone_call");
@@ -669,12 +702,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ];
 
         for (const { raw, stored } of cases) {
-          const callSid = `CA_STATUS_${raw}`;
-          await tracker.track(dbFull.schemaName, callSid, {
+          const callSid = callSidSchema.parse(`CA_STATUS_${raw}`);
+          await tracker.track(dbFull.schemaName as OrgSchema, callSid, {
             ticketId: fixture.ticketId,
             userId: fixture.userId,
             direction: "outbound",
-            orgSchema: dbFull.schemaName,
+            orgSchema: dbFull.schemaName as OrgSchema,
             clientId: null,
             createdAt: Date.now(),
           });
@@ -697,14 +730,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("ignores non-terminal status updates", async () => {
         const fixture = await createTestTicketFixture(dbFull.db);
         const tracker = createCallTracker();
-        await tracker.track(dbFull.schemaName, "CA_STATUS_RINGING", {
-          ticketId: fixture.ticketId,
-          userId: null,
-          direction: "outbound",
-          orgSchema: dbFull.schemaName,
-          clientId: null,
-          createdAt: Date.now(),
-        });
+        await tracker.track(
+          dbFull.schemaName as OrgSchema,
+          callSidSchema.parse("CA_STATUS_RINGING"),
+          {
+            ticketId: fixture.ticketId,
+            userId: null,
+            direction: "outbound",
+            orgSchema: dbFull.schemaName as OrgSchema,
+            clientId: null,
+            createdAt: Date.now(),
+          },
+        );
         const dispatch = makeDispatch({ callTracker: tracker });
 
         await dispatch.onStatusCallback!(ORG_FULL_ID, {
@@ -715,7 +752,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const row = await dbFull.db
           .selectFrom("followups")
           .select("id")
-          .where("call_sid", "=", "CA_STATUS_RINGING")
+          .where("call_sid", "=", "CA_STATUS_RINGING" as CallSid)
           .executeTakeFirst();
         expect(row).toBeUndefined();
       });

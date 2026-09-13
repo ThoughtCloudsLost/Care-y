@@ -17,6 +17,7 @@
     MessageSquare,
     MessagesSquare,
     ChevronDown,
+    Link2,
     type LucideIcon,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -102,11 +103,13 @@
     if (item.source === "system") return true;
     if (item.type === "internal_note") return true;
     if (item.type === "phone_call") return true;
+    if (item.type === "share_link") return true;
     if (item.hasRecording || item.hasImage || item.hasFile) return true;
     return false;
   }
 
   function landmarkIcon(item: TimelineItem): Component {
+    if (item.type === "share_link") return Link2;
     if (item.hasRecording)
       return resolveFollowUpTypeIcon(item.type, "recording");
     if (item.hasImage) return resolveFollowUpTypeIcon(item.type, "image");
@@ -121,6 +124,10 @@
   function landmarkLabel(item: TimelineItem): string {
     if (item.source === "system") {
       return systemEventLabel(item.type, item.eventParams, resolveUserName);
+    }
+
+    if (item.type === "share_link") {
+      return m.followup_type_share_link();
     }
 
     if (item.type === "internal_note") {

@@ -25,7 +25,16 @@ import {
   expectTrpcError,
   type TestDb,
 } from "../test-utils.js";
-import { RoleId } from "@care-y/shared";
+import { RoleId, type RoleIdValue } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgSlug,
+  OrgSchema,
+} from "@care-y/shared";
 import { createKeysRouter } from "./keys.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
@@ -88,8 +97,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       orgContext = {
         orgId: TEST_ORG_ID,
-        orgSlug: "test-keys",
-        orgSchema: testDb.schemaName,
+        orgSlug: "test-keys" as OrgSlug,
+        orgSchema: testDb.schemaName as OrgSchema,
         tenantDb,
         sealedBox: testSealedBox,
       };
@@ -107,8 +116,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     /** Maps a raw DB user row (snake_case) to a tRPC Context caller. */
     function createAuthedCaller(dbRow: {
-      id: string;
-      role_id: string;
+      id: UserId;
+      role_id: RoleIdValue;
       identifier_hash: string;
       encrypted_display_name: Buffer;
     }) {
@@ -119,11 +128,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         res: mockRes(),
         org: orgContext,
         session: {
-          id: "test-session",
-          token: "test-token",
+          id: "test-session" as SessionId,
+          token: "test-token" as SessionToken,
           userId: dbRow.id,
-          ipToken: "test-ip",
-          uaToken: "test-ua",
+          ipToken: "test-ip" as IpToken,
+          uaToken: "test-ua" as UaToken,
           expiresAt: new Date(Date.now() + 3_600_000),
           twofaVerified: true,
           webauthnChallenge: null,
@@ -532,8 +541,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
           const freshOrgCtx: OrgContext = {
             orgId: TEST_ORG_ID,
-            orgSlug: "test-keys-orgkey",
-            orgSchema: freshDb.schemaName,
+            orgSlug: "test-keys-orgkey" as OrgSlug,
+            orgSchema: freshDb.schemaName as OrgSchema,
             tenantDb: freshTenantDb,
             sealedBox: testSealedBox,
           };
@@ -549,11 +558,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
             res: mockRes(),
             org: freshOrgCtx,
             session: {
-              id: "s1",
-              token: "t1",
+              id: "s1" as SessionId,
+              token: "t1" as SessionToken,
               userId: admin.id,
-              ipToken: "ip1",
-              uaToken: "ua1",
+              ipToken: "ip1" as IpToken,
+              uaToken: "ua1" as UaToken,
               expiresAt: new Date(Date.now() + 3_600_000),
               twofaVerified: true,
               webauthnChallenge: null,
@@ -874,7 +883,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // -----------------------------------------------------------------------
 
     describe("adminBootstrapUserKeys", () => {
-      function bootstrapInput(userId: string) {
+      function bootstrapInput(userId: UserId) {
         return {
           userId,
           salt: testSalt(),
@@ -941,7 +950,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(volunteer);
 
         await expectTrpcError(
-          caller.keys.adminBootstrapUserKeys(bootstrapInput(randomUUID())),
+          caller.keys.adminBootstrapUserKeys(
+            bootstrapInput(randomUUID() as UserId),
+          ),
           "FORBIDDEN",
         );
       });
@@ -950,7 +961,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createUnauthCaller();
 
         await expectTrpcError(
-          caller.keys.adminBootstrapUserKeys(bootstrapInput(randomUUID())),
+          caller.keys.adminBootstrapUserKeys(
+            bootstrapInput(randomUUID() as UserId),
+          ),
           "UNAUTHORIZED",
         );
       });

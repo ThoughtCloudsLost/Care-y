@@ -4,6 +4,7 @@ import {
   ErrorCode,
   ROLE_ID_VALUES,
   type RoleIdValue,
+  type OrgSchema,
 } from "@care-y/shared";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
@@ -198,7 +199,7 @@ export function mergePermissions(
  */
 export async function getEffectivePermissions(
   tDb: Kysely<TenantDatabase>,
-  orgSchema: string,
+  orgSchema: OrgSchema,
   roleId: RoleIdValue,
 ): Promise<ReadonlySet<Permission>> {
   const orgCache = permissionCache.get(orgSchema);
@@ -242,7 +243,7 @@ export async function getEffectivePermissions(
  */
 export async function hasPermissionForOrg(
   tDb: Kysely<TenantDatabase>,
-  orgSchema: string,
+  orgSchema: OrgSchema,
   roleId: string,
   permission: Permission,
 ): Promise<boolean> {
@@ -258,7 +259,7 @@ export async function hasPermissionForOrg(
  */
 export async function requirePermissionForOrg(
   tDb: Kysely<TenantDatabase>,
-  orgSchema: string,
+  orgSchema: OrgSchema,
   roleId: string,
   permission: Permission,
 ): Promise<void> {
@@ -273,7 +274,7 @@ export async function requirePermissionForOrg(
  * override mutation (set, reset, delete) so that revoked permissions
  * stop working on the next request, not after some TTL.
  */
-export function invalidateRolePermissionCache(orgSchema: string): void {
+export function invalidateRolePermissionCache(orgSchema: OrgSchema): void {
   permissionCache.delete(orgSchema);
 }
 

@@ -37,6 +37,15 @@ import {
   type EciesTripleBuffers,
 } from "./portal-message-service.js";
 import { NotFoundError } from "../errors.js";
+import {
+  orgIdSchema,
+  orgSchemaNameSchema,
+  orgSlugIdSchema,
+  newFollowupId,
+  newKeyGeneration,
+  channelSecretSchema,
+} from "@care-y/shared";
+import type { ClientId } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,6 +70,12 @@ function createMockProvider(): TelephonyProvider & { sendSms: Mock } {
   } as unknown as TelephonyProvider & { sendSms: Mock };
 }
 
+const TEST_ORG_ID = orgIdSchema.parse("00000000-0000-4000-8000-bbbbbbbbbbbb");
+const TEST_ORG_SCHEMA = orgSchemaNameSchema.parse(
+  "org_00000000-0000-4000-8000-bbbbbbbbbbbb",
+);
+const TEST_ORG_SLUG = orgSlugIdSchema.parse("test-org");
+
 function makeDeps(
   overrides?: Partial<PortalMessageServiceDeps>,
 ): PortalMessageServiceDeps {
@@ -70,8 +85,9 @@ function makeDeps(
     resolveCallerIdByPurpose: vi.fn().mockResolvedValue("+15550001234"),
     fieldEncryptor: noopEncryptor,
     notificationService: createMockNotificationService(),
-    orgSchema: "test_schema",
-    orgSlug: "test-org",
+    orgId: TEST_ORG_ID,
+    orgSchema: TEST_ORG_SCHEMA,
+    orgSlug: TEST_ORG_SLUG,
     ...overrides,
   };
 }
@@ -86,10 +102,12 @@ function fakeTriple(): EciesTripleBuffers {
 
 async function insertChannel(
   db: TestDb["db"],
-  clientId: string,
+  clientId: ClientId,
   overrides?: Partial<Record<string, unknown>>,
 ): Promise<PortalChannelRow> {
-  const channelId = crypto.randomBytes(24).toString("hex");
+  const channelId = channelSecretSchema.parse(
+    crypto.randomBytes(24).toString("hex"),
+  );
   const row = await db
     .insertInto("portal_channels")
     .values({
@@ -137,7 +155,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const channel = await insertChannel(testDb.db, fixture.clientId);
 
         // Create follow-ups that portal_messages can reference (FK constraint)
-        const fuId1 = crypto.randomUUID();
+        const fuId1 = newFollowupId();
         await testDb.db
           .insertInto("followups")
           .values({
@@ -158,7 +176,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           "to_client",
         );
 
-        const fuId2 = crypto.randomUUID();
+        const fuId2 = newFollowupId();
         await testDb.db
           .insertInto("followups")
           .values({
@@ -167,7 +185,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             source: "client",
             type: "message",
             encrypted_content: Buffer.from("ct-2"),
-            key_generation: crypto.randomUUID(),
+            key_generation: newKeyGeneration(),
           })
           .execute();
 
@@ -209,7 +227,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
 
         // Create a follow-up to satisfy the FK constraint
-        const fuId = crypto.randomUUID();
+        const fuId = newFollowupId();
         await testDb.db
           .insertInto("followups")
           .values({
@@ -274,8 +292,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const channel = await insertChannel(testDb.db, fixture.clientId);
         const deps = makeDeps();
 
-        const followUpId = crypto.randomUUID();
-        const keyGen = crypto.randomUUID();
+        const followUpId = newFollowupId();
+        const keyGen = newKeyGeneration();
         const input: PortalReplyServiceInput = {
           ticketId: fixture.ticketId,
           followUpId,
@@ -329,8 +347,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         const input: PortalReplyServiceInput = {
           ticketId: fixture.ticketId,
-          followUpId: crypto.randomUUID(),
-          keyGeneration: crypto.randomUUID(),
+          followUpId: newFollowupId(),
+          keyGeneration: newKeyGeneration(),
           encryptedContent: Buffer.from("re-reply"),
           wrappedTkTemp: Buffer.alloc(80, 0xef),
           selfCopy: fakeTriple(),
@@ -367,8 +385,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         const input: PortalReplyServiceInput = {
           ticketId: fixture2.ticketId,
-          followUpId: crypto.randomUUID(),
-          keyGeneration: crypto.randomUUID(),
+          followUpId: newFollowupId(),
+          keyGeneration: newKeyGeneration(),
           encryptedContent: Buffer.from("wrong-ticket"),
           wrappedTkTemp: Buffer.alloc(80, 0xef),
           selfCopy: fakeTriple(),
@@ -392,13 +410,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const channel = await insertChannel(testDb.db, fixture.clientId);
         const deps = makeDeps();
 
-        const followUpId = crypto.randomUUID();
+        const followUpId = newFollowupId();
 
         // First reply succeeds
         const input1: PortalReplyServiceInput = {
           ticketId: fixture.ticketId,
           followUpId,
-          keyGeneration: crypto.randomUUID(),
+          keyGeneration: newKeyGeneration(),
           encryptedContent: Buffer.from("first"),
           wrappedTkTemp: Buffer.alloc(80, 0xef),
           selfCopy: fakeTriple(),
@@ -409,7 +427,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const input2: PortalReplyServiceInput = {
           ticketId: fixture.ticketId,
           followUpId, // same id causes unique violation
-          keyGeneration: crypto.randomUUID(),
+          keyGeneration: newKeyGeneration(),
           encryptedContent: Buffer.from("second"),
           wrappedTkTemp: Buffer.alloc(80, 0xab),
           selfCopy: fakeTriple(),
@@ -426,6 +444,38 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where("id", "=", followUpId)
           .execute();
         expect(fuRows.length).toBe(1);
+      });
+
+      it("passes orgId to notification dispatch for SMS payload correctness", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const notificationService = createMockNotificationService();
+        const deps = makeDeps({ notificationService });
+
+        const input: PortalReplyServiceInput = {
+          ticketId: fixture.ticketId,
+          followUpId: newFollowupId(),
+          keyGeneration: newKeyGeneration(),
+          encryptedContent: Buffer.from("encrypted-reply"),
+          wrappedTkTemp: Buffer.alloc(80, 0xef),
+          selfCopy: fakeTriple(),
+        };
+
+        await clientReply(testDb.db, deps, channel, input);
+
+        // The notification block runs several awaited queries before it
+        // dispatches, and nothing awaits it, so a single tick is not enough.
+        await vi.waitFor(() => {
+          expect(notificationService.dispatch).toHaveBeenCalledTimes(1);
+        });
+
+        // dispatch is called with orgId as the second positional argument
+        // (after tDb). This is the only compile-time-invisible contract
+        // that prevents a Zod rejection when the SMS job dequeues.
+        const dispatchArgs = notificationService.dispatch.mock
+          .calls[0] as unknown[];
+        // arg[0] = tDb, arg[1] = orgId
+        expect(dispatchArgs[1]).toBe(TEST_ORG_ID);
       });
     });
 
@@ -497,7 +547,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             queue_id: queue.id,
             encrypted_title: noopEncryptor.encrypt("t"),
             encrypted_description: noopEncryptor.encrypt("d"),
-            key_generation: crypto.randomUUID(),
+            key_generation: newKeyGeneration(),
           })
           .execute();
 
@@ -528,6 +578,32 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expect(
           nudgeClient(testDb.db, deps, channel),
         ).resolves.toBeUndefined();
+      });
+
+      it("passes the org UUID to getProvider and OrgIdentifiers to the resolver", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId, {
+          last_seen_at: new Date(Date.now() - 60_000),
+          last_notified_at: null,
+        });
+
+        const mockProvider = createMockProvider();
+        const getProvider = vi.fn().mockResolvedValue(mockProvider);
+        const resolveCallerIdByPurpose = vi
+          .fn()
+          .mockResolvedValue("+15550001234");
+        const deps = makeDeps({ getProvider, resolveCallerIdByPurpose });
+
+        await nudgeClient(testDb.db, deps, channel);
+
+        // getProvider receives the org UUID, not the schema name
+        expect(getProvider).toHaveBeenCalledWith(TEST_ORG_ID);
+
+        // resolveCallerIdByPurpose receives OrgIdentifiers, not a bare string
+        expect(resolveCallerIdByPurpose).toHaveBeenCalledWith(
+          { orgId: TEST_ORG_ID, orgSchema: TEST_ORG_SCHEMA },
+          "system",
+        );
       });
     });
   },

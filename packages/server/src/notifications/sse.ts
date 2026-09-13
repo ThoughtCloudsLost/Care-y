@@ -4,11 +4,12 @@
 
 import type { ServerResponse } from "node:http";
 import type { AnySseEvent } from "@care-y/shared";
+import type { OrgSchema, UserId } from "@care-y/shared";
 
 interface SseConnection {
   readonly res: ServerResponse;
-  readonly userId: string;
-  readonly orgId: string;
+  readonly userId: UserId;
+  readonly orgSchema: OrgSchema;
   lastEventId: number;
 }
 
@@ -16,15 +17,15 @@ export interface SseService {
   /** Registers a new SSE connection for a user. Returns a cleanup function. */
   connect(
     res: ServerResponse,
-    userId: string,
-    orgId: string,
+    userId: UserId,
+    orgSchema: OrgSchema,
     lastEventId?: number,
   ): () => void;
 
   /** Sends an event to all connected users in the recipient list for a given org. */
   broadcast(
-    orgId: string,
-    recipientUserIds: readonly string[],
+    orgSchema: OrgSchema,
+    recipientUserIds: readonly UserId[],
     event: AnySseEvent,
   ): void;
 
@@ -42,8 +43,8 @@ export function createSseService(): SseService {
   // Buffer: recent events for Last-Event-ID replay (5-minute window)
   const recentEvents: {
     id: number;
-    orgId: string;
-    recipientUserIds: readonly string[];
+    orgSchema: OrgSchema;
+    recipientUserIds: readonly UserId[];
     data: string;
     timestamp: number;
   }[] = [];
@@ -69,7 +70,7 @@ export function createSseService(): SseService {
   }
 
   return {
-    connect(res, userId, orgId, lastEventId) {
+    connect(res, userId, orgSchema, lastEventId) {
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -83,11 +84,11 @@ export function createSseService(): SseService {
       const conn: SseConnection = {
         res,
         userId,
-        orgId,
+        orgSchema,
         lastEventId: lastEventId ?? 0,
       };
 
-      const key = `${orgId}:${userId}`;
+      const key = `${orgSchema}:${userId}`;
       const existing = connections.get(key) ?? [];
 
       // Evict oldest connections when the per-user limit is reached.
@@ -108,7 +109,7 @@ export function createSseService(): SseService {
         for (const evt of recentEvents) {
           if (
             evt.id > lastEventId &&
-            evt.orgId === orgId &&
+            evt.orgSchema === orgSchema &&
             evt.recipientUserIds.includes(userId)
           ) {
             sendEvent(conn, evt.id, evt.data);
@@ -139,8 +140,8 @@ export function createSseService(): SseService {
     },
 
     broadcast(
-      orgId: string,
-      recipientUserIds: readonly string[],
+      orgSchema: OrgSchema,
+      recipientUserIds: readonly UserId[],
       event: AnySseEvent,
     ): void {
       const data = JSON.stringify(event);
@@ -150,7 +151,7 @@ export function createSseService(): SseService {
       // Buffer for replay
       recentEvents.push({
         id,
-        orgId,
+        orgSchema,
         recipientUserIds,
         data,
         timestamp: Date.now(),
@@ -159,7 +160,7 @@ export function createSseService(): SseService {
 
       // Send to all matching connections
       for (const userId of recipientUserIds) {
-        const key = `${orgId}:${userId}`;
+        const key = `${orgSchema}:${userId}`;
         const conns = connections.get(key);
         if (!conns) continue;
         for (const conn of conns) {

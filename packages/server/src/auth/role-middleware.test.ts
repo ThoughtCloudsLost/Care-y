@@ -8,7 +8,19 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { RoleId, Permission } from "@care-y/shared";
+import {
+  RoleId,
+  Permission,
+  type RoleIdValue,
+  type OrgId,
+  type OrgSlug,
+  type OrgSchema,
+  type SessionId,
+  type SessionToken,
+  type UserId,
+  type IpToken,
+  type UaToken,
+} from "@care-y/shared";
 import {
   router,
   authed2faProcedure,
@@ -26,10 +38,16 @@ import {
 
 // --- Stubs ---
 
+const TEST_USER_ID = "00000000-0000-4000-8000-aaaaaaaaaaaa" as UserId;
+const TEST_SESSION_ID = "00000000-0000-4000-8000-bbbbbbbbbbbb" as SessionId;
+const TEST_SESSION_TOKEN = "test-session-token" as SessionToken;
+const TEST_IP_TOKEN = "test-ip-token" as IpToken;
+const TEST_UA_TOKEN = "test-ua-token" as UaToken;
+
 const stubOrg: OrgContext = {
-  orgId: "00000000-0000-0000-0000-000000000001",
-  orgSlug: "test",
-  orgSchema: "test_schema",
+  orgId: "00000000-0000-4000-8000-000000000001" as OrgId,
+  orgSlug: "test" as OrgSlug,
+  orgSchema: "test_schema" as OrgSchema,
   tenantDb: stubTenantDbDefaultRoles(),
   sealedBox: testSealedBox,
 };
@@ -40,17 +58,17 @@ function makeCtx(overrides?: Partial<Context>): Context {
     res: mockRes(),
     org: stubOrg,
     session: {
-      id: "session-id",
-      token: "token",
-      userId: "user-id",
-      ipToken: "test-ip-token",
-      uaToken: "test-ua-token",
+      id: TEST_SESSION_ID,
+      token: TEST_SESSION_TOKEN,
+      userId: TEST_USER_ID,
+      ipToken: TEST_IP_TOKEN,
+      uaToken: TEST_UA_TOKEN,
       expiresAt: new Date(Date.now() + 60_000),
       twofaVerified: true,
       webauthnChallenge: null,
     },
     user: {
-      id: "user-id",
+      id: TEST_USER_ID,
       encryptedIdentifier: "testuser",
       encryptedDisplayName: "Test User",
       encryptedPreferredLocale: null,
@@ -62,10 +80,10 @@ function makeCtx(overrides?: Partial<Context>): Context {
   };
 }
 
-function makeCtxWithRole(roleId: string): Context {
+function makeCtxWithRole(roleId: RoleIdValue): Context {
   return makeCtx({
     user: {
-      id: "user-id",
+      id: TEST_USER_ID,
       encryptedIdentifier: "testuser",
       encryptedDisplayName: "Test User",
       encryptedPreferredLocale: null,

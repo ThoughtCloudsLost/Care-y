@@ -8,6 +8,7 @@ import {
   seedOrgPublicKey,
 } from "../../test-utils.js";
 import { createPhoneRepository, type PhoneRepository } from "./phone-repo.js";
+import type { PhoneHash } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("PhoneRepository", () => {
   let testDb: TestDb;
@@ -27,8 +28,8 @@ describe.skipIf(!process.env.DATABASE_URL)("PhoneRepository", () => {
     return testSealedBox.sealBuffer(Buffer.from(raw));
   }
 
-  function phoneHash(raw: string): string {
-    return testBlindIndexer.hash(raw, TEST_ORG_ID);
+  function phoneHash(raw: string): PhoneHash {
+    return testBlindIndexer.hash(raw, TEST_ORG_ID) as PhoneHash;
   }
 
   it("create inserts a phone and findByHash retrieves it", async () => {

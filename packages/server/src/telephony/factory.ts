@@ -5,6 +5,7 @@ import type { TelephonyProvider } from "./provider.js";
 import { providerConfigSchemas } from "./schemas.js";
 import { TelephonyConfigError, NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { OrgId } from "@care-y/shared";
 
 /**
  * A function that constructs a TelephonyProvider from a validated config object.
@@ -20,9 +21,9 @@ export interface ProviderFactoryDeps {
 
 export interface ProviderFactory {
   /** Get or create a cached provider instance for an org. */
-  getProvider(orgId: string): Promise<TelephonyProvider>;
+  getProvider(orgId: OrgId): Promise<TelephonyProvider>;
   /** Invalidate the cached provider for an org (call after config update). */
-  invalidate(orgId: string): void;
+  invalidate(orgId: OrgId): void;
   /** Invalidate all cached providers (e.g., after OPS_SECRETS_KEY rotation). */
   invalidateAll(): void;
 }
@@ -30,9 +31,9 @@ export interface ProviderFactory {
 export function createProviderFactory(
   deps: ProviderFactoryDeps,
 ): ProviderFactory {
-  const cache = new Map<string, TelephonyProvider>();
+  const cache = new Map<OrgId, TelephonyProvider>();
 
-  async function buildProvider(orgId: string): Promise<TelephonyProvider> {
+  async function buildProvider(orgId: OrgId): Promise<TelephonyProvider> {
     const row = await deps.db
       .selectFrom("telephony_config")
       .selectAll()
@@ -82,7 +83,7 @@ export function createProviderFactory(
   }
 
   return {
-    async getProvider(orgId: string): Promise<TelephonyProvider> {
+    async getProvider(orgId: OrgId): Promise<TelephonyProvider> {
       const cached = cache.get(orgId);
       if (cached) return cached;
 
@@ -91,7 +92,7 @@ export function createProviderFactory(
       return provider;
     },
 
-    invalidate(orgId: string): void {
+    invalidate(orgId: OrgId): void {
       cache.delete(orgId);
     },
 

@@ -8,11 +8,12 @@ import {
 import { createPresetService, type PresetService } from "./preset-service.js";
 import { NotFoundError } from "../errors.js";
 import * as crypto from "node:crypto";
+import type { QueueId, UserId, PresetReplyId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
   let testDb: TestDb;
   let svc: PresetService;
-  let queueId: string;
+  let queueId: QueueId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -32,7 +33,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
       encryptedTitle: Buffer.from("title-enc"),
       encryptedBody: Buffer.from("body-enc"),
       queueId: null,
-      createdBy: "user-123",
+      createdBy: "user-123" as UserId,
     });
 
     expect(preset.id).toBeTruthy();
@@ -47,13 +48,13 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
       encryptedTitle: Buffer.from("global"),
       encryptedBody: Buffer.from("g-body"),
       queueId: null,
-      createdBy: "u1",
+      createdBy: "u1" as UserId,
     });
     await svc.create({
       encryptedTitle: Buffer.from("queue-specific"),
       encryptedBody: Buffer.from("q-body"),
       queueId,
-      createdBy: "u2",
+      createdBy: "u2" as UserId,
     });
 
     const all = await svc.list(queueId);
@@ -72,7 +73,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
       encryptedTitle: Buffer.from("old-title"),
       encryptedBody: Buffer.from("old-body"),
       queueId: null,
-      createdBy: "u1",
+      createdBy: "u1" as UserId,
     });
 
     const updated = await svc.update(preset.id, {
@@ -88,7 +89,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
       encryptedTitle: Buffer.from("same"),
       encryptedBody: Buffer.from("same-body"),
       queueId: null,
-      createdBy: "u1",
+      createdBy: "u1" as UserId,
     });
     const same = await svc.update(preset.id, {});
     expect(same.encryptedTitle.toString()).toBe("same");
@@ -96,7 +97,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
 
   it("update throws NotFoundError for non-existent preset", async () => {
     await expect(
-      svc.update(crypto.randomUUID(), {
+      svc.update(crypto.randomUUID() as PresetReplyId, {
         encryptedTitle: Buffer.from("x"),
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -107,7 +108,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
       encryptedTitle: Buffer.from("to-delete"),
       encryptedBody: Buffer.from("del-body"),
       queueId: null,
-      createdBy: "u1",
+      createdBy: "u1" as UserId,
     });
 
     await svc.delete(preset.id);
@@ -122,8 +123,8 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
   });
 
   it("delete throws NotFoundError for non-existent preset", async () => {
-    await expect(svc.delete(crypto.randomUUID())).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    await expect(
+      svc.delete(crypto.randomUUID() as PresetReplyId),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });

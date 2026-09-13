@@ -5,6 +5,7 @@ import {
   listTenantSchemas,
   logMigrationResults,
 } from "./schema-utils.js";
+import { orgSchemaNameSchema, type OrgSchema } from "@care-y/shared";
 
 // CLI usage:
 //   migrate.ts [down] [--platform | --schema=org_<uuid> | --all-schemas]
@@ -25,7 +26,7 @@ const allSchemas = args.includes("--all-schemas");
 async function runMigrator(
   label: string,
   dir: "up" | "down",
-  schemaName?: string,
+  schemaName?: OrgSchema,
 ): Promise<void> {
   const migrator =
     schemaName !== undefined
@@ -49,13 +50,14 @@ async function runMigrator(
 
 if (targetSchema !== null) {
   // Single tenant schema
-  await runMigrator(targetSchema, direction, targetSchema);
+  const parsed = orgSchemaNameSchema.parse(targetSchema);
+  await runMigrator(targetSchema, direction, parsed);
 } else if (allSchemas) {
   // Platform first, then all tenant schemas
   await runMigrator("platform", direction);
   const schemas = await listTenantSchemas(db);
   for (const schema of schemas) {
-    await runMigrator(schema, direction, schema);
+    await runMigrator(schema, direction, orgSchemaNameSchema.parse(schema));
   }
 } else {
   // Default: platform only

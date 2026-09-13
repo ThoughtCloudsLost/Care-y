@@ -59,6 +59,8 @@ import { createOprfEvaluateService } from "./crypto/oprf-evaluate-service.js";
 import { createJobQueue } from "./jobs/index.js";
 import { deriveSecretsKey, createSecretsEncryptor } from "./config/secrets.js";
 import { createProviderFactory } from "./telephony/factory.js";
+import type { ProviderConstructor } from "./telephony/factory.js";
+import type { TelephonyProviderStatic } from "./telephony/provider.js";
 import {
   createTwilioProvider,
   twilioProviderStatic,
@@ -70,7 +72,7 @@ import { createBrandingIconHandler } from "./routes/branding-icons.js";
 import { createBlobDownloadHandler } from "./routes/blob-download.js";
 import { createManifestHandler } from "./routes/manifest.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
-import { authenticateRelay } from "./routes/relay-utils.js";
+import { authenticateRelay, type OrgResolved } from "./routes/relay-utils.js";
 import { createDbCallTracker } from "./telephony/call-tracker.js";
 import { extractOrgSlug } from "./org/slug-resolver.js";
 import { NotFoundError } from "./errors.js";
@@ -143,6 +145,10 @@ import {
   PORTAL_EXPIRY_QUEUE,
 } from "./jobs/portal-message-expiry.js";
 import {
+  registerShareCleanupHandler,
+  SHARE_CLEANUP_QUEUE,
+} from "./portal/share-service.js";
+import {
   registerEscalationRulesHandler,
   ESCALATION_RULES_QUEUE,
   DEFAULT_ESCALATION_RULES_INTERVAL_MS,
@@ -153,6 +159,12 @@ import {
   type EscalationServiceDeps,
 } from "./tickets/escalation-service.js";
 import { RoleId } from "@care-y/shared";
+import type {
+  OrgId,
+  OrgSchema,
+  OrgSlug,
+  StoredProviderId,
+} from "@care-y/shared";
 
 // --- DB startup probe ---
 
@@ -299,6 +311,17 @@ const RATE_PORTAL_READ_MAX = 60;
 // storage DoS from a single source.
 const RATE_PORTAL_REPLY_MAX = 30;
 
+// Share open: 10 req/min per IP. Defense in depth on the public consume
+// endpoint. UUIDv4 ids (122 random bits) make enumeration infeasible;
+// the limiter caps probe volume and log noise.
+const RATE_SHARE_OPEN_MAX = 10;
+
+// Account salt + login: 10 req/hour per IP each. Online guessing is
+// already throttled at the OPRF step; these bound salt-endpoint
+// scraping and login spam independently.
+const RATE_ACCOUNT_SALT_MAX = 10;
+const RATE_ACCOUNT_LOGIN_MAX = 10;
+
 // --- Rate limiters ---
 
 const noopLimiter: RateLimiter = {
@@ -396,12 +419,19 @@ const {
 const secretsKey = deriveSecretsKey(Buffer.from(env.OPS_SECRETS_KEY, "hex"));
 const secretsEncryptor = createSecretsEncryptor(secretsKey);
 
-const providerConstructors = new Map([["twilio", createTwilioProvider]]);
+// Keyed by the shared stored-provider union: registering an id that is not
+// in STORED_PROVIDER_IDS is a compile error, so this map cannot drift from
+// the single registry source.
+const providerConstructors = new Map<StoredProviderId, ProviderConstructor>([
+  ["twilio", createTwilioProvider],
+]);
 
-// Register mock provider (dev/test only)
+// Register mock provider (dev/test only). Production stays fail-closed:
+// schema validation passes (mockConfigSchema is unconditional) but the
+// constructor lookup here fails, which is the correct behavior.
 if (env.NODE_ENV !== "production") {
   const { createMockProvider } = await import("./telephony/mock-provider.js");
-  providerConstructors.set("mock", () => createMockProvider());
+  providerConstructors.set("mock", createMockProvider);
 }
 
 const providerFactory = createProviderFactory({
@@ -458,7 +488,15 @@ const createContext = createContextFactory({
   tokenizer,
 });
 
-const providerStatics = new Map([["twilio", twilioProviderStatic]]);
+const providerStatics = new Map<StoredProviderId, TelephonyProviderStatic>([
+  ["twilio", twilioProviderStatic],
+]);
+
+// Register mock statics (dev/test only), gated identically to the constructor.
+if (env.NODE_ENV !== "production") {
+  const { mockProviderStatic } = await import("./telephony/mock-provider.js");
+  providerStatics.set("mock", mockProviderStatic);
+}
 const telephonyConfigService = createTelephonyConfigService({
   db,
   secretsEncryptor,
@@ -469,7 +507,7 @@ const telephonyConfigService = createTelephonyConfigService({
 // --- Phone purpose resolver ---
 
 const phoneResolver = createPhoneResolver({
-  async getOrgConfig(orgSchema: string) {
+  async getOrgConfig(orgSchema: OrgSchema) {
     const tDb = tenantDb(orgSchema);
     const row = await tDb
       .selectFrom("org_config")
@@ -480,8 +518,8 @@ const phoneResolver = createPhoneResolver({
       phone_system_sid: row?.phone_system_sid ?? null,
     };
   },
-  async getProvisionedPhones(orgSchema: string) {
-    return telephonyConfigService.lookupProvisionedPhones(orgSchema);
+  async getProvisionedPhones(orgId: OrgId) {
+    return telephonyConfigService.lookupProvisionedPhones(orgId);
   },
 });
 
@@ -594,7 +632,7 @@ const appRouter = createAppRouter({
   clientPortalDeps: {
     submissionLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,
-      maxRequests: 3,
+      maxRequests: env.INTAKE_SUBMISSION_LIMIT,
     }),
     challengeLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,
@@ -626,9 +664,26 @@ const appRouter = createAppRouter({
       windowMs: RATE_WINDOW_1H,
       maxRequests: RATE_PORTAL_REPLY_MAX,
     }),
-    portalGetProvider: async (orgId: string) =>
+    portalGetProvider: async (orgId: OrgId) =>
       providerFactory.getProvider(orgId),
     portalResolveCallerId: phoneResolver,
+    shareLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_SHARE_OPEN_MAX,
+    }),
+    // Encrypted Account deps (orgUuid resolved per-request from ctx.org)
+    accountServiceDeps: {
+      indexer,
+      fakeSaltKey,
+    },
+    accountSaltLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1H,
+      maxRequests: RATE_ACCOUNT_SALT_MAX,
+    }),
+    accountLoginLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1H,
+      maxRequests: RATE_ACCOUNT_LOGIN_MAX,
+    }),
   },
   brandingDeps: {
     blobStore,
@@ -693,7 +748,7 @@ const trpcHandler = createHTTPHandler({
 // --- Job queue handlers ---
 
 /** Lists schema names for all active orgs. Used by cross-tenant job handlers. */
-async function listActiveOrgSchemas(): Promise<string[]> {
+async function listActiveOrgSchemas(): Promise<OrgSchema[]> {
   const orgs = await db
     .selectFrom("orgs")
     .select("schema_name")
@@ -702,16 +757,22 @@ async function listActiveOrgSchemas(): Promise<string[]> {
   return orgs.map((o) => o.schema_name);
 }
 
-/** Lists schema + slug pairs for all active orgs (single query). */
+/** Lists id + schema + slug for all active orgs (single query). Cross-tenant
+ *  job handlers need the id for platform tables and the schema for tenant
+ *  queries, so both travel together. */
 async function listActiveOrgSchemasWithSlugs(): Promise<
-  readonly { schema: string; slug: string }[]
+  readonly { id: OrgId; schema: OrgSchema; slug: OrgSlug }[]
 > {
   const orgs = await db
     .selectFrom("orgs")
-    .select(["schema_name", "slug"])
+    .select(["id", "schema_name", "slug"])
     .where("is_active", "=", true)
     .execute();
-  return orgs.map((o) => ({ schema: o.schema_name, slug: o.slug }));
+  return orgs.map((o) => ({
+    id: o.id,
+    schema: o.schema_name,
+    slug: o.slug,
+  }));
 }
 
 registerLogDeletionHandler(jobQueue, providerFactory);
@@ -732,8 +793,7 @@ jobQueue.process("notification-email", notificationJobHandler);
 registerNotificationSmsHandler(jobQueue, {
   encryptor,
   getTenantDb: tenantDb,
-  getProvider: async (orgSchema: string) =>
-    providerFactory.getProvider(orgSchema),
+  getProvider: async (orgId: OrgId) => providerFactory.getProvider(orgId),
   resolveCallerIdByPurpose: phoneResolver,
 });
 
@@ -774,6 +834,7 @@ registerEscalationRulesHandler(
       try {
         await runEscalationCheck(
           tenantDb(org.schema),
+          org.id,
           org.schema,
           org.slug,
           escalationRulesDeps,
@@ -808,10 +869,13 @@ registerPortalExpiryHandler(jobQueue, async () => {
   }
 });
 
+registerShareCleanupHandler(jobQueue, tenantDb, listActiveOrgSchemas);
+
 await ensureRecurringJob(db, jobQueue, ESCALATION_RULES_QUEUE);
 await ensureRecurringJob(db, jobQueue, ESCALATION_QUEUE);
 await ensureRecurringJob(db, jobQueue, MEDIA_CLEANUP_QUEUE);
 await ensureRecurringJob(db, jobQueue, PORTAL_EXPIRY_QUEUE);
+await ensureRecurringJob(db, jobQueue, SHARE_CLEANUP_QUEUE);
 jobQueue.start();
 console.log("Job queue started");
 
@@ -893,13 +957,16 @@ const pendingCallCleanupInterval = setInterval(() => {
 }, 60_000);
 
 // Org resolver for relay endpoints: looks up the org by slug via orgService
-// (same pattern as tRPC context) to get the correct UUID-based schema name.
-async function relayOrgResolver(req: IncomingMessage): Promise<string | null> {
+// (same pattern as tRPC context). Returns both identifiers, because platform
+// tables are keyed by the org UUID while tenant queries need the schema name.
+async function relayOrgResolver(
+  req: IncomingMessage,
+): Promise<OrgResolved | null> {
   const slug = extractOrgSlug(req);
   if (slug === null) return null;
   const org = await orgService.findBySlug(slug);
   if (org?.isActive !== true) return null;
-  return org.schemaName;
+  return { orgId: org.id, orgSchema: org.schemaName };
 }
 
 // Session repo factory for relay auth. Loads the real org_public_key
@@ -907,7 +974,7 @@ async function relayOrgResolver(req: IncomingMessage): Promise<string | null> {
 // The relay handler only calls findByToken (reads), but the session
 // repo interface requires a SealedBoxEncryptor for consistency.
 async function createRelaySessionRepo(
-  orgSchema: string,
+  orgSchema: OrgSchema,
 ): Promise<ReturnType<typeof createDbSessionRepository>> {
   const tDb = tenantDb(orgSchema);
   const row = await tDb
@@ -926,7 +993,7 @@ async function createRelaySessionRepo(
 
 /** Looks up webhook config for an org. Shared by relay auth token + account SID resolution. */
 async function requireWebhookConfig(
-  orgId: string,
+  orgId: OrgId,
 ): Promise<{ accountSid: string; authToken: string }> {
   const lookup = await telephonyConfigService.lookupWebhookConfig(orgId);
   if (!lookup) {
@@ -938,7 +1005,7 @@ async function requireWebhookConfig(
 /** Builds a SealedBoxEncryptor from the org's public key, or null when the
  *  org has not completed onboarding (no key set yet). */
 async function getOrgSealedBoxEncryptor(
-  orgSchema: string,
+  orgSchema: OrgSchema,
 ): Promise<SealedBoxEncryptor | null> {
   const row = await tenantDb(orgSchema)
     .selectFrom("org_config")
@@ -950,26 +1017,25 @@ async function getOrgSealedBoxEncryptor(
 }
 
 const relayHandler = createRelayHandler({
-  getProvider: async (orgId: string) => providerFactory.getProvider(orgId),
+  getProvider: async (orgId: OrgId) => providerFactory.getProvider(orgId),
   getTenantDb: tenantDb,
   createConsultantRepo: (tDb: Kysely<TenantDatabase>) =>
     createConsultantRepository(tDb),
   resolveCallerIdByPurpose: phoneResolver,
   pendingCalls,
   webhookBaseUrl: env.WEBHOOK_BASE_URL,
-  async getAuthToken(orgId: string) {
+  async getAuthToken(orgId: OrgId) {
     const lookup = await telephonyConfigService.lookupWebhookConfig(orgId);
     return lookup?.authToken ?? null;
   },
-  async getAccountSid(orgId: string) {
+  async getAccountSid(orgId: OrgId) {
     return (await requireWebhookConfig(orgId)).accountSid;
   },
   apiKeySid: env.TWILIO_API_KEY_SID ?? "",
   apiKeySecret: env.TWILIO_API_KEY_SECRET ?? "",
   twimlAppSid: env.TWILIO_TWIML_APP_SID ?? "",
   orgResolver: relayOrgResolver,
-  createSessionRepo: async (orgSchema: string) =>
-    createRelaySessionRepo(orgSchema),
+  createSessionRepo: async (orgSchema) => createRelaySessionRepo(orgSchema),
   indexer,
   fieldEncryptor: encryptor,
   pendingClients,

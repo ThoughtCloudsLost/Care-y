@@ -70,7 +70,7 @@ describe("TicketDecryptCache", () => {
       expect(mockDecrypt).toHaveBeenCalledWith(
         TICKET_ID,
         "description",
-        `desc:${TICKET_ID}`,
+        TICKET_ID,
         KEY_WRAP.ephemeralPoint,
         KEY_WRAP.nonce,
         KEY_WRAP.wrappedKey,
@@ -107,6 +107,23 @@ describe("TicketDecryptCache", () => {
         expect(cache.has(`desc:${TICKET_ID}`)).toBe(true);
       });
       expect(mockDecrypt).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("worker key-cache id", () => {
+    it("passes the ticket id for every slot of one ticket, so the Worker unwraps the ticket key once", () => {
+      // The Worker caches the unwrapped ticket key under the key-cache id
+      // (third bridge.decrypt argument). If any slot passed its prefixed
+      // cache key instead, that slot would trigger its own ECIES unwrap.
+      cache.decryptTitle(TICKET_ID, KEY_WRAP, ENCRYPTED_TITLE);
+      cache.decryptDescription(TICKET_ID, KEY_WRAP, ENCRYPTED_TITLE);
+      cache.decryptFollowUp(TICKET_ID, "fu-001", KEY_WRAP, ENCRYPTED_TITLE);
+      cache.decryptReadCursor(TICKET_ID, "user-1", KEY_WRAP, "cursor-ct");
+
+      expect(mockDecrypt).toHaveBeenCalledTimes(4);
+      for (const call of mockDecrypt.mock.calls) {
+        expect(call[2]).toBe(TICKET_ID);
+      }
     });
   });
 

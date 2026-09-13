@@ -9,12 +9,13 @@
 
 import type { Kysely, Selectable } from "kysely";
 import type { PhonesTable, TenantDatabase } from "../../db/types.js";
+import type { PhoneId, PhoneHash, PhoneMatchHash } from "@care-y/shared";
 
 export interface PhoneRecord {
-  readonly id: string;
-  readonly phoneHash: string;
+  readonly id: PhoneId;
+  readonly phoneHash: PhoneHash;
   readonly encryptedNumber: Buffer;
-  readonly phoneMatchHash: string | null;
+  readonly phoneMatchHash: PhoneMatchHash | null;
   readonly locale: string;
   readonly locationCity: string | null;
   readonly locationRegion: string | null;
@@ -22,19 +23,19 @@ export interface PhoneRecord {
 }
 
 export interface CreatePhoneInput {
-  readonly phoneHash: string;
+  readonly phoneHash: PhoneHash;
   readonly encryptedNumber: Buffer;
-  readonly phoneMatchHash?: string | null;
+  readonly phoneMatchHash?: PhoneMatchHash | null;
   readonly locale?: string;
   readonly locationCity?: string;
   readonly locationRegion?: string;
 }
 
 export interface PhoneRepository {
-  findByHash(phoneHash: string): Promise<PhoneRecord | null>;
+  findByHash(phoneHash: PhoneHash): Promise<PhoneRecord | null>;
   create(input: CreatePhoneInput): Promise<PhoneRecord>;
-  updateLocale(id: string, locale: string): Promise<void>;
-  deactivate(id: string): Promise<void>;
+  updateLocale(id: PhoneId, locale: string): Promise<void>;
+  deactivate(id: PhoneId): Promise<void>;
 }
 
 function mapPhoneRow(row: Selectable<PhonesTable>): PhoneRecord {
@@ -54,7 +55,7 @@ export function createPhoneRepository(
   db: Kysely<TenantDatabase>,
 ): PhoneRepository {
   return {
-    async findByHash(phoneHash: string): Promise<PhoneRecord | null> {
+    async findByHash(phoneHash: PhoneHash): Promise<PhoneRecord | null> {
       const row = await db
         .selectFrom("phones")
         .selectAll()
@@ -83,7 +84,7 @@ export function createPhoneRepository(
       return mapPhoneRow(row);
     },
 
-    async updateLocale(id: string, locale: string): Promise<void> {
+    async updateLocale(id: PhoneId, locale: string): Promise<void> {
       await db
         .updateTable("phones")
         .set({ locale, updated_at: new Date() })
@@ -91,7 +92,7 @@ export function createPhoneRepository(
         .execute();
     },
 
-    async deactivate(id: string): Promise<void> {
+    async deactivate(id: PhoneId): Promise<void> {
       await db
         .updateTable("phones")
         .set({ is_active: false, updated_at: new Date() })

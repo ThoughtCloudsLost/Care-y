@@ -15,7 +15,12 @@
  * The acting user (who triggered the event) is excluded.
  */
 
-import type { EscalationTarget } from "@care-y/shared";
+import type {
+  EscalationTarget,
+  UserId,
+  TicketId,
+  QueueId,
+} from "@care-y/shared";
 
 export type RecipientSource =
   | "owner"
@@ -26,7 +31,7 @@ export type RecipientSource =
   | "escalation_recipient";
 
 export interface NotificationRecipient {
-  readonly userId: string;
+  readonly userId: UserId;
   readonly source: RecipientSource;
 }
 
@@ -36,24 +41,24 @@ export interface NotificationRecipientList {
 }
 
 export interface RecipientBuilderDeps {
-  readonly getTicketWatchers: (ticketId: string) => Promise<string[]>;
-  readonly getQueueWatchers: (queueId: string) => Promise<string[]>;
-  readonly resolveValidMentions: (userIds: string[]) => Promise<string[]>;
+  readonly getTicketWatchers: (ticketId: TicketId) => Promise<UserId[]>;
+  readonly getQueueWatchers: (queueId: QueueId) => Promise<UserId[]>;
+  readonly resolveValidMentions: (userIds: string[]) => Promise<UserId[]>;
 }
 
 export interface EscalationResolverDeps {
-  readonly getUsersByRole: (role: "admin" | "manager") => Promise<string[]>;
-  readonly getUsersByPermission: (permission: string) => Promise<string[]>;
-  readonly getQueueMembers: (queueId: string) => Promise<string[]>;
-  readonly getTicketKeyWrapHolders: (ticketId: string) => Promise<string[]>;
+  readonly getUsersByRole: (role: "admin" | "manager") => Promise<UserId[]>;
+  readonly getUsersByPermission: (permission: string) => Promise<UserId[]>;
+  readonly getQueueMembers: (queueId: QueueId) => Promise<UserId[]>;
+  readonly getTicketKeyWrapHolders: (ticketId: TicketId) => Promise<UserId[]>;
 }
 
 export async function resolveEscalationTargets(
   targets: EscalationTarget[],
   deps: EscalationResolverDeps,
-  ticketId?: string,
-): Promise<string[]> {
-  const userIds = new Set<string>();
+  ticketId?: TicketId,
+): Promise<UserId[]> {
+  const userIds = new Set<UserId>();
   for (const target of targets) {
     switch (target.type) {
       case "role":
@@ -84,15 +89,15 @@ export async function resolveEscalationTargets(
  */
 export async function buildRecipientList(
   deps: RecipientBuilderDeps,
-  ticket: { assignedTo: string | null; queueId: string; id: string },
+  ticket: { assignedTo: UserId | null; queueId: QueueId; id: TicketId },
   mentionedPseudonyms: string[],
-  actingUserId: string,
-  escalationUserIds?: string[],
+  actingUserId: UserId,
+  escalationUserIds?: UserId[],
 ): Promise<NotificationRecipientList> {
-  const seen = new Set<string>();
+  const seen = new Set<UserId>();
   const recipients: NotificationRecipient[] = [];
 
-  function add(userId: string, source: RecipientSource): void {
+  function add(userId: UserId, source: RecipientSource): void {
     if (userId === actingUserId) return;
     if (seen.has(userId)) return;
     seen.add(userId);

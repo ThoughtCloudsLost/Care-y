@@ -8,11 +8,12 @@ import {
 } from "./ivr.js";
 import type { GreetingRecord } from "./models/greeting-repo.js";
 import type { VoiceInstruction } from "./provider.js";
+import { e164Schema, type PhoneGreetingId, type BlobKey } from "@care-y/shared";
 
 function makeGreeting(overrides: Partial<GreetingRecord> = {}): GreetingRecord {
   return {
-    id: "greeting-1",
-    phoneNumber: "+15551234567",
+    id: "greeting-1" as PhoneGreetingId,
+    phoneNumber: e164Schema.parse("+15551234567"),
     greetingType: "main",
     locale: "en-US",
     text: "Hello, please leave a message.",
@@ -77,7 +78,7 @@ describe("buildReturningCallerIvr", () => {
   const textGreeting = makeGreeting({ text: "Welcome back." });
   const audioGreeting = makeGreeting({
     isAudio: true,
-    audioBlobKey: "blob://greetings/abc123",
+    audioBlobKey: "blob://greetings/abc123" as BlobKey,
   });
   const reselection = makeGreeting({
     greetingType: "reselection",
@@ -209,7 +210,7 @@ describe("buildVoicemailIvr", () => {
   it("produces play + record for an audio greeting", () => {
     const greeting = makeGreeting({
       isAudio: true,
-      audioBlobKey: "blob://greetings/vm-001",
+      audioBlobKey: "blob://greetings/vm-001" as BlobKey,
     });
     const instructions = buildVoicemailIvr(greeting, "/record-callback");
 

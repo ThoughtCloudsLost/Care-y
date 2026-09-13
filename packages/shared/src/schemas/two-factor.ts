@@ -3,6 +3,10 @@ import {
   TwoFactorMethod,
   type TwoFactorMethodType,
 } from "../two-factor-types.js";
+import {
+  pushChallengeIdSchema as pushChallengeIdBrand,
+  webauthnCredentialIdSchema,
+} from "../ids.js";
 
 // --- Shared validation ---
 
@@ -75,7 +79,7 @@ export const backupCodeVerifySchema = z.object({
  * and browsers may send null (W3C spec allows it).
  */
 export const webauthnRegistrationResponseSchema = z.object({
-  id: z.string().min(1),
+  id: webauthnCredentialIdSchema,
   rawId: z.string().min(1),
   type: z.literal("public-key"),
   authenticatorAttachment: z
@@ -97,7 +101,7 @@ export const webauthnRegistrationResponseSchema = z.object({
  * authenticatorAttachment and userHandle are nullable (see registration schema).
  */
 export const webauthnAssertionResponseSchema = z.object({
-  id: z.string().min(1),
+  id: webauthnCredentialIdSchema,
   rawId: z.string().min(1),
   type: z.literal("public-key"),
   authenticatorAttachment: z
@@ -117,7 +121,7 @@ export const webauthnAssertionResponseSchema = z.object({
 /** Remove an enrolled 2FA method. */
 export const removeMethodSchema = z.object({
   method: twoFactorMethodSchema,
-  credentialId: z.string().optional(),
+  credentialId: webauthnCredentialIdSchema.optional(),
 });
 
 // --- Status response shapes (for type inference) ---
@@ -139,12 +143,12 @@ export const twoFactorStatusResponseSchema = z.object({
 
 /** Poll a push challenge by ID. */
 export const pushChallengeIdSchema = z.object({
-  challengeId: z.uuid(),
+  challengeId: pushChallengeIdBrand,
 });
 
 /** Approve or deny a push challenge. */
 export const pushApprovalSchema = z.object({
-  challengeId: z.uuid(),
+  challengeId: pushChallengeIdBrand,
 });
 
 // --- Inferred types ---

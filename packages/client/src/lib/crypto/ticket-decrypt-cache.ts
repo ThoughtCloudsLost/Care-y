@@ -82,6 +82,7 @@ export class TicketDecryptCache extends AsyncDecryptCache {
       keyWrap.nonce,
       keyWrap.wrappedKey,
       encryptedTitle,
+      ticketId,
     );
   }
 
@@ -136,6 +137,7 @@ export class TicketDecryptCache extends AsyncDecryptCache {
       keyWrap.nonce,
       keyWrap.wrappedKey,
       encryptedDescription,
+      ticketId,
     );
   }
 
@@ -200,7 +202,8 @@ export class TicketDecryptCache extends AsyncDecryptCache {
   /**
    * Request decryption of a follow-up's encrypted content using the
    * ticket's key wrap. Same trigger-and-cache pattern as decryptTitle.
-   * The Worker reuses the ticket key cached from title decryption.
+   * Passes the ticket id as the Worker key-cache id so the ticket key
+   * unwrapped for the title is reused for every follow-up.
    */
   decryptFollowUp(
     ticketId: string,
@@ -216,6 +219,7 @@ export class TicketDecryptCache extends AsyncDecryptCache {
       keyWrap.nonce,
       keyWrap.wrappedKey,
       ciphertext,
+      ticketId,
     );
   }
 

@@ -13,6 +13,7 @@
   } from "$lib/components/tickets/CallOptionsContent.svelte";
   import CloseResolutionSheet from "$lib/components/tickets/CloseResolutionSheet.svelte";
   import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
+  import ShareLinkSheet from "$lib/components/tickets/ShareLinkSheet.svelte";
   import TicketContentEditSheet from "$lib/components/tickets/TicketContentEditSheet.svelte";
   import TicketNotificationSheet from "$lib/components/tickets/TicketNotificationSheet.svelte";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
@@ -27,6 +28,7 @@
     NoteEditState,
     ContentEditState,
     NotificationSheetState,
+    ShareSheetState,
   } from "$lib/composables/ticket-detail/create-overlay-state.svelte.js";
   import type { ExposureHintState } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
   import type { LightboxState } from "$lib/composables/ticket-detail/create-lightbox.svelte.js";
@@ -68,6 +70,8 @@
     lightbox: LightboxState;
     contextMenu: ContextMenuState;
     closeFlow: CloseResolutionState;
+    shareSheet: ShareSheetState;
+    clientPhone: string | null;
     onpaneldismiss: () => void;
     onpanelaction: (action: TicketAction) => void;
     onnotetap: (noteId: string) => void;
@@ -114,6 +118,8 @@
     lightbox,
     contextMenu,
     closeFlow,
+    shareSheet,
+    clientPhone,
     onpaneldismiss,
     onpanelaction,
     onnotetap,
@@ -254,6 +260,13 @@
     noteEdit.dismiss();
     deleteConfirm.openConfirm(followUpId);
   }}
+/>
+
+<ShareLinkSheet
+  opened={shareSheet.sheetOpen}
+  ondismiss={() => shareSheet.dismiss()}
+  {ticketId}
+  {clientPhone}
 />
 
 <TicketContentEditSheet

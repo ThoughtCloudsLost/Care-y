@@ -2,6 +2,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { resolveOrCreateTicket } from "../tickets/server-ticket-create.js";
 import { requireSodium } from "@care-y/crypto";
+import type { ClientId, QueueId, TicketId } from "@care-y/shared";
 
 /**
  * Resolve or create a ticket for an inbound call/voicemail.
@@ -13,10 +14,10 @@ import { requireSodium } from "@care-y/crypto";
  */
 export async function resolveInboundTicket(
   tDb: Kysely<TenantDatabase>,
-  clientId: string,
-  intakeQueueId: string,
+  clientId: ClientId,
+  intakeQueueId: QueueId,
   description: string,
-): Promise<string> {
+): Promise<TicketId> {
   const titleBuf = Buffer.from(`Call from ${clientId}`, "utf-8");
   const descBuf = Buffer.from(description, "utf-8");
 

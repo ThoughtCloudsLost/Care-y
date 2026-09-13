@@ -1,5 +1,6 @@
 import type { TicketAction } from "$lib/tickets/types.js";
 import type { toastStore as ToastStoreType } from "$lib/stores/toast.svelte.js";
+import { newKeyGeneration } from "@care-y/shared";
 import * as m from "$lib/paraglide/messages.js";
 
 type ToastStore = typeof ToastStoreType;
@@ -25,6 +26,7 @@ export interface PanelActionsDeps {
   readonly onphone: () => void;
   readonly oneditcontent: () => void;
   readonly onnotifications: () => void;
+  readonly onsharelink: () => void;
 }
 
 export interface PanelActions {
@@ -69,7 +71,7 @@ export function createPanelActions(deps: PanelActionsDeps): PanelActions {
         mutateWithToast(
           deps.reopenMutate({
             ticketId,
-            newKeyGeneration: crypto.randomUUID(),
+            newKeyGeneration: newKeyGeneration(),
           }),
         );
         break;
@@ -84,6 +86,9 @@ export function createPanelActions(deps: PanelActionsDeps): PanelActions {
         break;
       case "notifications":
         deps.onnotifications();
+        break;
+      case "shareLink":
+        deps.onsharelink();
         break;
       case "cancel":
         break;

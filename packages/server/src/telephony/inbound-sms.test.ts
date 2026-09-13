@@ -10,6 +10,17 @@ import type { JobQueue } from "../jobs/queue.js";
 import type { ClientRepository } from "./models/client-repo.js";
 import type { SmsResponseRepository } from "./models/sms-response-repo.js";
 import type { BlocklistRepository } from "./models/blocklist-repo.js";
+import {
+  orgIdSchema,
+  orgSchemaNameSchema,
+  type OrgId,
+  type QueueId,
+  type PhoneHash,
+  type IdentifierHash,
+  type UsernameHash,
+  type OpsPhoneHash,
+  type E164,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -51,6 +62,21 @@ function createMockIndexer(): BlindIndexer {
   return {
     hash: vi.fn((_input: string, _orgId: string) => "hashed-phone"),
     hashBuffer: vi.fn((_input: Buffer, _orgId: string) => "hashed-phone"),
+    hashIdentifier: vi.fn(
+      (_input: string, _orgId: OrgId) => "hashed-id" as IdentifierHash,
+    ),
+    hashUsername: vi.fn(
+      (_input: string, _orgId: OrgId) => "hashed-user" as UsernameHash,
+    ),
+    hashPhone: vi.fn(
+      (_input: string, _orgId: OrgId) => "hashed-phone" as PhoneHash,
+    ),
+    hashPhoneBuffer: vi.fn(
+      (_input: Buffer, _orgId: OrgId) => "hashed-phone" as PhoneHash,
+    ),
+    hashConsultantPhoneBuffer: vi.fn(
+      (_input: Buffer, _orgId: OrgId) => "hashed-consultant" as OpsPhoneHash,
+    ),
   };
 }
 
@@ -124,8 +150,8 @@ function createMockSmsResponseRepo(): SmsResponseRepository {
 function makeSmsData(overrides?: Partial<IncomingSmsData>): IncomingSmsData {
   return {
     messageId: "SM999",
-    from: "+15551234567",
-    to: "+15559876543",
+    from: "+15551234567" as E164,
+    to: "+15559876543" as E164,
     body: "I need help",
     numMedia: 0,
     mediaUrls: [],
@@ -145,9 +171,11 @@ function makeDeps(overrides?: Partial<InboundSmsDeps>): InboundSmsDeps {
     smsResponseRepo: createMockSmsResponseRepo(),
     blocklistRepo: createMockBlocklistRepo(),
     tDb: {} as unknown as InboundSmsDeps["tDb"],
-    intakeQueueId: "queue-intake-1",
-    orgId: "org-1",
-    orgSchema: "org_test",
+    intakeQueueId: "queue-intake-1" as QueueId,
+    orgId: orgIdSchema.parse("a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0"),
+    orgSchema: orgSchemaNameSchema.parse(
+      "org_a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0",
+    ),
     defaultLocale: "en-US",
     ...overrides,
   };
@@ -192,8 +220,11 @@ describe("handleInboundSms", () => {
 
     await handleInboundSms(smsData, deps);
 
-    expect(deps.indexer.hash).toHaveBeenCalledOnce();
-    expect(deps.indexer.hash).toHaveBeenCalledWith("+15551234567", "org-1");
+    expect(deps.indexer.hashPhone).toHaveBeenCalledOnce();
+    expect(deps.indexer.hashPhone).toHaveBeenCalledWith(
+      "+15551234567",
+      "a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0",
+    );
   });
 
   // --- Phone encryption ---

@@ -89,7 +89,7 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => {
   };
 });
 
-const { mockEncryptIntake } = vi.hoisted(() => ({
+const { mockEncryptIntake, mockBuildAccountPayload } = vi.hoisted(() => ({
   mockEncryptIntake: vi.fn().mockReturnValue({
     encryptedTitle: "enc-title",
     encryptedDescription: "enc-desc",
@@ -97,11 +97,24 @@ const { mockEncryptIntake } = vi.hoisted(() => ({
     encryptedFormResponse: "enc-response",
     wrappedTk: "enc-wrap",
   }),
+  mockBuildAccountPayload: vi.fn().mockResolvedValue({
+    accountId: "test-account-id",
+    username: "testuser",
+    salt: "dGVzdHNhbHQ=",
+    publicKey: "dGVzdHB1YmtleQ==",
+    authHash: "dGVzdGF1dGhoYXNo",
+    keyCheck: {
+      ephemeralPoint: "ep",
+      nonce: "nc",
+      ciphertext: "ct",
+    },
+  }),
 }));
 
 vi.mock("./intake-crypto.js", async (importOriginal) => ({
   ...(await importOriginal()),
   encryptIntake: mockEncryptIntake,
+  buildAccountPayload: mockBuildAccountPayload,
 }));
 
 vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
@@ -188,6 +201,22 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_protected_volunteers_why: () => "Limited access.",
   intake_protected_server_what: () => "Server stores scrambled data.",
   intake_protected_server_why: () => "Cannot decode.",
+  account_intake_optin_title: () => "Add a secure account (optional)",
+  account_intake_optin_body: () => "Read replies here with a password.",
+  account_login_username: () => "Username",
+  account_login_password: () => "Password",
+  account_create_confirm: () => "Confirm password",
+  account_create_mismatch: () => "Passwords do not match.",
+  account_create_username_hint: () => "Pick a username you can remember.",
+  account_create_password_hint: () => "Use 8 or more characters.",
+  account_create_warning_password: () =>
+    "There is no way to recover this password.",
+  account_create_warning_reset: () =>
+    "If your password is ever reset, history is lost.",
+  account_unlocking: () => "Unlocking your messages...",
+  account_username_taken: () => "That username is already taken.",
+  account_intake_confirm_reminder: ({ username }: { username: string }) =>
+    `Your username is ${username}. Sign in at /account.`,
 }));
 
 vi.mock("$lib/shell/PageShell.svelte", async (importOriginal) => ({
@@ -364,5 +393,108 @@ describe("intake page", () => {
     const notAvailable = screen.getByRole("status");
     expect(notAvailable).toBeTruthy();
     expect(notAvailable.textContent).toContain("not available");
+  });
+
+  // -----------------------------------------------------------------
+  // Account opt-in tests
+  // -----------------------------------------------------------------
+
+  it("account opt-in is collapsed by default", () => {
+    render(IntakePage);
+    const toggle = screen.getByTestId("intake-account-toggle");
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    // Account fields should not be visible
+    expect(screen.queryByTestId("account-create-username")).toBeNull();
+  });
+
+  it("expands the account section on toggle click", async () => {
+    render(IntakePage);
+    const toggle = screen.getByTestId("intake-account-toggle");
+    await fireEvent.click(toggle);
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("account-create-username")).toBeTruthy();
+    expect(screen.getByTestId("account-create-password")).toBeTruthy();
+    expect(screen.getByTestId("account-create-confirm")).toBeTruthy();
+    expect(screen.getByTestId("warning-password")).toBeTruthy();
+    expect(screen.getByTestId("warning-reset")).toBeTruthy();
+  });
+
+  it("password mismatch blocks submit inline", async () => {
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    // Expand account section
+    const toggle = screen.getByTestId("intake-account-toggle");
+    await fireEvent.click(toggle);
+
+    // Fill username
+    const usernameInput = screen
+      .getByTestId("account-create-username")
+      .querySelector("input");
+    if (usernameInput)
+      setInputValue(usernameInput as HTMLInputElement, "testuser");
+
+    // Fill mismatched passwords
+    const passwordInput = screen
+      .getByTestId("account-create-password")
+      .querySelector("input");
+    const confirmInput = screen
+      .getByTestId("account-create-confirm")
+      .querySelector("input");
+    if (passwordInput)
+      setInputValue(passwordInput as HTMLInputElement, "password123");
+    if (confirmInput)
+      setInputValue(confirmInput as HTMLInputElement, "mismatch456");
+
+    // The mismatch error should appear
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("account-mismatch")).toBeTruthy();
+    });
+  });
+
+  it("username-taken error keeps form state and focuses username field", async () => {
+    const usernameTakenError = {
+      data: { code: "CONFLICT" },
+      message: "ACCOUNT_USERNAME_TAKEN",
+    };
+    mockMutateAsync.mockRejectedValue(usernameTakenError);
+
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    // Expand and fill account section
+    const toggle = screen.getByTestId("intake-account-toggle");
+    await fireEvent.click(toggle);
+
+    const usernameInput = screen
+      .getByTestId("account-create-username")
+      .querySelector("input");
+    const passwordInput = screen
+      .getByTestId("account-create-password")
+      .querySelector("input");
+    const confirmInput = screen
+      .getByTestId("account-create-confirm")
+      .querySelector("input");
+    if (usernameInput)
+      setInputValue(usernameInput as HTMLInputElement, "takenuser");
+    if (passwordInput)
+      setInputValue(passwordInput as HTMLInputElement, "password123");
+    if (confirmInput)
+      setInputValue(confirmInput as HTMLInputElement, "password123");
+
+    const submitBtn = screen.getByTestId("intake-submit");
+    await fireEvent.click(submitBtn);
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("account-create-error")).toBeTruthy();
+      expect(screen.getByTestId("account-create-error").textContent).toContain(
+        "That username is already taken",
+      );
+    });
+
+    // Form should still be rendered (not submitted/cleared)
+    expect(screen.getByTestId("intake-submit")).toBeTruthy();
   });
 });

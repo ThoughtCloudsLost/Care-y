@@ -7,23 +7,24 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { QueueId, UserId } from "@care-y/shared";
 
 export interface QueueAssignment {
-  readonly queueId: string;
-  readonly userId: string;
+  readonly queueId: QueueId;
+  readonly userId: UserId;
 }
 
 export interface QueuePermissionsService {
   /** Get all queue IDs this user is assigned to. */
-  getUserQueues(userId: string): Promise<string[]>;
+  getUserQueues(userId: UserId): Promise<QueueId[]>;
   /** Check if user is assigned to a specific queue. */
-  isMember(userId: string, queueId: string): Promise<boolean>;
+  isMember(userId: UserId, queueId: QueueId): Promise<boolean>;
   /** Add user to queue. Idempotent (no-op if already member). */
-  addMember(queueId: string, userId: string): Promise<void>;
+  addMember(queueId: QueueId, userId: UserId): Promise<void>;
   /** Remove user from queue. Idempotent (no-op if not member). */
-  removeMember(queueId: string, userId: string): Promise<void>;
+  removeMember(queueId: QueueId, userId: UserId): Promise<void>;
   /** List all members of a queue. Returns user IDs. */
-  getQueueMembers(queueId: string): Promise<string[]>;
+  getQueueMembers(queueId: QueueId): Promise<UserId[]>;
   /** List all queue-user assignments (bulk, for admin filtering). */
   listAllAssignments(): Promise<readonly QueueAssignment[]>;
 }

@@ -1,8 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, fireEvent } from "@testing-library/svelte";
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, fireEvent, cleanup } from "@testing-library/svelte";
 import PortalPassphraseGate from "./PortalPassphraseGate.svelte";
 
 describe("PortalPassphraseGate", () => {
+  afterEach(cleanup);
+
   it("renders a password input that accepts paste", () => {
     const { getByTestId } = render(PortalPassphraseGate, {
       props: { onsubmit: vi.fn(), pending: false, error: false },

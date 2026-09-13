@@ -55,7 +55,8 @@ export const orgSlugSchema = z
     "Must start with a letter, end with letter/digit, contain only lowercase letters, digits, or hyphens",
   )
   .refine((s) => !s.includes("--"), "Must not contain consecutive hyphens")
-  .refine((s) => !RESERVED_SLUGS.has(s), "This slug is reserved");
+  .refine((s) => !RESERVED_SLUGS.has(s), "This slug is reserved")
+  .brand<"OrgSlug">();
 
 export const createOrgInputSchema = z.object({
   slug: orgSlugSchema,

@@ -11,6 +11,7 @@
 
 import type { Kysely, Transaction } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { TicketId } from "@care-y/shared";
 
 /**
  * Reopen a closed ticket and record the status_opened system event.
@@ -23,8 +24,8 @@ import type { TenantDatabase } from "../db/types.js";
  */
 export async function reopenClosedTicket(
   trxOrDb: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
-  ticketId: string,
-): Promise<string> {
+  ticketId: TicketId,
+): Promise<TicketId> {
   await trxOrDb
     .updateTable("tickets")
     .set({ status: "open" })

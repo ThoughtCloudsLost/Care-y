@@ -16,6 +16,7 @@ import {
   afterAll,
 } from "vitest";
 import type { Kysely } from "kysely";
+import type { OrgSlug } from "@care-y/shared";
 import type { TenantDatabase } from "../db/types.js";
 import type { TelephonyProvider } from "./provider.js";
 import type { BlobStore, BlobCategory } from "../storage/store.js";
@@ -44,7 +45,7 @@ import {
   VOICEMAIL_QUARANTINE_MAX_BYTES,
   RoleId,
 } from "@care-y/shared";
-import type { RouteQuarantineInput } from "@care-y/shared";
+import type { RouteQuarantineInput, E164 } from "@care-y/shared";
 import {
   createTestDb,
   createTestQueue,
@@ -53,6 +54,19 @@ import {
   seedOrgPublicKey,
   type TestDb,
 } from "../test-utils.js";
+import {
+  orgIdSchema,
+  orgSchemaNameSchema,
+  recordingSidSchema,
+  callSidSchema,
+  type OrgSchema,
+  type ClientId,
+  type TicketId,
+  type VoicemailQuarantineId,
+  type QueueId,
+  type UserId,
+  type BlobKey,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -72,9 +86,10 @@ function createMockProvider(): TelephonyProvider {
     deleteRecording: vi.fn().mockResolvedValue(undefined),
     deleteCallLog: vi.fn().mockResolvedValue(undefined),
     deleteMessageLog: vi.fn(),
-    getCallDetails: vi
-      .fn()
-      .mockResolvedValue({ from: "+15551234567", to: "+15559876543" }),
+    getCallDetails: vi.fn().mockResolvedValue({
+      from: "+15551234567" as E164,
+      to: "+15559876543" as E164,
+    }),
     maskConfig: vi.fn().mockReturnValue({
       provider: "twilio",
       mode: "byot",
@@ -90,12 +105,12 @@ function createMockBlobStore(): BlobStore {
   let counter = 0;
   return {
     async put(
-      orgSchema: string,
+      orgSchema: OrgSchema,
       category: BlobCategory,
       blob: Buffer,
-    ): Promise<string> {
+    ): Promise<BlobKey> {
       counter++;
-      const key = `${orgSchema}/${category}/blob-${String(counter)}`;
+      const key = `${orgSchema}/${category}/blob-${String(counter)}` as BlobKey;
       blobs.set(key, Buffer.from(blob));
       return key;
     },
@@ -216,6 +231,12 @@ function createStubTenantDb(): Kysely<TenantDatabase> {
   } as unknown as Kysely<TenantDatabase>;
 }
 
+// Branded test fixtures: OrgId is a UUID, OrgSchema is org_<uuid>.
+const UNIT_ORG_ID = orgIdSchema.parse("a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0");
+const UNIT_ORG_SCHEMA = orgSchemaNameSchema.parse(
+  "org_a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0",
+);
+
 function makeDeps(overrides?: Partial<QuarantineDeps>): QuarantineDeps {
   return {
     tDb: createStubTenantDb(),
@@ -223,18 +244,21 @@ function makeDeps(overrides?: Partial<QuarantineDeps>): QuarantineDeps {
     blobStore: createMockBlobStore(),
     jobQueue: createMockJobQueue(),
     sealedBox: createMockSealedBox(),
-    orgId: "org-1",
-    orgSchema: "org_test",
-    orgSlug: "test-org",
+    orgId: UNIT_ORG_ID,
+    orgSchema: UNIT_ORG_SCHEMA,
+    orgSlug: "test-org" as OrgSlug,
     notificationService: createMockNotificationService(),
     ...overrides,
   };
 }
 
+const UNIT_RECORDING_SID = recordingSidSchema.parse("REtest123");
+const UNIT_CALL_SID = callSidSchema.parse("CAtest456");
+
 function makeParams(overrides?: Partial<QuarantineParams>): QuarantineParams {
   return {
-    recordingSid: "RE123",
-    callSid: "CA456",
+    recordingSid: UNIT_RECORDING_SID,
+    callSid: UNIT_CALL_SID,
     reason: "tracker_miss",
     ...overrides,
   };
@@ -254,7 +278,7 @@ describe("quarantineRecording", () => {
   it("fetches audio, seals it, stores the blob, and deletes provider copies", async () => {
     await quarantineRecording(deps, makeParams());
 
-    expect(deps.provider.getRecording).toHaveBeenCalledWith("RE123");
+    expect(deps.provider.getRecording).toHaveBeenCalledWith("REtest123");
     expect(deps.provider.deleteRecording).toHaveBeenCalledOnce();
     expect(deps.provider.deleteCallLog).toHaveBeenCalledOnce();
   });
@@ -262,7 +286,7 @@ describe("quarantineRecording", () => {
   it("fetches call details for tracker_miss reason", async () => {
     await quarantineRecording(deps, makeParams({ reason: "tracker_miss" }));
 
-    expect(deps.provider.getCallDetails).toHaveBeenCalledWith("CA456");
+    expect(deps.provider.getCallDetails).toHaveBeenCalledWith("CAtest456");
   });
 
   it("fetches call details for unresolved_client reason", async () => {
@@ -271,7 +295,7 @@ describe("quarantineRecording", () => {
       makeParams({ reason: "unresolved_client" }),
     );
 
-    expect(deps.provider.getCallDetails).toHaveBeenCalledWith("CA456");
+    expect(deps.provider.getCallDetails).toHaveBeenCalledWith("CAtest456");
   });
 
   it("does NOT fetch call details for no_intake_queue reason", async () => {
@@ -373,7 +397,7 @@ describe("quarantineRecording", () => {
       deps,
       makeParams({
         reason: "no_intake_queue",
-        clientId: "client-99",
+        clientId: "client-99" as ClientId,
       }),
     );
 
@@ -422,15 +446,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
         blobStore,
         jobQueue: createMockJobQueue(),
         sealedBox,
-        orgId: "org-integ",
-        orgSchema: testDb.schemaName,
-        orgSlug: "integ-org",
+        orgId: orgIdSchema.parse("b1b1b1b1-b1b1-41b1-81b1-b1b1b1b1b1b1"),
+        orgSchema: testDb.schemaName as OrgSchema,
+        orgSlug: "integ-org" as OrgSlug,
         notificationService,
       };
 
+      const integCallSid = callSidSchema.parse("CA_INTEG_1");
       await quarantineRecording(deps, {
-        recordingSid: `RE_INTEG_${crypto.randomUUID().slice(0, 8)}`,
-        callSid: "CA_INTEG_1",
+        recordingSid: recordingSidSchema.parse(
+          `RE_INTEG_${crypto.randomUUID().slice(0, 8)}`,
+        ),
+        callSid: integCallSid,
         reason: "tracker_miss",
         durationSeconds: 30,
       });
@@ -439,13 +466,57 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const rows = await testDb.db
         .selectFrom("voicemail_quarantine")
         .selectAll()
-        .where("call_sid", "=", "CA_INTEG_1")
+        .where("call_sid", "=", integCallSid)
         .execute();
 
       expect(rows).toHaveLength(1);
       expect(rows[0]!.reason).toBe("tracker_miss");
       expect(rows[0]!.duration_seconds).toBe(30);
       expect(rows[0]!.status).toBe("pending");
+    });
+
+    it("passes orgId to dispatchTicketless when admins exist", async () => {
+      const admin = await createTestUser(testDb.db, {
+        overrides: { role_id: RoleId.ADMIN },
+      });
+
+      const blobStore = createMockBlobStore();
+      const notificationService = createMockNotificationService();
+      const testOrgId = orgIdSchema.parse(crypto.randomUUID());
+
+      const deps: QuarantineDeps = {
+        tDb: testDb.db,
+        provider: createMockProvider(),
+        blobStore,
+        jobQueue: createMockJobQueue(),
+        sealedBox: createMockSealedBox(),
+        orgId: testOrgId,
+        orgSchema: testDb.schemaName as OrgSchema,
+        orgSlug: "integ-org" as OrgSlug,
+        notificationService,
+      };
+
+      await quarantineRecording(deps, {
+        recordingSid: recordingSidSchema.parse(
+          `RE_ORGID_${crypto.randomUUID().slice(0, 8)}`,
+        ),
+        callSid: callSidSchema.parse(
+          `CA_ORGID_${crypto.randomUUID().slice(0, 8)}`,
+        ),
+        reason: "tracker_miss",
+      });
+
+      expect(notificationService.dispatchTicketless).toHaveBeenCalledWith(
+        testDb.db,
+        testOrgId,
+        testDb.schemaName as OrgSchema,
+        "integ-org",
+        "voicemail_quarantined",
+        expect.arrayContaining([admin.id]),
+      );
+
+      // Clean up admin to avoid interference with other tests
+      await testDb.db.deleteFrom("users").where("id", "=", admin.id).execute();
     });
 
     it("duplicate recording_sid deletes the duplicate blob and returns early", async () => {
@@ -455,7 +526,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const provider = createMockProvider();
       const notificationService = createMockNotificationService();
 
-      const recordingSid = `RE_DUP_${crypto.randomUUID().slice(0, 8)}`;
+      const dupRecordingSid = recordingSidSchema.parse(
+        `RE_DUP_${crypto.randomUUID().slice(0, 8)}`,
+      );
 
       const deps: QuarantineDeps = {
         tDb: testDb.db,
@@ -463,23 +536,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
         blobStore,
         jobQueue: createMockJobQueue(),
         sealedBox,
-        orgId: "org-integ",
-        orgSchema: testDb.schemaName,
-        orgSlug: "integ-org",
+        orgId: orgIdSchema.parse("b1b1b1b1-b1b1-41b1-81b1-b1b1b1b1b1b1"),
+        orgSchema: testDb.schemaName as OrgSchema,
+        orgSlug: "integ-org" as OrgSlug,
         notificationService,
       };
 
       // First insert
       await quarantineRecording(deps, {
-        recordingSid,
-        callSid: "CA_DUP_1",
+        recordingSid: dupRecordingSid,
+        callSid: callSidSchema.parse("CA_DUP_1"),
         reason: "tracker_miss",
       });
 
       // Second insert (same recording_sid, should hit ON CONFLICT DO NOTHING)
       await quarantineRecording(deps, {
-        recordingSid,
-        callSid: "CA_DUP_2",
+        recordingSid: dupRecordingSid,
+        callSid: callSidSchema.parse("CA_DUP_2"),
         reason: "tracker_miss",
       });
 
@@ -490,7 +563,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const rows = await testDb.db
         .selectFrom("voicemail_quarantine")
         .selectAll()
-        .where("recording_sid", "=", recordingSid)
+        .where("recording_sid", "=", dupRecordingSid)
         .execute();
 
       expect(rows).toHaveLength(1);
@@ -501,14 +574,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // Insert a row with encrypted numbers
       const encCaller = Buffer.from("sealed-caller-number");
       const encCalled = Buffer.from("sealed-called-number");
-      const recordingSid = `RE_LIST_${crypto.randomUUID().slice(0, 8)}`;
+      const listRecSid = recordingSidSchema.parse(
+        `RE_LIST_${crypto.randomUUID().slice(0, 8)}`,
+      );
 
       await testDb.db
         .insertInto("voicemail_quarantine")
         .values({
-          recording_sid: recordingSid,
-          call_sid: "CA_LIST_1",
-          blob_key: "test/quarantine/list-blob",
+          recording_sid: listRecSid,
+          call_sid: callSidSchema.parse("CA_LIST_1"),
+          blob_key: "test/quarantine/list-blob" as BlobKey,
           size_bytes: 100,
           duration_seconds: 15,
           reason: "unresolved_client",
@@ -550,17 +625,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const blobStore = createMockBlobStore();
       const sealedData = Buffer.from("sealed-audio-content");
       const blobKey = await blobStore.put(
-        testDb.schemaName,
+        testDb.schemaName as OrgSchema,
         "quarantine",
         sealedData,
       );
-      const recordingSid = `RE_BLOB_${crypto.randomUUID().slice(0, 8)}`;
+      const blobRecSid = recordingSidSchema.parse(
+        `RE_BLOB_${crypto.randomUUID().slice(0, 8)}`,
+      );
 
       const inserted = await testDb.db
         .insertInto("voicemail_quarantine")
         .values({
-          recording_sid: recordingSid,
-          call_sid: "CA_BLOB_1",
+          recording_sid: blobRecSid,
+          call_sid: callSidSchema.parse("CA_BLOB_1"),
           blob_key: blobKey,
           size_bytes: sealedData.length,
           duration_seconds: 22,
@@ -577,7 +654,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("getQuarantineBlob throws NotFoundError for missing quarantine row", async () => {
       const blobStore = createMockBlobStore();
-      const fakeId = crypto.randomUUID();
+      const fakeId = crypto.randomUUID() as VoicemailQuarantineId;
 
       await expect(
         getQuarantineBlob(testDb.db, blobStore, fakeId),
@@ -586,14 +663,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("getQuarantineBlob throws NotFoundError when blob is missing from store", async () => {
       const blobStore = createMockBlobStore();
-      const recordingSid = `RE_NOBOB_${crypto.randomUUID().slice(0, 8)}`;
+      const noBlobRecSid = recordingSidSchema.parse(
+        `RE_NOBOB_${crypto.randomUUID().slice(0, 8)}`,
+      );
 
       const inserted = await testDb.db
         .insertInto("voicemail_quarantine")
         .values({
-          recording_sid: recordingSid,
-          call_sid: "CA_NOBL_1",
-          blob_key: "nonexistent/key",
+          recording_sid: noBlobRecSid,
+          call_sid: callSidSchema.parse("CA_NOBL_1"),
+          blob_key: "nonexistent/key" as BlobKey,
           size_bytes: 100,
           reason: "tracker_miss",
         })
@@ -610,7 +689,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const sealedBox = createMockSealedBox();
       const provider = createMockProvider();
       const notificationService = createMockNotificationService();
-      const recordingSid = `RE_AUDIT_${crypto.randomUUID().slice(0, 8)}`;
+      const auditRecSid = recordingSidSchema.parse(
+        `RE_AUDIT_${crypto.randomUUID().slice(0, 8)}`,
+      );
 
       const deps: QuarantineDeps = {
         tDb: testDb.db,
@@ -618,24 +699,25 @@ describe.skipIf(!process.env.DATABASE_URL)(
         blobStore,
         jobQueue: createMockJobQueue(),
         sealedBox,
-        orgId: "org-audit",
-        orgSchema: testDb.schemaName,
-        orgSlug: "audit-org",
+        orgId: orgIdSchema.parse("c1c1c1c1-c1c1-41c1-81c1-c1c1c1c1c1c1"),
+        orgSchema: testDb.schemaName as OrgSchema,
+        orgSlug: "audit-org" as OrgSlug,
         notificationService,
       };
 
+      const auditCallSid = callSidSchema.parse("CA_AUDIT_1");
       await quarantineRecording(deps, {
-        recordingSid,
-        callSid: "CA_AUDIT_1",
+        recordingSid: auditRecSid,
+        callSid: auditCallSid,
         reason: "no_intake_queue",
-        clientId: crypto.randomUUID(),
+        clientId: crypto.randomUUID() as ClientId,
       });
 
       const auditRows = await testDb.db
         .selectFrom("audit_log")
         .selectAll()
         .where("event_type", "=", "voicemail_quarantined")
-        .where("actor_id", "=", SYSTEM_ACTOR_ID)
+        .where("actor_id", "=", SYSTEM_ACTOR_ID as UserId)
         .execute();
 
       expect(auditRows.length).toBeGreaterThanOrEqual(1);
@@ -654,7 +736,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // -----------------------------------------------------------------
 
     describe("routeQuarantined", () => {
-      let intakeQueue: { id: string };
+      let intakeQueue: { id: QueueId };
       let adminUser: Awaited<ReturnType<typeof createTestUser>>;
 
       beforeAll(async () => {
@@ -673,19 +755,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       async function seedPendingQuarantineRow(
         store: BlobStore,
-      ): Promise<{ quarantineId: string; blobKey: string }> {
+      ): Promise<{ quarantineId: VoicemailQuarantineId; blobKey: BlobKey }> {
         const sealedData = Buffer.from("sealed-route-audio");
         const blobKey = await store.put(
-          testDb.schemaName,
+          testDb.schemaName as OrgSchema,
           "quarantine",
           sealedData,
         );
-        const recordingSid = `RE_SVC_${crypto.randomUUID().slice(0, 8)}`;
+        const svcRecSid = recordingSidSchema.parse(
+          `RE_SVC_${crypto.randomUUID().slice(0, 8)}`,
+        );
         const row = await testDb.db
           .insertInto("voicemail_quarantine")
           .values({
-            recording_sid: recordingSid,
-            call_sid: `CA_SVC_${crypto.randomUUID().slice(0, 8)}`,
+            recording_sid: svcRecSid,
+            call_sid: callSidSchema.parse(
+              `CA_SVC_${crypto.randomUUID().slice(0, 8)}`,
+            ),
             blob_key: blobKey,
             size_bytes: sealedData.length,
             duration_seconds: 12,
@@ -701,13 +787,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const deps: RouteQuarantineDeps = {
           tDb: testDb.db,
           blobStore: store,
-          orgSchema: testDb.schemaName,
+          orgSchema: testDb.schemaName as OrgSchema,
           pendingClients: new Map(),
           sealedBox: createMockSealedBox(),
         };
         const input: RouteQuarantineInput = {
-          quarantineId: crypto.randomUUID(),
-          target: { type: "ticketId", ticketId: crypto.randomUUID() },
+          quarantineId: crypto.randomUUID() as VoicemailQuarantineId,
+          target: {
+            type: "ticketId",
+            ticketId: crypto.randomUUID() as TicketId,
+          },
           audioData: Buffer.from("x").toString("base64"),
         };
 
@@ -730,13 +819,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const deps: RouteQuarantineDeps = {
           tDb: testDb.db,
           blobStore: store,
-          orgSchema: testDb.schemaName,
+          orgSchema: testDb.schemaName as OrgSchema,
           pendingClients: new Map(),
           sealedBox: createMockSealedBox(),
         };
         const input: RouteQuarantineInput = {
           quarantineId,
-          target: { type: "ticketId", ticketId: crypto.randomUUID() },
+          target: {
+            type: "ticketId",
+            ticketId: crypto.randomUUID() as TicketId,
+          },
           audioData: Buffer.from("x").toString("base64"),
         };
 
@@ -762,7 +854,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const deps: RouteQuarantineDeps = {
           tDb: testDb.db,
           blobStore: store,
-          orgSchema: testDb.schemaName,
+          orgSchema: testDb.schemaName as OrgSchema,
           pendingClients: new Map(),
           sealedBox: createMockSealedBox(),
         };
@@ -784,13 +876,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const deps: RouteQuarantineDeps = {
           tDb: testDb.db,
           blobStore: store,
-          orgSchema: testDb.schemaName,
+          orgSchema: testDb.schemaName as OrgSchema,
           pendingClients: new Map(),
           sealedBox: createMockSealedBox(),
         };
         const input: RouteQuarantineInput = {
           quarantineId,
-          target: { type: "ticketId", ticketId: crypto.randomUUID() },
+          target: {
+            type: "ticketId",
+            ticketId: crypto.randomUUID() as TicketId,
+          },
           audioData: Buffer.from("test").toString("base64"),
         };
 
@@ -821,7 +916,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         };
 
         await expect(
-          dismissQuarantined(deps, crypto.randomUUID(), adminUser.id),
+          dismissQuarantined(
+            deps,
+            crypto.randomUUID() as VoicemailQuarantineId,
+            adminUser.id,
+          ),
         ).rejects.toThrow(NotFoundError);
       });
 
@@ -829,16 +928,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const store = createMockBlobStore();
         const sealedData = Buffer.from("sealed-dismiss-audio");
         const blobKey = await store.put(
-          testDb.schemaName,
+          testDb.schemaName as OrgSchema,
           "quarantine",
           sealedData,
         );
-        const recordingSid = `RE_DIS_${crypto.randomUUID().slice(0, 8)}`;
+        const disRecSid = recordingSidSchema.parse(
+          `RE_DIS_${crypto.randomUUID().slice(0, 8)}`,
+        );
         const row = await testDb.db
           .insertInto("voicemail_quarantine")
           .values({
-            recording_sid: recordingSid,
-            call_sid: `CA_DIS_${crypto.randomUUID().slice(0, 8)}`,
+            recording_sid: disRecSid,
+            call_sid: callSidSchema.parse(
+              `CA_DIS_${crypto.randomUUID().slice(0, 8)}`,
+            ),
             blob_key: blobKey,
             size_bytes: sealedData.length,
             reason: "tracker_miss",
@@ -861,16 +964,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const store = createMockBlobStore();
         const sealedData = Buffer.from("sealed-dismiss-ok");
         const blobKey = await store.put(
-          testDb.schemaName,
+          testDb.schemaName as OrgSchema,
           "quarantine",
           sealedData,
         );
-        const recordingSid = `RE_DISOK_${crypto.randomUUID().slice(0, 8)}`;
+        const disokRecSid = recordingSidSchema.parse(
+          `RE_DISOK_${crypto.randomUUID().slice(0, 8)}`,
+        );
         const row = await testDb.db
           .insertInto("voicemail_quarantine")
           .values({
-            recording_sid: recordingSid,
-            call_sid: `CA_DISOK_${crypto.randomUUID().slice(0, 8)}`,
+            recording_sid: disokRecSid,
+            call_sid: callSidSchema.parse(
+              `CA_DISOK_${crypto.randomUUID().slice(0, 8)}`,
+            ),
             blob_key: blobKey,
             size_bytes: sealedData.length,
             reason: "unresolved_client",

@@ -23,7 +23,9 @@ import {
   type SmsCodeService,
   type CallerIdResolver,
 } from "./sms-code.js";
+import type { OrgIdentifiers } from "../telephony/phone-resolver.js";
 import { RateLimitError, ValidationError } from "../errors.js";
+import type { OrgId, OrgSchema, CodeHash } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
   let testDb: TestDb;
@@ -38,7 +40,13 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
     await testDb.cleanup();
   });
 
-  const TEST_ORG_SCHEMA = "org_test";
+  const TEST_ORG_ID = "00000000-0000-4000-8000-000000000001" as OrgId;
+  const TEST_ORG_SCHEMA =
+    "org_00000000-0000-4000-8000-000000000001" as OrgSchema;
+  const TEST_ORG: OrgIdentifiers = {
+    orgId: TEST_ORG_ID,
+    orgSchema: TEST_ORG_SCHEMA,
+  };
 
   function mockResolver(
     number: string | null = "+15551234567",
@@ -54,12 +62,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
     const provider = createMockTelephonyProvider();
     const resolveCallerId = mockResolver();
     return {
-      service: createSmsCodeService(
-        db,
-        provider,
-        resolveCallerId,
-        TEST_ORG_SCHEMA,
-      ),
+      service: createSmsCodeService(db, provider, resolveCallerId, TEST_ORG),
       provider,
       resolveCallerId,
     };
@@ -149,7 +152,8 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
           .insertInto("sms_codes")
           .values({
             user_id: user.id,
-            code_hash: `scrypt:${"aa".repeat(16)}:${"bb".repeat(32)}`,
+            code_hash:
+              `scrypt:${"aa".repeat(16)}:${"bb".repeat(32)}` as CodeHash,
             // expires_at set so creation time is within the hour
             expires_at: new Date(now + 5 * 60 * 1000 - i * 90_000),
             consumed: true, // consumed so they don't interfere with cooldown
@@ -172,11 +176,23 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
         db,
         provider,
         resolveCallerId,
-        TEST_ORG_SCHEMA,
+        TEST_ORG,
       );
 
       await expect(service.sendCode(user.id, "+15559876543")).rejects.toThrow(
         ValidationError,
+      );
+    });
+
+    it("passes OrgIdentifiers (not a bare string) to the resolver", async () => {
+      const user = await createTestUser(db);
+      const { service, resolveCallerId } = makeService();
+
+      await service.sendCode(user.id, "+15559876543");
+
+      expect(resolveCallerId).toHaveBeenCalledWith(
+        { orgId: TEST_ORG_ID, orgSchema: TEST_ORG_SCHEMA },
+        "system",
       );
     });
   });

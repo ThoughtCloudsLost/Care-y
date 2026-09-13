@@ -72,6 +72,8 @@ export const ticketKeys = {
   followUpSummary: (ticketId: string, ...filterParams: unknown[]) =>
     [...ticketKeys.followUps(ticketId), "summary", ...filterParams] as const,
 
+  shares: (ticketId: string) =>
+    [...ticketKeys.all(ticketId), "shares"] as const,
   attachments: (ticketId: string) =>
     [...ticketKeys.all(ticketId), "attachments"] as const,
   recordings: (ticketId: string) =>
@@ -230,4 +232,6 @@ export const portalKeys = {
     [...portalKeys.all, "bootstrap", channelId] as const,
   messages: (channelId: string) =>
     [...portalKeys.all, "messages", channelId] as const,
+  accountBootstrap: () => [...portalKeys.all, "accountBootstrap"] as const,
+  accountMessages: () => [...portalKeys.all, "accountMessages"] as const,
 };

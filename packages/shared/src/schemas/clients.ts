@@ -9,6 +9,11 @@
  */
 
 import { z } from "zod";
+import {
+  aliasHashSchema,
+  clientIdSchema,
+  phoneMatchHashSchema,
+} from "../ids.js";
 
 // --- Client list (paginated, sortable, searchable) ---
 
@@ -17,10 +22,10 @@ export const clientListInputSchema = z.object({
   sortBy: z.enum(["created_at", "ticket_count"]).default("created_at"),
   sortDirection: z.enum(["asc", "desc"]).default("desc"),
   limit: z.number().int().min(1).max(100).default(25),
-  cursor: z.uuid().optional(),
+  cursor: clientIdSchema.optional(),
 
   // Exact-alias lookup via blind index hash (browser-computed)
-  aliasHash: z.string().max(256).optional(),
+  aliasHash: z.string().max(256).pipe(aliasHashSchema).optional(),
 
   // Filter: tri-state application ownership. true = has tickets, false = no
   // tickets, undefined = no filtering. The list query already computes a
@@ -40,14 +45,14 @@ export type ClientListInput = z.infer<typeof clientListInputSchema>;
 // --- Client detail (single client by ID) ---
 
 export const clientGetInputSchema = z.object({
-  clientId: z.uuid(),
+  clientId: clientIdSchema,
 });
 export type ClientGetInput = z.infer<typeof clientGetInputSchema>;
 
 // --- Alias update (browser sends sealed ciphertext + blind index hash) ---
 
 export const updateAliasInputSchema = z.object({
-  clientId: z.uuid(),
+  clientId: clientIdSchema,
   encryptedAlias: z.string().min(1).max(4096),
   aliasHash: z.string().min(1).max(256),
 });
@@ -56,7 +61,7 @@ export type UpdateAliasInput = z.infer<typeof updateAliasInputSchema>;
 // --- Alias hash backfill (browser supplies hash for webhook-created rows) ---
 
 export const backfillAliasHashInputSchema = z.object({
-  clientId: z.uuid(),
+  clientId: clientIdSchema,
   aliasHash: z.string().min(1).max(256),
 });
 export type BackfillAliasHashInput = z.infer<
@@ -66,12 +71,13 @@ export type BackfillAliasHashInput = z.infer<
 // --- Phone update (plaintext E.164, server encrypts and hashes) ---
 
 export const updatePhoneInputSchema = z.object({
-  clientId: z.uuid(),
+  clientId: clientIdSchema,
   phoneNumber: z.string().regex(/^\+[1-9]\d{1,14}$/, "Must be E.164 format"),
   /** Browser-computed HMAC-SHA512 blind index (128 hex chars), nullable. */
   phoneMatchHash: z
     .string()
     .regex(/^[0-9a-f]{128}$/)
+    .pipe(phoneMatchHashSchema)
     .nullable()
     .optional(),
 });
@@ -80,7 +86,7 @@ export type UpdatePhoneInput = z.infer<typeof updatePhoneInputSchema>;
 // --- Phone match hash backfill (browser supplies hash for server-created rows) ---
 
 export const backfillPhoneMatchHashInputSchema = z.object({
-  clientId: z.uuid(),
+  clientId: clientIdSchema,
   phoneMatchHash: z.string().regex(/^[0-9a-f]{128}$/),
 });
 export type BackfillPhoneMatchHashInput = z.infer<
@@ -91,7 +97,7 @@ export type BackfillPhoneMatchHashInput = z.infer<
 
 export const suggestDuplicatesInputSchema = z.object({
   phoneHash: z.string().min(1),
-  excludeClientId: z.uuid().optional(),
+  excludeClientId: clientIdSchema.optional(),
 });
 export type SuggestDuplicatesInput = z.infer<
   typeof suggestDuplicatesInputSchema

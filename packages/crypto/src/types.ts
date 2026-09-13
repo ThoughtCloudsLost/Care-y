@@ -97,6 +97,8 @@ export const HKDF_LABELS = {
   PORTAL_AUTH: "care-y-portal-auth-v1",
   PORTAL_SALT: "care-y-portal-salt-v1",
   PORTAL_ECIES: "care-y-portal-ecies-v1",
+  CLIENT_ACCOUNT_ECIES: "care-y-client-ecies-v1",
+  CLIENT_ACCOUNT_AUTH: "care-y-client-auth-v1",
 } as const;
 
 /** BLAKE2b domain separation label for branding key derivation */

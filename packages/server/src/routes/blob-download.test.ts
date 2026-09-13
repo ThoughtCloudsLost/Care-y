@@ -14,6 +14,7 @@ import {
   type BlobDownloadHandlerDeps,
 } from "./blob-download.js";
 import { NotFoundError, ForbiddenError } from "../errors.js";
+import type { UserId, OrgId, OrgSchema } from "@care-y/shared";
 import * as RelayUtils from "./relay-utils.js";
 import * as Roles from "../auth/roles.js";
 
@@ -36,7 +37,7 @@ vi.mock("../auth/roles.js", async (importOriginal) => {
 const mockAuth = RelayUtils.authenticateRelay as ReturnType<typeof vi.fn>;
 const mockHasPermForOrg = Roles.hasPermissionForOrg as ReturnType<typeof vi.fn>;
 
-const TEST_UUID = "00000000-0000-0000-0000-000000000001";
+const TEST_UUID = "00000000-0000-4000-8000-000000000001";
 
 function mockReq(
   method: string,
@@ -98,7 +99,12 @@ function buildDeps(
 function authOk(): void {
   mockAuth.mockResolvedValue({
     ok: true,
-    session: { userId: "u1", orgSchema: "org_test", sessionId: "s1" },
+    session: {
+      userId: "u1" as UserId,
+      orgId: TEST_UUID as OrgId,
+      orgSchema: "org_test" as OrgSchema,
+      sessionId: "s1",
+    },
   });
 }
 

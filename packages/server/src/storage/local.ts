@@ -7,6 +7,8 @@ import * as path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { BlobCategory, BlobStore } from "./store.js";
 import { BlobStoreError } from "./store.js";
+import type { BlobKey, OrgSchema } from "@care-y/shared";
+import { blobKeySchema } from "@care-y/shared";
 
 const VALID_ORG_SCHEMA = /^org_[0-9a-f-]+$/;
 const VALID_CATEGORIES: ReadonlySet<string> = new Set<BlobCategory>([
@@ -30,7 +32,7 @@ function assertSafeKey(key: string): void {
 }
 
 /** Validates orgSchema and category inputs to put(). */
-function assertSafeInputs(orgSchema: string, category: string): void {
+function assertSafeInputs(orgSchema: OrgSchema, category: string): void {
   if (!VALID_ORG_SCHEMA.test(orgSchema)) {
     throw new BlobStoreError(`Invalid org schema: ${orgSchema}`);
   }
@@ -48,10 +50,10 @@ export function createLocalBlobStore(basePath: string): BlobStore {
 
   return {
     async put(
-      orgSchema: string,
+      orgSchema: OrgSchema,
       category: BlobCategory,
       blob: Buffer,
-    ): Promise<string> {
+    ): Promise<BlobKey> {
       assertSafeInputs(orgSchema, category);
       const id = randomUUID();
       const key = `${orgSchema}/${category}/${id}`;
@@ -67,10 +69,10 @@ export function createLocalBlobStore(basePath: string): BlobStore {
         throw new BlobStoreError(`Failed to write blob: ${key}`, err);
       }
 
-      return key;
+      return blobKeySchema.parse(key);
     },
 
-    async get(key: string): Promise<Buffer | null> {
+    async get(key: BlobKey): Promise<Buffer | null> {
       assertSafeKey(key);
       try {
         // Key format is regex-validated by assertSafeKey above
@@ -82,7 +84,7 @@ export function createLocalBlobStore(basePath: string): BlobStore {
       }
     },
 
-    async delete(key: string): Promise<void> {
+    async delete(key: BlobKey): Promise<void> {
       assertSafeKey(key);
       try {
         // eslint-disable-next-line security/detect-non-literal-fs-filename
@@ -93,7 +95,7 @@ export function createLocalBlobStore(basePath: string): BlobStore {
       }
     },
 
-    async exists(key: string): Promise<boolean> {
+    async exists(key: BlobKey): Promise<boolean> {
       assertSafeKey(key);
       try {
         await fs.access(keyToPath(key));

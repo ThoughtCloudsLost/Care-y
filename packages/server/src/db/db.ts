@@ -1,6 +1,7 @@
 import pg from "pg";
 import { Kysely, PostgresDialect } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "./types.js";
+import type { OrgSchema } from "@care-y/shared";
 
 // int8 (PostgreSQL bigint) is returned as string by pg by default.
 // Override the parser so COUNT(*) and other int8 results come back as number.
@@ -33,7 +34,7 @@ export const db = new Kysely<PlatformDatabase>({ dialect });
 // The `as unknown as Kysely<TenantDatabase>` cast is required because
 // .withSchema() preserves the source type parameter. At runtime the instance
 // is identical except for the added plugin.
-export function tenantDb(orgSchema: string): Kysely<TenantDatabase> {
+export function tenantDb(orgSchema: OrgSchema): Kysely<TenantDatabase> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- .withSchema() preserves source type param; runtime instance is correct, TS can't express the schema swap
   return db.withSchema(orgSchema) as unknown as Kysely<TenantDatabase>;
 }

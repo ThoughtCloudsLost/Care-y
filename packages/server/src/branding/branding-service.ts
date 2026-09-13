@@ -6,6 +6,7 @@ import type {
   BrandingData,
   SaveBrandingFieldInput,
   UploadIconsInput,
+  OrgSchema,
 } from "@care-y/shared";
 import { validateMagicBytes } from "../telephony/attachment-validator.js";
 import { ValidationError } from "../errors.js";
@@ -64,7 +65,7 @@ export interface BrandingService {
   saveBrandingField(input: SaveBrandingFieldInput): Promise<void>;
   uploadIcons(
     store: BlobStore,
-    orgSchema: string,
+    orgSchema: OrgSchema,
     input: UploadIconsInput,
   ): Promise<void>;
 }
@@ -145,7 +146,7 @@ export function createBrandingService(
 
     async uploadIcons(
       store: BlobStore,
-      orgSchema: string,
+      orgSchema: OrgSchema,
       input: UploadIconsInput,
     ): Promise<void> {
       const buf192 = Buffer.from(input.icon192, "base64");

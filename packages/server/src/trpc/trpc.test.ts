@@ -38,17 +38,38 @@ import {
   expectTrpcError,
   testSealedBox,
 } from "../test-utils.js";
+import {
+  RoleId,
+  orgIdSchema,
+  orgSlugIdSchema,
+  orgSchemaNameSchema,
+  sessionIdSchema,
+  sessionTokenSchema,
+  userIdSchema,
+  ipTokenSchema,
+  uaTokenSchema,
+} from "@care-y/shared";
 
 // --- Helpers ---
 
 const fakeOrg: OrgContext = {
-  orgId: "org-1",
-  orgSlug: "test",
-  orgSchema: "org_test",
+  orgId: orgIdSchema.parse("00000000-0000-4000-8000-000000000001"),
+  orgSlug: orgSlugIdSchema.parse("test"),
+  orgSchema: orgSchemaNameSchema.parse(
+    "org_00000000-0000-4000-8000-000000000001",
+  ),
   // Minimal stub; middleware doesn't use tenantDb directly
   tenantDb: {} as OrgContext["tenantDb"],
   sealedBox: testSealedBox,
 };
+
+const FAKE_SESSION_ID = sessionIdSchema.parse(
+  "11111111-1111-4111-8111-111111111111",
+);
+const FAKE_TOKEN = sessionTokenSchema.parse("tok");
+const FAKE_USER_ID = userIdSchema.parse("22222222-2222-4222-8222-222222222222");
+const FAKE_IP_TOKEN = ipTokenSchema.parse("test-ip-token");
+const FAKE_UA_TOKEN = uaTokenSchema.parse("test-ua-token");
 
 function baseCtx(overrides?: Partial<Context>): Context {
   return {
@@ -251,11 +272,11 @@ describe("requireAuth middleware (authedProcedure)", () => {
       baseCtx({
         org: fakeOrg,
         session: {
-          id: "s1",
-          token: "tok",
-          userId: "u1",
-          ipToken: "test-ip-token",
-          uaToken: "test-ua-token",
+          id: FAKE_SESSION_ID,
+          token: FAKE_TOKEN,
+          userId: FAKE_USER_ID,
+          ipToken: FAKE_IP_TOKEN,
+          uaToken: FAKE_UA_TOKEN,
           expiresAt: new Date(Date.now() + 60_000),
           twofaVerified: false,
           webauthnChallenge: null,
@@ -275,21 +296,21 @@ describe("requireAuth middleware (authedProcedure)", () => {
       baseCtx({
         org: fakeOrg,
         session: {
-          id: "s1",
-          token: "tok",
-          userId: "u1",
-          ipToken: "test-ip-token",
-          uaToken: "test-ua-token",
+          id: FAKE_SESSION_ID,
+          token: FAKE_TOKEN,
+          userId: FAKE_USER_ID,
+          ipToken: FAKE_IP_TOKEN,
+          uaToken: FAKE_UA_TOKEN,
           expiresAt: new Date(Date.now() + 60_000),
           twofaVerified: false,
           webauthnChallenge: null,
         },
         user: {
-          id: "u1",
+          id: FAKE_USER_ID,
           encryptedIdentifier: "testuser",
           encryptedDisplayName: "Test",
           encryptedPreferredLocale: null,
-          roleId: "volunteer",
+          roleId: RoleId.VOLUNTEER,
           isActive: true,
           hasSeenBriefing: true,
         },
@@ -332,21 +353,21 @@ describe("require2fa middleware (authed2faProcedure)", () => {
       baseCtx({
         org: fakeOrg,
         session: {
-          id: "s1",
-          token: "tok",
-          userId: "u1",
-          ipToken: "test-ip-token",
-          uaToken: "test-ua-token",
+          id: FAKE_SESSION_ID,
+          token: FAKE_TOKEN,
+          userId: FAKE_USER_ID,
+          ipToken: FAKE_IP_TOKEN,
+          uaToken: FAKE_UA_TOKEN,
           expiresAt: new Date(Date.now() + 60_000),
           twofaVerified: false,
           webauthnChallenge: null,
         },
         user: {
-          id: "u1",
+          id: FAKE_USER_ID,
           encryptedIdentifier: "testuser",
           encryptedDisplayName: "Test",
           encryptedPreferredLocale: null,
-          roleId: "volunteer",
+          roleId: RoleId.VOLUNTEER,
           isActive: true,
           hasSeenBriefing: true,
         },
@@ -360,21 +381,21 @@ describe("require2fa middleware (authed2faProcedure)", () => {
       baseCtx({
         org: fakeOrg,
         session: {
-          id: "s1",
-          token: "tok",
-          userId: "u1",
-          ipToken: "test-ip-token",
-          uaToken: "test-ua-token",
+          id: FAKE_SESSION_ID,
+          token: FAKE_TOKEN,
+          userId: FAKE_USER_ID,
+          ipToken: FAKE_IP_TOKEN,
+          uaToken: FAKE_UA_TOKEN,
           expiresAt: new Date(Date.now() + 60_000),
           twofaVerified: true,
           webauthnChallenge: null,
         },
         user: {
-          id: "u1",
+          id: FAKE_USER_ID,
           encryptedIdentifier: "testuser",
           encryptedDisplayName: "Test",
           encryptedPreferredLocale: null,
-          roleId: "volunteer",
+          roleId: RoleId.VOLUNTEER,
           isActive: true,
           hasSeenBriefing: true,
         },
@@ -391,21 +412,21 @@ describe("withErrorWrapping resolver wrapper", () => {
   const authedCtx = baseCtx({
     org: fakeOrg,
     session: {
-      id: "s1",
-      token: "tok",
-      userId: "u1",
-      ipToken: "test-ip-token",
-      uaToken: "test-ua-token",
+      id: FAKE_SESSION_ID,
+      token: FAKE_TOKEN,
+      userId: FAKE_USER_ID,
+      ipToken: FAKE_IP_TOKEN,
+      uaToken: FAKE_UA_TOKEN,
       expiresAt: new Date(Date.now() + 60_000),
       twofaVerified: false,
       webauthnChallenge: null,
     },
     user: {
-      id: "u1",
+      id: FAKE_USER_ID,
       encryptedIdentifier: "testuser",
       encryptedDisplayName: "Test",
       encryptedPreferredLocale: null,
-      roleId: "volunteer",
+      roleId: RoleId.VOLUNTEER,
       isActive: true,
       hasSeenBriefing: true,
     },
@@ -464,21 +485,21 @@ describe("withErrorWrapping resolver wrapper", () => {
     const verified2faCtx = baseCtx({
       org: fakeOrg,
       session: {
-        id: "s1",
-        token: "tok",
-        userId: "u1",
-        ipToken: "test-ip-token",
-        uaToken: "test-ua-token",
+        id: FAKE_SESSION_ID,
+        token: FAKE_TOKEN,
+        userId: FAKE_USER_ID,
+        ipToken: FAKE_IP_TOKEN,
+        uaToken: FAKE_UA_TOKEN,
         expiresAt: new Date(Date.now() + 60_000),
         twofaVerified: true,
         webauthnChallenge: null,
       },
       user: {
-        id: "u1",
+        id: FAKE_USER_ID,
         encryptedIdentifier: "testuser",
         encryptedDisplayName: "Test",
         encryptedPreferredLocale: null,
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
         isActive: true,
         hasSeenBriefing: true,
       },

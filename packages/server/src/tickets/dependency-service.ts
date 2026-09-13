@@ -12,31 +12,34 @@ import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { TicketError, NotFoundError, ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { TicketId, UserId } from "@care-y/shared";
 
 export interface DependencyRecord {
-  readonly ticketId: string;
-  readonly dependsOnTicketId: string;
+  readonly ticketId: TicketId;
+  readonly dependsOnTicketId: TicketId;
   readonly createdAt: Date;
 }
 
 export interface DependencyService {
-  add(
-    userId: string,
-    ticketId: string,
-    dependsOnTicketId: string,
-  ): Promise<DependencyRecord>;
-  remove(
-    userId: string,
-    ticketId: string,
-    dependsOnTicketId: string,
-  ): Promise<void>;
-  listForTicket(ticketId: string): Promise<DependencyRecord[]>;
-  allResolved(ticketId: string): Promise<boolean>;
+  // Named input because ticketId and dependsOnTicketId share a brand:
+  // swapping them reverses the dependency direction without an error.
+  add(input: {
+    userId: UserId;
+    ticketId: TicketId;
+    dependsOnTicketId: TicketId;
+  }): Promise<DependencyRecord>;
+  remove(input: {
+    userId: UserId;
+    ticketId: TicketId;
+    dependsOnTicketId: TicketId;
+  }): Promise<void>;
+  listForTicket(ticketId: TicketId): Promise<DependencyRecord[]>;
+  allResolved(ticketId: TicketId): Promise<boolean>;
 }
 
 function toRecord(row: {
-  ticket_id: string;
-  depends_on_ticket_id: string;
+  ticket_id: TicketId;
+  depends_on_ticket_id: TicketId;
   created_at: Date;
 }): DependencyRecord {
   return {
@@ -51,7 +54,8 @@ export function createDependencyService(
   access?: TicketAccessChecker,
 ): DependencyService {
   return {
-    async add(userId, ticketId, dependsOnTicketId): Promise<DependencyRecord> {
+    async add(input): Promise<DependencyRecord> {
+      const { userId, ticketId, dependsOnTicketId } = input;
       // Verify the caller has access to both tickets
       if (access) {
         await access.assertAccess(userId, ticketId);
@@ -104,7 +108,8 @@ export function createDependencyService(
       return toRecord(row);
     },
 
-    async remove(userId, ticketId, dependsOnTicketId): Promise<void> {
+    async remove(input): Promise<void> {
+      const { userId, ticketId, dependsOnTicketId } = input;
       // Verify the caller has access to the source ticket
       if (access) {
         await access.assertAccess(userId, ticketId);

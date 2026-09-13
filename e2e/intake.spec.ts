@@ -58,13 +58,15 @@ test.describe.serial("Public Intake Form", () => {
     await expect(nameInput).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await nameInput.fill(INTAKE_NAME);
 
-    // Contact method: select "none" (no contact info needed for test)
-    const noneRadio = intakePage
-      .getByText(/no contact/i)
-      .or(intakePage.getByText(/none/i));
-    if (await noneRadio.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await noneRadio.click();
-    }
+    // Contact method: "I'll check back myself" is the only option that
+    // needs no contact detail. The default (phone) leaves the number
+    // field required and blocks submit.
+    const noneRadio = intakePage.getByRole("radio", {
+      name: /check back myself/i,
+    });
+    await expect(noneRadio).toBeVisible({ timeout: 5_000 });
+    await noneRadio.dispatchEvent("click");
+    await expect(noneRadio).toBeChecked();
 
     // Message field (textarea)
     const messageInput = intakePage.locator("textarea").first();
@@ -88,7 +90,9 @@ test.describe.serial("Public Intake Form", () => {
       }
     });
 
-    const submitBtn = intakePage.getByRole("button", { name: /submit/i });
+    const submitBtn = intakePage.getByRole("button", {
+      name: /send encrypted message/i,
+    });
     await expect(submitBtn).toBeEnabled({ timeout: CRYPTO_TIMEOUT });
     await submitBtn.click();
 
@@ -110,20 +114,19 @@ test.describe.serial("Public Intake Form", () => {
     expect(postBody).not.toContain(INTAKE_NAME);
     expect(postBody).not.toContain(INTAKE_MESSAGE);
 
-    // Verify the payload has the expected base64 field shape
+    // Verify the payload has the expected base64 field shape. The batch
+    // entry holds the input directly; there is no superjson "json"
+    // wrapper on this route.
     const parsed: unknown = JSON.parse(postBody!);
-    expect(parsed).toHaveProperty("0.json.encryptedTitle");
-    expect(parsed).toHaveProperty("0.json.encryptedDescription");
-    expect(parsed).toHaveProperty("0.json.wrappedTk");
-    expect(parsed).toHaveProperty("0.json.ticketId");
+    expect(parsed).toHaveProperty("0.encryptedTitle");
+    expect(parsed).toHaveProperty("0.encryptedDescription");
+    expect(parsed).toHaveProperty("0.wrappedTk");
+    expect(parsed).toHaveProperty("0.ticketId");
 
     // Each encrypted field should be a non-empty base64-like string
     const json = (
-      parsed as Record<
-        string,
-        Record<string, Record<string, unknown>> | undefined
-      >
-    )["0"]?.json;
+      parsed as Record<string, Record<string, unknown> | undefined>
+    )["0"];
     expect(json).toBeDefined();
     expect(typeof json?.encryptedTitle).toBe("string");
     expect(typeof json?.encryptedDescription).toBe("string");
@@ -236,7 +239,9 @@ test.describe.serial("Public Intake Form", () => {
       if (await msgInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
         await msgInput.fill("Testing rate limit");
       }
-      const submitBtn = errorPage.getByRole("button", { name: /submit/i });
+      const submitBtn = errorPage.getByRole("button", {
+        name: /send encrypted message/i,
+      });
       if (await submitBtn.isEnabled({ timeout: 3_000 }).catch(() => false)) {
         await submitBtn.click();
         // Wait briefly for error or success
@@ -293,8 +298,8 @@ test.describe.serial("Multi-form Intake Routing", () => {
     if (queueIds.length < 2) {
       // Create a second queue for routing differentiation
       queryDb(
-        `INSERT INTO queues (id, encrypted_name, sort_order, created_at, updated_at)
-         VALUES (gen_random_uuid(), 'enc-test-q', 99, now(), now());`,
+        `INSERT INTO queues (id, encrypted_name, sort_order, created_at)
+         VALUES (gen_random_uuid(), 'enc-test-q', 99, now());`,
       );
       const refreshed = queryDb(
         "SELECT id FROM queues ORDER BY created_at LIMIT 2;",
@@ -327,8 +332,8 @@ test.describe.serial("Multi-form Intake Routing", () => {
     // Insert a minimal text field with encrypted label/config (placeholder ciphertext).
     for (const fid of [formAId, formBId]) {
       queryDb(
-        `INSERT INTO intake_form_fields (id, form_id, field_type, encrypted_label, encrypted_config, is_required, position, created_at, updated_at)
-         VALUES (gen_random_uuid(), '${fid}', 'textarea', 'dGVzdC1sYWJlbA', 'eyJ0eXBlIjoidGV4dGFyZWEifQ', true, 0, now(), now());`,
+        `INSERT INTO intake_form_fields (id, form_id, field_type, encrypted_label, encrypted_config, is_required, position, created_at)
+         VALUES (gen_random_uuid(), '${fid}', 'textarea', 'dGVzdC1sYWJlbA', 'eyJ0eXBlIjoidGV4dGFyZWEifQ', true, 0, now());`,
       );
     }
   });
@@ -340,7 +345,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
     const page = await browser.newPage();
     await page.goto("/intake/nonexistent-slug-xyz");
     // The not-available state renders a role="status" element with the message
-    const statusEl = page.locator("[role='status']");
+    const statusEl = page.locator("[role='status']:not(#toast-container)");
     await expect(statusEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     const text = await statusEl.textContent();
     expect(text).toContain("not available");
@@ -357,7 +362,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
 
     const page = await browser.newPage();
     await page.goto("/intake");
-    const statusEl = page.locator("[role='status']");
+    const statusEl = page.locator("[role='status']:not(#toast-container)");
     await expect(statusEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     const text = await statusEl.textContent();
     expect(text).toContain("not available");
@@ -383,7 +388,9 @@ test.describe.serial("Multi-form Intake Routing", () => {
     await expect(textarea).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await textarea.fill("Alpha queue submission");
 
-    const submitBtn = page.getByRole("button", { name: /submit/i });
+    const submitBtn = page.getByRole("button", {
+      name: /send encrypted message/i,
+    });
     await expect(submitBtn).toBeEnabled({ timeout: CRYPTO_TIMEOUT });
     await submitBtn.click();
 
@@ -411,7 +418,9 @@ test.describe.serial("Multi-form Intake Routing", () => {
     await expect(textarea).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await textarea.fill("Beta queue submission");
 
-    const submitBtn = page.getByRole("button", { name: /submit/i });
+    const submitBtn = page.getByRole("button", {
+      name: /send encrypted message/i,
+    });
     await expect(submitBtn).toBeEnabled({ timeout: CRYPTO_TIMEOUT });
     await submitBtn.click();
 

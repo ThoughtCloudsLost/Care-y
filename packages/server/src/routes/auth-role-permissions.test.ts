@@ -34,6 +34,15 @@ import {
   type TestDb,
 } from "../test-utils.js";
 import { RoleId, Permission, ErrorCode } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+} from "@care-y/shared";
 import { createAuthRouter, type AuthRouterDeps } from "./auth.js";
 import { createCallerFactory } from "../trpc/trpc.js";
 import { createAuditService } from "../tickets/audit.js";
@@ -62,9 +71,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       tenantDb = testDb.db;
 
       orgCtx = {
-        orgId: "org-role-perm-test",
-        orgSlug: "test-role-perms",
-        orgSchema: testDb.schemaName,
+        orgId: "org-role-perm-test" as OrgId,
+        orgSlug: "test-role-perms" as OrgSlug,
+        orgSchema: testDb.schemaName as OrgSchema,
         tenantDb,
         sealedBox: testSealedBox,
       };
@@ -122,11 +131,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         res: mockRes(),
         org: orgCtx,
         session: {
-          id: `sess-${user.id}`,
-          token: `tok-${user.id}`,
+          id: `sess-${user.id}` as SessionId,
+          token: `tok-${user.id}` as SessionToken,
           userId: user.id,
-          ipToken: "ip-tok",
-          uaToken: "ua-tok",
+          ipToken: "ip-tok" as IpToken,
+          uaToken: "ua-tok" as UaToken,
           expiresAt: new Date(Date.now() + 3_600_000),
           twofaVerified: true,
           webauthnChallenge: null,

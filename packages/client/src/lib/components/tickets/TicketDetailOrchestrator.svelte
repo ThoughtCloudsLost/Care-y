@@ -57,6 +57,7 @@
     createNoteEdit,
     createContentEdit,
     createNotificationSheet,
+    createShareSheet,
   } from "$lib/composables/ticket-detail/create-overlay-state.svelte.js";
   import { copyToClipboard } from "$lib/composables/ticket-detail/clipboard-copy.js";
   import {
@@ -107,6 +108,7 @@
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import { untrack } from "svelte";
   import { recentViews } from "$lib/search/recent-views.js";
+  import { ticketIdSchema, userIdSchema } from "@care-y/shared";
 
   let {
     ticketId,
@@ -479,13 +481,13 @@
     }) =>
       ({
         id: pendingId,
-        ticketId: tid,
+        ticketId: ticketIdSchema.parse(tid),
         source: "volunteer",
         type: "message",
         isPrivate: false,
         mentionedPseudonyms,
         encryptedContent: "",
-        createdBy: uid,
+        createdBy: uid == null ? null : userIdSchema.parse(uid),
         createdAt: new Date().toISOString(),
         hasRecording: false,
         hasImage: false,
@@ -677,6 +679,7 @@
 
   const contentEdit = createContentEdit();
   const notificationSheet = createNotificationSheet();
+  const shareSheet = createShareSheet();
 
   const panelActions = createPanelActions({
     getTicketId: () => ticketId,
@@ -709,6 +712,10 @@
     onnotifications: () => {
       closePanel();
       notificationSheet.open();
+    },
+    onsharelink: () => {
+      closePanel();
+      shareSheet.open();
     },
   });
 
@@ -1138,6 +1145,8 @@
   {lightbox}
   {contextMenu}
   {closeFlow}
+  {shareSheet}
+  clientPhone={ticket?.clientPhone ?? null}
   onpaneldismiss={closePanel}
   onpanelaction={(action: TicketAction) => panelActions.dispatch(action)}
   onnotetap={handleNoteTap}

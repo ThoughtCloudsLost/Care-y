@@ -16,14 +16,20 @@ import {
 import { createStubShiftProvider } from "./shift-provider.js";
 import { createQueuePermissionsService } from "./queue-permissions.js";
 import { ForbiddenError, NotFoundError, TicketError } from "../errors.js";
+import {
+  newTicketId,
+  type UserId,
+  type TicketId,
+  type QueueId,
+} from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
   let testDb: TestDb;
   let svc: AssignmentService;
-  let volunteerA: string;
-  let volunteerB: string;
-  let volunteerC: string;
-  let queueId: string;
+  let volunteerA: UserId;
+  let volunteerB: UserId;
+  let volunteerC: UserId;
+  let queueId: QueueId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -60,9 +66,9 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
   });
 
   async function insertTicket(opts?: {
-    assignedTo?: string;
+    assignedTo?: UserId;
     status?: "open" | "closed";
-  }): Promise<string> {
+  }): Promise<TicketId> {
     const fix = await createTestTicketFixture(testDb.db, { queueId });
     if (opts?.assignedTo !== undefined || opts?.status !== undefined) {
       await testDb.db
@@ -122,9 +128,9 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
   });
 
   it("throws NotFoundError for nonexistent ticket", async () => {
-    await expect(
-      svc.assignRoundRobin(crypto.randomUUID()),
-    ).rejects.toBeInstanceOf(NotFoundError);
+    await expect(svc.assignRoundRobin(newTicketId())).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
   });
 
   it("throws TicketError for closed ticket", async () => {
@@ -302,7 +308,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
     // Access checker returns ForbiddenError for nonexistent tickets
     // (no existence leak: "not found" is indistinguishable from "no access")
     await expect(
-      svc.assignTo(volunteerA, crypto.randomUUID(), volunteerB),
+      svc.assignTo(volunteerA, newTicketId(), volunteerB),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
@@ -324,7 +330,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AssignmentService (DB)", () => {
   it("assignTo throws ForbiddenError for nonexistent target user", async () => {
     const ticketId = await insertTicket();
     await expect(
-      svc.assignTo(volunteerA, ticketId, crypto.randomUUID()),
+      svc.assignTo(volunteerA, ticketId, crypto.randomUUID() as UserId),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 });

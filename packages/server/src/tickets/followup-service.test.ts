@@ -16,6 +16,17 @@ import {
 } from "./access.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import * as crypto from "node:crypto";
+import {
+  newFollowupId,
+  newTicketId,
+  newKeyGeneration,
+  type FollowupId,
+  type NoteTypeId,
+  type KeyGeneration,
+  type BlobKey,
+  type CallSid,
+  type RoleIdValue,
+} from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
   let testDb: TestDb;
@@ -46,8 +57,8 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
 
   async function createNoteTypeWithViewRole(
     db: TestDb["db"],
-    minViewRole: string,
-  ): Promise<string> {
+    minViewRole: RoleIdValue,
+  ): Promise<NoteTypeId> {
     const row = await db
       .insertInto("note_types")
       .values({
@@ -66,7 +77,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("content-blob"),
       source: "volunteer",
@@ -90,8 +101,8 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
 
     await expect(
       svc.create(user.id, {
-        id: crypto.randomUUID(),
-        ticketId: crypto.randomUUID(),
+        id: newFollowupId(),
+        ticketId: newTicketId(),
         encryptedContent: Buffer.from("c"),
         source: "volunteer",
         type: "note",
@@ -113,7 +124,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
 
     await expect(
       svc.create(userId, {
-        id: crypto.randomUUID(),
+        id: newFollowupId(),
         ticketId,
         encryptedContent: Buffer.from("c"),
         source: "volunteer",
@@ -131,7 +142,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const ids: string[] = [];
     for (let i = 0; i < 3; i++) {
       const fu = await svc.create(userId, {
-        id: crypto.randomUUID(),
+        id: newFollowupId(),
         ticketId,
         encryptedContent: Buffer.from(`content-${String(i)}`),
         source: "volunteer",
@@ -165,7 +176,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("original-note"),
       source: "volunteer",
@@ -189,7 +200,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const otherUser = await createTestUser(testDb.db);
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note"),
       source: "volunteer",
@@ -207,7 +218,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("message"),
       source: "volunteer",
@@ -225,7 +236,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("system-note"),
       source: "system",
@@ -245,7 +256,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note-to-delete"),
       source: "volunteer",
@@ -278,7 +289,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .execute();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note"),
       source: "volunteer",
@@ -304,7 +315,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const otherUser = await createTestUser(testDb.db);
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note"),
       source: "volunteer",
@@ -322,7 +333,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("msg"),
       source: "volunteer",
@@ -342,7 +353,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu1 = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note-1"),
       source: "volunteer",
@@ -352,7 +363,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     });
 
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note-2"),
       source: "volunteer",
@@ -376,7 +387,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const outsider = await createTestUser(testDb.db);
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note"),
       source: "volunteer",
@@ -395,7 +406,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const outsider = await createTestUser(testDb.db);
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note"),
       source: "volunteer",
@@ -415,7 +426,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("msg-1"),
       source: "volunteer",
@@ -424,7 +435,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       mentionedPseudonyms: [],
     });
     const note = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note-1"),
       source: "volunteer",
@@ -433,7 +444,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       mentionedPseudonyms: [],
     });
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("status-1"),
       source: "system",
@@ -468,7 +479,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
 
     for (let i = 0; i < 5; i++) {
       await svc.create(userId, {
-        id: crypto.randomUUID(),
+        id: newFollowupId(),
         ticketId,
         encryptedContent: Buffer.from(`msg-${String(i)}`),
         source: "volunteer",
@@ -493,7 +504,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("msg"),
       source: "volunteer",
@@ -502,7 +513,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       mentionedPseudonyms: [],
     });
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note"),
       source: "volunteer",
@@ -523,7 +534,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const msg = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("msg"),
       source: "volunteer",
@@ -532,7 +543,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       mentionedPseudonyms: [],
     });
     const note = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note"),
       source: "volunteer",
@@ -555,7 +566,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("msg-with-vm"),
       source: "client",
@@ -570,7 +581,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .values({
         ticket_id: ticketId,
         followup_id: fu.id,
-        blob_key: "blob-vm-test",
+        blob_key: "blob-vm-test" as BlobKey,
         size_bytes: 1024,
         duration_seconds: 30,
       })
@@ -588,7 +599,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("msg-with-img"),
       source: "client",
@@ -602,7 +613,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .values({
         ticket_id: ticketId,
         followup_id: fu.id,
-        blob_key: "blob-img-test",
+        blob_key: "blob-img-test" as BlobKey,
         size_bytes: 2048,
         content_type: "image/jpeg",
       })
@@ -620,7 +631,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("text-only"),
       source: "volunteer",
@@ -641,7 +652,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("msg-ids"),
       source: "client",
@@ -656,7 +667,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .values({
         ticket_id: ticketId,
         followup_id: fu.id,
-        blob_key: "blob-file-test",
+        blob_key: "blob-file-test" as BlobKey,
         size_bytes: 4096,
         content_type: "application/pdf",
       })
@@ -673,7 +684,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("new-msg"),
       source: "volunteer",
@@ -690,7 +701,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
   it("create persists noteTypeId on internal notes", async () => {
     const { userId, ticketId } = await createTicketFixture();
 
-    const noteTypeId = crypto.randomUUID();
+    const noteTypeId = crypto.randomUUID() as NoteTypeId;
     await testDb.db
       .insertInto("note_types")
       .values({
@@ -704,7 +715,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .execute();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("typed-note"),
       source: "volunteer",
@@ -721,7 +732,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("untyped-note"),
       source: "volunteer",
@@ -736,8 +747,8 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
   it("updateInternalNote changes noteTypeId when provided", async () => {
     const { userId, ticketId } = await createTicketFixture();
 
-    const noteTypeA = crypto.randomUUID();
-    const noteTypeB = crypto.randomUUID();
+    const noteTypeA = crypto.randomUUID() as NoteTypeId;
+    const noteTypeB = crypto.randomUUID() as NoteTypeId;
     await testDb.db
       .insertInto("note_types")
       .values([
@@ -757,7 +768,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .execute();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note-content"),
       source: "volunteer",
@@ -782,7 +793,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
   it("updateInternalNote preserves noteTypeId when not provided", async () => {
     const { userId, ticketId } = await createTicketFixture();
 
-    const noteTypeId = crypto.randomUUID();
+    const noteTypeId = crypto.randomUUID() as NoteTypeId;
     await testDb.db
       .insertInto("note_types")
       .values({
@@ -794,7 +805,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .execute();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note-content"),
       source: "volunteer",
@@ -816,7 +827,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
   it("listSummary includes noteTypeId in results", async () => {
     const { userId, ticketId } = await createTicketFixture();
 
-    const noteTypeId = crypto.randomUUID();
+    const noteTypeId = crypto.randomUUID() as NoteTypeId;
     await testDb.db
       .insertInto("note_types")
       .values({
@@ -828,7 +839,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .execute();
 
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("typed-note"),
       source: "volunteer",
@@ -848,7 +859,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("old-note"),
       source: "volunteer",
@@ -869,7 +880,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const note = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("react-test"),
       source: "volunteer",
@@ -901,7 +912,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const msg = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("just a message"),
       source: "volunteer",
@@ -919,7 +930,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const n1 = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note-1"),
       source: "volunteer",
@@ -928,7 +939,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       mentionedPseudonyms: [],
     });
     const n2 = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("note-2"),
       source: "volunteer",
@@ -972,7 +983,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     );
 
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("visible-note"),
       source: "volunteer",
@@ -981,7 +992,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       mentionedPseudonyms: [],
     });
     await svc.create(otherUser.id, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("restricted-note"),
       source: "volunteer",
@@ -1023,7 +1034,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     );
 
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("my-restricted-note"),
       source: "volunteer",
@@ -1048,10 +1059,10 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
 
   it("listByTicket returns keyWrap for follow-ups with non-null key_generation", async () => {
     const { userId, ticketId } = await createTicketFixture();
-    const keyGen = crypto.randomUUID();
+    const keyGen: KeyGeneration = newKeyGeneration();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("temp-msg"),
       source: "client",
@@ -1100,7 +1111,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("canonical-msg"),
       source: "volunteer",
@@ -1127,10 +1138,10 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
       .execute();
 
-    const keyGen = crypto.randomUUID();
+    const keyGen: KeyGeneration = newKeyGeneration();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("temp-msg"),
       source: "client",
@@ -1174,14 +1185,14 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("call-record"),
       source: "system",
       type: "phone_call",
       isPrivate: false,
       mentionedPseudonyms: [],
-      callSid: "CA_test_001",
+      callSid: "CA_test_001" as CallSid,
       callStatus: "completed",
       callDurationSeconds: 120,
     });
@@ -1195,14 +1206,14 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("call-data"),
       source: "system",
       type: "phone_call",
       isPrivate: false,
       mentionedPseudonyms: [],
-      callSid: "CA_list_002",
+      callSid: "CA_list_002" as CallSid,
       callStatus: "no_answer",
       callDurationSeconds: 0,
     });
@@ -1218,7 +1229,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("plain-msg"),
       source: "volunteer",
@@ -1240,7 +1251,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const ids: string[] = [];
     for (let i = 0; i < 5; i++) {
       const fu = await svc.create(userId, {
-        id: crypto.randomUUID(),
+        id: newFollowupId(),
         ticketId,
         encryptedContent: Buffer.from(`older-dir-${String(i)}`),
         source: "volunteer",
@@ -1276,7 +1287,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
 
     for (let i = 0; i < 5; i++) {
       await svc.create(userId, {
-        id: crypto.randomUUID(),
+        id: newFollowupId(),
         ticketId,
         encryptedContent: Buffer.from(`newer-dir-${String(i)}`),
         source: "volunteer",
@@ -1312,7 +1323,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     // Create follow-ups
     for (let i = 0; i < 3; i++) {
       await svc.create(userId, {
-        id: crypto.randomUUID(),
+        id: newFollowupId(),
         ticketId,
         encryptedContent: Buffer.from(`date-filter-${String(i)}`),
         source: "volunteer",
@@ -1351,7 +1362,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const withRec = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("has-recording"),
       source: "client",
@@ -1360,7 +1371,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       mentionedPseudonyms: [],
     });
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("no-recording"),
       source: "volunteer",
@@ -1374,7 +1385,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .values({
         ticket_id: ticketId,
         followup_id: withRec.id,
-        blob_key: "blob-rec-filter-test",
+        blob_key: "blob-rec-filter-test" as BlobKey,
         size_bytes: 1024,
         duration_seconds: 15,
       })
@@ -1392,7 +1403,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const withFile = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("has-file"),
       source: "client",
@@ -1406,7 +1417,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .values({
         ticket_id: ticketId,
         followup_id: withFile.id,
-        blob_key: "blob-file-filter-test",
+        blob_key: "blob-file-filter-test" as BlobKey,
         size_bytes: 2048,
         content_type: "application/pdf",
       })
@@ -1424,7 +1435,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const withImg = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("has-image-att"),
       source: "client",
@@ -1438,7 +1449,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .values({
         ticket_id: ticketId,
         followup_id: withImg.id,
-        blob_key: "blob-img-filter-test",
+        blob_key: "blob-img-filter-test" as BlobKey,
         size_bytes: 4096,
         content_type: "image/png",
       })
@@ -1465,7 +1476,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .execute();
 
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("by-user1"),
       source: "volunteer",
@@ -1474,7 +1485,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       mentionedPseudonyms: [],
     });
     await svc.create(otherUser.id, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("by-user2"),
       source: "volunteer",
@@ -1518,7 +1529,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
 
     for (let i = 0; i < 5; i++) {
       await svc.create(userId, {
-        id: crypto.randomUUID(),
+        id: newFollowupId(),
         ticketId,
         encryptedContent: Buffer.from(`summary-older-${String(i)}`),
         source: "volunteer",
@@ -1552,7 +1563,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("summary-rec"),
       source: "client",
@@ -1568,14 +1579,14 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
         {
           ticket_id: ticketId,
           followup_id: fu.id,
-          blob_key: "blob-rec-1",
+          blob_key: "blob-rec-1" as BlobKey,
           size_bytes: 1024,
           duration_seconds: 15,
         },
         {
           ticket_id: ticketId,
           followup_id: fu.id,
-          blob_key: "blob-rec-2",
+          blob_key: "blob-rec-2" as BlobKey,
           size_bytes: 2048,
           duration_seconds: 45,
         },
@@ -1593,7 +1604,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fuImg = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("has-img"),
       source: "client",
@@ -1603,7 +1614,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     });
 
     const fuFile = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("has-file"),
       source: "client",
@@ -1618,14 +1629,14 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
         {
           ticket_id: ticketId,
           followup_id: fuImg.id,
-          blob_key: "blob-img-summary",
+          blob_key: "blob-img-summary" as BlobKey,
           size_bytes: 4096,
           content_type: "image/jpeg",
         },
         {
           ticket_id: ticketId,
           followup_id: fuFile.id,
-          blob_key: "blob-file-summary",
+          blob_key: "blob-file-summary" as BlobKey,
           size_bytes: 8192,
           content_type: "application/pdf",
         },
@@ -1646,7 +1657,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("system-content"),
       source: "system",
@@ -1655,7 +1666,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       mentionedPseudonyms: [],
     });
     await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("plain-msg"),
       source: "volunteer",
@@ -1680,7 +1691,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
 
     for (let i = 0; i < 4; i++) {
       await svc.create(userId, {
-        id: crypto.randomUUID(),
+        id: newFollowupId(),
         ticketId,
         encryptedContent: Buffer.from(`pos-${String(i)}`),
         source: "volunteer",
@@ -1711,7 +1722,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
 
     for (let i = 0; i < 3; i++) {
       await svc.create(userId, {
-        id: crypto.randomUUID(),
+        id: newFollowupId(),
         ticketId,
         encryptedContent: Buffer.from(`sum-pos-${String(i)}`),
         source: "volunteer",
@@ -1761,7 +1772,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       .execute();
 
     const note = await svc.create(otherUser.id, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("restricted-react-test"),
       source: "volunteer",
@@ -1783,7 +1794,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("delete-then-update"),
       source: "volunteer",
@@ -1805,7 +1816,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("double-delete"),
       source: "volunteer",
@@ -1827,7 +1838,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const note = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("react-delete-test"),
       source: "volunteer",
@@ -1852,7 +1863,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       svc.toggleReaction(
         userId,
         "dXwG0zR9BtJp",
-        crypto.randomUUID(),
+        newFollowupId(),
         "acknowledge",
       ),
     ).rejects.toThrow(NotFoundError);
@@ -1864,7 +1875,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId } = await createTicketFixture();
 
     await expect(
-      svc.updateInternalNote(userId, crypto.randomUUID(), Buffer.from("x")),
+      svc.updateInternalNote(userId, newFollowupId(), Buffer.from("x")),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
@@ -1874,7 +1885,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId } = await createTicketFixture();
 
     await expect(
-      svc.softDeleteInternalNote(userId, crypto.randomUUID(), false),
+      svc.softDeleteInternalNote(userId, newFollowupId(), false),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
@@ -1884,7 +1895,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("original"),
       source: "volunteer",
@@ -1907,7 +1918,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("sms"),
       source: "volunteer",
@@ -1925,7 +1936,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { ticketId } = await createTicketFixture();
 
     // Insert a client-sourced message directly (bypassing access checks)
-    const fuId = crypto.randomUUID();
+    const fuId: FollowupId = newFollowupId();
     await testDb.db
       .insertInto("followups")
       .values({
@@ -1949,7 +1960,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("msg"),
       source: "volunteer",
@@ -1983,7 +1994,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId, ticketId } = await createTicketFixture();
 
     const fu = await svc.create(userId, {
-      id: crypto.randomUUID(),
+      id: newFollowupId(),
       ticketId,
       encryptedContent: Buffer.from("msg"),
       source: "volunteer",
@@ -2008,15 +2019,15 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const { userId } = await createTicketFixture();
 
     await expect(
-      svc.updateOutboundMessage(userId, crypto.randomUUID(), Buffer.from("x")),
+      svc.updateOutboundMessage(userId, newFollowupId(), Buffer.from("x")),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("updateOutboundMessage rejects unconverged follow-up (key_generation non-null)", async () => {
     const { userId, ticketId } = await createTicketFixture();
 
-    const fuId = crypto.randomUUID();
-    const keyGen = crypto.randomUUID();
+    const fuId: FollowupId = newFollowupId();
+    const keyGen: KeyGeneration = newKeyGeneration();
 
     await testDb.db
       .insertInto("followups")

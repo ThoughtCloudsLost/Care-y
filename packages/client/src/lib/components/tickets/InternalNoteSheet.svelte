@@ -13,6 +13,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { followupSlot } from "@care-y/crypto";
+  import { newFollowupId } from "@care-y/shared";
   import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge, getOrgDecryptCache } from "$lib/crypto/context.js";
   import { requireRouter } from "$lib/errors.js";
@@ -174,7 +175,7 @@
           typeChanged ? m.note_type_updated() : m.ticket_note_saved(),
         );
       } else {
-        const followUpId = crypto.randomUUID();
+        const followUpId = newFollowupId();
         const encryptedContent = await cryptoBridge.encrypt(
           ticketId,
           followupSlot(followUpId),

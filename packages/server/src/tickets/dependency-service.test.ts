@@ -19,14 +19,20 @@ import {
   ForbiddenError,
 } from "../errors.js";
 import * as crypto from "node:crypto";
+import {
+  newTicketId,
+  type UserId,
+  type TicketId,
+  type QueueId,
+} from "@care-y/shared";
 
 // Dummy user ID for tests that don't exercise access control
-const SYSTEM_USER = crypto.randomUUID();
+const SYSTEM_USER = crypto.randomUUID() as UserId;
 
 describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
   let testDb: TestDb;
   let svc: DependencyService;
-  let queueId: string;
+  let queueId: QueueId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -42,7 +48,7 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
     await testDb.cleanup();
   });
 
-  async function createTicket(): Promise<string> {
+  async function createTicket(): Promise<TicketId> {
     const fix = await createTestTicketFixture(testDb.db, { queueId });
     return fix.ticketId;
   }
@@ -50,7 +56,11 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
   it("add creates a dependency link", async () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
-    const dep = await svc.add(SYSTEM_USER, t1, t2);
+    const dep = await svc.add({
+      userId: SYSTEM_USER,
+      ticketId: t1,
+      dependsOnTicketId: t2,
+    });
     expect(dep.ticketId).toBe(t1);
     expect(dep.dependsOnTicketId).toBe(t2);
     expect(dep.createdAt).toBeInstanceOf(Date);
@@ -58,31 +68,43 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
 
   it("add rejects self-dependency", async () => {
     const t1 = await createTicket();
-    await expect(svc.add(SYSTEM_USER, t1, t1)).rejects.toBeInstanceOf(
-      ValidationError,
-    );
+    await expect(
+      svc.add({ userId: SYSTEM_USER, ticketId: t1, dependsOnTicketId: t1 }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("add rejects direct circular dependency", async () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
-    await svc.add(SYSTEM_USER, t1, t2);
-    await expect(svc.add(SYSTEM_USER, t2, t1)).rejects.toBeInstanceOf(
-      TicketError,
-    );
+    await svc.add({
+      userId: SYSTEM_USER,
+      ticketId: t1,
+      dependsOnTicketId: t2,
+    });
+    await expect(
+      svc.add({ userId: SYSTEM_USER, ticketId: t2, dependsOnTicketId: t1 }),
+    ).rejects.toBeInstanceOf(TicketError);
   });
 
   it("add throws NotFoundError for non-existent ticket", async () => {
     const t1 = await createTicket();
     await expect(
-      svc.add(SYSTEM_USER, t1, crypto.randomUUID()),
+      svc.add({
+        userId: SYSTEM_USER,
+        ticketId: t1,
+        dependsOnTicketId: newTicketId(),
+      }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("allResolved returns true when all deps are closed", async () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
-    await svc.add(SYSTEM_USER, t1, t2);
+    await svc.add({
+      userId: SYSTEM_USER,
+      ticketId: t1,
+      dependsOnTicketId: t2,
+    });
 
     // Close t2
     await testDb.db
@@ -97,7 +119,11 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
   it("allResolved returns false when any dep is open", async () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
-    await svc.add(SYSTEM_USER, t1, t2);
+    await svc.add({
+      userId: SYSTEM_USER,
+      ticketId: t1,
+      dependsOnTicketId: t2,
+    });
     expect(await svc.allResolved(t1)).toBe(false);
   });
 
@@ -110,14 +136,24 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
     // Remove something that doesn't exist - should not throw
-    await expect(svc.remove(SYSTEM_USER, t1, t2)).resolves.toBeUndefined();
+    await expect(
+      svc.remove({ userId: SYSTEM_USER, ticketId: t1, dependsOnTicketId: t2 }),
+    ).resolves.toBeUndefined();
   });
 
   it("remove deletes existing dependency", async () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
-    await svc.add(SYSTEM_USER, t1, t2);
-    await svc.remove(SYSTEM_USER, t1, t2);
+    await svc.add({
+      userId: SYSTEM_USER,
+      ticketId: t1,
+      dependsOnTicketId: t2,
+    });
+    await svc.remove({
+      userId: SYSTEM_USER,
+      ticketId: t1,
+      dependsOnTicketId: t2,
+    });
     const deps = await svc.listForTicket(t1);
     expect(deps).toHaveLength(0);
   });
@@ -126,8 +162,16 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
     const t1 = await createTicket();
     const t2 = await createTicket();
     const t3 = await createTicket();
-    await svc.add(SYSTEM_USER, t1, t2);
-    await svc.add(SYSTEM_USER, t1, t3);
+    await svc.add({
+      userId: SYSTEM_USER,
+      ticketId: t1,
+      dependsOnTicketId: t2,
+    });
+    await svc.add({
+      userId: SYSTEM_USER,
+      ticketId: t1,
+      dependsOnTicketId: t3,
+    });
     const deps = await svc.listForTicket(t1);
     expect(deps).toHaveLength(2);
     const ids = deps.map((d) => d.dependsOnTicketId);
@@ -162,7 +206,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const outsider = await createTestUser(testDb.db);
 
       await expect(
-        svc.add(outsider.id, fix.ticketId, other.ticketId),
+        svc.add({
+          userId: outsider.id,
+          ticketId: fix.ticketId,
+          dependsOnTicketId: other.ticketId,
+        }),
       ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
@@ -175,7 +223,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         queueId: fix.queueId,
       });
 
-      const dep = await svc.add(fix.userId!, fix.ticketId, fix2.ticketId);
+      const dep = await svc.add({
+        userId: fix.userId!,
+        ticketId: fix.ticketId,
+        dependsOnTicketId: fix2.ticketId,
+      });
       expect(dep.ticketId).toBe(fix.ticketId);
     });
   },

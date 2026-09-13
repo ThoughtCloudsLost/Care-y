@@ -24,43 +24,54 @@ import type {
 import { NotFoundError, ConflictError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { TicketStatus } from "@care-y/shared";
+import type {
+  ClientId,
+  UserId,
+  OrgId,
+  PhoneHash,
+  PhoneMatchHash,
+  AliasHash,
+  KeyGeneration,
+  PhoneId,
+  TicketId,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Result types
 // ---------------------------------------------------------------------------
 
 export interface ClientListRecord {
-  readonly id: string;
+  readonly id: ClientId;
   readonly encryptedAlias: Buffer;
-  readonly aliasHash: string | null;
+  readonly aliasHash: AliasHash | null;
   readonly encryptedNumber: Buffer | null;
-  readonly phoneMatchHash: string | null;
+  readonly phoneMatchHash: PhoneMatchHash | null;
   readonly ticketCount: number;
   readonly createdAt: Date;
-  readonly mergedInto: string | null;
+  readonly mergedInto: ClientId | null;
 }
 
 export interface ClientTicketRecord {
-  readonly id: string;
+  readonly id: TicketId;
   readonly encryptedTitle: Buffer;
   readonly status: TicketStatus;
   readonly priority: string;
   readonly createdAt: Date;
-  readonly keyGeneration: string;
+  readonly keyGeneration: KeyGeneration;
   readonly onHold: boolean;
   /** Follow-up count, needed to derive the display status shape. */
   readonly followUpCount: number;
 }
 
 export interface ClientDetailRecord extends ClientListRecord {
-  readonly phoneId: string | null;
-  readonly phoneHash: string | null;
+  readonly phoneId: PhoneId | null;
+  readonly phoneHash: PhoneHash | null;
   readonly tickets: readonly ClientTicketRecord[];
   readonly mergeHistory: readonly MergeEventRecord[];
 }
 
 export interface PhoneConflict {
-  readonly conflictingClientId: string;
+  readonly conflictingClientId: ClientId;
   readonly conflictingClientEncryptedAlias: Buffer;
 }
 
@@ -79,40 +90,40 @@ export interface ClientService {
     sortBy: string;
     sortDirection: string;
     limit: number;
-    cursor?: string;
+    cursor?: ClientId;
     hasApplications?: boolean;
     createdAfter?: string;
     createdBefore?: string;
     includeMerged?: boolean;
-    aliasHash?: string;
+    aliasHash?: AliasHash;
   }): Promise<ClientListRecord[]>;
 
-  getById(clientId: string): Promise<ClientDetailRecord>;
+  getById(clientId: ClientId): Promise<ClientDetailRecord>;
 
   updateAlias(
-    clientId: string,
+    clientId: ClientId,
     encryptedAlias: string,
-    aliasHash: string,
-    actorId: string,
+    aliasHash: AliasHash,
+    actorId: UserId,
   ): Promise<void>;
 
-  backfillAliasHash(clientId: string, aliasHash: string): Promise<void>;
+  backfillAliasHash(clientId: ClientId, aliasHash: AliasHash): Promise<void>;
 
   backfillPhoneMatchHash(
-    clientId: string,
-    phoneMatchHash: string,
+    clientId: ClientId,
+    phoneMatchHash: PhoneMatchHash,
   ): Promise<void>;
 
   updatePhone(
-    clientId: string,
+    clientId: ClientId,
     phoneNumber: string,
-    actorId: string,
-    phoneMatchHash?: string | null,
+    actorId: UserId,
+    phoneMatchHash?: PhoneMatchHash | null,
   ): Promise<UpdatePhoneResult>;
 
   suggestDuplicates(
-    phoneHash: string,
-    excludeClientId?: string,
+    phoneHash: PhoneHash,
+    excludeClientId?: ClientId,
   ): Promise<PhoneConflict | null>;
 }
 
@@ -139,7 +150,7 @@ export interface ClientServiceDeps {
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
   readonly mergeService: MergeService;
-  readonly orgId: string;
+  readonly orgId: OrgId;
 }
 
 export function createClientService(deps: ClientServiceDeps): ClientService {
@@ -447,7 +458,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
       // reads, so it is left out rather than implying a guarantee that the
       // string is scrubbed. It stays live until GC.
       const encryptedNumber = encryptor.encrypt(phoneNumber);
-      const phoneHash = indexer.hash(phoneNumber, deps.orgId);
+      const phoneHash = indexer.hashPhone(phoneNumber, deps.orgId);
 
       // Check for hash collision before starting the transaction
       const conflict = await this.suggestDuplicates(phoneHash, clientId);

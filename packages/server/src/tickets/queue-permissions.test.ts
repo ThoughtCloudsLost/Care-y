@@ -10,16 +10,17 @@ import {
   createQueuePermissionsService,
   type QueuePermissionsService,
 } from "./queue-permissions.js";
+import type { UserId, QueueId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "QueuePermissionsService (DB)",
   () => {
     let testDb: TestDb;
     let svc: QueuePermissionsService;
-    let userA: string;
-    let userB: string;
-    let queueA: string;
-    let queueB: string;
+    let userA: UserId;
+    let userB: UserId;
+    let queueA: QueueId;
+    let queueB: QueueId;
 
     beforeAll(async () => {
       testDb = await createTestDb();

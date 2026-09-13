@@ -17,8 +17,9 @@ import {
   removeFromBlocklistInputSchema,
   setPhonePurposeInputSchema,
   changeTelephonyModeInputSchema,
+  phoneSidSchema,
 } from "@care-y/shared";
-import { ConflictError } from "../errors.js";
+import { ConflictError, InternalError } from "../errors.js";
 
 export interface TelephonyAdminRouterDeps {
   readonly configService: TelephonyConfigService;
@@ -73,7 +74,7 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
     addToBlocklist: adminProcedure.input(addToBlocklistInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const repo = createBlocklistRepository(ctx.org.tenantDb);
-        const phoneHash = indexer.hash(input.phoneNumber, ctx.org.orgId);
+        const phoneHash = indexer.hashPhone(input.phoneNumber, ctx.org.orgId);
 
         if (await repo.exists(phoneHash)) {
           throw new ConflictError("This number is already blocked");
@@ -122,7 +123,10 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
 
     setPhonePurpose: adminProcedure.input(setPhonePurposeInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        await configService.setPhonePurpose(ctx.org.tenantDb, input);
+        await configService.setPhonePurpose(ctx.org.tenantDb, {
+          outboundSid: input.outboundSid,
+          systemSid: input.systemSid,
+        });
       }),
     ),
 
@@ -140,24 +144,24 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
                 { number: "+15550002222", sid: "PNdev002", label: "Support" },
               ] as const;
 
-              if (configService.devSeedConfigWithPhones) {
-                await configService.devSeedConfigWithPhones(
-                  ctx.org.orgId,
-                  devPhones,
+              if (!configService.devSeedConfigWithPhones) {
+                // Both this route and devSeedConfigWithPhones are gated on
+                // NODE_ENV === "development". If the route exists but the
+                // method does not, the env check is inconsistent.
+                throw new InternalError(
+                  "devSeedConfigWithPhones unavailable in development mode",
                 );
-
-                await configService.setPhonePurpose(ctx.org.tenantDb, {
-                  outboundSid: devPhones[0].sid,
-                  systemSid: devPhones[1].sid,
-                });
-              } else {
-                await configService.saveConfig({
-                  orgId: ctx.org.orgId,
-                  provider: "twilio",
-                  accountId: "ACdev00000000000000000000000mock",
-                  authToken: "dev_mock_auth_token_000000000000",
-                });
               }
+
+              await configService.devSeedConfigWithPhones(
+                ctx.org.orgId,
+                devPhones,
+              );
+
+              await configService.setPhonePurpose(ctx.org.tenantDb, {
+                outboundSid: phoneSidSchema.parse(devPhones[0].sid),
+                systemSid: phoneSidSchema.parse(devPhones[1].sid),
+              });
 
               return { skipped: false as const };
             }),

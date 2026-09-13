@@ -8,6 +8,7 @@ import {
   createNoopFieldEncryptor,
 } from "./field-encryptor.js";
 import { CryptoError } from "../errors.js";
+import type { OrgId } from "@care-y/shared";
 
 // Deterministic 32-byte test key (not from env, not a real secret).
 const TEST_KEY = Buffer.from(
@@ -169,8 +170,8 @@ describe("createFieldEncryptor", () => {
 describe("createBlindIndexer", () => {
   const keys = deriveKeys(TEST_KEY);
   const indexer = createBlindIndexer(keys.blindIndexKey);
-  const ORG_A = "org-a";
-  const ORG_B = "org-b";
+  const ORG_A = "org-a" as OrgId;
+  const ORG_B = "org-b" as OrgId;
 
   it("produces a 64-char hex string (SHA-256)", () => {
     const h = indexer.hash("test", ORG_A);

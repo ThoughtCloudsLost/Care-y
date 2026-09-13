@@ -24,6 +24,7 @@ import {
 } from "./branding-icons.js";
 import { deriveBrandingKey } from "../branding/branding-crypto.js";
 import type { BlobStore } from "../storage/store.js";
+import type { OrgId, OrgSlug, OrgSchema, BlobKey } from "@care-y/shared";
 import {
   createTestDb,
   seedOrgPublicKey,
@@ -68,7 +69,7 @@ function buildDeps(
 ): BrandingIconHandlerDeps {
   return {
     blobStore: {
-      put: vi.fn(async () => "key"),
+      put: vi.fn(async () => "key" as BlobKey),
       get: vi.fn(async () => null),
       delete: vi.fn(async () => undefined),
       exists: vi.fn(async () => false),
@@ -77,9 +78,9 @@ function buildDeps(
       findBySlug: vi.fn(async () => null),
       findById: vi.fn(async () => null),
       createOrg: vi.fn(async () => ({
-        id: "id",
-        slug: "test",
-        schemaName: "org_test",
+        id: "id" as OrgId,
+        slug: "test" as OrgSlug,
+        schemaName: "org_test" as OrgSchema,
         isActive: true,
         setupToken: "test-token",
       })),
@@ -140,16 +141,16 @@ describe("createBrandingIconHandler", () => {
     const inactiveDeps = buildDeps({
       orgService: {
         findBySlug: vi.fn(async () => ({
-          id: "id",
-          slug: "test",
-          schemaName: "org_test",
+          id: "id" as OrgId,
+          slug: "test" as OrgSlug,
+          schemaName: "org_test" as OrgSchema,
           isActive: false,
         })),
         findById: vi.fn(async () => null),
         createOrg: vi.fn(async () => ({
-          id: "id",
-          slug: "test",
-          schemaName: "org_test",
+          id: "id" as OrgId,
+          slug: "test" as OrgSlug,
+          schemaName: "org_test" as OrgSchema,
           isActive: true,
           setupToken: "test-token",
         })),
@@ -196,16 +197,16 @@ describe("createBrandingIconHandler", () => {
     const depsWithOrg = buildDeps({
       orgService: {
         findBySlug: vi.fn(async () => ({
-          id: "id",
-          slug: "test",
-          schemaName: "org_test",
+          id: "id" as OrgId,
+          slug: "test" as OrgSlug,
+          schemaName: "org_test" as OrgSchema,
           isActive: true,
         })),
         findById: vi.fn(async () => null),
         createOrg: vi.fn(async () => ({
-          id: "id",
-          slug: "test",
-          schemaName: "org_test",
+          id: "id" as OrgId,
+          slug: "test" as OrgSlug,
+          schemaName: "org_test" as OrgSchema,
           isActive: true,
           setupToken: "test-token",
         })),
@@ -233,9 +234,9 @@ describe("createBrandingIconHandler", () => {
         }),
         findById: vi.fn(async () => null),
         createOrg: vi.fn(async () => ({
-          id: "id",
-          slug: "test",
-          schemaName: "org_test",
+          id: "id" as OrgId,
+          slug: "test" as OrgSlug,
+          schemaName: "org_test" as OrgSchema,
           isActive: true,
           setupToken: "test-token",
         })),
@@ -270,7 +271,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
       Buffer.from("icon-bytes"),
     ]);
-    const BLOB_KEY = "branding/icon-192-test";
+    const BLOB_KEY = "branding/icon-192-test" as BlobKey;
     const ETAG = `"${BLOB_KEY}"`;
 
     const memoryStore: BlobStore = {
@@ -297,16 +298,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         blobStore: memoryStore,
         orgService: {
           findBySlug: vi.fn(async () => ({
-            id: "org-id",
-            slug: "test",
-            schemaName: testDb.schemaName,
+            id: "org-id" as OrgId,
+            slug: "test" as OrgSlug,
+            schemaName: testDb.schemaName as OrgSchema,
             isActive: true,
           })),
           findById: vi.fn(async () => null),
           createOrg: vi.fn(async () => ({
-            id: "org-id",
-            slug: "test",
-            schemaName: testDb.schemaName,
+            id: "org-id" as OrgId,
+            slug: "test" as OrgSlug,
+            schemaName: testDb.schemaName as OrgSchema,
             isActive: true,
             setupToken: "test-token",
           })),

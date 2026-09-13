@@ -16,7 +16,6 @@
  * configured recipients.
  */
 
-import crypto from "node:crypto";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { NotificationService } from "../notifications/service.js";
@@ -31,8 +30,26 @@ import { ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import { z } from "zod";
+import type {
+  AccountRegistrationInput,
+  AccountServiceDeps,
+} from "./account-service.js";
+import { createAccount } from "./account-service.js";
+import { storeClientCopy } from "./portal-message-service.js";
+import type { EciesTripleBuffers } from "./portal-message-service.js";
+import type {
+  TicketId,
+  FollowupId,
+  QueueId,
+  OrgId,
+  OrgSchema,
+  OrgSlug,
+  IntakeFormId,
+  UserId,
+} from "@care-y/shared";
+import { userIdSchema, newKeyGeneration } from "@care-y/shared";
 
-const recipientIdsSchema = z.array(z.uuid());
+const recipientIdsSchema = z.array(userIdSchema);
 
 // ---------------------------------------------------------------------------
 // Custom errors
@@ -63,22 +80,28 @@ export class IntakeDisabledError extends ValidationError {
 // Interfaces
 // ---------------------------------------------------------------------------
 
+export interface IntakeAccountInput {
+  readonly registration: AccountRegistrationInput;
+  readonly selfCopy: EciesTripleBuffers | null;
+}
+
 export interface IntakeTicketInput {
-  readonly ticketId: string;
-  readonly followUpId: string | null;
+  readonly ticketId: TicketId;
+  readonly followUpId: FollowupId | null;
   readonly encryptedTitle: Buffer;
   readonly encryptedDescription: Buffer;
   readonly encryptedMessage: Buffer | null;
   readonly encryptedFormResponse: Buffer;
-  readonly formId: string | null;
+  readonly formId: IntakeFormId | null;
   readonly wrappedTk: Buffer;
-  readonly resolvedQueueId: string | null;
+  readonly resolvedQueueId: QueueId | null;
   readonly resolvedPriority: "low" | "normal" | "high" | "urgent" | null;
   readonly resolvedEscalationLevel: string | null;
+  readonly account: IntakeAccountInput | null;
 }
 
 export interface IntakeTicketResult {
-  readonly ticketId: string;
+  readonly ticketId: TicketId;
   readonly clientAlias: string;
 }
 
@@ -107,8 +130,10 @@ export async function createIntakeTicket(
     readonly notificationService: NotificationService;
     readonly sealedBox: SealedBoxEncryptor;
     readonly fieldEncryptor?: FieldEncryptor;
-    readonly orgSchema: string;
-    readonly orgSlug: string;
+    readonly orgId: OrgId;
+    readonly orgSchema: OrgSchema;
+    readonly orgSlug: OrgSlug;
+    readonly accountServiceDeps?: AccountServiceDeps;
   },
   input: IntakeTicketInput,
 ): Promise<IntakeTicketResult> {
@@ -129,7 +154,7 @@ export async function createIntakeTicket(
 
   // Resolve destination queue via routing precedence
   let destinationQueueId = orgIntakeQueueId;
-  let formDestinationQueueId: string | null = null;
+  let formDestinationQueueId: QueueId | null = null;
 
   // Load form metadata when a formId is provided
   if (input.formId !== null) {
@@ -161,7 +186,7 @@ export async function createIntakeTicket(
         .where("role", "=", "queue-routing")
         .execute();
 
-      const allowedQueueIds = new Set<string>();
+      const allowedQueueIds = new Set<QueueId>();
       for (const field of routingFields) {
         if (field.routing_queue_ids !== null) {
           for (const qid of field.routing_queue_ids) {
@@ -215,7 +240,7 @@ export async function createIntakeTicket(
         queue_id: destinationQueueId,
         encrypted_title: input.encryptedTitle,
         encrypted_description: input.encryptedDescription,
-        key_generation: crypto.randomUUID(),
+        key_generation: newKeyGeneration(),
         priority,
       })
       .executeTakeFirstOrThrow();
@@ -257,7 +282,43 @@ export async function createIntakeTicket(
         .executeTakeFirstOrThrow();
     }
 
-    // 6. Return result
+    // 6. Account creation (opt-in at intake, inside the same transaction)
+    if (input.account !== null && deps.accountServiceDeps != null) {
+      await createAccount(
+        trx,
+        deps.accountServiceDeps,
+        client.id,
+        input.account.registration,
+      );
+
+      // Seed the account thread with the intake message when selfCopy is present
+      if (input.account.selfCopy !== null) {
+        // Resolve the follow-up id for the self copy: the intake message
+        // follow-up when one exists (the client wrote a message),
+        // otherwise no selfCopy (no follow-up to bind to).
+        const selfCopyFollowUpId = input.followUpId;
+        if (selfCopyFollowUpId !== null) {
+          // Fetch the new account channel row id (just created by createAccount)
+          const accountChannel = await trx
+            .selectFrom("portal_channels")
+            .select("id")
+            .where("client_id", "=", client.id)
+            .where("status", "=", "active")
+            .where("kind", "=", "account")
+            .executeTakeFirstOrThrow();
+
+          await storeClientCopy(
+            trx,
+            accountChannel.id,
+            selfCopyFollowUpId,
+            input.account.selfCopy,
+            "from_client",
+          );
+        }
+      }
+    }
+
+    // 7. Return result
     return { ticketId: input.ticketId, clientAlias: alias };
   });
 
@@ -292,11 +353,12 @@ function dispatchTicketCreated(
   db: Kysely<TenantDatabase>,
   deps: {
     readonly notificationService: NotificationService;
-    readonly orgSchema: string;
-    readonly orgSlug: string;
+    readonly orgId: OrgId;
+    readonly orgSchema: OrgSchema;
+    readonly orgSlug: OrgSlug;
   },
-  queueId: string,
-  ticketId: string,
+  queueId: QueueId,
+  ticketId: TicketId,
 ): void {
   void (async () => {
     try {
@@ -317,6 +379,7 @@ function dispatchTicketCreated(
 
       await deps.notificationService.dispatch(
         db,
+        deps.orgId,
         deps.orgSchema,
         deps.orgSlug,
         "ticket_created",
@@ -342,12 +405,13 @@ function dispatchEscalationAlert(
   db: Kysely<TenantDatabase>,
   deps: {
     readonly notificationService: NotificationService;
-    readonly orgSchema: string;
-    readonly orgSlug: string;
+    readonly orgId: OrgId;
+    readonly orgSchema: OrgSchema;
+    readonly orgSlug: OrgSlug;
   },
-  formId: string,
-  queueId: string,
-  ticketId: string,
+  formId: IntakeFormId,
+  queueId: QueueId,
+  ticketId: TicketId,
   encryptor: FieldEncryptor | null,
 ): void {
   void (async () => {
@@ -360,7 +424,7 @@ function dispatchEscalationAlert(
         .where("role", "=", "escalation")
         .execute();
 
-      const recipientIds = new Set<string>();
+      const recipientIds = new Set<UserId>();
       for (const field of escalationFields) {
         if (
           field.encrypted_escalation_recipient_ids !== null &&
@@ -406,6 +470,7 @@ function dispatchEscalationAlert(
 
       await deps.notificationService.dispatch(
         db,
+        deps.orgId,
         deps.orgSchema,
         deps.orgSlug,
         "ticket_escalated",

@@ -8,7 +8,15 @@
 import crypto from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Kysely } from "kysely";
+import { getSodium } from "@care-y/crypto";
 import type { TenantDatabase } from "../db/types.js";
+import type {
+  ClientId,
+  TicketId,
+  ChannelRowId,
+  FollowupId,
+} from "@care-y/shared";
+import { channelSecretSchema } from "@care-y/shared";
 import {
   createTestDb,
   createTestClientFixture,
@@ -38,7 +46,9 @@ function makeRegistration(
   overrides?: Partial<ChannelRegistration>,
 ): ChannelRegistration {
   return {
-    channelId: crypto.randomBytes(24).toString("hex"),
+    channelId: channelSecretSchema.parse(
+      crypto.randomBytes(24).toString("hex"),
+    ),
     authHash: crypto.randomBytes(32),
     clientPublic: crypto.randomBytes(32),
     hasPassphrase: false,
@@ -52,7 +62,7 @@ function makeRegistration(
 }
 
 /** Shorthand: create a client via the shared fixture and return its id. */
-async function insertClient(db: Kysely<TenantDatabase>): Promise<string> {
+async function insertClient(db: Kysely<TenantDatabase>): Promise<ClientId> {
   const fixture = await createTestClientFixture(db);
   return fixture.clientId;
 }
@@ -62,8 +72,8 @@ async function insertClient(db: Kysely<TenantDatabase>): Promise<string> {
  */
 async function insertFollowup(
   db: Kysely<TenantDatabase>,
-  ticketId: string,
-): Promise<string> {
+  ticketId: TicketId,
+): Promise<FollowupId> {
   const row = await db
     .insertInto("followups")
     .values({
@@ -83,8 +93,8 @@ async function insertFollowup(
  */
 async function insertPortalMessage(
   db: Kysely<TenantDatabase>,
-  channelRowId: string,
-  followupId: string,
+  channelRowId: ChannelRowId,
+  followupId: FollowupId,
 ): Promise<string> {
   const row = await db
     .insertInto("portal_messages")
@@ -110,6 +120,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
   let db: Kysely<TenantDatabase>;
 
   beforeAll(async () => {
+    await getSodium();
     testDb = await createTestDb();
     db = testDb.db;
   }, 30_000);
@@ -411,7 +422,9 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
     });
 
     it("returns null for unknown channel_id", async () => {
-      const unknownChannelId = crypto.randomBytes(24).toString("hex");
+      const unknownChannelId = channelSecretSchema.parse(
+        crypto.randomBytes(24).toString("hex"),
+      );
       const auth = crypto.randomBytes(32);
 
       const result = await resolveAuthedChannel(db, unknownChannelId, auth);
@@ -447,7 +460,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
       // Three different failure modes all produce the same null
       const unknownId = await resolveAuthedChannel(
         db,
-        crypto.randomBytes(24).toString("hex"),
+        channelSecretSchema.parse(crypto.randomBytes(24).toString("hex")),
         rawAuth,
       );
       const revokedChannel = await resolveAuthedChannel(
@@ -464,6 +477,74 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
       expect(unknownId).toBeNull();
       expect(revokedChannel).toBeNull();
       expect(wrongAuth).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // resolveAuthedChannel: kind clause
+  // -----------------------------------------------------------------------
+
+  describe("resolveAuthedChannel kind clause", () => {
+    it("returns null for a kind='account' row even with correct auth preimage", async () => {
+      const { hashChannelAuth: hash } = await import("@care-y/crypto");
+
+      const clientId = await insertClient(db);
+      const rawAuth = crypto.randomBytes(32);
+      const authHash = Buffer.from(hash(rawAuth));
+
+      // Insert a channel row with kind='account' directly.
+      // Account channels carry random auth_hash bytes in production
+      // (no token exists), but here we use a real hash to prove the
+      // kind clause blocks resolution even when the auth would match.
+      await db
+        .insertInto("portal_channels")
+        .values({
+          client_id: clientId,
+          channel_id: channelSecretSchema.parse(
+            crypto.randomBytes(24).toString("hex"),
+          ),
+          auth_hash: authHash,
+          client_public: crypto.randomBytes(32),
+          has_passphrase: false,
+          key_check_ephemeral_point: crypto.randomBytes(32),
+          key_check_nonce: crypto.randomBytes(24),
+          key_check_ciphertext: crypto.randomBytes(48),
+          status: "active",
+          kind: "account",
+        })
+        .returning("channel_id")
+        .executeTakeFirstOrThrow()
+        .then((row) => {
+          // Present the correct auth preimage; should still return null
+          return resolveAuthedChannel(db, row.channel_id, rawAuth);
+        })
+        .then((result) => {
+          expect(result).toBeNull();
+        });
+    });
+
+    it("still resolves kind='secure_link' rows (default behavior preserved)", async () => {
+      const { hashChannelAuth: hash } = await import("@care-y/crypto");
+
+      const clientId = await insertClient(db);
+      const rawAuth = crypto.randomBytes(32);
+      const authHash = Buffer.from(hash(rawAuth));
+
+      const reg = makeRegistration({ authHash });
+      await createChannel(db, clientId, reg);
+
+      // Verify the row has kind='secure_link' (the default)
+      const channel = await db
+        .selectFrom("portal_channels")
+        .select("kind")
+        .where("channel_id", "=", reg.channelId)
+        .executeTakeFirstOrThrow();
+      expect(channel.kind).toBe("secure_link");
+
+      // resolveAuthedChannel should still work for secure_link rows
+      const result = await resolveAuthedChannel(db, reg.channelId, rawAuth);
+      expect(result).not.toBeNull();
+      expect(result!.channel_id).toBe(reg.channelId);
     });
   });
 

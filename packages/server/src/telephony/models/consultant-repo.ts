@@ -13,17 +13,23 @@
 
 import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, ConsultantsTable } from "../../db/types.js";
+import type {
+  ConsultantId,
+  UserId,
+  OpsPhoneHash,
+  VerificationCodeHash,
+} from "@care-y/shared";
 
 export interface ConsultantRecord {
-  readonly id: string;
-  readonly userId: string;
+  readonly id: ConsultantId;
+  readonly userId: UserId;
   readonly encryptedPhone: Buffer | null;
   readonly isVerified: boolean;
   readonly preferredCallMethod: string;
-  readonly opsPhoneHash: string | null;
+  readonly opsPhoneHash: OpsPhoneHash | null;
   readonly opsEncryptedPhone: Buffer | null;
   readonly smsPingsEnabled: boolean;
-  readonly verificationCodeHash: string | null;
+  readonly verificationCodeHash: VerificationCodeHash | null;
   readonly verificationExpiresAt: Date | null;
   readonly verificationAttempts: number;
   readonly verifySendsHourStart: Date | null;
@@ -32,15 +38,15 @@ export interface ConsultantRecord {
 }
 
 export interface ConsultantRepository {
-  findByUserId(userId: string): Promise<ConsultantRecord | null>;
+  findByUserId(userId: UserId): Promise<ConsultantRecord | null>;
   create(input: {
-    userId: string;
+    userId: UserId;
     preferredCallMethod: string;
     smsPingsOptIn: boolean;
   }): Promise<ConsultantRecord>;
   setVerificationCode(
-    id: string,
-    codeHash: string,
+    id: ConsultantId,
+    codeHash: VerificationCodeHash,
     expiresAt: Date,
   ): Promise<void>;
   /**
@@ -53,13 +59,13 @@ export interface ConsultantRepository {
    * the error (cooldown vs hourly) for the response.
    */
   stageVerification(
-    id: string,
+    id: ConsultantId,
     artifacts: {
       readonly orgSealedPhone: Buffer;
-      readonly opsPhoneHash: string;
+      readonly opsPhoneHash: OpsPhoneHash;
       readonly opsEncryptedPhone: Buffer | null;
     },
-    codeHash: string,
+    codeHash: VerificationCodeHash,
     expiresAt: Date,
     now: Date,
     cooldownNotBefore: Date,
@@ -67,16 +73,20 @@ export interface ConsultantRepository {
     hourlyLimit: number,
   ): Promise<number>;
   /** Atomic verify: sets is_verified, clears code, finalizes ops columns. */
-  verifyAndActivate(id: string, codeHash: string, now: Date): Promise<boolean>;
+  verifyAndActivate(
+    id: ConsultantId,
+    codeHash: VerificationCodeHash,
+    now: Date,
+  ): Promise<boolean>;
   /** Increments verification_attempts. Returns new count. */
-  incrementVerificationAttempts(id: string): Promise<number>;
+  incrementVerificationAttempts(id: ConsultantId): Promise<number>;
   /** Clears code and attempts (lockout exhaustion). */
-  clearVerificationCode(id: string): Promise<void>;
-  updatePreferredCallMethod(id: string, method: string): Promise<void>;
+  clearVerificationCode(id: ConsultantId): Promise<void>;
+  updatePreferredCallMethod(id: ConsultantId, method: string): Promise<void>;
   /** Atomically nulls ops_encrypted_phone when disabling SMS pings. */
-  setSmsPingsEnabled(id: string, enabled: boolean): Promise<void>;
+  setSmsPingsEnabled(id: ConsultantId, enabled: boolean): Promise<void>;
   /** Atomically clears encrypted_phone, ops columns, and is_verified. */
-  delete(id: string): Promise<void>;
+  delete(id: ConsultantId): Promise<void>;
 }
 
 function toConsultantRecord(
@@ -104,7 +114,7 @@ export function createConsultantRepository(
   db: Kysely<TenantDatabase>,
 ): ConsultantRepository {
   return {
-    async findByUserId(userId: string): Promise<ConsultantRecord | null> {
+    async findByUserId(userId: UserId): Promise<ConsultantRecord | null> {
       const row = await db
         .selectFrom("consultants")
         .selectAll()
@@ -116,7 +126,7 @@ export function createConsultantRepository(
     },
 
     async create(input: {
-      userId: string;
+      userId: UserId;
       preferredCallMethod: string;
       smsPingsOptIn: boolean;
     }): Promise<ConsultantRecord> {
@@ -135,8 +145,8 @@ export function createConsultantRepository(
     },
 
     async setVerificationCode(
-      id: string,
-      codeHash: string,
+      id: ConsultantId,
+      codeHash: VerificationCodeHash,
       expiresAt: Date,
     ): Promise<void> {
       await db
@@ -151,13 +161,13 @@ export function createConsultantRepository(
     },
 
     async stageVerification(
-      id: string,
+      id: ConsultantId,
       artifacts: {
         readonly orgSealedPhone: Buffer;
-        readonly opsPhoneHash: string;
+        readonly opsPhoneHash: OpsPhoneHash;
         readonly opsEncryptedPhone: Buffer | null;
       },
-      codeHash: string,
+      codeHash: VerificationCodeHash,
       expiresAt: Date,
       now: Date,
       cooldownNotBefore: Date,
@@ -230,8 +240,8 @@ export function createConsultantRepository(
     },
 
     async verifyAndActivate(
-      id: string,
-      codeHash: string,
+      id: ConsultantId,
+      codeHash: VerificationCodeHash,
       now: Date,
     ): Promise<boolean> {
       const row = await db
@@ -268,7 +278,7 @@ export function createConsultantRepository(
       return true;
     },
 
-    async incrementVerificationAttempts(id: string): Promise<number> {
+    async incrementVerificationAttempts(id: ConsultantId): Promise<number> {
       const result = await db
         .updateTable("consultants")
         .set((eb) => ({
@@ -281,7 +291,7 @@ export function createConsultantRepository(
       return result.verification_attempts;
     },
 
-    async clearVerificationCode(id: string): Promise<void> {
+    async clearVerificationCode(id: ConsultantId): Promise<void> {
       await db
         .updateTable("consultants")
         .set({
@@ -293,7 +303,10 @@ export function createConsultantRepository(
         .execute();
     },
 
-    async updatePreferredCallMethod(id: string, method: string): Promise<void> {
+    async updatePreferredCallMethod(
+      id: ConsultantId,
+      method: string,
+    ): Promise<void> {
       await db
         .updateTable("consultants")
         .set({ preferred_call_method: method })
@@ -301,7 +314,10 @@ export function createConsultantRepository(
         .execute();
     },
 
-    async setSmsPingsEnabled(id: string, enabled: boolean): Promise<void> {
+    async setSmsPingsEnabled(
+      id: ConsultantId,
+      enabled: boolean,
+    ): Promise<void> {
       if (enabled) {
         await db
           .updateTable("consultants")
@@ -321,7 +337,7 @@ export function createConsultantRepository(
       }
     },
 
-    async delete(id: string): Promise<void> {
+    async delete(id: ConsultantId): Promise<void> {
       await db.deleteFrom("consultants").where("id", "=", id).execute();
     },
   };

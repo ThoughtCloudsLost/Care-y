@@ -35,7 +35,11 @@ import {
   updatePhoneInputSchema,
   backfillPhoneMatchHashInputSchema,
   suggestDuplicatesInputSchema,
+  aliasHashSchema,
+  phoneHashSchema,
+  phoneMatchHashSchema,
 } from "@care-y/shared";
+import type { OrgId, ClientId, UserId } from "@care-y/shared";
 import type { ClientService } from "../clients/client-service.js";
 import type { DismissalService } from "../clients/dismissal-service.js";
 import type { MergeScanService } from "../clients/merge-scan-service.js";
@@ -53,7 +57,7 @@ import { z } from "zod";
 export interface ClientRouterDeps {
   readonly createClientSvc: (
     db: Kysely<TenantDatabase>,
-    orgId: string,
+    orgId: OrgId,
   ) => ClientService;
   readonly fieldEncryptor: FieldEncryptor;
   /**
@@ -62,8 +66,8 @@ export interface ClientRouterDeps {
    */
   readonly isAssignedToClientTicket: (
     db: Kysely<TenantDatabase>,
-    clientId: string,
-    userId: string,
+    clientId: ClientId,
+    userId: UserId,
   ) => Promise<boolean>;
   readonly createDismissalSvc?: (
     db: Kysely<TenantDatabase>,
@@ -197,7 +201,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
         await svc.updateAlias(
           input.clientId,
           input.encryptedAlias,
-          input.aliasHash,
+          aliasHashSchema.parse(input.aliasHash),
           ctx.user.id,
         );
       }),
@@ -213,7 +217,10 @@ export function createClientRouter(deps: ClientRouterDeps) {
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
-          await svc.backfillAliasHash(input.clientId, input.aliasHash);
+          await svc.backfillAliasHash(
+            input.clientId,
+            aliasHashSchema.parse(input.aliasHash),
+          );
         }),
       ),
 
@@ -229,7 +236,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
           const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
           await svc.backfillPhoneMatchHash(
             input.clientId,
-            input.phoneMatchHash,
+            phoneMatchHashSchema.parse(input.phoneMatchHash),
           );
         }),
       ),
@@ -292,7 +299,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
           const result = await svc.suggestDuplicates(
-            input.phoneHash,
+            phoneHashSchema.parse(input.phoneHash),
             input.excludeClientId,
           );
           if (!result) return null;

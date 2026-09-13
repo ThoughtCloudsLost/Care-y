@@ -1,4 +1,3 @@
-import * as crypto from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   createTestDb,
@@ -13,16 +12,22 @@ import {
   type TicketAccessChecker,
 } from "./access.js";
 import { ForbiddenError } from "../errors.js";
+import {
+  newTicketId,
+  type UserId,
+  type TicketId,
+  type QueueId,
+} from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("TicketAccessChecker (DB)", () => {
   let testDb: TestDb;
   let access: TicketAccessChecker;
-  let assignedUser: string;
-  let queueMember: string;
-  let watcherUser: string;
-  let outsiderUser: string;
-  let ticketId: string;
-  let queueId: string;
+  let assignedUser: UserId;
+  let queueMember: UserId;
+  let watcherUser: UserId;
+  let outsiderUser: UserId;
+  let ticketId: TicketId;
+  let queueId: QueueId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -87,9 +92,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketAccessChecker (DB)", () => {
   });
 
   it("nonexistent ticket returns false (not a throw)", async () => {
-    expect(await access.canAccess(assignedUser, crypto.randomUUID())).toBe(
-      false,
-    );
+    expect(await access.canAccess(assignedUser, newTicketId())).toBe(false);
   });
 
   it("assertAccess succeeds for assigned volunteer", async () => {
@@ -106,7 +109,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketAccessChecker (DB)", () => {
 
   it("assertAccess throws ForbiddenError for nonexistent ticket", async () => {
     await expect(
-      access.assertAccess(assignedUser, crypto.randomUUID()),
+      access.assertAccess(assignedUser, newTicketId()),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 

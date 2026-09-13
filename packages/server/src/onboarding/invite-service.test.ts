@@ -15,7 +15,7 @@ import {
   seedOrgPublicKey,
   type TestDb,
 } from "../test-utils.js";
-import { RoleId } from "@care-y/shared";
+import { RoleId, type UserId, type InviteTokenId } from "@care-y/shared";
 import { createInviteService, type InviteService } from "./invite-service.js";
 
 const HAS_DB = Boolean(process.env.DATABASE_URL);
@@ -24,7 +24,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
   let testDb: TestDb;
   let tenantDb: Kysely<TenantDatabase>;
   let inviteService: InviteService;
-  let adminUserId: string;
+  let adminUserId: UserId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -343,7 +343,9 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
     it("throws NotFoundError for nonexistent token id", async () => {
       const { NotFoundError } = await import("../errors.js");
       await expect(
-        inviteService.revoke("00000000-0000-0000-0000-000000000000"),
+        inviteService.revoke(
+          "00000000-0000-0000-0000-000000000000" as InviteTokenId,
+        ),
       ).rejects.toThrow(NotFoundError);
     });
 

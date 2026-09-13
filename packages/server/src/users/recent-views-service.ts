@@ -11,6 +11,7 @@
  */
 
 import type { Kysely } from "kysely";
+import type { UserId } from "@care-y/shared";
 import type { TenantDatabase } from "../db/types.js";
 
 export interface RecentViewsEnvelope {
@@ -20,15 +21,15 @@ export interface RecentViewsEnvelope {
 }
 
 export interface RecentViewsService {
-  get(userId: string): Promise<RecentViewsEnvelope | null>;
-  put(userId: string, envelope: RecentViewsEnvelope): Promise<void>;
+  get(userId: UserId): Promise<RecentViewsEnvelope | null>;
+  put(userId: UserId, envelope: RecentViewsEnvelope): Promise<void>;
 }
 
 export function createRecentViewsService(
   db: Kysely<TenantDatabase>,
 ): RecentViewsService {
   return {
-    async get(userId: string): Promise<RecentViewsEnvelope | null> {
+    async get(userId: UserId): Promise<RecentViewsEnvelope | null> {
       const row = await db
         .selectFrom("user_recent_views")
         .select(["ephemeral_point", "nonce", "wrapped_payload"])
@@ -43,7 +44,7 @@ export function createRecentViewsService(
       };
     },
 
-    async put(userId: string, envelope: RecentViewsEnvelope): Promise<void> {
+    async put(userId: UserId, envelope: RecentViewsEnvelope): Promise<void> {
       await db
         .insertInto("user_recent_views")
         .values({

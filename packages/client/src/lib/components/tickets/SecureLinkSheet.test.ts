@@ -116,7 +116,7 @@ describe("SecureLinkSheet crypto flow", () => {
 
     // authHash is present
     expect(payload.authHash).toBe(authHash);
-    expect(payload.authHash).toHaveLength(44); // 32 bytes base64
+    expect(payload.authHash).toHaveLength(43); // 32 bytes base64url no padding
 
     zeroAll(seed, auth, keypair.clientPrivate);
   });

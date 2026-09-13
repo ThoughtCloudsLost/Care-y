@@ -13,47 +13,48 @@ import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, PhoneGreetingsTable } from "../../db/types.js";
 import { NotFoundError } from "../../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { PhoneGreetingId, E164, BlobKey } from "@care-y/shared";
 
 export interface GreetingRecord {
-  readonly id: string;
-  readonly phoneNumber: string;
+  readonly id: PhoneGreetingId;
+  readonly phoneNumber: E164;
   readonly greetingType: string;
   readonly locale: string;
   readonly text: string;
   readonly isAudio: boolean;
-  readonly audioBlobKey: string | null;
+  readonly audioBlobKey: BlobKey | null;
   readonly audioContentType: string | null;
 }
 
 export interface GreetingRepository {
   findById(id: string): Promise<GreetingRecord | null>;
   findByNumberAndLocaleAndType(
-    phoneNumber: string,
+    phoneNumber: E164,
     locale: string,
     greetingType: string,
   ): Promise<GreetingRecord | null>;
-  listByNumber(phoneNumber: string): Promise<readonly GreetingRecord[]>;
+  listByNumber(phoneNumber: E164): Promise<readonly GreetingRecord[]>;
   listAll(): Promise<readonly GreetingRecord[]>;
   create(input: {
-    phoneNumber: string;
+    phoneNumber: E164;
     greetingType: string;
     locale: string;
     text: string;
     isAudio?: boolean;
-    audioBlobKey?: string | null;
+    audioBlobKey?: BlobKey | null;
     audioContentType?: string | null;
   }): Promise<GreetingRecord>;
   update(
-    id: string,
+    id: PhoneGreetingId,
     input: {
-      phoneNumber?: string;
+      phoneNumber?: E164;
       text?: string;
       isAudio?: boolean;
-      audioBlobKey?: string | null;
+      audioBlobKey?: BlobKey | null;
       audioContentType?: string | null;
     },
   ): Promise<GreetingRecord>;
-  delete(id: string): Promise<void>;
+  delete(id: PhoneGreetingId): Promise<void>;
 }
 
 function toGreetingRecord(
@@ -87,7 +88,7 @@ export function createGreetingRepository(
     },
 
     async findByNumberAndLocaleAndType(
-      phoneNumber: string,
+      phoneNumber: E164,
       locale: string,
       greetingType: string,
     ): Promise<GreetingRecord | null> {
@@ -103,9 +104,7 @@ export function createGreetingRepository(
       return toGreetingRecord(row);
     },
 
-    async listByNumber(
-      phoneNumber: string,
-    ): Promise<readonly GreetingRecord[]> {
+    async listByNumber(phoneNumber: E164): Promise<readonly GreetingRecord[]> {
       const rows = await db
         .selectFrom("phone_greetings")
         .selectAll()
@@ -122,12 +121,12 @@ export function createGreetingRepository(
     },
 
     async create(input: {
-      phoneNumber: string;
+      phoneNumber: E164;
       greetingType: string;
       locale: string;
       text: string;
       isAudio?: boolean;
-      audioBlobKey?: string | null;
+      audioBlobKey?: BlobKey | null;
       audioContentType?: string | null;
     }): Promise<GreetingRecord> {
       const row = await db
@@ -148,12 +147,12 @@ export function createGreetingRepository(
     },
 
     async update(
-      id: string,
+      id: PhoneGreetingId,
       input: {
-        phoneNumber?: string;
+        phoneNumber?: E164;
         text?: string;
         isAudio?: boolean;
-        audioBlobKey?: string | null;
+        audioBlobKey?: BlobKey | null;
         audioContentType?: string | null;
       },
     ): Promise<GreetingRecord> {
@@ -181,7 +180,7 @@ export function createGreetingRepository(
       return toGreetingRecord(row);
     },
 
-    async delete(id: string): Promise<void> {
+    async delete(id: PhoneGreetingId): Promise<void> {
       const result = await db
         .deleteFrom("phone_greetings")
         .where("id", "=", id)

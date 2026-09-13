@@ -13,9 +13,10 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError, ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { QueueId } from "@care-y/shared";
 
 export interface QueueRecord {
-  readonly id: string;
+  readonly id: QueueId;
   readonly encryptedName: Buffer;
   readonly encryptedColor: Buffer | null;
   readonly encryptedIcon: Buffer | null;
@@ -39,7 +40,7 @@ export interface QueueService {
   }): Promise<QueueRecord>;
   listActive(): Promise<QueueRecord[]>;
   update(
-    queueId: string,
+    queueId: QueueId,
     input: {
       encryptedName?: Buffer;
       encryptedColor?: Buffer;
@@ -47,12 +48,12 @@ export interface QueueService {
       escalateDays?: number;
     },
   ): Promise<QueueRecord>;
-  reorder(items: { queueId: string; sortOrder: number }[]): Promise<void>;
-  delete(queueId: string, reassignTo?: string): Promise<void>;
+  reorder(items: { queueId: QueueId; sortOrder: number }[]): Promise<void>;
+  delete(queueId: QueueId, reassignTo?: QueueId): Promise<void>;
 }
 
 interface QueueRow {
-  id: string;
+  id: QueueId;
   encrypted_name: Buffer;
   encrypted_color: Buffer | null;
   encrypted_icon: Buffer | null;
@@ -88,23 +89,24 @@ function toRecord(row: QueueRow, counts: QueueCounts = {}): QueueRecord {
   };
 }
 
+// Named parameters: both sides are QueueId, and swapping them moves every
+// ticket into the queue being deleted.
 async function reassignTickets(
   tx: Kysely<TenantDatabase>,
-  fromQueueId: string,
-  toQueueId: string,
+  params: { fromQueueId: QueueId; toQueueId: QueueId },
 ): Promise<void> {
   const target = await tx
     .selectFrom("queues")
     .select("id")
-    .where("id", "=", toQueueId)
+    .where("id", "=", params.toQueueId)
     .executeTakeFirst();
   if (!target) {
     throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
   }
   await tx
     .updateTable("tickets")
-    .set({ queue_id: toQueueId })
-    .where("queue_id", "=", fromQueueId)
+    .set({ queue_id: params.toQueueId })
+    .where("queue_id", "=", params.fromQueueId)
     .execute();
 }
 
@@ -285,7 +287,10 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
           if (reassignTo === undefined) {
             throw new ValidationError(ErrorCode.QUEUE_HAS_TICKETS);
           }
-          await reassignTickets(tx, queueId, reassignTo);
+          await reassignTickets(tx, {
+            fromQueueId: queueId,
+            toQueueId: reassignTo,
+          });
         }
 
         await tx

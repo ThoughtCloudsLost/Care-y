@@ -2,11 +2,13 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { CallTracker } from "./call-tracker.js";
 import { resolveInboundTicket } from "./resolve-inbound-ticket.js";
+import type { OrgSchema, QueueId } from "@care-y/shared";
+import { callSidSchema } from "@care-y/shared";
 
 export interface CallStatusDeps {
   readonly callTracker: CallTracker;
-  readonly getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>;
-  readonly intakeQueueId: string | null;
+  readonly getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>;
+  readonly intakeQueueId: QueueId | null;
 }
 
 const TERMINAL_STATUSES = new Set([
@@ -22,7 +24,7 @@ function normalizeTwilioStatus(raw: string): string {
 }
 
 export async function handleCallStatus(
-  orgSchema: string,
+  orgSchema: OrgSchema,
   body: Record<string, string>,
   deps: CallStatusDeps,
 ): Promise<void> {
@@ -35,7 +37,8 @@ export async function handleCallStatus(
   if (rawStatus === undefined || rawStatus === "") return;
   if (!TERMINAL_STATUSES.has(rawStatus)) return;
 
-  const tracked = await deps.callTracker.get(orgSchema, callSid);
+  const parsedCallSid = callSidSchema.parse(callSid);
+  const tracked = await deps.callTracker.get(orgSchema, parsedCallSid);
   if (!tracked) return;
 
   // Do NOT remove the tracker entry here. The recording callback is a
@@ -49,7 +52,7 @@ export async function handleCallStatus(
   const duration = durationStr !== undefined ? parseInt(durationStr, 10) : null;
 
   const tDb = deps.getTenantDb(
-    tracked.orgSchema.length > 0 ? tracked.orgSchema : orgSchema,
+    tracked.orgSchema === "" ? orgSchema : tracked.orgSchema,
   );
 
   let ticketId = tracked.ticketId;
@@ -80,7 +83,7 @@ export async function handleCallStatus(
       type: "phone_call",
       encrypted_content: Buffer.from("system"),
       created_by: tracked.userId,
-      call_sid: callSid,
+      call_sid: parsedCallSid,
       call_status: status,
       call_duration_seconds:
         duration !== null && !Number.isNaN(duration) ? duration : null,

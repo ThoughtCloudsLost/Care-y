@@ -7,6 +7,7 @@ import {
   type TestDb,
 } from "../test-utils.js";
 import { escalateTenantTickets } from "./escalation.js";
+import type { QueueId, TicketId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("escalateTenantTickets (DB)", () => {
   let testDb: TestDb;
@@ -21,12 +22,12 @@ describe.skipIf(!process.env.DATABASE_URL)("escalateTenantTickets (DB)", () => {
   });
 
   async function insertTicketWithAge(opts: {
-    queueId: string;
+    queueId: QueueId;
     ageDays: number;
     priority?: "low" | "normal" | "high" | "urgent";
     onHold?: boolean;
     status?: "open" | "closed";
-  }): Promise<string> {
+  }): Promise<TicketId> {
     const fix = await createTestTicketFixture(testDb.db, {
       queueId: opts.queueId,
     });

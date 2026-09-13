@@ -9,6 +9,7 @@
 import type { TelephonyProvider } from "./provider.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { LogDeletionPayload } from "../jobs/log-deletion.js";
+import type { OrgId } from "@care-y/shared";
 
 type ResourceType = LogDeletionPayload["resourceType"];
 
@@ -21,10 +22,13 @@ type ResourceType = LogDeletionPayload["resourceType"];
 export async function deleteOrEnqueue(
   provider: TelephonyProvider,
   jobQueue: JobQueue,
-  orgId: string,
-  resourceType: ResourceType,
-  resourceId: string,
+  target: {
+    orgId: OrgId;
+    resourceType: ResourceType;
+    resourceId: string;
+  },
 ): Promise<void> {
+  const { orgId, resourceType, resourceId } = target;
   try {
     switch (resourceType) {
       case "call":

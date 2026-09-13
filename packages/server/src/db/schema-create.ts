@@ -15,6 +15,7 @@ import {
   createTenantMigrator,
   logMigrationResults,
 } from "./schema-utils.js";
+import { orgSchemaNameSchema } from "@care-y/shared";
 
 const schemaName = process.argv[2];
 
@@ -31,6 +32,8 @@ if (!isValidOrgSchemaName(schemaName)) {
   process.exit(1);
 }
 
+const parsedSchema = orgSchemaNameSchema.parse(schemaName);
+
 // Check schema does not already exist.
 if (await schemaExists(db, schemaName)) {
   console.error(`Schema "${schemaName}" already exists. Aborting.`);
@@ -42,7 +45,7 @@ await db.schema.createSchema(schemaName).execute();
 console.log(`Created schema: ${schemaName}`);
 
 // Run tenant migrations. On failure, drop schema to keep state clean.
-const migrator = createTenantMigrator(tenantDb(schemaName), schemaName);
+const migrator = createTenantMigrator(tenantDb(parsedSchema), schemaName);
 const { error, results } = await migrator.migrateToLatest();
 logMigrationResults(schemaName, results);
 

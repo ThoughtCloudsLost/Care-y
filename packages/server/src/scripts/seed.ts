@@ -31,7 +31,15 @@ try {
   throw err;
 }
 
-import { RoleId } from "@care-y/shared";
+import { RoleId, phoneSidSchema } from "@care-y/shared";
+import type {
+  OrgId,
+  OrgSchema,
+  UserId,
+  PhoneId,
+  QueueId,
+  TicketId,
+} from "@care-y/shared";
 import sodium from "sodium-native";
 import { db, tenantDb } from "../db/db.js";
 import { getEnv } from "../env.js";
@@ -52,6 +60,10 @@ import {
 import { deriveSecretsKey, createSecretsEncryptor } from "../config/secrets.js";
 import { seedDefaultNoteTypes } from "../tickets/note-type-service.js";
 import { generateAlias } from "../telephony/models/alias-generator.js";
+import {
+  DEV_MOCK_ACCOUNT_SID,
+  DEV_MOCK_AUTH_TOKEN,
+} from "../telephony/mock-provider.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 
@@ -113,8 +125,8 @@ async function seed(): Promise<void> {
   const orgService = createOrgService(db, tenantDb);
 
   // --- Create org ---
-  let orgId: string;
-  let schemaName: string;
+  let orgId: OrgId;
+  let schemaName: OrgSchema;
   let setupToken: string | null = null;
   try {
     const org = await orgService.createOrg({ slug: ORG_SLUG });
@@ -191,7 +203,7 @@ async function seed(): Promise<void> {
     orgId,
   );
 
-  let adminUserId: string;
+  let adminUserId: UserId;
   try {
     const user = await authService.register({
       identifier: ADMIN_IDENTIFIER,
@@ -203,7 +215,7 @@ async function seed(): Promise<void> {
     console.log(`Created admin user "${ADMIN_IDENTIFIER}" (${user.id})`);
   } catch (err) {
     if (err instanceof ConflictError) {
-      const identifierHash = indexer.hash(ADMIN_IDENTIFIER, orgId);
+      const identifierHash = indexer.hashIdentifier(ADMIN_IDENTIFIER, orgId);
       const existing = await tenantDatabase
         .selectFrom("users")
         .select("id")
@@ -231,11 +243,11 @@ async function seed(): Promise<void> {
   // (registerCrypto + loginCrypto) and server (devSeedTickets).
 
   // Phone record (encrypted via OPS_SECRETS_KEY field encryption)
-  let phoneId: string;
+  let phoneId: PhoneId;
   const existingPhone = await tenantDatabase
     .selectFrom("phones")
     .select("id")
-    .where("phone_hash", "=", indexer.hash("+15550001234", orgId))
+    .where("phone_hash", "=", indexer.hashPhone("+15550001234", orgId))
     .executeTakeFirst();
 
   if (existingPhone) {
@@ -245,14 +257,14 @@ async function seed(): Promise<void> {
     const inserted = await tenantDatabase
       .insertInto("phones")
       .values({
-        phone_hash: indexer.hash("+15550001234", orgId),
+        phone_hash: indexer.hashPhone("+15550001234", orgId),
         encrypted_number: encryptor.encrypt("+15550001234"),
         locale: "en",
       })
       .returning("id")
       .executeTakeFirstOrThrow();
     phoneId = inserted.id;
-    console.log(`Created phone record (${phoneId})`);
+    console.log("Created dev telephony seed row.");
   }
 
   // Seal a plaintext string with the org public key (crypto_box_seal).
@@ -268,7 +280,7 @@ async function seed(): Promise<void> {
     { name: "Crisis", color: "red", icon: "triangle-alert" },
     { name: "Housing", color: "green", icon: "house" },
   ];
-  const queueIds = new Map<string, string>();
+  const queueIds = new Map<string, QueueId>();
 
   for (let i = 0; i < seedQueues.length; i++) {
     const { name, color, icon } = seedQueues[i]!;
@@ -331,9 +343,7 @@ async function seed(): Promise<void> {
 
   const currentCount = Number(existingClientCount.count);
   if (currentCount >= NUM_SEED_CLIENTS) {
-    console.log(
-      `${String(currentCount)} clients already exist, skipping client seeding.`,
-    );
+    console.log("Seed records already exist, skipping seeding.");
   } else {
     const toCreate = NUM_SEED_CLIENTS - currentCount;
     for (let i = 0; i < toCreate; i++) {
@@ -399,6 +409,61 @@ async function seed(): Promise<void> {
     console.log("Seeded 4 default note types.");
   }
 
+  // --- Seed mock telephony config ---
+  // Placement: AFTER the SEED_SKIP_ADMIN early return (line 154). The e2e
+  // onboarding test uses SEED_SKIP_ADMIN=1 to create an org with no telephony
+  // config, then asserts the communications wizard step shows "Skip" rather
+  // than "Next". Seeding telephony here keeps that org unconfigured.
+
+  // Platform table: telephony_config (keyed by org UUID, OPS-encrypted blob).
+  // Encrypt in a tight scope so the cleartext buffer is zeroed before the
+  // DB write (and the variable falls out of scope).
+  const telephonySealed = ((): Buffer => {
+    const configObj = {
+      accountSid: DEV_MOCK_ACCOUNT_SID,
+      authToken: DEV_MOCK_AUTH_TOKEN,
+      phoneNumbers: [
+        { number: "+15550001111", sid: "PNdev001", label: "Main" },
+        { number: "+15550002222", sid: "PNdev002", label: "Support" },
+      ],
+    };
+    const buf = Buffer.from(JSON.stringify(configObj), "utf-8");
+    try {
+      return secretsEncryptor.encrypt(buf);
+    } finally {
+      buf.fill(0);
+    }
+  })();
+
+  await db
+    .insertInto("telephony_config")
+    .values({
+      org_id: orgId,
+      provider: "mock",
+      config: telephonySealed,
+    })
+    .onConflict((oc) =>
+      oc.column("org_id").doUpdateSet({
+        provider: "mock",
+        config: telephonySealed,
+        updated_at: new Date(),
+      }),
+    )
+    .execute();
+  console.log("Seeded mock telephony config (platform table).");
+
+  // Tenant table: org_config purpose SIDs (migration 022 columns).
+  // These are provider SID identifiers (e.g. "PNdev001"), not numbers.
+  // care-y-ignore-next-line no-plaintext-db-write -- SIDs are opaque provider identifiers, not PII
+  await tenantDatabase
+    .updateTable("org_config")
+    .set({
+      phone_outbound_sid: phoneSidSchema.parse("PNdev001"),
+      phone_system_sid: phoneSidSchema.parse("PNdev002"),
+    })
+    .execute();
+  console.log("Seeded purpose SIDs (tenant org_config).");
+
   // --- Seed audit log entries (sample activity for dashboard feed) ---
   const ticketRows = await tenantDatabase
     .selectFrom("tickets")
@@ -416,8 +481,8 @@ async function seed(): Promise<void> {
     if (!existingAudit) {
       const events: Array<{
         event_type: string;
-        actor_id: string;
-        ticket_id: string;
+        actor_id: UserId;
+        ticket_id: TicketId;
         metadata: Record<string, unknown>;
       }> = [];
 

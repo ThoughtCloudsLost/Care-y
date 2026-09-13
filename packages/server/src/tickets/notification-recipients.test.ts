@@ -6,12 +6,17 @@ import {
   type EscalationResolverDeps,
 } from "./notification-recipients.js";
 import { DEFAULT_NOTE_TYPES } from "./note-type-service.js";
-import type { EscalationTarget } from "@care-y/shared";
+import type {
+  EscalationTarget,
+  QueueId,
+  UserId,
+  TicketId,
+} from "@care-y/shared";
 
 function createMockDeps(overrides?: {
-  ticketWatchers?: string[];
-  queueWatchers?: string[];
-  validMentions?: string[];
+  ticketWatchers?: UserId[];
+  queueWatchers?: UserId[];
+  validMentions?: UserId[];
 }): RecipientBuilderDeps {
   return {
     getTicketWatchers: async () => overrides?.ticketWatchers ?? [],
@@ -22,18 +27,20 @@ function createMockDeps(overrides?: {
 }
 
 const baseTicket = {
-  id: "ticket-1",
-  queueId: "queue-1",
-  assignedTo: "owner-1",
+  id: "ticket-1" as TicketId,
+  queueId: "queue-1" as QueueId,
+  assignedTo: "owner-1" as UserId,
 };
+
+const ACTOR = "actor-999" as UserId;
 
 describe("buildRecipientList", () => {
   it("owner is first in list", async () => {
     const deps = createMockDeps({
-      ticketWatchers: ["watcher-1"],
+      ticketWatchers: ["watcher-1" as UserId],
     });
 
-    const result = await buildRecipientList(deps, baseTicket, [], "actor-999");
+    const result = await buildRecipientList(deps, baseTicket, [], ACTOR);
 
     expect(result.recipients[0]).toEqual({
       userId: "owner-1",
@@ -43,10 +50,10 @@ describe("buildRecipientList", () => {
 
   it("CC watchers added after owner", async () => {
     const deps = createMockDeps({
-      ticketWatchers: ["watcher-1", "watcher-2"],
+      ticketWatchers: ["watcher-1" as UserId, "watcher-2" as UserId],
     });
 
-    const result = await buildRecipientList(deps, baseTicket, [], "actor-999");
+    const result = await buildRecipientList(deps, baseTicket, [], ACTOR);
 
     expect(result.recipients).toEqual([
       { userId: "owner-1", source: "owner" },
@@ -57,11 +64,11 @@ describe("buildRecipientList", () => {
 
   it("queue watchers added after CC", async () => {
     const deps = createMockDeps({
-      ticketWatchers: ["watcher-1"],
-      queueWatchers: ["qw-1"],
+      ticketWatchers: ["watcher-1" as UserId],
+      queueWatchers: ["qw-1" as UserId],
     });
 
-    const result = await buildRecipientList(deps, baseTicket, [], "actor-999");
+    const result = await buildRecipientList(deps, baseTicket, [], ACTOR);
 
     expect(result.recipients).toEqual([
       { userId: "owner-1", source: "owner" },
@@ -72,16 +79,16 @@ describe("buildRecipientList", () => {
 
   it("mentions added last", async () => {
     const deps = createMockDeps({
-      ticketWatchers: ["watcher-1"],
-      queueWatchers: ["qw-1"],
-      validMentions: ["mentioned-1"],
+      ticketWatchers: ["watcher-1" as UserId],
+      queueWatchers: ["qw-1" as UserId],
+      validMentions: ["mentioned-1" as UserId],
     });
 
     const result = await buildRecipientList(
       deps,
       baseTicket,
       ["mentioned-1"],
-      "actor-999",
+      ACTOR,
     );
 
     expect(result.recipients[result.recipients.length - 1]).toEqual({
@@ -91,36 +98,33 @@ describe("buildRecipientList", () => {
   });
 
   it("acting user excluded from all sources", async () => {
+    const actor = "actor-1" as UserId;
     const deps = createMockDeps({
-      ticketWatchers: ["actor-1"],
-      queueWatchers: ["actor-1"],
-      validMentions: ["actor-1"],
+      ticketWatchers: [actor],
+      queueWatchers: [actor],
+      validMentions: [actor],
     });
 
-    const ticket = { ...baseTicket, assignedTo: "actor-1" };
+    const ticket = { ...baseTicket, assignedTo: actor };
 
-    const result = await buildRecipientList(
-      deps,
-      ticket,
-      ["actor-1"],
-      "actor-1",
-    );
+    const result = await buildRecipientList(deps, ticket, ["actor-1"], actor);
 
     expect(result.recipients).toEqual([]);
   });
 
   it("duplicate user appears once with first source (owner wins over CC)", async () => {
+    const owner = "owner-1" as UserId;
     const deps = createMockDeps({
-      ticketWatchers: ["owner-1"],
-      queueWatchers: ["owner-1"],
-      validMentions: ["owner-1"],
+      ticketWatchers: [owner],
+      queueWatchers: [owner],
+      validMentions: [owner],
     });
 
     const result = await buildRecipientList(
       deps,
       baseTicket,
       ["owner-1"],
-      "actor-999",
+      ACTOR,
     );
 
     expect(result.recipients).toEqual([{ userId: "owner-1", source: "owner" }]);
@@ -130,16 +134,16 @@ describe("buildRecipientList", () => {
     const deps = createMockDeps();
     const ticket = { ...baseTicket, assignedTo: null };
 
-    const result = await buildRecipientList(deps, ticket, [], "actor-999");
+    const result = await buildRecipientList(deps, ticket, [], ACTOR);
 
     expect(result.recipients).toEqual([]);
   });
 
   it("unassigned ticket still includes CC, queue watchers, mentions", async () => {
     const deps = createMockDeps({
-      ticketWatchers: ["watcher-1"],
-      queueWatchers: ["qw-1"],
-      validMentions: ["mentioned-1"],
+      ticketWatchers: ["watcher-1" as UserId],
+      queueWatchers: ["qw-1" as UserId],
+      validMentions: ["mentioned-1" as UserId],
     });
 
     const ticket = { ...baseTicket, assignedTo: null };
@@ -148,7 +152,7 @@ describe("buildRecipientList", () => {
       deps,
       ticket,
       ["mentioned-1"],
-      "actor-999",
+      ACTOR,
     );
 
     expect(result.recipients).toEqual([
@@ -160,12 +164,12 @@ describe("buildRecipientList", () => {
 
   it("escalation users added after mentions", async () => {
     const deps = createMockDeps({
-      ticketWatchers: ["watcher-1"],
+      ticketWatchers: ["watcher-1" as UserId],
     });
 
-    const result = await buildRecipientList(deps, baseTicket, [], "actor-999", [
-      "escalation-1",
-      "escalation-2",
+    const result = await buildRecipientList(deps, baseTicket, [], ACTOR, [
+      "escalation-1" as UserId,
+      "escalation-2" as UserId,
     ]);
 
     expect(result.recipients).toEqual([
@@ -179,8 +183,8 @@ describe("buildRecipientList", () => {
   it("escalation user already in owner is not duplicated", async () => {
     const deps = createMockDeps();
 
-    const result = await buildRecipientList(deps, baseTicket, [], "actor-999", [
-      "owner-1",
+    const result = await buildRecipientList(deps, baseTicket, [], ACTOR, [
+      "owner-1" as UserId,
     ]);
 
     expect(result.recipients).toEqual([{ userId: "owner-1", source: "owner" }]);
@@ -189,25 +193,23 @@ describe("buildRecipientList", () => {
   it("acting user excluded from escalation recipients", async () => {
     const deps = createMockDeps();
 
-    const result = await buildRecipientList(deps, baseTicket, [], "actor-999", [
-      "actor-999",
+    const result = await buildRecipientList(deps, baseTicket, [], ACTOR, [
+      ACTOR,
     ]);
 
-    expect(
-      result.recipients.find((r) => r.userId === "actor-999"),
-    ).toBeUndefined();
+    expect(result.recipients.find((r) => r.userId === ACTOR)).toBeUndefined();
   });
 
   it("undefined escalationUserIds does not affect existing behavior", async () => {
     const deps = createMockDeps({
-      ticketWatchers: ["watcher-1"],
+      ticketWatchers: ["watcher-1" as UserId],
     });
 
     const result = await buildRecipientList(
       deps,
       baseTicket,
       [],
-      "actor-999",
+      ACTOR,
       undefined,
     );
 
@@ -219,11 +221,11 @@ describe("buildRecipientList", () => {
 });
 
 function createMockEscalationDeps(overrides?: {
-  adminUsers?: string[];
-  managerUsers?: string[];
-  permissionUsers?: Record<string, string[]>;
-  queueMembers?: Record<string, string[]>;
-  ticketKeyWrapHolders?: Record<string, string[]>;
+  adminUsers?: UserId[];
+  managerUsers?: UserId[];
+  permissionUsers?: Record<string, UserId[]>;
+  queueMembers?: Record<string, UserId[]>;
+  ticketKeyWrapHolders?: Record<string, UserId[]>;
 }): EscalationResolverDeps {
   return {
     getUsersByRole: async (role) => {
@@ -241,7 +243,9 @@ function createMockEscalationDeps(overrides?: {
 
 describe("resolveEscalationTargets", () => {
   it("resolves role targets to admin user IDs", async () => {
-    const deps = createMockEscalationDeps({ adminUsers: ["admin-1"] });
+    const deps = createMockEscalationDeps({
+      adminUsers: ["admin-1" as UserId],
+    });
     const targets: EscalationTarget[] = [{ type: "role", value: "admin" }];
 
     const result = await resolveEscalationTargets(targets, deps);
@@ -250,7 +254,9 @@ describe("resolveEscalationTargets", () => {
   });
 
   it("resolves role targets to manager user IDs", async () => {
-    const deps = createMockEscalationDeps({ managerUsers: ["mgr-1", "mgr-2"] });
+    const deps = createMockEscalationDeps({
+      managerUsers: ["mgr-1" as UserId, "mgr-2" as UserId],
+    });
     const targets: EscalationTarget[] = [{ type: "role", value: "manager" }];
 
     const result = await resolveEscalationTargets(targets, deps);
@@ -260,7 +266,7 @@ describe("resolveEscalationTargets", () => {
 
   it("resolves permission targets to matching user IDs", async () => {
     const deps = createMockEscalationDeps({
-      permissionUsers: { manage_queues: ["perm-1"] },
+      permissionUsers: { manage_queues: ["perm-1" as UserId] },
     });
     const targets: EscalationTarget[] = [
       { type: "permission", value: "manage_queues" },
@@ -273,10 +279,10 @@ describe("resolveEscalationTargets", () => {
 
   it("resolves queue targets to queue members", async () => {
     const deps = createMockEscalationDeps({
-      queueMembers: { "queue-uuid": ["q-1", "q-2"] },
+      queueMembers: { "queue-uuid": ["q-1" as UserId, "q-2" as UserId] },
     });
     const targets: EscalationTarget[] = [
-      { type: "queue", value: "queue-uuid" },
+      { type: "queue", value: "queue-uuid" as QueueId },
     ];
 
     const result = await resolveEscalationTargets(targets, deps);
@@ -286,8 +292,8 @@ describe("resolveEscalationTargets", () => {
 
   it("merges and deduplicates multiple targets", async () => {
     const deps = createMockEscalationDeps({
-      adminUsers: ["shared-user", "admin-only"],
-      managerUsers: ["shared-user", "mgr-only"],
+      adminUsers: ["shared-user" as UserId, "admin-only" as UserId],
+      managerUsers: ["shared-user" as UserId, "mgr-only" as UserId],
     });
     const targets: EscalationTarget[] = [
       { type: "role", value: "admin" },
@@ -311,18 +317,24 @@ describe("resolveEscalationTargets", () => {
 
   it("resolves ticket_access targets to key wrap holders when ticketId provided", async () => {
     const deps = createMockEscalationDeps({
-      ticketKeyWrapHolders: { "ticket-42": ["vol-1", "vol-2"] },
+      ticketKeyWrapHolders: {
+        "ticket-42": ["vol-1" as UserId, "vol-2" as UserId],
+      },
     });
     const targets: EscalationTarget[] = [{ type: "ticket_access" }];
 
-    const result = await resolveEscalationTargets(targets, deps, "ticket-42");
+    const result = await resolveEscalationTargets(
+      targets,
+      deps,
+      "ticket-42" as TicketId,
+    );
 
     expect(result).toEqual(["vol-1", "vol-2"]);
   });
 
   it("ticket_access with no ticketId returns empty (no-op)", async () => {
     const deps = createMockEscalationDeps({
-      ticketKeyWrapHolders: { "ticket-42": ["vol-1"] },
+      ticketKeyWrapHolders: { "ticket-42": ["vol-1" as UserId] },
     });
     const targets: EscalationTarget[] = [{ type: "ticket_access" }];
 
@@ -333,15 +345,21 @@ describe("resolveEscalationTargets", () => {
 
   it("ticket_access deduplicates with role targets", async () => {
     const deps = createMockEscalationDeps({
-      adminUsers: ["shared-user", "admin-only"],
-      ticketKeyWrapHolders: { "ticket-1": ["shared-user", "vol-only"] },
+      adminUsers: ["shared-user" as UserId, "admin-only" as UserId],
+      ticketKeyWrapHolders: {
+        "ticket-1": ["shared-user" as UserId, "vol-only" as UserId],
+      },
     });
     const targets: EscalationTarget[] = [
       { type: "role", value: "admin" },
       { type: "ticket_access" },
     ];
 
-    const result = await resolveEscalationTargets(targets, deps, "ticket-1");
+    const result = await resolveEscalationTargets(
+      targets,
+      deps,
+      "ticket-1" as TicketId,
+    );
 
     expect(result).toHaveLength(3);
     expect(result).toContain("shared-user");
@@ -351,14 +369,14 @@ describe("resolveEscalationTargets", () => {
 
   it("ticket_access with unknown ticketId returns empty", async () => {
     const deps = createMockEscalationDeps({
-      ticketKeyWrapHolders: { "ticket-42": ["vol-1"] },
+      ticketKeyWrapHolders: { "ticket-42": ["vol-1" as UserId] },
     });
     const targets: EscalationTarget[] = [{ type: "ticket_access" }];
 
     const result = await resolveEscalationTargets(
       targets,
       deps,
-      "nonexistent-ticket",
+      "nonexistent-ticket" as TicketId,
     );
 
     expect(result).toEqual([]);

@@ -18,3 +18,13 @@
 export function normalizeAlias(raw: string): string {
   return raw.normalize("NFKC").toLowerCase().trim().replace(/\s+/g, " ");
 }
+
+/**
+ * Normalizes a client-chosen username for blind index hashing.
+ * Same steps as normalizeAlias (NFKC, casefold, trim, collapse whitespace)
+ * so the account service and client login paths produce identical hashes
+ * for equivalent inputs.
+ */
+export function normalizeUsername(raw: string): string {
+  return normalizeAlias(raw);
+}

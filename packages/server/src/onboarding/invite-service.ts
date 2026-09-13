@@ -1,15 +1,17 @@
 import { randomBytes, createHash } from "node:crypto";
 import type { Kysely } from "kysely";
 import { ErrorCode } from "@care-y/shared";
+import type { InviteTokenId, UserId } from "@care-y/shared";
+import type { RoleIdValue } from "@care-y/shared";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError } from "../errors.js";
 
 const DEFAULT_EXPIRY_HOURS = 72;
 
 export interface PendingInviteRecord {
-  readonly id: string;
-  readonly roleId: string;
-  readonly invitedBy: string;
+  readonly id: InviteTokenId;
+  readonly roleId: RoleIdValue;
+  readonly invitedBy: UserId;
   readonly expiresAt: Date;
   readonly createdAt: Date;
   readonly encryptedToken: Buffer | null;
@@ -17,25 +19,25 @@ export interface PendingInviteRecord {
 
 export interface InviteService {
   generate(input: {
-    invitedBy: string;
-    roleId: string;
+    invitedBy: UserId;
+    roleId: RoleIdValue;
     encryptedEmail?: Buffer;
     expiresInHours?: number;
     seal?: (token: string) => Buffer;
   }): Promise<{ rawToken: string; expiresAt: Date }>;
 
   validate(rawToken: string): Promise<{
-    id: string;
-    roleId: string;
-    invitedBy: string;
+    id: InviteTokenId;
+    roleId: RoleIdValue;
+    invitedBy: UserId;
     expiresAt: Date;
   } | null>;
 
-  consume(tokenId: string): Promise<void>;
+  consume(tokenId: InviteTokenId): Promise<void>;
 
   listPending(): Promise<readonly PendingInviteRecord[]>;
 
-  revoke(tokenId: string): Promise<void>;
+  revoke(tokenId: InviteTokenId): Promise<void>;
 }
 
 function hashToken(rawToken: string): Buffer {

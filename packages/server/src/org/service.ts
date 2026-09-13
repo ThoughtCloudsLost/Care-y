@@ -9,13 +9,14 @@
 import { getEnv } from "../env.js";
 import type { Kysely, Selectable } from "kysely";
 import { sql } from "kysely";
+import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import {
-  randomUUID,
-  randomBytes,
-  createHash,
-  timingSafeEqual,
-} from "node:crypto";
-import { orgSlugSchema } from "@care-y/shared";
+  orgSlugSchema,
+  orgSlugIdSchema,
+  newOrgId,
+  orgSchemaFor,
+} from "@care-y/shared";
+import type { OrgId, OrgSchema, OrgSlug } from "@care-y/shared";
 import type {
   PlatformDatabase,
   TenantDatabase,
@@ -34,9 +35,9 @@ import {
 const swallowCleanupError = (): void => {};
 
 export interface OrgRecord {
-  readonly id: string;
-  readonly slug: string;
-  readonly schemaName: string;
+  readonly id: OrgId;
+  readonly slug: OrgSlug;
+  readonly schemaName: OrgSchema;
   readonly isActive: boolean;
 }
 
@@ -47,9 +48,9 @@ export interface CreateOrgResult extends OrgRecord {
 export interface OrgService {
   createOrg(input: { slug: string }): Promise<CreateOrgResult>;
   findBySlug(slug: string): Promise<OrgRecord | null>;
-  findById(id: string): Promise<OrgRecord | null>;
-  validateSetupToken(orgId: string, rawToken: string): Promise<boolean>;
-  consumeSetupToken(orgId: string): Promise<void>;
+  findById(id: OrgId): Promise<OrgRecord | null>;
+  validateSetupToken(orgId: OrgId, rawToken: string): Promise<boolean>;
+  consumeSetupToken(orgId: OrgId): Promise<void>;
 }
 
 function hashSetupToken(raw: string): Buffer {
@@ -65,7 +66,7 @@ function toOrgRecord(row: Selectable<OrgsTable>): OrgRecord {
   };
 }
 
-function parseSlug(raw: string): string {
+function parseSlug(raw: string): OrgSlug {
   const parsed = orgSlugSchema.safeParse(raw);
   if (!parsed.success) {
     throw new ValidationError(
@@ -78,8 +79,8 @@ function parseSlug(raw: string): string {
 /** Best-effort cleanup: drop schema (if created) and delete the orgs row. */
 async function rollbackOrg(
   platformDb: Kysely<PlatformDatabase>,
-  orgId: string,
-  schemaName: string,
+  orgId: OrgId,
+  schemaName: OrgSchema,
 ): Promise<void> {
   await sql`DROP SCHEMA IF EXISTS ${sql.id(schemaName)} CASCADE`
     .execute(platformDb)
@@ -93,9 +94,9 @@ async function rollbackOrg(
 
 async function insertOrgRow(
   platformDb: Kysely<PlatformDatabase>,
-  orgId: string,
-  slug: string,
-  schemaName: string,
+  orgId: OrgId,
+  slug: OrgSlug,
+  schemaName: OrgSchema,
   setupTokenHash: Buffer,
 ): Promise<Selectable<OrgsTable>> {
   try {
@@ -119,8 +120,8 @@ async function insertOrgRow(
 
 async function createPostgresSchema(
   platformDb: Kysely<PlatformDatabase>,
-  orgId: string,
-  schemaName: string,
+  orgId: OrgId,
+  schemaName: OrgSchema,
 ): Promise<void> {
   try {
     await platformDb.schema.createSchema(schemaName).execute();
@@ -138,7 +139,7 @@ async function createPostgresSchema(
 
 async function runTenantMigrations(
   tenantDb: Kysely<TenantDatabase>,
-  schemaName: string,
+  schemaName: OrgSchema,
 ): Promise<void> {
   const migrator = createTenantMigrator(tenantDb, schemaName);
 
@@ -170,13 +171,13 @@ async function insertDefaultOrgConfig(
 
 export function createOrgService(
   platformDb: Kysely<PlatformDatabase>,
-  tenantDbFactory: (schema: string) => Kysely<TenantDatabase>,
+  tenantDbFactory: (schema: OrgSchema) => Kysely<TenantDatabase>,
 ): OrgService {
   return {
     async createOrg(input: { slug: string }): Promise<CreateOrgResult> {
       const slug = parseSlug(input.slug);
-      const orgId = randomUUID();
-      const schemaName = `org_${orgId}`;
+      const orgId = newOrgId();
+      const schemaName = orgSchemaFor(orgId);
 
       const rawToken =
         getEnv().NODE_ENV === "development"
@@ -211,13 +212,13 @@ export function createOrgService(
       const row = await platformDb
         .selectFrom("orgs")
         .selectAll()
-        .where("slug", "=", slug)
+        .where("slug", "=", orgSlugIdSchema.parse(slug))
         .executeTakeFirst();
 
       return row ? toOrgRecord(row) : null;
     },
 
-    async findById(id: string): Promise<OrgRecord | null> {
+    async findById(id: OrgId): Promise<OrgRecord | null> {
       const row = await platformDb
         .selectFrom("orgs")
         .selectAll()
@@ -227,10 +228,7 @@ export function createOrgService(
       return row ? toOrgRecord(row) : null;
     },
 
-    async validateSetupToken(
-      orgId: string,
-      rawToken: string,
-    ): Promise<boolean> {
+    async validateSetupToken(orgId: OrgId, rawToken: string): Promise<boolean> {
       const row = await platformDb
         .selectFrom("orgs")
         .select("setup_token_hash")
@@ -243,7 +241,7 @@ export function createOrgService(
       return timingSafeEqual(candidateHash, row.setup_token_hash);
     },
 
-    async consumeSetupToken(orgId: string): Promise<void> {
+    async consumeSetupToken(orgId: OrgId): Promise<void> {
       await platformDb
         .updateTable("orgs")
         .set({ setup_token_hash: null })

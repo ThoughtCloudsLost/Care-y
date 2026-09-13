@@ -172,6 +172,9 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   // Deliberately generic: the portal surface never distinguishes
   // unknown, revoked, and bad-auth channels.
   [ErrorCode.PORTAL_CHANNEL_NOT_FOUND]: () => m.error_generic(),
+
+  // Client accounts
+  [ErrorCode.ACCOUNT_USERNAME_TAKEN]: () => m.error_account_username_taken(),
 };
 
 /** Type guard: returns true when the string is a recognized ErrorCode value. */

@@ -8,6 +8,7 @@ import {
   testSealedBox,
   type TestDb,
 } from "../test-utils.js";
+import { newTicketId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
   let testDb: TestDb;
@@ -374,7 +375,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
       testDb.db
         .insertInto("intake_key_wraps")
         .values({
-          ticket_id: crypto.randomUUID(),
+          ticket_id: newTicketId(),
           wrapped_tk: Buffer.alloc(80, 0xab),
         })
         .execute(),

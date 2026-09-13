@@ -16,8 +16,10 @@ import {
   encode,
   buildContentAad,
   followupSlot,
+  eciesEncrypt,
   type SymmetricKey,
   type Ciphertext,
+  type EciesOutput,
 } from "@care-y/crypto";
 import type {
   IntakeFieldType,
@@ -27,6 +29,8 @@ import type {
   IntakeFormResponse,
   TicketPriority,
 } from "@care-y/shared";
+import { buildAccountRegistration } from "$lib/portal/account-crypto.js";
+import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
 const textEncoder = new TextEncoder();
 
@@ -299,4 +303,81 @@ export function resolveSubmitMetadata(
   }
 
   return { resolvedQueueId, resolvedPriority, resolvedEscalationLevel };
+}
+
+// ---------------------------------------------------------------------------
+// Account payload assembly for intake opt-in
+// ---------------------------------------------------------------------------
+
+/** Wire-ready account branch for the intake submission payload. */
+export interface IntakeAccountPayload {
+  readonly accountId: string;
+  readonly username: string;
+  readonly salt: string;
+  readonly publicKey: string;
+  readonly authHash: string;
+  readonly keyCheck: {
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly ciphertext: string;
+  };
+  readonly selfCopy?: {
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly ciphertext: string;
+  };
+}
+
+/**
+ * Build the account registration payload for the intake opt-in.
+ *
+ * Delegates the entire derivation pipeline (Argon2id, OPRF, key derivation)
+ * to buildAccountRegistration from account-crypto.ts. Adds a selfCopy when
+ * a message exists (eciesEncrypt of the message bytes to the new public key).
+ * Zeroes keypair.clientPrivate in the finally block. The password string is
+ * cleared by the form on submit (never stored in component state past the
+ * submit call).
+ */
+export async function buildAccountPayload(
+  username: string,
+  password: string,
+  message: string | null,
+  callbacks: LoginCryptoCallbacks,
+): Promise<IntakeAccountPayload> {
+  const { payload, keypair } = await buildAccountRegistration(
+    username,
+    password,
+    null,
+    callbacks,
+  );
+
+  try {
+    let selfCopy: IntakeAccountPayload["selfCopy"] | undefined;
+
+    if (message !== null && message.length > 0) {
+      const messageBytes = textEncoder.encode(message);
+      const triple: EciesOutput = eciesEncrypt(
+        messageBytes,
+        keypair.clientPublic,
+      );
+      selfCopy = {
+        ephemeralPoint: encode(triple.ephemeralPoint),
+        nonce: encode(triple.nonce),
+        ciphertext: encode(triple.ciphertext),
+      };
+    }
+
+    return {
+      accountId: payload.accountId,
+      username: payload.username,
+      salt: payload.salt,
+      publicKey: payload.publicKey,
+      authHash: payload.authHash,
+      keyCheck: payload.keyCheck,
+      ...(selfCopy != null ? { selfCopy } : {}),
+    };
+  } finally {
+    const sodium = requireSodium();
+    sodium.memzero(keypair.clientPrivate);
+  }
 }

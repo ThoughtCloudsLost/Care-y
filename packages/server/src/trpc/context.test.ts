@@ -37,6 +37,12 @@ import {
   type ContextDeps,
 } from "./context.js";
 import { _resetEnvCache } from "../env.js";
+import {
+  RoleId,
+  type OrgId,
+  type OrgSlug,
+  type OrgSchema,
+} from "@care-y/shared";
 
 const HAS_DB = Boolean(process.env.DATABASE_URL);
 
@@ -51,12 +57,12 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
   let testDb: TestDb;
   let tenantDb: Kysely<TenantDatabase>;
   let orgService: OrgService;
-  let orgSlug: string;
-  let orgId: string;
-  let orgSchemaName: string;
+  let orgSlug: OrgSlug;
+  let orgId: OrgId;
+  let orgSchemaName: OrgSchema;
   const hasher = createScryptHasher();
-  const createdOrgIds: string[] = [];
-  const createdSchemas: string[] = [];
+  const createdOrgIds: OrgId[] = [];
+  const createdSchemas: OrgSchema[] = [];
 
   function makeDeps(): ContextDeps {
     return {
@@ -77,8 +83,8 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
     );
 
     const suffix = randomUUID().slice(0, 8);
-    orgSlug = `ctx-test-${suffix}`;
-    const org = await orgService.createOrg({ slug: orgSlug });
+    const org = await orgService.createOrg({ slug: `ctx-test-${suffix}` });
+    orgSlug = org.slug;
     orgId = org.id;
     orgSchemaName = org.schemaName;
     createdOrgIds.push(org.id);
@@ -305,7 +311,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
         identifier: `ctx-session-${suffix}`,
         password: "test-password-long-enough",
         displayName: "Context Session User",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       const loginResult = await authService.login({
@@ -393,7 +399,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
         identifier: `scoped-svc-${suffix}`,
         password: "scoped-password-long-enough",
         displayName: "Scoped User",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       expect(testUnseal(user.encryptedIdentifier)).toBe(`scoped-svc-${suffix}`);

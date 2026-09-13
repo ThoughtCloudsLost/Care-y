@@ -13,6 +13,7 @@ import {
   createClientRepository,
   type ClientRepository,
 } from "./client-repo.js";
+import type { ClientId, PhoneId, PhoneHash } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("ClientRepository", () => {
   let testDb: TestDb;
@@ -34,8 +35,8 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientRepository", () => {
     return testSealedBox.sealBuffer(Buffer.from(raw));
   }
 
-  function phoneHash(raw: string): string {
-    return testBlindIndexer.hash(raw, TEST_ORG_ID);
+  function phoneHash(raw: string): PhoneHash {
+    return testBlindIndexer.hash(raw, TEST_ORG_ID) as PhoneHash;
   }
 
   it("findOrCreateByPhoneHash creates phone and client on first call with isNew=true", async () => {
@@ -151,7 +152,9 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientRepository", () => {
   });
 
   it("findById returns null for unknown ID", async () => {
-    const found = await repo.findById("00000000-0000-0000-0000-ffffffffffff");
+    const found = await repo.findById(
+      "00000000-0000-4000-8000-ffffffffffff" as ClientId,
+    );
     expect(found).toBeNull();
   });
 
@@ -174,7 +177,10 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientRepository", () => {
 
   /** Marks a client row as merged into another. UUID-only, no PII. */
   // care-y-ignore no-plaintext-db-write -- merged_into is a UUID FK, not PII; test helper only
-  async function markMerged(sourceId: string, targetId: string): Promise<void> {
+  async function markMerged(
+    sourceId: ClientId,
+    targetId: ClientId,
+  ): Promise<void> {
     await testDb.db
       .updateTable("clients")
       .set({ merged_into: targetId })
@@ -198,7 +204,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientRepository", () => {
 
     it("returns null for unknown phone ID", async () => {
       const found = await repo.findByPhoneId(
-        "00000000-0000-0000-0000-ffffffffffff",
+        "00000000-0000-4000-8000-ffffffffffff" as PhoneId,
       );
       expect(found).toBeNull();
     });

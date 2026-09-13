@@ -1,7 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomBytes, randomUUID } from "node:crypto";
 import { sql, type Kysely } from "kysely";
-import { RoleId } from "@care-y/shared";
+import { RoleId, type RoleIdValue } from "@care-y/shared";
+import type {
+  SessionToken,
+  UserId,
+  OrgId,
+  OrgSchema,
+  TicketId,
+  KeyGeneration,
+} from "@care-y/shared";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import {
   createTestDb,
@@ -45,7 +53,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let testDb: TestDb;
     let tenantDb: Kysely<TenantDatabase>;
     let orgContext: OrgContext;
-    const createdOrgIds: string[] = [];
+    const createdOrgIds: OrgId[] = [];
     const createdSchemas: string[] = [];
 
     const hasher = createScryptHasher();
@@ -91,7 +99,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       orgContext = {
         orgId: org.id,
         orgSlug: org.slug,
-        orgSchema: testDb.schemaName,
+        orgSchema: testDb.schemaName as OrgSchema,
         tenantDb,
         sealedBox: testSealedBox,
       };
@@ -165,14 +173,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
       return createCallerFactory(buildRouter())(ctx);
     }
 
-    async function createSession(userId: string): Promise<SessionData> {
+    async function createSession(userId: UserId): Promise<SessionData> {
       const repo = createDbSessionRepository(
         tenantDb,
         testSessionTokenizer,
         testSealedBox,
       );
       return repo.create({
-        token: randomUUID(),
+        token: randomUUID() as SessionToken,
         userId,
         ipAddress: "127.0.0.1",
         userAgent: "test-agent",
@@ -181,9 +189,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     }
 
     function authedCtx(
-      userId: string,
+      userId: UserId,
       session: SessionData,
-      roleId: string = RoleId.VOLUNTEER,
+      roleId: RoleIdValue = RoleId.VOLUNTEER,
       twofaVerified = false,
     ): Context {
       return {
@@ -564,7 +572,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     describe("changePassword", () => {
-      async function seedUserKeys(userId: string): Promise<void> {
+      async function seedUserKeys(userId: UserId): Promise<void> {
         await tenantDb
           .insertInto("user_keys")
           .values({
@@ -722,9 +730,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     describe("myTicketKeyWraps", () => {
       async function insertKeyWrap(
-        ticketId: string,
-        volunteerId: string,
-        keyGeneration: string,
+        ticketId: TicketId,
+        volunteerId: UserId,
+        keyGeneration: KeyGeneration,
       ): Promise<{
         ephemeralPoint: Buffer;
         nonce: Buffer;
@@ -760,9 +768,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture2 = await createTestTicketFixture(tenantDb);
         const fixture3 = await createTestTicketFixture(tenantDb);
 
-        const kg1 = randomUUID();
-        const kg2 = randomUUID();
-        const kg3 = randomUUID();
+        const kg1 = randomUUID() as KeyGeneration;
+        const kg2 = randomUUID() as KeyGeneration;
+        const kg3 = randomUUID() as KeyGeneration;
 
         const wrap1 = await insertKeyWrap(fixture1.ticketId, user.id, kg1);
         const wrap2 = await insertKeyWrap(fixture2.ticketId, user.id, kg2);
@@ -909,7 +917,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     describe("changePassword with reWrappedOrgKey", () => {
-      async function seedUserKeys(userId: string): Promise<void> {
+      async function seedUserKeys(userId: UserId): Promise<void> {
         await tenantDb
           .insertInto("user_keys")
           .values({
@@ -921,7 +929,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .execute();
       }
 
-      async function seedWrappedOrgKey(userId: string): Promise<void> {
+      async function seedWrappedOrgKey(userId: UserId): Promise<void> {
         await tenantDb
           .insertInto("wrapped_org_keys")
           .values({

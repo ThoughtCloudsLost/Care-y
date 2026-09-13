@@ -8,6 +8,7 @@
  */
 
 import { z } from "zod";
+import { queueIdSchema, escalationRuleIdSchema } from "../ids.js";
 
 // --- Escalation rule enums ---
 
@@ -26,7 +27,7 @@ export type EscalationAction = z.infer<typeof escalationActionSchema>;
 // --- CRUD input schemas ---
 
 export const createEscalationRuleInputSchema = z.object({
-  queueId: z.uuid(),
+  queueId: queueIdSchema,
   ruleType: escalationRuleTypeSchema,
   thresholdMinutes: z
     .number()
@@ -40,7 +41,7 @@ export type CreateEscalationRuleInput = z.infer<
 >;
 
 export const updateEscalationRuleInputSchema = z.object({
-  ruleId: z.uuid(),
+  ruleId: escalationRuleIdSchema,
   thresholdMinutes: z
     .number()
     .int()
@@ -55,14 +56,14 @@ export type UpdateEscalationRuleInput = z.infer<
 >;
 
 export const deleteEscalationRuleInputSchema = z.object({
-  ruleId: z.uuid(),
+  ruleId: escalationRuleIdSchema,
 });
 export type DeleteEscalationRuleInput = z.infer<
   typeof deleteEscalationRuleInputSchema
 >;
 
 export const listEscalationRulesInputSchema = z.object({
-  queueId: z.uuid(),
+  queueId: queueIdSchema,
 });
 export type ListEscalationRulesInput = z.infer<
   typeof listEscalationRulesInputSchema

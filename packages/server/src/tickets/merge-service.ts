@@ -12,11 +12,12 @@ import type { TenantDatabase } from "../db/types.js";
 import { MergeError, NotFoundError } from "../errors.js";
 import { createDependencyService } from "./dependency-service.js";
 import { ErrorCode } from "@care-y/shared";
+import type { ClientId, ClientMergeEventId } from "@care-y/shared";
 
 export interface MergeEventRecord {
-  readonly id: string;
-  readonly primaryClientId: string;
-  readonly secondaryClientId: string;
+  readonly id: ClientMergeEventId;
+  readonly primaryClientId: ClientId;
+  readonly secondaryClientId: ClientId;
   readonly mergedAt: Date;
   readonly snapshot: Buffer;
   readonly undoLocked: boolean;
@@ -25,25 +26,25 @@ export interface MergeEventRecord {
 
 export interface MergeService {
   merge(input: {
-    primaryClientId: string;
-    secondaryClientId: string;
+    primaryClientId: ClientId;
+    secondaryClientId: ClientId;
     encryptedSnapshot: Buffer;
   }): Promise<MergeEventRecord>;
 
   undoMerge(input: {
-    mergeEventId: string;
+    mergeEventId: ClientMergeEventId;
     encryptedSnapshot: Buffer;
   }): Promise<MergeEventRecord>;
 
-  setUndoLock(mergeEventId: string, locked: boolean): Promise<void>;
+  setUndoLock(mergeEventId: ClientMergeEventId, locked: boolean): Promise<void>;
 
-  listByClient(clientId: string): Promise<MergeEventRecord[]>;
+  listByClient(clientId: ClientId): Promise<MergeEventRecord[]>;
 }
 
 function toRecord(row: {
-  id: string;
-  primary_client_id: string;
-  secondary_client_id: string;
+  id: ClientMergeEventId;
+  primary_client_id: ClientId;
+  secondary_client_id: ClientId;
   merged_at: Date;
   snapshot: Buffer;
   undo_locked: boolean;

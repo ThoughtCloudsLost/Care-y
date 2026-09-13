@@ -18,8 +18,19 @@ import type {
   NotificationEventType,
   SseEvent,
   SystemSseEvent,
+  OrgId,
+  OrgSchema,
+  OrgSlug,
+  TicketId,
+  QueueId,
+  UserId,
 } from "@care-y/shared";
-import { notificationEventTypeSchema } from "@care-y/shared";
+import {
+  notificationEventTypeSchema,
+  orgSchemaNameSchema,
+  orgSlugIdSchema,
+  userIdSchema,
+} from "@care-y/shared";
 import { z } from "zod";
 import { getStrings, buildLoginUrl } from "./i18n.js";
 import type { NotificationRecipientList } from "../tickets/notification-recipients.js";
@@ -39,11 +50,12 @@ export interface NotificationServiceDeps {
 export interface NotificationService {
   dispatch(
     tDb: Kysely<TenantDatabase>,
-    orgSchema: string,
-    orgSlug: string,
+    orgId: OrgId,
+    orgSchema: OrgSchema,
+    orgSlug: OrgSlug,
     eventType: NotificationEventType,
-    ticketId: string,
-    queueId: string,
+    ticketId: TicketId,
+    queueId: QueueId,
     recipients: NotificationRecipientList,
   ): Promise<void>;
 
@@ -54,10 +66,11 @@ export interface NotificationService {
    */
   dispatchTicketless(
     tDb: Kysely<TenantDatabase>,
-    orgSchema: string,
-    orgSlug: string,
+    orgId: OrgId,
+    orgSchema: OrgSchema,
+    orgSlug: OrgSlug,
     eventType: NotificationEventType,
-    userIds: readonly string[],
+    userIds: readonly UserId[],
   ): Promise<void>;
 }
 
@@ -67,6 +80,7 @@ export function createNotificationService(
   return {
     async dispatch(
       tDb,
+      orgId,
       orgSchema,
       orgSlug,
       eventType,
@@ -127,7 +141,7 @@ export function createNotificationService(
       // enqueue-time semantics keep the job handler simple and the payload
       // PII-free (IDs only).
 
-      let emailList: readonly string[];
+      let emailList: readonly UserId[];
 
       if (allow.smsAllowed.length > 0) {
         const reach = await getReachabilityForUsers(tDb, allow.smsAllowed);
@@ -141,6 +155,7 @@ export function createNotificationService(
 
         if (smsDeliverable.length > 0) {
           await deps.jobQueue.enqueue(NOTIFICATION_SMS_QUEUE, {
+            orgId,
             orgSchema,
             orgSlug,
             recipientUserIds: smsDeliverable,
@@ -161,7 +176,14 @@ export function createNotificationService(
       }
     },
 
-    async dispatchTicketless(tDb, orgSchema, orgSlug, eventType, userIds) {
+    async dispatchTicketless(
+      tDb,
+      orgId,
+      orgSchema,
+      orgSlug,
+      eventType,
+      userIds,
+    ) {
       if (userIds.length === 0) return;
 
       // Ticketless dispatch: no ticket or queue context, so preferences
@@ -202,7 +224,7 @@ export function createNotificationService(
       // because a silently dropped escalation ping is the worse failure
       // mode for a support tool serving at-risk populations.
 
-      let emailList: readonly string[];
+      let emailList: readonly UserId[];
 
       if (allow.smsAllowed.length > 0) {
         const reach = await getReachabilityForUsers(tDb, allow.smsAllowed);
@@ -216,6 +238,7 @@ export function createNotificationService(
 
         if (smsDeliverable.length > 0) {
           await deps.jobQueue.enqueue(NOTIFICATION_SMS_QUEUE, {
+            orgId,
             orgSchema,
             orgSlug,
             recipientUserIds: smsDeliverable,
@@ -248,10 +271,10 @@ export function createNotificationService(
 async function resolveAllowListsSafe(
   preferences: NotificationPreferencesService,
   tDb: Kysely<TenantDatabase>,
-  userIds: readonly string[],
+  userIds: readonly UserId[],
   eventType: NotificationEventType,
-  ticketId: string | undefined,
-  queueId: string | undefined,
+  ticketId: TicketId | undefined,
+  queueId: QueueId | undefined,
 ): Promise<DispatchAllowLists> {
   try {
     return await preferences.resolveForDispatch(
@@ -277,7 +300,7 @@ async function resolveAllowListsSafe(
 export interface NotificationJobHandlerDeps {
   readonly emailSender: NotificationEmailSender;
   readonly encryptor: FieldEncryptor;
-  readonly getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>;
+  readonly getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>;
 }
 
 /**
@@ -289,9 +312,9 @@ export function createNotificationJobHandler(
   deps: NotificationJobHandlerDeps,
 ): (payload: Record<string, unknown>) => Promise<void> {
   const jobPayloadSchema = z.object({
-    orgSchema: z.string().min(1),
-    orgSlug: z.string().min(1),
-    recipientUserIds: z.array(z.uuid()),
+    orgSchema: orgSchemaNameSchema,
+    orgSlug: orgSlugIdSchema,
+    recipientUserIds: z.array(userIdSchema),
     eventType: notificationEventTypeSchema,
   });
 

@@ -5,7 +5,7 @@ import {
   auditA11y,
   clickComposeAction,
   CRYPTO_TIMEOUT,
-  isDesktopLayout,
+  openTicketInfoPanel,
   login,
   openComposeActions,
   openTicketByTitle,
@@ -55,16 +55,10 @@ test.describe.serial("Secure Link Portal", () => {
   // ── Volunteer half: upgrade + link generation ────────────────────
 
   test("tier section shows SMS/Email for a fresh client", async () => {
-    const desktop = await isDesktopLayout(volunteerPage);
-    if (!desktop) {
-      const moreBtn = volunteerPage.getByRole("button", {
-        name: /more actions/i,
-      });
-      await expect(moreBtn).toBeVisible({ timeout: 10_000 });
-      await moreBtn.dispatchEvent("click");
-    }
-    // PortalTierSection renders the tier heading in the panel (aside on
-    // desktop, popup on mobile).
+    // PortalTierSection renders the tier heading inside the info panel,
+    // which sits behind "More actions" in the detail overlay at every
+    // width.
+    await openTicketInfoPanel(volunteerPage, "Communication");
     await expect(
       volunteerPage.getByText("Communication", { exact: true }).first(),
     ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
@@ -92,10 +86,14 @@ test.describe.serial("Secure Link Portal", () => {
     const sheet = volunteerPage.getByRole("dialog").last();
     await expect(sheet).toBeVisible({ timeout: 5_000 });
 
-    // Enable the passphrase and capture the diceware words.
-    const toggleLabel = sheet.getByText(/add a passphrase/i);
-    await expect(toggleLabel).toBeVisible({ timeout: 5_000 });
-    await toggleLabel.dispatchEvent("click");
+    // Enable the passphrase and capture the diceware words. The list
+    // item title is inert; the Konsta Toggle's checkbox carries the
+    // aria-label and is what actually flips the state.
+    const passphraseToggle = sheet.getByRole("checkbox", {
+      name: /add a passphrase/i,
+    });
+    await expect(passphraseToggle).toBeVisible({ timeout: 5_000 });
+    await passphraseToggle.dispatchEvent("click");
 
     const wordsEl = sheet.locator(".words-display");
     await expect(wordsEl).toBeVisible({ timeout: 5_000 });
@@ -139,8 +137,16 @@ test.describe.serial("Secure Link Portal", () => {
     await volunteerPage.waitForTimeout(300);
 
     // "Reply to ..." is available because the client is now
-    // portal-capable. Reload so the detail payload carries the flag.
-    await volunteerPage.reload();
+    // portal-capable, and the detail payload has to be refetched to
+    // carry the flag; without it the volunteer sends an ordinary reply
+    // and no client copy is written. Navigate away and back inside the
+    // app rather than reloading the page: the volunteer's keys live
+    // only in memory for the session, so a reload discards them and the
+    // app returns to a blocked state with nothing decrypted.
+    await volunteerPage.keyboard.press("Escape");
+    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
+    await volunteerPage.getByRole("tab", { name: "Tickets" }).click();
+    await openTicketByTitle(volunteerPage, TICKET_TITLE);
     await expect(volunteerPage.locator('[role="log"]')).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });

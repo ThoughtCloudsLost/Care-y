@@ -10,6 +10,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type * as BrandingCrypto from "./branding-crypto.js";
 import type * as AttachmentValidator from "../telephony/attachment-validator.js";
+import type { BlobKey, OrgSchema } from "@care-y/shared";
 
 // Spread the original so exports this file does not stub (BRANDING_AAD,
 // which test-utils imports) stay real instead of becoming undefined.
@@ -73,7 +74,7 @@ async function resetOrgConfig(db: Kysely<TenantDatabase>): Promise<void> {
 function createMockBlobStore(): BlobStore {
   let counter = 0;
   return {
-    put: vi.fn(async () => `blob-key-${++counter}`),
+    put: vi.fn(async () => `blob-key-${++counter}` as BlobKey),
     get: vi.fn(async () => null),
     delete: vi.fn(async () => undefined),
     exists: vi.fn(async () => false),
@@ -131,7 +132,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
     it("hasIcons is true when icon blob keys are present", async () => {
       await db
         .updateTable("org_config")
-        .set({ icon_192_blob_key: "some-key-abcdef" })
+        .set({ icon_192_blob_key: "some-key-abcdef" as BlobKey })
         .execute();
 
       const svc = createBrandingService(db);
@@ -271,7 +272,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       const store = createMockBlobStore();
       const svc = createBrandingService(db);
 
-      await svc.uploadIcons(store, testDb.schemaName, {
+      await svc.uploadIcons(store, testDb.schemaName as OrgSchema, {
         icon192: Buffer.from("192").toString("base64"),
         icon512: Buffer.from("512").toString("base64"),
         iconMaskable: Buffer.from("mask").toString("base64"),
@@ -299,16 +300,16 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       await db
         .updateTable("org_config")
         .set({
-          icon_192_blob_key: "old-key-1",
-          icon_512_blob_key: "old-key-2",
-          icon_maskable_blob_key: "old-key-3",
+          icon_192_blob_key: "old-key-1" as BlobKey,
+          icon_512_blob_key: "old-key-2" as BlobKey,
+          icon_maskable_blob_key: "old-key-3" as BlobKey,
         })
         .execute();
 
       const store = createMockBlobStore();
       const svc = createBrandingService(db);
 
-      await svc.uploadIcons(store, testDb.schemaName, {
+      await svc.uploadIcons(store, testDb.schemaName as OrgSchema, {
         icon192: Buffer.from("192").toString("base64"),
         icon512: Buffer.from("512").toString("base64"),
         iconMaskable: Buffer.from("mask").toString("base64"),
@@ -325,7 +326,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       const store = createMockBlobStore();
       const svc = createBrandingService(db);
 
-      await svc.uploadIcons(store, testDb.schemaName, {
+      await svc.uploadIcons(store, testDb.schemaName as OrgSchema, {
         icon192: Buffer.from("192").toString("base64"),
         icon512: Buffer.from("512").toString("base64"),
         iconMaskable: Buffer.from("mask").toString("base64"),

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { getSodium, requireSodium, encode, decode } from "@care-y/crypto";
+import type { UserId } from "@care-y/shared";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type * as TrpcModule from "$lib/trpc/index.js";
 import {
@@ -55,7 +56,7 @@ function createPendingUsers(count: number): PendingWrapUser[] {
     const scalar = sodium.crypto_core_ristretto255_scalar_random();
     const pk = sodium.crypto_scalarmult_ristretto255_base(scalar);
     return {
-      userId: `user-${String(i)}`,
+      userId: `user-${String(i)}` as UserId,
       volPublic: encode(pk),
     };
   });

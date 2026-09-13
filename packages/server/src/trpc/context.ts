@@ -17,6 +17,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { CreateHTTPContextOptions } from "@trpc/server/adapters/standalone";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import {
+  sessionTokenSchema,
+  type OrgId,
+  type OrgSchema,
+  type OrgSlug,
+} from "@care-y/shared";
 import type {
   SessionData,
   SessionRepository,
@@ -40,9 +46,9 @@ import { tenantDb } from "../db/db.js";
 import { extractOrgSlug } from "../org/slug-resolver.js";
 
 export interface OrgContext {
-  readonly orgId: string;
-  readonly orgSlug: string;
-  readonly orgSchema: string;
+  readonly orgId: OrgId;
+  readonly orgSlug: OrgSlug;
+  readonly orgSchema: OrgSchema;
   readonly tenantDb: Kysely<TenantDatabase>;
   readonly sealedBox: SealedBoxEncryptor;
 }
@@ -159,15 +165,18 @@ async function validateSessionFromRequest(
   orgCtx: OrgContext,
   deps: ContextDeps,
 ): Promise<{ session: SessionData; user: UserRecord } | null> {
-  const cookieToken = parseCookies(req.headers.cookie).get(SESSION_COOKIE_NAME);
-  if (cookieToken === undefined) return null;
+  const raw = parseCookies(req.headers.cookie).get(SESSION_COOKIE_NAME);
+  if (raw === undefined) return null;
+
+  const parsed = sessionTokenSchema.safeParse(raw);
+  if (!parsed.success) return null;
 
   const sessions = createTenantSessions(orgCtx, deps.tokenizer);
   const authService = createScopedAuthService(orgCtx, sessions, deps);
   const ip = extractClientIp(req);
   const ua = req.headers["user-agent"] ?? "unknown";
 
-  return authService.validateSession(cookieToken, ip, ua);
+  return authService.validateSession(parsed.data, ip, ua);
 }
 
 /**

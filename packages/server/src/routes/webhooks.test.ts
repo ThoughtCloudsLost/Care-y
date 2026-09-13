@@ -10,6 +10,7 @@ import {
   type WebhookDispatch,
 } from "./webhooks.js";
 import { twilioHmacValidator } from "../telephony/webhook-crypto.js";
+import type { OrgId, E164, CallSid } from "@care-y/shared";
 import type {
   RateLimitResult,
   RateLimiter,
@@ -23,7 +24,7 @@ import type { TelephonyConfigService } from "../telephony/config-service.js";
 // Test constants
 // ---------------------------------------------------------------------------
 
-const TEST_ORG_ID = "550e8400-e29b-41d4-a716-446655440000";
+const TEST_ORG_ID = "550e8400-e29b-41d4-a716-446655440000" as OrgId;
 const TEST_AUTH_TOKEN = "test-auth-token-12345";
 const TEST_ACCOUNT_SID = "AC_TEST_12345";
 const WEBHOOK_BASE_URL = "https://api.care-y.app";
@@ -110,18 +111,23 @@ function createMockProvider(validateResult: boolean): TelephonyProvider {
     validateWebhook() {
       return validateResult;
     },
-    parseIncomingCall() {
-      return { callId: "c", from: "+1", to: "+1", direction: "inbound" };
+    parseIncomingCall(_body: Record<string, string>) {
+      return {
+        callId: "c" as CallSid,
+        from: "+1" as E164,
+        to: "+1" as E164,
+        direction: "inbound" as const,
+      };
     },
-    parseIncomingSms() {
+    parseIncomingSms(_body: Record<string, string>) {
       return {
         messageId: "m",
-        from: "+1",
-        to: "+1",
+        from: "+1" as E164,
+        to: "+1" as E164,
         body: "",
         numMedia: 0,
-        mediaUrls: [],
-        mediaContentTypes: [],
+        mediaUrls: [] as string[],
+        mediaContentTypes: [] as string[],
       };
     },
     generateVoiceResponse() {
@@ -131,7 +137,7 @@ function createMockProvider(validateResult: boolean): TelephonyProvider {
       return Buffer.alloc(0);
     },
     async getCallDetails() {
-      return { from: "+15550000001", to: "+15550000002" };
+      return { from: "+15550000001" as E164, to: "+15550000002" as E164 };
     },
     async deleteRecording() {
       // no-op

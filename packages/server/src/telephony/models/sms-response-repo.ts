@@ -14,9 +14,10 @@ import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, SmsResponsesTable } from "../../db/types.js";
 import { NotFoundError } from "../../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { SmsResponseId } from "@care-y/shared";
 
 export interface SmsResponseRecord {
-  readonly id: string;
+  readonly id: SmsResponseId;
   readonly responseType: string;
   readonly locale: string;
   readonly text: string;
@@ -38,8 +39,11 @@ export interface SmsResponseRepository {
     locale: string;
     text: string;
   }): Promise<SmsResponseRecord>;
-  update(id: string, input: { text?: string }): Promise<SmsResponseRecord>;
-  delete(id: string): Promise<void>;
+  update(
+    id: SmsResponseId,
+    input: { text?: string },
+  ): Promise<SmsResponseRecord>;
+  delete(id: SmsResponseId): Promise<void>;
 }
 
 function toSmsResponseRecord(
@@ -122,7 +126,7 @@ export function createSmsResponseRepository(
     },
 
     async update(
-      id: string,
+      id: SmsResponseId,
       input: { text?: string },
     ): Promise<SmsResponseRecord> {
       const updateValues: Record<string, unknown> = {};
@@ -142,7 +146,7 @@ export function createSmsResponseRepository(
       return toSmsResponseRecord(row);
     },
 
-    async delete(id: string): Promise<void> {
+    async delete(id: SmsResponseId): Promise<void> {
       const result = await db
         .deleteFrom("sms_responses")
         .where("id", "=", id)

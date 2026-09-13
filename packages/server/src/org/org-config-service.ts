@@ -1,4 +1,5 @@
 import type { Kysely } from "kysely";
+import type { QueueId } from "@care-y/shared";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError, ValidationError } from "../errors.js";
 
@@ -19,8 +20,8 @@ export interface UpdateOrgGeneralInput {
 export interface OrgConfigService {
   getOrgGeneral(): Promise<OrgGeneralResult>;
   updateOrgGeneral(input: UpdateOrgGeneralInput): Promise<void>;
-  getIntakeQueue(): Promise<string | null>;
-  setIntakeQueue(queueId: string | null): Promise<void>;
+  getIntakeQueue(): Promise<QueueId | null>;
+  setIntakeQueue(queueId: QueueId | null): Promise<void>;
 }
 
 export function createOrgConfigService(
@@ -71,7 +72,7 @@ export function createOrgConfigService(
       }
     },
 
-    async getIntakeQueue(): Promise<string | null> {
+    async getIntakeQueue(): Promise<QueueId | null> {
       const config = await tenantDb
         .selectFrom("org_config")
         .select("intake_queue_id")
@@ -84,7 +85,7 @@ export function createOrgConfigService(
       return config.intake_queue_id;
     },
 
-    async setIntakeQueue(queueId: string | null): Promise<void> {
+    async setIntakeQueue(queueId: QueueId | null): Promise<void> {
       if (queueId !== null) {
         const queue = await tenantDb
           .selectFrom("queues")

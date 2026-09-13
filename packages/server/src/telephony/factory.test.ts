@@ -7,6 +7,12 @@ import {
 import type { TelephonyProvider } from "./provider.js";
 import { deriveSecretsKey, createSecretsEncryptor } from "../config/secrets.js";
 import { NotFoundError, TelephonyConfigError } from "../errors.js";
+import {
+  createMockProvider,
+  DEV_MOCK_ACCOUNT_SID,
+  DEV_MOCK_AUTH_TOKEN,
+} from "./mock-provider.js";
+import type { OrgId, CallSid, E164, StoredProviderId } from "@care-y/shared";
 
 const TEST_OPS_KEY = Buffer.from(
   "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
@@ -17,7 +23,7 @@ const secretsKey = deriveSecretsKey(TEST_OPS_KEY);
 const secretsEncryptor = createSecretsEncryptor(secretsKey);
 
 /** Minimal TelephonyProvider stub for testing. */
-function createStubProvider(providerId: string): TelephonyProvider {
+function createStubProvider(providerId: StoredProviderId): TelephonyProvider {
   return {
     providerId,
     async sendSms() {
@@ -34,17 +40,17 @@ function createStubProvider(providerId: string): TelephonyProvider {
     },
     parseIncomingCall() {
       return {
-        callId: "c",
-        from: "+1",
-        to: "+1",
+        callId: "c" as CallSid,
+        from: "+10000000000" as E164,
+        to: "+10000000001" as E164,
         direction: "inbound" as const,
       };
     },
     parseIncomingSms() {
       return {
         messageId: "m",
-        from: "+1",
-        to: "+1",
+        from: "+10000000000" as E164,
+        to: "+10000000001" as E164,
         body: "",
         numMedia: 0,
         mediaUrls: [],
@@ -58,7 +64,7 @@ function createStubProvider(providerId: string): TelephonyProvider {
       return Buffer.alloc(0);
     },
     async getCallDetails() {
-      return { from: "+15550000001", to: "+15550000002" };
+      return { from: "+15550000001" as E164, to: "+15550000002" as E164 };
     },
     async deleteRecording() {
       // no-op stub
@@ -131,7 +137,7 @@ describe("createProviderFactory", () => {
       key_version: 1,
     });
     const factory = buildFactory(db);
-    const provider = await factory.getProvider("org-1");
+    const provider = await factory.getProvider("org-1" as OrgId);
     expect(provider.providerId).toBe("twilio");
     expect(mockConstructor).toHaveBeenCalledOnce();
   });
@@ -139,7 +145,9 @@ describe("createProviderFactory", () => {
   it("throws NotFoundError when no config row exists", async () => {
     const { db } = createMockDb(undefined);
     const factory = buildFactory(db);
-    await expect(factory.getProvider("org-1")).rejects.toThrow(NotFoundError);
+    await expect(factory.getProvider("org-1" as OrgId)).rejects.toThrow(
+      NotFoundError,
+    );
   });
 
   it("throws TelephonyConfigError for invalid JSON blob", async () => {
@@ -153,7 +161,7 @@ describe("createProviderFactory", () => {
       key_version: 1,
     });
     const factory = buildFactory(db);
-    await expect(factory.getProvider("org-1")).rejects.toThrow(
+    await expect(factory.getProvider("org-1" as OrgId)).rejects.toThrow(
       TelephonyConfigError,
     );
   });
@@ -166,7 +174,7 @@ describe("createProviderFactory", () => {
       key_version: 1,
     });
     const factory = buildFactory(db);
-    await expect(factory.getProvider("org-1")).rejects.toThrow(
+    await expect(factory.getProvider("org-1" as OrgId)).rejects.toThrow(
       TelephonyConfigError,
     );
   });
@@ -186,7 +194,7 @@ describe("createProviderFactory", () => {
     });
     // Factory only has "twilio" registered, not "signalwire"
     const factory = buildFactory(db);
-    await expect(factory.getProvider("org-1")).rejects.toThrow(
+    await expect(factory.getProvider("org-1" as OrgId)).rejects.toThrow(
       TelephonyConfigError,
     );
   });
@@ -199,8 +207,8 @@ describe("createProviderFactory", () => {
       key_version: 1,
     });
     const factory = buildFactory(db);
-    const first = await factory.getProvider("org-1");
-    const second = await factory.getProvider("org-1");
+    const first = await factory.getProvider("org-1" as OrgId);
+    const second = await factory.getProvider("org-1" as OrgId);
     expect(second).toBe(first);
     // Constructor called only once proves caching works at the behavioral level
     expect(mockConstructor).toHaveBeenCalledTimes(1);
@@ -214,9 +222,9 @@ describe("createProviderFactory", () => {
       key_version: 1,
     });
     const factory = buildFactory(db);
-    const first = await factory.getProvider("org-1");
-    factory.invalidate("org-1");
-    const second = await factory.getProvider("org-1");
+    const first = await factory.getProvider("org-1" as OrgId);
+    factory.invalidate("org-1" as OrgId);
+    const second = await factory.getProvider("org-1" as OrgId);
     expect(second).not.toBe(first);
     expect(mockConstructor).toHaveBeenCalledTimes(2);
   });
@@ -229,10 +237,63 @@ describe("createProviderFactory", () => {
       key_version: 1,
     });
     const factory = buildFactory(db);
-    const first = await factory.getProvider("org-1");
+    const first = await factory.getProvider("org-1" as OrgId);
     factory.invalidateAll();
-    const second = await factory.getProvider("org-1");
+    const second = await factory.getProvider("org-1" as OrgId);
     expect(second).not.toBe(first);
     expect(mockConstructor).toHaveBeenCalledTimes(2);
+  });
+
+  it("constructs a mock provider through the factory when registered", async () => {
+    const mockConfig = {
+      accountSid: DEV_MOCK_ACCOUNT_SID,
+      authToken: DEV_MOCK_AUTH_TOKEN,
+      phoneNumbers: [
+        { number: "+15550001111", sid: "PNdev001", label: "Main" },
+      ],
+    };
+    const { db } = createMockDb({
+      org_id: "org-mock",
+      provider: "mock",
+      config: encryptConfig(mockConfig),
+      key_version: 1,
+    });
+    const factory = createProviderFactory({
+      db,
+      secretsEncryptor,
+      providerConstructors: new Map<string, ProviderConstructor>([
+        ["twilio", mockConstructor],
+        ["mock", createMockProvider],
+      ]),
+    });
+
+    const provider = await factory.getProvider("org-mock" as OrgId);
+    expect(provider.providerId).toBe("mock");
+    expect(provider.maskConfig().phoneNumbers).toEqual([
+      { number: "+15550001111", label: "Main" },
+    ]);
+  });
+
+  it("production fail-closed: mock schema passes but missing constructor throws TelephonyConfigError", async () => {
+    // Simulates production: mock is in providerConfigSchemas (unconditional)
+    // but NOT in providerConstructors (prod-gated). Schema validation passes
+    // but the constructor lookup fails.
+    const mockConfig = {
+      accountSid: DEV_MOCK_ACCOUNT_SID,
+      authToken: DEV_MOCK_AUTH_TOKEN,
+      phoneNumbers: [],
+    };
+    const { db } = createMockDb({
+      org_id: "org-prod-mock",
+      provider: "mock",
+      config: encryptConfig(mockConfig),
+      key_version: 1,
+    });
+    // Only "twilio" registered, simulating production constructor map
+    const factory = buildFactory(db);
+
+    await expect(factory.getProvider("org-prod-mock" as OrgId)).rejects.toThrow(
+      TelephonyConfigError,
+    );
   });
 });

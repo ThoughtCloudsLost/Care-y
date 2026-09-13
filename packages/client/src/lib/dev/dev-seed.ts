@@ -17,6 +17,8 @@ import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
 import {
   RoleId,
+  newTicketId,
+  newFollowupId,
   type EscalationTarget,
   type RoleIdValue,
 } from "@care-y/shared";
@@ -1279,7 +1281,7 @@ export async function devSeedData(
 
     // Seeding assumes a reset DB (step 0), so every create is fresh and
     // the minted id is the id the row will get (AAD binding, ADR-053).
-    const mintedTicketId = crypto.randomUUID();
+    const mintedTicketId = newTicketId();
     const encrypted = await bridge.createTicketEncryption(mintedTicketId, [
       { name: "title", plaintext: ticket.title },
       { name: "description", plaintext: ticket.description },
@@ -1378,7 +1380,7 @@ export async function devSeedData(
           VOL_REPLY_POOL.at((ti * 2 + fi) % VOL_REPLY_POOL.length) ?? "";
       }
 
-      const followUpId = crypto.randomUUID();
+      const followUpId = newFollowupId();
       const encryptedContent = await bridge.encrypt(
         ticketId,
         followupSlot(followUpId),

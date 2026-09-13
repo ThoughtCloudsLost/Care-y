@@ -21,6 +21,15 @@ import {
   type ConversionWrap,
 } from "./intake-conversion-service.js";
 import { ForbiddenError } from "../errors.js";
+import { newTicketId, newKeyGeneration } from "@care-y/shared";
+import type {
+  QueueId,
+  UserId,
+  ClientId,
+  TicketId,
+  KeyGeneration,
+  AliasHash,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,11 +37,11 @@ import { ForbiddenError } from "../errors.js";
 
 async function seedTicketWithIntakeWrap(
   db: TestDb["db"],
-  queueId: string,
-  clientId: string,
-): Promise<{ ticketId: string; keyGeneration: string }> {
-  const ticketId = crypto.randomUUID();
-  const keyGeneration = crypto.randomUUID();
+  queueId: QueueId,
+  clientId: ClientId,
+): Promise<{ ticketId: TicketId; keyGeneration: KeyGeneration }> {
+  const ticketId = newTicketId();
+  const keyGeneration = newKeyGeneration();
 
   await db
     .insertInto("tickets")
@@ -59,7 +68,7 @@ async function seedTicketWithIntakeWrap(
   return { ticketId, keyGeneration };
 }
 
-function makeWrap(volunteerId: string): ConversionWrap {
+function makeWrap(volunteerId: UserId): ConversionWrap {
   return {
     volunteerId,
     ephemeralPoint: Buffer.alloc(32, 0x01),
@@ -76,9 +85,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
   "intake conversion service (DB integration)",
   () => {
     let testDb: TestDb;
-    let queueId: string;
-    let userId: string;
-    let clientId: string;
+    let queueId: QueueId;
+    let userId: UserId;
+    let clientId: ClientId;
 
     beforeAll(async () => {
       testDb = await createTestDb();
@@ -123,7 +132,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("clients")
         .values({
           encrypted_alias: Buffer.from(alias),
-          alias_hash: alias,
+          alias_hash: alias as AliasHash,
         })
         .returning("id")
         .executeTakeFirstOrThrow();
@@ -219,7 +228,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         clientId,
       );
       const access = createTicketAccessChecker(testDb.db);
-      const nonMemberId = crypto.randomUUID();
+      const nonMemberId = crypto.randomUUID() as UserId;
 
       await expect(
         convertIntakeKeyWrap(testDb.db, access, userId, {
@@ -244,7 +253,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         clientId,
       );
       const access = createTicketAccessChecker(testDb.db);
-      const unknownUserId = crypto.randomUUID();
+      const unknownUserId = crypto.randomUUID() as UserId;
 
       await expect(
         convertIntakeKeyWrap(testDb.db, access, unknownUserId, {

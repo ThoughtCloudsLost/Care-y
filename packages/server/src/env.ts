@@ -90,6 +90,12 @@ const envSchema = z.object({
   // When set, X-Forwarded-For is honored only from these peers (plus loopback).
   // Leave unset to trust only loopback peers (default for single-proxy setups).
   TRUSTED_PROXIES: z.string().optional(),
+
+  // Public intake submissions allowed per IP per hour. Defaults to the
+  // production value; raise it only in development or testing, where the
+  // whole suite submits from one address and would otherwise exhaust the
+  // budget partway through a single run.
+  INTAKE_SUBMISSION_LIMIT: z.coerce.number().int().positive().default(3),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

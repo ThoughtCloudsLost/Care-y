@@ -1,4 +1,5 @@
 import { followupSlot } from "@care-y/crypto";
+import { newFollowupId } from "@care-y/shared";
 import type { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { QueryClient } from "@tanstack/svelte-query";
@@ -122,7 +123,7 @@ export function createCloseResolution(
     saving = true;
     try {
       const ticketId = config.getTicketId();
-      const followUpId = crypto.randomUUID();
+      const followUpId = newFollowupId();
       const encryptedContent = await config.cryptoBridge.encrypt(
         ticketId,
         followupSlot(followUpId),

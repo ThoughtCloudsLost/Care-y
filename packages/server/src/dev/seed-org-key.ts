@@ -9,6 +9,7 @@ import {
 import sodium from "sodium-native";
 import { NotFoundError } from "../errors.js";
 import { generateAlias } from "../telephony/models/alias-generator.js";
+import type { UserId, QueueId, KbCategoryId } from "@care-y/shared";
 
 function sealWithOrgKey(plaintext: string, orgPk: Uint8Array): Buffer {
   const pt = Buffer.from(plaintext, "utf8");
@@ -27,11 +28,11 @@ async function resealOrgEncryptedNames(
     .orderBy("sort_order", "asc")
     .execute();
 
-  const queuePairs: [string, string][] = [
+  const queuePairs: [string, QueueId][] = [
     ["Intake", queues[0]?.id],
     ["Crisis", queues[1]?.id],
     ["Housing", queues[2]?.id],
-  ].filter((pair): pair is [string, string] => pair[1] !== undefined);
+  ].filter((pair): pair is [string, QueueId] => pair[1] !== undefined);
 
   for (const [name, id] of queuePairs) {
     await tDb
@@ -47,11 +48,11 @@ async function resealOrgEncryptedNames(
     .orderBy("sort_order", "asc")
     .execute();
 
-  const catPairs: [string, string][] = [
+  const catPairs: [string, KbCategoryId][] = [
     ["Procedures", categories[0]?.id],
     ["Resources", categories[1]?.id],
     ["Safety", categories[2]?.id],
-  ].filter((pair): pair is [string, string] => pair[1] !== undefined);
+  ].filter((pair): pair is [string, KbCategoryId] => pair[1] !== undefined);
 
   for (const [name, id] of catPairs) {
     await tDb
@@ -113,9 +114,7 @@ async function resealClientAliases(
   orgPk: Uint8Array,
 ): Promise<void> {
   const clients = await tDb.selectFrom("clients").select("id").execute();
-  console.log(
-    `[seed-org-key] re-sealing ${String(clients.length)} client records`,
-  );
+  console.log("[seed-org-key] re-sealing records under the new org key");
 
   for (const client of clients) {
     const alias = await generateAlias(tDb);
@@ -132,7 +131,7 @@ async function resealClientAliases(
 
 export async function seedOrgKey(
   tDb: Kysely<TenantDatabase>,
-  userId: string,
+  userId: UserId,
 ): Promise<{ success: true; skipped: boolean }> {
   const existing = await tDb
     .selectFrom("wrapped_org_keys")

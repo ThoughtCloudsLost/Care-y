@@ -10,7 +10,7 @@
  * matching production wiring behavior.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
@@ -31,6 +31,24 @@ import {
   type TestDb,
 } from "../test-utils.js";
 import { RoleId, ErrorCode, type RoleIdValue } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgSlug,
+  OrgSchema,
+  TicketId,
+  FollowupId,
+  KeyGeneration,
+  ClientId,
+  ClientAccountId,
+  UsernameHash,
+  ChannelSecret,
+  AliasHash,
+  BlobKey,
+} from "@care-y/shared";
 import { createTicketRouter, type TicketRouterDeps } from "./tickets.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
@@ -63,7 +81,7 @@ function createTestBlobStore(): BlobStore {
   let counter = 0;
   return {
     async put(_orgSchema, _category, blob) {
-      const key = `test-blob-${String(++counter)}`;
+      const key = `test-blob-${String(++counter)}` as BlobKey;
       store.set(key, blob);
       return key;
     },
@@ -125,8 +143,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       orgContext = {
         orgId: TEST_ORG_ID,
-        orgSlug: "test-tickets",
-        orgSchema: testDb.schemaName,
+        orgSlug: "test-tickets" as OrgSlug,
+        orgSchema: testDb.schemaName as OrgSchema,
         tenantDb,
         sealedBox: testSealedBox,
       };
@@ -187,8 +205,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     /** Maps a raw DB user row (snake_case) to a tRPC Context caller. */
     function createAuthedCaller(
       dbRow: {
-        id: string;
-        role_id: string;
+        id: UserId;
+        role_id: RoleIdValue;
         identifier_hash: string;
         encrypted_display_name: Buffer;
       },
@@ -201,11 +219,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         res: mockRes(),
         org: orgContext,
         session: {
-          id: "test-session",
-          token: "test-token",
+          id: "test-session" as SessionId,
+          token: "test-token" as SessionToken,
           userId: dbRow.id,
-          ipToken: "test-ip",
-          uaToken: "test-ua",
+          ipToken: "test-ip" as IpToken,
+          uaToken: "test-ua" as UaToken,
           expiresAt: new Date(Date.now() + 3_600_000),
           twofaVerified: opts?.twofaVerified ?? true,
           webauthnChallenge: null,
@@ -261,7 +279,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .values({
           ticket_id: fixture.ticketId,
           volunteer_id: user.id,
-          key_generation: randomUUID(),
+          key_generation: randomUUID() as KeyGeneration,
           ephemeral_point: Buffer.alloc(32, 0xcc),
           nonce: Buffer.alloc(24, 0xdd),
           wrapped_key: Buffer.alloc(48, 0xee),
@@ -296,9 +314,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .execute();
 
         const caller = createAuthedCaller(user);
-        const keyGen = randomUUID();
+        const keyGen = randomUUID() as KeyGeneration;
         const result = await caller.tickets.create({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as TicketId,
           clientId: clientFixture.clientId,
           queueId: clientFixture.queueId,
           encryptedTitle: testEncryptedContent(0x01),
@@ -349,7 +367,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("rejects unauthenticated access to get", async () => {
         const caller = createUnauthCaller();
         await expectTrpcError(
-          caller.tickets.get({ ticketId: randomUUID() }),
+          caller.tickets.get({ ticketId: randomUUID() as TicketId }),
           "UNAUTHORIZED",
         );
       });
@@ -365,7 +383,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         const followUp = await caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(),
           source: "volunteer",
@@ -383,7 +401,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         await caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(),
           source: "volunteer",
@@ -403,7 +421,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         const note = await caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(0x33),
           source: "volunteer",
@@ -420,7 +438,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         const note = await caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(0x44),
           source: "volunteer",
@@ -441,7 +459,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         const note = await caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(0x66),
           source: "volunteer",
@@ -465,8 +483,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createUnauthCaller();
         await expectTrpcError(
           caller.tickets.createFollowUp({
-            id: crypto.randomUUID(),
-            ticketId: randomUUID(),
+            id: crypto.randomUUID() as FollowupId,
+            ticketId: randomUUID() as TicketId,
             encryptedContent: testEncryptedContent(),
             source: "volunteer",
             type: "message",
@@ -488,7 +506,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         const note = await caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(0x77),
           source: "volunteer",
@@ -520,7 +538,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         const note = await caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(0x78),
           source: "volunteer",
@@ -594,7 +612,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("rejects unauthenticated assignment", async () => {
         const caller = createUnauthCaller();
         await expectTrpcError(
-          caller.tickets.take({ ticketId: randomUUID() }),
+          caller.tickets.take({ ticketId: randomUUID() as TicketId }),
           "UNAUTHORIZED",
         );
       });
@@ -632,7 +650,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         await caller.tickets.close({ ticketId });
 
-        const newKeyGen = randomUUID();
+        const newKeyGen = randomUUID() as KeyGeneration;
         const reopened = await caller.tickets.reopen({
           ticketId,
           newKeyGeneration: newKeyGen,
@@ -1290,7 +1308,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         // Create a follow-up with a key_generation (simulates tk_temp)
-        const tempKeyGen = randomUUID();
+        const tempKeyGen = randomUUID() as KeyGeneration;
         const followUpRow = await tenantDb
           .insertInto("followups")
           .values({
@@ -1725,7 +1743,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("returns a fixed placeholder mask when no field encryptor is configured", async () => {
         const { user, clientId } = await setupUserWithTicket();
         // Set a known alias_hash so the exact-match query finds this client
-        const hash = `mask-hash-${randomUUID().slice(0, 8)}`;
+        const hash = `mask-hash-${randomUUID().slice(0, 8)}` as AliasHash;
         await tenantDb
           .updateTable("clients")
           .set({ alias_hash: hash })
@@ -1743,7 +1761,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("masks decrypted phone numbers to the last four digits", async () => {
         const { user, clientId, phoneId } = await setupUserWithTicket();
-        const hash = `phone-hash-${randomUUID().slice(0, 8)}`;
+        const hash = `phone-hash-${randomUUID().slice(0, 8)}` as AliasHash;
         // Re-encrypt the fixture phone with the real OPS encryptor so the
         // route's decrypt-and-mask path runs against real ciphertext.
         // care-y-ignore-next-line no-plaintext-db-write -- value passes through testFieldEncryptor.encrypt(), result is ciphertext
@@ -1779,8 +1797,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // exclude the merged one.
         const merged = await createTestTicketFixture(tenantDb, { queueId });
         const survivor = await createTestTicketFixture(tenantDb, { queueId });
-        const mergedHash = `merged-hash-${randomUUID().slice(0, 8)}`;
-        const survivorHash = `survivor-hash-${randomUUID().slice(0, 8)}`;
+        const mergedHash =
+          `merged-hash-${randomUUID().slice(0, 8)}` as AliasHash;
+        const survivorHash =
+          `survivor-hash-${randomUUID().slice(0, 8)}` as AliasHash;
         await tenantDb
           .updateTable("clients")
           .set({ alias_hash: mergedHash, merged_into: survivor.clientId })
@@ -1806,7 +1826,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("hides clients whose tickets live in queues the volunteer is not assigned to", async () => {
         const { user } = await setupUserWithTicket();
         const foreign = await createTestTicketFixture(tenantDb);
-        const foreignHash = `foreign-hash-${randomUUID().slice(0, 8)}`;
+        const foreignHash =
+          `foreign-hash-${randomUUID().slice(0, 8)}` as AliasHash;
         await tenantDb
           .updateTable("clients")
           .set({ alias_hash: foreignHash })
@@ -1824,7 +1845,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("returns clients from every queue for admins", async () => {
         const { user } = await setupUserWithTicket(RoleId.ADMIN);
         const foreign = await createTestTicketFixture(tenantDb);
-        const foreignHash = `admin-hash-${randomUUID().slice(0, 8)}`;
+        const foreignHash =
+          `admin-hash-${randomUUID().slice(0, 8)}` as AliasHash;
         await tenantDb
           .updateTable("clients")
           .set({ alias_hash: foreignHash })
@@ -1848,12 +1870,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("Follow-up queries", () => {
       async function createMessage(
         caller: ReturnType<typeof createAuthedCaller>,
-        ticketId: string,
+        ticketId: TicketId,
         fill: number,
         type: "message" | "internal_note" = "message",
       ) {
         return caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(fill),
           source: "volunteer",
@@ -2042,7 +2064,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const volCaller = createAuthedCaller(vol.user);
         await expectTrpcError(
           volCaller.tickets.createFollowUp({
-            id: crypto.randomUUID(),
+            id: crypto.randomUUID() as FollowupId,
             ticketId: vol.ticketId,
             encryptedContent: testEncryptedContent(0x65),
             source: "volunteer",
@@ -2059,7 +2081,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const mgr = await setupUserWithTicket(RoleId.MANAGER);
         const mgrCaller = createAuthedCaller(mgr.user);
         const note = await mgrCaller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId: mgr.ticketId,
           encryptedContent: testEncryptedContent(0x66),
           source: "volunteer",
@@ -2110,7 +2132,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         // Create only message-type follow-ups (not internal_note)
         await caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(0xc1),
           source: "volunteer",
@@ -2119,7 +2141,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           mentionedPseudonyms: [],
         });
         await caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(0xc2),
           source: "volunteer",
@@ -2162,7 +2184,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const { user, ticketId } = await setupUserWithTicket();
         const caller = createAuthedCaller(user);
         const note = await caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(0xd3),
           source: "volunteer",
@@ -2205,7 +2227,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const { user, ticketId } = await setupUserWithTicket();
         const caller = createAuthedCaller(user);
         const note = await caller.tickets.createFollowUp({
-          id: crypto.randomUUID(),
+          id: crypto.randomUUID() as FollowupId,
           ticketId,
           encryptedContent: testEncryptedContent(0xd9),
           source: "volunteer",
@@ -2240,7 +2262,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .insertInto("attachments")
           .values({
             ticket_id: ticketId,
-            blob_key: `absent-blob-${randomUUID().slice(0, 8)}`,
+            blob_key: `absent-blob-${randomUUID().slice(0, 8)}` as BlobKey,
             size_bytes: 64,
           })
           .returning("id")
@@ -2264,7 +2286,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
 
         // Create a follow-up with a key_generation (simulates tk_temp)
-        const tempKeyGen = randomUUID();
+        const tempKeyGen = randomUUID() as KeyGeneration;
         const originalBlob = Buffer.alloc(64, 0xf1);
         const blobKey = await blobStore.put(
           orgContext.orgSchema,
@@ -2383,15 +2405,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
           },
         });
 
-        const auditRow = await tenantDb
-          .selectFrom("audit_log")
-          .select(["event_type", "actor_id"])
-          .where("event_type", "=", "client_tier_changed")
-          .where("actor_id", "=", user.id)
-          .orderBy("created_at", "desc")
-          .executeTakeFirst();
-        expect(auditRow).toBeDefined();
-        expect(auditRow!.event_type).toBe("client_tier_changed");
+        // The route-side audit helper is fire-and-forget (void svc.log),
+        // so the DB write may not have landed when the mutation returns.
+        const auditRow = await vi.waitFor(async () => {
+          const row = await tenantDb
+            .selectFrom("audit_log")
+            .select(["event_type", "actor_id"])
+            .where("event_type", "=", "client_tier_changed")
+            .where("actor_id", "=", user.id)
+            .orderBy("created_at", "desc")
+            .executeTakeFirst();
+          expect(row).toBeDefined();
+          return row!;
+        });
+        expect(auditRow.event_type).toBe("client_tier_changed");
       });
     });
 
@@ -2476,7 +2503,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(user);
         const ticketId = fixture.ticketId;
 
-        const tempKeyGen = randomUUID();
+        const tempKeyGen = randomUUID() as KeyGeneration;
         const followUpRow = await tenantDb
           .insertInto("followups")
           .values({
@@ -2535,7 +2562,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         // Create a follow-up via the route
         const fu = await caller.tickets.createFollowUp({
-          id: randomUUID(),
+          id: randomUUID() as FollowupId,
           ticketId: fixture.ticketId,
           encryptedContent: testEncryptedContent(0xbb),
           source: "volunteer",
@@ -2551,6 +2578,353 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         expect(updated.encryptedContent).toBeTruthy();
         expect(updated.id).toBe(fu.id);
+      });
+    });
+
+    // --- Encrypted Account: volunteer-side offer toggle and reset ---
+
+    /**
+     * Seeds a Secure Link channel for a client. Returns the channel_id.
+     */
+    async function seedSecureLinkChannel(
+      clientId: ClientId,
+      overrides?: { kind?: string; accountOffer?: boolean },
+    ): Promise<ChannelSecret> {
+      const channelId = (randomUUID().replace(/-/g, "") +
+        randomUUID().replace(/-/g, "").slice(0, 16)) as ChannelSecret;
+      await tenantDb
+        .insertInto("portal_channels")
+        .values({
+          channel_id: channelId,
+          client_id: clientId,
+          auth_hash: Buffer.alloc(32, 0xab),
+          client_public: Buffer.alloc(32, 0xcd),
+          has_passphrase: false,
+          status: "active",
+          kind: overrides?.kind ?? "secure_link",
+          account_offer: overrides?.accountOffer ?? false,
+          key_check_ephemeral_point: Buffer.alloc(32, 0x01),
+          key_check_nonce: Buffer.alloc(24, 0x02),
+          key_check_ciphertext: Buffer.alloc(64, 0x03),
+        })
+        .execute();
+      return channelId;
+    }
+
+    /** Seeds a client_accounts row for a client. */
+    async function seedClientAccount(
+      clientId: ClientId,
+    ): Promise<ClientAccountId> {
+      const accountId = randomUUID() as ClientAccountId;
+      await tenantDb
+        .insertInto("client_accounts")
+        .values({
+          id: accountId,
+          client_id: clientId,
+          username_hash: `uh-${randomUUID().slice(0, 8)}` as UsernameHash,
+          salt: Buffer.alloc(16, 0x11),
+          public_key: Buffer.alloc(32, 0x22),
+          auth_hash: Buffer.alloc(32, 0x33),
+        })
+        .execute();
+      return accountId;
+    }
+
+    describe("setAccountOffer", () => {
+      it("flips the flag on an active secure_link channel", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId);
+
+        await caller.tickets.setAccountOffer({
+          ticketId: fixture.ticketId,
+          enabled: true,
+        });
+
+        const channel = await tenantDb
+          .selectFrom("portal_channels")
+          .select("account_offer")
+          .where("client_id", "=", fixture.clientId)
+          .where("status", "=", "active")
+          .executeTakeFirstOrThrow();
+        expect(channel.account_offer).toBe(true);
+
+        // Flip it back
+        await caller.tickets.setAccountOffer({
+          ticketId: fixture.ticketId,
+          enabled: false,
+        });
+        const after = await tenantDb
+          .selectFrom("portal_channels")
+          .select("account_offer")
+          .where("client_id", "=", fixture.clientId)
+          .where("status", "=", "active")
+          .executeTakeFirstOrThrow();
+        expect(after.account_offer).toBe(false);
+      });
+
+      it("404s when no active channel exists", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        await expectTrpcError(
+          caller.tickets.setAccountOffer({
+            ticketId: fixture.ticketId,
+            enabled: true,
+          }),
+          "NOT_FOUND",
+        );
+      });
+
+      it("404s on an account-kind channel", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
+
+        await expectTrpcError(
+          caller.tickets.setAccountOffer({
+            ticketId: fixture.ticketId,
+            enabled: true,
+          }),
+          "NOT_FOUND",
+        );
+      });
+
+      it("denies a volunteer without ticket access", async () => {
+        const { user: _user, ...fixture } = await setupUserWithTicket();
+        // Create a second user with no queue membership
+        const otherUser = await createTestUser(tenantDb);
+        const otherCaller = createAuthedCaller(otherUser);
+
+        await seedSecureLinkChannel(fixture.clientId);
+
+        await expectTrpcError(
+          otherCaller.tickets.setAccountOffer({
+            ticketId: fixture.ticketId,
+            enabled: true,
+          }),
+          "FORBIDDEN",
+        );
+      });
+
+      it("emits account_offer_changed audit event with pseudonym only", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId);
+
+        await caller.tickets.setAccountOffer({
+          ticketId: fixture.ticketId,
+          enabled: true,
+        });
+
+        const auditRow = await vi.waitFor(async () => {
+          const row = await tenantDb
+            .selectFrom("audit_log")
+            .select(["event_type", "actor_id", "metadata"])
+            .where("event_type", "=", "account_offer_changed")
+            .where("actor_id", "=", user.id)
+            .orderBy("created_at", "desc")
+            .executeTakeFirst();
+          expect(row).toBeDefined();
+          return row!;
+        });
+        expect(auditRow.event_type).toBe("account_offer_changed");
+        // Metadata carries only the operation, no username, account id, or channel id
+        const meta = auditRow.metadata as Record<string, unknown>;
+        expect(meta).toEqual({ operation: "enabled" });
+        expect(meta).not.toHaveProperty("username");
+        expect(meta).not.toHaveProperty("accountId");
+        expect(meta).not.toHaveProperty("channelId");
+      });
+    });
+
+    describe("resetClientAccount", () => {
+      it("removes account and sessions, revokes channel, resets tier", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        // Set tier to account
+        await tenantDb
+          .updateTable("clients")
+          .set({ communication_tier: "account" })
+          .where("id", "=", fixture.clientId)
+          .execute();
+
+        // Seed an account-kind channel
+        await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
+        const accountId = await seedClientAccount(fixture.clientId);
+
+        // Seed a session
+        await tenantDb
+          .insertInto("client_account_sessions")
+          .values({
+            account_id: accountId,
+            token_hash: Buffer.alloc(32, 0x44),
+            expires_at: new Date(Date.now() + 3_600_000),
+          })
+          .execute();
+
+        // Seed a portal message to verify copy deletion
+        const copyFollowup = await tenantDb
+          .insertInto("followups")
+          .values({
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.alloc(64, 0x11),
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+        await tenantDb
+          .insertInto("portal_messages")
+          .values({
+            channel_id: (
+              await tenantDb
+                .selectFrom("portal_channels")
+                .select("id")
+                .where("client_id", "=", fixture.clientId)
+                .where("kind", "=", "account")
+                .executeTakeFirstOrThrow()
+            ).id,
+            followup_id: copyFollowup.id,
+            direction: "from_client",
+            ephemeral_point: Buffer.alloc(32, 0x55),
+            nonce: Buffer.alloc(24, 0x66),
+            ciphertext: Buffer.alloc(64, 0x77),
+          })
+          .execute();
+
+        await caller.tickets.resetClientAccount({
+          ticketId: fixture.ticketId,
+        });
+
+        // Account row deleted
+        const acct = await tenantDb
+          .selectFrom("client_accounts")
+          .select("id")
+          .where("client_id", "=", fixture.clientId)
+          .executeTakeFirst();
+        expect(acct).toBeUndefined();
+
+        // Sessions cascaded
+        const sessions = await tenantDb
+          .selectFrom("client_account_sessions")
+          .select("id")
+          .where("account_id", "=", accountId)
+          .execute();
+        expect(sessions).toHaveLength(0);
+
+        // Tier reset to sms_email
+        const client = await tenantDb
+          .selectFrom("clients")
+          .select("communication_tier")
+          .where("id", "=", fixture.clientId)
+          .executeTakeFirstOrThrow();
+        expect(client.communication_tier).toBe("sms_email");
+      });
+
+      it("404s when the client has no account", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        await expectTrpcError(
+          caller.tickets.resetClientAccount({
+            ticketId: fixture.ticketId,
+          }),
+          "NOT_FOUND",
+        );
+      });
+
+      it("emits client_account_reset audit event with pseudonym only", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        await tenantDb
+          .updateTable("clients")
+          .set({ communication_tier: "account" })
+          .where("id", "=", fixture.clientId)
+          .execute();
+        await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
+        await seedClientAccount(fixture.clientId);
+
+        await caller.tickets.resetClientAccount({
+          ticketId: fixture.ticketId,
+        });
+
+        const auditRow = await vi.waitFor(async () => {
+          const row = await tenantDb
+            .selectFrom("audit_log")
+            .select(["event_type", "actor_id", "metadata"])
+            .where("event_type", "=", "client_account_reset")
+            .where("actor_id", "=", user.id)
+            .orderBy("created_at", "desc")
+            .executeTakeFirst();
+          expect(row).toBeDefined();
+          return row!;
+        });
+        expect(auditRow.event_type).toBe("client_account_reset");
+        const meta = auditRow.metadata as Record<string, unknown>;
+        expect(meta).toEqual({ operation: "reset" });
+        expect(meta).not.toHaveProperty("username");
+        expect(meta).not.toHaveProperty("accountId");
+        expect(meta).not.toHaveProperty("channelId");
+      });
+    });
+
+    describe("ticket detail portal fields (account)", () => {
+      it("carries kind and accountOffer for a secure_link channel", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId, {
+          kind: "secure_link",
+          accountOffer: true,
+        });
+
+        // Update the tier so the fixture is consistent
+        await tenantDb
+          .updateTable("clients")
+          .set({ communication_tier: "secure_link" })
+          .where("id", "=", fixture.clientId)
+          .execute();
+
+        const detail = await caller.tickets.get({
+          ticketId: fixture.ticketId,
+        });
+        expect(detail.portalCapable).toBe(true);
+        expect(detail.portalChannel).not.toBeNull();
+        expect(detail.portalChannel!.kind).toBe("secure_link");
+        expect(detail.portalChannel!.accountOffer).toBe(true);
+      });
+
+      it("carries kind and accountOffer for an account channel", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
+
+        await tenantDb
+          .updateTable("clients")
+          .set({ communication_tier: "account" })
+          .where("id", "=", fixture.clientId)
+          .execute();
+
+        const detail = await caller.tickets.get({
+          ticketId: fixture.ticketId,
+        });
+        expect(detail.portalCapable).toBe(true);
+        expect(detail.portalChannel).not.toBeNull();
+        expect(detail.portalChannel!.kind).toBe("account");
+        expect(detail.portalChannel!.accountOffer).toBe(false);
+      });
+
+      it("portalCapable is true for account clients", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
+
+        const detail = await caller.tickets.get({
+          ticketId: fixture.ticketId,
+        });
+        expect(detail.portalCapable).toBe(true);
       });
     });
   },

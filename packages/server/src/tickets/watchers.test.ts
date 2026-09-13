@@ -13,16 +13,17 @@ import {
 } from "./access.js";
 import { createWatchersService, type WatchersService } from "./watchers.js";
 import { ForbiddenError } from "../errors.js";
+import type { UserId, TicketId, QueueId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("WatchersService (DB)", () => {
   let testDb: TestDb;
   let access: TicketAccessChecker;
   let svc: WatchersService;
-  let userA: string;
-  let userB: string;
-  let outsider: string;
-  let ticketId: string;
-  let queueId: string;
+  let userA: UserId;
+  let userB: UserId;
+  let outsider: UserId;
+  let ticketId: TicketId;
+  let queueId: QueueId;
 
   beforeAll(async () => {
     testDb = await createTestDb();

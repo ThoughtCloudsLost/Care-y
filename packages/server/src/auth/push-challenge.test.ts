@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createTestDb, type TestDb, TEST_OPS_KEY } from "../test-utils.js";
+import {
+  createTestDb,
+  createTestUser,
+  type TestDb,
+  TEST_OPS_KEY,
+} from "../test-utils.js";
 import {
   createPushChallengeService,
   hashSessionToken,
@@ -9,7 +14,23 @@ import type { PushNotificationSender } from "../notifications/push.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { hkdfSync } from "node:crypto";
-import { pushChallengeIdSchema, pushApprovalSchema } from "@care-y/shared";
+import {
+  pushChallengeIdSchema,
+  pushApprovalSchema,
+  type UserId,
+  type SessionToken,
+  type PushChallengeId,
+} from "@care-y/shared";
+
+// ---------------------------------------------------------------------------
+// Narrowing helper: asserts the challenge was actually created (not the
+// empty-string sentinel returned when a user has no push subscriptions).
+// ---------------------------------------------------------------------------
+
+function requireChallengeId(c: PushChallengeId | ""): PushChallengeId {
+  if (c === "") throw new Error("expected a challenge to have been created");
+  return c;
+}
 
 // ---------------------------------------------------------------------------
 // Test HMAC key (derived the same way as production, from test OPS key)
@@ -38,7 +59,7 @@ function createMockPushSender(
         for (const uid of userIds) {
           await (tDb as Kysely<TenantDatabase>)
             .deleteFrom("push_subscriptions")
-            .where("user_id", "=", uid)
+            .where("user_id", "=", uid as UserId)
             .execute();
         }
       }
@@ -59,24 +80,26 @@ function createMockPushSender(
 describe("hashSessionToken", () => {
   it("produces deterministic output for the same input", () => {
     const key = Buffer.alloc(32, 0xab);
-    const hash1 = hashSessionToken("session-abc", key);
-    const hash2 = hashSessionToken("session-abc", key);
+    const token = "session-abc" as SessionToken;
+    const hash1 = hashSessionToken(token, key);
+    const hash2 = hashSessionToken(token, key);
     expect(hash1).toBe(hash2);
     expect(hash1).toHaveLength(64); // SHA-256 hex
   });
 
   it("produces different output for different tokens", () => {
     const key = Buffer.alloc(32, 0xab);
-    const hash1 = hashSessionToken("session-abc", key);
-    const hash2 = hashSessionToken("session-xyz", key);
+    const hash1 = hashSessionToken("session-abc" as SessionToken, key);
+    const hash2 = hashSessionToken("session-xyz" as SessionToken, key);
     expect(hash1).not.toBe(hash2);
   });
 
   it("produces different output for different keys", () => {
     const key1 = Buffer.alloc(32, 0xab);
     const key2 = Buffer.alloc(32, 0xcd);
-    const hash1 = hashSessionToken("session-abc", key1);
-    const hash2 = hashSessionToken("session-abc", key2);
+    const token = "session-abc" as SessionToken;
+    const hash1 = hashSessionToken(token, key1);
+    const hash2 = hashSessionToken(token, key2);
     expect(hash1).not.toBe(hash2);
   });
 });
@@ -118,9 +141,9 @@ describe("push Zod schemas", () => {
 describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
   let testDb: TestDb;
   let service: PushChallengeService;
-  let testUserId: string;
-  const SESSION_TOKEN_A = "session-token-a";
-  const SESSION_TOKEN_B = "session-token-b";
+  let testUserId: UserId;
+  const SESSION_TOKEN_A = "session-token-a" as SessionToken;
+  const SESSION_TOKEN_B = "session-token-b" as SessionToken;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -133,18 +156,8 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
       .values({ pii_retention_days: null })
       .execute();
 
-    // Create a test user
-    const user = await testDb.db
-      .insertInto("users")
-      .values({
-        identifier_hash: "test-hash-push-001",
-        encrypted_identifier: Buffer.from("encrypted-id"),
-        password_hash: "scrypt:" + "aa".repeat(16) + ":" + "bb".repeat(64),
-        encrypted_display_name: Buffer.from("encrypted-name"),
-        role_id: "volunteer",
-      })
-      .returning("id")
-      .executeTakeFirstOrThrow();
+    // Create a test user via factory (returns branded UserId)
+    const user = await createTestUser(testDb.db);
     testUserId = user.id;
 
     // Create a push subscription for the test user
@@ -174,7 +187,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
     const row = await testDb.db
       .selectFrom("push_challenges")
       .selectAll()
-      .where("id", "=", result.challengeId)
+      .where("id", "=", requireChallengeId(result.challengeId))
       .executeTakeFirstOrThrow();
     expect(row.status).toBe("pending");
     expect(row.user_id).toBe(testUserId);
@@ -183,17 +196,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
 
   it("returns sent: false when user has no subscriptions", async () => {
     // Create a second user with no subscriptions
-    const user2 = await testDb.db
-      .insertInto("users")
-      .values({
-        identifier_hash: "test-hash-push-002",
-        encrypted_identifier: Buffer.from("encrypted-id-2"),
-        password_hash: "scrypt:" + "aa".repeat(16) + ":" + "bb".repeat(64),
-        encrypted_display_name: Buffer.from("encrypted-name-2"),
-        role_id: "volunteer",
-      })
-      .returning("id")
-      .executeTakeFirstOrThrow();
+    const user2 = await createTestUser(testDb.db);
 
     const result = await service.sendChallenge(user2.id, SESSION_TOKEN_A);
     expect(result.sent).toBe(false);
@@ -218,7 +221,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
     const firstRow = await testDb.db
       .selectFrom("push_challenges")
       .select("status")
-      .where("id", "=", first.challengeId)
+      .where("id", "=", requireChallengeId(first.challengeId))
       .executeTakeFirstOrThrow();
     expect(firstRow.status).toBe("expired");
 
@@ -226,7 +229,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
     const secondRow = await testDb.db
       .selectFrom("push_challenges")
       .select("status")
-      .where("id", "=", second.challengeId)
+      .where("id", "=", requireChallengeId(second.challengeId))
       .executeTakeFirstOrThrow();
     expect(secondRow.status).toBe("pending");
   });
@@ -238,7 +241,10 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
       testUserId,
       SESSION_TOKEN_A,
     );
-    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
+    const result = await service.pollChallenge(
+      requireChallengeId(challengeId),
+      SESSION_TOKEN_A,
+    );
     expect(result.status).toBe("pending");
   });
 
@@ -248,13 +254,16 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
       SESSION_TOKEN_A,
     );
     // Poll with a different session token
-    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_B);
+    const result = await service.pollChallenge(
+      requireChallengeId(challengeId),
+      SESSION_TOKEN_B,
+    );
     expect(result.status).toBe("expired");
   });
 
   it("returns expired for a nonexistent challenge ID", async () => {
     const result = await service.pollChallenge(
-      "00000000-0000-0000-0000-000000000000",
+      "00000000-0000-0000-0000-000000000000" as PushChallengeId,
       SESSION_TOKEN_A,
     );
     expect(result.status).toBe("expired");
@@ -270,17 +279,20 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
     await testDb.db
       .updateTable("push_challenges")
       .set({ expires_at: new Date(Date.now() - 1000) })
-      .where("id", "=", challengeId)
+      .where("id", "=", requireChallengeId(challengeId))
       .execute();
 
-    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
+    const result = await service.pollChallenge(
+      requireChallengeId(challengeId),
+      SESSION_TOKEN_A,
+    );
     expect(result.status).toBe("expired");
 
     // DB row should also be marked expired (lazy expiry)
     const row = await testDb.db
       .selectFrom("push_challenges")
       .select("status")
-      .where("id", "=", challengeId)
+      .where("id", "=", requireChallengeId(challengeId))
       .executeTakeFirstOrThrow();
     expect(row.status).toBe("expired");
   });
@@ -292,10 +304,16 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
       testUserId,
       SESSION_TOKEN_A,
     );
-    const approved = await service.approveChallenge(challengeId, testUserId);
+    const approved = await service.approveChallenge(
+      requireChallengeId(challengeId),
+      testUserId,
+    );
     expect(approved).toBe(true);
 
-    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
+    const result = await service.pollChallenge(
+      requireChallengeId(challengeId),
+      SESSION_TOKEN_A,
+    );
     expect(result.status).toBe("approved");
   });
 
@@ -304,9 +322,9 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
       testUserId,
       SESSION_TOKEN_A,
     );
-    await service.approveChallenge(challengeId, testUserId);
+    await service.approveChallenge(requireChallengeId(challengeId), testUserId);
     const secondApproval = await service.approveChallenge(
-      challengeId,
+      requireChallengeId(challengeId),
       testUserId,
     );
     expect(secondApproval).toBe(false);
@@ -318,8 +336,8 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
       SESSION_TOKEN_A,
     );
     const result = await service.approveChallenge(
-      challengeId,
-      "00000000-0000-0000-0000-999999999999",
+      requireChallengeId(challengeId),
+      "00000000-0000-4000-8000-999999999999" as UserId,
     );
     expect(result).toBe(false);
   });
@@ -332,10 +350,13 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
     await testDb.db
       .updateTable("push_challenges")
       .set({ expires_at: new Date(Date.now() - 1000) })
-      .where("id", "=", challengeId)
+      .where("id", "=", requireChallengeId(challengeId))
       .execute();
 
-    const result = await service.approveChallenge(challengeId, testUserId);
+    const result = await service.approveChallenge(
+      requireChallengeId(challengeId),
+      testUserId,
+    );
     expect(result).toBe(false);
   });
 
@@ -346,10 +367,16 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
       testUserId,
       SESSION_TOKEN_A,
     );
-    const denied = await service.denyChallenge(challengeId, testUserId);
+    const denied = await service.denyChallenge(
+      requireChallengeId(challengeId),
+      testUserId,
+    );
     expect(denied).toBe(true);
 
-    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
+    const result = await service.pollChallenge(
+      requireChallengeId(challengeId),
+      SESSION_TOKEN_A,
+    );
     expect(result.status).toBe("denied");
   });
 
@@ -358,8 +385,11 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
       testUserId,
       SESSION_TOKEN_A,
     );
-    await service.approveChallenge(challengeId, testUserId);
-    const denied = await service.denyChallenge(challengeId, testUserId);
+    await service.approveChallenge(requireChallengeId(challengeId), testUserId);
+    const denied = await service.denyChallenge(
+      requireChallengeId(challengeId),
+      testUserId,
+    );
     expect(denied).toBe(false);
   });
 
@@ -399,7 +429,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
         expires_at: new Date(Date.now() - 60_000),
         status: "expired",
       })
-      .where("id", "in", [c1, c2])
+      .where("id", "in", [requireChallengeId(c1), requireChallengeId(c2)])
       .execute();
 
     const deleted = await service.cleanupExpired();
@@ -434,17 +464,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
 
   it("returns false when user has no subscriptions", async () => {
     // Create a user with no subscriptions
-    const user3 = await testDb.db
-      .insertInto("users")
-      .values({
-        identifier_hash: "test-hash-push-003",
-        encrypted_identifier: Buffer.from("encrypted-id-3"),
-        password_hash: "scrypt:" + "aa".repeat(16) + ":" + "bb".repeat(64),
-        encrypted_display_name: Buffer.from("encrypted-name-3"),
-        role_id: "volunteer",
-      })
-      .returning("id")
-      .executeTakeFirstOrThrow();
+    const user3 = await createTestUser(testDb.db);
 
     const result = await service.sendTestPush(user3.id);
     expect(result).toBe(false);
@@ -452,17 +472,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
 
   it("returns false when all subscriptions are expired (410)", async () => {
     // Create a user with a subscription, using the allExpired mock sender
-    const user4 = await testDb.db
-      .insertInto("users")
-      .values({
-        identifier_hash: "test-hash-push-004",
-        encrypted_identifier: Buffer.from("encrypted-id-4"),
-        password_hash: "scrypt:" + "aa".repeat(16) + ":" + "bb".repeat(64),
-        encrypted_display_name: Buffer.from("encrypted-name-4"),
-        role_id: "volunteer",
-      })
-      .returning("id")
-      .executeTakeFirstOrThrow();
+    const user4 = await createTestUser(testDb.db);
 
     await testDb.db
       .insertInto("push_subscriptions")
@@ -495,13 +505,22 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
     );
     expect(sent).toBe(true);
 
-    const pending = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
+    const pending = await service.pollChallenge(
+      requireChallengeId(challengeId),
+      SESSION_TOKEN_A,
+    );
     expect(pending.status).toBe("pending");
 
-    const approved = await service.approveChallenge(challengeId, testUserId);
+    const approved = await service.approveChallenge(
+      requireChallengeId(challengeId),
+      testUserId,
+    );
     expect(approved).toBe(true);
 
-    const final = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
+    const final = await service.pollChallenge(
+      requireChallengeId(challengeId),
+      SESSION_TOKEN_A,
+    );
     expect(final.status).toBe("approved");
   });
 
@@ -511,10 +530,16 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
       SESSION_TOKEN_A,
     );
 
-    const denied = await service.denyChallenge(challengeId, testUserId);
+    const denied = await service.denyChallenge(
+      requireChallengeId(challengeId),
+      testUserId,
+    );
     expect(denied).toBe(true);
 
-    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
+    const result = await service.pollChallenge(
+      requireChallengeId(challengeId),
+      SESSION_TOKEN_A,
+    );
     expect(result.status).toBe("denied");
   });
 });

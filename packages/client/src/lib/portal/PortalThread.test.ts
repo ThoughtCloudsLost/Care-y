@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll } from "vitest";
-import { render } from "@testing-library/svelte";
+// @vitest-environment jsdom
+import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
+import { render, cleanup } from "@testing-library/svelte";
 import {
   getSodium,
   generatePortalSeed,
@@ -9,6 +10,20 @@ import {
   toRistrettoPoint,
 } from "@care-y/crypto";
 import PortalThread from "./PortalThread.svelte";
+
+// IntersectionObserver stub for DecryptPlaceholder
+vi.stubGlobal(
+  "IntersectionObserver",
+  vi.fn(function (this: {
+    observe: () => void;
+    disconnect: () => void;
+    unobserve: () => void;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
 
 beforeAll(async () => {
   await getSodium();
@@ -42,6 +57,8 @@ function makeMessage(
 }
 
 describe("PortalThread", () => {
+  afterEach(cleanup);
+
   it("renders empty state when no messages", () => {
     const seed = generatePortalSeed();
     const keypair = derivePortalKeypair(seed);
@@ -57,7 +74,7 @@ describe("PortalThread", () => {
     expect(getByTestId("portal-empty-state")).toBeTruthy();
   });
 
-  it("renders messages with correct direction", () => {
+  it("renders messages with correct direction via ConversationBubble", () => {
     const seed = generatePortalSeed();
     const keypair = derivePortalKeypair(seed);
 
@@ -66,7 +83,7 @@ describe("PortalThread", () => {
       makeMessage("Thanks for the help", "from_client", keypair.clientPublic),
     ];
 
-    const { getByTestId } = render(PortalThread, {
+    const { getByTestId, container } = render(PortalThread, {
       props: {
         messages,
         clientPrivate: keypair.clientPrivate,
@@ -76,6 +93,36 @@ describe("PortalThread", () => {
 
     const thread = getByTestId("portal-thread");
     expect(thread.getAttribute("role")).toBe("log");
+
+    const bubbles = container.querySelectorAll(".msg");
+    expect(bubbles.length).toBe(2);
+
+    const received = container.querySelector('[data-direction="received"]');
+    expect(received).toBeTruthy();
+
+    const sent = container.querySelector('[data-direction="sent"]');
+    expect(sent).toBeTruthy();
+  });
+
+  it("shows speaker eyebrow on received bubbles only", () => {
+    const seed = generatePortalSeed();
+    const keypair = derivePortalKeypair(seed);
+
+    const messages = [
+      makeMessage("Hello from support", "to_client", keypair.clientPublic),
+      makeMessage("Thanks for the help", "from_client", keypair.clientPublic),
+    ];
+
+    const { container } = render(PortalThread, {
+      props: {
+        messages,
+        clientPrivate: keypair.clientPrivate,
+        loading: false,
+      },
+    });
+
+    const speakerLabels = container.querySelectorAll(".msg-who");
+    expect(speakerLabels.length).toBe(1);
   });
 
   it("shows edited marker when editedAt is present", () => {
@@ -99,7 +146,7 @@ describe("PortalThread", () => {
       },
     });
 
-    const editedMarkers = container.querySelectorAll(".edited-marker");
+    const editedMarkers = container.querySelectorAll(".msg-edited");
     expect(editedMarkers.length).toBeGreaterThan(0);
   });
 
@@ -115,7 +162,31 @@ describe("PortalThread", () => {
       },
     });
 
-    // Should not show empty state during loading
     expect(queryByTestId("portal-empty-state")).toBeNull();
+    expect(queryByTestId("portal-loading")).toBeTruthy();
+  });
+
+  it("provides accessible names on bubble wrappers", () => {
+    const seed = generatePortalSeed();
+    const keypair = derivePortalKeypair(seed);
+
+    const messages = [
+      makeMessage("Hello", "to_client", keypair.clientPublic),
+      makeMessage("Hi back", "from_client", keypair.clientPublic),
+    ];
+
+    const { container } = render(PortalThread, {
+      props: {
+        messages,
+        clientPrivate: keypair.clientPrivate,
+        loading: false,
+      },
+    });
+
+    const articles = container.querySelectorAll('[role="article"]');
+    expect(articles.length).toBe(2);
+    for (const article of articles) {
+      expect(article.getAttribute("aria-label")).toBeTruthy();
+    }
   });
 });

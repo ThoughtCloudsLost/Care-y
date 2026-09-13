@@ -134,7 +134,7 @@ export async function createScopedTwoFactorServices(
       org.tenantDb,
       provider,
       deps.resolveCallerId,
-      org.orgSchema,
+      { orgId: org.orgId, orgSchema: org.orgSchema },
     );
   } catch (err: unknown) {
     // NotFoundError: telephony not configured for this org. SMS 2FA unavailable.

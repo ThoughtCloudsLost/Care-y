@@ -14,12 +14,21 @@ import type { TicketAccessChecker } from "./access.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type {
+  TicketId,
+  FollowupId,
+  RecordingId,
+  AttachmentId,
+  BlobKey,
+  UserId,
+  OrgSchema,
+} from "@care-y/shared";
 
 export interface RecordingRecord {
-  readonly id: string;
-  readonly ticketId: string;
-  readonly followupId: string | null;
-  readonly blobKey: string;
+  readonly id: RecordingId;
+  readonly ticketId: TicketId;
+  readonly followupId: FollowupId | null;
+  readonly blobKey: BlobKey;
   readonly sizeBytes: number;
   readonly durationSeconds: number | null;
   readonly createdAt: Date;
@@ -27,10 +36,10 @@ export interface RecordingRecord {
 }
 
 export interface AttachmentRecord {
-  readonly id: string;
-  readonly ticketId: string;
-  readonly followupId: string | null;
-  readonly blobKey: string;
+  readonly id: AttachmentId;
+  readonly ticketId: TicketId;
+  readonly followupId: FollowupId | null;
+  readonly blobKey: BlobKey;
   readonly sizeBytes: number;
   readonly encryptedFilename: Buffer | null;
   readonly contentType: string | null;
@@ -40,61 +49,64 @@ export interface AttachmentRecord {
 
 export interface MediaService {
   createRecording(input: {
-    ticketId: string;
-    followupId?: string;
-    blobKey: string;
+    ticketId: TicketId;
+    followupId?: FollowupId;
+    blobKey: BlobKey;
     sizeBytes: number;
     durationSeconds?: number;
   }): Promise<RecordingRecord>;
 
   createAttachment(input: {
-    ticketId: string;
-    followupId?: string;
-    blobKey: string;
+    ticketId: TicketId;
+    followupId?: FollowupId;
+    blobKey: BlobKey;
     sizeBytes: number;
     encryptedFilename?: Buffer;
     contentType?: string;
   }): Promise<AttachmentRecord>;
 
-  getRecording(userId: string, recordingId: string): Promise<RecordingRecord>;
+  getRecording(
+    userId: UserId,
+    recordingId: RecordingId,
+  ): Promise<RecordingRecord>;
   getAttachment(
-    userId: string,
-    attachmentId: string,
+    userId: UserId,
+    attachmentId: AttachmentId,
   ): Promise<AttachmentRecord>;
 
-  softDeleteRecording(recordingId: string): Promise<void>;
-  softDeleteAttachment(attachmentId: string): Promise<void>;
+  softDeleteRecording(recordingId: RecordingId): Promise<void>;
+  softDeleteAttachment(attachmentId: AttachmentId): Promise<void>;
 
-  hardDeleteRecording(recordingId: string): Promise<void>;
-  hardDeleteAttachment(attachmentId: string): Promise<void>;
+  hardDeleteRecording(recordingId: RecordingId): Promise<void>;
+  hardDeleteAttachment(attachmentId: AttachmentId): Promise<void>;
 
   listRecordings(
-    userId: string,
-    ticketId: string,
+    userId: UserId,
+    ticketId: TicketId,
     opts: {
       limit: number;
-      cursor?: string;
+      cursor?: RecordingId;
       direction?: "newer" | "older";
-      followupId?: string;
+      followupId?: FollowupId;
     },
   ): Promise<RecordingRecord[]>;
   listAttachments(
-    userId: string,
-    ticketId: string,
+    userId: UserId,
+    ticketId: TicketId,
     opts: {
       limit: number;
-      cursor?: string;
+      cursor?: AttachmentId;
       direction?: "newer" | "older";
-      followupId?: string;
+      followupId?: FollowupId;
     },
   ): Promise<AttachmentRecord[]>;
 }
 
 function toRecordingRecord(row: {
-  id: string;
-  ticket_id: string;
-  followup_id: string | null;
-  blob_key: string;
+  id: RecordingId;
+  ticket_id: TicketId;
+  followup_id: FollowupId | null;
+  blob_key: BlobKey;
   size_bytes: number;
   duration_seconds: number | null;
   created_at: Date;
@@ -113,10 +125,10 @@ function toRecordingRecord(row: {
 }
 
 function toAttachmentRecord(row: {
-  id: string;
-  ticket_id: string;
-  followup_id: string | null;
-  blob_key: string;
+  id: AttachmentId;
+  ticket_id: TicketId;
+  followup_id: FollowupId | null;
+  blob_key: BlobKey;
   size_bytes: number;
   encrypted_filename: Buffer | null;
   content_type: string | null;
@@ -385,9 +397,9 @@ export const MEDIA_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
 
 export function registerMediaCleanupHandler(
   jobQueue: JobQueue,
-  getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>,
+  getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>,
   blobStore: BlobStore,
-  listOrgSchemas: () => Promise<string[]>,
+  listOrgSchemas: () => Promise<OrgSchema[]>,
 ): void {
   jobQueue.process(MEDIA_CLEANUP_QUEUE, async () => {
     try {

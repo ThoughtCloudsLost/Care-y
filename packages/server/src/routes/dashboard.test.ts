@@ -17,7 +17,17 @@ import { createDashboardRouter } from "./dashboard.js";
 import { createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { UsersTable } from "../db/types.js";
-import { RoleId, ErrorCode } from "@care-y/shared";
+import { RoleId, ErrorCode, type RoleIdValue } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+} from "@care-y/shared";
 import {
   createTestDb,
   createTestUser,
@@ -35,29 +45,33 @@ const factory = createCallerFactory(createDashboardRouter());
 // access, and a wrongly admitted call would surface as
 // INTERNAL_SERVER_ERROR from the stub, never as the asserted FORBIDDEN.
 
+const UNIT_USER_ID = "00000000-0000-4000-8000-000000001001" as UserId;
+const UNIT_ORG_ID = "00000000-0000-4000-8000-000000001100" as OrgId;
+const UNIT_ORG_SCHEMA = "org_00000000-0000-4000-8000-000000001100" as OrgSchema;
+
 function createAdminContext(): Context {
   return {
     req: mockReq(),
     res: mockRes(),
     org: {
-      orgId: "org-dashboard-unit",
-      orgSlug: "test-org",
-      orgSchema: "org_test",
+      orgId: UNIT_ORG_ID,
+      orgSlug: "test-org" as OrgSlug,
+      orgSchema: UNIT_ORG_SCHEMA,
       tenantDb: stubTenantDbDefaultRoles(),
       sealedBox: {} as OrgContext["sealedBox"],
     },
     session: {
-      id: "sess-1",
-      token: "tok-1",
-      userId: "user-1",
-      ipToken: "ip-tok",
-      uaToken: "ua-tok",
+      id: "00000000-0000-4000-8000-000000100010" as SessionId,
+      token: "tok-1" as SessionToken,
+      userId: UNIT_USER_ID,
+      ipToken: "ip-tok" as IpToken,
+      uaToken: "ua-tok" as UaToken,
       expiresAt: new Date(Date.now() + 3_600_000),
       twofaVerified: true,
       webauthnChallenge: null,
     },
     user: {
-      id: "user-1",
+      id: UNIT_USER_ID,
       encryptedIdentifier: "encrypted-identifier",
       encryptedDisplayName: "encrypted-name",
       encryptedPreferredLocale: null,
@@ -72,7 +86,7 @@ function createUnauthenticatedContext(): Context {
   return { ...createAdminContext(), session: null, user: null };
 }
 
-function createContextWithRole(roleId: string): Context {
+function createContextWithRole(roleId: RoleIdValue): Context {
   const base = createAdminContext();
   return {
     ...base,
@@ -140,7 +154,9 @@ describe("createDashboardRouter", () => {
     }
 
     it("fails closed for an unrecognized role id", async () => {
-      const caller = factory(createContextWithRole("not-a-real-role"));
+      const caller = factory(
+        createContextWithRole("not-a-real-role" as RoleIdValue),
+      );
 
       await expectTrpcError(
         caller.getSetupChecklist(),
@@ -173,18 +189,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
         req: mockReq(),
         res: mockRes(),
         org: {
-          orgId: "org-dashboard-db-test",
-          orgSlug: "test-org",
-          orgSchema: testDb.schemaName,
+          orgId: UNIT_ORG_ID,
+          orgSlug: "test-org" as OrgSlug,
+          orgSchema: testDb.schemaName as OrgSchema,
           tenantDb: testDb.db,
           sealedBox: {} as OrgContext["sealedBox"],
         },
         session: {
-          id: "sess-db-1",
-          token: "tok-db-1",
+          id: "00000000-0000-4000-8000-000000100020" as SessionId,
+          token: "tok-db-1" as SessionToken,
           userId: adminUser.id,
-          ipToken: "ip-tok",
-          uaToken: "ua-tok",
+          ipToken: "ip-tok" as IpToken,
+          uaToken: "ua-tok" as UaToken,
           expiresAt: new Date(Date.now() + 3_600_000),
           twofaVerified: true,
           webauthnChallenge: null,

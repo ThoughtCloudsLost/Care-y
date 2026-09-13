@@ -27,6 +27,7 @@ import { createHash } from "node:crypto";
 import { createCleanupInterval } from "../utils/intervals.js";
 import { ConfigError } from "../errors.js";
 import { TOTP_PERIOD, TOTP_VERIFY_WINDOW } from "./totp.js";
+import type { OrgId, UserId } from "@care-y/shared";
 
 const CLEANUP_INTERVAL_MS = 60_000;
 
@@ -46,9 +47,9 @@ export const TOTP_REPLAY_TTL_MS =
 
 export interface TotpReplayCache {
   /** True when this exact code was already accepted for this user recently. */
-  isUsed(orgId: string, userId: string, code: string): boolean;
+  isUsed(orgId: OrgId, userId: UserId, code: string): boolean;
   /** Records an accepted code so repeats inside the TTL are rejected. */
-  markUsed(orgId: string, userId: string, code: string): void;
+  markUsed(orgId: OrgId, userId: UserId, code: string): void;
 }
 
 /**
@@ -115,7 +116,7 @@ export function createInMemoryTotpReplayCache(
   /** Entry key ("orgId:userId:codeHash") to expiry timestamp in ms. */
   const used = new Map<string, number>();
 
-  function entryKey(orgId: string, userId: string, code: string): string {
+  function entryKey(orgId: OrgId, userId: UserId, code: string): string {
     const codeHash = createHash("sha256").update(code).digest("hex");
     return `${orgId}:${userId}:${codeHash}`;
   }
@@ -130,7 +131,7 @@ export function createInMemoryTotpReplayCache(
   });
 
   return {
-    isUsed(orgId: string, userId: string, code: string): boolean {
+    isUsed(orgId: OrgId, userId: UserId, code: string): boolean {
       const key = entryKey(orgId, userId, code);
       const expiresAt = used.get(key);
       if (expiresAt === undefined) {
@@ -143,7 +144,7 @@ export function createInMemoryTotpReplayCache(
       return true;
     },
 
-    markUsed(orgId: string, userId: string, code: string): void {
+    markUsed(orgId: OrgId, userId: UserId, code: string): void {
       used.set(entryKey(orgId, userId, code), now() + TOTP_REPLAY_TTL_MS);
     },
   };

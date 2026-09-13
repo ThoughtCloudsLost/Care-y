@@ -24,6 +24,7 @@ import {
   ErrorCode,
   Permission,
 } from "@care-y/shared";
+import type { OrgId, OrgSlug, OrgSchema } from "@care-y/shared";
 import {
   router,
   publicProcedure,
@@ -60,14 +61,14 @@ export interface OnboardingRouterDeps extends OnboardingServiceDeps {
   readonly bootstrapLimiter: RateLimiter;
   readonly isSecureCookie: boolean;
   readonly tenantDbFactory: (
-    schema: string,
+    schema: OrgSchema,
   ) => Parameters<typeof createOnboardingService>[0];
 }
 
 interface ResolvedOrg {
-  orgId: string;
-  orgSlug: string;
-  orgSchema: string;
+  orgId: OrgId;
+  orgSlug: OrgSlug;
+  orgSchema: OrgSchema;
   tenantDb: Parameters<typeof createOnboardingService>[0];
   sealedBox: SealedBoxEncryptor | null;
 }

@@ -18,6 +18,12 @@ import { NotFoundError, TelephonyConfigError } from "../errors.js";
 import { providerConfigSchemas } from "./schemas.js";
 import { z } from "zod";
 import { ErrorCode } from "@care-y/shared";
+import {
+  e164Schema,
+  phoneSidSchema,
+  storedProviderIdSchema,
+} from "@care-y/shared";
+import type { OrgId, PhoneSid, E164, StoredProviderId } from "@care-y/shared";
 
 /** Type guard for objects with a phoneNumbers array. */
 function hasPhoneNumbers(
@@ -48,7 +54,7 @@ export interface TelephonyConfigServiceDeps {
 }
 
 export interface SaveConfigInput {
-  readonly orgId: string;
+  readonly orgId: OrgId;
   readonly provider: string;
   readonly accountId: string;
   readonly authToken: string;
@@ -61,7 +67,7 @@ export interface ProvisionResult {
 
 /** Decrypted config fields needed for webhook validation. */
 export interface WebhookConfigLookup {
-  readonly provider: string;
+  readonly provider: StoredProviderId;
   readonly accountSid: string;
   readonly authToken: string;
 }
@@ -71,11 +77,11 @@ export interface TelephonyConfigService {
   saveConfig(input: SaveConfigInput): Promise<{ success: true }>;
 
   /** Retrieve masked config for admin UI. Returns null if not configured. */
-  getMaskedConfig(orgId: string): Promise<MaskedTelephonyConfig | null>;
+  getMaskedConfig(orgId: OrgId): Promise<MaskedTelephonyConfig | null>;
 
   /** Provision webhook URLs on the provider's phone numbers. */
   provisionWebhooks(
-    orgId: string,
+    orgId: OrgId,
     webhookBaseUrl: string,
   ): Promise<ProvisionResult>;
 
@@ -83,7 +89,7 @@ export interface TelephonyConfigService {
    * Look up and decrypt an org's telephony config for webhook validation.
    * Returns null if no config exists for the org.
    */
-  lookupWebhookConfig(orgId: string): Promise<WebhookConfigLookup | null>;
+  lookupWebhookConfig(orgId: OrgId): Promise<WebhookConfigLookup | null>;
 
   /**
    * Look up provisioned phone numbers with their provider SIDs.
@@ -91,21 +97,21 @@ export interface TelephonyConfigService {
    * against actual provisioned numbers. Returns empty array if not configured.
    */
   lookupProvisionedPhones(
-    orgId: string,
-  ): Promise<readonly { number: string; sid: string }[]>;
+    orgId: OrgId,
+  ): Promise<readonly { number: E164; sid: PhoneSid }[]>;
 
   /** Delete BYOT config for an org. Used when switching away from BYOT mode. */
-  clearConfig(orgId: string): Promise<void>;
+  clearConfig(orgId: OrgId): Promise<void>;
 
   /** Read phone purpose assignments from tenant org_config. */
   getPhonePurpose(
     tenantDb: Kysely<TenantDatabase>,
-  ): Promise<{ outboundSid: string | null; systemSid: string | null }>;
+  ): Promise<{ outboundSid: PhoneSid | null; systemSid: PhoneSid | null }>;
 
   /** Update phone purpose assignments in tenant org_config. */
   setPhonePurpose(
     tenantDb: Kysely<TenantDatabase>,
-    input: { outboundSid: string | null; systemSid: string | null },
+    input: { outboundSid: PhoneSid | null; systemSid: PhoneSid | null },
   ): Promise<void>;
 
   /**
@@ -113,7 +119,7 @@ export interface TelephonyConfigService {
    * Skips provider validation since no real Twilio account exists.
    */
   devSeedConfigWithPhones?(
-    orgId: string,
+    orgId: OrgId,
     phones: readonly { number: string; sid: string; label?: string }[],
   ): Promise<void>;
 }
@@ -146,8 +152,14 @@ export function createTelephonyConfigService(
 
   return {
     async saveConfig(input: SaveConfigInput): Promise<{ success: true }> {
-      const providerStatic = providerStatics.get(input.provider);
-      if (!providerStatic) {
+      // The wire schema already constrains provider, but this service is a
+      // trust boundary of its own: re-narrow to the stored union before the
+      // value reaches the typed column, and fail closed on anything else.
+      const provider = storedProviderIdSchema.safeParse(input.provider);
+      const providerStatic = provider.success
+        ? providerStatics.get(provider.data)
+        : undefined;
+      if (!provider.success || !providerStatic) {
         throw new TelephonyConfigError(
           `Unsupported telephony provider: ${input.provider}`,
         );
@@ -168,12 +180,12 @@ export function createTelephonyConfigService(
         .insertInto("telephony_config")
         .values({
           org_id: input.orgId,
-          provider: input.provider,
+          provider: provider.data,
           config: sealed,
         })
         .onConflict((oc) =>
           oc.column("org_id").doUpdateSet({
-            provider: input.provider,
+            provider: provider.data,
             config: sealed,
             updated_at: new Date(),
           }),
@@ -185,7 +197,7 @@ export function createTelephonyConfigService(
       return { success: true as const };
     },
 
-    async clearConfig(orgId: string): Promise<void> {
+    async clearConfig(orgId: OrgId): Promise<void> {
       await db
         .deleteFrom("telephony_config")
         .where("org_id", "=", orgId)
@@ -196,7 +208,7 @@ export function createTelephonyConfigService(
 
     async getPhonePurpose(
       tenantDb: Kysely<TenantDatabase>,
-    ): Promise<{ outboundSid: string | null; systemSid: string | null }> {
+    ): Promise<{ outboundSid: PhoneSid | null; systemSid: PhoneSid | null }> {
       const row = await tenantDb
         .selectFrom("org_config")
         .select(["phone_outbound_sid", "phone_system_sid"])
@@ -209,7 +221,7 @@ export function createTelephonyConfigService(
 
     async setPhonePurpose(
       tenantDb: Kysely<TenantDatabase>,
-      input: { outboundSid: string | null; systemSid: string | null },
+      input: { outboundSid: PhoneSid | null; systemSid: PhoneSid | null },
     ): Promise<void> {
       await tenantDb
         .updateTable("org_config")
@@ -220,9 +232,7 @@ export function createTelephonyConfigService(
         .execute();
     },
 
-    async getMaskedConfig(
-      orgId: string,
-    ): Promise<MaskedTelephonyConfig | null> {
+    async getMaskedConfig(orgId: OrgId): Promise<MaskedTelephonyConfig | null> {
       try {
         const provider = await providerFactory.getProvider(orgId);
         return provider.maskConfig();
@@ -235,7 +245,7 @@ export function createTelephonyConfigService(
     },
 
     async provisionWebhooks(
-      orgId: string,
+      orgId: OrgId,
       webhookBaseUrl: string,
     ): Promise<ProvisionResult> {
       const row = await db
@@ -285,7 +295,7 @@ export function createTelephonyConfigService(
     },
 
     async lookupWebhookConfig(
-      orgId: string,
+      orgId: OrgId,
     ): Promise<WebhookConfigLookup | null> {
       const row = await db
         .selectFrom("telephony_config")
@@ -299,11 +309,14 @@ export function createTelephonyConfigService(
 
       const rawConfig = decryptConfig(row.config);
 
-      // Validate the decrypted config has the fields needed for webhook validation.
-      // Use the provider's registered Zod schema if available, fall back to a
-      // minimal schema that extracts only what lookupWebhookConfig needs.
-      const schema = providerConfigSchemas[row.provider];
-      if (schema) {
+      // Check the decrypted config against the provider's registered schema.
+      // The column type says provider is a stored id, but a DB read is an
+      // unchecked assertion, so re-narrow before indexing the registry; an
+      // out-of-union value falls through to the minimal extraction below
+      // (whose required fields are still enforced), as before.
+      const provider = storedProviderIdSchema.safeParse(row.provider);
+      if (provider.success) {
+        const schema = providerConfigSchemas[provider.data];
         const result = schema.safeParse(rawConfig);
         if (!result.success) {
           throw new TelephonyConfigError(
@@ -331,8 +344,8 @@ export function createTelephonyConfigService(
     },
 
     async lookupProvisionedPhones(
-      orgId: string,
-    ): Promise<readonly { number: string; sid: string }[]> {
+      orgId: OrgId,
+    ): Promise<readonly { number: E164; sid: PhoneSid }[]> {
       const row = await db
         .selectFrom("telephony_config")
         .select(["provider", "config"])
@@ -361,31 +374,50 @@ export function createTelephonyConfigService(
 
       if (!phoneArraySchema.success) return [];
 
-      return phoneArraySchema.data.phoneNumbers.map((pn) => ({
-        number: pn.number,
-        sid: pn.sid ?? pn.id ?? pn.number,
-      }));
+      // A number is not a SID. An earlier version fell back to `pn.number`
+      // when neither key was present, which produced an entry whose "sid"
+      // could never match a stored `phone_outbound_sid`. The purpose resolver
+      // then dropped through to "first provisioned number", so a multi-number
+      // org with a deliberately configured outbound line silently used the
+      // wrong one. Single-number orgs hid it by always falling through.
+      //
+      // An entry with no provider id cannot be a caller-ID target, so it is
+      // excluded rather than given a fabricated SID.
+      return phoneArraySchema.data.phoneNumbers.flatMap((pn) => {
+        const rawSid = pn.sid ?? pn.id;
+        if (rawSid === undefined) return [];
+        return [
+          {
+            number: e164Schema.parse(pn.number),
+            sid: phoneSidSchema.parse(rawSid),
+          },
+        ];
+      });
     },
 
     ...(getEnv().NODE_ENV === "development"
       ? {
           async devSeedConfigWithPhones(
-            orgId: string,
+            orgId: OrgId,
             phones: readonly {
               number: string;
               sid: string;
               label?: string;
             }[],
           ): Promise<void> {
+            // Lazy import keeps mock-provider out of the production bundle.
+            // The constants are dev-only shared secrets (not production
+            // credentials); see the doc comments on each export.
+            const { DEV_MOCK_ACCOUNT_SID, DEV_MOCK_AUTH_TOKEN } =
+              await import("./mock-provider.js");
+
             const configObj = {
-              mode: "byot" as const,
-              accountSid: "ACdev00000000000000000000000mock",
-              authToken: "dev_mock_auth_token_000000000000",
+              accountSid: DEV_MOCK_ACCOUNT_SID,
+              authToken: DEV_MOCK_AUTH_TOKEN,
               phoneNumbers: phones.map((p) => ({
                 number: p.number,
                 sid: p.sid,
                 label: p.label,
-                friendlyName: p.label ?? p.number,
               })),
             };
 
@@ -395,12 +427,12 @@ export function createTelephonyConfigService(
               .insertInto("telephony_config")
               .values({
                 org_id: orgId,
-                provider: "twilio",
+                provider: "mock",
                 config: sealed,
               })
               .onConflict((oc) =>
                 oc.column("org_id").doUpdateSet({
-                  provider: "twilio",
+                  provider: "mock",
                   config: sealed,
                   updated_at: new Date(),
                 }),

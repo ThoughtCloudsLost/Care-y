@@ -12,6 +12,23 @@
 
 import { vi } from "vitest";
 
+// Under the jsdom environment the global TextEncoder produces Uint8Arrays
+// from a different realm than the global Uint8Array, so `instanceof` checks
+// fail and libsodium rejects the bytes ("unsupported input type"). That
+// breaks any jsdom test reaching real crypto. Wrap encode() to rebuild the
+// output through the ambient Uint8Array so both sides share a realm.
+if (
+  typeof globalThis.window !== "undefined" &&
+  !(new TextEncoder().encode("") instanceof Uint8Array)
+) {
+  const NativeTextEncoder = globalThis.TextEncoder;
+  globalThis.TextEncoder = class extends NativeTextEncoder {
+    override encode(input?: string): Uint8Array<ArrayBuffer> {
+      return Uint8Array.from(super.encode(input)) as Uint8Array<ArrayBuffer>;
+    }
+  };
+}
+
 // jsdom does not implement matchMedia. Stub it so components that
 // read media queries (e.g., prefers-reduced-motion) don't crash.
 if (

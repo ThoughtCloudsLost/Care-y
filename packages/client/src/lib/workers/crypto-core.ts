@@ -96,6 +96,7 @@ import {
   normalizeContactEmail,
   looksLikePhone,
   looksLikeEmail,
+  newKeyGeneration,
 } from "@care-y/shared";
 import { TkCache } from "./tk-cache.js";
 
@@ -1091,7 +1092,7 @@ function handleCreateTicketKey(req: CreateTicketKeyRequest, sink: Sink): void {
     });
 
     const wrap = eciesEncrypt(tk, assertPresent(volPublic, "volPublic"));
-    const keyGeneration = crypto.randomUUID();
+    const keyGeneration = newKeyGeneration();
 
     const msg: WorkerResponse = {
       id: req.id,

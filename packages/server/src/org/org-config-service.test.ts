@@ -102,6 +102,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
           encryptedName: updatedName.toString("base64url"),
           defaultLanguage: "es",
           countryCode: "+34",
+          portalSafeExitUrl: null,
         });
 
         // At rest the name is the decoded bytes; base64 exists only on

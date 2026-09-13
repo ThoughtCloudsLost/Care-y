@@ -12,6 +12,17 @@
 import { z } from "zod";
 import { base64Bytes, base64String } from "./validators.js";
 import { intakeFieldRoleSchema } from "./intake-forms.js";
+import {
+  ticketIdSchema,
+  followupIdSchema,
+  clientAccountIdSchema,
+  shareIdSchema,
+  keyGenerationSchema,
+  queueIdSchema,
+  intakeFormIdSchema,
+  intakeFormFieldIdSchema,
+  portalMessageIdSchema,
+} from "../ids.js";
 
 /** crypto_box_seal(32-byte tk) = 32 + 48 = 80 bytes (variant-agnostic exact-byte check). */
 export const intakeWrappedTkSchema = base64Bytes(80, "wrappedTk (sealed box)");
@@ -29,9 +40,9 @@ export const intakeWrappedTkSchema = base64Bytes(80, "wrappedTk (sealed box)");
  * volunteer-side decrypt would fail with a context mismatch.
  */
 export const intakeSubmissionInputSchema = z.object({
-  ticketId: z.uuid(),
-  followUpId: z.uuid().nullable(),
-  formId: z.uuid().nullable(),
+  ticketId: ticketIdSchema,
+  followUpId: followupIdSchema.nullable(),
+  formId: intakeFormIdSchema.nullable(),
   encryptedTitle: base64String("encryptedTitle").refine(
     (s) => s.length <= 1_400,
     "encryptedTitle too large",
@@ -53,9 +64,37 @@ export const intakeSubmissionInputSchema = z.object({
     .optional(),
   // Submit-time plaintext metadata resolved from encrypted field config
   // by the submitter's browser (ADR-068 server-metadata roles).
-  resolvedQueueId: z.uuid().nullable().optional(),
+  resolvedQueueId: queueIdSchema.nullable().optional(),
   resolvedPriority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   resolvedEscalationLevel: z.string().min(1).max(50).optional(),
+  /** Optional account registration branch (client opts into Encrypted Account at intake). */
+  account: z
+    .object({
+      accountId: clientAccountIdSchema,
+      username: z.string().min(3).max(64),
+      salt: base64Bytes(16, "argon2Salt"),
+      publicKey: base64Bytes(32, "accountPublicKey"),
+      authHash: base64Bytes(32, "authHash"),
+      keyCheck: z.object({
+        ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+        nonce: base64Bytes(24, "nonce"),
+        ciphertext: base64String("ciphertext").refine(
+          (s) => s.length <= 28_000,
+          "ciphertext too large",
+        ),
+      }),
+      selfCopy: z
+        .object({
+          ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+          nonce: base64Bytes(24, "nonce"),
+          ciphertext: base64String("ciphertext").refine(
+            (s) => s.length <= 28_000,
+            "ciphertext too large",
+          ),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 export type IntakeSubmissionInput = z.infer<typeof intakeSubmissionInputSchema>;
 
@@ -84,7 +123,7 @@ export type IntakeConfigResponse = z.infer<typeof intakeConfigResponseSchema>;
 
 /** Wire shape for a single field as seen by the public renderer. */
 export const publicIntakeFieldSchema = z.object({
-  id: z.uuid(),
+  id: intakeFormFieldIdSchema,
   fieldType: z.string(),
   role: intakeFieldRoleSchema.nullable(),
   encryptedLabel: z.string(),
@@ -95,7 +134,7 @@ export type PublicIntakeField = z.infer<typeof publicIntakeFieldSchema>;
 
 /** Wire shape for the public form as seen by the anonymous submitter. */
 export const publicIntakeFormSchema = z.object({
-  id: z.uuid(),
+  id: intakeFormIdSchema,
   slug: z.string().nullable(),
   fields: z.array(publicIntakeFieldSchema),
 });
@@ -105,12 +144,27 @@ export type PublicIntakeForm = z.infer<typeof publicIntakeFormSchema>;
 // Secure Link portal schemas (8b)
 // ---------------------------------------------------------------------------
 
-/** Communication tier for a client. 8c appends "account". */
-export const communicationTierSchema = z.enum(["sms_email", "secure_link"]);
+/** Communication tier for a client. */
+export const communicationTierSchema = z.enum([
+  "sms_email",
+  "secure_link",
+  "account",
+]);
 export type CommunicationTier = z.infer<typeof communicationTierSchema>;
 
+/** Portal channel kind discriminator. */
+export const portalChannelKindSchema = z.enum(["secure_link", "account"]);
+export type PortalChannelKind = z.infer<typeof portalChannelKindSchema>;
+
 /** 48 lowercase hex chars: hex(sha512(seed)[0:24]). */
-export const portalChannelIdSchema = z.string().regex(/^[0-9a-f]{48}$/);
+// The brand makes this the bearer secret rather than a row key. The codebase
+// already knew the difference and encoded it as this regex; branding moves that
+// knowledge somewhere the compiler can enforce it, so a `ChannelRowId` can no
+// longer be passed where the URL-visible secret belongs.
+export const portalChannelIdSchema = z
+  .string()
+  .regex(/^[0-9a-f]{48}$/)
+  .brand<"ChannelSecret">();
 
 /** 32-byte bearer auth token, base64-encoded. */
 export const portalAuthSchema = base64Bytes(32, "channelAuth");
@@ -137,9 +191,9 @@ export type PortalBootstrapInput = z.infer<typeof portalBootstrapInputSchema>;
 export const portalReplyInputSchema = z.object({
   channelId: portalChannelIdSchema,
   auth: portalAuthSchema,
-  ticketId: z.uuid(),
-  followUpId: z.uuid(),
-  keyGeneration: z.uuid(),
+  ticketId: ticketIdSchema,
+  followUpId: followupIdSchema,
+  keyGeneration: keyGenerationSchema,
   encryptedContent: base64String("encryptedContent").refine(
     (s) => s.length <= 28_000,
     "too large",
@@ -148,3 +202,97 @@ export const portalReplyInputSchema = z.object({
   selfCopy: eciesTripleSchema,
 });
 export type PortalReplyInput = z.infer<typeof portalReplyInputSchema>;
+
+// ---------------------------------------------------------------------------
+// Share link schemas (8d)
+// ---------------------------------------------------------------------------
+
+/** Share ciphertext cap matches the intake description cap. */
+const shareCiphertextSchema = base64String("ciphertext").refine(
+  (s) => s.length <= 88_000,
+  "ciphertext too large",
+);
+
+export const createShareInputSchema = z.object({
+  shareId: shareIdSchema,
+  ticketId: ticketIdSchema,
+  ciphertext: shareCiphertextSchema,
+  followUpId: followupIdSchema,
+  encryptedFollowUp: shareCiphertextSchema,
+});
+export type CreateShareInput = z.infer<typeof createShareInputSchema>;
+
+export const openShareInputSchema = z.object({ shareId: shareIdSchema });
+export type OpenShareInput = z.infer<typeof openShareInputSchema>;
+
+export const openShareResponseSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("ready"), ciphertext: z.string() }),
+  z.object({ status: z.literal("opened") }),
+  z.object({ status: z.literal("expired") }),
+  z.object({ status: z.literal("not_found") }),
+]);
+export type OpenShareResponse = z.infer<typeof openShareResponseSchema>;
+
+export const shareStatusSchema = z.object({
+  id: shareIdSchema,
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  readAt: z.string().nullable(),
+});
+export type ShareStatus = z.infer<typeof shareStatusSchema>;
+
+// ---------------------------------------------------------------------------
+// Encrypted Account schemas (8c)
+// ---------------------------------------------------------------------------
+
+/** Normalized client-side before hashing server-side; length limits on the RAW input. */
+export const accountUsernameSchema = z.string().min(3).max(64);
+
+/** Payload registering a new account (intake branch, in-portal upgrade, password change). */
+export const accountRegistrationSchema = z.object({
+  accountId: clientAccountIdSchema,
+  username: accountUsernameSchema,
+  salt: base64Bytes(16, "argon2Salt"),
+  publicKey: base64Bytes(32, "accountPublicKey"),
+  authHash: base64Bytes(32, "authHash"),
+  keyCheck: eciesTripleSchema,
+});
+export type AccountRegistration = z.infer<typeof accountRegistrationSchema>;
+
+export const getAccountSaltInputSchema = z.object({
+  username: accountUsernameSchema,
+});
+export type GetAccountSaltInput = z.infer<typeof getAccountSaltInputSchema>;
+
+export const accountLoginInputSchema = z.object({
+  accountId: clientAccountIdSchema,
+  authToken: base64Bytes(32, "authToken"),
+});
+export type AccountLoginInput = z.infer<typeof accountLoginInputSchema>;
+
+/** Re-encrypted copy swap rows for upgrade and password change. */
+export const rewrappedMessageSchema = z.object({
+  id: portalMessageIdSchema,
+  copy: eciesTripleSchema,
+});
+export type RewrappedMessage = z.infer<typeof rewrappedMessageSchema>;
+
+export const rewrappedMessagesSchema = z.array(rewrappedMessageSchema).max(500);
+export type RewrappedMessages = z.infer<typeof rewrappedMessagesSchema>;
+
+export const accountUpgradeInputSchema = z.object({
+  channelId: portalChannelIdSchema,
+  auth: portalAuthSchema,
+  account: accountRegistrationSchema,
+  rewrappedMessages: rewrappedMessagesSchema,
+});
+export type AccountUpgradeInput = z.infer<typeof accountUpgradeInputSchema>;
+
+export const accountChangePasswordInputSchema = z.object({
+  currentAuthToken: base64Bytes(32, "currentAuthToken"),
+  account: accountRegistrationSchema.omit({ accountId: true, username: true }),
+  rewrappedMessages: rewrappedMessagesSchema,
+});
+export type AccountChangePasswordInput = z.infer<
+  typeof accountChangePasswordInputSchema
+>;

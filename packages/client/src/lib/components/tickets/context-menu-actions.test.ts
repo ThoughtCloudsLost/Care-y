@@ -20,15 +20,15 @@ describe("getContextMenuActions", () => {
     expect(actions[0]!.id).toBe("copy");
   });
 
-  it("shows only Copy for a volunteer message", () => {
+  it("shows Copy and Edit for own volunteer message", () => {
     const actions = getContextMenuActions(
       { type: "message", source: "volunteer", createdBy: "user-1" },
       "user-1",
       false,
       labels,
     );
-    expect(actions).toHaveLength(1);
-    expect(actions[0]!.id).toBe("copy");
+    const ids = actions.map((a) => a.id);
+    expect(ids).toEqual(["copy", "editMessage"]);
   });
 
   it("shows only Copy for a system event", () => {

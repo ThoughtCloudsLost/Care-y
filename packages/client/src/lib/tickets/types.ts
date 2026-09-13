@@ -13,4 +13,5 @@ export type TicketAction =
   | "unwatch"
   | "editContent"
   | "notifications"
+  | "shareLink"
   | "cancel";

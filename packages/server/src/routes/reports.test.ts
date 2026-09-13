@@ -14,7 +14,17 @@ import { createReportsRouter } from "./reports.js";
 import { createCallerFactory } from "../trpc/trpc.js";
 import { stubTenantDbDefaultRoles } from "../test-utils.js";
 import type { Context, OrgContext } from "../trpc/context.js";
-import { RoleId } from "@care-y/shared";
+import { RoleId, type RoleIdValue } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+} from "@care-y/shared";
 
 // --- Mock reports service ---
 
@@ -38,33 +48,38 @@ vi.mock("../tickets/reports-service.js", () => ({
 
 // --- Context helpers ---
 
+const FIXTURE_USER_ID = "00000000-0000-4000-8000-000000000e01" as UserId;
+const FIXTURE_ORG_ID = "00000000-0000-4000-8000-00000000ee00" as OrgId;
+const FIXTURE_ORG_SCHEMA =
+  "org_00000000-0000-4000-8000-00000000ee00" as OrgSchema;
+
 function createMockOrgContext(): OrgContext {
   return {
-    orgId: "org-reports-test",
-    orgSlug: "test-org",
-    orgSchema: "org_test",
+    orgId: FIXTURE_ORG_ID,
+    orgSlug: "test-org" as OrgSlug,
+    orgSchema: FIXTURE_ORG_SCHEMA,
     tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
 }
 
-function makeContext(roleId: string): Context {
+function makeContext(roleId: RoleIdValue): Context {
   return {
     req: {} as Context["req"],
     res: {} as Context["res"],
     org: createMockOrgContext(),
     session: {
-      id: "sess-1",
-      token: "tok-1",
-      userId: "user-reports-1",
-      ipToken: "ip-tok",
-      uaToken: "ua-tok",
+      id: "00000000-0000-4000-8000-0000000e0010" as SessionId,
+      token: "tok-1" as SessionToken,
+      userId: FIXTURE_USER_ID,
+      ipToken: "ip-tok" as IpToken,
+      uaToken: "ua-tok" as UaToken,
       expiresAt: new Date(Date.now() + 3_600_000),
       twofaVerified: true,
       webauthnChallenge: null,
     },
     user: {
-      id: "user-reports-1",
+      id: FIXTURE_USER_ID,
       encryptedIdentifier: "tester",
       encryptedDisplayName: "encrypted",
       encryptedPreferredLocale: null,
@@ -77,7 +92,7 @@ function makeContext(roleId: string): Context {
 
 // --- Caller builders ---
 
-function buildCaller(roleId: string) {
+function buildCaller(roleId: RoleIdValue) {
   const routerInstance = createReportsRouter();
   return createCallerFactory(routerInstance)(makeContext(roleId));
 }

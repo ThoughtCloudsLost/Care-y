@@ -23,6 +23,8 @@
     type IntakeFieldType,
     type IntakeFieldRole,
     type TicketPriority,
+    type QueueId,
+    queueIdSchema,
   } from "@care-y/shared";
   import { SvelteSet } from "svelte/reactivity";
   import * as m from "$lib/paraglide/messages.js";
@@ -73,7 +75,7 @@
   let selectedRole = $state<IntakeFieldRole | null>(null);
 
   // Role mapping state
-  let queueRoutingMapping = $state<Record<string, string>>({});
+  let queueRoutingMapping = $state<Record<string, QueueId>>({});
   let urgencyMapping = $state<Record<string, TicketPriority>>({});
   let escalationMapping = $state<Record<string, string>>({});
   let escalationRecipientIds = $state<string[]>([]);
@@ -233,7 +235,10 @@
         const { [optionLabel]: _removed, ...rest } = queueRoutingMapping;
         queueRoutingMapping = rest;
       } else {
-        queueRoutingMapping = { ...queueRoutingMapping, [optionLabel]: val };
+        queueRoutingMapping = {
+          ...queueRoutingMapping,
+          [optionLabel]: queueIdSchema.parse(val),
+        };
       }
     }
   }

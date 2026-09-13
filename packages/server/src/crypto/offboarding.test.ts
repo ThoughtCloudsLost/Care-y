@@ -4,6 +4,7 @@ import { createTestDb, createTestUser, type TestDb } from "../test-utils.js";
 import { createOffboardingService } from "./offboarding.js";
 import { OffboardingError } from "../errors.js";
 import type { OffboardingService } from "./offboarding.js";
+import type { UserId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("OffboardingService", () => {
   let testDb: TestDb;
@@ -20,7 +21,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OffboardingService", () => {
 
   /** Seeds user_keys and optionally wrapped_org_keys for a user. */
   async function seedKeyMaterial(
-    userId: string,
+    userId: UserId,
     opts?: { withWrappedOrgKey?: boolean },
   ): Promise<void> {
     await testDb.db

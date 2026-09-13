@@ -47,7 +47,15 @@ import type {
   AuthenticationChecks,
 } from "./webauthn/index.js";
 import { TwoFactorMethod, ErrorCode } from "@care-y/shared";
-import type { TwoFactorMethodType } from "@care-y/shared";
+import type {
+  TwoFactorMethodType,
+  UserId,
+  SessionToken,
+  OrgId,
+  PushChallengeId,
+  TotpSecretId,
+  WebauthnCredentialId,
+} from "@care-y/shared";
 import type { TotpReplayCache } from "./totp-replay-cache.js";
 import { ValidationError } from "../errors.js";
 import { toCount } from "../db/query-utils.js";
@@ -67,7 +75,7 @@ export interface WebauthnRegistrationOptions {
   readonly challenge: string;
   readonly rpId: string;
   readonly rpName: string;
-  readonly userId: string;
+  readonly userId: UserId;
 }
 
 export interface WebauthnAssertionOptions {
@@ -92,111 +100,117 @@ export interface TwoFactorStatusResult {
 }
 
 export interface TwoFactorService {
-  getStatus(userId: string): Promise<TwoFactorStatusResult>;
+  getStatus(userId: UserId): Promise<TwoFactorStatusResult>;
 
   // TOTP enrollment
-  setupTotp(userId: string): Promise<TotpSetupResult>;
-  verifyTotpEnrollment(userId: string, code: string): Promise<boolean>;
+  setupTotp(userId: UserId): Promise<TotpSetupResult>;
+  verifyTotpEnrollment(userId: UserId, code: string): Promise<boolean>;
 
   // TOTP verification (login)
-  verifyTotp(userId: string, code: string): Promise<boolean>;
+  verifyTotp(userId: UserId, code: string): Promise<boolean>;
 
   // Backup codes
-  generateBackupCodes(userId: string): Promise<BackupCodesResult>;
-  checkBackupCode(userId: string, code: string): Promise<boolean>;
+  generateBackupCodes(userId: UserId): Promise<BackupCodesResult>;
+  checkBackupCode(userId: UserId, code: string): Promise<boolean>;
 
   // WebAuthn enrollment
   getWebauthnRegistrationOptions(
-    sessionToken: string,
+    sessionToken: SessionToken,
     rpId: string,
     rpName: string,
-    userId: string,
+    userId: UserId,
   ): Promise<WebauthnRegistrationOptions>;
   verifyWebauthnRegistration(
-    sessionToken: string,
+    sessionToken: SessionToken,
     registration: RegistrationResponseJSON,
     origin: string,
     rpId: string,
-    userId: string,
+    userId: UserId,
   ): Promise<void>;
 
   // WebAuthn verification (login)
   getWebauthnAssertionOptions(
-    sessionToken: string,
-    userId: string,
+    sessionToken: SessionToken,
+    userId: UserId,
     rpId: string,
   ): Promise<WebauthnAssertionOptions>;
   verifyWebauthnAssertion(
-    sessionToken: string,
+    sessionToken: SessionToken,
     authentication: AuthenticationResponseJSON,
     origin: string,
     rpId: string,
   ): Promise<void>;
 
   // Email enrollment
-  verifyEmailEnrollment(userId: string, code: string): Promise<boolean>;
+  verifyEmailEnrollment(userId: UserId, code: string): Promise<boolean>;
 
   // SMS enrollment (rawPhone is user input, normalized to E.164 internally).
   // Returns the normalized E.164 phone for the caller to send the verification code.
   enrollSmsPhone(
-    userId: string,
+    userId: UserId,
     rawPhone: string,
-    orgId: string,
+    orgId: OrgId,
   ): Promise<string>;
-  verifySmsEnrollment(userId: string, code: string): Promise<boolean>;
+  verifySmsEnrollment(userId: UserId, code: string): Promise<boolean>;
 
   // SMS verification (login)
-  verifySms(userId: string, code: string): Promise<boolean>;
+  verifySms(userId: UserId, code: string): Promise<boolean>;
 
   // Method queries
-  getEnrolledMethodTypes(userId: string): Promise<string[]>;
+  getEnrolledMethodTypes(userId: UserId): Promise<string[]>;
 
   // User email (store + resolve for 2FA code delivery)
-  setNotificationEmail(userId: string, email: string): Promise<void>;
-  resolveUserEmail(userId: string): Promise<string>;
+  setNotificationEmail(userId: UserId, email: string): Promise<void>;
+  resolveUserEmail(userId: UserId): Promise<string>;
 
   // User SMS phone resolution (decrypts stored SMS phone for code delivery)
-  resolveUserSmsPhone(userId: string): Promise<string>;
+  resolveUserSmsPhone(userId: UserId): Promise<string>;
 
   // Push enrollment
-  enrollPushDevice(userId: string): Promise<boolean>;
+  enrollPushDevice(userId: UserId): Promise<boolean>;
 
   // Push verification (login)
   sendPushChallenge(
-    userId: string,
-    sessionToken: string,
-  ): Promise<{ challengeId: string; sent: boolean }>;
+    userId: UserId,
+    sessionToken: SessionToken,
+  ): Promise<{ challengeId: PushChallengeId | ""; sent: boolean }>;
   pollPushChallenge(
-    challengeId: string,
-    sessionToken: string,
+    challengeId: PushChallengeId,
+    sessionToken: SessionToken,
   ): Promise<{ status: ChallengeStatus }>;
 
   // Push approval/denial (called from the approving device)
-  approvePushChallenge(challengeId: string, userId: string): Promise<boolean>;
-  denyPushChallenge(challengeId: string, userId: string): Promise<boolean>;
+  approvePushChallenge(
+    challengeId: PushChallengeId,
+    userId: UserId,
+  ): Promise<boolean>;
+  denyPushChallenge(
+    challengeId: PushChallengeId,
+    userId: UserId,
+  ): Promise<boolean>;
 
   // Method management
   removeMethod(
-    userId: string,
+    userId: UserId,
     method: TwoFactorMethodType,
-    credentialId?: string,
+    credentialId?: WebauthnCredentialId,
   ): Promise<void>;
 
   // Session
-  markSessionVerified(sessionToken: string): Promise<void>;
+  markSessionVerified(sessionToken: SessionToken): Promise<void>;
 }
 
 export interface SmsDeps {
   readonly smsCodes: SmsCodeService;
   readonly indexer: BlindIndexer;
-  readonly orgId: string;
+  readonly orgId: OrgId;
 }
 
 export interface TotpReplayDeps {
   /** Process-wide cache of recently accepted codes (see totp-replay-cache.ts). */
   readonly cache: TotpReplayCache;
   /** Tenant scope for cache keys: user IDs are only unique per org schema. */
-  readonly orgId: string;
+  readonly orgId: OrgId;
 }
 
 export interface PushDeps {
@@ -205,7 +219,7 @@ export interface PushDeps {
 
 export async function getEnrolledMethodTypes(
   db: Kysely<TenantDatabase>,
-  userId: string,
+  userId: UserId,
 ): Promise<string[]> {
   const rows = await db
     .selectFrom("two_factor_methods")
@@ -244,7 +258,7 @@ export function createTwoFactorService(
   // --- Internal helpers ---
 
   async function getActiveMethods(
-    userId: string,
+    userId: UserId,
   ): Promise<{ method_type: string }[]> {
     return db
       .selectFrom("two_factor_methods")
@@ -255,7 +269,7 @@ export function createTwoFactorService(
   }
 
   async function registerMethod(
-    userId: string,
+    userId: UserId,
     method: TwoFactorMethodType,
   ): Promise<void> {
     // Single-query upsert via the unique index on (user_id, method_type).
@@ -276,14 +290,14 @@ export function createTwoFactorService(
    * Uses upsert to handle re-enrollment (user changes their SMS phone).
    */
   async function storePendingSmsPhone(
-    userId: string,
+    userId: UserId,
     phone: string,
-    orgId: string,
+    orgId: OrgId,
   ): Promise<void> {
     const sms = requireSmsDeps();
 
     const encryptedPhone = encryptor.encrypt(phone);
-    const phoneHash = sms.indexer.hash(phone, orgId);
+    const phoneHash = sms.indexer.hashPhone(phone, orgId);
 
     await db
       .insertInto("two_factor_methods")
@@ -304,7 +318,7 @@ export function createTwoFactorService(
       .execute();
   }
 
-  async function getNextWebauthnOrdinal(userId: string): Promise<number> {
+  async function getNextWebauthnOrdinal(userId: UserId): Promise<number> {
     const result = await db
       .selectFrom("webauthn_credentials")
       .select(db.fn.max("ordinal").as("max_ordinal"))
@@ -317,7 +331,7 @@ export function createTwoFactorService(
 
   /** Builds display info for each WebAuthn credential (platform vs cross-platform). */
   async function listWebauthnCredentials(
-    userId: string,
+    userId: UserId,
   ): Promise<EnrolledMethodInfo[]> {
     const creds = await db
       .selectFrom("webauthn_credentials")
@@ -336,7 +350,7 @@ export function createTwoFactorService(
   }
 
   /** Returns the number of unused backup codes for a user. */
-  async function countRemainingBackupCodes(userId: string): Promise<number> {
+  async function countRemainingBackupCodes(userId: UserId): Promise<number> {
     const { count } = await db
       .selectFrom("backup_codes")
       .select(db.fn.countAll().as("count"))
@@ -351,7 +365,7 @@ export function createTwoFactorService(
    * session has no pending challenge (the user didn't request options first).
    */
   async function requireWebauthnChallenge(
-    sessionToken: string,
+    sessionToken: SessionToken,
   ): Promise<string> {
     const session = await sessions.findByToken(sessionToken);
     const challenge = session?.webauthnChallenge;
@@ -368,9 +382,9 @@ export function createTwoFactorService(
    * by enrollment to mark the row as verified).
    */
   async function loadTotpSecret(
-    userId: string,
+    userId: UserId,
     verified: boolean,
-  ): Promise<{ secret: Buffer; rowId: string }> {
+  ): Promise<{ secret: Buffer; rowId: TotpSecretId }> {
     const row = await db
       .selectFrom("totp_secrets")
       .selectAll()
@@ -417,7 +431,7 @@ export function createTwoFactorService(
 
   /** Deactivates a method type in the two_factor_methods table. */
   async function deactivateMethod(
-    userId: string,
+    userId: UserId,
     method: TwoFactorMethodType,
   ): Promise<void> {
     await db
@@ -430,8 +444,8 @@ export function createTwoFactorService(
 
   /** Removes a single WebAuthn credential, deactivating the method if it was the last one. */
   async function removeSingleWebauthnCredential(
-    userId: string,
-    credentialId: string,
+    userId: UserId,
+    credentialId: WebauthnCredentialId,
     activeMethods: { method_type: string }[],
   ): Promise<void> {
     const credCount = await db
@@ -454,7 +468,7 @@ export function createTwoFactorService(
 
   /** Removes an entire 2FA method type, deleting associated data. */
   async function removeEntireMethod(
-    userId: string,
+    userId: UserId,
     method: TwoFactorMethodType,
     activeMethods: { method_type: string }[],
   ): Promise<void> {
@@ -486,7 +500,7 @@ export function createTwoFactorService(
   }
 
   return {
-    async getStatus(userId: string): Promise<TwoFactorStatusResult> {
+    async getStatus(userId: UserId): Promise<TwoFactorStatusResult> {
       // First fetch active methods (needed to build the response).
       // Then run WebAuthn + backup count in parallel (independent queries).
       const methods = await getActiveMethods(userId);
@@ -530,7 +544,7 @@ export function createTwoFactorService(
 
     // --- TOTP ---
 
-    async setupTotp(userId: string): Promise<TotpSetupResult> {
+    async setupTotp(userId: UserId): Promise<TotpSetupResult> {
       const secret = generateTotpSecret();
       const uri = getTotpUri(secret, issuer);
       const b32 = base32Encode(secret);
@@ -555,7 +569,7 @@ export function createTwoFactorService(
       return { secret: b32, uri };
     },
 
-    async verifyTotpEnrollment(userId: string, code: string): Promise<boolean> {
+    async verifyTotpEnrollment(userId: UserId, code: string): Promise<boolean> {
       const { secret, rowId } = await loadTotpSecret(userId, false);
 
       // Replay guard shared with verifyTotp. Enrollment itself is
@@ -581,7 +595,7 @@ export function createTwoFactorService(
       return true;
     },
 
-    async verifyTotp(userId: string, code: string): Promise<boolean> {
+    async verifyTotp(userId: UserId, code: string): Promise<boolean> {
       const { secret } = await loadTotpSecret(userId, true);
 
       // Reject replays of an accepted code (RFC 6238 Section 5.2). The
@@ -601,7 +615,7 @@ export function createTwoFactorService(
 
     // --- Backup codes ---
 
-    async generateBackupCodes(userId: string): Promise<BackupCodesResult> {
+    async generateBackupCodes(userId: UserId): Promise<BackupCodesResult> {
       // Delete existing codes
       await db
         .deleteFrom("backup_codes")
@@ -625,7 +639,7 @@ export function createTwoFactorService(
       return { codes: codes.map(formatCode) };
     },
 
-    async checkBackupCode(userId: string, code: string): Promise<boolean> {
+    async checkBackupCode(userId: UserId, code: string): Promise<boolean> {
       const rows = await db
         .selectFrom("backup_codes")
         .selectAll()
@@ -659,10 +673,10 @@ export function createTwoFactorService(
     // --- WebAuthn ---
 
     async getWebauthnRegistrationOptions(
-      sessionToken: string,
+      sessionToken: SessionToken,
       rpId: string,
       rpName: string,
-      userId: string,
+      userId: UserId,
     ): Promise<WebauthnRegistrationOptions> {
       const challenge = randomChallenge();
       await sessions.setWebauthnChallenge(sessionToken, challenge);
@@ -670,11 +684,11 @@ export function createTwoFactorService(
     },
 
     async verifyWebauthnRegistration(
-      sessionToken: string,
+      sessionToken: SessionToken,
       registration: RegistrationResponseJSON,
       origin: string,
       rpId: string,
-      userId: string,
+      userId: UserId,
     ): Promise<void> {
       const challenge = await requireWebauthnChallenge(sessionToken);
 
@@ -714,8 +728,8 @@ export function createTwoFactorService(
     },
 
     async getWebauthnAssertionOptions(
-      sessionToken: string,
-      userId: string,
+      sessionToken: SessionToken,
+      userId: UserId,
       rpId: string,
     ): Promise<WebauthnAssertionOptions> {
       const challenge = randomChallenge();
@@ -738,7 +752,7 @@ export function createTwoFactorService(
     },
 
     async verifyWebauthnAssertion(
-      sessionToken: string,
+      sessionToken: SessionToken,
       authentication: AuthenticationResponseJSON,
       origin: string,
       rpId: string,
@@ -790,7 +804,7 @@ export function createTwoFactorService(
     // --- Email enrollment ---
 
     async verifyEmailEnrollment(
-      userId: string,
+      userId: UserId,
       code: string,
     ): Promise<boolean> {
       const valid = await emailCodes.verifyCode(userId, code);
@@ -803,9 +817,9 @@ export function createTwoFactorService(
     // --- SMS enrollment ---
 
     async enrollSmsPhone(
-      userId: string,
+      userId: UserId,
       rawPhone: string,
-      orgId: string,
+      orgId: OrgId,
     ): Promise<string> {
       requireSmsDeps();
       // Resolve org's default country code for phone normalization
@@ -824,7 +838,7 @@ export function createTwoFactorService(
       return phone;
     },
 
-    async verifySmsEnrollment(userId: string, code: string): Promise<boolean> {
+    async verifySmsEnrollment(userId: UserId, code: string): Promise<boolean> {
       const sms = requireSmsDeps();
       const valid = await sms.smsCodes.verifyCode(userId, code);
       if (valid) {
@@ -842,19 +856,19 @@ export function createTwoFactorService(
 
     // --- SMS verification (login) ---
 
-    async verifySms(userId: string, code: string): Promise<boolean> {
+    async verifySms(userId: UserId, code: string): Promise<boolean> {
       const sms = requireSmsDeps();
       return sms.smsCodes.verifyCode(userId, code);
     },
 
     // --- Method queries ---
 
-    async getEnrolledMethodTypes(userId: string): Promise<string[]> {
+    async getEnrolledMethodTypes(userId: UserId): Promise<string[]> {
       const methods = await getActiveMethods(userId);
       return methods.map((m) => m.method_type);
     },
 
-    async setNotificationEmail(userId: string, email: string): Promise<void> {
+    async setNotificationEmail(userId: UserId, email: string): Promise<void> {
       const encrypted = encryptor.encrypt(email);
       await db
         .updateTable("users")
@@ -864,7 +878,7 @@ export function createTwoFactorService(
         .execute();
     },
 
-    async resolveUserEmail(userId: string): Promise<string> {
+    async resolveUserEmail(userId: UserId): Promise<string> {
       const row = await db
         .selectFrom("users")
         .select("encrypted_notification_addr")
@@ -875,11 +889,11 @@ export function createTwoFactorService(
         throw new ValidationError(ErrorCode.NO_NOTIFICATION_EMAIL);
       }
 
-      // care-y-ignore-next-line server-no-decrypt -- notification email is operational server-side PII (Tier 2, not E2EE)
+      // care-y-ignore-next-line server-no-decrypt -- notification email is operational server-side PII (ops tier, not E2EE)
       return encryptor.decrypt(row.encrypted_notification_addr);
     },
 
-    async resolveUserSmsPhone(userId: string): Promise<string> {
+    async resolveUserSmsPhone(userId: UserId): Promise<string> {
       const row = await db
         .selectFrom("two_factor_methods")
         .select("encrypted_sms_phone")
@@ -892,16 +906,16 @@ export function createTwoFactorService(
         throw new ValidationError(ErrorCode.NO_SMS_PHONE_ENROLLED);
       }
 
-      // care-y-ignore-next-line server-no-decrypt -- SMS phone is operational server-side PII (Tier 2, not E2EE)
+      // care-y-ignore-next-line server-no-decrypt -- SMS phone is operational server-side PII (ops tier, not E2EE)
       return encryptor.decrypt(row.encrypted_sms_phone);
     },
 
     // --- Method management ---
 
     async removeMethod(
-      userId: string,
+      userId: UserId,
       method: TwoFactorMethodType,
-      credentialId?: string,
+      credentialId?: WebauthnCredentialId,
     ): Promise<void> {
       const activeMethods = await getActiveMethods(userId);
 
@@ -922,7 +936,7 @@ export function createTwoFactorService(
 
     // --- Push enrollment ---
 
-    async enrollPushDevice(userId: string): Promise<boolean> {
+    async enrollPushDevice(userId: UserId): Promise<boolean> {
       const push = requirePushDeps();
 
       // Verify the user has at least one working push subscription
@@ -940,38 +954,38 @@ export function createTwoFactorService(
     // --- Push verification (login) ---
 
     async sendPushChallenge(
-      userId: string,
-      sessionToken: string,
-    ): Promise<{ challengeId: string; sent: boolean }> {
+      userId: UserId,
+      sessionToken: SessionToken,
+    ): Promise<{ challengeId: PushChallengeId | ""; sent: boolean }> {
       const push = requirePushDeps();
       return push.pushChallenges.sendChallenge(userId, sessionToken);
     },
 
     async pollPushChallenge(
-      challengeId: string,
-      sessionToken: string,
+      challengeId: PushChallengeId,
+      sessionToken: SessionToken,
     ): Promise<{ status: ChallengeStatus }> {
       const push = requirePushDeps();
       return push.pushChallenges.pollChallenge(challengeId, sessionToken);
     },
 
     async approvePushChallenge(
-      challengeId: string,
-      userId: string,
+      challengeId: PushChallengeId,
+      userId: UserId,
     ): Promise<boolean> {
       const push = requirePushDeps();
       return push.pushChallenges.approveChallenge(challengeId, userId);
     },
 
     async denyPushChallenge(
-      challengeId: string,
-      userId: string,
+      challengeId: PushChallengeId,
+      userId: UserId,
     ): Promise<boolean> {
       const push = requirePushDeps();
       return push.pushChallenges.denyChallenge(challengeId, userId);
     },
 
-    async markSessionVerified(sessionToken: string): Promise<void> {
+    async markSessionVerified(sessionToken: SessionToken): Promise<void> {
       await sessions.markTwoFactorVerified(sessionToken);
     },
   };

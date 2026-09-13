@@ -5,6 +5,7 @@ import type {
   SendSmsResult,
 } from "../telephony/provider.js";
 import { NotificationError, TelephonyError } from "../errors.js";
+import type { OrgId, E164 } from "@care-y/shared";
 
 function mockProvider(
   behavior: "success" | "fail" = "success",
@@ -47,7 +48,7 @@ function mockProvider(
       return Buffer.alloc(0);
     },
     async getCallDetails() {
-      return { from: "+15550000001", to: "+15550000002" };
+      return { from: "+15550000001" as E164, to: "+15550000002" as E164 };
     },
     async deleteRecording() {
       // mock stub
@@ -67,7 +68,10 @@ function mockProvider(
 describe("createNotificationSmsSender", () => {
   it("calls provider.sendSms with correct arguments", async () => {
     const provider = mockProvider();
-    const sender = createNotificationSmsSender(async () => provider, "org-123");
+    const sender = createNotificationSmsSender(
+      async () => provider,
+      "org-123" as OrgId,
+    );
 
     await sender.sendPing({
       toPhoneNumber: "+15551234567",
@@ -84,7 +88,10 @@ describe("createNotificationSmsSender", () => {
 
   it("wraps provider errors in NotificationError", async () => {
     const provider = mockProvider("fail");
-    const sender = createNotificationSmsSender(async () => provider, "org-123");
+    const sender = createNotificationSmsSender(
+      async () => provider,
+      "org-123" as OrgId,
+    );
 
     await expect(
       sender.sendPing({
@@ -97,7 +104,10 @@ describe("createNotificationSmsSender", () => {
 
   it("uses generic message without leaking provider error details", async () => {
     const provider = mockProvider("fail");
-    const sender = createNotificationSmsSender(async () => provider, "org-123");
+    const sender = createNotificationSmsSender(
+      async () => provider,
+      "org-123" as OrgId,
+    );
 
     await expect(
       sender.sendPing({

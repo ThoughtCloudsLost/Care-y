@@ -7,6 +7,11 @@
  */
 
 import { z } from "zod";
+import {
+  phoneGreetingIdSchema,
+  smsResponseIdSchema,
+  e164Schema,
+} from "../ids.js";
 
 // --- PhoneGreeting ---
 
@@ -19,8 +24,6 @@ export const greetingTypeSchema = z.enum([
 ]);
 export type GreetingType = z.infer<typeof greetingTypeSchema>;
 
-const e164Schema = z.string().regex(/^\+[1-9]\d{1,14}$/);
-
 export const createGreetingInputSchema = z.object({
   phoneNumber: e164Schema,
   locale: z.string().min(2).max(10),
@@ -31,7 +34,7 @@ export const createGreetingInputSchema = z.object({
 export type CreateGreetingInput = z.infer<typeof createGreetingInputSchema>;
 
 export const updateGreetingInputSchema = z.object({
-  id: z.uuid(),
+  id: phoneGreetingIdSchema,
   phoneNumber: e164Schema.optional(),
   text: z.string().min(1).max(2000).optional(),
   isAudio: z.boolean().optional(),
@@ -39,7 +42,7 @@ export const updateGreetingInputSchema = z.object({
 export type UpdateGreetingInput = z.infer<typeof updateGreetingInputSchema>;
 
 export const deleteGreetingInputSchema = z.object({
-  id: z.uuid(),
+  id: phoneGreetingIdSchema,
 });
 export type DeleteGreetingInput = z.infer<typeof deleteGreetingInputSchema>;
 
@@ -60,7 +63,7 @@ export type GreetingAudioContentType = z.infer<
 >;
 
 export const uploadGreetingAudioInputSchema = z.object({
-  greetingId: z.uuid(),
+  greetingId: phoneGreetingIdSchema,
   audioBase64: z.string().min(1),
   contentType: greetingAudioContentTypeSchema,
 });
@@ -99,7 +102,7 @@ export type CreateSmsResponseInput = z.infer<
 >;
 
 export const updateSmsResponseInputSchema = z.object({
-  id: z.uuid(),
+  id: smsResponseIdSchema,
   text: z.string().min(1).max(1600).optional(),
 });
 export type UpdateSmsResponseInput = z.infer<
@@ -107,7 +110,7 @@ export type UpdateSmsResponseInput = z.infer<
 >;
 
 export const deleteSmsResponseInputSchema = z.object({
-  id: z.uuid(),
+  id: smsResponseIdSchema,
 });
 export type DeleteSmsResponseInput = z.infer<
   typeof deleteSmsResponseInputSchema

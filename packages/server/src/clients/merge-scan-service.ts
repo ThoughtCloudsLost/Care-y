@@ -9,31 +9,39 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type {
+  ClientId,
+  TicketId,
+  IntakeFormId,
+  IntakeFormFieldId,
+  PhoneMatchHash,
+  UserId,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Result types
 // ---------------------------------------------------------------------------
 
 export interface MergeScanClientRecord {
-  readonly clientId: string;
+  readonly clientId: ClientId;
   readonly responses: readonly MergeScanResponseRecord[];
 }
 
 export interface MergeScanResponseRecord {
-  readonly ticketId: string;
-  readonly formId: string;
+  readonly ticketId: TicketId;
+  readonly formId: IntakeFormId;
   readonly encryptedResponse: Buffer;
 }
 
 export interface MergeScanFieldRoleRecord {
-  readonly formId: string;
-  readonly fieldId: string;
+  readonly formId: IntakeFormId;
+  readonly fieldId: IntakeFormFieldId;
   readonly role: string;
 }
 
 export interface MergeScanPhoneHashRecord {
-  readonly clientId: string;
-  readonly phoneMatchHash: string;
+  readonly clientId: ClientId;
+  readonly phoneMatchHash: PhoneMatchHash;
 }
 
 // ---------------------------------------------------------------------------
@@ -47,7 +55,7 @@ export interface MergeScanService {
    * Restricted to tickets visible to the calling volunteer (via key wraps).
    */
   getResponsesByClient(
-    userId: string,
+    userId: UserId,
   ): Promise<readonly MergeScanClientRecord[]>;
 
   /**
@@ -76,7 +84,7 @@ export function createMergeScanService(
 ): MergeScanService {
   return {
     async getResponsesByClient(
-      userId: string,
+      userId: UserId,
     ): Promise<readonly MergeScanClientRecord[]> {
       // Join intake_form_responses with tickets to get client_id,
       // and with key_wraps to filter to tickets accessible to this volunteer.
@@ -107,7 +115,7 @@ export function createMergeScanService(
         .execute();
 
       // Group by client
-      const byClient = new Map<string, MergeScanResponseRecord[]>();
+      const byClient = new Map<ClientId, MergeScanResponseRecord[]>();
       for (const row of rows) {
         const clientId = row.clientId;
         let responses = byClient.get(clientId);

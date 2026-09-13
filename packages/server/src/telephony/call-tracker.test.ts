@@ -15,13 +15,24 @@ import {
   type TrackedCall,
 } from "./call-tracker.js";
 import { createTestDb, type TestDb } from "../test-utils.js";
+import type {
+  OrgSchema,
+  TicketId,
+  UserId,
+  ClientId,
+  CallSid,
+} from "@care-y/shared";
+
+const TEST_ORG_SCHEMA = "org_test" as OrgSchema;
+const TEST_TICKET_ID = "ticket-1" as TicketId;
+const TEST_USER_ID = "user-1" as UserId;
 
 function makeTracked(overrides?: Partial<TrackedCall>): TrackedCall {
   return {
-    ticketId: "ticket-1",
-    userId: "user-1",
+    ticketId: TEST_TICKET_ID,
+    userId: TEST_USER_ID,
     direction: "outbound",
-    orgSchema: "test_org",
+    orgSchema: TEST_ORG_SCHEMA,
     clientId: null,
     createdAt: Date.now(),
     ...overrides,
@@ -36,49 +47,59 @@ describe("CallTracker (in-memory)", () => {
   it("tracks and retrieves a call", async () => {
     const tracker = createCallTracker();
     const call = makeTracked();
-    await tracker.track("test_org", "CA123", call);
-    const got = await tracker.get("test_org", "CA123");
+    await tracker.track(TEST_ORG_SCHEMA, "CA123" as CallSid, call);
+    const got = await tracker.get(TEST_ORG_SCHEMA, "CA123" as CallSid);
     expect(got).toBe(call);
   });
 
   it("returns undefined for unknown callSid", async () => {
     const tracker = createCallTracker();
-    expect(await tracker.get("test_org", "unknown")).toBeUndefined();
+    expect(
+      await tracker.get(TEST_ORG_SCHEMA, "unknown" as CallSid),
+    ).toBeUndefined();
   });
 
   it("removes a tracked call", async () => {
     const tracker = createCallTracker();
-    await tracker.track("test_org", "CA123", makeTracked());
-    await tracker.remove("test_org", "CA123");
-    expect(await tracker.get("test_org", "CA123")).toBeUndefined();
+    await tracker.track(TEST_ORG_SCHEMA, "CA123" as CallSid, makeTracked());
+    await tracker.remove(TEST_ORG_SCHEMA, "CA123" as CallSid);
+    expect(
+      await tracker.get(TEST_ORG_SCHEMA, "CA123" as CallSid),
+    ).toBeUndefined();
   });
 
   it("remove is a no-op for unknown callSid", async () => {
     const tracker = createCallTracker();
-    await tracker.remove("test_org", "unknown");
+    await tracker.remove(TEST_ORG_SCHEMA, "unknown" as CallSid);
     // No error thrown
   });
 
   it("tracks multiple calls independently", async () => {
     const tracker = createCallTracker();
-    const call1 = makeTracked({ ticketId: "t1" });
-    const call2 = makeTracked({ ticketId: "t2" });
-    await tracker.track("test_org", "CA1", call1);
-    await tracker.track("test_org", "CA2", call2);
-    const got1 = await tracker.get("test_org", "CA1");
-    const got2 = await tracker.get("test_org", "CA2");
+    const call1 = makeTracked({ ticketId: "t1" as TicketId });
+    const call2 = makeTracked({ ticketId: "t2" as TicketId });
+    await tracker.track(TEST_ORG_SCHEMA, "CA1" as CallSid, call1);
+    await tracker.track(TEST_ORG_SCHEMA, "CA2" as CallSid, call2);
+    const got1 = await tracker.get(TEST_ORG_SCHEMA, "CA1" as CallSid);
+    const got2 = await tracker.get(TEST_ORG_SCHEMA, "CA2" as CallSid);
     expect(got1?.ticketId).toBe("t1");
     expect(got2?.ticketId).toBe("t2");
   });
 
   it("uses composite key so same callSid in different orgs are independent", async () => {
     const tracker = createCallTracker();
-    const callA = makeTracked({ ticketId: "tA", orgSchema: "org_a" });
-    const callB = makeTracked({ ticketId: "tB", orgSchema: "org_b" });
-    await tracker.track("org_a", "CA_SAME", callA);
-    await tracker.track("org_b", "CA_SAME", callB);
-    const gotA = await tracker.get("org_a", "CA_SAME");
-    const gotB = await tracker.get("org_b", "CA_SAME");
+    const callA = makeTracked({
+      ticketId: "tA" as TicketId,
+      orgSchema: "org_a" as OrgSchema,
+    });
+    const callB = makeTracked({
+      ticketId: "tB" as TicketId,
+      orgSchema: "org_b" as OrgSchema,
+    });
+    await tracker.track("org_a" as OrgSchema, "CA_SAME" as CallSid, callA);
+    await tracker.track("org_b" as OrgSchema, "CA_SAME" as CallSid, callB);
+    const gotA = await tracker.get("org_a" as OrgSchema, "CA_SAME" as CallSid);
+    const gotB = await tracker.get("org_b" as OrgSchema, "CA_SAME" as CallSid);
     expect(gotA?.ticketId).toBe("tA");
     expect(gotB?.ticketId).toBe("tB");
   });
@@ -100,26 +121,30 @@ describe("CallTracker (in-memory)", () => {
       const tracker = createCallTracker();
 
       const staleCall = makeTracked({
-        ticketId: "stale",
+        ticketId: "stale" as TicketId,
         createdAt: Date.now(),
       });
-      await tracker.track("test_org", "CA-STALE", staleCall);
+      await tracker.track(TEST_ORG_SCHEMA, "CA-STALE" as CallSid, staleCall);
 
       // Advance past TTL (60 min) + one cleanup interval (1 min)
       vi.advanceTimersByTime(3_600_000 + 60_000);
 
       // Track a fresh call after the advance so it is not stale
       const freshCall = makeTracked({
-        ticketId: "fresh",
+        ticketId: "fresh" as TicketId,
         createdAt: Date.now(),
       });
-      await tracker.track("test_org", "CA-FRESH", freshCall);
+      await tracker.track(TEST_ORG_SCHEMA, "CA-FRESH" as CallSid, freshCall);
 
       // Advance one more cleanup interval to sweep
       vi.advanceTimersByTime(60_000);
 
-      expect(await tracker.get("test_org", "CA-STALE")).toBeUndefined();
-      expect(await tracker.get("test_org", "CA-FRESH")).toBe(freshCall);
+      expect(
+        await tracker.get(TEST_ORG_SCHEMA, "CA-STALE" as CallSid),
+      ).toBeUndefined();
+      expect(await tracker.get(TEST_ORG_SCHEMA, "CA-FRESH" as CallSid)).toBe(
+        freshCall,
+      );
     });
 
     it("retains calls that have not exceeded the TTL", async () => {
@@ -127,12 +152,14 @@ describe("CallTracker (in-memory)", () => {
 
       const tracker = createCallTracker();
       const call = makeTracked({ createdAt: Date.now() });
-      await tracker.track("test_org", "CA-KEEP", call);
+      await tracker.track(TEST_ORG_SCHEMA, "CA-KEEP" as CallSid, call);
 
       // Advance less than TTL plus one cleanup tick
       vi.advanceTimersByTime(3_600_000 - 1_000 + 60_000);
 
-      expect(await tracker.get("test_org", "CA-KEEP")).toBe(call);
+      expect(await tracker.get(TEST_ORG_SCHEMA, "CA-KEEP" as CallSid)).toBe(
+        call,
+      );
     });
   });
 });
@@ -142,13 +169,13 @@ describe("CallTracker (in-memory)", () => {
 // ---------------------------------------------------------------------------
 
 // Valid UUIDs for DB-backed tests (uuid columns reject arbitrary strings)
-const UUID_TICKET_RT = "a0000000-0000-0000-0000-000000000001";
-const UUID_TICKET_V1 = "a0000000-0000-0000-0000-000000000002";
-const UUID_TICKET_V2 = "a0000000-0000-0000-0000-000000000003";
-const UUID_TICKET_RESTART = "a0000000-0000-0000-0000-000000000004";
-const UUID_USER_DEFAULT = "b0000000-0000-0000-0000-000000000000";
-const UUID_USER_UPDATED = "b0000000-0000-0000-0000-000000000001";
-const UUID_CLIENT_RESTART = "c0000000-0000-0000-0000-000000000001";
+const UUID_TICKET_RT = "a0000000-0000-4000-8000-000000000001" as TicketId;
+const UUID_TICKET_V1 = "a0000000-0000-4000-8000-000000000002" as TicketId;
+const UUID_TICKET_V2 = "a0000000-0000-4000-8000-000000000003" as TicketId;
+const UUID_TICKET_RESTART = "a0000000-0000-4000-8000-000000000004" as TicketId;
+const UUID_USER_DEFAULT = "b0000000-0000-4000-8000-000000000000" as UserId;
+const UUID_USER_UPDATED = "b0000000-0000-4000-8000-000000000001" as UserId;
+const UUID_CLIENT_RESTART = "c0000000-0000-4000-8000-000000000001" as ClientId;
 
 describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
   let testDb: TestDb;
@@ -158,7 +185,7 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
     testDb = await createTestDb();
     tracker = createDbCallTracker(
       () => testDb.db,
-      async () => [testDb.schemaName],
+      async () => [testDb.schemaName as OrgSchema],
     );
   }, 30_000);
 
@@ -169,29 +196,43 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
 
   it("round-trips a tracked call through the DB", async () => {
     const call = makeTracked({
-      orgSchema: testDb.schemaName,
+      orgSchema: testDb.schemaName as OrgSchema,
       ticketId: UUID_TICKET_RT,
       userId: UUID_USER_DEFAULT,
     });
-    await tracker.track(testDb.schemaName, "CA_RT", call);
-    const got = await tracker.get(testDb.schemaName, "CA_RT");
+    await tracker.track(
+      testDb.schemaName as OrgSchema,
+      "CA_RT" as CallSid,
+      call,
+    );
+    const got = await tracker.get(
+      testDb.schemaName as OrgSchema,
+      "CA_RT" as CallSid,
+    );
 
     expect(got).toBeDefined();
     expect(got!.ticketId).toBe(UUID_TICKET_RT);
     expect(got!.userId).toBe(UUID_USER_DEFAULT);
     expect(got!.direction).toBe("outbound");
     expect(got!.clientId).toBeNull();
-    expect(got!.orgSchema).toBe(testDb.schemaName);
+    expect(got!.orgSchema).toBe(testDb.schemaName as OrgSchema);
   });
 
   it("maps empty-string ticketId sentinel to NULL in DB and back", async () => {
     const call = makeTracked({
-      orgSchema: testDb.schemaName,
-      ticketId: "",
+      orgSchema: testDb.schemaName as OrgSchema,
+      ticketId: "" as TicketId,
       userId: UUID_USER_DEFAULT,
     });
-    await tracker.track(testDb.schemaName, "CA_SENTINEL", call);
-    const got = await tracker.get(testDb.schemaName, "CA_SENTINEL");
+    await tracker.track(
+      testDb.schemaName as OrgSchema,
+      "CA_SENTINEL" as CallSid,
+      call,
+    );
+    const got = await tracker.get(
+      testDb.schemaName as OrgSchema,
+      "CA_SENTINEL" as CallSid,
+    );
     expect(got).toBeDefined();
     expect(got!.ticketId).toBe("");
 
@@ -199,27 +240,38 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
     const row = await testDb.db
       .selectFrom("tracked_calls")
       .select("ticket_id")
-      .where("call_sid", "=", "CA_SENTINEL")
+      .where("call_sid", "=", "CA_SENTINEL" as CallSid)
       .executeTakeFirst();
     expect(row?.ticket_id).toBeNull();
   });
 
   it("upserts on re-track with same callSid", async () => {
     const call1 = makeTracked({
-      orgSchema: testDb.schemaName,
+      orgSchema: testDb.schemaName as OrgSchema,
       ticketId: UUID_TICKET_V1,
       userId: null,
     });
-    await tracker.track(testDb.schemaName, "CA_UPSERT", call1);
+    await tracker.track(
+      testDb.schemaName as OrgSchema,
+      "CA_UPSERT" as CallSid,
+      call1,
+    );
 
     const call2 = makeTracked({
-      orgSchema: testDb.schemaName,
+      orgSchema: testDb.schemaName as OrgSchema,
       ticketId: UUID_TICKET_V2,
       userId: UUID_USER_UPDATED,
     });
-    await tracker.track(testDb.schemaName, "CA_UPSERT", call2);
+    await tracker.track(
+      testDb.schemaName as OrgSchema,
+      "CA_UPSERT" as CallSid,
+      call2,
+    );
 
-    const got = await tracker.get(testDb.schemaName, "CA_UPSERT");
+    const got = await tracker.get(
+      testDb.schemaName as OrgSchema,
+      "CA_UPSERT" as CallSid,
+    );
     expect(got).toBeDefined();
     expect(got!.ticketId).toBe(UUID_TICKET_V2);
     expect(got!.userId).toBe(UUID_USER_UPDATED);
@@ -228,7 +280,7 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
     const rows = await testDb.db
       .selectFrom("tracked_calls")
       .selectAll()
-      .where("call_sid", "=", "CA_UPSERT")
+      .where("call_sid", "=", "CA_UPSERT" as CallSid)
       .execute();
     expect(rows).toHaveLength(1);
   });
@@ -239,7 +291,7 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
     await testDb.db
       .insertInto("tracked_calls")
       .values({
-        call_sid: "CA_OLD",
+        call_sid: "CA_OLD" as CallSid,
         ticket_id: null,
         user_id: null,
         direction: "inbound",
@@ -248,7 +300,10 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
       })
       .execute();
 
-    const got = await tracker.get(testDb.schemaName, "CA_OLD");
+    const got = await tracker.get(
+      testDb.schemaName as OrgSchema,
+      "CA_OLD" as CallSid,
+    );
     expect(got).toBeUndefined();
   });
 
@@ -258,7 +313,7 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
     await testDb.db
       .insertInto("tracked_calls")
       .values({
-        call_sid: "CA_SWEEP_TARGET",
+        call_sid: "CA_SWEEP_TARGET" as CallSid,
         ticket_id: null,
         user_id: null,
         direction: "inbound",
@@ -273,7 +328,7 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
       () => testDb.db,
       async () => {
         sweepCalled = true;
-        return [testDb.schemaName];
+        return [testDb.schemaName as OrgSchema];
       },
     );
 
@@ -283,21 +338,24 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
     sweepTracker.stop();
 
     // The get already filters by TTL, so it should miss the old row
-    const got = await sweepTracker.get(testDb.schemaName, "CA_SWEEP_TARGET");
+    const got = await sweepTracker.get(
+      testDb.schemaName as OrgSchema,
+      "CA_SWEEP_TARGET" as CallSid,
+    );
     expect(got).toBeUndefined();
 
     // Verify the row exists in DB (sweep hasn't run yet since we stopped it)
     const beforeSweep = await testDb.db
       .selectFrom("tracked_calls")
       .select("call_sid")
-      .where("call_sid", "=", "CA_SWEEP_TARGET")
+      .where("call_sid", "=", "CA_SWEEP_TARGET" as CallSid)
       .executeTakeFirst();
     expect(beforeSweep).toBeDefined();
 
     // Clean up manually (the sweep would have done this)
     await testDb.db
       .deleteFrom("tracked_calls")
-      .where("call_sid", "=", "CA_SWEEP_TARGET")
+      .where("call_sid", "=", "CA_SWEEP_TARGET" as CallSid)
       .execute();
 
     expect(sweepCalled).toBe(false); // timer was stopped before it could fire
@@ -305,20 +363,23 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
 
   it("remove deletes a tracked call from DB", async () => {
     await tracker.track(
-      testDb.schemaName,
-      "CA_REMOVE_DB",
+      testDb.schemaName as OrgSchema,
+      "CA_REMOVE_DB" as CallSid,
       makeTracked({
-        orgSchema: testDb.schemaName,
+        orgSchema: testDb.schemaName as OrgSchema,
         ticketId: UUID_TICKET_RT,
         userId: UUID_USER_DEFAULT,
       }),
     );
-    await tracker.remove(testDb.schemaName, "CA_REMOVE_DB");
+    await tracker.remove(
+      testDb.schemaName as OrgSchema,
+      "CA_REMOVE_DB" as CallSid,
+    );
 
     const row = await testDb.db
       .selectFrom("tracked_calls")
       .select("call_sid")
-      .where("call_sid", "=", "CA_REMOVE_DB")
+      .where("call_sid", "=", "CA_REMOVE_DB" as CallSid)
       .executeTakeFirst();
     expect(row).toBeUndefined();
   });
@@ -327,13 +388,13 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
     // First instance writes
     const tracker1 = createDbCallTracker(
       () => testDb.db,
-      async () => [testDb.schemaName],
+      async () => [testDb.schemaName as OrgSchema],
     );
     await tracker1.track(
-      testDb.schemaName,
-      "CA_RESTART",
+      testDb.schemaName as OrgSchema,
+      "CA_RESTART" as CallSid,
       makeTracked({
-        orgSchema: testDb.schemaName,
+        orgSchema: testDb.schemaName as OrgSchema,
         ticketId: UUID_TICKET_RESTART,
         userId: UUID_USER_DEFAULT,
         direction: "inbound",
@@ -345,9 +406,12 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
     // Second instance reads (simulates server restart)
     const tracker2 = createDbCallTracker(
       () => testDb.db,
-      async () => [testDb.schemaName],
+      async () => [testDb.schemaName as OrgSchema],
     );
-    const got = await tracker2.get(testDb.schemaName, "CA_RESTART");
+    const got = await tracker2.get(
+      testDb.schemaName as OrgSchema,
+      "CA_RESTART" as CallSid,
+    );
     tracker2.stop();
 
     expect(got).toBeDefined();

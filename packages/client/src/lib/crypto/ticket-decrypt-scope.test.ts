@@ -134,6 +134,7 @@ describe("TicketDecryptScope", () => {
         KEY_WRAP,
         ENCRYPTED_CONTENT,
         undefined,
+        undefined,
       );
     });
 
@@ -155,6 +156,7 @@ describe("TicketDecryptScope", () => {
         KEY_WRAP,
         ENCRYPTED_CONTENT,
         { followUpKeyWrap: fuKeyWrap, ticketId: TICKET_ID },
+        undefined,
       );
     });
 
@@ -170,6 +172,7 @@ describe("TicketDecryptScope", () => {
         followupSlot(FOLLOW_UP_ID),
         KEY_WRAP,
         ENCRYPTED_CONTENT,
+        undefined,
         undefined,
       );
     });

@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { TwilioConfig } from "./schemas.js";
 import type { VoiceInstruction } from "./provider.js";
 import { TelephonyError } from "../errors.js";
+import type { OrgId } from "@care-y/shared";
 import { twilioHmacValidator } from "./webhook-crypto.js";
 import {
   createTwilioProvider,
@@ -504,7 +505,7 @@ describe("twilioProviderStatic", () => {
 
       const result = (await twilioProviderStatic.provisionWebhooks(
         validConfig,
-        "org-uuid-123",
+        "org-uuid-123" as OrgId,
         "https://care-y.example.com",
       )) as TwilioConfig;
 

@@ -22,6 +22,7 @@ import { createPowVerifier } from "./pow.js";
 import { PowRequiredError } from "../errors.js";
 import type { OprfEvaluator } from "./oprf-ipc.js";
 import type { OprfAuditLogger } from "./oprf-audit.js";
+import type { UserId } from "@care-y/shared";
 
 describe("resolvePowThreshold", () => {
   it("relaxes the threshold in development and test", () => {
@@ -115,7 +116,7 @@ describe("createOprfEvaluateService under production", () => {
     const blinded = blindedInput.toString("base64");
     const blindedExpected = blindedInput.toString("base64url");
     const request: OprfEvaluateRequest = {
-      userId: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      userId: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d" as UserId,
       blindedElement: blinded,
       ip: "203.0.113.42",
       sessionUserId: null,

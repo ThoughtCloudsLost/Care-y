@@ -26,6 +26,7 @@ import {
 } from "../test-utils.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { QueueId, UserId, ClientId, PhoneHash } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Crypto roundtrip tests (no DB required)
@@ -186,8 +187,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
   () => {
     let testDb: TestDb;
     let db: Kysely<TenantDatabase>;
-    let queueId: string;
-    let userId: string;
+    let queueId: QueueId;
+    let userId: UserId;
 
     beforeAll(async () => {
       testDb = await createTestDb();
@@ -230,12 +231,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await testDb.cleanup();
     });
 
-    async function createClient(): Promise<string> {
+    async function createClient(): Promise<ClientId> {
       const uid = crypto.randomUUID().slice(0, 8);
       const phone = await db
         .insertInto("phones")
         .values({
-          phone_hash: `ph-${uid}`,
+          phone_hash: `ph-${uid}` as PhoneHash,
           encrypted_number: noopEncryptor.encrypt(`+1555${uid}`),
           locale: "en-US",
         })

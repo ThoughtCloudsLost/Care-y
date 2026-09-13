@@ -40,7 +40,7 @@ import { _resetEnvCache } from "../env.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
-import { createAuthService } from "../auth/service.js";
+import { createAuthService, type UserRecord } from "../auth/service.js";
 import { createOrgService } from "../org/service.js";
 import { createAppRouter } from "./router.js";
 import { createCallerFactory } from "../trpc/trpc.js";
@@ -48,8 +48,27 @@ import type { Context, OrgContext } from "../trpc/context.js";
 import { createTwoFactorService } from "../auth/two-factor-service.js";
 import { createEmailCodeService } from "../auth/email-code.js";
 import { generateTotpCode, base32Decode } from "../auth/totp.js";
-import { TwoFactorMethod } from "@care-y/shared";
+import { TwoFactorMethod, RoleId } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSchema,
+  WebauthnCredentialId,
+  PasswordHash,
+  PushChallengeId,
+} from "@care-y/shared";
 import * as webauthnVerify from "../auth/webauthn/verify.js";
+
+/** Narrows the empty-string sentinel to a real PushChallengeId, throwing
+ *  if no challenge was created. Copied from push-challenge.test.ts. */
+function requireChallengeId(c: PushChallengeId | ""): PushChallengeId {
+  if (c === "") throw new Error("expected a challenge to have been created");
+  return c;
+}
 
 function makeTenantDbFactory(
   platformDb: Kysely<PlatformDatabase>,
@@ -66,8 +85,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let orgContext: OrgContext;
     let mockEmail: MockEmailSender;
 
-    const createdOrgIds: string[] = [];
-    const createdSchemas: string[] = [];
+    const createdOrgIds: OrgId[] = [];
+    const createdSchemas: OrgSchema[] = [];
 
     const hasher = createScryptHasher();
     const loginLimiter = createInMemoryRateLimiter({
@@ -104,7 +123,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       orgContext = {
         orgId: org.id,
         orgSlug: org.slug,
-        orgSchema: testDb.schemaName,
+        orgSchema: testDb.schemaName as OrgSchema,
         tenantDb,
         sealedBox: testSealedBox,
       };
@@ -193,15 +212,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     /** Authed caller with twofaVerified: false. */
     function createAuthedCaller(
-      user: {
-        id: string;
-        encryptedIdentifier: string;
-        encryptedDisplayName: string;
-        encryptedPreferredLocale: string | null;
-        roleId: string;
-        isActive: boolean;
-        hasSeenBriefing: boolean;
-      },
+      user: UserRecord,
       sessionToken: string,
       emailSender?: MockEmailSender,
     ) {
@@ -212,11 +223,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         res: mockRes(),
         org: orgContext,
         session: {
-          id: "test-session-id",
-          token: sessionToken,
+          id: "test-session-id" as SessionId,
+          token: sessionToken as SessionToken,
           userId: user.id,
-          ipToken: "test-ip-token",
-          uaToken: "test-ua-token",
+          ipToken: "test-ip-token" as IpToken,
+          uaToken: "test-ua-token" as UaToken,
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
           twofaVerified: false,
           webauthnChallenge: null,
@@ -227,18 +238,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     }
 
     /** Authed caller with twofaVerified: true (for methods sub-router). */
-    function createVerifiedCaller(
-      user: {
-        id: string;
-        encryptedIdentifier: string;
-        encryptedDisplayName: string;
-        encryptedPreferredLocale: string | null;
-        roleId: string;
-        isActive: boolean;
-        hasSeenBriefing: boolean;
-      },
-      sessionToken: string,
-    ) {
+    function createVerifiedCaller(user: UserRecord, sessionToken: string) {
       const appRouter = buildRouter();
       const factory = createCallerFactory(appRouter);
       const ctx: Context = {
@@ -246,11 +246,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         res: mockRes(),
         org: orgContext,
         session: {
-          id: "test-session-id",
-          token: sessionToken,
+          id: "test-session-id" as SessionId,
+          token: sessionToken as SessionToken,
           userId: user.id,
-          ipToken: "test-ip-token",
-          uaToken: "test-ua-token",
+          ipToken: "test-ip-token" as IpToken,
+          uaToken: "test-ua-token" as UaToken,
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
           twofaVerified: true,
           webauthnChallenge: null,
@@ -281,7 +281,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         identifier: `2fa-user-${suffix}`,
         password: "test-password-long-enough",
         displayName: `2FA User ${suffix}`,
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
     }
 
@@ -398,7 +398,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
           overrides: {
             encrypted_notification_addr:
               testFieldEncryptor.encrypt("user@example.com"),
-            password_hash: "scrypt:" + "aa".repeat(16) + ":" + "bb".repeat(64),
+            password_hash: ("scrypt:" +
+              "aa".repeat(16) +
+              ":" +
+              "bb".repeat(64)) as PasswordHash,
           },
         });
         const userRecord = {
@@ -434,7 +437,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
           overrides: {
             encrypted_notification_addr:
               testFieldEncryptor.encrypt("verify@example.com"),
-            password_hash: "scrypt:" + "aa".repeat(16) + ":" + "bb".repeat(64),
+            password_hash: ("scrypt:" +
+              "aa".repeat(16) +
+              ":" +
+              "bb".repeat(64)) as PasswordHash,
           },
         });
         const userRecord = {
@@ -593,7 +599,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
             encrypted_notification_addr: testFieldEncryptor.encrypt(
               "verify-email@example.com",
             ),
-            password_hash: "scrypt:" + "aa".repeat(16) + ":" + "bb".repeat(64),
+            password_hash: ("scrypt:" +
+              "aa".repeat(16) +
+              ":" +
+              "bb".repeat(64)) as PasswordHash,
           },
         });
         const userRecord = {
@@ -675,7 +684,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
             encrypted_notification_addr: testFieldEncryptor.encrypt(
               "remove-test@example.com",
             ),
-            password_hash: "scrypt:" + "aa".repeat(16) + ":" + "bb".repeat(64),
+            password_hash: ("scrypt:" +
+              "aa".repeat(16) +
+              ":" +
+              "bb".repeat(64)) as PasswordHash,
           },
         });
         const userRecord = {
@@ -825,7 +837,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       function fakeRegistrationResult(credId: string) {
         return {
           credential: {
-            id: credId,
+            id: credId as WebauthnCredentialId,
             publicKey: "test-pk",
             algorithm: "ES256" as const,
             transports: ["internal"],
@@ -1014,16 +1026,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
 
       function createSmsAuthedCaller(
-        user: {
-          id: string;
-          encryptedIdentifier: string;
-          encryptedDisplayName: string;
-          encryptedPreferredLocale: string | null;
-          roleId: string;
-          isActive: boolean;
-          hasSeenBriefing: boolean;
-        },
-        sessionToken: string,
+        user: UserRecord,
+        sessionToken: SessionToken,
         emailSender?: MockEmailSender,
       ) {
         const appRouter = buildRouterWithSms(emailSender);
@@ -1033,11 +1037,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
           res: mockRes(),
           org: orgContext,
           session: {
-            id: "test-session-id",
+            id: "test-session-id" as SessionId,
             token: sessionToken,
             userId: user.id,
-            ipToken: "test-ip-token",
-            uaToken: "test-ua-token",
+            ipToken: "test-ip-token" as IpToken,
+            uaToken: "test-ua-token" as UaToken,
             expiresAt: new Date(Date.now() + 60 * 60 * 1000),
             twofaVerified: false,
             webauthnChallenge: null,
@@ -1234,16 +1238,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
 
       function createPushAuthedCaller(
-        user: {
-          id: string;
-          encryptedIdentifier: string;
-          encryptedDisplayName: string;
-          encryptedPreferredLocale: string | null;
-          roleId: string;
-          isActive: boolean;
-          hasSeenBriefing: boolean;
-        },
-        sessionToken: string,
+        user: UserRecord,
+        sessionToken: SessionToken,
       ) {
         const appRouter = buildRouterWithPush();
         const factory = createCallerFactory(appRouter);
@@ -1252,11 +1248,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
           res: mockRes(),
           org: orgContext,
           session: {
-            id: "test-session-id",
+            id: "test-session-id" as SessionId,
             token: sessionToken,
             userId: user.id,
-            ipToken: "test-ip-token",
-            uaToken: "test-ua-token",
+            ipToken: "test-ip-token" as IpToken,
+            uaToken: "test-ua-token" as UaToken,
             expiresAt: new Date(Date.now() + 60 * 60 * 1000),
             twofaVerified: false,
             webauthnChallenge: null,
@@ -1267,16 +1263,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
 
       function createPushVerifiedCaller(
-        user: {
-          id: string;
-          encryptedIdentifier: string;
-          encryptedDisplayName: string;
-          encryptedPreferredLocale: string | null;
-          roleId: string;
-          isActive: boolean;
-          hasSeenBriefing: boolean;
-        },
-        sessionToken: string,
+        user: UserRecord,
+        sessionToken: SessionToken,
       ) {
         const appRouter = buildRouterWithPush();
         const factory = createCallerFactory(appRouter);
@@ -1285,11 +1273,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
           res: mockRes(),
           org: orgContext,
           session: {
-            id: "test-session-id",
+            id: "test-session-id" as SessionId,
             token: sessionToken,
             userId: user.id,
-            ipToken: "test-ip-token",
-            uaToken: "test-ua-token",
+            ipToken: "test-ip-token" as IpToken,
+            uaToken: "test-ua-token" as UaToken,
             expiresAt: new Date(Date.now() + 60 * 60 * 1000),
             twofaVerified: true,
             webauthnChallenge: null,
@@ -1300,7 +1288,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
 
       /** Inserts a push subscription so the user has a device to send to. */
-      async function seedPushSubscription(userId: string): Promise<void> {
+      async function seedPushSubscription(userId: UserId): Promise<void> {
         const uid = randomUUID().slice(0, 8);
         await tenantDb
           .insertInto("push_subscriptions")
@@ -1392,10 +1380,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
           const sendResult = await caller.twoFactor.verify.pushSend();
 
           // Approve it directly in the DB (simulates the approving device)
+          const challengeId = requireChallengeId(sendResult.challengeId);
           await tenantDb
             .updateTable("push_challenges")
             .set({ status: "approved" })
-            .where("id", "=", sendResult.challengeId)
+            .where("id", "=", challengeId)
             .execute();
 
           // Poll should see approved and mark session verified
@@ -1528,7 +1517,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .insertInto("webauthn_credentials")
           .values({
             user_id: user.id,
-            credential_id: "test-cred-assert",
+            credential_id: "test-cred-assert" as WebauthnCredentialId,
             public_key: "fakePubKeyBase64url",
             sign_count: 0,
             ordinal: 1,

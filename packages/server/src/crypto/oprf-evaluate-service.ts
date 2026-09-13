@@ -29,15 +29,16 @@ import type { OprfEvaluator } from "./oprf-ipc.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { PowVerifier } from "./pow.js";
 import type { OprfAuditLogger } from "./oprf-audit.js";
+import type { UserId } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Attempt tracker (sliding window per userId)
 // ---------------------------------------------------------------------------
 
 export interface AttemptTracker {
-  check(userId: string): number;
-  increment(userId: string): number;
-  reset(userId: string): void;
+  check(userId: UserId): number;
+  increment(userId: UserId): number;
+  reset(userId: UserId): void;
   dispose(): void;
 }
 
@@ -60,19 +61,19 @@ export function createAttemptTracker(
   });
 
   return {
-    check(userId: string): number {
+    check(userId: UserId): number {
       const cutoff = now() - windowMs;
       const timestamps = attempts.get(userId);
       if (!timestamps) return 0;
       return timestamps.filter((t) => t > cutoff).length;
     },
-    increment(userId: string): number {
+    increment(userId: UserId): number {
       const timestamps = attempts.get(userId) ?? [];
       timestamps.push(now());
       attempts.set(userId, timestamps);
       return this.check(userId);
     },
-    reset(userId: string): void {
+    reset(userId: UserId): void {
       attempts.delete(userId);
     },
     dispose,
@@ -130,10 +131,10 @@ export interface OprfEvaluateServiceDeps {
 }
 
 export interface OprfEvaluateRequest {
-  readonly userId: string;
+  readonly userId: UserId;
   readonly blindedElement: string;
   readonly ip: string;
-  readonly sessionUserId: string | null;
+  readonly sessionUserId: UserId | null;
   readonly powChallenge: string | undefined;
   readonly powSolution: string | undefined;
 }
@@ -168,9 +169,9 @@ export function createOprfEvaluateService(
 
   /** If authenticated, the session owner must match the requested userId. */
   async function assertSessionBinding(
-    userId: string,
+    userId: UserId,
     ip: string,
-    sessionUserId: string | null,
+    sessionUserId: UserId | null,
   ): Promise<void> {
     if (sessionUserId !== null && sessionUserId !== userId) {
       await deps.auditLogger.logFailure(userId, ip, "session_mismatch");
@@ -180,7 +181,7 @@ export function createOprfEvaluateService(
 
   /** Per-userId sliding window rate limit (10 requests / 15 min). */
   async function enforceUserRateLimit(
-    userId: string,
+    userId: UserId,
     ip: string,
   ): Promise<void> {
     const result = deps.userRateLimiter.check(userId);
@@ -194,7 +195,7 @@ export function createOprfEvaluateService(
   }
 
   /** Per-IP supplementary rate limit, independent of per-userId. */
-  async function enforceIpRateLimit(userId: string, ip: string): Promise<void> {
+  async function enforceIpRateLimit(userId: UserId, ip: string): Promise<void> {
     const result = deps.ipRateLimiter.check(ip);
     if (!result.allowed) {
       await deps.auditLogger.logFailure(userId, ip, "rate_limited");
@@ -212,7 +213,7 @@ export function createOprfEvaluateService(
    * no separate failure counter to bump.
    */
   async function enforcePowGate(
-    userId: string,
+    userId: UserId,
     ip: string,
     attemptCount: number,
     powChallenge: string | undefined,
@@ -241,7 +242,7 @@ export function createOprfEvaluateService(
 
   /** Perform threshold OPRF evaluation and log failures for audit. */
   async function evaluateBlindedElement(
-    userId: string,
+    userId: UserId,
     ip: string,
     blindedElement: string,
   ): Promise<OprfEvaluateResult> {

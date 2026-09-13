@@ -23,6 +23,7 @@ import {
   createEncryptedFollowUp,
   createFollowUpWithTk,
 } from "./server-followup-create.js";
+import { newTicketId, type OrgSchema } from "@care-y/shared";
 
 let volPublic: RistrettoPoint;
 let volPrivate: Scalar;
@@ -213,7 +214,7 @@ describe("Buffer zeroing contracts", () => {
     await expect(
       createFollowUpWithTk(
         dbNever,
-        crypto.randomUUID(),
+        newTicketId(),
         shortTk,
         content,
         "message",
@@ -239,7 +240,7 @@ describe("Buffer zeroing contracts", () => {
     await expect(
       createEncryptedFollowUp(
         dbNever,
-        crypto.randomUUID(),
+        newTicketId(),
         content,
         "message",
         "system",
@@ -250,7 +251,7 @@ describe("Buffer zeroing contracts", () => {
           ],
           recording: { data: recording, durationSeconds: 3 },
           blobStore: failingStore,
-          orgSchema: "org_test",
+          orgSchema: "org_test" as OrgSchema,
         },
       ),
     ).rejects.toThrow(BlobStoreError);
