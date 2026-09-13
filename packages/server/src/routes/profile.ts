@@ -7,6 +7,7 @@ import {
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import { createKeyRotationService } from "../crypto/key-rotation.js";
+import { createTicketKeyWrapQueryService } from "../crypto/ticket-key-wrap-query-service.js";
 import {
   ConflictError,
   ForbiddenError,
@@ -180,24 +181,15 @@ export function createProfileRouter(deps: ProfileRouterDeps) {
 
     myTicketKeyWraps: authedProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
-        const rows = await ctx.org.tenantDb
-          .selectFrom("ticket_key_wraps")
-          .select([
-            "ticket_id",
-            "key_generation",
-            "ephemeral_point",
-            "nonce",
-            "wrapped_key",
-          ])
-          .where("volunteer_id", "=", ctx.session.userId)
-          .execute();
+        const service = createTicketKeyWrapQueryService(ctx.org.tenantDb);
+        const rows = await service.listForVolunteer(ctx.session.userId);
 
         return rows.map((r) => ({
-          ticketId: r.ticket_id,
-          keyGeneration: r.key_generation,
-          ephemeralPoint: encode(r.ephemeral_point),
+          ticketId: r.ticketId,
+          keyGeneration: r.keyGeneration,
+          ephemeralPoint: encode(r.ephemeralPoint),
           nonce: encode(r.nonce),
-          wrappedKey: encode(r.wrapped_key),
+          wrappedKey: encode(r.wrappedKey),
         }));
       }),
     ),

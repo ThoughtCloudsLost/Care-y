@@ -90,7 +90,10 @@ async function validateAndStoreAudio(
   audioBase64: string,
   contentType: GreetingAudioContentType,
 ): Promise<{ blobKey: BlobKey; verified: GreetingAudioContentType }> {
-  const audioBuf = Buffer.from(audioBase64, "base64");
+  // base64url is the project's wire encoding. Node's decoder also accepts
+  // the standard alphabet, so this stays tolerant of either form on input
+  // while the response below emits base64url only.
+  const audioBuf = Buffer.from(audioBase64, "base64url");
 
   if (audioBuf.length > GREETING_AUDIO_MAX_BYTES) {
     throw new ValidationError(
@@ -210,7 +213,7 @@ export function createTelephonyContentService(
         throw new NotFoundError(ErrorCode.GREETING_NOT_FOUND);
       }
       return {
-        audioBase64: blob.toString("base64"),
+        audioBase64: blob.toString("base64url"),
         contentType: greeting.audioContentType ?? "application/octet-stream",
       };
     },

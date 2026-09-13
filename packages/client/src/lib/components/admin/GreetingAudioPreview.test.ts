@@ -3,7 +3,6 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
-import type * as BufferEncoding from "$lib/utils/buffer-encoding.js";
 
 // vi.hoisted so the mock exists when the hoisted vi.mock factory below
 // runs; a plain top-level const is still in its temporal dead zone then.
@@ -39,11 +38,9 @@ vi.mock("$lib/errors.js", () => ({
   },
 }));
 
-vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof BufferEncoding>()),
-  base64ToUint8Array: (s: string) =>
-    Uint8Array.from(atob(s), (c) => c.charCodeAt(0)),
-}));
+// No crypto mock: the component decodes with @care-y/crypto's decode(),
+// which is pure string work over native btoa/atob and needs no sodium
+// initialization, so the real implementation runs here.
 
 // Stub AudioContext (jsdom does not provide Web Audio API)
 const mockDecodeAudioData = vi.fn().mockResolvedValue({
@@ -132,7 +129,7 @@ describe("GreetingAudioPreview", () => {
   it("renders AudioPlayer after successful fetch and decode", async () => {
     // Base64 of 4 zero bytes
     mockGetGreetingAudio.mockResolvedValue({
-      audioBase64: "AAAAAA==",
+      audioBase64: "AAAAAA",
       contentType: "audio/wav",
     });
 
@@ -152,7 +149,7 @@ describe("GreetingAudioPreview", () => {
 
   it("shows error when audio decode fails", async () => {
     mockGetGreetingAudio.mockResolvedValue({
-      audioBase64: "AAAAAA==",
+      audioBase64: "AAAAAA",
       contentType: "audio/wav",
     });
     mockDecodeAudioData.mockRejectedValueOnce(new DOMException("decode error"));

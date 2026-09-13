@@ -219,7 +219,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
     const wavData = Buffer.from([
       0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
     ]);
-    const audioBase64 = wavData.toString("base64");
+    const audioBase64 = wavData.toString("base64url");
 
     const mockBlobStore = {
       put: vi.fn().mockResolvedValue("blob-key-wav-123"),
@@ -261,7 +261,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
     oversized[1] = 0x49;
     oversized[2] = 0x46;
     oversized[3] = 0x46;
-    const audioBase64 = oversized.toString("base64");
+    const audioBase64 = oversized.toString("base64url");
 
     const mockBlobStore = {
       put: vi.fn(),
@@ -291,7 +291,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
 
     // Random bytes that don't match MP3 signature
     const badData = Buffer.from([0x00, 0x01, 0x02, 0x03, 0x04, 0x05]);
-    const audioBase64 = badData.toString("base64");
+    const audioBase64 = badData.toString("base64url");
 
     const mockBlobStore = {
       put: vi.fn(),
@@ -325,7 +325,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
     const wavData = Buffer.from([
       0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
     ]);
-    const audioBase64 = wavData.toString("base64");
+    const audioBase64 = wavData.toString("base64url");
 
     const mockBlobStore = {
       put: vi.fn().mockResolvedValue("blob-key-get-audio"),
@@ -346,7 +346,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
     // Now fetch it back
     const result = await service.getGreetingAudio(mockBlobStore, greeting.id);
 
-    expect(result.audioBase64).toBe(wavData.toString("base64"));
+    expect(result.audioBase64).toBe(wavData.toString("base64url"));
     expect(result.contentType).toBe("audio/wav");
   });
 

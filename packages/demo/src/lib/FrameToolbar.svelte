@@ -548,6 +548,7 @@
 
   // Post-DOM animate: the template has been applied, so barRef is in its
   // new position. Read the "last" rect and apply the inverse transform.
+  // care-y-ignore-next-line no-effect-without-cleanup -- the transitionend listener is { once: true } on barRef, so it dies with the element, and the safety timeout is a no-op after unmount now that onEnd guards with == null. A cleanup return would cancel that safety net on a legitimate re-run, leaving stale inline transforms.
   $effect(() => {
     if (flipFirstRect === null || flipTarget === null) return;
     const firstRect = flipFirstRect;
@@ -555,7 +556,7 @@
     flipFirstRect = null;
     flipTarget = null;
 
-    if (barRef === undefined) return;
+    if (barRef == null) return;
     // Guard: if fullscreen changed again between pre and post, skip
     if (untrack(() => fullscreen) !== target) return;
 
@@ -591,7 +592,7 @@
     barRef.style.transform = "";
 
     function onEnd(): void {
-      if (barRef === undefined) return;
+      if (barRef == null) return;
       barRef.style.transition = "";
       barRef.style.transform = "";
       barRef.style.transformOrigin = "";

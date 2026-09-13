@@ -15,7 +15,10 @@
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
+  // decode(), not buffer-encoding's base64ToUint8Array: this is a server
+  // wire value, and that module is scoped to browser-local round-trips.
+  // Same import QuarantinePlayer uses for the same job.
+  import { decode } from "@care-y/crypto";
 
   interface Props {
     greetingId: string;
@@ -55,7 +58,7 @@
         });
         if (aborted()) return;
 
-        const audioBytes = base64ToUint8Array(result.audioBase64);
+        const audioBytes = decode(result.audioBase64);
         if (aborted()) return;
 
         const ctx = getAudioContext();

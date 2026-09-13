@@ -254,6 +254,7 @@ async function seed(): Promise<void> {
     phoneId = existingPhone.id;
     console.log("Phone record already exists, skipping.");
   } else {
+    // care-y-ignore-start no-plaintext-db-write -- dev seed: +1 555 000 1234 is a fictional NANP number, phone_hash is a one-way blind index, and encrypted_number goes through encryptor.encrypt(). The proximity heuristic reports every line of the formatted chain, so a next-line comment cannot cover it.
     const inserted = await tenantDatabase
       .insertInto("phones")
       .values({
@@ -263,6 +264,7 @@ async function seed(): Promise<void> {
       })
       .returning("id")
       .executeTakeFirstOrThrow();
+    // care-y-ignore-end no-plaintext-db-write
     phoneId = inserted.id;
     console.log("Created dev telephony seed row.");
   }

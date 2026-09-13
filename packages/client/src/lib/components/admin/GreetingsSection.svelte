@@ -262,7 +262,16 @@
     },
   }));
 
-  async function fileToBase64(file: File): Promise<string> {
+  /**
+   * Read a file as base64url (the wire encoding for this project; see
+   * "Ciphertext on the Wire" in code-standards.md).
+   *
+   * FileReader emits standard base64, so the alphabet is translated here
+   * rather than re-encoding the bytes. @care-y/crypto's encode() would give
+   * the same string, but it builds it one byte at a time, which is a real
+   * cost on a multi-megabyte audio file where FileReader is native.
+   */
+  async function fileToBase64Url(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
@@ -272,7 +281,9 @@
           reject(new Error("Failed to encode file"));
           return;
         }
-        resolve(base64);
+        resolve(
+          base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
+        );
       };
       reader.onerror = () =>
         reject(reader.error ?? new Error("FileReader failed"));
@@ -294,7 +305,7 @@
       throw new ClientError("too_large");
     }
     uploadPhase = "uploading";
-    const base64 = await fileToBase64(uploadFile);
+    const base64 = await fileToBase64Url(uploadFile);
     return { base64, contentType };
   }
 

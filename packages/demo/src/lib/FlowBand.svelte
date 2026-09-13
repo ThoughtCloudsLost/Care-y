@@ -491,12 +491,14 @@
          same list docked in the handbook drawer, where the host owns the
          box and there is nothing to dismiss it off of. -->
     {#if presentation === "overlay"}
+      <!-- care-y-ignore-start no-click-without-keyboard -- a role="presentation" backdrop. The keyboard path is Escape, handled at the window (handleWindowKeydown), which is what the WAI-ARIA APG modal dialog pattern asks for. Making the scrim focusable would add a duplicate tab stop with no target. -->
       <div
         class="overlay-scrim"
         role="presentation"
         onclick={close}
         transition:chromeFade
       ></div>
+      <!-- care-y-ignore-end no-click-without-keyboard -->
     {/if}
     <section
       class="flow-band-root list-view"
