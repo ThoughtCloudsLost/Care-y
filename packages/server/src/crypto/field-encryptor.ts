@@ -20,6 +20,10 @@ import { CryptoError } from "../errors.js";
 
 export interface FieldEncryptor {
   encrypt(plaintext: string): Buffer;
+  /** Encrypts a Buffer directly without string conversion. Caller MUST zero
+   *  the input after use. For relay-grade code paths where JS strings are
+   *  prohibited (NEVER-Encryption: no JS strings for plaintext in relay). */
+  encryptBuffer(plaintext: Buffer): Buffer;
   decrypt(ciphertext: Buffer): string;
   /** Returns plaintext as a Buffer. Caller MUST zero it after use. */
   decryptToBuffer(ciphertext: Buffer): Buffer;
@@ -27,6 +31,10 @@ export interface FieldEncryptor {
 
 export interface BlindIndexer {
   hash(input: string, orgId: string): string;
+  /** Hashes a Buffer directly without string conversion. For relay-grade
+   *  code paths where JS strings are prohibited. The Buffer content is
+   *  treated as UTF-8 and normalized (lowercase + trim) before hashing. */
+  hashBuffer(input: Buffer, orgId: string): string;
 }
 
 export interface DerivedKeys {
@@ -38,6 +46,7 @@ export interface DerivedKeys {
 
 const BLIND_INDEX_INFO = "care-y-blind-index-v1";
 const FIELD_ENCRYPT_INFO = "care-y-field-encrypt-v1";
+const CONSULTANT_PHONE_INDEX_INFO = "consultant-phone-index";
 const REQUIRED_KEY_LENGTH = 32;
 
 /**
@@ -60,6 +69,30 @@ export function deriveKeys(opsSecretsKey: Buffer): DerivedKeys {
   );
 
   return { blindIndexKey, fieldEncryptKey };
+}
+
+/**
+ * Derives a blind-index key for consultant phone numbers under a separate
+ * HKDF label ("consultant-phone-index"). This key MUST NOT be shared with
+ * the phones.phone_hash indexer ("care-y-blind-index-v1"); a shared label
+ * would surface volunteer numbers as client merge suggestions (ADR-065
+ * domain separation).
+ */
+export function deriveConsultantPhoneIndexKey(opsSecretsKey: Buffer): Buffer {
+  if (opsSecretsKey.length !== REQUIRED_KEY_LENGTH) {
+    throw new CryptoError(
+      `OPS_SECRETS_KEY must be exactly ${String(REQUIRED_KEY_LENGTH)} bytes, got ${String(opsSecretsKey.length)}`,
+    );
+  }
+  return Buffer.from(
+    hkdfSync(
+      "sha256",
+      opsSecretsKey,
+      Buffer.alloc(0),
+      CONSULTANT_PHONE_INDEX_INFO,
+      32,
+    ),
+  );
 }
 
 // --- Field Encryption ---
@@ -127,6 +160,18 @@ export function createFieldEncryptor(key: Buffer): FieldEncryptor {
       }
     },
 
+    encryptBuffer(plaintext: Buffer): Buffer {
+      const nonce = Buffer.alloc(sodium.crypto_secretbox_NONCEBYTES);
+      sodium.randombytes_buf(nonce);
+
+      const ciphertext = Buffer.alloc(
+        plaintext.length + sodium.crypto_secretbox_MACBYTES,
+      );
+      sodium.crypto_secretbox_easy(ciphertext, plaintext, nonce, key);
+
+      return Buffer.concat([nonce, ciphertext]);
+    },
+
     decrypt(sealed: Buffer): string {
       const plaintext = decryptRaw(sealed, key);
       try {
@@ -171,6 +216,21 @@ export function createBlindIndexer(key: Buffer): BlindIndexer {
         .update(orgId + ":" + normalized)
         .digest("hex");
     },
+
+    hashBuffer(input: Buffer, orgId: string): string {
+      // Normalize by converting to lowercase + trim via a temporary Buffer.
+      // The temporary is zeroed after use (relay-grade plaintext rule).
+      const normalized = Buffer.from(
+        input.toString("utf-8").toLowerCase().trim(),
+      );
+      try {
+        return createHmac("sha256", key)
+          .update(orgId + ":" + normalized.toString("utf-8"))
+          .digest("hex");
+      } finally {
+        normalized.fill(0);
+      }
+    },
   };
 }
 
@@ -197,6 +257,9 @@ export function createNoopFieldEncryptor(): FieldEncryptor {
   return {
     encrypt(plaintext: string): Buffer {
       return Buffer.from(plaintext, "utf-8");
+    },
+    encryptBuffer(plaintext: Buffer): Buffer {
+      return Buffer.from(plaintext);
     },
     decrypt(ciphertext: Buffer): string {
       return ciphertext.toString("utf-8");

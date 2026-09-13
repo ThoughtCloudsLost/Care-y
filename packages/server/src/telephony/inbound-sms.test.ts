@@ -50,6 +50,7 @@ function createMockSealedBox(): SealedBoxEncryptor {
 function createMockIndexer(): BlindIndexer {
   return {
     hash: vi.fn((_input: string, _orgId: string) => "hashed-phone"),
+    hashBuffer: vi.fn((_input: Buffer, _orgId: string) => "hashed-phone"),
   };
 }
 

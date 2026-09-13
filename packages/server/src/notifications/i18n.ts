@@ -17,6 +17,8 @@ export interface NotificationStrings {
   readonly mentionNotification: (loginUrl: string) => string;
   readonly voicemailQuarantined: (loginUrl: string) => string;
   readonly smsPing: (loginUrl: string) => string;
+  /** Short SMS carrying a phone verification code. No event details. */
+  readonly verificationCode: (code: string) => string;
   readonly emailSubjectPrefix: string;
 }
 
@@ -33,6 +35,7 @@ const EN: NotificationStrings = {
   voicemailQuarantined: (url) =>
     `A voicemail could not be routed automatically and was quarantined. Log in to review it: ${url}`,
   smsPing: (url) => `You have a new notification. Visit ${url}`,
+  verificationCode: (code) => `Your CARE-Y verification code is ${code}`,
   emailSubjectPrefix: "CARE-Y",
 };
 
@@ -50,6 +53,7 @@ const ES: NotificationStrings = {
   voicemailQuarantined: (url) =>
     `Un correo de voz no pudo ser dirigido automaticamente y fue puesto en cuarentena. Inicie sesion para revisarlo: ${url}`,
   smsPing: (url) => `Tiene una nueva notificacion. Visite ${url}`,
+  verificationCode: (code) => `Su codigo de verificacion de CARE-Y es ${code}`,
   emailSubjectPrefix: "CARE-Y",
 };
 

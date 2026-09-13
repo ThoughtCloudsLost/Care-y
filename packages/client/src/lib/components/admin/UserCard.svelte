@@ -2,8 +2,9 @@
   import { Checkbox } from "konsta/svelte";
   import { CHECKBOX_BRAND_COLORS } from "$lib/components/shared/konsta-classes.js";
   import { personInitials } from "$lib/utils/initials.js";
-  import { Pencil } from "@lucide/svelte";
+  import { Pencil, Phone, MessageSquare } from "@lucide/svelte";
   import { RoleId } from "@care-y/shared";
+  import type { VolunteerReachabilityWire } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
@@ -18,6 +19,7 @@
     readonly hasKeys: boolean;
     readonly hasOrgKeyWrap: boolean;
     readonly isSelf: boolean;
+    readonly reachability?: VolunteerReachabilityWire;
     readonly selected?: boolean;
     readonly multiSelectActive?: boolean;
     /** Search term to highlight in the display name (search People cell). */
@@ -35,6 +37,7 @@
     hasKeys,
     hasOrgKeyWrap,
     isSelf,
+    reachability = "none",
     selected = false,
     multiSelectActive = false,
     searchTerm = null,
@@ -63,6 +66,25 @@
     if (!hasKeys)
       return { label: m.admin_users_key_no_keys(), cls: "key-warn" };
     return { label: m.admin_users_key_no_org(), cls: "key-warn" };
+  });
+
+  const reachabilityChip = $derived.by(() => {
+    switch (reachability) {
+      case "verified_sms":
+        return {
+          label: m.admin_reachability_callable_sms(),
+          icon: MessageSquare,
+        };
+      case "verified":
+        return { label: m.admin_reachability_callable(), icon: Phone };
+      case "unverified":
+        return {
+          label: m.admin_reachability_phone_unverified(),
+          icon: Phone,
+        };
+      case "none":
+        return null;
+    }
   });
 
   function handleCardClick(): void {
@@ -143,6 +165,13 @@
           {/if}
         </div>
         <span class="key-status {keyStatus.cls}">{keyStatus.label}</span>
+        {#if reachabilityChip}
+          {@const ReachIcon = reachabilityChip.icon}
+          <span class="reachability-chip">
+            <ReachIcon size={10} aria-hidden="true" />
+            {reachabilityChip.label}
+          </span>
+        {/if}
       </div>
 
       <!-- Role stamp: a role is who someone is (identity slot, brand ink) -->
@@ -272,6 +301,14 @@
 
   .key-warn {
     color: var(--care);
+  }
+
+  .reachability-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: var(--text-xs);
+    color: var(--muted);
   }
 
   /* ── Role stamp (identity slot: brand ink on the stamp anatomy) ── */

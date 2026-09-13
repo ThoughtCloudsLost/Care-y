@@ -884,6 +884,174 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     }, 60_000);
   });
 
+  // --- Auth: listUsers reachability field ---
+
+  describe("listUsers reachability", () => {
+    it("returns 'none' for users with no consultant row", async () => {
+      const authService = makeAuthService(tenantDb);
+      const admin = await authService.register({
+        identifier: `reach-admin-${randomUUID().slice(0, 8)}`,
+        password: "reach-admin-password-long1",
+        displayName: "Reach Admin",
+        roleId: RoleId.ADMIN,
+      });
+
+      const { caller } = createAuthedCaller(
+        { ...admin, isActive: true },
+        `reach-token-${randomUUID()}`,
+        true,
+      );
+      const users = await caller.auth.listUsers();
+      const self = users.find((u) => u.id === admin.id);
+      expect(self).toBeDefined();
+      expect(self!.reachability).toBe("none");
+    });
+
+    it("returns 'unverified' for a user with an unverified consultant row", async () => {
+      const authService = makeAuthService(tenantDb);
+      const admin = await authService.register({
+        identifier: `reach-unv-admin-${randomUUID().slice(0, 8)}`,
+        password: "reach-unv-admin-password-long",
+        displayName: "Reach Unv Admin",
+        roleId: RoleId.ADMIN,
+      });
+      const vol = await authService.register({
+        identifier: `reach-unv-vol-${randomUUID().slice(0, 8)}`,
+        password: "reach-unv-vol-password-long1",
+        displayName: "Reach Unv Vol",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      // Insert an unverified consultant row.
+      await tenantDb
+        .insertInto("consultants")
+        .values({
+          user_id: vol.id,
+          encrypted_phone: null,
+          is_verified: false,
+          preferred_call_method: "phone_callback",
+          sms_pings_enabled: false,
+          verify_sends_in_hour: 0,
+        })
+        .execute();
+
+      const { caller } = createAuthedCaller(
+        { ...admin, isActive: true },
+        `reach-unv-tok-${randomUUID()}`,
+        true,
+      );
+      const users = await caller.auth.listUsers();
+      const found = users.find((u) => u.id === vol.id);
+      expect(found).toBeDefined();
+      expect(found!.reachability).toBe("unverified");
+    });
+
+    it("returns 'verified' for a user with a verified consultant row without SMS pings", async () => {
+      const authService = makeAuthService(tenantDb);
+      const admin = await authService.register({
+        identifier: `reach-ver-admin-${randomUUID().slice(0, 8)}`,
+        password: "reach-ver-admin-password-long",
+        displayName: "Reach Ver Admin",
+        roleId: RoleId.ADMIN,
+      });
+      const vol = await authService.register({
+        identifier: `reach-ver-vol-${randomUUID().slice(0, 8)}`,
+        password: "reach-ver-vol-password-long1",
+        displayName: "Reach Ver Vol",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      await tenantDb
+        .insertInto("consultants")
+        .values({
+          user_id: vol.id,
+          encrypted_phone: Buffer.from("sealed-phone"),
+          is_verified: true,
+          preferred_call_method: "phone_callback",
+          sms_pings_enabled: false,
+          verify_sends_in_hour: 0,
+        })
+        .execute();
+
+      const { caller } = createAuthedCaller(
+        { ...admin, isActive: true },
+        `reach-ver-tok-${randomUUID()}`,
+        true,
+      );
+      const users = await caller.auth.listUsers();
+      const found = users.find((u) => u.id === vol.id);
+      expect(found).toBeDefined();
+      expect(found!.reachability).toBe("verified");
+    });
+
+    it("returns 'verified_sms' for a user with verified phone and SMS pings enabled with OPS copy", async () => {
+      const authService = makeAuthService(tenantDb);
+      const admin = await authService.register({
+        identifier: `reach-sms-admin-${randomUUID().slice(0, 8)}`,
+        password: "reach-sms-admin-password-long",
+        displayName: "Reach SMS Admin",
+        roleId: RoleId.ADMIN,
+      });
+      const vol = await authService.register({
+        identifier: `reach-sms-vol-${randomUUID().slice(0, 8)}`,
+        password: "reach-sms-vol-password-long1",
+        displayName: "Reach SMS Vol",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      await tenantDb
+        .insertInto("consultants")
+        .values({
+          user_id: vol.id,
+          encrypted_phone: Buffer.from("sealed-phone"),
+          is_verified: true,
+          preferred_call_method: "phone_callback",
+          sms_pings_enabled: true,
+          ops_encrypted_phone: Buffer.from("ops-encrypted-phone"),
+          verify_sends_in_hour: 0,
+        })
+        .execute();
+
+      const { caller } = createAuthedCaller(
+        { ...admin, isActive: true },
+        `reach-sms-tok-${randomUUID()}`,
+        true,
+      );
+      const users = await caller.auth.listUsers();
+      const found = users.find((u) => u.id === vol.id);
+      expect(found).toBeDefined();
+      expect(found!.reachability).toBe("verified_sms");
+    });
+
+    it("does not expose any phone-derived value beyond the enum", async () => {
+      const authService = makeAuthService(tenantDb);
+      const admin = await authService.register({
+        identifier: `reach-noexp-admin-${randomUUID().slice(0, 8)}`,
+        password: "reach-noexp-admin-password-long",
+        displayName: "Reach NoExp Admin",
+        roleId: RoleId.ADMIN,
+      });
+
+      const { caller } = createAuthedCaller(
+        { ...admin, isActive: true },
+        `reach-noexp-tok-${randomUUID()}`,
+        true,
+      );
+      const users = await caller.auth.listUsers();
+      for (const u of users) {
+        expect(u).not.toHaveProperty("ops_phone_hash");
+        expect(u).not.toHaveProperty("opsPhoneHash");
+        expect(u).not.toHaveProperty("phone");
+        expect(u).not.toHaveProperty("phoneHash");
+        expect(u).not.toHaveProperty("ops_encrypted_phone");
+        expect(u).not.toHaveProperty("opsEncryptedPhone");
+        expect(["none", "unverified", "verified", "verified_sms"]).toContain(
+          u.reachability,
+        );
+      }
+    });
+  });
+
   // --- Auth: setUserActive ---
 
   describe("setUserActive", () => {

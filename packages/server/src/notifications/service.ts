@@ -25,6 +25,8 @@ import { getStrings, buildLoginUrl } from "./i18n.js";
 import type { NotificationRecipientList } from "../tickets/notification-recipients.js";
 import type { NotificationPreferencesService } from "./preferences.js";
 import type { DispatchAllowLists } from "./preferences.js";
+import { getReachabilityForUsers } from "../telephony/reachability.js";
+import { NOTIFICATION_SMS_QUEUE } from "../jobs/notification-sms.js";
 
 export interface NotificationServiceDeps {
   readonly sse: SseService;
@@ -111,22 +113,52 @@ export function createNotificationService(
           });
       }
 
-      // 3. Email (via JobQueue for retry, filtered by preferences)
+      // 3. SMS + email dispatch with reachability-based split.
+      //
+      // Users in smsAllowed who have verified_sms reachability get an SMS
+      // ping. Everyone else in smsAllowed falls back to the email list.
+      // The fallback deliberately overrides a disabled email preference
+      // because a silently dropped escalation ping is the worse failure
+      // mode for a support tool serving at-risk populations.
+      //
       // Preference resolution happens at enqueue time, not at send time.
       // A retried job re-sends to the same recipient set even if the user
       // changed preferences between enqueue and retry. This is accepted:
       // enqueue-time semantics keep the job handler simple and the payload
       // PII-free (IDs only).
-      if (allow.emailAllowed.length > 0) {
+
+      let emailList: readonly string[];
+
+      if (allow.smsAllowed.length > 0) {
+        const reach = await getReachabilityForUsers(tDb, allow.smsAllowed);
+        const smsDeliverable = allow.smsAllowed.filter(
+          (id) => reach.get(id) === "verified_sms",
+        );
+        const smsFallback = allow.smsAllowed.filter(
+          (id) => reach.get(id) !== "verified_sms",
+        );
+        emailList = [...new Set([...allow.emailAllowed, ...smsFallback])];
+
+        if (smsDeliverable.length > 0) {
+          await deps.jobQueue.enqueue(NOTIFICATION_SMS_QUEUE, {
+            orgSchema,
+            orgSlug,
+            recipientUserIds: smsDeliverable,
+            eventType,
+          });
+        }
+      } else {
+        emailList = allow.emailAllowed;
+      }
+
+      if (emailList.length > 0) {
         await deps.jobQueue.enqueue("notification-email", {
           orgSchema,
           orgSlug,
-          recipientUserIds: [...allow.emailAllowed],
+          recipientUserIds: [...emailList],
           eventType,
         });
       }
-      // SMS: allow.smsAllowed is computed but unconsumed until the SMS
-      // dispatch leg is wired. Do not enqueue anything for it here.
     },
 
     async dispatchTicketless(tDb, orgSchema, orgSlug, eventType, userIds) {
@@ -163,13 +195,42 @@ export function createNotificationService(
           });
       }
 
-      // 3. Email (via JobQueue for retry, filtered by preferences)
-      // Enqueue-time semantics (see dispatch() comment).
-      if (allow.emailAllowed.length > 0) {
+      // 3. SMS + email dispatch with reachability-based split.
+      // Same logic as dispatch(): verified_sms users get an SMS ping,
+      // everyone else in smsAllowed falls back to the email list.
+      // The fallback deliberately overrides a disabled email preference
+      // because a silently dropped escalation ping is the worse failure
+      // mode for a support tool serving at-risk populations.
+
+      let emailList: readonly string[];
+
+      if (allow.smsAllowed.length > 0) {
+        const reach = await getReachabilityForUsers(tDb, allow.smsAllowed);
+        const smsDeliverable = allow.smsAllowed.filter(
+          (id) => reach.get(id) === "verified_sms",
+        );
+        const smsFallback = allow.smsAllowed.filter(
+          (id) => reach.get(id) !== "verified_sms",
+        );
+        emailList = [...new Set([...allow.emailAllowed, ...smsFallback])];
+
+        if (smsDeliverable.length > 0) {
+          await deps.jobQueue.enqueue(NOTIFICATION_SMS_QUEUE, {
+            orgSchema,
+            orgSlug,
+            recipientUserIds: smsDeliverable,
+            eventType,
+          });
+        }
+      } else {
+        emailList = allow.emailAllowed;
+      }
+
+      if (emailList.length > 0) {
         await deps.jobQueue.enqueue("notification-email", {
           orgSchema,
           orgSlug,
-          recipientUserIds: [...allow.emailAllowed],
+          recipientUserIds: [...emailList],
           eventType,
         });
       }

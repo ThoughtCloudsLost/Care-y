@@ -21,9 +21,11 @@ function createMockService(): ConsultantService {
   return {
     getByUserId: vi.fn(),
     register: vi.fn(),
+    prepareVerification: vi.fn(),
     verify: vi.fn(),
     updatePreference: vi.fn(),
     deleteByUserId: vi.fn(),
+    setSmsPings: vi.fn(),
   };
 }
 
@@ -101,7 +103,9 @@ describe("createConsultantRouter", () => {
         id: "consultant-1",
         isVerified: false,
         preferredCallMethod: "phone_callback",
-        encryptedPhone: "",
+        encryptedPhone: null as string | null,
+        smsPingsEnabled: false,
+        hasOpsPhone: false,
       };
       vi.mocked(mockService.getByUserId).mockResolvedValue(info);
 
@@ -112,41 +116,38 @@ describe("createConsultantRouter", () => {
   });
 
   describe("register", () => {
-    it("creates consultant, returns id", async () => {
+    it("creates consultant with metadata only (ADR-065), returns id", async () => {
       vi.mocked(mockService.register).mockResolvedValue({
         id: "consultant-1",
       });
 
       const result = await caller.register({
-        encryptedPhone: "dGVzdA==",
-        phoneHash: "abc123hash",
         preferredCallMethod: "phone_callback",
       });
 
       expect(result).toEqual({ id: "consultant-1" });
       expect(mockService.register).toHaveBeenCalledWith(
         USER_ID,
-        expect.any(Buffer),
-        "abc123hash",
         "phone_callback",
+        false, // smsPingsOptIn defaults to false
       );
     });
 
-    it("passes base64-decoded buffer to service", async () => {
+    it("passes smsPingsOptIn flag to service", async () => {
       vi.mocked(mockService.register).mockResolvedValue({
         id: "consultant-2",
       });
 
       await caller.register({
-        encryptedPhone: "AQID",
-        phoneHash: "hash456",
         preferredCallMethod: "webrtc",
+        smsPingsOptIn: true,
       });
 
-      const callArgs = vi.mocked(mockService.register).mock.calls[0]!;
-      const buf = callArgs[1];
-      expect(Buffer.isBuffer(buf)).toBe(true);
-      expect(buf).toEqual(Buffer.from([1, 2, 3]));
+      expect(mockService.register).toHaveBeenCalledWith(
+        USER_ID,
+        "webrtc",
+        true,
+      );
     });
   });
 

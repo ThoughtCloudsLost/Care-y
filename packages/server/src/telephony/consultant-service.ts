@@ -1,9 +1,13 @@
 /**
  * Service layer for volunteer consultant phone registration and verification.
  *
- * Owns the verification code generation, hashing, and expiry logic that
- * was previously inline in the route. Routes delegate here instead of
- * creating repositories directly.
+ * Owns the verification code generation, hashing, and expiry logic.
+ * Routes delegate here instead of creating repositories directly.
+ *
+ * ADR-065: register() carries metadata only (preferredCallMethod,
+ * smsPingsOptIn). All phone-derived data is written exclusively by
+ * prepareVerification(), which the relay verification endpoint calls
+ * after deriving all artifacts from a single plaintext Buffer.
  */
 
 import type { Kysely } from "kysely";
@@ -14,10 +18,25 @@ import {
   type ConsultantRepository,
 } from "./models/consultant-repo.js";
 import { randomInt, createHash } from "node:crypto";
-import { NotFoundError, AuthError } from "../errors.js";
+import {
+  NotFoundError,
+  AuthError,
+  RateLimitError,
+  ValidationError,
+} from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 
 const VERIFICATION_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
+const COOLDOWN_MS = 60 * 1000; // 60 seconds between sends
+const HOURLY_LIMIT = 5; // max 5 sends per hour
+const HOURLY_WINDOW_MS = 60 * 60 * 1000;
+// Wrong-code lockout mirrors the 2FA code services (sms-code.ts, email-code.ts)
+// which use MAX_ATTEMPTS = 3 per active code. The security-hardening.md
+// "Brute Force Specifics" section specifies 10 failed login attempts for
+// account lockout; 2FA code verification is stricter at 3 attempts per code
+// because codes are short (6 digits) and a single code grants access. We
+// mirror that 2FA threshold here.
+const MAX_VERIFICATION_ATTEMPTS = 3;
 
 function hashCode(code: string): string {
   return createHash("sha256").update(code).digest("hex");
@@ -27,20 +46,49 @@ export interface ConsultantInfo {
   readonly id: string;
   readonly isVerified: boolean;
   readonly preferredCallMethod: string;
-  readonly encryptedPhone: string;
+  readonly encryptedPhone: string | null;
+  readonly smsPingsEnabled: boolean;
+  readonly hasOpsPhone: boolean;
 }
 
 export interface ConsultantService {
   getByUserId(userId: string): Promise<ConsultantInfo | null>;
+  /** Metadata-only registration. No phone fields (ADR-065). */
   register(
     userId: string,
-    encryptedPhone: Buffer,
-    phoneHash: string,
     preferredCallMethod: string,
+    smsPingsOptIn: boolean,
   ): Promise<{ id: string }>;
+  /**
+   * Called by the relay verify endpoint (the ONLY phone write path, ADR-065).
+   * In one transaction: stages org-tier sealed copy, ops_phone_hash, and the
+   * staged OPS copy, resets is_verified, enforces cooldown + hourly cap,
+   * generates the code, stores codeHash/expiry. Returns the code for the
+   * caller to send (caller owns SMS + zeroing).
+   */
+  prepareVerification(
+    userId: string,
+    artifacts: {
+      readonly orgSealedPhone: Buffer;
+      readonly opsPhoneHash: string;
+      readonly opsEncryptedPhone: Buffer | null;
+    },
+  ): Promise<{ code: string }>;
+  /**
+   * Verifies the code. On success, sets is_verified and finalizes staged
+   * opt-in state in one UPDATE. On repeated failure past the lockout
+   * threshold, clears the code and requires a fresh send.
+   */
   verify(userId: string, code: string): Promise<void>;
   updatePreference(userId: string, preferredCallMethod: string): Promise<void>;
+  /** Atomically clears encrypted_phone, ops trio, and is_verified. */
   deleteByUserId(userId: string): Promise<void>;
+  /**
+   * Disabling: ops_encrypted_phone = NULL in the same statement.
+   * Enabling after the fact requires re-verification (the server no longer
+   * has the plaintext to encrypt): throws REVERIFICATION_REQUIRED.
+   */
+  setSmsPings(userId: string, enabled: boolean): Promise<void>;
 }
 
 /** Looks up a consultant by userId, throwing NotFoundError if missing. */
@@ -68,37 +116,95 @@ export function createConsultantService(
         id: record.id,
         isVerified: record.isVerified,
         preferredCallMethod: record.preferredCallMethod,
-        encryptedPhone: record.encryptedPhone.toString("base64url"),
+        encryptedPhone: record.encryptedPhone
+          ? record.encryptedPhone.toString("base64url")
+          : null,
+        smsPingsEnabled: record.smsPingsEnabled,
+        hasOpsPhone: record.opsEncryptedPhone !== null,
       };
     },
 
     async register(
       userId: string,
-      encryptedPhone: Buffer,
-      phoneHash: string,
       preferredCallMethod: string,
+      smsPingsOptIn: boolean,
     ): Promise<{ id: string }> {
+      // Metadata-only: no phone fields, no code generation (ADR-065).
+      // Code lifecycle moved entirely to prepareVerification.
       const consultant = await repo.create({
         userId,
-        encryptedPhone,
-        phoneHash,
         preferredCallMethod,
+        smsPingsOptIn,
       });
-
-      const code = String(randomInt(100000, 1000000));
-      const codeHash = hashCode(code);
-      const expiresAt = new Date(Date.now() + VERIFICATION_EXPIRY_MS);
-
-      await repo.setVerificationCode(consultant.id, codeHash, expiresAt);
-
-      // SMS sending requires relay endpoints (not yet implemented).
-      // Code is stored but not yet delivered.
 
       return { id: consultant.id };
     },
 
+    async prepareVerification(
+      userId: string,
+      artifacts: {
+        readonly orgSealedPhone: Buffer;
+        readonly opsPhoneHash: string;
+        readonly opsEncryptedPhone: Buffer | null;
+      },
+    ): Promise<{ code: string }> {
+      const record = await requireConsultantByUserId(repo, userId);
+      const now = new Date();
+
+      // Generate code before the atomic UPDATE; the code never leaves
+      // this return value (anti-pattern: never log or return it elsewhere).
+      const code = String(randomInt(100000, 1000000));
+      const codeHash = hashCode(code);
+      const expiresAt = new Date(now.getTime() + VERIFICATION_EXPIRY_MS);
+
+      // Thresholds for the conditional WHERE clause
+      const cooldownNotBefore = new Date(now.getTime() - COOLDOWN_MS);
+      const hourlyWindowNotBefore = new Date(now.getTime() - HOURLY_WINDOW_MS);
+
+      // Single conditional UPDATE: stages all phone artifacts, resets
+      // is_verified, stores new code, rolls the hourly window, increments
+      // the send counter, and resets attempt counter. The WHERE clause
+      // enforces both the 60s cooldown and the 5/hour cap atomically.
+      // Two concurrent requests both reading count 4 cannot both succeed:
+      // only one UPDATE will match the WHERE condition.
+      const rowsUpdated = await repo.stageVerification(
+        record.id,
+        artifacts,
+        codeHash,
+        expiresAt,
+        now,
+        cooldownNotBefore,
+        hourlyWindowNotBefore,
+        HOURLY_LIMIT,
+      );
+
+      if (rowsUpdated === 0) {
+        // The atomic UPDATE matched nothing. Re-read only to classify
+        // the error (cooldown vs hourly) for the client response.
+        const current = await repo.findByUserId(userId);
+        if (
+          current?.verifyLastSentAt &&
+          current.verifyLastSentAt > cooldownNotBefore
+        ) {
+          const elapsed = now.getTime() - current.verifyLastSentAt.getTime();
+          const retryAfter = Math.ceil((COOLDOWN_MS - elapsed) / 1000);
+          throw new RateLimitError(ErrorCode.RATE_LIMIT_COOLDOWN, retryAfter);
+        }
+        throw new RateLimitError(ErrorCode.RATE_LIMIT_HOURLY, 3600);
+      }
+
+      return { code };
+    },
+
     async verify(userId: string, code: string): Promise<void> {
       const record = await requireConsultantByUserId(repo, userId);
+
+      // Check for exhausted attempts before anything else
+      if (record.verificationAttempts >= MAX_VERIFICATION_ATTEMPTS) {
+        await repo.clearVerificationCode(record.id);
+        throw new ValidationError(ErrorCode.TOO_MANY_ATTEMPTS);
+      }
+
       const codeHash = hashCode(code);
       const verified = await repo.verifyAndActivate(
         record.id,
@@ -107,6 +213,12 @@ export function createConsultantService(
       );
 
       if (!verified) {
+        // Increment attempt counter; clear code if max reached
+        const newAttempts = await repo.incrementVerificationAttempts(record.id);
+        if (newAttempts >= MAX_VERIFICATION_ATTEMPTS) {
+          await repo.clearVerificationCode(record.id);
+          throw new ValidationError(ErrorCode.TOO_MANY_ATTEMPTS);
+        }
         throw new AuthError(ErrorCode.INVALID_VERIFICATION_CODE);
       }
     },
@@ -122,6 +234,23 @@ export function createConsultantService(
     async deleteByUserId(userId: string): Promise<void> {
       const record = await requireConsultantByUserId(repo, userId);
       await repo.delete(record.id);
+    },
+
+    async setSmsPings(userId: string, enabled: boolean): Promise<void> {
+      const record = await requireConsultantByUserId(repo, userId);
+
+      if (enabled) {
+        // Enabling requires that the OPS encrypted phone exists (was staged
+        // during verification with wantsPings=true). If absent, the server
+        // no longer has the plaintext and re-verification is needed.
+        if (record.opsEncryptedPhone === null) {
+          throw new ValidationError(ErrorCode.REVERIFICATION_REQUIRED);
+        }
+        await repo.setSmsPingsEnabled(record.id, true);
+      } else {
+        // Disabling nulls ops_encrypted_phone atomically
+        await repo.setSmsPingsEnabled(record.id, false);
+      }
     },
   };
 }

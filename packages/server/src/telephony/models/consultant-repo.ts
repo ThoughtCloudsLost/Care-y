@@ -3,7 +3,9 @@
  *
  * Stores encrypted phone numbers and verification state for volunteers
  * who receive forwarded calls. Phone numbers are encrypted at rest;
- * lookup uses a pre-computed hash (phone_hash).
+ * lookup uses a server-computed blind-index hash (ops_phone_hash) under
+ * the "consultant-phone-index" HKDF label (ADR-065, never the
+ * phones.phone_hash domain).
  *
  * All queries go through a Kysely instance bound to the tenant schema
  * via .withSchema(). Schema scoping is the caller's responsibility.
@@ -15,27 +17,65 @@ import type { TenantDatabase, ConsultantsTable } from "../../db/types.js";
 export interface ConsultantRecord {
   readonly id: string;
   readonly userId: string;
-  readonly encryptedPhone: Buffer;
-  readonly phoneHash: string;
+  readonly encryptedPhone: Buffer | null;
   readonly isVerified: boolean;
   readonly preferredCallMethod: string;
+  readonly opsPhoneHash: string | null;
+  readonly opsEncryptedPhone: Buffer | null;
+  readonly smsPingsEnabled: boolean;
+  readonly verificationCodeHash: string | null;
+  readonly verificationExpiresAt: Date | null;
+  readonly verificationAttempts: number;
+  readonly verifySendsHourStart: Date | null;
+  readonly verifySendsInHour: number;
+  readonly verifyLastSentAt: Date | null;
 }
 
 export interface ConsultantRepository {
   findByUserId(userId: string): Promise<ConsultantRecord | null>;
   create(input: {
     userId: string;
-    encryptedPhone: Buffer;
-    phoneHash: string;
     preferredCallMethod: string;
+    smsPingsOptIn: boolean;
   }): Promise<ConsultantRecord>;
   setVerificationCode(
     id: string,
     codeHash: string,
     expiresAt: Date,
   ): Promise<void>;
+  /**
+   * Atomically stages phone artifacts, resets is_verified, stores a new
+   * code hash/expiry, rolls the hourly window, increments the hourly
+   * counter, and resets attempts in a single UPDATE whose WHERE clause
+   * enforces both the cooldown and hourly cap. Returns the number of rows
+   * affected: 0 means the rate-limit conditions were not met (the UPDATE
+   * matched nothing). The caller reads the row afterward only to classify
+   * the error (cooldown vs hourly) for the response.
+   */
+  stageVerification(
+    id: string,
+    artifacts: {
+      readonly orgSealedPhone: Buffer;
+      readonly opsPhoneHash: string;
+      readonly opsEncryptedPhone: Buffer | null;
+    },
+    codeHash: string,
+    expiresAt: Date,
+    now: Date,
+    cooldownNotBefore: Date,
+    hourlyWindowNotBefore: Date,
+    hourlyLimit: number,
+  ): Promise<number>;
+  /** Atomic verify: sets is_verified, clears code, finalizes ops columns. */
   verifyAndActivate(id: string, codeHash: string, now: Date): Promise<boolean>;
+  /** Increments verification_attempts. Returns new count. */
+  incrementVerificationAttempts(id: string): Promise<number>;
+  /** Clears code and attempts (lockout exhaustion). */
+  clearVerificationCode(id: string): Promise<void>;
   updatePreferredCallMethod(id: string, method: string): Promise<void>;
+  /** Atomically nulls ops_encrypted_phone when disabling SMS pings. */
+  setSmsPingsEnabled(id: string, enabled: boolean): Promise<void>;
+  /** Atomically clears encrypted_phone, ops columns, and is_verified. */
   delete(id: string): Promise<void>;
 }
 
@@ -45,10 +85,18 @@ function toConsultantRecord(
   return {
     id: row.id,
     userId: row.user_id,
-    encryptedPhone: row.encrypted_phone,
-    phoneHash: row.phone_hash,
+    encryptedPhone: row.encrypted_phone ?? null,
     isVerified: row.is_verified,
     preferredCallMethod: row.preferred_call_method,
+    opsPhoneHash: row.ops_phone_hash ?? null,
+    opsEncryptedPhone: row.ops_encrypted_phone ?? null,
+    smsPingsEnabled: row.sms_pings_enabled,
+    verificationCodeHash: row.verification_code_hash ?? null,
+    verificationExpiresAt: row.verification_expires_at ?? null,
+    verificationAttempts: row.verification_attempts,
+    verifySendsHourStart: row.verify_sends_hour_start ?? null,
+    verifySendsInHour: row.verify_sends_in_hour,
+    verifyLastSentAt: row.verify_last_sent_at ?? null,
   };
 }
 
@@ -69,17 +117,16 @@ export function createConsultantRepository(
 
     async create(input: {
       userId: string;
-      encryptedPhone: Buffer;
-      phoneHash: string;
       preferredCallMethod: string;
+      smsPingsOptIn: boolean;
     }): Promise<ConsultantRecord> {
       const row = await db
         .insertInto("consultants")
         .values({
           user_id: input.userId,
-          encrypted_phone: input.encryptedPhone,
-          phone_hash: input.phoneHash,
           preferred_call_method: input.preferredCallMethod,
+          // sms_pings_enabled stays false until verification finalizes it;
+          // smsPingsOptIn is the staged intent, stored in the service layer.
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -97,9 +144,89 @@ export function createConsultantRepository(
         .set({
           verification_code_hash: codeHash,
           verification_expires_at: expiresAt,
+          verification_attempts: 0,
         })
         .where("id", "=", id)
         .execute();
+    },
+
+    async stageVerification(
+      id: string,
+      artifacts: {
+        readonly orgSealedPhone: Buffer;
+        readonly opsPhoneHash: string;
+        readonly opsEncryptedPhone: Buffer | null;
+      },
+      codeHash: string,
+      expiresAt: Date,
+      now: Date,
+      cooldownNotBefore: Date,
+      hourlyWindowNotBefore: Date,
+      hourlyLimit: number,
+    ): Promise<number> {
+      // Single conditional UPDATE: stages all phone artifacts, resets
+      // is_verified, stores new code, rolls the hourly window, increments
+      // the hourly counter, and resets attempts. The WHERE clause enforces
+      // the cooldown (verify_last_sent_at must be null or before the
+      // cooldown threshold) and the hourly cap (window must have expired
+      // or count must be below limit). Zero rows returned means a rate
+      // limit condition was not met.
+      const result = await db
+        .updateTable("consultants")
+        .set((eb) => ({
+          encrypted_phone: artifacts.orgSealedPhone,
+          ops_phone_hash: artifacts.opsPhoneHash,
+          ops_encrypted_phone: artifacts.opsEncryptedPhone,
+          is_verified: eb.lit(false),
+          verification_code_hash: codeHash,
+          verification_expires_at: expiresAt,
+          verification_attempts: 0,
+          verify_last_sent_at: now,
+          // Roll the hourly window: if hour_start is null or older than
+          // the window threshold, reset counter to 1; otherwise increment.
+          verify_sends_in_hour: eb
+            .case()
+            .when(
+              eb.or([
+                eb("verify_sends_hour_start", "is", null),
+                eb("verify_sends_hour_start", "<=", hourlyWindowNotBefore),
+              ]),
+            )
+            .then(1)
+            .else(eb("verify_sends_in_hour", "+", 1))
+            .end(),
+          // Roll the window start: reset to now if expired, keep if current.
+          verify_sends_hour_start: eb
+            .case()
+            .when(
+              eb.or([
+                eb("verify_sends_hour_start", "is", null),
+                eb("verify_sends_hour_start", "<=", hourlyWindowNotBefore),
+              ]),
+            )
+            .then(now)
+            .else(eb.ref("verify_sends_hour_start"))
+            .end(),
+        }))
+        .where("id", "=", id)
+        // Cooldown: last sent must be null or before the threshold
+        .where((eb) =>
+          eb.or([
+            eb("verify_last_sent_at", "is", null),
+            eb("verify_last_sent_at", "<=", cooldownNotBefore),
+          ]),
+        )
+        // Hourly cap: window expired (will roll) OR count below limit
+        .where((eb) =>
+          eb.or([
+            eb("verify_sends_hour_start", "is", null),
+            eb("verify_sends_hour_start", "<=", hourlyWindowNotBefore),
+            eb("verify_sends_in_hour", "<", hourlyLimit),
+          ]),
+        )
+        .execute();
+
+      return Number(result[0]?.numUpdatedRows ?? 0);
     },
 
     async verifyAndActivate(
@@ -109,7 +236,11 @@ export function createConsultantRepository(
     ): Promise<boolean> {
       const row = await db
         .selectFrom("consultants")
-        .select(["verification_code_hash", "verification_expires_at"])
+        .select([
+          "verification_code_hash",
+          "verification_expires_at",
+          "verification_attempts",
+        ])
         .where("id", "=", id)
         .executeTakeFirst();
 
@@ -129,11 +260,37 @@ export function createConsultantRepository(
           is_verified: true,
           verification_code_hash: null,
           verification_expires_at: null,
+          verification_attempts: 0,
         })
         .where("id", "=", id)
         .execute();
 
       return true;
+    },
+
+    async incrementVerificationAttempts(id: string): Promise<number> {
+      const result = await db
+        .updateTable("consultants")
+        .set((eb) => ({
+          verification_attempts: eb("verification_attempts", "+", 1),
+        }))
+        .where("id", "=", id)
+        .returning("verification_attempts")
+        .executeTakeFirstOrThrow();
+
+      return result.verification_attempts;
+    },
+
+    async clearVerificationCode(id: string): Promise<void> {
+      await db
+        .updateTable("consultants")
+        .set({
+          verification_code_hash: null,
+          verification_expires_at: null,
+          verification_attempts: 0,
+        })
+        .where("id", "=", id)
+        .execute();
     },
 
     async updatePreferredCallMethod(id: string, method: string): Promise<void> {
@@ -142,6 +299,26 @@ export function createConsultantRepository(
         .set({ preferred_call_method: method })
         .where("id", "=", id)
         .execute();
+    },
+
+    async setSmsPingsEnabled(id: string, enabled: boolean): Promise<void> {
+      if (enabled) {
+        await db
+          .updateTable("consultants")
+          .set({ sms_pings_enabled: true })
+          .where("id", "=", id)
+          .execute();
+      } else {
+        // Disabling nulls the ops copy in the same statement (security action)
+        await db
+          .updateTable("consultants")
+          .set({
+            sms_pings_enabled: false,
+            ops_encrypted_phone: null,
+          })
+          .where("id", "=", id)
+          .execute();
+      }
     },
 
     async delete(id: string): Promise<void> {

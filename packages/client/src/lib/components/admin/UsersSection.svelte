@@ -647,6 +647,7 @@
             hasKeys={user.hasKeys}
             hasOrgKeyWrap={user.hasOrgKeyWrap}
             {isSelf}
+            reachability={user.reachability}
             selected={selectedIds.has(user.id)}
             {multiSelectActive}
             onedit={(id: string) => void handleUserEdit(id)}

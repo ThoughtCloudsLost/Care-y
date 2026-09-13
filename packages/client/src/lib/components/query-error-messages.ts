@@ -154,6 +154,10 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.GREETING_NOT_FOUND]: () => m.error_greeting_not_found(),
   [ErrorCode.SMS_RESPONSE_NOT_FOUND]: () => m.error_sms_response_not_found(),
 
+  // Consultant phone verification
+  [ErrorCode.REVERIFICATION_REQUIRED]: () => m.error_reverification_required(),
+  [ErrorCode.CONSULTANT_NOT_VERIFIED]: () => m.error_consultant_not_verified(),
+
   // Role permission overrides
   [ErrorCode.PERMISSION_LOCKED]: () => m.error_permission_locked(),
 };

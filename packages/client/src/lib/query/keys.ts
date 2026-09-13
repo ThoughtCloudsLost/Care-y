@@ -150,6 +150,7 @@ export const presetKeys = {
 
 export const consultantKeys = {
   all: ["consultant"] as const,
+  self: () => [...consultantKeys.all, "self"] as const,
 };
 
 export const orgKeyKeys = {

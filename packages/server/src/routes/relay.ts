@@ -21,13 +21,19 @@ import type {
   FieldEncryptor,
   BlindIndexer,
 } from "../crypto/field-encryptor.js";
+import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import type { ConsultantService } from "../telephony/consultant-service.js";
 import type { PendingClient } from "../tickets/ticket-service.js";
 import type { CallTracker } from "../telephony/call-tracker.js";
 import { generateTwilioAccessToken } from "../telephony/twilio-token.js";
 import { createPhoneRepository } from "../telephony/models/phone-repo.js";
+import { isE164Buffer } from "../telephony/phone-utils.js";
+import { getStrings } from "../notifications/i18n.js";
+import { RateLimitError } from "../errors.js";
 import {
   readRawBody,
   extractBufferField,
+  extractBooleanField,
   authenticateRelay,
   sendJsonResponse,
   sendRelayError,
@@ -36,7 +42,7 @@ import {
   type OrgResolver,
 } from "./relay-utils.js";
 import { readFormBody } from "./webhooks.js";
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Dependencies
@@ -84,6 +90,16 @@ export interface RelayHandlerDeps {
     tenantDb: Kysely<TenantDatabase>,
     fieldEncryptor: FieldEncryptor,
   ) => Promise<Buffer | null>;
+  /** Blind indexer keyed with the consultant-phone-index HKDF label (ADR-065). */
+  readonly consultantPhoneIndexer: BlindIndexer;
+  /** Factory: builds a SealedBoxEncryptor from the org's public key. */
+  readonly getSealedBoxEncryptor: (
+    orgSchema: string,
+  ) => Promise<SealedBoxEncryptor | null>;
+  /** Factory: creates a tenant-scoped ConsultantService. */
+  readonly createConsultantService: (
+    db: Kysely<TenantDatabase>,
+  ) => ConsultantService;
 }
 
 export interface PendingCall {
@@ -155,6 +171,8 @@ export function createRelayHandler(deps: RelayHandlerDeps): RelayHandler {
       await handleWebrtcToken(req, res, session, deps);
     } else if (url === "/relay/phone-lookup") {
       await handlePhoneLookup(req, res, session, deps);
+    } else if (url === "/relay/consultant-verify") {
+      await handleConsultantVerifyRelay(req, res, session, deps);
     } else {
       res.writeHead(404);
       res.end();
@@ -327,6 +345,28 @@ async function resolveCallContext(
   const consultantPhoneBuf = extractBufferField(rawBody, "consultantPhone");
   if (!consultantPhoneBuf || consultantPhoneBuf.length === 0) {
     sendRelayError(res, 400, "MISSING_CONSULTANT_PHONE");
+    return { ok: false };
+  }
+
+  // Verify the submitted number matches the consultant's verified phone.
+  // Derive the hash immediately (before any subsequent await) so plaintext
+  // lifetime stays minimal and the existing zeroing path is not weakened.
+  // Uses session.orgSchema as the salt, matching handleConsultantVerifyRelay.
+  if (consultant.opsPhoneHash === null) {
+    sendRelayError(res, 403, "CONSULTANT_NOT_VERIFIED");
+    return { ok: false };
+  }
+  const submittedHash = deps.consultantPhoneIndexer.hashBuffer(
+    consultantPhoneBuf,
+    session.orgSchema,
+  );
+  const storedBuf = Buffer.from(consultant.opsPhoneHash, "utf-8");
+  const submittedBuf = Buffer.from(submittedHash, "utf-8");
+  if (
+    storedBuf.length !== submittedBuf.length ||
+    !timingSafeEqual(storedBuf, submittedBuf)
+  ) {
+    sendRelayError(res, 403, "CONSULTANT_NOT_VERIFIED");
     return { ok: false };
   }
 
@@ -717,6 +757,115 @@ async function handlePhoneLookup(
       found: false,
       token,
     });
+  } finally {
+    rawBody?.fill(0);
+    phoneBuf?.fill(0);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Consultant Phone Verification (POST /relay/consultant-verify)
+// ---------------------------------------------------------------------------
+
+/**
+ * Receives { phone, wantsPings }. Derives all phone artifacts from the one
+ * plaintext Buffer (ADR-065 single write path), stages them via
+ * prepareVerification, then sends the verification code SMS.
+ *
+ * The phone Buffer and raw body are zeroed in the finally block.
+ * The only toString on the phone Buffer is the provider sendSms call
+ * (same accepted boundary as handleCallRelay's consultantPhoneBuf.toString).
+ */
+async function handleConsultantVerifyRelay(
+  req: IncomingMessage,
+  res: ServerResponse,
+  session: RelaySession,
+  deps: RelayHandlerDeps,
+): Promise<void> {
+  let rawBody: Buffer | null = null;
+  let phoneBuf: Buffer | null = null;
+
+  try {
+    rawBody = await readRawBody(req, MAX_RELAY_BODY);
+    phoneBuf = extractBufferField(rawBody, "phone");
+
+    if (!phoneBuf || !isE164Buffer(phoneBuf)) {
+      sendRelayError(res, 400, "INVALID_PHONE");
+      return;
+    }
+
+    const wantsPings = extractBooleanField(rawBody, "wantsPings") ?? false;
+
+    // Derive all three artifacts from the one buffer (ADR-065).
+    // No awaits between derivation and the finally zeroing except the
+    // provider send, which requires the phone buffer.
+    const sealedBox = await deps.getSealedBoxEncryptor(session.orgSchema);
+    if (!sealedBox) {
+      sendRelayError(res, 500, "NO_ORG_KEY");
+      return;
+    }
+
+    const orgSealedPhone = sealedBox.sealBuffer(phoneBuf);
+    const opsPhoneHash = deps.consultantPhoneIndexer.hashBuffer(
+      phoneBuf,
+      session.orgSchema,
+    );
+    const opsEncryptedPhone = wantsPings
+      ? deps.fieldEncryptor.encryptBuffer(phoneBuf)
+      : null;
+
+    const tenantDb = deps.getTenantDb(session.orgSchema);
+    const consultantService = deps.createConsultantService(tenantDb);
+
+    let code: string;
+    try {
+      const result = await consultantService.prepareVerification(
+        session.userId,
+        { orgSealedPhone, opsPhoneHash, opsEncryptedPhone },
+      );
+      code = result.code;
+    } catch (err: unknown) {
+      if (err instanceof RateLimitError) {
+        res.setHeader("Retry-After", String(err.retryAfterSeconds));
+        sendRelayError(res, 429, "RATE_LIMITED");
+        return;
+      }
+      throw err;
+    }
+
+    const provider = await deps.getProvider(session.orgSchema);
+    if (!provider) {
+      sendRelayError(res, 500, "NO_PROVIDER");
+      return;
+    }
+
+    const from = await deps.resolveCallerIdByPurpose(
+      session.orgSchema,
+      "outbound",
+    );
+    if (from === null) {
+      sendRelayError(res, 400, "NO_CALLER_ID");
+      return;
+    }
+
+    const strings = getStrings("en");
+    const smsBody = strings.verificationCode(code);
+
+    try {
+      await provider.sendSms(phoneBuf.toString("utf-8"), smsBody, from);
+    } catch {
+      // Generic failure log with user ID only (no phone, no code, no body)
+      console.error(`Verification SMS send failed for user ${session.userId}`);
+      sendRelayError(res, 502, "PROVIDER_ERROR");
+      return;
+    }
+
+    sendJsonResponse(res, 200, { sent: true });
+  } catch (err: unknown) {
+    // Catch-all for unexpected errors (NotFoundError from missing consultant
+    // registration, etc.). Log user ID only.
+    console.error(`Consultant verify relay failed for user ${session.userId}`);
+    sendRelayError(res, 500, "INTERNAL_ERROR");
   } finally {
     rawBody?.fill(0);
     phoneBuf?.fill(0);

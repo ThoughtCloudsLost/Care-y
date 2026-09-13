@@ -112,6 +112,10 @@ export const ErrorCode = {
   // --- Ticket content editing (7.5b) ---
   TICKET_KEY_GENERATION_STALE: "TICKET_KEY_GENERATION_STALE",
 
+  // --- Consultant phone verification ---
+  REVERIFICATION_REQUIRED: "REVERIFICATION_REQUIRED",
+  CONSULTANT_NOT_VERIFIED: "CONSULTANT_NOT_VERIFIED",
+
   // --- Role permission overrides ---
   PERMISSION_LOCKED: "PERMISSION_LOCKED",
 } as const;
