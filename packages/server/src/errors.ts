@@ -215,6 +215,35 @@ export class AuditError extends AppError {
   readonly httpStatus = 500;
 }
 
+/** Reply token operation failed (unknown token, revoked, mint failure) */
+export class ReplyTokenError extends AppError {
+  readonly code = "REPLY_TOKEN_ERROR" as const;
+  readonly httpStatus: number;
+
+  constructor(message: string, httpStatus = 400) {
+    super(message);
+    this.httpStatus = httpStatus;
+  }
+}
+
+/** Inbound email ingest failed (missing ticket, encrypt/store failure).
+ *  The SMTP receiver maps this to a 451 transient reply so the sending
+ *  MTA retries; the message itself never appears in the error. */
+export class InboundEmailError extends AppError {
+  readonly code = "INBOUND_EMAIL_ERROR" as const;
+  readonly httpStatus = 500;
+}
+
+/** A communication channel (SMS, email, voice, portal, share link) is disabled by org policy. */
+export class ChannelDisabledError extends ForbiddenError {
+  readonly channel: string;
+
+  constructor(channel: string) {
+    super(channel);
+    this.channel = channel;
+  }
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }

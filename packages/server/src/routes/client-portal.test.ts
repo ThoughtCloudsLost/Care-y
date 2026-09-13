@@ -71,6 +71,8 @@ import type {
   PortalReplyServiceInput,
 } from "../portal/portal-message-service.js";
 import type * as AccountServiceModule from "../portal/account-service.js";
+import type * as ContactExposureServiceModule from "../portal/contact-exposure-service.js";
+import type * as ChannelServiceModule from "../portal/channel-service.js";
 import {
   UsernameTakenError,
   StaleThreadError,
@@ -2049,6 +2051,7 @@ describe("client-portal router", () => {
         };
       };
       rewrappedMessages: never[];
+      skippedMessageIds: never[];
     } {
       return {
         channelId: VALID_CHANNEL_ID,
@@ -2066,6 +2069,7 @@ describe("client-portal router", () => {
           },
         },
         rewrappedMessages: [],
+        skippedMessageIds: [],
       };
     }
 
@@ -2148,6 +2152,7 @@ describe("client-portal router", () => {
         };
       };
       rewrappedMessages: never[];
+      skippedMessageIds: never[];
     } {
       return {
         currentAuthToken: Buffer.alloc(32, 0xaa).toString("base64"),
@@ -2162,6 +2167,7 @@ describe("client-portal router", () => {
           },
         },
         rewrappedMessages: [],
+        skippedMessageIds: [],
       };
     }
 
@@ -2330,6 +2336,1364 @@ describe("client-portal router", () => {
       expect(cookie).not.toContain("Domain");
 
       expect(mockAccountLogout).toHaveBeenCalledOnce();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Module-level mocks for cold procedure tests below.
+// vi.mock is hoisted by vitest's transform regardless of placement.
+// ---------------------------------------------------------------------------
+
+const mockGetSealedContactInfo = vi.fn();
+const mockAddPassphrase = vi.fn();
+
+vi.mock("../portal/contact-exposure-service.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContactExposureServiceModule>()),
+  getSealedContactInfo: (...args: unknown[]) =>
+    (mockGetSealedContactInfo as (...a: unknown[]) => unknown)(...args),
+}));
+
+vi.mock("../portal/channel-service.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ChannelServiceModule>()),
+  addPassphrase: (...args: unknown[]) =>
+    (mockAddPassphrase as (...a: unknown[]) => unknown)(...args),
+}));
+
+// ---------------------------------------------------------------------------
+// Cold procedure tests: channel-token (Secure Link) auth model
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (channel-token procedures)", () => {
+  const VALID_CHANNEL_ID = "a".repeat(48);
+  const VALID_AUTH = Buffer.alloc(32, 0xcc).toString("base64");
+  const SEEDED_PLAINTEXT_SENTINEL = "rt-contact-payload-sentinel";
+
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetSealedContactInfo.mockResolvedValue({
+      sealed: Buffer.from("ct-sealed-envelope").toString("base64url"),
+    });
+    mockAddPassphrase.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function fakeChannelRow(): PortalChannelRow {
+    return {
+      id: crypto.randomUUID() as ChannelRowId,
+      client_id: crypto.randomUUID() as ClientId,
+      channel_id: VALID_CHANNEL_ID as ChannelSecret,
+      auth_hash: Buffer.alloc(32, 0xaa),
+      client_public: Buffer.alloc(32, 0xbb),
+      has_passphrase: true,
+      key_check_ephemeral_point: Buffer.alloc(32),
+      key_check_nonce: Buffer.alloc(24),
+      key_check_ciphertext: Buffer.alloc(48),
+      status: "active",
+      created_at: new Date(),
+      last_seen_at: null,
+      last_notified_at: null,
+      revoked_at: null,
+      kind: "secure_link",
+    };
+  }
+
+  function buildChannelDeps(
+    overrides?: Partial<ClientPortalRouterDeps>,
+  ): ClientPortalRouterDeps {
+    return buildDeps({
+      portalChannelService: {
+        resolveAuthedChannel: vi.fn().mockResolvedValue(fakeChannelRow()),
+      },
+      portalMessageService: {
+        bootstrap: vi.fn().mockResolvedValue({
+          hasPassphrase: true,
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32).toString("base64"),
+            nonce: Buffer.alloc(24).toString("base64"),
+            ciphertext: Buffer.alloc(48).toString("base64"),
+          },
+          ticketId: crypto.randomUUID(),
+          messages: [],
+          attachments: [],
+          recordings: [],
+          callEntries: [],
+          messagesExpireDays: 30,
+          safeExitUrl: null,
+          upgradeOptions: [],
+        }),
+        clientReply: vi.fn().mockResolvedValue(undefined),
+        listMessages: vi.fn().mockResolvedValue({
+          messages: [
+            {
+              id: crypto.randomUUID(),
+              followupId: crypto.randomUUID(),
+              direction: "to_client",
+              type: "message",
+              ephemeralPoint: "ep1",
+              nonce: "n1",
+              ciphertext: "ct1",
+              createdAt: new Date().toISOString(),
+              editedAt: null,
+            },
+          ],
+          totalCount: 1,
+        }),
+        hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+      },
+      portalReadLimiter: allowLimiter(),
+      portalReplyLimiter: allowLimiter(),
+      portalReplyIpLimiter: allowLimiter(),
+      fieldEncryptor: {
+        encrypt: vi.fn(),
+        decrypt: vi.fn(),
+      } as unknown as FieldEncryptor,
+      ...overrides,
+    });
+  }
+
+  function makeChannelInput(): { channelId: string; auth: string } {
+    return { channelId: VALID_CHANNEL_ID, auth: VALID_AUTH };
+  }
+
+  // -- contactInfo --
+
+  describe("contactInfo", () => {
+    it("returns sealed envelope for an authenticated channel", async () => {
+      const deps = buildChannelDeps();
+      const caller = buildCaller(deps);
+      const result = await caller.contactInfo(makeChannelInput());
+      // Wire format: base64url string (consumed by portal eciesDecrypt)
+      expect(typeof result.sealed).toBe("string");
+      expect(result.sealed.length).toBeGreaterThan(0);
+      expect(mockGetSealedContactInfo).toHaveBeenCalledOnce();
+    });
+
+    it("returns NOT_FOUND when fieldEncryptor is null", async () => {
+      const deps = buildChannelDeps({ fieldEncryptor: null });
+      const caller = buildCaller(deps);
+      await expectTrpcError(
+        caller.contactInfo(makeChannelInput()),
+        "NOT_FOUND",
+      );
+      expect(mockGetSealedContactInfo).not.toHaveBeenCalled();
+    });
+
+    it("returns NOT_FOUND when portal channel deps are null", async () => {
+      const deps = buildDeps({ fieldEncryptor: null });
+      const caller = buildCaller(deps);
+      await expectTrpcError(
+        caller.contactInfo(makeChannelInput()),
+        "NOT_FOUND",
+      );
+    });
+
+    it("returns NOT_FOUND for unknown channel (null from resolve)", async () => {
+      const deps = buildChannelDeps({
+        portalChannelService: {
+          resolveAuthedChannel: vi.fn().mockResolvedValue(null),
+        },
+      });
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const caller = buildCaller(deps);
+      await expectTrpcError(
+        caller.contactInfo(makeChannelInput()),
+        "NOT_FOUND",
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("maps PortalContactLockedError to FORBIDDEN with typed code", async () => {
+      const { PortalContactLockedError } =
+        await import("../portal/portal-errors.js");
+      mockGetSealedContactInfo.mockRejectedValue(
+        new PortalContactLockedError(),
+      );
+      const deps = buildChannelDeps();
+      const caller = buildCaller(deps);
+      const err = await expectTrpcError(
+        caller.contactInfo(makeChannelInput()),
+        "FORBIDDEN",
+      );
+      expect(err.message).toBe("PORTAL_CONTACT_LOCKED");
+    });
+
+    it("enforces read rate limit before channel resolution", async () => {
+      const deps = buildChannelDeps({ portalReadLimiter: denyLimiter() });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.contactInfo(makeChannelInput()),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+      expect(err.cause).toBeInstanceOf(RateLimitError);
+      expect(mockGetSealedContactInfo).not.toHaveBeenCalled();
+    });
+
+    it("response never contains seeded plaintext", async () => {
+      mockGetSealedContactInfo.mockResolvedValue({
+        sealed: Buffer.from("ct-sealed-data").toString("base64url"),
+      });
+      const deps = buildChannelDeps();
+      const caller = buildCaller(deps);
+      const result = await caller.contactInfo(makeChannelInput());
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain(SEEDED_PLAINTEXT_SENTINEL);
+    });
+  });
+
+  // -- portalMessagePage --
+
+  describe("portalMessagePage", () => {
+    it("returns paginated messages for an authenticated channel", async () => {
+      const deps = buildChannelDeps();
+      const caller = buildCaller(deps);
+      const result = await caller.portalMessagePage({
+        ...makeChannelInput(),
+        limit: 10,
+        direction: "newer",
+      });
+      expect(result.messages).toHaveLength(1);
+      expect(result.totalCount).toBe(1);
+      expect(deps.portalMessageService!.listMessages).toHaveBeenCalledOnce();
+    });
+
+    it("passes limit, cursor, and direction to the service", async () => {
+      const mockListMessages = vi.fn().mockResolvedValue({
+        messages: [],
+        totalCount: 0,
+      });
+      const deps = buildChannelDeps({
+        portalMessageService: {
+          bootstrap: vi.fn(),
+          clientReply: vi.fn(),
+          listMessages: mockListMessages,
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+        },
+      });
+      const caller = buildCaller(deps);
+      const cursorId = crypto.randomUUID();
+      await caller.portalMessagePage({
+        ...makeChannelInput(),
+        limit: 25,
+        cursor: cursorId,
+        direction: "older",
+      });
+      const serviceOpts = mockListMessages.mock.calls[0]![2] as {
+        limit: number;
+        cursor: string;
+        direction: string;
+      };
+      expect(serviceOpts.limit).toBe(25);
+      expect(serviceOpts.cursor).toBe(cursorId);
+      expect(serviceOpts.direction).toBe("older");
+    });
+
+    it("returns NOT_FOUND when portal deps are not configured", async () => {
+      const caller = buildCaller(buildDeps());
+      await expectTrpcError(
+        caller.portalMessagePage({
+          ...makeChannelInput(),
+          limit: 10,
+          direction: "newer",
+        }),
+        "NOT_FOUND",
+      );
+    });
+
+    it("returns NOT_FOUND for unknown channel", async () => {
+      const deps = buildChannelDeps({
+        portalChannelService: {
+          resolveAuthedChannel: vi.fn().mockResolvedValue(null),
+        },
+      });
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const caller = buildCaller(deps);
+      await expectTrpcError(
+        caller.portalMessagePage({
+          ...makeChannelInput(),
+          limit: 10,
+          direction: "newer",
+        }),
+        "NOT_FOUND",
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("enforces read rate limit", async () => {
+      const deps = buildChannelDeps({ portalReadLimiter: denyLimiter() });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.portalMessagePage({
+          ...makeChannelInput(),
+          limit: 10,
+          direction: "newer",
+        }),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+      expect(err.cause).toBeInstanceOf(RateLimitError);
+    });
+  });
+
+  // -- evaluateChannelOprf --
+
+  describe("evaluateChannelOprf", () => {
+    // 32 bytes base64-encoded, matching the oprf.test.ts pattern for a
+    // simulated blinded ristretto255 point.
+    const BLINDED_BYTES = Buffer.alloc(32, 0xab);
+    const VALID_BLINDED_ELEMENT = BLINDED_BYTES.toString("base64");
+    const EVALUATED_RESULT = BLINDED_BYTES.toString("base64url");
+
+    function buildOprfDeps(
+      overrides?: Partial<ClientPortalRouterDeps>,
+    ): ClientPortalRouterDeps {
+      return buildDeps({
+        oprfService: {
+          evaluate: vi.fn(),
+          adminEvaluate: vi.fn(),
+          evaluateChannel: vi.fn().mockResolvedValue({
+            evaluated: EVALUATED_RESULT,
+          }),
+        },
+        ...overrides,
+      });
+    }
+
+    it("returns evaluated element as base64url string", async () => {
+      const deps = buildOprfDeps();
+      const caller = buildCaller(deps);
+      const result = await caller.evaluateChannelOprf({
+        channelId: VALID_CHANNEL_ID as ChannelSecret,
+        blindedElement: VALID_BLINDED_ELEMENT,
+        auth: VALID_AUTH,
+      });
+      // Wire format: base64url string, not Buffer. The portal client
+      // feeds this string directly to oprfFinalize, which expects base64url.
+      expect(typeof result.evaluated).toBe("string");
+      expect(result.evaluated).toBe(EVALUATED_RESULT);
+    });
+
+    it("response never contains key material or plaintext", async () => {
+      const deps = buildOprfDeps();
+      const caller = buildCaller(deps);
+      const result = await caller.evaluateChannelOprf({
+        channelId: VALID_CHANNEL_ID as ChannelSecret,
+        blindedElement: VALID_BLINDED_ELEMENT,
+      });
+      const serialized = JSON.stringify(result);
+      // Only the evaluated element should be present; no key shares,
+      // no server secrets, no channel auth material.
+      expect(Object.keys(result)).toEqual(["evaluated"]);
+      expect(serialized).not.toContain("key");
+      expect(serialized).not.toContain("secret");
+      expect(serialized).not.toContain("share");
+    });
+
+    it("returns NOT_FOUND when oprfService is null", async () => {
+      const deps = buildDeps({ oprfService: null });
+      const caller = buildCaller(deps);
+      await expectTrpcError(
+        caller.evaluateChannelOprf({
+          channelId: VALID_CHANNEL_ID as ChannelSecret,
+          blindedElement: VALID_BLINDED_ELEMENT,
+        }),
+        "NOT_FOUND",
+      );
+    });
+
+    it("delegates channelId, blindedElement, auth, and ip to the service", async () => {
+      const mockEvaluateChannel = vi.fn().mockResolvedValue({
+        evaluated: EVALUATED_RESULT,
+      });
+      const deps = buildOprfDeps({
+        oprfService: {
+          evaluate: vi.fn(),
+          adminEvaluate: vi.fn(),
+          evaluateChannel: mockEvaluateChannel,
+        },
+      });
+      const caller = buildCaller(deps);
+      await caller.evaluateChannelOprf({
+        channelId: VALID_CHANNEL_ID as ChannelSecret,
+        blindedElement: VALID_BLINDED_ELEMENT,
+        auth: VALID_AUTH,
+      });
+      expect(mockEvaluateChannel).toHaveBeenCalledOnce();
+      const reqArg = mockEvaluateChannel.mock.calls[0]![1] as {
+        channelId: string;
+        blindedElement: string;
+        auth: string;
+        ip: string;
+        orgUuid: string;
+      };
+      expect(reqArg.channelId).toBe(VALID_CHANNEL_ID);
+      expect(reqArg.blindedElement).toBe(VALID_BLINDED_ELEMENT);
+      expect(reqArg.auth).toBe(VALID_AUTH);
+      expect(typeof reqArg.ip).toBe("string");
+      expect(reqArg.orgUuid).toBeDefined();
+    });
+
+    it("propagates RateLimitError from the service as TOO_MANY_REQUESTS", async () => {
+      const deps = buildOprfDeps({
+        oprfService: {
+          evaluate: vi.fn(),
+          adminEvaluate: vi.fn(),
+          evaluateChannel: vi
+            .fn()
+            .mockRejectedValue(
+              new RateLimitError("Channel OPRF rate limit exceeded", 120),
+            ),
+        },
+      });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(
+        caller.evaluateChannelOprf({
+          channelId: VALID_CHANNEL_ID as ChannelSecret,
+          blindedElement: VALID_BLINDED_ELEMENT,
+        }),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("propagates ForbiddenError from the service as FORBIDDEN", async () => {
+      const { ForbiddenError } = await import("../errors.js");
+      const deps = buildOprfDeps({
+        oprfService: {
+          evaluate: vi.fn(),
+          adminEvaluate: vi.fn(),
+          evaluateChannel: vi
+            .fn()
+            .mockRejectedValue(
+              new ForbiddenError("Channel authentication failed"),
+            ),
+        },
+      });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(
+        caller.evaluateChannelOprf({
+          channelId: VALID_CHANNEL_ID as ChannelSecret,
+          blindedElement: VALID_BLINDED_ELEMENT,
+        }),
+        "FORBIDDEN",
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("propagates ValidationError for malformed blinded input as BAD_REQUEST", async () => {
+      const { ValidationError } = await import("../errors.js");
+      const deps = buildOprfDeps({
+        oprfService: {
+          evaluate: vi.fn(),
+          adminEvaluate: vi.fn(),
+          evaluateChannel: vi
+            .fn()
+            .mockRejectedValue(new ValidationError("Invalid blinded element")),
+        },
+      });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(
+        caller.evaluateChannelOprf({
+          channelId: VALID_CHANNEL_ID as ChannelSecret,
+          blindedElement: "not-valid-base64-!!!",
+        }),
+        "BAD_REQUEST",
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("rejects empty blindedElement at schema level", async () => {
+      const deps = buildOprfDeps();
+      const caller = buildCaller(deps);
+      await expectTrpcError(
+        caller.evaluateChannelOprf({
+          channelId: VALID_CHANNEL_ID as ChannelSecret,
+          blindedElement: "",
+        }),
+        "BAD_REQUEST",
+      );
+    });
+
+    it("auth field is optional (mint path for new channels)", async () => {
+      const deps = buildOprfDeps();
+      const caller = buildCaller(deps);
+      const result = await caller.evaluateChannelOprf({
+        channelId: VALID_CHANNEL_ID as ChannelSecret,
+        blindedElement: VALID_BLINDED_ELEMENT,
+      });
+      expect(result.evaluated).toBe(EVALUATED_RESULT);
+    });
+  });
+
+  // -- addPassphrase --
+
+  describe("addPassphrase", () => {
+    function makeAddPassphraseInput(): {
+      channelId: string;
+      auth: string;
+      clientPublic: string;
+      keyCheck: {
+        ephemeralPoint: string;
+        nonce: string;
+        ciphertext: string;
+      };
+      resealedMessages: {
+        id: string;
+        copy: {
+          ephemeralPoint: string;
+          nonce: string;
+          ciphertext: string;
+        };
+      }[];
+      skippedMessageIds: string[];
+    } {
+      return {
+        channelId: VALID_CHANNEL_ID,
+        auth: VALID_AUTH,
+        clientPublic: Buffer.alloc(32, 0xaa).toString("base64"),
+        keyCheck: {
+          ephemeralPoint: Buffer.alloc(32, 0xbb).toString("base64"),
+          nonce: Buffer.alloc(24, 0xcc).toString("base64"),
+          ciphertext: Buffer.from("kc-ct").toString("base64"),
+        },
+        resealedMessages: [
+          {
+            id: crypto.randomUUID(),
+            copy: {
+              ephemeralPoint: Buffer.alloc(32, 0xdd).toString("base64"),
+              nonce: Buffer.alloc(24, 0xee).toString("base64"),
+              ciphertext: Buffer.from("msg-ct").toString("base64"),
+            },
+          },
+        ],
+        skippedMessageIds: [],
+      };
+    }
+
+    it("returns empty object on success", async () => {
+      const deps = buildChannelDeps();
+      const caller = buildCaller(deps);
+      const result = await caller.addPassphrase(makeAddPassphraseInput());
+      expect(result).toEqual({});
+      expect(mockAddPassphrase).toHaveBeenCalledOnce();
+    });
+
+    it("decodes base64 fields to Buffers before delegating", async () => {
+      const deps = buildChannelDeps();
+      const caller = buildCaller(deps);
+      await caller.addPassphrase(makeAddPassphraseInput());
+
+      const channelArg = mockAddPassphrase.mock
+        .calls[0]![1] as PortalChannelRow;
+      expect(channelArg.channel_id).toBe(VALID_CHANNEL_ID);
+
+      const inputArg = mockAddPassphrase.mock.calls[0]![2] as {
+        clientPublic: Buffer;
+        keyCheck: {
+          ephemeralPoint: Buffer;
+          nonce: Buffer;
+          ciphertext: Buffer;
+        };
+        resealedMessages: {
+          id: string;
+          copy: { ephemeralPoint: Buffer; nonce: Buffer; ciphertext: Buffer };
+        }[];
+      };
+      expect(Buffer.isBuffer(inputArg.clientPublic)).toBe(true);
+      expect(Buffer.isBuffer(inputArg.keyCheck.ephemeralPoint)).toBe(true);
+      expect(Buffer.isBuffer(inputArg.keyCheck.nonce)).toBe(true);
+      expect(Buffer.isBuffer(inputArg.keyCheck.ciphertext)).toBe(true);
+      expect(inputArg.resealedMessages).toHaveLength(1);
+      expect(
+        Buffer.isBuffer(inputArg.resealedMessages[0]!.copy.ephemeralPoint),
+      ).toBe(true);
+    });
+
+    it("maps PassphraseAlreadySetError to CONFLICT", async () => {
+      const { PassphraseAlreadySetError } =
+        await import("../portal/portal-errors.js");
+      mockAddPassphrase.mockRejectedValue(new PassphraseAlreadySetError());
+      const deps = buildChannelDeps();
+      const caller = buildCaller(deps);
+      const err = await expectTrpcError(
+        caller.addPassphrase(makeAddPassphraseInput()),
+        "CONFLICT",
+      );
+      expect(err.message).toBe("PORTAL_PASSPHRASE_ALREADY_SET");
+    });
+
+    it("maps PassphraseCountMismatchError to CONFLICT", async () => {
+      const { PassphraseCountMismatchError } =
+        await import("../portal/portal-errors.js");
+      mockAddPassphrase.mockRejectedValue(new PassphraseCountMismatchError());
+      const deps = buildChannelDeps();
+      const caller = buildCaller(deps);
+      const err = await expectTrpcError(
+        caller.addPassphrase(makeAddPassphraseInput()),
+        "CONFLICT",
+      );
+      expect(err.message).toBe("PORTAL_PASSPHRASE_COUNT_MISMATCH");
+    });
+
+    it("returns NOT_FOUND for unknown channel", async () => {
+      const deps = buildChannelDeps({
+        portalChannelService: {
+          resolveAuthedChannel: vi.fn().mockResolvedValue(null),
+        },
+      });
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const caller = buildCaller(deps);
+      await expectTrpcError(
+        caller.addPassphrase(makeAddPassphraseInput()),
+        "NOT_FOUND",
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("enforces upgrade-namespace IP rate limit", async () => {
+      const deps = buildChannelDeps({
+        portalReplyIpLimiter: denyLimiter(),
+      });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.addPassphrase(makeAddPassphraseInput()),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+      expect(err.cause).toBeInstanceOf(RateLimitError);
+    });
+
+    it("skips IP limit check when portalReplyIpLimiter is null", async () => {
+      const deps = buildChannelDeps({ portalReplyIpLimiter: null });
+      const caller = buildCaller(deps);
+      const result = await caller.addPassphrase(makeAddPassphraseInput());
+      expect(result).toEqual({});
+    });
+  });
+
+  // -- submitIntake cold error branches --
+
+  describe("submitIntake (cold error branches)", () => {
+    it("maps IntakeDisabledError to FORBIDDEN", async () => {
+      const { IntakeDisabledError } =
+        await import("../portal/intake-service.js");
+      mockCreateIntakeTicket.mockRejectedValue(new IntakeDisabledError());
+      const caller = buildCaller();
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.submitIntake(makeSubmitInput()),
+        "FORBIDDEN",
+      );
+      warnSpy.mockRestore();
+      expect(err.message).toBe("Web intake is not available");
+    });
+
+    it("maps IntakeFormClosedError to FORBIDDEN", async () => {
+      const { IntakeFormClosedError } =
+        await import("../portal/intake-service.js");
+      mockCreateIntakeTicket.mockRejectedValue(new IntakeFormClosedError());
+      const caller = buildCaller();
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.submitIntake(makeSubmitInput()),
+        "FORBIDDEN",
+      );
+      warnSpy.mockRestore();
+      expect(err.message).toBe("Web intake is not available");
+    });
+
+    it("maps IntakeAccountUnavailableError to INTERNAL_SERVER_ERROR", async () => {
+      const { IntakeAccountUnavailableError } =
+        await import("../portal/intake-service.js");
+      mockCreateIntakeTicket.mockRejectedValue(
+        new IntakeAccountUnavailableError(),
+      );
+      const caller = buildCaller();
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.submitIntake(makeSubmitInput()),
+        "INTERNAL_SERVER_ERROR",
+      );
+      warnSpy.mockRestore();
+      expect(err.message).toBe("Service temporarily unavailable");
+    });
+
+    it("maps UsernameTakenError to CONFLICT from the intake path", async () => {
+      mockCreateIntakeTicket.mockRejectedValue(new UsernameTakenError());
+      const caller = buildCaller(
+        buildDeps({
+          accountServiceDeps: {
+            indexer: {
+              hash: vi.fn().mockReturnValue("hashed"),
+            } as unknown as BlindIndexer,
+            fakeSaltKey: Buffer.alloc(32, 0xab),
+          },
+        }),
+      );
+      const err = await expectTrpcError(
+        caller.submitIntake(makeSubmitInput()),
+        "CONFLICT",
+      );
+      expect(err.message).toBe("ACCOUNT_USERNAME_TAKEN");
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cold procedure tests: account session auth model
+// ---------------------------------------------------------------------------
+
+describe("client-portal router (account session procedures)", () => {
+  const SESSION_TOKEN = "valid-session-token-cold";
+  const ACCOUNT_ROW = {
+    id: crypto.randomUUID() as ClientAccountId,
+    client_id: crypto.randomUUID() as ClientId,
+    username_hash: "hash",
+    salt: Buffer.alloc(16),
+    public_key: Buffer.alloc(32),
+    auth_hash: Buffer.alloc(32),
+    created_at: new Date("2026-08-15T00:00:00Z"),
+  };
+
+  beforeAll(async () => {
+    await getSodium();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetSealedContactInfo.mockResolvedValue({
+      sealed: Buffer.from("ct-account-sealed").toString("base64url"),
+    });
+    mockResolveAccountSession.mockResolvedValue({
+      account: ACCOUNT_ROW,
+      channel: fakeAccountChannelRow(),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function fakeAccountChannelRow(): PortalChannelRow {
+    return {
+      id: crypto.randomUUID() as ChannelRowId,
+      client_id: ACCOUNT_ROW.client_id,
+      channel_id: "d".repeat(48) as ChannelSecret,
+      auth_hash: Buffer.alloc(32, 0xaa),
+      client_public: Buffer.alloc(32, 0xbb),
+      has_passphrase: true,
+      key_check_ephemeral_point: Buffer.alloc(32),
+      key_check_nonce: Buffer.alloc(24),
+      key_check_ciphertext: Buffer.alloc(48),
+      status: "active",
+      created_at: new Date(),
+      last_seen_at: null,
+      last_notified_at: null,
+      revoked_at: null,
+      kind: "account",
+    };
+  }
+
+  function makeContextWithCookie(token: string): Context {
+    return {
+      req: mockReq({
+        remoteAddress: "10.0.0.1",
+        headers: { cookie: `care_y_client_session=${token}` },
+      }),
+      res: mockRes(),
+      org: createMockOrgContext(),
+      session: null,
+      user: null,
+    };
+  }
+
+  function buildAccountSessionDeps(
+    overrides?: Partial<ClientPortalRouterDeps>,
+  ): ClientPortalRouterDeps {
+    return buildDeps({
+      accountServiceDeps: {
+        indexer: {
+          hash: vi.fn().mockReturnValue("hashed"),
+        } as unknown as BlindIndexer,
+        fakeSaltKey: Buffer.alloc(32, 0xab),
+      },
+      accountSaltLimiter: allowLimiter(),
+      accountLoginLimiter: allowLimiter(),
+      portalMessageService: {
+        bootstrap: vi.fn().mockResolvedValue({
+          hasPassphrase: true,
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32).toString("base64"),
+            nonce: Buffer.alloc(24).toString("base64"),
+            ciphertext: Buffer.alloc(48).toString("base64"),
+          },
+          ticketId: crypto.randomUUID(),
+          messages: [],
+          attachments: [],
+          recordings: [],
+          callEntries: [],
+          messagesExpireDays: 14,
+          safeExitUrl: null,
+          upgradeOptions: [],
+        }),
+        clientReply: vi.fn().mockResolvedValue(undefined),
+        listMessages: vi
+          .fn()
+          .mockResolvedValue({ messages: [], totalCount: 0 }),
+        hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+      },
+      portalReplyLimiter: allowLimiter(),
+      fieldEncryptor: {
+        encrypt: vi.fn(),
+        decrypt: vi.fn(),
+      } as unknown as FieldEncryptor,
+      ...overrides,
+    });
+  }
+
+  // -- accountContactInfo --
+
+  describe("accountContactInfo", () => {
+    it("returns sealed envelope for a valid account session", async () => {
+      const deps = buildAccountSessionDeps();
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(deps, ctx);
+      const result = await caller.accountContactInfo();
+      expect(typeof result.sealed).toBe("string");
+      expect(result.sealed.length).toBeGreaterThan(0);
+      expect(mockGetSealedContactInfo).toHaveBeenCalledOnce();
+    });
+
+    it("returns NOT_FOUND when fieldEncryptor is null", async () => {
+      const deps = buildAccountSessionDeps({ fieldEncryptor: null });
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(deps, ctx);
+      await expectTrpcError(caller.accountContactInfo(), "NOT_FOUND");
+      expect(mockGetSealedContactInfo).not.toHaveBeenCalled();
+    });
+
+    it("fails with UNAUTHORIZED without a session cookie", async () => {
+      const deps = buildAccountSessionDeps();
+      const ctx = makeContext();
+      const caller = buildCaller(deps, ctx);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.accountContactInfo(),
+        "UNAUTHORIZED",
+      );
+      warnSpy.mockRestore();
+      expect(err.message).toBe("Sign-in failed");
+    });
+
+    it("fails with UNAUTHORIZED for a garbage session token", async () => {
+      mockResolveAccountSession.mockResolvedValue(null);
+      const deps = buildAccountSessionDeps();
+      const ctx = makeContextWithCookie("garbage-token-xyz");
+      const caller = buildCaller(deps, ctx);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.accountContactInfo(),
+        "UNAUTHORIZED",
+      );
+      warnSpy.mockRestore();
+      expect(err.message).toBe("Sign-in failed");
+    });
+
+    it("response never contains seeded plaintext", async () => {
+      const SENTINEL = "rt-pii-contact-name";
+      mockGetSealedContactInfo.mockResolvedValue({
+        sealed: Buffer.from("ct-sealed-contact").toString("base64url"),
+      });
+      const deps = buildAccountSessionDeps();
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(deps, ctx);
+      const result = await caller.accountContactInfo();
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain(SENTINEL);
+    });
+  });
+
+  // -- accountMessages --
+
+  describe("accountMessages", () => {
+    it("returns messages list for a valid account session", async () => {
+      const deps = buildAccountSessionDeps();
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(deps, ctx);
+      const result = await caller.accountMessages();
+      expect(result.messages).toBeDefined();
+      expect(result.ticketId).toBeDefined();
+      expect(result.messagesExpireDays).toBe(14);
+    });
+
+    it("strips keyCheck and hasPassphrase from the response", async () => {
+      const deps = buildAccountSessionDeps();
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(deps, ctx);
+      const result = await caller.accountMessages();
+      expect(result).not.toHaveProperty("keyCheck");
+      expect(result).not.toHaveProperty("hasPassphrase");
+    });
+
+    it("fails with UNAUTHORIZED without a session cookie", async () => {
+      const deps = buildAccountSessionDeps();
+      const ctx = makeContext();
+      const caller = buildCaller(deps, ctx);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.accountMessages(),
+        "UNAUTHORIZED",
+      );
+      warnSpy.mockRestore();
+      expect(err.message).toBe("Sign-in failed");
+    });
+
+    it("returns NOT_FOUND when portalMessageService is null", async () => {
+      const deps = buildAccountSessionDeps({
+        portalMessageService: null,
+      });
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(deps, ctx);
+      await expectTrpcError(caller.accountMessages(), "NOT_FOUND");
+    });
+  });
+
+  // -- denial matrix: channel-token procedure called with account auth --
+
+  describe("denial matrix (account session calling channel-token procedures)", () => {
+    it("contactInfo rejects without channel auth even with a valid session cookie", async () => {
+      // contactInfo requires channelId + auth (channel-token model).
+      // An account session cookie alone does not satisfy the channel auth gate.
+      const deps = buildAccountSessionDeps({
+        portalChannelService: {
+          resolveAuthedChannel: vi.fn().mockResolvedValue(null),
+        },
+        portalReadLimiter: allowLimiter(),
+      });
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(deps, ctx);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      // The procedure still requires channelId + auth in the input schema,
+      // but the channel does not resolve for this account.
+      await expectTrpcError(
+        caller.contactInfo({
+          channelId: "b".repeat(48),
+          auth: Buffer.alloc(32, 0xdd).toString("base64"),
+        }),
+        "NOT_FOUND",
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("addPassphrase rejects without channel auth even with a valid session", async () => {
+      const deps = buildAccountSessionDeps({
+        portalChannelService: {
+          resolveAuthedChannel: vi.fn().mockResolvedValue(null),
+        },
+        portalReplyIpLimiter: allowLimiter(),
+      });
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(deps, ctx);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(
+        caller.addPassphrase({
+          channelId: "b".repeat(48),
+          auth: Buffer.alloc(32, 0xdd).toString("base64"),
+          clientPublic: Buffer.alloc(32, 0xaa).toString("base64"),
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0xbb).toString("base64"),
+            nonce: Buffer.alloc(24, 0xcc).toString("base64"),
+            ciphertext: Buffer.from("kc").toString("base64"),
+          },
+          resealedMessages: [],
+          skippedMessageIds: [],
+        }),
+        "NOT_FOUND",
+      );
+      warnSpy.mockRestore();
+    });
+  });
+
+  // -- denial matrix: account procedure called without a cookie --
+
+  describe("denial matrix (no cookie on account-only procedures)", () => {
+    it("accountContactInfo rejects without a cookie", async () => {
+      const deps = buildAccountSessionDeps();
+      const ctx = makeContext();
+      const caller = buildCaller(deps, ctx);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(caller.accountContactInfo(), "UNAUTHORIZED");
+      warnSpy.mockRestore();
+    });
+
+    it("accountMessages rejects without a cookie", async () => {
+      const deps = buildAccountSessionDeps();
+      const ctx = makeContext();
+      const caller = buildCaller(deps, ctx);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(caller.accountMessages(), "UNAUTHORIZED");
+      warnSpy.mockRestore();
+    });
+  });
+
+  // -- accountUpgrade cold branches --
+
+  describe("accountUpgrade (cold branches)", () => {
+    const VALID_CHANNEL_ID = "a".repeat(48);
+    const VALID_AUTH = Buffer.alloc(32, 0xcc).toString("base64");
+
+    function fakeUpgradeChannelRow(): PortalChannelRow {
+      return {
+        id: crypto.randomUUID() as ChannelRowId,
+        client_id: crypto.randomUUID() as ClientId,
+        channel_id: VALID_CHANNEL_ID as ChannelSecret,
+        auth_hash: Buffer.alloc(32, 0xaa),
+        client_public: Buffer.alloc(32, 0xbb),
+        has_passphrase: false,
+        key_check_ephemeral_point: Buffer.alloc(32),
+        key_check_nonce: Buffer.alloc(24),
+        key_check_ciphertext: Buffer.alloc(48),
+        status: "active",
+        created_at: new Date(),
+        last_seen_at: null,
+        last_notified_at: null,
+        revoked_at: null,
+        kind: "secure_link",
+      };
+    }
+
+    function buildUpgradeDeps(
+      overrides?: Partial<ClientPortalRouterDeps>,
+    ): ClientPortalRouterDeps {
+      return buildDeps({
+        portalChannelService: {
+          resolveAuthedChannel: vi
+            .fn()
+            .mockResolvedValue(fakeUpgradeChannelRow()),
+        },
+        portalMessageService: {
+          bootstrap: vi.fn(),
+          clientReply: vi.fn(),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+        },
+        portalReplyLimiter: allowLimiter(),
+        portalReplyIpLimiter: allowLimiter(),
+        accountServiceDeps: {
+          indexer: {
+            hash: vi.fn().mockReturnValue("hashed"),
+          } as unknown as BlindIndexer,
+          fakeSaltKey: Buffer.alloc(32, 0xab),
+        },
+        accountSaltLimiter: allowLimiter(),
+        accountLoginLimiter: allowLimiter(),
+        ...overrides,
+      });
+    }
+
+    function makeUpgradeInput(): {
+      channelId: string;
+      auth: string;
+      account: {
+        accountId: string;
+        username: string;
+        salt: string;
+        publicKey: string;
+        authHash: string;
+        keyCheck: {
+          ephemeralPoint: string;
+          nonce: string;
+          ciphertext: string;
+        };
+      };
+      rewrappedMessages: never[];
+      skippedMessageIds: never[];
+    } {
+      return {
+        channelId: VALID_CHANNEL_ID,
+        auth: VALID_AUTH,
+        account: {
+          accountId: crypto.randomUUID(),
+          username: "test-user",
+          salt: Buffer.alloc(16, 0xaa).toString("base64"),
+          publicKey: Buffer.alloc(32, 0xbb).toString("base64"),
+          authHash: Buffer.alloc(32, 0xcc).toString("base64"),
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0xdd).toString("base64"),
+            nonce: Buffer.alloc(24, 0xee).toString("base64"),
+            ciphertext: Buffer.from("key-check-ct").toString("base64"),
+          },
+        },
+        rewrappedMessages: [],
+        skippedMessageIds: [],
+      };
+    }
+
+    it("enforces upgrade-namespace IP rate limit", async () => {
+      const deps = buildUpgradeDeps({
+        portalReplyIpLimiter: denyLimiter(),
+      });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.accountUpgrade(makeUpgradeInput()),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+      expect(err.cause).toBeInstanceOf(RateLimitError);
+    });
+
+    it("skips IP limit check when portalReplyIpLimiter is null", async () => {
+      mockUpgradeFromSecureLink.mockResolvedValue(undefined);
+      const deps = buildUpgradeDeps({ portalReplyIpLimiter: null });
+      const caller = buildCaller(deps);
+      const result = await caller.accountUpgrade(makeUpgradeInput());
+      expect(result).toEqual({});
+    });
+  });
+
+  // -- accountChangePassword cold branches --
+
+  describe("accountChangePassword (cold branches)", () => {
+    function makeChangePasswordInput(): {
+      currentAuthToken: string;
+      account: {
+        salt: string;
+        publicKey: string;
+        authHash: string;
+        keyCheck: {
+          ephemeralPoint: string;
+          nonce: string;
+          ciphertext: string;
+        };
+      };
+      rewrappedMessages: never[];
+      skippedMessageIds: never[];
+    } {
+      return {
+        currentAuthToken: Buffer.alloc(32, 0xaa).toString("base64"),
+        account: {
+          salt: Buffer.alloc(16, 0xbb).toString("base64"),
+          publicKey: Buffer.alloc(32, 0xcc).toString("base64"),
+          authHash: Buffer.alloc(32, 0xdd).toString("base64"),
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0xee).toString("base64"),
+            nonce: Buffer.alloc(24, 0xff).toString("base64"),
+            ciphertext: Buffer.from("kc-ct").toString("base64"),
+          },
+        },
+        rewrappedMessages: [],
+        skippedMessageIds: [],
+      };
+    }
+
+    function buildChangePasswordDeps(): ClientPortalRouterDeps {
+      return buildDeps({
+        accountServiceDeps: {
+          indexer: {
+            hash: vi.fn().mockReturnValue("hashed"),
+          } as unknown as BlindIndexer,
+          fakeSaltKey: Buffer.alloc(32, 0xab),
+        },
+        accountSaltLimiter: allowLimiter(),
+        accountLoginLimiter: allowLimiter(),
+        portalMessageService: {
+          bootstrap: vi.fn(),
+          clientReply: vi.fn(),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          hasRecentOrgReply: vi.fn().mockResolvedValue(false),
+        },
+        portalReplyLimiter: allowLimiter(),
+      });
+    }
+
+    it("maps StaleThreadError to CONFLICT", async () => {
+      mockResolveAccountSession.mockResolvedValue({
+        account: ACCOUNT_ROW,
+        channel: fakeAccountChannelRow(),
+        tokenHash: Buffer.alloc(32, 0xdd),
+      });
+      mockChangePassword.mockRejectedValue(new StaleThreadError());
+
+      const changeDeps = buildChangePasswordDeps();
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(changeDeps, ctx);
+
+      const err = await expectTrpcError(
+        caller.accountChangePassword(makeChangePasswordInput()),
+        "CONFLICT",
+      );
+      expect(err.message).toBe("Thread state changed; retry after refetch");
+    });
+
+    it("maps false return from changePassword to UNAUTHORIZED", async () => {
+      mockResolveAccountSession.mockResolvedValue({
+        account: ACCOUNT_ROW,
+        channel: fakeAccountChannelRow(),
+        tokenHash: Buffer.alloc(32, 0xdd),
+      });
+      mockChangePassword.mockResolvedValue(false);
+
+      const changeDeps = buildChangePasswordDeps();
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(changeDeps, ctx);
+
+      const err = await expectTrpcError(
+        caller.accountChangePassword(makeChangePasswordInput()),
+        "UNAUTHORIZED",
+      );
+      expect(err.message).toBe("Sign-in failed");
+    });
+  });
+
+  // -- accountLogin cold branches --
+
+  describe("accountLogin (cold branches)", () => {
+    function buildLoginDeps(
+      overrides?: Partial<ClientPortalRouterDeps>,
+    ): ClientPortalRouterDeps {
+      return buildDeps({
+        accountServiceDeps: {
+          indexer: {
+            hash: vi.fn().mockReturnValue("hashed"),
+          } as unknown as BlindIndexer,
+          fakeSaltKey: Buffer.alloc(32, 0xab),
+        },
+        accountSaltLimiter: allowLimiter(),
+        accountLoginLimiter: allowLimiter(),
+        ...overrides,
+      });
+    }
+
+    it("enforces login rate limit", async () => {
+      const deps = buildLoginDeps({ accountLoginLimiter: denyLimiter() });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(
+        caller.accountLogin({
+          accountId: crypto.randomUUID(),
+          authToken: Buffer.alloc(32, 0xdd).toString("base64"),
+        }),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("sets Secure flag when x-forwarded-proto is https", async () => {
+      const expiresAt = new Date(Date.now() + 86400_000);
+      mockAccountLogin.mockResolvedValue({
+        sessionToken: "session-tok-secure",
+        expiresAt,
+      });
+      const deps = buildLoginDeps();
+      const ctx: Context = {
+        req: mockReq({
+          remoteAddress: "10.0.0.1",
+          headers: { "x-forwarded-proto": "https" },
+        }),
+        res: mockRes(),
+        org: createMockOrgContext(),
+        session: null,
+        user: null,
+      };
+      const caller = buildCaller(deps, ctx);
+      await caller.accountLogin({
+        accountId: crypto.randomUUID(),
+        authToken: Buffer.alloc(32, 0xdd).toString("base64"),
+      });
+      const res = ctx.res as MockResWithCookies;
+      const cookies = res.getCapturedCookies();
+      expect(cookies).toHaveLength(1);
+      expect(cookies[0]).toContain("Secure");
+    });
+  });
+
+  // -- portalMessages cold branches (rate limit) --
+
+  describe("portalMessages (cold rate-limit branch)", () => {
+    const VALID_CHANNEL_ID = "a".repeat(48);
+    const VALID_AUTH = Buffer.alloc(32, 0xcc).toString("base64");
+
+    it("enforces read rate limit and returns RateLimitError cause", async () => {
+      const deps = buildAccountSessionDeps({
+        portalChannelService: {
+          resolveAuthedChannel: vi.fn().mockResolvedValue(null),
+        },
+        portalReadLimiter: denyLimiter(1800_000),
+      });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.portalMessages({
+          channelId: VALID_CHANNEL_ID,
+          auth: VALID_AUTH,
+        }),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+      expect(err.cause).toBeInstanceOf(RateLimitError);
     });
   });
 });

@@ -252,20 +252,24 @@ describe("CallLogSection", () => {
   });
 
   describe("interactions", () => {
-    it("fires onticketopen when Enter is pressed on a row", async () => {
-      const onticketopen = vi.fn();
+    it("renders each row as a native button inside its list item", () => {
       const rows = [makeRow("1")];
       render(CallLogSection, {
         props: {
           rows,
           onfetchnext: vi.fn(),
           onretry: vi.fn(),
-          onticketopen,
+          onticketopen: vi.fn(),
         },
       });
+      // Keyboard activation comes from the button element itself rather
+      // than a key handler, so the assertion is the element type plus
+      // its place in the list. jsdom does not run a button's activation
+      // behavior for a synthetic keydown, so pressing Enter here would
+      // prove nothing; the e2e suite covers real keyboard operation.
       const button = screen.getAllByRole("button")[0]!;
-      await fireEvent.keyDown(button, { key: "Enter" });
-      expect(onticketopen).toHaveBeenCalledWith("ticket-1");
+      expect(button.tagName).toBe("BUTTON");
+      expect(button.closest("li")).not.toBeNull();
     });
 
     it("fires onticketopen on click", async () => {

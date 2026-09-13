@@ -16,7 +16,8 @@
     setDraftForMode,
     clearDraftForMode,
   } from "$lib/tickets/draft-store.svelte.js";
-  import { Link, Button, Chip } from "konsta/svelte";
+  import { Link, Button, Chip, DialogButton } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     ChevronLeft,
     MessageSquareText,
@@ -36,6 +37,7 @@
   } from "$lib/shell/context.js";
   import { useThreadChrome } from "$lib/shell/use-thread-chrome.svelte.js";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import SplitView from "$lib/shell/SplitView.svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import IconTabToggle from "$lib/components/shared/IconTabToggle.svelte";
@@ -76,6 +78,7 @@
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys, ticketsKeys, consultantKeys } from "$lib/query/keys";
   import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
+  import { createChannelPolicyQuery } from "$lib/query/channel-policy.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getCryptoBridge,
@@ -132,6 +135,7 @@
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const cryptoBridge = getCryptoBridge();
   const queryClient = useQueryClient();
+  const channelPolicy = createChannelPolicyQuery();
 
   type FollowUpList = Awaited<
     ReturnType<typeof ticketRouter.listFollowUps.query>
@@ -153,8 +157,8 @@
     if (!ticket || !compose || autoActivatedForTicket === ticketId) return;
     autoActivatedForTicket = ticketId;
 
-    const hasReply = ticket.portalCapable;
-    const hasSms = ticket.hasPhone;
+    const hasReply = ticket.portalCapable && channelPolicy.secureLinkEnabled;
+    const hasSms = ticket.hasPhone && channelPolicy.smsEnabled;
 
     // Auto-activate when exactly one client-reply method exists.
     if (hasReply && !hasSms) {
@@ -179,7 +183,7 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
-    enabled: ticketId !== "",
+    enabled: typeof ticketId === "string" && ticketId !== "",
   }));
 
   const ticket = $derived(ticketQuery.data);
@@ -281,7 +285,7 @@
   const readCursorQuery = createQuery(() => ({
     queryKey: ticketKeys.readCursor(ticketId),
     queryFn: async () => ticketRouter.getReadCursor.query({ ticketId }),
-    enabled: ticketId !== "",
+    enabled: typeof ticketId === "string" && ticketId !== "",
   }));
 
   const currentUserIdGetter = getCurrentUserId();
@@ -389,6 +393,21 @@
   let mergeConflictClientId = $state<string | null>(null);
   let mergeConflictAlias = $state<string | null>(null);
   let timelineActive = $state(false);
+  let revokeTokenDialogOpen = $state(false);
+  let revokeTokenPending = $state(false);
+
+  async function handleRevokeReplyToken(): Promise<void> {
+    revokeTokenPending = true;
+    try {
+      await ticketRouter.revokeReplyToken.mutate({ ticketId });
+      revokeTokenDialogOpen = false;
+      toastStore.show(m.revoke_reply_token_success(), 3000);
+    } catch {
+      toastStore.show(m.error_generic(), 3000);
+    } finally {
+      revokeTokenPending = false;
+    }
+  }
 
   const mergeClientA = $derived.by((): { id: string; alias: string } | null => {
     if (!ticket) return null;
@@ -614,6 +633,7 @@
   let loadOlderPage = $state<(() => Promise<void>) | undefined>(undefined);
   let loadedFollowUpCount = $state(0);
   let correctionPending = $state(false);
+  let emailExpected = $state(false);
 
   const deepSearch = createDeepSearch({
     getOverlayTerm: () => overlay.term,
@@ -730,7 +750,10 @@
       ticketRouter.watchTicket.mutate({ ticketId: tid }),
     unwatchMutate: async (tid) =>
       ticketRouter.unwatchTicket.mutate({ ticketId: tid }),
-    onclose: () => closeFlow.start(),
+    onclose: () => {
+      closePanel();
+      closeFlow.start();
+    },
     oncall: () => {
       closePanel();
       openCallSheet();
@@ -765,8 +788,13 @@
       notificationSheet.open();
     },
     onsharelink: () => {
+      if (!channelPolicy.shareLinkEnabled) return;
       closePanel();
       shareSheet.open();
+    },
+    onrevokeReplyToken: () => {
+      closePanel();
+      revokeTokenDialogOpen = true;
     },
   });
 
@@ -1067,6 +1095,7 @@
     bind:loadOlderPage
     bind:loadedFollowUpCount
     bind:correctionPending
+    bind:emailExpected
     onapplyphone={handleApplyPhone}
     onapplyemail={handleApplyEmail}
   />
@@ -1122,6 +1151,7 @@
       hidden={selectMode.active}
       sending={messenger.sending || sms.sending || attachmentUpload.busy}
       hasUnacknowledgedCorrection={correctionPending}
+      emailExpected={emailExpected && channelPolicy.emailEnabled}
       floatingPill={jumpPill}
       onsendreply={() => void messenger.handleSend()}
       onsendsms={(text: string) => void sms.handleSmsSend(text)}
@@ -1163,6 +1193,10 @@
           onaction={(action: TicketAction) => panelActions.dispatch(action)}
           onnotetap={handleNoteTap}
           onlightbox={handlePanelLightbox}
+          voiceEnabled={channelPolicy.voiceEnabled}
+          shareLinkEnabled={channelPolicy.shareLinkEnabled}
+          secureLinkEnabled={channelPolicy.secureLinkEnabled}
+          smsEnabled={channelPolicy.smsEnabled}
         />
       </aside>
     {/snippet}
@@ -1351,16 +1385,16 @@
   oncallaction={handleCallAction}
   oncalldismiss={closeCallSheet}
   oncomposedismiss={closeComposeActions}
-  onreply={ticket?.portalCapable === true
+  onreply={ticket?.portalCapable === true && channelPolicy.secureLinkEnabled
     ? () => compose?.activateReply()
     : undefined}
-  ontextclient={ticket?.hasPhone === true
+  ontextclient={ticket?.hasPhone === true && channelPolicy.smsEnabled
     ? () => {
         exposureHint.show("sms");
         compose?.activateSms();
       }
     : undefined}
-  onemailclient={ticket?.hasEmail === true
+  onemailclient={ticket?.hasEmail === true && channelPolicy.emailEnabled
     ? () => {
         emailComposeOpen = true;
       }
@@ -1375,6 +1409,10 @@
     setDraftForMode(ticketId, "reply", body);
     compose?.activateReply();
   }}
+  voiceEnabled={channelPolicy.voiceEnabled}
+  shareLinkEnabled={channelPolicy.shareLinkEnabled}
+  secureLinkEnabled={channelPolicy.secureLinkEnabled}
+  smsEnabled={channelPolicy.smsEnabled}
 />
 
 <EmailComposeSheet
@@ -1402,6 +1440,33 @@
     editMessageSheetOpen = false;
   }}
 />
+
+<ShellDialog
+  opened={revokeTokenDialogOpen}
+  ondismiss={() => (revokeTokenDialogOpen = false)}
+  title={m.revoke_reply_token_confirm_title()}
+>
+  {#snippet content()}
+    <p>{m.revoke_reply_token_confirm_body()}</p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton
+      onclick={() => (revokeTokenDialogOpen = false)}
+      disabled={revokeTokenPending}
+    >
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton
+      onclick={() => void handleRevokeReplyToken()}
+      class={DIALOG_DESTRUCTIVE_CLASS}
+      disabled={revokeTokenPending}
+    >
+      {revokeTokenPending
+        ? m.common_loading()
+        : m.revoke_reply_token_confirm_action()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   .ticket-detail-page {

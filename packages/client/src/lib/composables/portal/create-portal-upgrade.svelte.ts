@@ -9,6 +9,7 @@ import { encode } from "@care-y/crypto";
 import { ErrorCode } from "@care-y/shared";
 import {
   buildAccountRegistration,
+  collectDecryptedMessages,
   rewrapMessages,
 } from "$lib/portal/account-crypto.js";
 import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
@@ -30,6 +31,9 @@ export interface PortalUpgradeState {
   readonly pending: boolean;
   readonly error: string;
   readonly success: boolean;
+  /** True when the last successful upgrade left undecryptable messages
+   *  out of the re-seal; the success UI shows a notice. */
+  readonly skippedMessages: boolean;
   readonly username: string;
   dismiss(): void;
   expand(): void;
@@ -109,6 +113,7 @@ export function createPortalUpgrade(): PortalUpgradeState {
   let pending = $state(false);
   let error = $state("");
   let success = $state(false);
+  let skippedMessages = $state(false);
   let savedUsername = $state("");
 
   function dismiss(): void {
@@ -161,18 +166,21 @@ export function createPortalUpgrade(): PortalUpgradeState {
           callbacks,
         );
 
-        // Re-encrypt already-decrypted thread messages to the new key
-        const decryptedMsgs = await collectDecrypted(serverMessages, session);
-        const rewrapped = rewrapMessages(
-          decryptedMsgs,
-          newKeypair.clientPublic,
+        // Re-encrypt already-decrypted thread messages to the new key.
+        // Undecryptable ones are declared as skipped so the server's
+        // coverage guard still accounts for every row.
+        const { decrypted, skippedIds } = await collectDecryptedMessages(
+          serverMessages,
+          session,
         );
+        const rewrapped = rewrapMessages(decrypted, newKeypair.clientPublic);
 
         await trpcPortal.accountUpgrade.mutate({
           channelId: fragmentChannelId,
           auth: encode(fragmentAuth),
           account: payload,
           rewrappedMessages: rewrapped,
+          skippedMessageIds: [...skippedIds],
         });
 
         // Clean up new keypair
@@ -183,6 +191,7 @@ export function createPortalUpgrade(): PortalUpgradeState {
         session.destroy();
 
         savedUsername = username;
+        skippedMessages = skippedIds.length > 0;
         success = true;
       } catch (err: unknown) {
         const mapped = mapUpgradeError(err, {
@@ -218,6 +227,9 @@ export function createPortalUpgrade(): PortalUpgradeState {
     get success(): boolean {
       return success;
     },
+    get skippedMessages(): boolean {
+      return skippedMessages;
+    },
     get username(): string {
       return savedUsername;
     },
@@ -226,24 +238,4 @@ export function createPortalUpgrade(): PortalUpgradeState {
     collapse,
     submit,
   };
-}
-
-async function collectDecrypted(
-  serverMessages: readonly PortalMessageWire[],
-  session: PortalSessionHandle,
-): Promise<readonly { id: string; text: string }[]> {
-  const result: { id: string; text: string }[] = [];
-  for (const msg of serverMessages) {
-    try {
-      const text = await session.decryptMessage(
-        msg.ephemeralPoint,
-        msg.nonce,
-        msg.ciphertext,
-      );
-      result.push({ id: msg.id, text });
-    } catch {
-      // Skip messages that fail to decrypt
-    }
-  }
-  return result;
 }

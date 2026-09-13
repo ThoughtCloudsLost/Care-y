@@ -28,7 +28,10 @@ test.describe.serial("shell architecture", () => {
   test("has banner landmark on navbar", async () => {
     const banner = page.locator('[role="banner"]');
     await expect(banner).toBeAttached();
-    await expect(banner).toContainText("CARE-Y");
+    // The navbar shows the org's configured name (org_config.name, set
+    // to "E2E Test Org" by global-setup). "CARE-Y" would be the
+    // unbranded fallback, not the expected branded state.
+    await expect(banner).toContainText("E2E Test Org");
   });
 
   test("has tablist landmark on tabbar", async () => {
@@ -95,7 +98,9 @@ test.describe.serial("shell architecture", () => {
   test("navbar renders with title and action buttons", async () => {
     const navbar = page.getByRole("banner");
     await expect(navbar).toBeAttached();
-    await expect(navbar).toContainText("CARE-Y");
+    // Org name from org_config.name (global-setup), not the unbranded
+    // product-name fallback. Same contract as the banner landmark test.
+    await expect(navbar).toContainText("E2E Test Org");
 
     // Account button only renders on mobile; desktop uses the sidebar.
     await expect(navbar.getByRole("button", { name: "Search" })).toBeAttached();

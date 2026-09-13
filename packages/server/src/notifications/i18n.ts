@@ -20,6 +20,10 @@ export interface NotificationStrings {
   /** Short SMS carrying a phone verification code. No event details. */
   readonly verificationCode: (code: string) => string;
   readonly emailSubjectPrefix: string;
+  /** Default footer appended to outbound client emails when the org has an
+   *  inbound reply domain configured. Tells the client not to share the
+   *  sending address, because it routes to their case. */
+  readonly emailReplyFooter: string;
 }
 
 const EN: NotificationStrings = {
@@ -37,6 +41,10 @@ const EN: NotificationStrings = {
   smsPing: (url) => `You have a new notification. Visit ${url}`,
   verificationCode: (code) => `Your CARE-Y verification code is ${code}`,
   emailSubjectPrefix: "CARE-Y",
+  emailReplyFooter:
+    "Please do not share or forward this email. " +
+    "The reply address is unique to your case. " +
+    "Anyone who has it can send messages on your behalf.",
 };
 
 const ES: NotificationStrings = {
@@ -55,6 +63,10 @@ const ES: NotificationStrings = {
   smsPing: (url) => `Tiene una nueva notificacion. Visite ${url}`,
   verificationCode: (code) => `Su codigo de verificacion de CARE-Y es ${code}`,
   emailSubjectPrefix: "CARE-Y",
+  emailReplyFooter:
+    "Por favor, no comparta ni reenvíe este correo. " +
+    "La dirección de respuesta es exclusiva de su caso. " +
+    "Cualquier persona que la tenga puede enviar mensajes en su nombre.",
 };
 
 /** Returns notification strings for the given locale. Falls back to English. */

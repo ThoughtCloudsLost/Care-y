@@ -44,6 +44,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   onboarding_communications_subtext: () => "Configure phone and messaging.",
   admin_tab_telephony: () => "Telephony",
   admin_tab_greetings: () => "Greetings",
+  admin_tab_channel_policy: () => "Channels",
   admin_tab_sms_templates: () => "SMS Templates",
   admin_tab_blocklist: () => "Blocklist",
   ticket_close_skip: () => "Skip",
@@ -89,8 +90,14 @@ vi.mock("$lib/components/admin/BlocklistSection.svelte", async () => ({
   default: (await import("./test-helpers/StubAdminSection.svelte")).default,
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
+vi.mock("$lib/components/admin/ChannelPolicySection.svelte", async () => ({
+  default: (await import("./test-helpers/StubAdminSection.svelte")).default,
+}));
+
 const wizardNavContainer: WizardNavContainer = { current: undefined };
 
+// care-y-ignore-next-line mock-factory-unguarded -- context accessor stub returning a test-owned container
 vi.mock("./wizard-nav-context.js", () => ({
   getWizardNavCtx: () => wizardNavContainer,
 }));

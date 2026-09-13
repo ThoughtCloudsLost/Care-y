@@ -28,31 +28,14 @@ export interface FocusTrapOptions {
 }
 
 /**
- * Creates a document-level Escape keydown handler that calls onEscape.
- * Registered synchronously so Escape works from the moment the overlay
- * opens, without waiting for the RAF that positions focus.
- */
-export function addEscapeHandler(onEscape: () => void): () => void {
-  function handleEscape(event: KeyboardEvent): void {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onEscape();
-    }
-  }
-  document.addEventListener("keydown", handleEscape);
-  return () => {
-    document.removeEventListener("keydown", handleEscape);
-  };
-}
-
-/**
  * Activates a focus trap on the given container.
  *
  * Moves focus to the first focusable element inside the container.
  * Tab wraps from last to first; Shift+Tab wraps from first to last.
  *
- * Does NOT add an Escape handler; callers should use addEscapeHandler
- * separately so Escape is active before the RAF-deferred focus setup.
+ * Does NOT register an Escape handler; callers register with the
+ * overlay stack (pushOverlay) separately so Escape is active before
+ * the RAF-deferred focus setup.
  *
  * Returns a cleanup function that removes the Tab listener.
  */

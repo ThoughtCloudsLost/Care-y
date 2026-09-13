@@ -25,6 +25,9 @@ import type * as PublicBranding from "$lib/branding/public-branding.js";
 
 let mockBranding: PublicBranding.PublicBranding | null = null;
 let mockBrandingError = false;
+// null = derive from data (isSuccess true iff data landed), matching the
+// real query; set explicitly to force a settled-success-without-data state.
+let mockBrandingSuccess: boolean | null = null;
 
 function branding(
   overrides: Partial<PublicBranding.PublicBranding> = {},
@@ -86,6 +89,9 @@ vi.mock("$lib/branding/public-branding.js", async (importOriginal) => ({
     isLoading: false,
     get isError() {
       return mockBrandingError;
+    },
+    get isSuccess() {
+      return mockBrandingSuccess ?? mockBranding !== null;
     },
     error: null,
   }),
@@ -154,6 +160,7 @@ describe("ClientShell", () => {
   beforeEach(() => {
     mockBranding = branding();
     mockBrandingError = false;
+    mockBrandingSuccess = null;
     document.documentElement.removeAttribute("data-org-name");
     document.documentElement.removeAttribute("data-safe-exit-url");
   });
@@ -269,6 +276,18 @@ describe("ClientShell", () => {
     it("empties the slot rather than shimmering on once the query gives up", () => {
       mockBranding = null;
       mockBrandingError = true;
+
+      const { container } = renderShell();
+
+      const group = navbar(container).querySelector(".navbar-title-group");
+      expect(group?.querySelector("[data-skeleton]")).toBeNull();
+    });
+
+    // A success whose payload carries no name is settled: the org has no
+    // client-facing name, and the skeleton must stop rather than promise
+    // a name that is not coming.
+    it("stops the skeleton on success with an empty org name", () => {
+      mockBranding = branding({ orgName: "" });
 
       const { container } = renderShell();
 

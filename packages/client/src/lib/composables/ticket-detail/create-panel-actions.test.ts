@@ -32,6 +32,7 @@ describe("createPanelActions", () => {
   let oneditcontent: Mock;
   let onnotifications: Mock;
   let onsharelink: Mock;
+  let onrevokeReplyToken: Mock;
   let toastStore: { show: Mock; current: null; dismiss: Mock };
 
   beforeEach(() => {
@@ -49,6 +50,7 @@ describe("createPanelActions", () => {
     oneditcontent = vi.fn();
     onnotifications = vi.fn();
     onsharelink = vi.fn();
+    onrevokeReplyToken = vi.fn();
     toastStore = { show: vi.fn(), current: null, dismiss: vi.fn() };
   });
 
@@ -70,6 +72,7 @@ describe("createPanelActions", () => {
       oneditcontent,
       onnotifications,
       onsharelink,
+      onrevokeReplyToken,
     });
   }
 
@@ -157,6 +160,11 @@ describe("createPanelActions", () => {
   it("dispatches unwatch mutation", () => {
     make().dispatch("unwatch");
     expect(unwatchMutate).toHaveBeenCalledWith("t-001");
+  });
+
+  it("dispatches revokeReplyToken to onrevokeReplyToken callback", () => {
+    make().dispatch("revokeReplyToken");
+    expect(onrevokeReplyToken).toHaveBeenCalledOnce();
   });
 
   it("cancel is a no-op", () => {

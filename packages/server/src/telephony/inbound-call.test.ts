@@ -10,6 +10,8 @@ import type { ClientRepository } from "./models/client-repo.js";
 import type { GreetingRepository } from "./models/greeting-repo.js";
 import type { BlocklistRepository } from "./models/blocklist-repo.js";
 import { createCallTracker } from "./call-tracker.js";
+import type { Kysely } from "kysely";
+import type { TenantDatabase } from "../db/types.js";
 import {
   orgIdSchema,
   orgSchemaNameSchema,
@@ -128,6 +130,21 @@ function makeCallData(overrides?: Partial<IncomingCallData>): IncomingCallData {
   };
 }
 
+/** Minimal chainable mock that resolves channel policy from org_config. */
+function mockTenantDbWithPolicy(
+  policyOverrides?: Record<string, boolean>,
+): Kysely<TenantDatabase> {
+  const policyRow = { channel_voice_enabled: true, ...policyOverrides };
+  const chain = {
+    select: vi.fn().mockReturnValue({
+      executeTakeFirst: vi.fn().mockResolvedValue(policyRow),
+    }),
+  };
+  return {
+    selectFrom: vi.fn().mockReturnValue(chain),
+  } as unknown as Kysely<TenantDatabase>;
+}
+
 function makeDeps(overrides?: Partial<InboundCallDeps>): InboundCallDeps {
   return {
     sealedBox: createMockSealedBox(),
@@ -136,6 +153,7 @@ function makeDeps(overrides?: Partial<InboundCallDeps>): InboundCallDeps {
     clientRepo: createMockClientRepo(),
     greetingRepo: createMockGreetingRepo(),
     blocklistRepo: createMockBlocklistRepo(),
+    tDb: mockTenantDbWithPolicy(),
     orgId: orgIdSchema.parse("a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0"),
     orgSchema: orgSchemaNameSchema.parse(
       "org_a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0",
@@ -204,6 +222,29 @@ describe("handleInboundCall", () => {
       { type: "reject", attributes: { reason: "busy" } },
     ]);
     expect(deps.clientRepo.findOrCreateByPhoneHash).not.toHaveBeenCalled();
+  });
+
+  // --- Channel policy ---
+
+  it("returns reject with busy reason when voice channel is disabled", async () => {
+    deps = makeDeps({
+      tDb: mockTenantDbWithPolicy({ channel_voice_enabled: false }),
+    });
+    const body: Record<string, string> = {};
+
+    const result = await handleInboundCall(callData, body, deps);
+
+    expect(result).toEqual([
+      { type: "reject", attributes: { reason: "busy" } },
+    ]);
+    expect(deps.clientRepo.findOrCreateByPhoneHash).not.toHaveBeenCalled();
+  });
+
+  it("proceeds past policy guard when voice channel is enabled", async () => {
+    const body: Record<string, string> = {};
+    const result = await handleInboundCall(callData, body, deps);
+    // Should reach the IVR, not the reject path
+    expect(result[0]!.type).not.toBe("reject");
   });
 
   // --- Path 3: New caller, no Digits ---

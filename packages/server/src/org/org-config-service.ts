@@ -1,7 +1,16 @@
 import type { Kysely } from "kysely";
-import type { QueueId } from "@care-y/shared";
+import type {
+  QueueId,
+  ChannelPolicy,
+  UpdateChannelPolicyInput,
+} from "@care-y/shared";
+import { ErrorCode } from "@care-y/shared";
 import type { TenantDatabase } from "../db/types.js";
-import { NotFoundError, ValidationError } from "../errors.js";
+import {
+  NotFoundError,
+  ValidationError,
+  ChannelDisabledError,
+} from "../errors.js";
 
 export interface OrgGeneralResult {
   readonly name: string | null;
@@ -22,6 +31,8 @@ export interface OrgConfigService {
   updateOrgGeneral(input: UpdateOrgGeneralInput): Promise<void>;
   getIntakeQueue(): Promise<QueueId | null>;
   setIntakeQueue(queueId: QueueId | null): Promise<void>;
+  getChannelPolicy(): Promise<ChannelPolicy>;
+  updateChannelPolicy(input: UpdateChannelPolicyInput): Promise<void>;
 }
 
 export function createOrgConfigService(
@@ -106,5 +117,107 @@ export function createOrgConfigService(
         throw new NotFoundError("Org config not found");
       }
     },
+
+    async getChannelPolicy(): Promise<ChannelPolicy> {
+      const config = await tenantDb
+        .selectFrom("org_config")
+        .select([
+          "channel_sms_enabled",
+          "channel_email_enabled",
+          "channel_secure_link_enabled",
+          "channel_voice_enabled",
+          "channel_share_link_enabled",
+        ])
+        .executeTakeFirst();
+
+      return {
+        smsEnabled: config?.channel_sms_enabled !== false,
+        emailEnabled: config?.channel_email_enabled !== false,
+        secureLinkEnabled: config?.channel_secure_link_enabled !== false,
+        voiceEnabled: config?.channel_voice_enabled !== false,
+        shareLinkEnabled: config?.channel_share_link_enabled !== false,
+      };
+    },
+
+    async updateChannelPolicy(input: UpdateChannelPolicyInput): Promise<void> {
+      let query = tenantDb.updateTable("org_config");
+      let hasUpdate = false;
+
+      if (input.smsEnabled !== undefined) {
+        query = query.set({ channel_sms_enabled: input.smsEnabled });
+        hasUpdate = true;
+      }
+      if (input.emailEnabled !== undefined) {
+        query = query.set({ channel_email_enabled: input.emailEnabled });
+        hasUpdate = true;
+      }
+      if (input.secureLinkEnabled !== undefined) {
+        query = query.set({
+          channel_secure_link_enabled: input.secureLinkEnabled,
+        });
+        hasUpdate = true;
+      }
+      if (input.voiceEnabled !== undefined) {
+        query = query.set({ channel_voice_enabled: input.voiceEnabled });
+        hasUpdate = true;
+      }
+      if (input.shareLinkEnabled !== undefined) {
+        query = query.set({
+          channel_share_link_enabled: input.shareLinkEnabled,
+        });
+        hasUpdate = true;
+      }
+
+      if (!hasUpdate) return;
+
+      const result = await query.executeTakeFirst();
+      if (result.numUpdatedRows === 0n) {
+        throw new NotFoundError("Org config not found");
+      }
+    },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Standalone channel-policy assertions (service layer)
+// ---------------------------------------------------------------------------
+
+/** Throws ChannelDisabledError when secure link messaging is disabled. */
+export async function assertSecureLinkEnabled(
+  db: Kysely<TenantDatabase>,
+): Promise<void> {
+  const row = await db
+    .selectFrom("org_config")
+    .select("channel_secure_link_enabled")
+    .executeTakeFirst();
+  if (row?.channel_secure_link_enabled === false) {
+    throw new ChannelDisabledError(ErrorCode.PORTAL_CHANNEL_DISABLED);
+  }
+}
+
+/** Throws ChannelDisabledError when share links are disabled. */
+export async function assertShareLinksEnabled(
+  db: Kysely<TenantDatabase>,
+): Promise<void> {
+  const row = await db
+    .selectFrom("org_config")
+    .select("channel_share_link_enabled")
+    .executeTakeFirst();
+  if (row?.channel_share_link_enabled === false) {
+    throw new ChannelDisabledError(ErrorCode.SHARE_LINKS_DISABLED);
+  }
+}
+
+/**
+ * Returns true when secure link messaging is enabled.
+ * Used by portalBootstrap to expose the flag without throwing.
+ */
+export async function isSecureLinkEnabled(
+  db: Kysely<TenantDatabase>,
+): Promise<boolean> {
+  const row = await db
+    .selectFrom("org_config")
+    .select("channel_secure_link_enabled")
+    .executeTakeFirst();
+  return row?.channel_secure_link_enabled !== false;
 }

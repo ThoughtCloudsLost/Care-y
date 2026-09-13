@@ -7,6 +7,7 @@ import {
   openTicketInfoPanel,
   login,
   openTicketByTitle,
+  reopenTicketByTitle,
 } from "./helpers";
 import { queryDb } from "./db-probe";
 
@@ -251,13 +252,7 @@ test.describe.serial("One-Time Share Link", () => {
     // app rather than reloading: the volunteer's keys live only in
     // memory for the session, so a reload discards them and the app
     // returns to a blocked state with nothing decrypted.
-    await volunteerPage.keyboard.press("Escape");
-    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
-    await volunteerPage.getByRole("tab", { name: "Tickets" }).click();
-    await openTicketByTitle(volunteerPage, TICKET_TITLE);
-    await expect(volunteerPage.locator('[role="log"]')).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
+    await reopenTicketByTitle(volunteerPage, TICKET_TITLE);
 
     // The share content should appear in the timeline (decrypted via
     // the ticket-key follow-up copy).
@@ -265,9 +260,12 @@ test.describe.serial("One-Time Share Link", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    // The status line should show "Opened" (the share has been consumed).
-    await expect(volunteerPage.getByText(/opened/i).first()).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
+    // The share bubble's status value must read exactly "Opened"
+    // (share_status_opened; the share has been consumed). Scoped to the
+    // status element: an unscoped /opened/i also matches the one-time
+    // notice copy and would pass with the status stuck on "Waiting".
+    await expect(
+      volunteerPage.locator('[data-testid="share-status-value"]').first(),
+    ).toHaveText("Opened", { timeout: CRYPTO_TIMEOUT });
   });
 });

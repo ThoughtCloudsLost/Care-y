@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createSmsSend, type SmsSendConfig } from "./create-sms-send.svelte.js";
 import type * as ToastModule from "$lib/stores/toast.svelte.js";
 import type * as Messages from "$lib/paraglide/messages.js";
-import type * as QueryKeys from "$lib/query/keys.js";
+import { ticketKeys, ticketsKeys } from "$lib/query/keys.js";
 import type * as SealModule from "$lib/crypto/seal-portal-copy.js";
 
 // vi.mock required: sealPortalCopy imports from @care-y/crypto barrel which
@@ -42,17 +42,6 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ticket_sms_error_send: () => "sms-error",
   ticket_sms_error_record: () => "sms-record-error",
 }));
-vi.mock("$lib/query/keys.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof QueryKeys>()),
-  ticketKeys: {
-    followUps: (id: string) => ["ticket", id, "followUps"],
-  },
-  ticketsKeys: {
-    readStates: () => ["tickets", "readState"],
-    readStateSweep: () => ["tickets", "readStateSweep"],
-  },
-}));
-
 function makeConfig(overrides?: Partial<SmsSendConfig>): SmsSendConfig {
   return {
     getTicketId: () => "t-1",
@@ -110,13 +99,13 @@ describe("createSmsSend", () => {
     // The outbound SMS is a volunteer follow-up: the list's read-state
     // families refetch alongside the detail's follow-ups.
     expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["ticket", "t-1", "followUps"],
+      queryKey: ticketKeys.followUps("t-1"),
     });
     expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["tickets", "readState"],
+      queryKey: ticketsKeys.readStates(),
     });
     expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["tickets", "readStateSweep"],
+      queryKey: ticketsKeys.readStateSweep(),
     });
   });
 

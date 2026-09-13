@@ -42,6 +42,8 @@ describe("CONTENT_TYPE_REGISTRY", () => {
       ["phone_call", "call"],
       ["share_link", "share"],
       ["contact_correction", "correction"],
+      ["email_outbound", "email"],
+      ["email_inbound", "email"],
     ])("type %s has renderVariant '%s'", (type, expected) => {
       const entry =
         CONTENT_TYPE_REGISTRY[type as keyof typeof CONTENT_TYPE_REGISTRY];
@@ -53,12 +55,49 @@ describe("CONTENT_TYPE_REGISTRY", () => {
         "phone_call",
         "share_link",
         "contact_correction",
+        "email_outbound",
+        "email_inbound",
       ]);
       for (const [type, meta] of Object.entries(CONTENT_TYPE_REGISTRY)) {
         if (!typesWithVariant.has(type)) {
           expect(meta.renderVariant).toBeUndefined();
         }
       }
+    });
+  });
+
+  describe("email_inbound entry", () => {
+    it("has an entry for email_inbound", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound).toBeDefined();
+    });
+
+    it("has category 'message'", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.category).toBe("message");
+    });
+
+    it("allows only client source", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.allowedSources).toEqual([
+        "client",
+      ]);
+    });
+
+    it("uses ticket-key encryption", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.encryption).toBe("ticket-key");
+    });
+
+    it("has encrypted content and no event params", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.hasEncryptedContent).toBe(
+        true,
+      );
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.hasEventParams).toBe(false);
+    });
+
+    it("is not groupable", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.groupable).toBe(false);
+    });
+
+    it("has the email renderVariant (timeline landmark)", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.renderVariant).toBe("email");
     });
   });
 });

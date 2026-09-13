@@ -4,6 +4,7 @@ import {
   isFilterStatus,
   isSortField,
   filterByDisplayStatus,
+  matchesServerFilters,
   reactionsForTicket,
   matchTitles,
   mergeSearchMatches,
@@ -17,6 +18,8 @@ import {
   GRID_CARD_MIN_WIDTH,
   VALID_STATUSES,
   SORT_FIELDS,
+  type TicketForServerFilter,
+  type TicketServerFilterParams,
 } from "./ticket-list-utils.js";
 
 describe("isFilterStatus", () => {
@@ -641,5 +644,226 @@ describe("resolveGridColumns", () => {
     expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 2)).toBe(2);
     expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 3)).toBe(3);
     expect(resolveGridColumns(1280)).toBe(4);
+  });
+});
+
+describe("matchesServerFilters", () => {
+  function record(
+    overrides: Partial<TicketForServerFilter> = {},
+  ): TicketForServerFilter {
+    return {
+      id: "t-1",
+      status: "open",
+      onHold: false,
+      followUpCount: 0,
+      queueId: "q-1",
+      priority: "normal",
+      assignedTo: "u-1",
+      createdAt: "2026-06-15T12:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  function params(
+    overrides: Partial<TicketServerFilterParams> = {},
+  ): TicketServerFilterParams {
+    return { ...overrides };
+  }
+
+  it("keeps all records when no filter dimensions are active", () => {
+    expect(matchesServerFilters(record(), params())).toBe(true);
+  });
+
+  it("excludes a record whose status is not in the active statuses set", () => {
+    expect(
+      matchesServerFilters(
+        record({ status: "open" }),
+        params({ statuses: ["closed"] }),
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a record whose status is in the active statuses set", () => {
+    expect(
+      matchesServerFilters(
+        record({ status: "closed" }),
+        params({ statuses: ["open", "closed"] }),
+      ),
+    ).toBe(true);
+  });
+
+  it("treats an empty statuses array as no filter", () => {
+    expect(
+      matchesServerFilters(
+        record({ status: "open" }),
+        params({ statuses: [] }),
+      ),
+    ).toBe(true);
+  });
+
+  it("excludes a non-hold record when onHold is true", () => {
+    expect(
+      matchesServerFilters(record({ onHold: false }), params({ onHold: true })),
+    ).toBe(false);
+  });
+
+  it("keeps an on-hold record when onHold is true", () => {
+    expect(
+      matchesServerFilters(record({ onHold: true }), params({ onHold: true })),
+    ).toBe(true);
+  });
+
+  it("excludes a record whose queue is not in the active queue set", () => {
+    expect(
+      matchesServerFilters(
+        record({ queueId: "q-2" }),
+        params({ queueIds: ["q-1", "q-3"] }),
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a record whose queue matches one in the set", () => {
+    expect(
+      matchesServerFilters(
+        record({ queueId: "q-3" }),
+        params({ queueIds: ["q-1", "q-3"] }),
+      ),
+    ).toBe(true);
+  });
+
+  it("excludes a record whose priority is not in the active priority set", () => {
+    expect(
+      matchesServerFilters(
+        record({ priority: "low" }),
+        params({ priorities: ["high", "urgent"] }),
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a record whose priority matches one in the set", () => {
+    expect(
+      matchesServerFilters(
+        record({ priority: "high" }),
+        params({ priorities: ["high", "urgent"] }),
+      ),
+    ).toBe(true);
+  });
+
+  it("excludes a record when assignedTo is a string and does not match", () => {
+    expect(
+      matchesServerFilters(
+        record({ assignedTo: "u-1" }),
+        params({ assignedTo: "u-2" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a record when assignedTo matches exactly", () => {
+    expect(
+      matchesServerFilters(
+        record({ assignedTo: "u-2" }),
+        params({ assignedTo: "u-2" }),
+      ),
+    ).toBe(true);
+  });
+
+  it("excludes an assigned record when assignedTo is null (unassigned-only)", () => {
+    expect(
+      matchesServerFilters(
+        record({ assignedTo: "u-1" }),
+        params({ assignedTo: null }),
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps an unassigned record when assignedTo is null", () => {
+    expect(
+      matchesServerFilters(
+        record({ assignedTo: null }),
+        params({ assignedTo: null }),
+      ),
+    ).toBe(true);
+  });
+
+  it("excludes a record created before the createdAfter boundary", () => {
+    expect(
+      matchesServerFilters(
+        record({ createdAt: "2026-05-01T00:00:00.000Z" }),
+        params({ createdAfter: "2026-06-01T00:00:00.000Z" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a record created at or after the createdAfter boundary", () => {
+    expect(
+      matchesServerFilters(
+        record({ createdAt: "2026-06-01T00:00:00.000Z" }),
+        params({ createdAfter: "2026-06-01T00:00:00.000Z" }),
+      ),
+    ).toBe(true);
+  });
+
+  it("excludes a record created after the createdBefore boundary", () => {
+    expect(
+      matchesServerFilters(
+        record({ createdAt: "2026-08-01T00:00:00.000Z" }),
+        params({ createdBefore: "2026-07-01T00:00:00.000Z" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a record created at or before the createdBefore boundary", () => {
+    expect(
+      matchesServerFilters(
+        record({ createdAt: "2026-07-01T00:00:00.000Z" }),
+        params({ createdBefore: "2026-07-01T00:00:00.000Z" }),
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts Date objects for createdAt (superjson deserialization)", () => {
+    expect(
+      matchesServerFilters(
+        record({ createdAt: new Date("2026-06-15T12:00:00.000Z") }),
+        params({ createdAfter: "2026-06-01T00:00:00.000Z" }),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects when any single dimension fails (AND composition)", () => {
+    expect(
+      matchesServerFilters(
+        record({ status: "open", onHold: false, queueId: "q-2" }),
+        params({
+          statuses: ["open"],
+          onHold: true,
+          queueIds: ["q-2"],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("passes when all active dimensions match simultaneously", () => {
+    expect(
+      matchesServerFilters(
+        record({
+          status: "open",
+          onHold: true,
+          queueId: "q-1",
+          priority: "high",
+          assignedTo: "u-3",
+          createdAt: "2026-06-15T00:00:00.000Z",
+        }),
+        params({
+          statuses: ["open"],
+          onHold: true,
+          queueIds: ["q-1"],
+          priorities: ["high"],
+          assignedTo: "u-3",
+          createdAfter: "2026-06-01T00:00:00.000Z",
+          createdBefore: "2026-07-01T00:00:00.000Z",
+        }),
+      ),
+    ).toBe(true);
   });
 });

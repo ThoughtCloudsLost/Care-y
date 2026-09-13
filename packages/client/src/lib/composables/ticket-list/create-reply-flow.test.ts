@@ -37,11 +37,13 @@ function makeQueryClient(): QueryClient {
 describe("createReplyFlow", () => {
   let qc: QueryClient;
   let getPreviewFollowUps: Mock;
+  let getLatestClientType: Mock;
   let eagerLoadPreviews: Mock;
 
   beforeEach(() => {
     qc = makeQueryClient();
     getPreviewFollowUps = vi.fn().mockReturnValue(previewData);
+    getLatestClientType = vi.fn().mockReturnValue(null);
     eagerLoadPreviews = vi.fn().mockResolvedValue(undefined);
   });
 
@@ -50,6 +52,7 @@ describe("createReplyFlow", () => {
       queryClient: qc,
       getTickets: () => tickets,
       getPreviewFollowUps,
+      getLatestClientType,
       eagerLoadPreviews,
     });
   }
@@ -63,6 +66,7 @@ describe("createReplyFlow", () => {
       expect(flow.clientPublic).toBeNull();
       expect(flow.previewFollowUps).toBeUndefined();
       expect(flow.followUpCount).toBe(0);
+      expect(flow.latestClientType).toBeNull();
     });
   });
 
@@ -151,6 +155,33 @@ describe("createReplyFlow", () => {
       expect(flow.clientPublic).toBeNull();
       expect(flow.previewFollowUps).toBeUndefined();
       expect(flow.followUpCount).toBe(0);
+      expect(flow.latestClientType).toBeNull();
+    });
+  });
+
+  describe("latestClientType", () => {
+    it("populates latestClientType from preview data on open", () => {
+      getLatestClientType.mockReturnValue("email_inbound");
+      const flow = make();
+      flow.open("t1");
+      expect(flow.latestClientType).toBe("email_inbound");
+      expect(getLatestClientType).toHaveBeenCalledWith("t1");
+    });
+
+    it("returns null when getLatestClientType returns null", () => {
+      getLatestClientType.mockReturnValue(null);
+      const flow = make();
+      flow.open("t1");
+      expect(flow.latestClientType).toBeNull();
+    });
+
+    it("resets latestClientType on dismiss", () => {
+      getLatestClientType.mockReturnValue("email_inbound");
+      const flow = make();
+      flow.open("t1");
+      expect(flow.latestClientType).toBe("email_inbound");
+      flow.dismiss();
+      expect(flow.latestClientType).toBeNull();
     });
   });
 });

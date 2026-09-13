@@ -411,6 +411,28 @@ export const shareIdSchema = z.uuid().brand<"ShareId">();
 export type ShareId = z.infer<typeof shareIdSchema>;
 
 // ---------------------------------------------------------------------------
+// Email reply tokens
+// ---------------------------------------------------------------------------
+
+/** `email_reply_tokens.id`. */
+export const replyTokenIdSchema = z.uuid().brand<"ReplyTokenId">();
+export type ReplyTokenId = z.infer<typeof replyTokenIdSchema>;
+
+/**
+ * OPS-keyed HMAC of a plaintext reply token, under the reply-token index
+ * label. `email_reply_tokens.token_hash`. Same OPS-keyed domain as
+ * PhoneHash but branded separately.
+ */
+export const replyTokenHashSchema = z.string().brand<"ReplyTokenHash">();
+export type ReplyTokenHash = z.infer<typeof replyTokenHashSchema>;
+
+/** `inbound_email_domains.id` (public schema). */
+export const inboundEmailDomainIdSchema = z
+  .uuid()
+  .brand<"InboundEmailDomainId">();
+export type InboundEmailDomainId = z.infer<typeof inboundEmailDomainIdSchema>;
+
+// ---------------------------------------------------------------------------
 // Notification outbox
 // ---------------------------------------------------------------------------
 

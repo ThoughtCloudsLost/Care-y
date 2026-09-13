@@ -729,6 +729,11 @@ describe("loadInjectedBranding", () => {
     expect(fetchBeta).toHaveBeenCalledOnce();
   });
 
+  // Contract tests: the exact URL and header set are the routing contract
+  // (branding-inject.ts fetchBranding). Dev goes straight to the API server,
+  // mirroring the Vite proxy (same target, same /trpc strip, same x-org-slug
+  // header). Prod round-trips the app's own origin so the Host header carries
+  // the org subdomain the API resolves from; no slug header is sent there.
   it("sends x-org-slug header in dev mode", async () => {
     const fetchImpl = makeFetchOk(goodEnvelope);
     await loadInjectedBranding({

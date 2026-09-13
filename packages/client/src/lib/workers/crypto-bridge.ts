@@ -594,6 +594,12 @@ export class CryptoBridge {
 
   /** Zero all key material and return to READY state. */
   async zeroAll(): Promise<void> {
+    // Gate on init like argon2id: the login page calls zeroAll as its
+    // first bridge operation, and a request dispatched while the Worker
+    // is still awaiting getSodium() is rejected with "Sodium backend not
+    // initialized" instead of queued. Under a slow module waterfall that
+    // race loses often enough to fail real logins.
+    await this.readyPromise;
     await this.sendRequest({ type: "zeroAll" });
     this.setState("READY");
   }

@@ -208,6 +208,21 @@ function makeSmsData(overrides?: Partial<IncomingSmsData>): IncomingSmsData {
   };
 }
 
+/** Minimal chainable mock that resolves channel policy from org_config. */
+function mockTenantDbWithPolicy(
+  policyOverrides?: Record<string, boolean>,
+): Kysely<TenantDatabase> {
+  const policyRow = { channel_sms_enabled: true, ...policyOverrides };
+  const chain = {
+    select: vi.fn().mockReturnValue({
+      executeTakeFirst: vi.fn().mockResolvedValue(policyRow),
+    }),
+  };
+  return {
+    selectFrom: vi.fn().mockReturnValue(chain),
+  } as unknown as Kysely<TenantDatabase>;
+}
+
 function makeDeps(overrides?: Partial<InboundSmsDeps>): InboundSmsDeps {
   return {
     provider: createMockProvider(),
@@ -218,7 +233,7 @@ function makeDeps(overrides?: Partial<InboundSmsDeps>): InboundSmsDeps {
     clientRepo: createMockClientRepo(),
     smsResponseRepo: createMockSmsResponseRepo(),
     blocklistRepo: createMockBlocklistRepo(),
-    tDb: {} as unknown as InboundSmsDeps["tDb"],
+    tDb: mockTenantDbWithPolicy(),
     intakeQueueId: "queue-intake-1" as QueueId,
     orgId: orgIdSchema.parse("a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0"),
     orgSchema: orgSchemaNameSchema.parse(
@@ -259,6 +274,28 @@ describe("handleInboundSms", () => {
 
     expect(deps.clientRepo.findOrCreateByPhoneHash).not.toHaveBeenCalled();
     expect(deps.provider.sendSms).not.toHaveBeenCalled();
+  });
+
+  // --- Channel policy ---
+
+  it("returns null when channel_sms_enabled is false (same as blocked)", async () => {
+    deps = makeDeps({
+      tDb: mockTenantDbWithPolicy({ channel_sms_enabled: false }),
+    });
+
+    const result = await handleInboundSms(smsData, deps);
+    expect(result).toBeNull();
+    expect(deps.clientRepo.findOrCreateByPhoneHash).not.toHaveBeenCalled();
+    expect(deps.provider.sendSms).not.toHaveBeenCalled();
+  });
+
+  it("proceeds past policy guard when channel_sms_enabled is true", async () => {
+    // Default deps have sms enabled; blocklist returns false (default).
+    // The stub tDb cannot support ticket creation, so the call rejects
+    // downstream of the guard; reaching client creation proves the guard
+    // passed.
+    await handleInboundSms(smsData, deps).catch(() => undefined);
+    expect(deps.clientRepo.findOrCreateByPhoneHash).toHaveBeenCalled();
   });
 
   // --- Blind index ---

@@ -1,35 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type * as CryptoPkg from "@care-y/crypto";
-
-const { fakeEciesOutput } = vi.hoisted(() => ({
-  fakeEciesOutput: {
-    ephemeralPoint: new Uint8Array(32).fill(9),
-    nonce: new Uint8Array(24).fill(10),
-    ciphertext: new Uint8Array(50).fill(11),
-  },
-}));
-
-vi.mock("@care-y/crypto", async (importOriginal) => ({
-  ...(await importOriginal<typeof CryptoPkg>()),
-  eciesEncrypt: vi.fn().mockReturnValue(fakeEciesOutput),
-  PORTAL_KEY_CHECK: "care-y-portal-check-v1",
-  encode: vi
-    .fn()
-    .mockImplementation((buf: Uint8Array) =>
-      Buffer.from(buf).toString("base64url"),
-    ),
-  decode: vi
-    .fn()
-    .mockImplementation((s: string) => Buffer.from(s, "base64url")),
-  toRistrettoPoint: vi.fn().mockImplementation((buf: Uint8Array) => buf),
-}));
-
+import { describe, it, expect, vi, beforeAll } from "vitest";
+import { getSodium, PORTAL_KEY_CHECK } from "@care-y/crypto";
+import {
+  makeRistrettoKeypair,
+  decryptTripleB64,
+  type TestKeypair,
+} from "./test-helpers/crypto.js";
 import {
   buildAddPassphrasePayload,
   type DecryptHandle,
   type PortalMessageWire,
 } from "./add-passphrase-crypto.js";
-import { eciesEncrypt } from "@care-y/crypto";
+
+// The "new keypair" the Worker would have derived. The suite only ever
+// hands the public half to the module under test; the private half stays
+// here to verify the seals by decryption.
+let keypair: TestKeypair;
+
+beforeAll(async () => {
+  await getSodium();
+  keypair = makeRistrettoKeypair();
+});
 
 function makeSession(_messages: readonly PortalMessageWire[]): DecryptHandle {
   return {
@@ -53,42 +43,20 @@ function makeMessages(count: number): PortalMessageWire[] {
   }));
 }
 
-// A fake base64url client public key (32 bytes)
-const fakeClientPublicB64 = Buffer.from(new Uint8Array(32).fill(4)).toString(
-  "base64url",
-);
-
 describe("buildAddPassphrasePayload", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("returns a payload with clientPublic and keyCheck", async () => {
+  it("seals a key check the new private key can decrypt", async () => {
     const messages = makeMessages(0);
     const session = makeSession(messages);
 
     const payload = await buildAddPassphrasePayload(
-      fakeClientPublicB64,
+      keypair.publicB64,
       messages,
       session,
     );
 
-    expect(payload.clientPublic).toBe(fakeClientPublicB64);
-    expect(payload.keyCheck).toBeDefined();
-    expect(payload.keyCheck.ephemeralPoint).toBeDefined();
-    expect(payload.keyCheck.nonce).toBeDefined();
-    expect(payload.keyCheck.ciphertext).toBeDefined();
-  });
-
-  it("seals the key check to the decoded new public key", async () => {
-    const messages = makeMessages(0);
-    const session = makeSession(messages);
-
-    await buildAddPassphrasePayload(fakeClientPublicB64, messages, session);
-
-    expect(eciesEncrypt).toHaveBeenCalledWith(
-      expect.any(Uint8Array),
-      expect.any(Uint8Array),
+    expect(payload.clientPublic).toBe(keypair.publicB64);
+    expect(decryptTripleB64(payload.keyCheck, keypair.privateScalar)).toBe(
+      PORTAL_KEY_CHECK,
     );
   });
 
@@ -97,7 +65,7 @@ describe("buildAddPassphrasePayload", () => {
     const session = makeSession(messages);
 
     const payload = await buildAddPassphrasePayload(
-      fakeClientPublicB64,
+      keypair.publicB64,
       messages,
       session,
     );
@@ -105,12 +73,19 @@ describe("buildAddPassphrasePayload", () => {
     expect(payload.resealedMessages).toHaveLength(4);
     expect(session.decryptMessage).toHaveBeenCalledTimes(4);
 
-    // All directions get re-sealed (both to_client and from_client)
+    // All directions get re-sealed (both to_client and from_client),
+    // and each copy must open under the new private key.
     const ids = payload.resealedMessages.map((m) => m.id);
     expect(ids).toEqual(["msg-0", "msg-1", "msg-2", "msg-3"]);
+    expect(payload.skippedMessageIds).toEqual([]);
+    for (const resealed of payload.resealedMessages) {
+      expect(decryptTripleB64(resealed.copy, keypair.privateScalar)).toBe(
+        "decrypted text",
+      );
+    }
   });
 
-  it("skips messages that fail to decrypt", async () => {
+  it("declares messages that fail to decrypt as skipped IDs", async () => {
     const messages = makeMessages(3);
     const session: DecryptHandle = {
       decryptMessage: vi
@@ -121,15 +96,18 @@ describe("buildAddPassphrasePayload", () => {
     };
 
     const payload = await buildAddPassphrasePayload(
-      fakeClientPublicB64,
+      keypair.publicB64,
       messages,
       session,
     );
 
-    // Only 2 out of 3 successfully decrypted
+    // Only 2 out of 3 successfully decrypted; the failed one is
+    // declared rather than silently dropped, so the server's coverage
+    // check still accounts for every row.
     expect(payload.resealedMessages).toHaveLength(2);
     expect(payload.resealedMessages[0]?.id).toBe("msg-0");
     expect(payload.resealedMessages[1]?.id).toBe("msg-2");
+    expect(payload.skippedMessageIds).toEqual(["msg-1"]);
   });
 
   it("returns empty resealedMessages when no messages exist", async () => {
@@ -137,24 +115,12 @@ describe("buildAddPassphrasePayload", () => {
     const session = makeSession(messages);
 
     const payload = await buildAddPassphrasePayload(
-      fakeClientPublicB64,
+      keypair.publicB64,
       messages,
       session,
     );
 
     expect(payload.resealedMessages).toHaveLength(0);
-  });
-
-  it("passes the base64url public key through as clientPublic", async () => {
-    const messages = makeMessages(0);
-    const session = makeSession(messages);
-
-    const payload = await buildAddPassphrasePayload(
-      fakeClientPublicB64,
-      messages,
-      session,
-    );
-
-    expect(payload.clientPublic).toBe(fakeClientPublicB64);
+    expect(payload.skippedMessageIds).toHaveLength(0);
   });
 });

@@ -21,6 +21,7 @@ import type {
   UsernameHash,
   PhoneHash,
   OpsPhoneHash,
+  ReplyTokenHash,
 } from "@care-y/shared";
 
 // --- Interfaces ---
@@ -101,6 +102,7 @@ export interface DerivedKeys {
 const BLIND_INDEX_INFO = "care-y-blind-index-v1";
 const FIELD_ENCRYPT_INFO = "care-y-field-encrypt-v1";
 const CONSULTANT_PHONE_INDEX_INFO = "consultant-phone-index";
+const REPLY_TOKEN_INDEX_INFO = "care-y-reply-token-v1";
 const REQUIRED_KEY_LENGTH = 32;
 
 /**
@@ -147,6 +149,53 @@ export function deriveConsultantPhoneIndexKey(opsSecretsKey: Buffer): Buffer {
       32,
     ),
   );
+}
+
+/**
+ * Derives a keyed HMAC key for reply token hashing under a separate HKDF
+ * label ("care-y-reply-token-v1"). The resulting key MUST NOT be shared
+ * with any other indexer. A DB dump seeing token hashes cannot reconstruct
+ * working reply addresses without this key.
+ */
+export function deriveReplyTokenIndexKey(opsSecretsKey: Buffer): Buffer {
+  if (opsSecretsKey.length !== REQUIRED_KEY_LENGTH) {
+    throw new CryptoError(
+      `OPS_SECRETS_KEY must be exactly ${String(REQUIRED_KEY_LENGTH)} bytes, got ${String(opsSecretsKey.length)}`,
+    );
+  }
+  return Buffer.from(
+    hkdfSync(
+      "sha256",
+      opsSecretsKey,
+      Buffer.alloc(0),
+      REPLY_TOKEN_INDEX_INFO,
+      32,
+    ),
+  );
+}
+
+/** Hashes a reply token for storage. Not org-salted: the token itself has
+ *  128 bits of entropy and is globally unique. */
+export interface ReplyTokenHasher {
+  /** Hashes a plaintext reply token, returning a branded ReplyTokenHash. */
+  hash(token: string): ReplyTokenHash;
+}
+
+/** Creates a ReplyTokenHasher from a derived key. */
+export function createReplyTokenHasher(key: Buffer): ReplyTokenHasher {
+  if (key.length !== REQUIRED_KEY_LENGTH) {
+    throw new CryptoError(
+      `Reply token index key must be ${String(REQUIRED_KEY_LENGTH)} bytes, got ${String(key.length)}`,
+    );
+  }
+
+  return {
+    hash(token: string): ReplyTokenHash {
+      return createHmac("sha256", key)
+        .update(token)
+        .digest("hex") as ReplyTokenHash;
+    },
+  };
 }
 
 // --- Field Encryption ---

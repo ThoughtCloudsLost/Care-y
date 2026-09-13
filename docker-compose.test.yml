@@ -24,7 +24,10 @@ services:
     read_only: false
     # security_opt inherited from base docker-compose.yml (no-new-privileges).
     # Do not redeclare here: CI overlays both files and Compose rejects duplicates.
-    mem_limit: 512m
+    # Higher than production's 512m because the coverage run instruments
+    # every server test file at once and the v8 map outgrew that cap; the
+    # plain suite still fits well under it.
+    mem_limit: 1536m
     cpus: "1.0"
     tmpfs:
       - /tmp

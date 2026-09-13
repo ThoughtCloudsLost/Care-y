@@ -1,32 +1,22 @@
-import { describe, it, expect, vi } from "vitest";
-import type * as CryptoPkg from "@care-y/crypto";
-
-// vi.mock required: eciesEncrypt needs initialized libsodium (WASM via the
-// getSodium() singleton), unavailable in the node test environment without
-// the slow JS fallback. Stubs also make the sealed triple deterministic.
-vi.mock("@care-y/crypto", async (importOriginal) => ({
-  ...(await importOriginal<typeof CryptoPkg>()),
-  eciesEncrypt: (_plaintext: Uint8Array, _pub: Uint8Array) => ({
-    ephemeralPoint: new Uint8Array([10]),
-    nonce: new Uint8Array([20]),
-    ciphertext: new Uint8Array([30]),
-  }),
-  toRistrettoPoint: (b: Uint8Array) => b,
-  decode: () => new Uint8Array([9]),
-  encode: (b: Uint8Array) => `b64:${String(b[0] ?? "")}`,
-}));
-
+import { describe, it, expect, beforeAll } from "vitest";
+import { getSodium } from "@care-y/crypto";
+import {
+  makeRistrettoKeypair,
+  decryptTripleB64,
+} from "../portal/test-helpers/crypto.js";
 import { sealPortalCopy } from "./seal-portal-copy.js";
 
-describe("sealPortalCopy", () => {
-  it("returns a sealed triple when given a non-empty client public key", () => {
-    const result = sealPortalCopy("client-pub-b64", "hello");
+beforeAll(async () => {
+  await getSodium();
+});
 
-    expect(result).toEqual({
-      ephemeralPoint: "b64:10",
-      nonce: "b64:20",
-      ciphertext: "b64:30",
-    });
+describe("sealPortalCopy", () => {
+  it("seals text the holder of the client private key can decrypt", () => {
+    const { publicB64, privateScalar } = makeRistrettoKeypair();
+    const result = sealPortalCopy(publicB64, "hello portal");
+
+    expect(result).toBeDefined();
+    expect(decryptTripleB64(result!, privateScalar)).toBe("hello portal");
   });
 
   it("returns undefined when clientPublic is null", () => {
@@ -38,7 +28,8 @@ describe("sealPortalCopy", () => {
   });
 
   it("produces a triple with three non-empty string parts", () => {
-    const result = sealPortalCopy("some-key", "test body");
+    const { publicB64 } = makeRistrettoKeypair();
+    const result = sealPortalCopy(publicB64, "test body");
     expect(result).toBeDefined();
     expect(result!.ephemeralPoint.length).toBeGreaterThan(0);
     expect(result!.nonce.length).toBeGreaterThan(0);

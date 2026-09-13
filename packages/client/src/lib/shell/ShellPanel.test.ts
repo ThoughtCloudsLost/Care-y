@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import ShellPanel from "./ShellPanel.svelte";
+import { _resetOverlayStack } from "./overlay-stack";
 
 // Konsta Panel relies on a .k-page container for portaling.
 beforeEach(() => {
@@ -13,6 +14,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  _resetOverlayStack();
   document.body.querySelector(".k-page")?.remove();
 });
 
@@ -106,6 +108,38 @@ describe("ShellPanel", () => {
 
     const dialog = document.querySelector('[role="dialog"]');
     expect(dialog?.classList.contains("shell-panel-content")).toBe(true);
+  });
+
+  it("stacks backdrops for two open panels and removes them on close", async () => {
+    const { rerender: rerenderA } = render(ShellPanel, {
+      props: {
+        opened: true,
+        ondismiss: vi.fn(),
+        ariaLabel: "Panel A",
+        children: testSnippet,
+      },
+    });
+
+    const { rerender: rerenderB } = render(ShellPanel, {
+      props: {
+        opened: true,
+        ondismiss: vi.fn(),
+        ariaLabel: "Panel B",
+        children: testSnippet,
+      },
+    });
+
+    const backdrops = () =>
+      document.querySelectorAll('[data-testid="shell-backdrop"]');
+    expect(backdrops()).toHaveLength(2);
+
+    // Close the second panel
+    await rerenderB({ opened: false });
+    expect(backdrops()).toHaveLength(1);
+
+    // Close the first panel
+    await rerenderA({ opened: false });
+    expect(backdrops()).toHaveLength(0);
   });
 
   it("marks the closed panel inert and drops aria-modal", async () => {

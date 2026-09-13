@@ -20,6 +20,7 @@ import { hashChannelAuth } from "@care-y/crypto";
 import { normalizeUsername } from "@care-y/shared";
 import { computeFakeSalt, computeFakeUuid } from "../auth/salt-defense.js";
 import { UsernameTakenError, StaleThreadError } from "./portal-errors.js";
+import { hasExactMessageCoverage } from "./message-coverage.js";
 import type {
   ClientId,
   ClientAccountId,
@@ -238,13 +239,18 @@ export async function createAccount(
 
 /**
  * Upgrade from Secure Link to Encrypted Account, one transaction:
- *   1. Revoke the old channel FIRST (partial unique index on client_id
+ *   1. Coverage guard: rewrapped + skipped must exactly partition the
+ *      old channel's portal_messages rows. A volunteer dual-copy reply
+ *      racing the upgrade lands in neither set and aborts
+ *      (StaleThreadError); the client refetches and retries. Skipped
+ *      rows are ones already unreadable on the client's device, so
+ *      deleting them below loses nothing readable.
+ *   2. Revoke the old channel FIRST (partial unique index on client_id
  *      WHERE active rejects two active rows)
- *   2. createAccount inserts the new kind='account' channel
- *   3. For each rewrapped row: guarded UPDATE of portal_messages
- *   4. Stale-thread guard: reject if any old-channel row has created_at
- *      newer than the newest re-encrypted row
- *   5. DELETE remaining portal_messages of the old channel
+ *   3. createAccount inserts the new kind='account' channel
+ *   4. For each rewrapped row: guarded UPDATE of portal_messages
+ *   5. DELETE remaining old-channel rows (exactly the skipped set,
+ *      dead ciphertext under the superseded key)
  *
  * Does NOT touch followups or portal_reply_key_wraps (volunteer copies
  * and convergence are not this surface's to modify).
@@ -255,18 +261,35 @@ export async function upgradeFromSecureLink(
   channel: PortalChannelRow,
   reg: AccountRegistrationInput,
   rewrapped: readonly RewrappedMessageInput[],
+  skippedMessageIds: readonly PortalMessageId[],
 ): Promise<void> {
   await db.transaction().execute(async (trx) => {
     const oldChannelRowId = channel.id;
 
-    // 1. Revoke old channel FIRST
+    // 1. Coverage guard
+    const rows = await trx
+      .selectFrom("portal_messages")
+      .select("id")
+      .where("channel_id", "=", oldChannelRowId)
+      .execute();
+
+    const covered = hasExactMessageCoverage(
+      rows.map((row) => row.id),
+      rewrapped.map((msg) => msg.id),
+      skippedMessageIds,
+    );
+    if (!covered) {
+      throw new StaleThreadError();
+    }
+
+    // 2. Revoke old channel FIRST
     await trx
       .updateTable("portal_channels")
       .set({ status: "revoked", revoked_at: new Date() })
       .where("id", "=", oldChannelRowId)
       .execute();
 
-    // 2. Create account (inserts account row + new channel + sets tier)
+    // 3. Create account (inserts account row + new channel + sets tier)
     await createAccount(trx, deps, channel.client_id, reg);
 
     // Get the new channel row id for message re-pointing
@@ -280,12 +303,10 @@ export async function upgradeFromSecureLink(
 
     const newChannelRowId = newChannel.id;
 
-    // 3. Swap re-encrypted triples: guarded UPDATE per message
+    // 4. Swap re-encrypted triples: guarded UPDATE per message
     // The WHERE channel_id = old guard stops cross-channel writes
-    let newestRewrappedAt: Date | null = null;
-
     for (const msg of rewrapped) {
-      const result = await trx
+      await trx
         .updateTable("portal_messages")
         .set({
           channel_id: newChannelRowId,
@@ -295,34 +316,10 @@ export async function upgradeFromSecureLink(
         })
         .where("id", "=", msg.id)
         .where("channel_id", "=", oldChannelRowId)
-        .returning("created_at")
-        .executeTakeFirst();
-
-      if (
-        result &&
-        (newestRewrappedAt === null || result.created_at > newestRewrappedAt)
-      ) {
-        newestRewrappedAt = result.created_at;
-      }
+        .execute();
     }
 
-    // 4. Stale-thread guard: if any remaining old-channel message has
-    // created_at newer than the newest row the client re-encrypted, a
-    // volunteer dual-copy reply raced the upgrade. Abort.
-    if (newestRewrappedAt !== null) {
-      const staleRow = await trx
-        .selectFrom("portal_messages")
-        .select("id")
-        .where("channel_id", "=", oldChannelRowId)
-        .where("created_at", ">", newestRewrappedAt)
-        .executeTakeFirst();
-
-      if (staleRow) {
-        throw new StaleThreadError();
-      }
-    }
-
-    // 5. Delete remaining old-channel messages (not re-encrypted = dead ciphertext)
+    // 5. Delete remaining old-channel rows (exactly the skipped set)
     await trx
       .deleteFrom("portal_messages")
       .where("channel_id", "=", oldChannelRowId)
@@ -469,9 +466,14 @@ export async function resolveAccountSession(
 /**
  * Change password, one transaction, after verifying currentAuthToken
  * against the stored hash (timing-safe):
+ *   - Coverage guard: rewrapped + skipped must exactly partition the
+ *     channel's portal_messages rows (StaleThreadError otherwise; a
+ *     raced inbound copy lands in neither set)
  *   - Update salt/public_key/auth_hash on the account
  *   - Update the channel's client_public + key check
  *   - Swap rewrapped triples (same guarded UPDATE as upgrade, no channel move)
+ *   - Skipped rows stay untouched, sealed to the superseded key (they
+ *     were already unreadable on the client's device)
  *   - Delete all sessions except the current one
  *
  * Same accountId (the OPRF userId is identity, not key material).
@@ -492,6 +494,7 @@ export async function changePassword(
       readonly ciphertext: Buffer;
     };
     readonly rewrappedMessages: readonly RewrappedMessageInput[];
+    readonly skippedMessageIds: readonly PortalMessageId[];
   },
 ): Promise<boolean> {
   // Verify the current auth token (timing-safe). False signals the
@@ -508,6 +511,22 @@ export async function changePassword(
   }
 
   await db.transaction().execute(async (trx) => {
+    // Coverage guard
+    const rows = await trx
+      .selectFrom("portal_messages")
+      .select("id")
+      .where("channel_id", "=", channel.id)
+      .execute();
+
+    const covered = hasExactMessageCoverage(
+      rows.map((row) => row.id),
+      input.rewrappedMessages.map((msg) => msg.id),
+      input.skippedMessageIds,
+    );
+    if (!covered) {
+      throw new StaleThreadError();
+    }
+
     // Update account key material
     await trx
       .updateTable("client_accounts")
@@ -532,10 +551,8 @@ export async function changePassword(
       .execute();
 
     // Swap rewrapped triples (same guarded UPDATE as upgrade, no channel move)
-    let newestRewrappedAt: Date | null = null;
-
     for (const msg of input.rewrappedMessages) {
-      const result = await trx
+      await trx
         .updateTable("portal_messages")
         .set({
           ephemeral_point: msg.copy.ephemeralPoint,
@@ -544,29 +561,7 @@ export async function changePassword(
         })
         .where("id", "=", msg.id)
         .where("channel_id", "=", channel.id)
-        .returning("created_at")
-        .executeTakeFirst();
-
-      if (
-        result &&
-        (newestRewrappedAt === null || result.created_at > newestRewrappedAt)
-      ) {
-        newestRewrappedAt = result.created_at;
-      }
-    }
-
-    // Stale-thread guard
-    if (newestRewrappedAt !== null) {
-      const staleRow = await trx
-        .selectFrom("portal_messages")
-        .select("id")
-        .where("channel_id", "=", channel.id)
-        .where("created_at", ">", newestRewrappedAt)
-        .executeTakeFirst();
-
-      if (staleRow) {
-        throw new StaleThreadError();
-      }
+        .execute();
     }
 
     // Delete all sessions except the current one

@@ -104,7 +104,6 @@
   .empty-subtitle {
     color: var(--muted);
     font-size: var(--text-sm);
-    opacity: 0.7;
   }
 
   /* Seal and stamp variants take the mock's empty anatomy: Fraunces
@@ -121,7 +120,6 @@
     font-size: 0.8125rem;
     line-height: 1.5;
     max-width: 230px;
-    opacity: 1;
   }
 
   .empty-action {

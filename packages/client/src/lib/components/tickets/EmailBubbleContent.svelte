@@ -9,6 +9,7 @@
   import { parseEmailOutbound } from "$lib/editor/email-schema.js";
   import * as m from "$lib/paraglide/messages.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import EmailChannelChip from "$lib/components/tickets/EmailChannelChip.svelte";
 
   interface EmailBubbleContentProps {
     result: DecryptResult;
@@ -22,6 +23,7 @@
   );
 </script>
 
+<EmailChannelChip />
 {#if result.status !== "ready"}
   <span class="bubble-text">
     <DecryptPlaceholder

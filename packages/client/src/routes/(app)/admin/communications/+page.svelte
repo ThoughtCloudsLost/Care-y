@@ -2,11 +2,19 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { Permission } from "@care-y/shared";
-  import { Phone, Ban, Mic, MessageSquare, PhoneMissed } from "@lucide/svelte";
+  import {
+    Phone,
+    Ban,
+    Mic,
+    MessageSquare,
+    PhoneMissed,
+    ToggleRight,
+  } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
   import CollapsibleSectionPage from "$lib/components/admin/CollapsibleSectionPage.svelte";
   import type { SectionDef } from "$lib/components/admin/collapsible-section-types.js";
+  import ChannelPolicySection from "$lib/components/admin/ChannelPolicySection.svelte";
   import TelephonyConfigSection from "$lib/components/admin/TelephonyConfigSection.svelte";
   import BlocklistSection from "$lib/components/admin/BlocklistSection.svelte";
   import GreetingsSection from "$lib/components/admin/GreetingsSection.svelte";
@@ -17,6 +25,13 @@
   const permissions = $derived(permissionsGetter());
 
   const SECTIONS: readonly SectionDef[] = [
+    {
+      id: "channel-policy",
+      label: m.admin_tab_channel_policy,
+      icon: ToggleRight,
+      permission: Permission.MANAGE_ORG_CONFIG,
+      component: ChannelPolicySection,
+    },
     {
       id: "telephony",
       label: m.admin_tab_telephony,

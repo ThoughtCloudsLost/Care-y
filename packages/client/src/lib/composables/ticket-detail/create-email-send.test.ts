@@ -5,7 +5,6 @@ import {
 } from "./create-email-send.svelte.js";
 import type * as ToastModule from "$lib/stores/toast.svelte.js";
 import type * as Messages from "$lib/paraglide/messages.js";
-import type * as QueryKeys from "$lib/query/keys.js";
 import type * as SealModule from "$lib/crypto/seal-portal-copy.js";
 import type { ProseMirrorDocJSON } from "@care-y/shared";
 
@@ -43,17 +42,6 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ticket_email_error_send: () => "email-error",
   ticket_email_error_record: () => "email-record-error",
   ticket_email_too_long: () => "too-long",
-}));
-
-vi.mock("$lib/query/keys.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof QueryKeys>()),
-  ticketKeys: {
-    followUps: (id: string) => ["ticket", id, "followUps"],
-  },
-  ticketsKeys: {
-    readStates: () => ["tickets", "readState"],
-    readStateSweep: () => ["tickets", "readStateSweep"],
-  },
 }));
 
 const sampleDoc: ProseMirrorDocJSON = {

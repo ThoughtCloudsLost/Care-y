@@ -53,13 +53,13 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
   });
 
   test("exposure hint has dismiss button", async () => {
-    const dismissBtn = page.locator('[data-testid="exposure-dismiss"]');
+    const dismissBtn = page.locator('[data-testid="exposure-hint-ok"]');
     await expect(dismissBtn).toBeVisible();
     await expect(dismissBtn).toHaveText(/got it/i);
   });
 
   test("dismissing exposure hint opens SMS compose sheet", async () => {
-    const dismissBtn = page.locator('[data-testid="exposure-dismiss"]');
+    const dismissBtn = page.locator('[data-testid="exposure-hint-ok"]');
     await dismissBtn.click();
 
     // SMS compose mode indicator visible in the messagebar header.
@@ -107,7 +107,7 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
 
     // Verify the exposure hint is NOT showing.
     await expect(
-      page.locator('[data-testid="exposure-dismiss"]'),
+      page.locator('[data-testid="exposure-hint-ok"]'),
     ).not.toBeVisible({ timeout: 1000 });
 
     // Dismiss the inline SMS compose mode.
@@ -125,14 +125,18 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
     });
 
     // Open the client info panel via the header button.
-    // On desktop split-view, the alias button is replaced by "More actions".
+    // On desktop split-view, the alias button is replaced by "More
+    // actions"; on mobile both buttons exist, so a combined regex trips
+    // strict mode. Prefer the alias button and fall back to the other.
     const panel = page.locator('[role="dialog"]').filter({
       hasText: "Help with housing",
     });
     if (!(await panel.isVisible().catch(() => false))) {
-      const clientInfoBtn = page.getByRole("button", {
-        name: /view info|more actions/i,
-      });
+      const viewInfo = page.getByRole("button", { name: /view info/i });
+      const clientInfoBtn =
+        (await viewInfo.count()) > 0
+          ? viewInfo
+          : page.getByRole("button", { name: /more actions/i });
       await expect(clientInfoBtn).toBeVisible({ timeout: 5_000 });
       await clientInfoBtn.click();
     }

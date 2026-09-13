@@ -457,6 +457,10 @@ async function handleAccountStep(
 /**
  * Handles the optional continuation channel inside the intake transaction.
  * Only executes when account is null (account strictly dominates continuation).
+ *
+ * When channel_secure_link_enabled is false, the continuation channel is
+ * silently skipped and the client stays at sms_email tier. The intake
+ * itself still succeeds (no error).
  */
 async function handleContinuationStep(
   trx: Kysely<TenantDatabase>,
@@ -464,6 +468,13 @@ async function handleContinuationStep(
   clientId: ClientId,
 ): Promise<void> {
   if (input.continuation === null || input.account !== null) return;
+
+  // Channel policy: skip portal channel creation when secure link is disabled
+  const policyRow = await trx
+    .selectFrom("org_config")
+    .select("channel_secure_link_enabled")
+    .executeTakeFirst();
+  if (policyRow?.channel_secure_link_enabled === false) return;
 
   const contChannelRow = await trx
     .insertInto("portal_channels")

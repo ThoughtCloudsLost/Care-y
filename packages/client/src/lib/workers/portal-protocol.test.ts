@@ -30,24 +30,28 @@ import type {
 } from "./portal-protocol.js";
 
 describe("portal-protocol types", () => {
-  it("PortalWorkerRequestType covers all request discriminants", () => {
-    const allTypes: PortalWorkerRequestType[] = [
-      "init",
-      "channelSessionStart",
-      "channelSessionRestart",
-      "channelSessionFinish",
-      "verifyKeyCheck",
-      "decryptMessage",
-      "encryptReply",
-      "decryptAttachmentKey",
-      "decryptAttachmentBlob",
-      "accountSessionStart",
-      "accountSessionFinish",
-      "channelPassphraseDerive",
-      "channelPassphraseFinish",
-      "zeroAll",
-    ];
-    expect(allTypes).toHaveLength(14);
+  it("PortalWorkerRequestType covers all request discriminants (compile-time)", () => {
+    // Exhaustiveness is enforced by the compiler: `satisfies Record<...>`
+    // fails typecheck if a PortalWorkerRequestType member is missing here
+    // (new union member goes undetected) or if a listed key is not a
+    // member (stale key after a rename).
+    const covered = {
+      init: true,
+      channelSessionStart: true,
+      channelSessionRestart: true,
+      channelSessionFinish: true,
+      verifyKeyCheck: true,
+      decryptMessage: true,
+      encryptReply: true,
+      decryptAttachmentKey: true,
+      decryptAttachmentBlob: true,
+      accountSessionStart: true,
+      accountSessionFinish: true,
+      channelPassphraseDerive: true,
+      channelPassphraseFinish: true,
+      zeroAll: true,
+    } satisfies Record<PortalWorkerRequestType, true>;
+    void covered;
   });
 
   it("PortalResponseForRequest maps each type correctly (compile-time)", () => {
@@ -98,8 +102,6 @@ describe("portal-protocol types", () => {
       _accFinish,
       _zero,
     ];
-
-    expect(true).toBe(true);
   });
 
   it("ErrorResponse carries type and code", () => {

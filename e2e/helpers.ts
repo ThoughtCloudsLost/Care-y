@@ -130,19 +130,138 @@ export interface LoginOptions {
   readonly allowOrgKeyWait?: boolean;
 }
 
+/** First-attempt bound on the credential leg. Timed full runs put healthy
+ *  logins at 2.5-15s end to end; the failure mode is a hang where auth.login
+ *  never responds at all, not a slow tail. 20s cleanly separates the two and
+ *  leaves room for a full-length second attempt inside the common
+ *  CRYPTO_TIMEOUT * 2 hook budgets. */
+const FIRST_LOGIN_ATTEMPT_TIMEOUT = 20_000;
+
+/** A stalled credential leg (timeout) or the login page's catch-all error
+ *  alert. Both are environmental under full-run load; genuinely bad
+ *  credentials just fail identically on the second attempt. */
+function isRetryableLoginFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.name === "TimeoutError" || error.message.startsWith("Login failed:")
+  );
+}
+
+/** Pages that already have diagnostic listeners attached. */
+const diagnosedPages = new WeakSet<Page>();
+
+/**
+ * Page-lifetime diagnostics for triaging full-run failures. Logs the
+ * signals that past triage sessions had to reconstruct after the fact:
+ * tRPC response statuses (procedure + status + error code, never bodies),
+ * failed requests, Vite dev-server client messages (a dep re-optimization
+ * announces "[vite] optimized dependencies changed, reloading" right
+ * before it force-reloads the page), page errors, and full document
+ * loads (a "load:" line mid-suite means the page reloaded).
+ */
+export function attachPageDiagnostics(page: Page, label: string): void {
+  if (diagnosedPages.has(page)) return;
+  diagnosedPages.add(page);
+  const t0 = Date.now();
+  const log = (msg: string): void => {
+    console.log(`[diag:${label}] +${String(Date.now() - t0)}ms ${msg}`);
+  };
+
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (!url.pathname.startsWith("/trpc/")) {
+      if (response.status() >= 400) {
+        log(`http ${String(response.status())} ${url.pathname}`);
+      }
+      return;
+    }
+    const procedures = url.pathname.replace("/trpc/", "");
+    if (response.status() < 400) {
+      log(`trpc ${procedures} status=${String(response.status())}`);
+      return;
+    }
+    void response
+      .text()
+      .then((body) => {
+        // tRPC error envelope: log codes only, never payloads.
+        const codes = [...body.matchAll(/"code":\s*(-?\d+|"[A-Z_]+")/g)]
+          .map((m) => m[1])
+          .join(",");
+        log(
+          `trpc ${procedures} status=${String(response.status())} codes=[${codes}]`,
+        );
+      })
+      .catch(() => {
+        log(`trpc ${procedures} status=${String(response.status())} (no body)`);
+      });
+  });
+  page.on("requestfailed", (request) => {
+    const url = new URL(request.url());
+    log(
+      `requestfailed ${url.pathname} (${request.failure()?.errorText ?? "unknown"})`,
+    );
+  });
+  page.on("console", (msg) => {
+    const text = msg.text();
+    if (text.startsWith("[vite]") || msg.type() === "error") {
+      log(`console.${msg.type()} ${text.slice(0, 300)}`);
+    }
+  });
+  page.on("pageerror", (error) => {
+    log(`pageerror ${error.message.slice(0, 300)}`);
+  });
+  page.on("load", () => {
+    log(`load: ${new URL(page.url()).pathname}`);
+  });
+}
+
 export async function login(
   page: Page,
   username = DEV_USER,
   password = DEV_PASSWORD,
   options: LoginOptions = {},
 ): Promise<void> {
+  attachPageDiagnostics(page, username);
+  try {
+    await loginAttempt(
+      page,
+      username,
+      password,
+      options,
+      FIRST_LOGIN_ATTEMPT_TIMEOUT,
+    );
+  } catch (error) {
+    if (!isRetryableLoginFailure(error)) throw error;
+    const firstLine = String(error).split("\n")[0] ?? "";
+    console.log(`[login] attempt stalled (${firstLine}), retrying once`);
+    // The error-alert failure mode persists for a few seconds (a firefox
+    // full run had back-to-back alert failures when the retry was
+    // immediate), so give the condition time to clear. Bounded small:
+    // the worst-case hang path (20s + backoff + 30s) must stay inside
+    // the common CRYPTO_TIMEOUT * 2 hook budgets.
+    await page.waitForTimeout(2_500);
+    await loginAttempt(page, username, password, options, CRYPTO_TIMEOUT);
+  }
+}
+
+async function loginAttempt(
+  page: Page,
+  username: string,
+  password: string,
+  options: LoginOptions,
+  credentialTimeout: number,
+): Promise<void> {
   // reauth=1 bypasses the session check that redirects to / if already logged in.
   // Without it, pages sharing a browser context reuse the previous session.
+  const t0 = Date.now();
+  const elapsed = (): string => `+${String(Date.now() - t0)}ms`;
   await page.goto("/login?reauth=1");
+  console.log(`[login] /login loaded ${elapsed()}`);
 
   // Capture login response for diagnostics
   const loginResponsePromise = page.waitForResponse(
     (r) => r.url().includes("auth.login") && r.status() === 200,
+    { timeout: credentialTimeout },
   );
 
   const submitBtn = page.getByRole("button", { name: /sign in/i });
@@ -151,13 +270,20 @@ export async function login(
   await page.locator('input[autocomplete="current-password"]').fill(password);
   await submitBtn.click();
 
-  const loginResponse = await loginResponsePromise.catch(() => null);
-  if (loginResponse) {
-    // Body content stays out of logs (PII rule); size is enough for flake
-    // debugging.
-    const responseBytes = (await loginResponse.text().catch(() => "")).length;
-    console.log(`[login] response received (${String(responseBytes)} bytes)`);
-  }
+  // Diagnostics only, so it must not gate the outcome race below: awaiting
+  // it here would let a stalled response burn credentialTimeout twice per
+  // attempt. Body content stays out of logs (PII rule); size is enough for
+  // flake debugging.
+  void loginResponsePromise
+    .then(async (loginResponse) => {
+      const responseBytes = (await loginResponse.text().catch(() => "")).length;
+      console.log(
+        `[login] response received (${String(responseBytes)} bytes) ${elapsed()}`,
+      );
+    })
+    .catch(() => {
+      console.log(`[login] no auth.login response ${elapsed()}`);
+    });
 
   // After credential submission, three outcomes:
   // 1. Redirect to /complete (first login, needs onboarding + 2FA enrollment)
@@ -167,25 +293,27 @@ export async function login(
 
   const result = await Promise.race([
     page
-      .waitForURL(/\/complete$/, { timeout: CRYPTO_TIMEOUT })
+      .waitForURL(/\/complete$/, { timeout: credentialTimeout })
       .then(() => "onboarding" as const),
     page
-      .waitForURL(/:\d+\/$/, { timeout: CRYPTO_TIMEOUT })
+      .waitForURL(/:\d+\/$/, { timeout: credentialTimeout })
       .then(() => "done" as const),
     page
       .getByText(/verify your identity/i)
-      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+      .waitFor({ state: "visible", timeout: credentialTimeout })
       .then(() => "2fa-challenge" as const),
     page
       .locator('[role="alert"]')
-      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+      .waitFor({ state: "visible", timeout: credentialTimeout })
       .then(async () => {
         const text = await page.locator('[role="alert"]').textContent();
         throw new E2eError(`Login failed: ${text ?? "(no text)"}`);
       }),
   ]);
 
-  console.log(`[login] race resolved: ${result}, url: ${page.url()}`);
+  console.log(
+    `[login] race resolved: ${result}, url: ${page.url()} ${elapsed()}`,
+  );
 
   if (result === "onboarding") {
     await completeOnboarding(page);
@@ -202,7 +330,7 @@ export async function login(
   // sufficient: the (app) layout gates AppShell behind isAuthenticated
   // (meQuery must resolve) and safety-net effects can briefly redirect
   // back to /login during the first render cycle.
-  console.log(`[login] waiting for tablist. URL: ${page.url()}`);
+  console.log(`[login] waiting for tablist. URL: ${page.url()} ${elapsed()}`);
   const shellWaits: Promise<"shell" | "org-key-wait">[] = [
     page
       .locator('[role="tablist"]')
@@ -222,7 +350,7 @@ export async function login(
     );
   }
   const shellState = await Promise.race(shellWaits);
-  console.log(`[login] shell wait resolved: ${shellState}`);
+  console.log(`[login] shell wait resolved: ${shellState} ${elapsed()}`);
 }
 
 /**
@@ -382,6 +510,35 @@ export async function waitForKeysUnlocked(page: Page): Promise<void> {
 }
 
 /**
+ * Wait for a portal page element while watching for the read-limiter
+ * pause state ("Taking a short pause").
+ *
+ * When the portal read limiter trips, the page swaps its content for the
+ * pause state, so every content locator times out after its full budget
+ * with no hint of the cause. Racing the expected element against the
+ * pause state turns that 30s silent timeout into an immediate failure
+ * that names the limiter. Use this for the first content wait after
+ * navigating to a portal link.
+ */
+export async function expectPortalReady(
+  page: Page,
+  target: Locator,
+  options: { timeout?: number } = {},
+): Promise<void> {
+  const timeout = options.timeout ?? CRYPTO_TIMEOUT;
+  const pause = page.getByTestId("portal-rate-limited");
+  await expect(target.or(pause).first()).toBeVisible({ timeout });
+  if (await pause.isVisible()) {
+    throw new E2eError(
+      "Portal read limiter tripped: the page shows 'Taking a short pause' " +
+        "instead of content. The hourly budget does not reset between " +
+        "runs; check PORTAL_READ_LIMIT (docker-compose.yml raises it to " +
+        "2000 for dev/E2E) or wait for the window to pass.",
+    );
+  }
+}
+
+/**
  * Dismiss the backup-codes sheet shown after the first TOTP enrollment.
  *
  * While codes are on screen the sheet routes every dismissal (Escape,
@@ -485,10 +642,20 @@ export async function openTicketByTitle(
 ): Promise<void> {
   const currentUrl = page.url();
   if (!currentUrl.endsWith("/tickets")) {
+    // Mobile ticket detail (/tickets/{uuid}) hides the tab bar; leave
+    // via the navbar Back button before reaching for the Tickets tab.
+    const ticketsTab = page.getByRole("tab", { name: "Tickets" });
+    if (!(await ticketsTab.isVisible().catch(() => false))) {
+      const back = page.getByRole("button", { name: "Back" });
+      if (await back.isVisible().catch(() => false)) {
+        await back.click();
+        await expect(ticketsTab).toBeVisible({ timeout: 10_000 });
+      }
+    }
     // A click during the post-login key unlock is swallowed; retry the
     // click until the route actually changes instead of clicking once.
     await expect(async () => {
-      await page.getByRole("tab", { name: "Tickets" }).click();
+      await ticketsTab.click();
       await expect(page).toHaveURL("/tickets", { timeout: 2_000 });
     }).toPass({ timeout: CRYPTO_TIMEOUT });
   }
@@ -514,6 +681,31 @@ export async function openTicketByTitle(
   await expect(page.locator('[role="log"]')).toBeVisible({
     timeout: CRYPTO_TIMEOUT,
   });
+}
+
+/**
+ * Refetch a ticket detail by navigating away and back inside the app.
+ *
+ * A full reload would drop the volunteer's in-memory keys and land on
+ * the blocked state, so the round trip goes Overview -> ticket instead.
+ * openTicketByTitle handles the Tickets tab and waits for the chat log.
+ */
+export async function reopenTicketByTitle(
+  page: Page,
+  title: string,
+): Promise<void> {
+  await page.keyboard.press("Escape");
+  // Mobile ticket detail (/tickets/{uuid}) hides the tab bar, so the
+  // Overview tab is unreachable until the navbar Back button returns to
+  // the list. Desktop split view keeps the tabs mounted throughout.
+  const overviewTab = page.getByRole("tab", { name: "Overview" });
+  if (!(await overviewTab.isVisible().catch(() => false))) {
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(overviewTab).toBeVisible({ timeout: 10_000 });
+  }
+  await overviewTab.click();
+  await expect(page).toHaveURL("/");
+  await openTicketByTitle(page, title);
 }
 
 /**
@@ -858,7 +1050,10 @@ async function closeSplitDetail(page: Page): Promise<void> {
  */
 async function scrollToTicket(page: Page, title: string): Promise<void> {
   const target = page.getByText(title).first();
-  const scrollContainer = page.locator('[role="main"]');
+  // getByRole, not a [role="main"] CSS selector: the shell's <main> has an
+  // implicit landmark role, so the attribute selector never matches and
+  // evaluate() waits out the whole test timeout on the first scroll.
+  const scrollContainer = page.getByRole("main");
   for (let attempt = 0; attempt < 10; attempt++) {
     if (await target.isVisible({ timeout: 500 }).catch(() => false)) return;
     await scrollContainer.evaluate((el) => {
@@ -1013,10 +1208,39 @@ export async function longPress(
   locator: ReturnType<Page["locator"]>,
 ): Promise<void> {
   await locator.scrollIntoViewIfNeeded();
-  const box = await locator.boundingBox();
-  if (!box) throw new E2eError("Element not found for long-press");
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
+  // Find a point where the element is actually the hit target. The raw
+  // box center is not good enough on mobile: a tall article in a
+  // scrolled chat log can extend past the viewport, and fixed chrome
+  // (the case header's glass layer) overlaps its top, so a press there
+  // lands on chrome or on nothing and never reaches the element.
+  const point = await locator.evaluate(
+    (el, vp) => {
+      const rect = el.getBoundingClientRect();
+      const left = Math.max(rect.left, 0);
+      const top = Math.max(rect.top, 0);
+      const right = Math.min(rect.right, vp.width);
+      const bottom = Math.min(rect.bottom, vp.height);
+      if (right <= left || bottom <= top) return null;
+      const x = (left + right) / 2;
+      for (const f of [0.5, 0.65, 0.8, 0.9, 0.35, 0.2, 0.1]) {
+        const y = top + (bottom - top) * f;
+        const hit = document.elementFromPoint(x, y);
+        if (hit !== null && (hit === el || el.contains(hit))) {
+          return { x, y };
+        }
+      }
+      return null;
+    },
+    {
+      width: page.viewportSize()?.width ?? Number.MAX_SAFE_INTEGER,
+      height: page.viewportSize()?.height ?? Number.MAX_SAFE_INTEGER,
+    },
+  );
+  if (!point) {
+    throw new E2eError("No hittable point on element for long-press");
+  }
+  const cx = point.x;
+  const cy = point.y;
   await page.mouse.move(cx, cy);
   await page.mouse.down();
   await page.waitForTimeout(600);
@@ -1098,6 +1322,22 @@ export async function auditA11y(
   for (const selector of opts.exclude ?? []) {
     builder = builder.exclude(selector);
   }
+  // Animations mid-flight skew axe geometry and color sampling: a fold
+  // or sheet transition caught mid-frame reports scaled target sizes and
+  // blended colors. Wait for finite animations to settle before
+  // analyzing; infinite ones (spinners, skeleton pulse) are steady-state
+  // and excluded. Timeboxed so a stuck animation cannot hang the audit.
+  await page
+    .waitForFunction(
+      () =>
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+          .length === 0,
+      undefined,
+      { timeout: 5_000 },
+    )
+    .catch(() => undefined);
   const results = await builder.analyze();
   expect(results.violations).toEqual([]);
 }

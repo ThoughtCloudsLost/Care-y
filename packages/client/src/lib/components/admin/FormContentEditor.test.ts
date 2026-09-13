@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import {
+  render,
+  screen,
+  within,
+  fireEvent,
+  cleanup,
+} from "@testing-library/svelte";
 
 const { mockToastShow, mockUploadFormAsset } = vi.hoisted(() => ({
   mockToastShow: vi.fn(),
@@ -132,7 +138,7 @@ describe("FormContentEditor", () => {
     expect(screen.getByText("Shown above the form.")).toBeTruthy();
   });
 
-  it("renders toolbar with formatting buttons", () => {
+  it("renders toolbar with formatting buttons", async () => {
     const onchange = vi.fn();
     render(FormContentEditor, {
       props: {
@@ -144,21 +150,14 @@ describe("FormContentEditor", () => {
       },
     });
 
-    // Toolbar should be present (may take a tick for ProseMirror to mount)
-    const toolbar = screen.queryByRole("toolbar");
-    // The toolbar renders after ProseMirror mounts (onMount), so it may
-    // be null in the initial synchronous render. That is expected
-    // behavior since useProseMirror defers to onMount.
-    // The toolbar renders conditionally on toolbarState !== null.
-    // In jsdom without a real mount cycle, it may not appear.
-    // We verify the label and hint rendered, which confirms the
-    // component itself initialized.
-    if (toolbar !== null) {
-      expect(screen.getByRole("button", { name: "Bold" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Italic" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Redo" })).toBeTruthy();
-    }
+    // The toolbar renders once ProseMirror mounts (useProseMirror defers
+    // to onMount), so flush the mount before asserting.
+    const toolbar = await vi.waitFor(() => screen.getByRole("toolbar"));
+    const buttons = within(toolbar);
+    expect(buttons.getByRole("button", { name: "Bold" })).toBeTruthy();
+    expect(buttons.getByRole("button", { name: "Italic" })).toBeTruthy();
+    expect(buttons.getByRole("button", { name: "Undo" })).toBeTruthy();
+    expect(buttons.getByRole("button", { name: "Redo" })).toBeTruthy();
   });
 
   it("loads initial value from plain string", () => {
@@ -223,9 +222,10 @@ describe("FormContentEditor", () => {
     expect(screen.getByText("Field")).toBeTruthy();
   });
 
-  it("onchange emits doc JSON, not strings", () => {
-    // This test verifies the contract: onchange receives
-    // LocalizedRichText with ProseMirrorDocJSON values.
+  it("onchange emits doc JSON, not strings", async () => {
+    // Contract: onchange receives LocalizedRichText with
+    // ProseMirrorDocJSON values, even when the initial value was a
+    // plain string. Drive a real transaction via a toolbar command.
     const onchange = vi.fn();
     render(FormContentEditor, {
       props: {
@@ -237,20 +237,21 @@ describe("FormContentEditor", () => {
       },
     });
 
-    // If onchange has been called (ProseMirror mounted and triggered
-    // a transaction), verify the payload shape.
-    const firstCall = onchange.mock.calls[0] as [LocalizedRichText] | undefined;
-    if (firstCall !== undefined) {
-      const emitted = firstCall[0];
-      const enValue = emitted.en;
-      expect(enValue).toBeDefined();
-      // enValue is string | ProseMirrorDocJSON | undefined per the union type.
-      // When the editor emits, it always emits doc JSON (object).
-      expect(typeof enValue).toBe("object");
-      if (typeof enValue === "object") {
-        expect(enValue.type).toBe("doc");
-        expect(Array.isArray(enValue.content)).toBe(true);
-      }
+    const toolbar = await vi.waitFor(() => screen.getByRole("toolbar"));
+    await fireEvent.click(
+      within(toolbar).getByRole("button", { name: "Blockquote" }),
+    );
+
+    expect(onchange).toHaveBeenCalled();
+    const firstCall = onchange.mock.calls[0] as [LocalizedRichText];
+    const enValue = firstCall[0].en;
+    // enValue is string | ProseMirrorDocJSON | undefined per the union
+    // type. When the editor emits, it always emits doc JSON (object).
+    expect(enValue).toBeDefined();
+    expect(typeof enValue).toBe("object");
+    if (typeof enValue === "object") {
+      expect(enValue.type).toBe("doc");
+      expect(Array.isArray(enValue.content)).toBe(true);
     }
   });
 
@@ -270,7 +271,7 @@ describe("FormContentEditor", () => {
     expect(screen.queryByRole("note")).toBeNull();
   });
 
-  it("disables image button when orgPublicKey is null", () => {
+  it("disables image button when orgPublicKey is null", async () => {
     const onchange = vi.fn();
     render(FormContentEditor, {
       props: {
@@ -282,10 +283,10 @@ describe("FormContentEditor", () => {
       },
     });
 
-    // The image button should be disabled when orgPublicKey is null
-    const imageBtn = screen.queryByRole("button", { name: "Image" });
-    if (imageBtn !== null) {
-      expect(imageBtn).toHaveProperty("disabled", true);
-    }
+    // Scope to the toolbar: the hidden file input shares the "Image"
+    // accessible name (input[type=file] maps to role button).
+    const toolbar = await vi.waitFor(() => screen.getByRole("toolbar"));
+    const imageBtn = within(toolbar).getByRole("button", { name: "Image" });
+    expect(imageBtn).toHaveProperty("disabled", true);
   });
 });

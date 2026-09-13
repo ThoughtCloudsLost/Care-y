@@ -1,5 +1,9 @@
 import { test, expect } from "./coverage-fixture";
-import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import {
+  startCoverage,
+  stopAndWriteCoverage,
+  stopCoverageAndClose,
+} from "./coverage-fixture";
 import type { Page, Request } from "@playwright/test";
 import {
   auditA11y,
@@ -33,7 +37,6 @@ const INTAKE_MESSAGE = `I need help with a housing situation ${suffix}, please c
 test.describe.serial("Public Intake Form", () => {
   let intakePage: Page;
   let volunteerPage: Page;
-  let submittedReference: string;
 
   // ── Client-side: intake form submission ──────────────────────────
 
@@ -46,14 +49,21 @@ test.describe.serial("Public Intake Form", () => {
   test.afterAll(async () => {
     await stopAndWriteCoverage(intakePage, "intake-client");
     await intakePage.close();
+    // volunteerPage is created mid-suite; clean it up here (lifecycle,
+    // not a test) so a close failure reports as teardown, not test red.
+    await stopCoverageAndClose(volunteerPage, "intake-volunteer");
   });
 
   test("intake page loads and shows org branding", async () => {
     await intakePage.goto("/intake");
-    // The branded layout renders the org name in the navbar.
-    // The e2e-org seed sets the org name; verify the navbar has content.
+    // The branded layout renders the org name (org_config.name, set by
+    // global-setup) in the navbar. A bare banner-role check would pass
+    // with branding entirely broken.
     const navbar = intakePage.getByRole("banner");
     await expect(navbar).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(navbar.getByText("E2E Test Org")).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
   });
 
   test("a11y: empty intake form passes axe audit", async () => {
@@ -109,10 +119,9 @@ test.describe.serial("Public Intake Form", () => {
     const referenceEl = intakePage.locator("code").first();
     await expect(referenceEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
-    // Capture the reference code for the volunteer-side assertions
+    // The reference code must be non-empty
     const reference = await referenceEl.textContent();
     expect(reference).toBeTruthy();
-    submittedReference = reference ?? "";
 
     // Assert the intercepted request payload contains only base64 fields
     expect(capturedRequest).not.toBeNull();
@@ -123,40 +132,32 @@ test.describe.serial("Public Intake Form", () => {
     expect(postBody).not.toContain(INTAKE_NAME);
     expect(postBody).not.toContain(INTAKE_MESSAGE);
 
-    // Verify the payload has the expected base64 field shape. The batch
-    // entry holds the input directly; there is no superjson "json"
-    // wrapper on this route.
-    const parsed: unknown = JSON.parse(postBody!);
-    expect(parsed).toHaveProperty("0.encryptedTitle");
-    expect(parsed).toHaveProperty("0.encryptedDescription");
-    expect(parsed).toHaveProperty("0.wrappedTk");
-    expect(parsed).toHaveProperty("0.ticketId");
+    // Verify the payload has the expected base64 field shape. The field
+    // names are API contract; the batch envelope is not. Read the entry
+    // defensively so switching httpBatchLink to a non-batched link (same
+    // observable behavior) does not break this. There is no superjson
+    // "json" wrapper on this route.
+    const parsed = JSON.parse(postBody!) as Record<
+      string,
+      Record<string, unknown> | undefined
+    >;
+    const json = parsed["0"] ?? (parsed as Record<string, unknown>);
+    expect(json).toHaveProperty("encryptedTitle");
+    expect(json).toHaveProperty("encryptedDescription");
+    expect(json).toHaveProperty("wrappedTk");
+    expect(json).toHaveProperty("ticketId");
 
     // Each encrypted field should be a non-empty base64-like string
-    const json = (
-      parsed as Record<string, Record<string, unknown> | undefined>
-    )["0"];
-    expect(json).toBeDefined();
-    expect(typeof json?.encryptedTitle).toBe("string");
-    expect(typeof json?.encryptedDescription).toBe("string");
-    expect(typeof json?.wrappedTk).toBe("string");
-    expect((json?.encryptedTitle as string).length).toBeGreaterThan(10);
-    expect((json?.wrappedTk as string).length).toBeGreaterThan(10);
+    expect(typeof json.encryptedTitle).toBe("string");
+    expect(typeof json.encryptedDescription).toBe("string");
+    expect(typeof json.wrappedTk).toBe("string");
+    expect((json.encryptedTitle as string).length).toBeGreaterThan(10);
+    expect((json.wrappedTk as string).length).toBeGreaterThan(10);
   });
 
-  test("success state shows reference code", async () => {
-    // Already verified in the submit test, but this is the explicit assertion.
-    const successHeading = intakePage
-      .getByRole("heading", { level: 2 })
-      .or(intakePage.getByText(/submitted|received|thank/i));
-    await expect(successHeading).toBeVisible();
-
-    // The reference code should be displayed
-    const codeEl = intakePage.locator("code").first();
-    await expect(codeEl).toBeVisible();
-    expect(submittedReference.length).toBeGreaterThan(0);
-  });
-
+  // No separate "success state shows reference code" test: the submit
+  // test already asserts the reference code is visible and non-empty,
+  // and the a11y audit below runs against the same success state.
   test("a11y: success state passes axe audit", async () => {
     await auditA11y(intakePage);
   });
@@ -213,21 +214,26 @@ test.describe.serial("Public Intake Form", () => {
     const intakeWrapCount = countRows("intake_key_wraps");
     expect(intakeWrapCount).toBe(intakeWrapCountBeforeOpen - 1);
 
-    // ticket_key_wraps should have rows for the queue volunteers.
-    // The e2e org seed assigns at least one volunteer to the intake queue,
-    // so at least one wrap row should exist for the intake ticket.
-    const ticketWrapCount = countRows("ticket_key_wraps");
+    // ticket_key_wraps must gain rows for THIS ticket's queue volunteers.
+    // Scoped to the intake ticket (the newest tickets row; safe under the
+    // suite's workers:1 and this file's sequential order): the seed already
+    // guarantees tenant-wide wrap rows exist, so an unscoped count(*) > 0
+    // could never fail.
+    const ticketWrapCount = countRows(
+      "ticket_key_wraps",
+      "ticket_id = (SELECT id FROM tickets ORDER BY created_at DESC LIMIT 1)",
+    );
     expect(ticketWrapCount).toBeGreaterThan(0);
-  });
-
-  test("cleanup volunteer page", async () => {
-    await stopAndWriteCoverage(volunteerPage, "intake-volunteer");
-    await volunteerPage.close();
   });
 
   // ── Error state a11y ─────────────────────────────────────────────
 
-  test("a11y: rate-limited error state passes axe audit", async ({
+  // Named for what it verifies: the dev/e2e stack runs with
+  // INTAKE_SUBMISSION_LIMIT=500 (docker-compose.yml), so the 3/IP/hour
+  // production limit cannot trip here and the rate-limited error state
+  // is unreachable in this environment. Auditing the limited state
+  // would need a stack with a low limit configured.
+  test("a11y: intake form after repeated submissions passes axe audit", async ({
     browser,
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
@@ -235,6 +241,7 @@ test.describe.serial("Public Intake Form", () => {
     // The first submission already used one slot. Fire three more to hit the
     // 3/IP/hour limit (the first test already consumed one).
     const errorPage = await browser.newPage();
+    await startCoverage(errorPage);
     await errorPage.goto("/intake");
     await expect(errorPage.getByRole("banner")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -271,10 +278,8 @@ test.describe.serial("Public Intake Form", () => {
       }
     }
 
-    // At this point the page may show an error. Run the a11y audit regardless
-    // of what state we reached (the audit should pass on any page state).
     await auditA11y(errorPage);
-    await errorPage.close();
+    await stopCoverageAndClose(errorPage, "intake-rate-limited");
   });
 });
 
@@ -338,6 +343,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
     // Create both forms from a logged-in browser page so the field
     // labels and configs are encrypted with the real branding key.
     const setupPage = await browser.newPage();
+    await startCoverage(setupPage);
     await login(setupPage);
 
     const formResults = await setupPage.evaluate(
@@ -486,7 +492,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
       { slugA: SLUG_A, slugB: SLUG_B, queueA: queueAId, queueB: queueBId },
     );
 
-    await setupPage.close();
+    await stopCoverageAndClose(setupPage, "intake-multiform-setup");
 
     if (!formResults.ok) {
       throw new E2eError(
@@ -503,13 +509,14 @@ test.describe.serial("Multi-form Intake Routing", () => {
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     const page = await browser.newPage();
+    await startCoverage(page);
     await page.goto("/intake/nonexistent-slug-xyz");
     // The not-available state renders a role="status" element with the message
     const statusEl = page.locator("[role='status']:not(#toast-container)");
     await expect(statusEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     const text = await statusEl.textContent();
     expect(text).toContain("not available");
-    await page.close();
+    await stopCoverageAndClose(page, "intake-unknown-slug");
   });
 
   test("not-available state when web_intake_enabled is false", async ({
@@ -521,6 +528,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
     queryDb("UPDATE org_config SET web_intake_enabled = false WHERE true;");
 
     const page = await browser.newPage();
+    await startCoverage(page);
     await page.goto("/intake");
     const statusEl = page.locator("[role='status']:not(#toast-container)");
     await expect(statusEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
@@ -529,7 +537,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
 
     // Re-enable for subsequent tests
     queryDb("UPDATE org_config SET web_intake_enabled = true WHERE true;");
-    await page.close();
+    await stopCoverageAndClose(page, "intake-web-disabled");
   });
 
   test("submit to slug-A routes ticket to queue A", async ({
@@ -537,6 +545,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
     const page = await browser.newPage();
+    await startCoverage(page);
     await page.goto(`/intake/${SLUG_A}`);
 
     // Wait for the form to render. The branding-key decrypt decodes the
@@ -561,7 +570,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
     ).trim();
     expect(latestQueueId).toBe(queueAId);
 
-    await page.close();
+    await stopCoverageAndClose(page, "intake-route-slug-a");
   });
 
   test("submit to slug-B routes ticket to queue B", async ({
@@ -569,6 +578,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
     const page = await browser.newPage();
+    await startCoverage(page);
     await page.goto(`/intake/${SLUG_B}`);
 
     const textarea = page.locator("textarea").first();
@@ -590,7 +600,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
     ).trim();
     expect(latestQueueId).toBe(queueBId);
 
-    await page.close();
+    await stopCoverageAndClose(page, "intake-route-slug-b");
   });
 
   test.afterAll(() => {
@@ -602,5 +612,360 @@ test.describe.serial("Multi-form Intake Routing", () => {
     queryDb(
       `DELETE FROM intake_forms WHERE id IN ('${formAId}', '${formBId}');`,
     );
+  });
+});
+
+/**
+ * Field-type validation matrix on a purpose-built multi-page form.
+ *
+ * One form carries every data field type plus a conditionally visible
+ * field and a page break, so the client-side validation paths (required
+ * per type, email/phone/number formats, number range, page-scoped
+ * validation on Next) and the pagination machinery all execute against
+ * real encrypted field configs. The fixture is built browser-side with
+ * the same encrypt-and-save path as the multi-form suite above.
+ */
+test.describe.serial("Intake validation matrix", () => {
+  const SLUG_V = "e2e-form-validation";
+  let formVId: string;
+  let page: Page;
+
+  // Field keys are minted here so tests can reference them in comments;
+  // the browser fixture receives the labels and shapes only.
+  const LABELS = {
+    email: "Contact email",
+    phone: "Contact phone",
+    amount: "How many people",
+    topic: "Topic",
+    urgent: "Urgent details",
+    tags: "Areas of need",
+    consent: "I agree to be contacted",
+    date: "Preferred date",
+    message: "Your message",
+    details: "Anything else",
+  } as const;
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+
+    const setupPage = await browser.newPage();
+    await startCoverage(setupPage);
+    await login(setupPage);
+
+    const result = await setupPage.evaluate(
+      async (args: { slug: string; labels: Record<string, string> }) => {
+        const formCryptoUrl = "/src/lib/portal/intake-form-crypto.ts";
+        const cryptoBarrelUrl = "/@id/@care-y/crypto";
+        const { encryptFieldContent } = (await import(formCryptoUrl)) as {
+          encryptFieldContent: (
+            plain: {
+              label: Record<string, string>;
+              config: Record<string, unknown>;
+              visibleWhen?: Record<string, unknown>;
+            },
+            orgPub: Uint8Array,
+          ) => { encryptedLabel: string; encryptedConfig: string };
+        };
+        const { decode } = (await import(cryptoBarrelUrl)) as {
+          decode: (b64: string) => Uint8Array;
+        };
+
+        const brandingRes = await fetch("/trpc/branding.getPublicBranding", {
+          credentials: "include",
+        });
+        if (!brandingRes.ok) {
+          return { ok: false as const, error: "branding fetch failed" };
+        }
+        const brandingJson = (await brandingRes.json()) as {
+          result: { data: { orgPublicKey: string | null } };
+        };
+        const orgPubB64 = brandingJson.result.data.orgPublicKey;
+        if (orgPubB64 === null) {
+          return { ok: false as const, error: "org public key is null" };
+        }
+        const orgPub = decode(orgPubB64);
+
+        const topicKey = crypto.randomUUID();
+        const mkField = (
+          label: string,
+          config: Record<string, unknown>,
+          visibleWhen?: Record<string, unknown>,
+        ): {
+          fieldKey: string;
+          enc: { encryptedLabel: string; encryptedConfig: string };
+        } => ({
+          fieldKey: crypto.randomUUID(),
+          enc: encryptFieldContent(
+            {
+              label: { en: label },
+              config,
+              ...(visibleWhen && { visibleWhen }),
+            },
+            orgPub,
+          ),
+        });
+
+        const email = mkField(args.labels.email!, {
+          type: "text",
+          subtype: "email",
+        });
+        const phone = mkField(args.labels.phone!, {
+          type: "text",
+          subtype: "phone",
+        });
+        const amount = mkField(args.labels.amount!, {
+          type: "text",
+          subtype: "number",
+          numberRange: { min: 1, max: 5 },
+        });
+        const topicEnc = encryptFieldContent(
+          {
+            label: { en: args.labels.topic! },
+            config: {
+              type: "select",
+              options: [
+                { key: "opt-urgent", label: { en: "Urgent help" } },
+                { key: "opt-normal", label: { en: "General question" } },
+              ],
+            },
+          },
+          orgPub,
+        );
+        const urgent = mkField(
+          args.labels.urgent!,
+          { type: "text" },
+          {
+            version: 2,
+            groups: [
+              [
+                {
+                  fieldKey: topicKey,
+                  operator: "equals",
+                  optionKey: "opt-urgent",
+                },
+              ],
+            ],
+          },
+        );
+        const tags = mkField(args.labels.tags!, {
+          type: "multiselect",
+          options: [
+            { key: "k-housing", label: { en: "Housing" } },
+            { key: "k-legal", label: { en: "Legal" } },
+          ],
+        });
+        const consent = mkField(args.labels.consent!, {
+          type: "checkbox",
+          requiredTrue: true,
+        });
+        const date = mkField(args.labels.date!, { type: "date" });
+        const message = mkField(args.labels.message!, { type: "textarea" });
+        const pageBreak = mkField("More details", {
+          type: "pageBreak",
+          title: { en: "More details" },
+        });
+        const details = mkField(args.labels.details!, { type: "textarea" });
+
+        const fields = [
+          { f: email, type: "text", required: true },
+          { f: phone, type: "text", required: false },
+          { f: amount, type: "text", required: false },
+          {
+            f: { fieldKey: topicKey, enc: topicEnc },
+            type: "select",
+            required: true,
+          },
+          { f: urgent, type: "text", required: true },
+          { f: tags, type: "multiselect", required: true },
+          { f: consent, type: "checkbox", required: true },
+          { f: date, type: "date", required: true },
+          { f: message, type: "textarea", required: true },
+          { f: pageBreak, type: "pageBreak", required: false },
+          { f: details, type: "textarea", required: true },
+        ].map((x) => ({
+          fieldKey: x.f.fieldKey,
+          fieldType: x.type,
+          encryptedLabel: x.f.enc.encryptedLabel,
+          encryptedConfig: x.f.enc.encryptedConfig,
+          isRequired: x.required,
+        }));
+
+        const save = await fetch("/trpc/intakeForms.save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            formId: null,
+            name: "Validation Matrix Form",
+            slug: args.slug,
+            isDefault: false,
+            fields,
+          }),
+        });
+        if (!save.ok) {
+          const body = await save.text();
+          return { ok: false as const, error: `save failed: ${body}` };
+        }
+        const data = (await save.json()) as {
+          result: { data: { formId: string } };
+        };
+
+        const act = await fetch("/trpc/intakeForms.setActive", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            formId: data.result.data.formId,
+            active: true,
+          }),
+        });
+        if (!act.ok) {
+          const body = await act.text();
+          return { ok: false as const, error: `activate failed: ${body}` };
+        }
+
+        return { ok: true as const, formId: data.result.data.formId };
+      },
+      { slug: SLUG_V, labels: LABELS },
+    );
+    await stopCoverageAndClose(setupPage, "intake-validation-setup");
+
+    if (!result.ok) {
+      throw new E2eError(`Validation form fixture failed: ${result.error}`);
+    }
+    formVId = result.formId;
+
+    page = await browser.newPage();
+    await startCoverage(page);
+  });
+
+  test.afterAll(async () => {
+    await stopCoverageAndClose(page, "intake-validation");
+    queryDb(`DELETE FROM intake_form_responses WHERE form_id = '${formVId}';`);
+    queryDb(`DELETE FROM intake_forms WHERE id = '${formVId}';`);
+  });
+
+  test("empty Next surfaces required errors per field type", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
+    await page.goto(`/intake/${SLUG_V}`);
+
+    // Form decrypted and rendered once the first labeled input appears.
+    await expect(page.getByLabel(LABELS.email)).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
+
+    await page.getByTestId("intake-page-next").click();
+
+    // Required errors: textarea carries its own message, the other field
+    // types share the generic one. The hidden conditional field must NOT
+    // produce an error (validation skips invisible fields).
+    await expect(
+      page.getByText("Please write a message so we know how to help."),
+    ).toBeVisible({ timeout: 5_000 });
+    const genericErrors = page.getByText("This field is required.", {
+      exact: true,
+    });
+    // Six sources: field errors for email, topic, tags, consent, and
+    // date, plus the polite live-region announcement that echoes the
+    // same string on a failed Next. The hidden urgent-details field
+    // would make it seven if visibility leaked into validation.
+    await expect(genericErrors).toHaveCount(6, { timeout: 5_000 });
+  });
+
+  test("format validation for email, phone, and number range", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+
+    await page.getByLabel(LABELS.email).fill("not-an-email");
+    await page.getByLabel(LABELS.phone).fill("12");
+    await page.getByTestId("intake-page-next").click();
+
+    await expect(page.getByText("Enter a valid email address.")).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(
+      page.getByText("Enter a phone number like +1 555 000 1234."),
+    ).toBeVisible({ timeout: 5_000 });
+
+    // No NaN case: the number subtype renders input[type=number], and
+    // the browser refuses non-numeric text before the validator can see
+    // it, so that branch guards non-UI input only.
+
+    // Range checks: above max, then below min.
+    await page.getByLabel(LABELS.amount).fill("9");
+    await page.getByTestId("intake-page-next").click();
+    await expect(page.getByText("Value must be at most 5.")).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.getByLabel(LABELS.amount).fill("0");
+    await page.getByTestId("intake-page-next").click();
+    await expect(page.getByText("Value must be at least 1.")).toBeVisible({
+      timeout: 5_000,
+    });
+  });
+
+  test("conditional field appears with its trigger and validates", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+
+    // Selecting the urgent topic reveals the conditional field.
+    await page.getByLabel(LABELS.topic).selectOption("opt-urgent");
+    await expect(page.getByLabel(LABELS.urgent)).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Switching back hides it again.
+    await page.getByLabel(LABELS.topic).selectOption("opt-normal");
+    await expect(page.getByLabel(LABELS.urgent)).not.toBeVisible({
+      timeout: 5_000,
+    });
+  });
+
+  test("multi-page navigation preserves values and submits", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+
+    await page.getByLabel(LABELS.email).fill("rt-intake@example.test");
+    await page.getByLabel(LABELS.phone).fill("+1 555 000 2222");
+    await page.getByLabel(LABELS.amount).fill("3");
+    // Multiselect options and the consent row render as Konsta checkbox
+    // list items; the visible text is the click target.
+    await page.getByText("Housing", { exact: true }).click();
+    // Required fields render with a trailing asterisk ("... *"), so the
+    // consent row needs a substring match, which getByText does by
+    // default for a string argument.
+    await page.getByText(LABELS.consent).click();
+    await page.getByLabel(LABELS.date).fill("2026-01-15");
+    await page.getByLabel(LABELS.message).fill("Validation matrix message");
+
+    await page.getByTestId("intake-page-next").click();
+
+    // Page 2: the page-break title renders and Back is available.
+    await expect(page.getByText("More details").first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(page.getByTestId("intake-page-back")).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Back retains page-1 values.
+    await page.getByTestId("intake-page-back").click();
+    await expect(page.getByLabel(LABELS.email)).toHaveValue(
+      "rt-intake@example.test",
+      { timeout: 5_000 },
+    );
+    await page.getByTestId("intake-page-next").click();
+
+    // Submit with the last page empty: its required textarea blocks.
+    await page.getByTestId("intake-submit").click();
+    await expect(
+      page.getByText("Please write a message so we know how to help."),
+    ).toBeVisible({ timeout: 5_000 });
+
+    await page.getByLabel(LABELS.details).fill("Nothing further");
+    await page.getByTestId("intake-submit").click();
+
+    // Success renders the reference code, same contract as the routing
+    // tests above.
+    await expect(page.locator("code").first()).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
   });
 });

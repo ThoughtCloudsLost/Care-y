@@ -339,6 +339,7 @@
         ),
       })),
     getPreviewFollowUps: (id) => previewLoader.get(id),
+    getLatestClientType: (id) => previewLoader.getLatestClientType(id),
     eagerLoadPreviews: async (ids) => previewLoader.eagerLoad(ids),
   });
 
@@ -841,6 +842,7 @@
   clientPublic={replyFlow.clientPublic}
   previewFollowUps={replyFlow.previewFollowUps}
   followUpCount={replyFlow.followUpCount}
+  latestClientType={replyFlow.latestClientType}
   ondismiss={() => replyFlow.dismiss()}
   onsent={(tid: string) => replyFlow.handleReplySent(tid)}
 />

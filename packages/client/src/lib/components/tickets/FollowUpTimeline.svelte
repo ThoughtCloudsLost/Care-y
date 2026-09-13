@@ -18,6 +18,7 @@
     MessagesSquare,
     ChevronDown,
     Link2,
+    Mail,
     type LucideIcon,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -115,6 +116,7 @@
 
   function landmarkIcon(item: TimelineItem): Component {
     const variant = followUpRenderVariant(item);
+    if (variant === "email") return Mail;
     if (variant === "share") return Link2;
     if (item.hasRecording)
       return resolveFollowUpTypeIcon(item.type, "recording");
@@ -133,6 +135,36 @@
     }
 
     const variant = followUpRenderVariant(item);
+
+    if (variant === "email") {
+      const decrypted = resolveDecrypted(item.id);
+      let subject = "";
+      if (decrypted !== undefined) {
+        try {
+          const parsed: unknown = JSON.parse(decrypted);
+          if (
+            typeof parsed === "object" &&
+            parsed !== null &&
+            "subject" in parsed
+          ) {
+            const raw = (parsed as Record<string, unknown>).subject;
+            if (typeof raw === "string" && raw !== "") {
+              subject = raw;
+            }
+          }
+        } catch {
+          // malformed payload, treat as no subject
+        }
+      }
+      if (item.source === "client") {
+        return subject !== ""
+          ? m.ticket_timeline_email_received({ subject })
+          : m.ticket_timeline_email_received_plain();
+      }
+      return subject !== ""
+        ? m.ticket_timeline_email_sent({ subject })
+        : m.ticket_timeline_email_sent_plain();
+    }
 
     if (variant === "share") {
       return m.followup_type_share_link();

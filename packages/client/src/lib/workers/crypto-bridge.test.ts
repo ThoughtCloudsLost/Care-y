@@ -269,10 +269,16 @@ describe("CryptoBridge", () => {
 
       const promise = bridge.zeroAll();
 
-      const calls = mockWorkerInstance?.postMessage.mock.calls;
-      const zeroCall = calls?.find(
-        (c: unknown[]) => (c[0] as { type: string }).type === "zeroAll",
-      ) as [{ type: string; id: number }] | undefined;
+      // zeroAll awaits readyPromise before posting, so the request lands
+      // a microtask later. Poll like the argon2id test does.
+      const zeroCall = await vi.waitFor(() => {
+        const calls = mockWorkerInstance?.postMessage.mock.calls;
+        const found = calls?.find(
+          (c: unknown[]) => (c[0] as { type: string }).type === "zeroAll",
+        ) as [{ type: string; id: number }] | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
 
       respondFromWorker({
         id: zeroCall?.[0].id ?? 0,
@@ -674,6 +680,42 @@ describe("CryptoBridge", () => {
       });
 
       await argonPromise;
+    });
+
+    it("queues zeroAll until init completes", async () => {
+      const { CryptoBridge } = await import("./crypto-bridge.js");
+      const bridge = new CryptoBridge();
+
+      // The login page calls zeroAll as its first bridge operation. Sent
+      // before init completes, the Worker rejects it with "Sodium backend
+      // not initialized" instead of queuing, so the bridge must gate it.
+      const zeroPromise = bridge.zeroAll();
+
+      const preInitCalls = mockWorkerInstance?.postMessage.mock.calls;
+      const earlyZeroCall = preInitCalls?.find(
+        (c: unknown[]) => (c[0] as { type: string }).type === "zeroAll",
+      );
+      expect(earlyZeroCall).toBeUndefined();
+
+      const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        ([msg]) => (msg as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      respondFromWorker({ id: initCall![0].id, ok: true, type: "init" });
+      await bridge.waitReady();
+
+      const zeroCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        (c: unknown[]) => (c[0] as { type: string }).type === "zeroAll",
+      ) as [{ type: string; id: number }] | undefined;
+      expect(zeroCall).toBeDefined();
+
+      respondFromWorker({
+        id: zeroCall?.[0].id ?? 0,
+        ok: true,
+        type: "zeroAll",
+      });
+
+      await zeroPromise;
+      expect(bridge.getState()).toBe("READY");
     });
   });
 });

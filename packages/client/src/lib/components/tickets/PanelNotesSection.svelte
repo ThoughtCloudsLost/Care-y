@@ -76,7 +76,8 @@
       });
       return result.followUps;
     },
-    enabled: ticketId !== "" && keyWrap !== null,
+    enabled:
+      typeof ticketId === "string" && ticketId !== "" && keyWrap !== null,
     initialData: getCachedNotes(),
   }));
 

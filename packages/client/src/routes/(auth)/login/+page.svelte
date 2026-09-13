@@ -195,6 +195,15 @@
     } catch (caught: unknown) {
       phase = "error";
       const msg = caught instanceof Error ? caught.message : String(caught);
+      if (import.meta.env.DEV) {
+        // Generic-alert failures are invisible in e2e runs without the
+        // underlying reason; names and codes only, never payloads.
+        console.error(
+          "[login] pipeline rejected:",
+          caught instanceof Error ? caught.name : typeof caught,
+          msg,
+        );
+      }
       const lower = msg.toLowerCase();
       if (lower.includes("invalid") || lower.includes("credentials")) {
         error = m.auth_invalid_credentials();
@@ -289,6 +298,14 @@
     } catch (caught: unknown) {
       phase = "error";
       const msg = caught instanceof Error ? caught.message : String(caught);
+      if (import.meta.env.DEV) {
+        // Same diagnostic as handleSubmit: see the comment there.
+        console.error(
+          "[login] pipeline rejected:",
+          caught instanceof Error ? caught.name : typeof caught,
+          msg,
+        );
+      }
       const lower = msg.toLowerCase();
       error =
         lower.includes("invalid") || lower.includes("credentials")

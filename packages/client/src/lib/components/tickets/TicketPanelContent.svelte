@@ -22,7 +22,14 @@
     ListItem,
     Toggle,
   } from "konsta/svelte";
-  import { Phone, Mail, Pencil, BellRing, Link2 } from "@lucide/svelte";
+  import {
+    Phone,
+    Mail,
+    Pencil,
+    BellRing,
+    Link2,
+    KeyRound,
+  } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import StatusMark from "$lib/components/StatusMark.svelte";
@@ -57,6 +64,14 @@
     onlightbox?: (imageUrl: string) => void;
     /** Skip title, description, and opened date (already shown by CaseHeader). */
     compact?: boolean;
+    /** Channel policy: hide call button when voice is disabled. */
+    voiceEnabled?: boolean;
+    /** Channel policy: hide share link action when disabled. */
+    shareLinkEnabled?: boolean;
+    /** Channel policy: hide portal setup offer when secure links are disabled. */
+    secureLinkEnabled?: boolean;
+    /** Channel policy: hide SMS delivery in the secure link sheet. */
+    smsEnabled?: boolean;
   }
 
   let {
@@ -65,6 +80,10 @@
     onnotetap,
     onlightbox,
     compact = false,
+    voiceEnabled = true,
+    shareLinkEnabled = true,
+    secureLinkEnabled = true,
+    smsEnabled = true,
   }: TicketPanelContentProps = $props();
 
   // --- Context + caches ---
@@ -81,13 +100,13 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
-    enabled: ticketId !== "",
+    enabled: typeof ticketId === "string" && ticketId !== "",
   }));
 
   const watchingQuery = createQuery(() => ({
     queryKey: ticketKeys.isWatching(ticketId),
     queryFn: async () => ticketRouter.isWatching.query({ ticketId }),
-    enabled: ticketId !== "",
+    enabled: typeof ticketId === "string" && ticketId !== "",
   }));
 
   // --- Derived ticket state ---
@@ -185,12 +204,14 @@
   {/if}
 
   <!-- Call button -->
-  <Block class="!my-3">
-    <Button large onclick={() => onaction("call")}>
-      <Phone size={18} aria-hidden="true" class="call-icon" />
-      {m.ticket_panel_call()}
-    </Button>
-  </Block>
+  {#if voiceEnabled}
+    <Block class="!my-3">
+      <Button large onclick={() => onaction("call")}>
+        <Phone size={18} aria-hidden="true" class="call-icon" />
+        {m.ticket_panel_call()}
+      </Button>
+    </Block>
+  {/if}
 
   <!-- Ticket metadata -->
   <List class="!my-3">
@@ -215,11 +236,11 @@
          a value rather than vanishing when none is on file. -->
     {#if ticket && !ticket.contactWithheld}
       <ListItem
+        link
+        linkComponent="button"
+        chevron={false}
         title={m.client_phone_label()}
         onclick={() => onaction("phone")}
-        onkeydown={onKeyActivate(() => onaction("phone"))}
-        role="button"
-        tabindex={0}
         class="touch-feedback"
       >
         {#snippet media()}
@@ -240,11 +261,11 @@
          rather than the absence of a value. -->
     {#if ticket && !ticket.contactWithheld}
       <ListItem
+        link
+        linkComponent="button"
+        chevron={false}
         title={m.client_email_label()}
         onclick={() => onaction("email")}
-        onkeydown={onKeyActivate(() => onaction("email"))}
-        role="button"
-        tabindex={0}
         class="touch-feedback"
       >
         {#snippet media()}
@@ -258,6 +279,19 @@
           {/if}
         {/snippet}
       </ListItem>
+      {#if ticket.clientEmail}
+        <ListItem
+          link
+          title={m.revoke_reply_token_label()}
+          onclick={() => onaction("revokeReplyToken")}
+          onkeydown={onKeyActivate(() => onaction("revokeReplyToken"))}
+          class="touch-feedback"
+        >
+          {#snippet media()}
+            <KeyRound class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+          {/snippet}
+        </ListItem>
+      {/if}
     {/if}
     {#if !compact}
       <ListItem title={m.ticket_panel_opened()}>
@@ -281,6 +315,8 @@
     portalChannel={ticket?.portalChannel}
     clientPhone={ticket?.clientPhone}
     isLoading={ticketQuery.isLoading}
+    {secureLinkEnabled}
+    {smsEnabled}
   />
 
   <!-- Ticket actions -->
@@ -313,16 +349,18 @@
       title={m.ticket_action_assign()}
       onclick={() => onaction("assign")}
     />
-    <ListItem
-      link
-      chevron
-      title={m.share_sheet_title()}
-      onclick={() => onaction("shareLink")}
-    >
-      {#snippet media()}
-        <Link2 class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
-      {/snippet}
-    </ListItem>
+    {#if shareLinkEnabled}
+      <ListItem
+        link
+        chevron
+        title={m.share_sheet_title()}
+        onclick={() => onaction("shareLink")}
+      >
+        {#snippet media()}
+          <Link2 class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/if}
     <ListItem title={m.ticket_action_hold()}>
       {#snippet after()}
         <span use:labelToggleInput={m.ticket_action_hold()}>

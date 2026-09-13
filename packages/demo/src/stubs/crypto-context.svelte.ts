@@ -473,10 +473,10 @@ export function getFollowUpDecryptCache(): FollowUpDecryptCacheType {
 let trpcForPreview: {
   tickets: {
     recentFollowUps: {
-      query: (input: {
-        ticketIds: string[];
-        perTicket: number;
-      }) => Promise<Record<string, RawFollowUpPreview[]>>;
+      query: (input: { ticketIds: string[]; perTicket: number }) => Promise<{
+        previews: Record<string, RawFollowUpPreview[]>;
+        latestClientType: Record<string, string | null>;
+      }>;
     };
   };
 } | null = null;

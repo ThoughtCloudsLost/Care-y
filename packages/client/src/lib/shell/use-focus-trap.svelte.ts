@@ -6,7 +6,8 @@
  * to the original trigger.
  */
 
-import { activateFocusTrap, addEscapeHandler } from "./focus-trap";
+import { activateFocusTrap } from "./focus-trap";
+import { pushOverlay } from "./overlay-stack";
 
 export interface UseFocusTrapOptions {
   /** Reactive getter: whether the overlay is open. */
@@ -43,7 +44,7 @@ export function useFocusTrap(options: UseFocusTrapOptions): UseFocusTrapReturn {
 
     // Escape handler registered synchronously so it's active from the
     // moment the overlay opens, not deferred behind a RAF.
-    cleanupEscape = addEscapeHandler(handleDismiss);
+    cleanupEscape = pushOverlay(handleDismiss);
 
     // Focus movement and Tab trapping deferred to next frame so the
     // overlay has time to position itself before we move focus into it.

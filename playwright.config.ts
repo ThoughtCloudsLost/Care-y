@@ -61,6 +61,11 @@ export default defineConfig({
     command: "pnpm --filter @care-y/client exec vite dev --port 5174",
     url: "http://localhost:5174",
     reuseExistingServer: false,
+    // Surface the dev server's own log in the run output: "/trpc" proxy
+    // errors and "new dependencies optimized" reload notices are invisible
+    // in both the app container logs and the page, and full-run triage
+    // needed exactly these lines. stderr is piped by default; stdout is not.
+    stdout: "pipe",
     timeout: 120_000,
     env: { VITE_ORG_SLUG: "e2e-org", VITE_E2E_FAST_KDF: "1" },
   },

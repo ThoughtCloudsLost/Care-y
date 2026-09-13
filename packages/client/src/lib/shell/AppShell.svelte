@@ -1323,6 +1323,13 @@
   .app-shell-layout > :global(:last-child) {
     flex: 1;
     min-width: 0;
+    /* Must exceed the rail's z-index: 10. Both are flex items, so each
+       z-index creates a stacking context, and Konsta overlays (popover
+       z-40, sheet backdrops) are trapped inside the page's context by the
+       k-page isolation. Without this, a popover overhanging the rail
+       paints under it and its overhung edge stops receiving taps. The
+       hover-rail-anchor in DesktopSidebar must stay above this value. */
+    z-index: 20;
   }
 
   /* iOS only: override Konsta's pb-safe-4 (safe-area + 16px) to match native

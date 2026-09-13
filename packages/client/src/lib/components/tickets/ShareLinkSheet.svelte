@@ -33,10 +33,17 @@
     ondismiss: () => void;
     ticketId: string;
     clientPhone: string | null;
+    /** Channel policy: hide SMS delivery when SMS is disabled org-wide. */
+    smsEnabled?: boolean;
   }
 
-  let { opened, ondismiss, ticketId, clientPhone }: ShareLinkSheetProps =
-    $props();
+  let {
+    opened,
+    ondismiss,
+    ticketId,
+    clientPhone,
+    smsEnabled = true,
+  }: ShareLinkSheetProps = $props();
 
   const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
   const cryptoBridge = getCryptoBridge();
@@ -60,7 +67,7 @@
   const contentByteLength = $derived(textEncoder.encode(text).length);
   const isOverLimit = $derived(contentByteLength > MAX_CONTENT_BYTES);
   const canSend = $derived(text.trim().length > 0 && !isOverLimit && !sending);
-  const isSmsMode = $derived(clientPhone !== null);
+  const isSmsMode = $derived(clientPhone !== null && smsEnabled);
 
   async function handleSend(): Promise<void> {
     const trimmed = text.trim();

@@ -1,5 +1,9 @@
 import { test, expect } from "./coverage-fixture";
-import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import {
+  startCoverage,
+  stopAndWriteCoverage,
+  stopCoverageAndClose,
+} from "./coverage-fixture";
 import type { Page, Request } from "@playwright/test";
 import {
   auditA11y,
@@ -8,6 +12,7 @@ import {
   login,
   openComposeActions,
   openTicketByTitle,
+  reopenTicketByTitle,
   openTicketInfoPanel,
 } from "./helpers";
 import { countRows, queryDb, resetCommunicationTiers } from "./db-probe";
@@ -67,6 +72,11 @@ test.describe.serial("Encrypted Account Portal", () => {
   test.afterAll(async () => {
     await stopAndWriteCoverage(intakePage, "account-intake");
     await intakePage.close();
+    // accountPage and volunteerPage are created mid-suite; close them
+    // here (lifecycle, not a test) so a close failure reports as
+    // teardown, not test red.
+    await stopCoverageAndClose(accountPage, "account-client");
+    await stopCoverageAndClose(volunteerPage, "account-volunteer");
   });
 
   // ── Intake half: opt-in creates the account atomically ───────────
@@ -151,6 +161,11 @@ test.describe.serial("Encrypted Account Portal", () => {
   });
 
   test("DB: account row, account channel, and tier exist", async () => {
+    // PRECONDITION: resetCommunicationTiers() in beforeAll truncated
+    // portal_channels/client_accounts and reset every tier, so these
+    // unscoped counts can only be satisfied by rows this file created.
+    // If another test ever seeds an account earlier in this file, scope
+    // these by the intake client's id instead.
     const accountCount = queryDb(
       "SELECT count(*) FROM client_accounts;",
     ).trim();
@@ -269,9 +284,11 @@ test.describe.serial("Encrypted Account Portal", () => {
     });
 
     // Convergence: the background rewrap clears key_generation and
-    // deletes the sealed wrap row.
-    await volunteerPage.waitForTimeout(3_000);
-    expect(countRows("portal_reply_key_wraps")).toBe(0);
+    // deletes the sealed wrap row. Poll instead of a fixed sleep (a
+    // flake source under CI load).
+    await expect
+      .poll(() => countRows("portal_reply_key_wraps"), { timeout: 15_000 })
+      .toBe(0);
     const pendingGenerations = queryDb(
       `SELECT count(*) FROM followups
        WHERE source = 'client' AND key_generation IS NOT NULL;`,
@@ -348,10 +365,7 @@ test.describe.serial("Encrypted Account Portal", () => {
     // In-app navigation, never goto: a hard load drops the volunteer's
     // in-memory keys and bricks the session (same repair as the portal
     // spec's convergence test).
-    await volunteerPage.keyboard.press("Escape");
-    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
-    await expect(volunteerPage).toHaveURL("/");
-    await openTicketByTitle(volunteerPage, UPGRADE_TICKET_TITLE);
+    await reopenTicketByTitle(volunteerPage, UPGRADE_TICKET_TITLE);
 
     // The tier section sits behind "More actions" in the detail overlay
     // at every width (portal.spec.ts precedent), not just on mobile.
@@ -380,14 +394,7 @@ test.describe.serial("Encrypted Account Portal", () => {
     // away and back in-app: a reload drops the in-memory keys. The detail
     // refetch also picks up the channel created above, which gates the
     // "Reply to" compose action.
-    await volunteerPage.keyboard.press("Escape");
-    await volunteerPage.waitForTimeout(300);
-    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
-    await expect(volunteerPage).toHaveURL("/");
-    await openTicketByTitle(volunteerPage, UPGRADE_TICKET_TITLE);
-    await expect(volunteerPage.locator('[role="log"]')).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
+    await reopenTicketByTitle(volunteerPage, UPGRADE_TICKET_TITLE);
     const dialog = await openComposeActions(volunteerPage);
     await clickComposeAction(dialog, /reply to/i);
     const textarea = volunteerPage.getByRole("textbox", {
@@ -411,6 +418,7 @@ test.describe.serial("Encrypted Account Portal", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 6);
 
     const upgradePage = await browser.newPage();
+    await startCoverage(upgradePage);
     await upgradePage.goto(upgradeLink);
 
     // No passphrase on this channel: the thread renders directly.
@@ -483,18 +491,20 @@ test.describe.serial("Encrypted Account Portal", () => {
     });
     const successBody = await upgradePage.content();
     expect(successBody).not.toContain(UPGRADE_PASSWORD);
-    await upgradePage.close();
+    await stopCoverageAndClose(upgradePage, "account-upgrade-chooser");
 
     // The old fragment link is dead (channel revoked by the upgrade).
     const deadPage = await browser.newPage();
+    await startCoverage(deadPage);
     await deadPage.goto(upgradeLink);
     await expect(deadPage.getByText(/no longer active/i).first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
-    await deadPage.close();
+    await stopCoverageAndClose(deadPage, "account-upgrade-dead-link");
 
     // The account login shows the SAME history, re-encrypted.
     const upgradedAccountPage = await browser.newPage();
+    await startCoverage(upgradedAccountPage);
     await upgradedAccountPage.goto("/account");
     await upgradedAccountPage
       .getByPlaceholder(/username/i)
@@ -506,7 +516,7 @@ test.describe.serial("Encrypted Account Portal", () => {
     await expect(upgradedAccountPage.getByText(UPGRADE_MESSAGE)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
-    await upgradedAccountPage.close();
+    await stopCoverageAndClose(upgradedAccountPage, "account-upgraded-login");
   });
 
   // ── Reset half: volunteer reset kills the login ──────────────────
@@ -514,11 +524,7 @@ test.describe.serial("Encrypted Account Portal", () => {
   test("volunteer reset removes the account and kills the login", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
-    // In-app navigation, never goto: a hard load drops the in-memory keys.
-    await volunteerPage.keyboard.press("Escape");
-    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
-    await expect(volunteerPage).toHaveURL("/");
-    await openTicketByTitle(volunteerPage, INTAKE_TITLE);
+    await reopenTicketByTitle(volunteerPage, INTAKE_TITLE);
 
     // Same panel repair as the Secure Link test: the tier section sits
     // behind "More actions" at every width.
@@ -551,13 +557,21 @@ test.describe.serial("Encrypted Account Portal", () => {
     await confirmBtn.dispatchEvent("click");
 
     // The reset deletes the intake client's account row and revokes its
-    // channel.
-    await volunteerPage.waitForTimeout(2_000);
-    const revokedAccountChannels = queryDb(
-      `SELECT count(*) FROM portal_channels
-       WHERE kind = 'account' AND status = 'revoked';`,
-    ).trim();
-    expect(Number(revokedAccountChannels)).toBeGreaterThan(0);
+    // channel. PRECONDITION: resetCommunicationTiers() in beforeAll
+    // truncated portal_channels, so a revoked account channel here can
+    // only be the one this file created. Poll, not a fixed sleep.
+    await expect
+      .poll(
+        () =>
+          Number(
+            queryDb(
+              `SELECT count(*) FROM portal_channels
+               WHERE kind = 'account' AND status = 'revoked';`,
+            ).trim(),
+          ),
+        { timeout: 15_000 },
+      )
+      .toBeGreaterThan(0);
 
     // The login now fails with the same generic message.
     await accountPage.reload();
@@ -574,21 +588,20 @@ test.describe.serial("Encrypted Account Portal", () => {
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
     const exitPage = await browser.newPage();
+    await startCoverage(exitPage);
     await exitPage.goto("/account");
     const quickExit = exitPage.getByRole("button", {
       name: /leave this page/i,
     });
     await expect(quickExit).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    // Collect before the click, never after: quick exit leaves the origin,
+    // and the renderer's V8 coverage dies with the page it was recorded on.
+    await stopAndWriteCoverage(exitPage, "account-quick-exit");
+
     await quickExit.click();
     await exitPage.waitForURL(/^(?!.*account).*$/, { timeout: 15_000 });
     expect(exitPage.url()).not.toContain("/account");
     await exitPage.close();
-  });
-
-  test("cleanup pages", async () => {
-    await stopAndWriteCoverage(accountPage, "account-client");
-    await accountPage.close();
-    await stopAndWriteCoverage(volunteerPage, "account-volunteer");
-    await volunteerPage.close();
   });
 });

@@ -9,7 +9,7 @@ import {
 import { RateLimitError, RelayError } from "$lib/errors.js";
 import type * as ToastModule from "$lib/stores/toast.svelte.js";
 import type * as SealModule from "$lib/crypto/seal-portal-copy.js";
-import type * as QueryKeys from "$lib/query/keys.js";
+import { ticketKeys } from "$lib/query/keys.js";
 
 const { mockSealPortalCopy } = vi.hoisted(() => ({
   mockSealPortalCopy: vi.fn((clientPublic: string | null, _text: string) =>
@@ -34,17 +34,6 @@ vi.mock(
       toastStore: { current: null, show: vi.fn(), dismiss: vi.fn() },
     }) satisfies typeof ToastModule,
 );
-
-vi.mock("$lib/query/keys.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof QueryKeys>()),
-  ticketKeys: {
-    followUps: (id: string) => ["ticket", id, "followUps"],
-  },
-  ticketsKeys: {
-    readStates: () => ["tickets", "readState"],
-    readStateSweep: () => ["tickets", "readStateSweep"],
-  },
-}));
 
 function makeConfig(
   overrides?: Partial<RelayThenRecordConfig>,
@@ -153,7 +142,7 @@ describe("relayThenRecord", () => {
     await relayThenRecord(config);
 
     expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["ticket", "t-1", "followUps"],
+      queryKey: ticketKeys.followUps("t-1"),
     });
   });
 
@@ -239,7 +228,7 @@ describe("retryRecord", () => {
     await retryRecord(pending, config);
 
     expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["ticket", "t-1", "followUps"],
+      queryKey: ticketKeys.followUps("t-1"),
     });
   });
 

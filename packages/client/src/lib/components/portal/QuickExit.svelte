@@ -14,10 +14,13 @@
     2. ondestroy() (zero seed, auth, private key)
     3. location.replace(safeUrl) (no back-button entry)
 
-  Escape fires even while the drawer is open. The panel's focus trap also
-  handles Escape, but exiting takes precedence over closing a panel: the
-  whole point of the control is leaving fast, and it navigates away either
-  way. Do not gate this behind an "is anything open" check.
+  Escape fires even while the drawer is open. The overlay stack also
+  handles Escape (capture phase, attached when an overlay opens), but
+  exiting takes precedence over closing a panel: the whole point of the
+  control is leaving fast, and it navigates away either way. This listener
+  is capture-phase and registered at layout mount, so it runs before the
+  overlay stack's later-attached listener; preventDefault() makes the
+  stack yield. Do not gate this behind an "is anything open" check.
 
   pagehide zeroes key material as a fallback.
 -->
@@ -48,8 +51,9 @@
         exit();
       }
     }
-    window.addEventListener("keydown", onKeydown);
-    return () => window.removeEventListener("keydown", onKeydown);
+    window.addEventListener("keydown", onKeydown, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", onKeydown, { capture: true });
   });
 
   $effect(() => {

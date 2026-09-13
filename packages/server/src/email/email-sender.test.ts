@@ -111,6 +111,30 @@ describe("createSmtpEmailSender", () => {
     });
   });
 
+  it("passes replyTo through to sendMail when present", async () => {
+    mockSendMail.mockResolvedValueOnce({});
+    const sender = createTestSmtpSender();
+
+    await sender.send({
+      ...testMessage,
+      replyTo: "reply-abc@reply.example.org",
+    });
+
+    expect(mockSendMail).toHaveBeenCalledWith(
+      expect.objectContaining({ replyTo: "reply-abc@reply.example.org" }),
+    );
+  });
+
+  it("omits replyTo from sendMail when not provided", async () => {
+    mockSendMail.mockResolvedValueOnce({});
+    const sender = createTestSmtpSender();
+
+    await sender.send(testMessage);
+
+    const envelope = mockSendMail.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(envelope).not.toHaveProperty("replyTo");
+  });
+
   it("sends without html when not provided", async () => {
     mockSendMail.mockResolvedValueOnce({});
     const sender = createTestSmtpSender();

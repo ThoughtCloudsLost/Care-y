@@ -11,6 +11,10 @@ export {
   createOrgInputSchema,
   updateOrgGeneralAdminInputSchema,
   safeExitUrlSchema,
+  channelPolicySchema,
+  updateChannelPolicyInputSchema,
+  type ChannelPolicy,
+  type UpdateChannelPolicyInput,
 } from "./schemas/org.js";
 
 // --- Utilities ---
@@ -358,6 +362,8 @@ export {
   emailSendInputSchema,
   EMAIL_RELAY_LIMITS,
   type EmailSendInput,
+  emailInboundPayloadSchema,
+  type EmailInboundPayload,
 } from "./schemas/tickets.js";
 
 // --- Client management ---
@@ -622,6 +628,8 @@ export {
   accountLoginInputSchema,
   rewrappedMessageSchema,
   rewrappedMessagesSchema,
+  skippedMessageIdsSchema,
+  type SkippedMessageIds,
   accountUpgradeInputSchema,
   accountChangePasswordInputSchema,
   type CreateShareInput,
@@ -895,6 +903,13 @@ export {
   type ClientAccountId,
   type ClientAccountSessionId,
   type ShareId,
+  // Email reply tokens
+  replyTokenIdSchema,
+  type ReplyTokenId,
+  replyTokenHashSchema,
+  type ReplyTokenHash,
+  inboundEmailDomainIdSchema,
+  type InboundEmailDomainId,
   // Notification outbox
   notificationOutboxIdSchema,
   type NotificationOutboxId,

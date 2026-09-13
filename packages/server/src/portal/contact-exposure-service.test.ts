@@ -147,7 +147,13 @@ async function insertClientWithContacts(
   return client.id;
 }
 
-/** Decode a base64url sealed envelope and decrypt with eciesDecrypt. */
+/**
+ * Decode a base64url sealed envelope and decrypt with eciesDecrypt.
+ *
+ * Contract: the 32|24|N split (ephemeralPoint | nonce | ciphertext) must
+ * match the client-side envelope parser in packages/client/src/lib/portal;
+ * a cross-package drift makes portal copies undecryptable.
+ */
 function openEnvelope(
   sealedBase64url: string,
   recipientPrivate: Scalar,

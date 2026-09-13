@@ -11,7 +11,6 @@
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDuration } from "$lib/utils/time.js";
-  import { onKeyActivate } from "$lib/utils/a11y.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -129,11 +128,11 @@
     <List>
       {#each rows as row (row.id)}
         <ListItem
+          link
+          linkComponent="button"
+          chevron={false}
           class="touch-feedback"
           onclick={() => onticketopen(row.ticketId)}
-          onkeydown={onKeyActivate(() => onticketopen(row.ticketId))}
-          role="button"
-          tabindex={0}
         >
           {#snippet media()}
             <span class="row-glyph" aria-hidden="true">

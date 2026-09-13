@@ -25,6 +25,7 @@ import {
   accountUpgradeInputSchema,
   accountChangePasswordInputSchema,
   attachmentUploadSchema,
+  backfillWrapInputSchema,
   PORTAL_ATTACHMENT_MAX_BYTES,
   PORTAL_ATTACHMENTS_PER_MESSAGE,
 } from "./client-portal.js";
@@ -991,6 +992,7 @@ describe("accountUpgradeInputSchema", () => {
         },
       },
       rewrappedMessages: [],
+      skippedMessageIds: [],
     };
   }
 
@@ -1009,6 +1011,20 @@ describe("accountUpgradeInputSchema", () => {
     delete input2.auth;
     expect(accountUpgradeInputSchema.safeParse(input2).success).toBe(false);
   });
+
+  it("requires skippedMessageIds and rejects non-UUID entries", () => {
+    const missing = validUpgrade();
+    delete missing.skippedMessageIds;
+    expect(accountUpgradeInputSchema.safeParse(missing).success).toBe(false);
+
+    const bad = validUpgrade();
+    bad.skippedMessageIds = ["not-a-uuid"];
+    expect(accountUpgradeInputSchema.safeParse(bad).success).toBe(false);
+
+    const good = validUpgrade();
+    good.skippedMessageIds = [crypto.randomUUID()];
+    expect(accountUpgradeInputSchema.safeParse(good).success).toBe(true);
+  });
 });
 
 describe("accountChangePasswordInputSchema", () => {
@@ -1026,6 +1042,7 @@ describe("accountChangePasswordInputSchema", () => {
         },
       },
       rewrappedMessages: [],
+      skippedMessageIds: [],
     };
   }
 
@@ -1400,5 +1417,45 @@ describe("portalReplyInputSchema attachments", () => {
       attachments: tooMany,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// --- backfillWrapInputSchema wrappedKey length refinement ---
+
+describe("backfillWrapInputSchema wrappedKey refinement", () => {
+  function validWrap(): Record<string, unknown> {
+    return {
+      volunteerId: crypto.randomUUID(),
+      ephemeralPoint: base64OfBytes(32),
+      nonce: base64OfBytes(24),
+      wrappedKey: base64OfBytes(32),
+    };
+  }
+
+  it("accepts a wrappedKey within the 256-char limit", () => {
+    const result = backfillWrapInputSchema.safeParse(validWrap());
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a wrappedKey at exactly 256 chars", () => {
+    const result = backfillWrapInputSchema.safeParse({
+      ...validWrap(),
+      wrappedKey: "A".repeat(256),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a wrappedKey exceeding 256 chars", () => {
+    const result = backfillWrapInputSchema.safeParse({
+      ...validWrap(),
+      wrappedKey: "A".repeat(257),
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const wrappedKeyIssues = result.error.issues.filter((i) =>
+        i.path.includes("wrappedKey"),
+      );
+      expect(wrappedKeyIssues.length).toBeGreaterThan(0);
+    }
   });
 });

@@ -19,6 +19,11 @@ export function isEmailOutbound(fu: { type: string }): boolean {
   return fu.type === "email_outbound";
 }
 
+/** Whether a follow-up is an inbound email (renders subject + text + caution). */
+export function isEmailInbound(fu: { type: string }): boolean {
+  return fu.type === "email_inbound";
+}
+
 // --- F6 grouping ---
 
 export interface FollowUpGroup<T> {

@@ -24,6 +24,7 @@ import {
   setDraftForMode,
   clearDraftForMode,
 } from "$lib/tickets/draft-store.svelte.js";
+import { _resetEmailExpectedDismissals } from "$lib/tickets/email-expected.svelte.js";
 
 // jsdom has no ResizeObserver; ShellMessagebar observes its anchor in
 // fixed mode and Konsta may observe internally.
@@ -88,6 +89,9 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_mention_volunteers: () => "Mention a volunteer",
   contact_correction_pending_warning: () =>
     "A contact correction is pending below.",
+  ticket_compose_email_expected_caution: () =>
+    "The client's last message arrived by email.",
+  ticket_compose_email_expected_dismiss: () => "Dismiss email caution",
   ticket_compose_enter_hint: () => "Enter to send, Shift+Enter for new line",
 }));
 
@@ -121,6 +125,7 @@ describe("TicketCompose", () => {
   beforeEach(() => {
     clearDraftForMode(TICKET_ID, "reply");
     clearDraftForMode(TICKET_ID, "sms");
+    _resetEmailExpectedDismissals();
   });
 
   afterEach(() => {
@@ -427,6 +432,82 @@ describe("TicketCompose", () => {
       expect(
         screen.getByText("Enter to send, Shift+Enter for new line"),
       ).toBeTruthy();
+    });
+  });
+
+  describe("email expected caution", () => {
+    it("shows caution in SMS mode when emailExpected is true", async () => {
+      const { component } = render(TicketCompose, {
+        props: { ...baseProps(), emailExpected: true },
+      });
+      component.activateSms();
+      await tick();
+
+      const caution = screen.queryByTestId("compose-email-expected-caution");
+      expect(caution).toBeTruthy();
+      expect(caution?.textContent).toContain(
+        "The client's last message arrived by email.",
+      );
+    });
+
+    it("shows caution in reply mode when emailExpected is true", async () => {
+      const { component } = render(TicketCompose, {
+        props: { ...baseProps(), emailExpected: true },
+      });
+      component.activateReply();
+      await tick();
+
+      expect(
+        screen.queryByTestId("compose-email-expected-caution"),
+      ).toBeTruthy();
+    });
+
+    it("hides caution in SMS mode when emailExpected is false", async () => {
+      const { component } = render(TicketCompose, {
+        props: { ...baseProps(), emailExpected: false },
+      });
+      component.activateSms();
+      await tick();
+
+      expect(screen.queryByTestId("compose-email-expected-caution")).toBeNull();
+    });
+
+    it("hides caution after dismiss button is clicked", async () => {
+      const { component } = render(TicketCompose, {
+        props: { ...baseProps(), emailExpected: true },
+      });
+      component.activateSms();
+      await tick();
+
+      expect(
+        screen.queryByTestId("compose-email-expected-caution"),
+      ).toBeTruthy();
+
+      await fireEvent.click(
+        screen.getByRole("button", { name: "Dismiss email caution" }),
+      );
+      await tick();
+
+      expect(screen.queryByTestId("compose-email-expected-caution")).toBeNull();
+    });
+
+    it("dismiss persists across remount (module Set)", async () => {
+      const props = { ...baseProps(), emailExpected: true };
+      const { component, unmount } = render(TicketCompose, { props });
+      component.activateSms();
+      await tick();
+
+      await fireEvent.click(
+        screen.getByRole("button", { name: "Dismiss email caution" }),
+      );
+      await tick();
+
+      unmount();
+      const { component: c2 } = render(TicketCompose, { props });
+      c2.activateSms();
+      await tick();
+
+      expect(screen.queryByTestId("compose-email-expected-caution")).toBeNull();
     });
   });
 });

@@ -173,19 +173,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // Column metadata
     // -----------------------------------------------------------------
 
-    it("hash index is unique", async () => {
-      const result = await sql<{ is_unique: boolean }>`
-        SELECT ix.indisunique AS is_unique
-        FROM pg_class c
-        JOIN pg_index ix ON c.oid = ix.indexrelid
-        JOIN pg_class t ON t.oid = ix.indrelid
-        JOIN pg_namespace n ON t.relnamespace = n.oid
-        WHERE n.nspname = ${testDb.schemaName}
-          AND c.relname = 'emails_email_hash_idx'
+    it("email_hash is covered by a unique index", async () => {
+      // A unique index on the column is the contract; its name is not.
+      const result = await sql<{ indexdef: string }>`
+        SELECT indexdef FROM pg_indexes
+        WHERE schemaname = ${testDb.schemaName}
+          AND tablename = 'emails'
       `.execute(testDb.platformDb);
 
-      expect(result.rows).toHaveLength(1);
-      expect(result.rows[0]?.is_unique).toBe(true);
+      const uniqueOnHash = result.rows.filter(
+        (r) =>
+          r.indexdef.includes("UNIQUE") && r.indexdef.includes("(email_hash)"),
+      );
+      expect(uniqueOnHash.length).toBeGreaterThan(0);
     });
   },
 );

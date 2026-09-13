@@ -12,6 +12,15 @@ import {
 test.describe.serial("Ticket List (Tickets Tab)", () => {
   let page: Page;
 
+  // In desktop split view a detail pane (which carries its own
+  // "Filter tickets" toolbar) can stay mounted beside the list, so an
+  // unscoped [role="toolbar"] resolves twice and trips strict mode.
+  // Always scope filter-bar locators to the list's own region.
+  const filterToolbar = () =>
+    page
+      .getByRole("region", { name: "Tickets", exact: true })
+      .getByRole("toolbar");
+
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     page = await browser.newPage();
@@ -66,7 +75,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
   test("status filter pill filters tickets", async () => {
     // Tap the "Status" filter pill to open its popover.
-    const statusPill = page.locator('[role="toolbar"]').getByText("Status");
+    const statusPill = filterToolbar().getByText("Status");
     await statusPill.click();
 
     // The popover should be visible with status options.
@@ -86,15 +95,24 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
     // On-hold tickets should be visible (seeded: "Waiting for callback from shelter",
     // "Pending court date documentation").
-    await expect(page.getByText("Waiting for callback")).toBeVisible();
+    //
+    // Applying a filter triggers a server refetch plus decrypt of the
+    // filtered list, which can outlast the 5s default expect timeout on a
+    // loaded machine. Hand-driving the popover under a delayed counts
+    // response showed the tap itself always registers (the handler lives
+    // on the keyed <li>, which a count-label re-render never replaces), so
+    // slow-list-update is the only failure mode left to absorb here.
+    await expect(page.getByText("Waiting for callback")).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
     // Non-hold tickets should be hidden.
-    await expect(page.getByText("Help with housing")).not.toBeVisible();
+    await expect(page.getByText("Help with housing")).not.toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
     // Pill should show the selected label.
-    await expect(
-      page.locator('[role="toolbar"]').getByText("On Hold"),
-    ).toBeVisible();
+    await expect(filterToolbar().getByText("On Hold")).toBeVisible();
 
     // Clear the filter for subsequent tests.
     await page.getByText("Clear all").click();
@@ -106,7 +124,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   // ── 3. Queue filter pill ────────────────────────────────────────
 
   test("queue filter pill shows filtered results", async () => {
-    const queuePill = page.locator('[role="toolbar"]').getByText("Queue");
+    const queuePill = filterToolbar().getByText("Queue");
     await queuePill.click();
 
     // Select "Crisis" queue from the filter popover.
@@ -159,6 +177,19 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   // ── 4. View toggle (list <-> grid) ──────────────────────────────
 
   test("view toggle switches between list and grid layouts", async () => {
+    // The toggle lives in the scroll-collapsing subnavbar. The search
+    // test before this one can leave the list scrolled, and a collapsed
+    // subnavbar is transform-hidden, which scrollIntoView cannot undo
+    // (a webkit-mobile run burned 90s on "element is outside of the
+    // viewport" here). Scroll the list to the top to reveal it.
+    // getByRole, not a [role="main"] CSS selector: the shell renders a
+    // <main> element whose landmark role is implicit, so the attribute
+    // selector never matches and waits out the full test timeout.
+    await page.getByRole("main").evaluate((el) => {
+      el.scrollTo({ top: 0, behavior: "instant" });
+    });
+    await page.waitForTimeout(400);
+
     // Default is list (compact rows) mode.
     const listBtn = page.getByRole("button", { name: "Compact rows" });
     const gridBtn = page.getByRole("button", { name: "Grid" });
@@ -319,16 +350,17 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   test("empty state shown when filters match zero tickets", async () => {
     // Apply a filter combination that matches nothing: "Closed" status.
     // No seeded tickets are closed.
-    const statusPill = page.locator('[role="toolbar"]').getByText("Status");
+    const statusPill = filterToolbar().getByText("Status");
     await statusPill.click();
     await page.getByText(/^Closed \(\d+\)$/).click();
     // Dismiss the filter popover by pressing Escape.
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
 
-    // Empty state message should appear.
+    // Empty state message should appear. Same slow-refetch allowance as the
+    // status filter test above; the tap is not the flaky part.
     await expect(page.getByText("No tickets match this filter.")).toBeVisible({
-      timeout: 5_000,
+      timeout: CRYPTO_TIMEOUT,
     });
 
     // Clear filter.
@@ -340,7 +372,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
   test("filter pill bar has correct ARIA structure", async () => {
     // Toolbar role on the filter bar.
-    const toolbar = page.locator('[role="toolbar"]');
+    const toolbar = filterToolbar();
     await expect(toolbar).toBeAttached();
     await expect(toolbar).toHaveAttribute("aria-label", "Filter tickets");
 
@@ -357,7 +389,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
   test("escape closes open filter popover", async () => {
     // Open status pill.
-    const statusPill = page.locator('[role="toolbar"]').getByText("Status");
+    const statusPill = filterToolbar().getByText("Status");
     await statusPill.click();
 
     // Popover should be visible with status options.
@@ -439,7 +471,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
       await expect(
         page.locator('[data-testid="ticket-card-wrap"]').first(),
       ).toBeVisible();
-      await expect(page.locator('[role="toolbar"]')).toBeVisible();
+      await expect(filterToolbar()).toBeVisible();
       await expect(
         page.getByRole("button", { name: "Compact rows" }),
       ).toBeVisible();
@@ -452,5 +484,90 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
       active = theme;
     }
+  });
+});
+
+/**
+ * Table view mode and bulk actions.
+ *
+ * The table mode (sortable data-table layout) and the bulk action bar's
+ * assign path are the list page's cold interaction clusters; the base
+ * suite covers rows/cards/grid and multi-select entry only.
+ */
+test.describe.serial("Ticket List (Table, Bulk Actions)", () => {
+  let page: Page;
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    page = await browser.newPage();
+    await startCoverage(page);
+    await login(page);
+    await page.getByRole("tab", { name: "Tickets" }).click();
+    await expect(page).toHaveURL(/\/tickets/);
+    await expect(
+      page.locator('[data-testid="ticket-card-wrap"]').first(),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+  });
+
+  test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "ticket-list-table");
+    await page.close();
+  });
+
+  test("table view renders and sorts by column", async () => {
+    await page.getByRole("main").evaluate((el) => {
+      el.scrollTo({ top: 0, behavior: "instant" });
+    });
+    await page.waitForTimeout(400);
+
+    await page.getByRole("button", { name: "Table" }).click();
+    await expect(page.getByRole("button", { name: "Table" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    // The table renders decrypted rows with sortable headers.
+    const table = page.getByRole("table");
+    await expect(table).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    const sortableHeader = table.locator("th[aria-sort]").first();
+    await expect(sortableHeader).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    // Toggling the first sortable column flips its aria-sort state
+    // (ascending <-> descending or none -> ascending).
+    const before = await sortableHeader.getAttribute("aria-sort");
+    await sortableHeader.getByRole("button").click();
+    await expect
+      .poll(async () => sortableHeader.getAttribute("aria-sort"), {
+        timeout: 5_000,
+      })
+      .not.toBe(before);
+
+    // Restore the default mode for any later suites.
+    await page.getByRole("button", { name: "Compact rows" }).click();
+  });
+
+  test("bulk assign opens the assign sheet from the action bar", async () => {
+    // Enter select mode via the explicit button (same entry the base
+    // suite verifies), select one ticket, and open the assign sheet.
+    await page.getByRole("button", { name: "Select" }).click();
+    await expect(page.locator(".checkbox-wrap").first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.locator('[data-testid="ticket-card-wrap"]').first().click();
+    await expect(page.getByText(/1 selected/)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await page.getByRole("button", { name: "Assign", exact: true }).click();
+    // The bulk assign sheet lists assignable volunteers.
+    const sheet = page.getByRole("dialog").last();
+    await expect(sheet).toBeVisible({ timeout: 5_000 });
+
+    // Escape closes the sheet (org-app overlay contract), then exit
+    // selection mode to leave the page clean.
+    await page.keyboard.press("Escape");
+    await expect(sheet).not.toBeVisible({ timeout: 5_000 });
+    await page.getByRole("button", { name: "Exit selection mode" }).click();
+    await expect(page.locator(".checkbox-wrap")).toHaveCount(0);
   });
 });

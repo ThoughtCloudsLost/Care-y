@@ -21,23 +21,10 @@ import {
   type ChannelEvaluateCallback,
 } from "./portal-crypto.js";
 
-/**
- * Test helper: simulate a local OPRF evaluation with a fixed "server key"
- * scalar. This bypasses the real threshold OPRF service but exercises the
- * same blind/evaluate/finalize/derive pipeline as performChannelOprf.
- */
-const TEST_SERVER_KEY = new Uint8Array(32).fill(0xaa);
-
-function localEvaluate(blindedB64: string): string {
-  const sodium = requireSodium();
-  const blinded = decode(blindedB64);
-  // Simulate server: evaluated = serverKey * blindedElement
-  const evaluated = sodium.crypto_scalarmult_ristretto255(
-    TEST_SERVER_KEY,
-    blinded,
-  );
-  return encode(evaluated);
-}
+// Local OPRF simulation (fixed server key) shared with the other portal
+// crypto suites. It bypasses the real threshold OPRF service but exercises
+// the same blind/evaluate/finalize/derive pipeline as performChannelOprf.
+import { localOprfEvaluate as localEvaluate } from "./test-helpers/crypto.js";
 
 /** Stub evaluate callback that uses the local server key. */
 function makeStubEvaluate(): ChannelEvaluateCallback {

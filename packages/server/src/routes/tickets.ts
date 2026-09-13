@@ -72,6 +72,7 @@ import {
   convertBlobForReseedInputSchema,
 } from "@care-y/shared";
 import { ForbiddenError, NotFoundError, RateLimitError } from "../errors.js";
+import { assertSecureLinkEnabled } from "../org/org-config-service.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import {
   createChannel,
@@ -101,6 +102,7 @@ import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
 import { rewrapFollowUp } from "../tickets/rewrap-service.js";
+import { revokeTokensForTicket } from "../email/reply-token-service.js";
 import {
   maskPhone,
   formatPhone,
@@ -683,9 +685,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     recentFollowUps: volunteerProcedure.input(recentFollowUpsInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
-        const grouped = await svc.recentFollowUps(ctx.user.id, input);
-        return Object.fromEntries(
-          Object.entries(grouped).map(
+        const result = await svc.recentFollowUps(ctx.user.id, input);
+        const wirePreviews = Object.fromEntries(
+          Object.entries(result.previews).map(
             ([ticketId, previews]): [string, WirePreview[]] => [
               ticketId,
               previews.map((p) => ({
@@ -695,6 +697,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             ],
           ),
         );
+        return {
+          previews: wirePreviews,
+          latestClientType: result.latestClientType,
+        };
       }),
     ),
 
@@ -1933,6 +1939,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const { svc } = ticketSvc(ctx.org.tenantDb);
           // findById asserts ticket access for the caller
+          await assertSecureLinkEnabled(ctx.org.tenantDb);
           const ticket = await svc.findById(input.ticketId, ctx.user.id);
           const clientId = ticket.clientId;
 
@@ -2279,6 +2286,29 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             }
             throw err;
           }
+        }),
+      ),
+
+    // --- Reply token revocation ---
+
+    revokeReplyToken: volunteerProcedure
+      .input(z.object({ ticketId: ticketIdSchema }))
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { svc } = ticketSvc(ctx.org.tenantDb);
+          // Assert the caller can access this ticket
+          await svc.findById(input.ticketId, ctx.user.id);
+          const revoked = await revokeTokensForTicket(
+            ctx.org.tenantDb,
+            input.ticketId,
+          );
+          audit(ctx.org.tenantDb, {
+            eventType: "reply_token_revoked",
+            actorId: ctx.user.id,
+            ticketId: input.ticketId,
+            metadata: { revokedCount: revoked },
+          });
+          return { revokedCount: revoked };
         }),
       ),
 

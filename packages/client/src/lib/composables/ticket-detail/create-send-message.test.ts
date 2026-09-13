@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type * as ToastStore from "$lib/stores/toast.svelte.js";
-import type * as Mentions from "$lib/utils/mentions.js";
-import type * as QueryKeys from "$lib/query/keys.js";
-import type * as BridgeErrors from "$lib/workers/crypto-bridge-errors.js";
+import { ticketKeys, ticketsKeys } from "$lib/query/keys.js";
 import type * as Paraglide from "$lib/paraglide/messages.js";
 import type * as SealModule from "$lib/crypto/seal-portal-copy.js";
 import {
@@ -39,33 +37,6 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof Paraglide>()),
   ticket_reply_error_encrypt: () => "encrypt-error",
   ticket_reply_error_send: () => "send-error",
-}));
-vi.mock("$lib/utils/mentions.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof Mentions>()),
-  extractMentions: (text: string) =>
-    text.includes("@") ? [text.split("@")[1]!.split(" ")[0]!] : [],
-}));
-vi.mock("$lib/query/keys.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof QueryKeys>()),
-  ticketKeys: {
-    followUpsInitial: (id: string) => ["ticket", id, "followUps", "initial"],
-    followUps: (id: string) => ["ticket", id, "followUps"],
-  },
-  ticketsKeys: {
-    readStates: () => ["tickets", "readState"],
-    readStateSweep: () => ["tickets", "readStateSweep"],
-  },
-}));
-
-vi.mock("$lib/workers/crypto-bridge-errors.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof BridgeErrors>()),
-  CryptoWorkerError: class MockCryptoWorkerError extends Error {
-    code: string;
-    constructor(message: string, code: string) {
-      super(message);
-      this.code = code;
-    }
-  },
 }));
 
 interface FakeEntry {
@@ -136,13 +107,13 @@ describe("createSendMessage", () => {
     // The detail's follow-ups plus the list's read-state families: a
     // volunteer reply must refresh unread truth without waiting for SSE.
     expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["ticket", "t-1", "followUps"],
+      queryKey: ticketKeys.followUps("t-1"),
     });
     expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["tickets", "readState"],
+      queryKey: ticketsKeys.readStates(),
     });
     expect(config.queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["tickets", "readStateSweep"],
+      queryKey: ticketsKeys.readStateSweep(),
     });
   });
 

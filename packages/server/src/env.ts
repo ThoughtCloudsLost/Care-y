@@ -96,6 +96,28 @@ const envSchema = z.object({
   // whole suite submits from one address and would otherwise exhaust the
   // budget partway through a single run.
   INTAKE_SUBMISSION_LIMIT: z.coerce.number().int().positive().default(3),
+
+  // Portal reads (bootstrap, message pages) per IP per hour. The default
+  // of 60 budgets a 5-minute polling interval at 12/hr plus ~5-10/hr from
+  // refetchOnWindowFocus, leaving headroom for CGNAT-shared IPs where
+  // several clients sit behind one public address. Overridable for the
+  // same reason as the intake limit above: one E2E run opens portal pages
+  // far more often than a client would, and the hourly budget does not
+  // reset between runs, so repeated runs from one address exhaust it.
+  PORTAL_READ_LIMIT: z.coerce.number().int().positive().default(60),
+
+  // Inbound SMTP receiver (runs as its own process via inbound-entry.ts,
+  // never inside the API process). Disabled by default: orgs without an
+  // inbound email domain see no receiver at all.
+  INBOUND_SMTP_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  INBOUND_SMTP_PORT: z.coerce.number().int().positive().default(25),
+  // STARTTLS is offered only when both paths are set; without them the
+  // receiver stays plaintext SMTP (port 25 opportunistic-TLS reality).
+  INBOUND_SMTP_TLS_KEY_PATH: z.string().optional(),
+  INBOUND_SMTP_TLS_CERT_PATH: z.string().optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

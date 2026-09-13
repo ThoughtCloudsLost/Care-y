@@ -8,6 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
 import { TicketDecryptCache } from "./ticket-decrypt-cache.js";
 import {
   DECRYPT_ERROR_SENTINEL,
@@ -382,6 +383,402 @@ describe("TicketDecryptCache", () => {
   describe("cache registry", () => {
     it("registers with cacheRegistry on construction", () => {
       expect(cacheRegistry.registered).toContain("TicketDecryptCache");
+    });
+  });
+
+  describe("decryptTitle via intakeWrap", () => {
+    const INTAKE_WRAP = "sealed-tk-blob-fake-b64";
+    const TITLE_CT = "ct-title-fake-b64";
+
+    function createIntakeBridge(): {
+      bridge: CryptoBridge;
+      intakeDecrypt: ReturnType<typeof vi.fn>;
+      mockUnwrapIntakeTk: ReturnType<typeof vi.fn>;
+    } {
+      const intakeDecrypt = vi.fn<() => Promise<string>>();
+      intakeDecrypt.mockResolvedValue("Intake Title Decrypted");
+
+      const mockUnwrapIntakeTk = vi.fn<() => Promise<void>>();
+      mockUnwrapIntakeTk.mockResolvedValue(undefined);
+
+      const bridge = {
+        decrypt: intakeDecrypt,
+        unwrapIntakeTk: mockUnwrapIntakeTk,
+        getState: () => "KEYED",
+      } as unknown as CryptoBridge;
+
+      return { bridge, intakeDecrypt, mockUnwrapIntakeTk };
+    }
+
+    it("returns undefined on first call and triggers unseal + decrypt", () => {
+      cacheRegistry.reset();
+      const { bridge } = createIntakeBridge();
+      const c = new TicketDecryptCache(bridge);
+
+      const result = c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+      expect(result).toBeUndefined();
+    });
+
+    it("chains unwrapIntakeTk then bridge.decrypt for the title slot", async () => {
+      cacheRegistry.reset();
+      const { bridge, mockUnwrapIntakeTk, intakeDecrypt } =
+        createIntakeBridge();
+      const c = new TicketDecryptCache(bridge);
+
+      c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+
+      await vi.waitFor(() => {
+        expect(c.has(TICKET_ID)).toBe(true);
+      });
+
+      expect(mockUnwrapIntakeTk).toHaveBeenCalledOnce();
+      expect(mockUnwrapIntakeTk).toHaveBeenCalledWith(TICKET_ID, INTAKE_WRAP);
+      expect(intakeDecrypt).toHaveBeenCalledOnce();
+      // Worker receives empty key-wrap strings (tk already cached)
+      expect(intakeDecrypt).toHaveBeenCalledWith(
+        TICKET_ID,
+        "title",
+        TICKET_ID,
+        "",
+        "",
+        "",
+        TITLE_CT,
+      );
+      expect(c.get(TICKET_ID)).toBe("Intake Title Decrypted");
+    });
+
+    it("de-duplicates concurrent intake wrap requests for the same ticket", () => {
+      cacheRegistry.reset();
+      const { bridge, mockUnwrapIntakeTk } = createIntakeBridge();
+      const c = new TicketDecryptCache(bridge);
+
+      c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+      c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+      c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+
+      // Only one unseal chain fires; repeats see intakePending and return undefined
+      expect(mockUnwrapIntakeTk).toHaveBeenCalledOnce();
+    });
+
+    it("returns cached value on subsequent calls after resolve", async () => {
+      cacheRegistry.reset();
+      const { bridge, mockUnwrapIntakeTk } = createIntakeBridge();
+      const c = new TicketDecryptCache(bridge);
+
+      c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+      await vi.waitFor(() => {
+        expect(c.has(TICKET_ID)).toBe(true);
+      });
+
+      mockUnwrapIntakeTk.mockClear();
+      const result = c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+      expect(result).toBe("Intake Title Decrypted");
+      expect(mockUnwrapIntakeTk).not.toHaveBeenCalled();
+    });
+
+    it("sets error sentinel when unseal fails", async () => {
+      cacheRegistry.reset();
+      const { bridge, mockUnwrapIntakeTk } = createIntakeBridge();
+      mockUnwrapIntakeTk.mockRejectedValue(new Error("unseal failed"));
+      const c = new TicketDecryptCache(bridge);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+        // silenced
+      });
+
+      c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+
+      await vi.waitFor(() => {
+        expect(c.has(TICKET_ID)).toBe(true);
+      });
+      expect(isDecryptError(c.get(TICKET_ID))).toBe(true);
+      warnSpy.mockRestore();
+    });
+
+    it("sets error sentinel when decrypt after unseal fails", async () => {
+      cacheRegistry.reset();
+      const { bridge, intakeDecrypt } = createIntakeBridge();
+      intakeDecrypt.mockRejectedValue(new Error("AEAD failure"));
+      const c = new TicketDecryptCache(bridge);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+        // silenced
+      });
+
+      c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+
+      await vi.waitFor(() => {
+        expect(c.has(TICKET_ID)).toBe(true);
+      });
+      expect(isDecryptError(c.get(TICKET_ID))).toBe(true);
+      warnSpy.mockRestore();
+    });
+
+    it("silently swallows BRIDGE_DESTROYED without sentinel or warning", async () => {
+      cacheRegistry.reset();
+      const { bridge, mockUnwrapIntakeTk } = createIntakeBridge();
+      mockUnwrapIntakeTk.mockRejectedValue(
+        new CryptoWorkerError("Bridge is destroyed", "BRIDGE_DESTROYED"),
+      );
+      const c = new TicketDecryptCache(bridge);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+        // silenced
+      });
+
+      c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+
+      // Let the rejection settle
+      await new Promise((r) => setTimeout(r, 10));
+      expect(c.has(TICKET_ID)).toBe(false);
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it("returns undefined without firing when bridge is DESTROYED", () => {
+      cacheRegistry.reset();
+      const mockUnwrapIntakeTk = vi.fn();
+      const destroyedBridge = {
+        decrypt: vi.fn(),
+        unwrapIntakeTk: mockUnwrapIntakeTk,
+        getState: () => "DESTROYED",
+      } as unknown as CryptoBridge;
+      const c = new TicketDecryptCache(destroyedBridge);
+
+      const result = c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+      expect(result).toBeUndefined();
+      expect(mockUnwrapIntakeTk).not.toHaveBeenCalled();
+    });
+
+    it("treats null intakeWrap with null keyWrap as missing key material", async () => {
+      const result = cache.decryptTitle(TICKET_ID, null, TITLE_CT, null);
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+      expect(mockDecrypt).not.toHaveBeenCalled();
+    });
+
+    it("treats undefined intakeWrap with null keyWrap as missing key material", () => {
+      const result = cache.decryptTitle(TICKET_ID, null, TITLE_CT, undefined);
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+      expect(mockDecrypt).not.toHaveBeenCalled();
+    });
+
+    it("treats empty-string intakeWrap with null keyWrap as missing key material", () => {
+      const result = cache.decryptTitle(TICKET_ID, null, TITLE_CT, "");
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+      expect(mockDecrypt).not.toHaveBeenCalled();
+    });
+
+    it("cleans up intakePending after failure so a retry can fire", async () => {
+      cacheRegistry.reset();
+      const { bridge, mockUnwrapIntakeTk } = createIntakeBridge();
+      const c = new TicketDecryptCache(bridge);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+        // silenced
+      });
+
+      mockUnwrapIntakeTk.mockRejectedValueOnce(new Error("transient"));
+      c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+
+      await vi.waitFor(() => {
+        expect(c.has(TICKET_ID)).toBe(true);
+      });
+
+      // Reset: clear error sentinel so the next call re-triggers
+      c.clear();
+      mockUnwrapIntakeTk.mockResolvedValueOnce(undefined);
+      c.decryptTitle(TICKET_ID, null, TITLE_CT, INTAKE_WRAP);
+
+      // Second attempt should fire another unwrap
+      expect(mockUnwrapIntakeTk).toHaveBeenCalledTimes(2);
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe("decryptDescription via intakeWrap", () => {
+    const INTAKE_WRAP = "sealed-tk-blob-fake-b64";
+    const DESC_CT = "ct-desc-fake-b64";
+
+    function createIntakeDescBridge(): {
+      bridge: CryptoBridge;
+      intakeDecrypt: ReturnType<typeof vi.fn>;
+      mockUnwrapIntakeTk: ReturnType<typeof vi.fn>;
+    } {
+      const intakeDecrypt = vi.fn<() => Promise<string>>();
+      intakeDecrypt.mockResolvedValue("Intake Desc Decrypted");
+
+      const mockUnwrapIntakeTk = vi.fn<() => Promise<void>>();
+      mockUnwrapIntakeTk.mockResolvedValue(undefined);
+
+      const bridge = {
+        decrypt: intakeDecrypt,
+        unwrapIntakeTk: mockUnwrapIntakeTk,
+        getState: () => "KEYED",
+      } as unknown as CryptoBridge;
+
+      return { bridge, intakeDecrypt, mockUnwrapIntakeTk };
+    }
+
+    it("chains unwrapIntakeTk then decrypt for the description slot", async () => {
+      cacheRegistry.reset();
+      const {
+        bridge,
+        mockUnwrapIntakeTk,
+        intakeDecrypt: md,
+      } = createIntakeDescBridge();
+      const c = new TicketDecryptCache(bridge);
+
+      c.decryptDescription(TICKET_ID, null, DESC_CT, INTAKE_WRAP);
+
+      await vi.waitFor(() => {
+        expect(c.has(`desc:${TICKET_ID}`)).toBe(true);
+      });
+
+      expect(mockUnwrapIntakeTk).toHaveBeenCalledOnce();
+      expect(md).toHaveBeenCalledWith(
+        TICKET_ID,
+        "description",
+        TICKET_ID,
+        "",
+        "",
+        "",
+        DESC_CT,
+      );
+      expect(c.get(`desc:${TICKET_ID}`)).toBe("Intake Desc Decrypted");
+    });
+
+    it("de-duplicates concurrent intake wrap requests for the description", () => {
+      cacheRegistry.reset();
+      const { bridge, mockUnwrapIntakeTk } = createIntakeDescBridge();
+      const c = new TicketDecryptCache(bridge);
+
+      c.decryptDescription(TICKET_ID, null, DESC_CT, INTAKE_WRAP);
+      c.decryptDescription(TICKET_ID, null, DESC_CT, INTAKE_WRAP);
+      expect(mockUnwrapIntakeTk).toHaveBeenCalledOnce();
+    });
+
+    it("returns cached value after intake desc resolve", async () => {
+      cacheRegistry.reset();
+      const { bridge, mockUnwrapIntakeTk } = createIntakeDescBridge();
+      const c = new TicketDecryptCache(bridge);
+
+      c.decryptDescription(TICKET_ID, null, DESC_CT, INTAKE_WRAP);
+      await vi.waitFor(() => {
+        expect(c.has(`desc:${TICKET_ID}`)).toBe(true);
+      });
+
+      mockUnwrapIntakeTk.mockClear();
+      const result = c.decryptDescription(
+        TICKET_ID,
+        null,
+        DESC_CT,
+        INTAKE_WRAP,
+      );
+      expect(result).toBe("Intake Desc Decrypted");
+      expect(mockUnwrapIntakeTk).not.toHaveBeenCalled();
+    });
+
+    it("sets error sentinel when intake desc unseal fails", async () => {
+      cacheRegistry.reset();
+      const { bridge, mockUnwrapIntakeTk } = createIntakeDescBridge();
+      mockUnwrapIntakeTk.mockRejectedValue(new Error("unseal desc failed"));
+      const c = new TicketDecryptCache(bridge);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+        // silenced
+      });
+
+      c.decryptDescription(TICKET_ID, null, DESC_CT, INTAKE_WRAP);
+
+      await vi.waitFor(() => {
+        expect(c.has(`desc:${TICKET_ID}`)).toBe(true);
+      });
+      expect(isDecryptError(c.get(`desc:${TICKET_ID}`))).toBe(true);
+      warnSpy.mockRestore();
+    });
+
+    it("silently swallows BRIDGE_DESTROYED for intake desc path", async () => {
+      cacheRegistry.reset();
+      const { bridge, mockUnwrapIntakeTk } = createIntakeDescBridge();
+      mockUnwrapIntakeTk.mockRejectedValue(
+        new CryptoWorkerError("Bridge is destroyed", "BRIDGE_DESTROYED"),
+      );
+      const c = new TicketDecryptCache(bridge);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+        // silenced
+      });
+
+      c.decryptDescription(TICKET_ID, null, DESC_CT, INTAKE_WRAP);
+
+      await new Promise((r) => setTimeout(r, 10));
+      expect(c.has(`desc:${TICKET_ID}`)).toBe(false);
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it("returns undefined when bridge is DESTROYED for intake desc", () => {
+      cacheRegistry.reset();
+      const destroyedBridge = {
+        decrypt: vi.fn(),
+        unwrapIntakeTk: vi.fn(),
+        getState: () => "DESTROYED",
+      } as unknown as CryptoBridge;
+      const c = new TicketDecryptCache(destroyedBridge);
+
+      const result = c.decryptDescription(
+        TICKET_ID,
+        null,
+        DESC_CT,
+        INTAKE_WRAP,
+      );
+      expect(result).toBeUndefined();
+    });
+
+    it("treats null intakeWrap on description as missing key material", () => {
+      const result = cache.decryptDescription(TICKET_ID, null, DESC_CT, null);
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+    });
+
+    it("treats empty-string intakeWrap on description as missing key material", () => {
+      const result = cache.decryptDescription(TICKET_ID, null, DESC_CT, "");
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+    });
+  });
+
+  describe("decryptTitle null keyWrap error sentinel via microtask", () => {
+    it("defers setError to avoid state_unsafe_mutation in render", async () => {
+      const result = cache.decryptTitle(TICKET_ID, null, ENCRYPTED_TITLE);
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+      // Before microtask: the sentinel was returned but the has() may not
+      // yet reflect the cache write. After flushing microtasks it must.
+      await new Promise((r) => setTimeout(r, 0));
+      expect(cache.has(TICKET_ID)).toBe(true);
+      expect(isDecryptError(cache.get(TICKET_ID))).toBe(true);
+    });
+
+    it("does not double-write the sentinel on repeated calls", async () => {
+      cache.decryptTitle(TICKET_ID, null, ENCRYPTED_TITLE);
+      cache.decryptTitle(TICKET_ID, null, ENCRYPTED_TITLE);
+      await new Promise((r) => setTimeout(r, 0));
+      // Only one sentinel entry
+      expect(cache.size).toBe(1);
+    });
+  });
+
+  describe("decryptDescription null keyWrap error sentinel via microtask", () => {
+    it("defers error sentinel write for description too", async () => {
+      const result = cache.decryptDescription(TICKET_ID, null, "ct-desc");
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(cache.has(`desc:${TICKET_ID}`)).toBe(true);
+      expect(isDecryptError(cache.get(`desc:${TICKET_ID}`))).toBe(true);
+    });
+  });
+
+  describe("decryptReadCursor null keyWrap error sentinel via microtask", () => {
+    it("defers error sentinel write for read cursor", async () => {
+      const ct = "cursor-ct-fake-padding-24ch";
+      const result = cache.decryptReadCursor(TICKET_ID, "user-1", null, ct);
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+      const ck = `cursor:${TICKET_ID}:${ct.slice(0, 24)}`;
+      await new Promise((r) => setTimeout(r, 0));
+      expect(cache.has(ck)).toBe(true);
+      expect(isDecryptError(cache.get(ck))).toBe(true);
     });
   });
 });

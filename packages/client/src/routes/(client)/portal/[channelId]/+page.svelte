@@ -81,6 +81,26 @@
   import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
   import { useThreadChrome } from "$lib/shell/use-thread-chrome.svelte.js";
 
+  /** Shape-probe for a PORTAL_CHANNEL_DISABLED tRPC error. */
+  function isPortalChannelDisabledError(err: unknown): boolean {
+    if (typeof err !== "object" || err === null) return false;
+    // tRPC client errors carry the app error code in message (via
+    // the server's errorFormatter). Check both message and data.code.
+    if ("message" in err && err.message === "PORTAL_CHANNEL_DISABLED") {
+      return true;
+    }
+    if (
+      "data" in err &&
+      typeof err.data === "object" &&
+      err.data !== null &&
+      "code" in err.data &&
+      err.data.code === "PORTAL_CHANNEL_DISABLED"
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   // Route param; the fragment-derived channel id is the crypto authority,
   // this one only keys the queries.
   const routeChannelId = $derived(page.params.channelId ?? "");
@@ -505,6 +525,11 @@
       void queryClient.invalidateQueries({
         queryKey: portalKeys.messages(routeChannelId),
       });
+      // Bootstrap is deliberately NOT invalidated here. Its message set
+      // goes stale, but only the add-password re-seal depends on that
+      // being current, and it refetches for itself. Invalidating on every
+      // send would double portal reads against the read limiter for
+      // clients on constrained connections.
       announceToLiveRegion("polite", m.portal_send());
     },
     onError: (err, variables) => {
@@ -512,12 +537,13 @@
         (msg) => msg.id !== variables.followUpId,
       );
       composerRef?.restoreDraft(lastSentText);
-      // A rate-limited send names the fix (waiting, or a support reply,
-      // clears the pause) instead of the generic try-again copy.
-      sendError =
-        readRateLimitError(err) !== null
-          ? m.portal_send_rate_limited()
-          : m.portal_send_failed();
+      if (isPortalChannelDisabledError(err)) {
+        sendError = m.portal_messaging_disabled();
+      } else if (readRateLimitError(err) !== null) {
+        sendError = m.portal_send_rate_limited();
+      } else {
+        sendError = m.portal_send_failed();
+      }
       announceToLiveRegion("polite", sendError);
     },
   }));
@@ -633,6 +659,7 @@
   let passphrasePending = $state(false);
   let passphraseError = $state("");
   let passphraseSuccess = $state(false);
+  let passphraseSkippedMessages = $state(false);
 
   /**
    * Fetch the sealed contact envelope from the server. Called on card open.
@@ -762,8 +789,20 @@
         // Worker finalizes OPRF, returns only the new public key
         const finishResult = await sess.channelPassphraseFinish(evaluated);
 
-        // Main-thread steps: seal key check and re-seal messages
-        const portalMessages = bootstrapQuery.data?.messages ?? [];
+        // Main-thread steps: seal key check and re-seal messages.
+        // Refetch rather than reading the cached bootstrap: the server
+        // compares the re-sealed count against portal_messages inside
+        // the transaction, and the cached snapshot (5 min staleTime) can
+        // predate the client's own last message. Submitting it fails the
+        // guard and reports "new messages arrived" when none did.
+        const refreshed = await bootstrapQuery.refetch();
+        const portalMessages = refreshed.data?.messages;
+        // A failed refetch keeps the previous data, so checking for
+        // undefined alone would fall back to the stale snapshot this
+        // refetch exists to avoid.
+        if (refreshed.isError || portalMessages === undefined) {
+          throw new Error("Portal bootstrap unavailable");
+        }
 
         const payload = await buildAddPassphrasePayload(
           finishResult.clientPublic,
@@ -779,9 +818,11 @@
           // Zod-derived input types are mutable; the payload is readonly,
           // so this copies rather than casting the readonly away.
           resealedMessages: [...payload.resealedMessages],
+          skippedMessageIds: [...payload.skippedMessageIds],
         });
 
         passphraseSuccess = true;
+        passphraseSkippedMessages = payload.skippedMessageIds.length > 0;
 
         // Refresh bootstrap so upgradeOptions recomputes and the drawer
         // no longer shows the add-passphrase entry.
@@ -1055,6 +1096,11 @@
       <Block>
         <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
         <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
+        {#if upgrade.skippedMessages}
+          <p class="portal-body-text" data-testid="upgrade-skipped-note">
+            {m.portal_reseal_skipped_note()}
+          </p>
+        {/if}
         <p class="portal-body-text upgrade-username">
           {m.account_login_username()}: {upgrade.username}
         </p>
@@ -1088,6 +1134,8 @@
           pending={replyMutation.isPending}
           errorMessage={sendError || undefined}
           draftKey={routeChannelId}
+          messagingDisabled={bootstrapQuery.data?.portalMessagingEnabled ===
+            false}
         />
       {/snippet}
 
@@ -1165,6 +1213,7 @@
           passphraseFormOpen = false;
           if (passphraseSuccess) {
             passphraseSuccess = false;
+            passphraseSkippedMessages = false;
             passphraseError = "";
           }
         }
@@ -1172,6 +1221,7 @@
       pending={passphrasePending}
       error={passphraseError}
       success={passphraseSuccess}
+      skippedNotice={passphraseSkippedMessages}
       onsubmit={handlePassphraseFormSubmit}
     />
 

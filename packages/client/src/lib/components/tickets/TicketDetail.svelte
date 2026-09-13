@@ -17,6 +17,7 @@
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys } from "$lib/query/keys";
   import { hasUnacknowledgedCorrection as computeUnackedCorrection } from "$lib/tickets/correction-status.js";
+  import { latestClientFollowUpIsEmail } from "$lib/tickets/email-expected.svelte.js";
   import { Checkbox, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -83,6 +84,7 @@
   import CorrectionStatusLine from "$lib/components/tickets/CorrectionStatusLine.svelte";
   import CorrectionBody from "$lib/components/tickets/CorrectionBody.svelte";
   import EmailBubbleContent from "$lib/components/tickets/EmailBubbleContent.svelte";
+  import EmailInboundBubbleContent from "$lib/components/tickets/EmailInboundBubbleContent.svelte";
   import { parseContactCorrection } from "@care-y/shared";
   import { parseEmailOutbound } from "$lib/editor/email-schema.js";
   import {
@@ -92,6 +94,7 @@
     isFollowUpGroup,
     followUpGroupKey,
     isEmailOutbound,
+    isEmailInbound,
     type GroupedFollowUp,
   } from "$lib/tickets/follow-up-utils.js";
   import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
@@ -186,6 +189,9 @@
     /** Two-way bindable: true when any contact_correction follow-up
      *  has no acknowledge reaction. Drives outbound-surface warnings. */
     correctionPending?: boolean;
+    /** Two-way bindable: true when the newest client-sourced follow-up
+     *  is an inbound email. Drives the "email expected" caution. */
+    emailExpected?: boolean;
     /** Called when the volunteer taps Apply on a structured correction phone row. */
     onapplyphone?: (phone: string, followUpId: string) => void;
     /** Called when the volunteer taps Apply on a structured correction email row. */
@@ -222,6 +228,7 @@
     loadedFollowUpCount = $bindable(0),
     loadOlderPage: loadOlderPageProp = $bindable(undefined),
     correctionPending = $bindable(false),
+    emailExpected = $bindable(false),
     onapplyphone,
     onapplyemail,
   }: TicketDetailProps = $props();
@@ -266,7 +273,7 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
-    enabled: ticketId !== "",
+    enabled: typeof ticketId === "string" && ticketId !== "",
   }));
 
   // Initial query: most recent PAGE_SIZE follow-ups (direction='older', no cursor).
@@ -278,10 +285,14 @@
         limit: PAGE_SIZE,
         direction: "older",
       }),
-    enabled: ticketId !== "",
+    enabled: typeof ticketId === "string" && ticketId !== "",
   }));
 
   // Share status query: resolves waiting/opened/expired for share_link bubbles.
+  // staleTime 0 (overriding the app's 30s default): the status flips when
+  // the client consumes the link, and a remount serving a cached "Waiting"
+  // shows the volunteer stale consumption state with nothing left to
+  // trigger a refetch.
   const portalRouter = trpc.clientPortal;
   const sharesQuery = createQuery(() => ({
     queryKey: ticketKeys.shares(ticketId),
@@ -290,6 +301,7 @@
       return portalRouter.listShares.query({ ticketId });
     },
     enabled: portalRouter !== undefined,
+    staleTime: 0,
   }));
 
   interface ShareRow {
@@ -548,6 +560,13 @@
   // so a filter can't suppress the warning.
   $effect(() => {
     correctionPending = computeUnackedCorrection(followUps, getReactions);
+  });
+
+  // Reactively compute whether the newest client-sourced follow-up is an
+  // inbound email. Uses the unfiltered followUps so a filter can't suppress
+  // the caution.
+  $effect(() => {
+    emailExpected = latestClientFollowUpIsEmail(followUps);
   });
 
   // Expose the broadest available follow-up list for search matching.
@@ -890,6 +909,22 @@
           const parsed = parseEmailOutbound(v);
           if (parsed !== null) return parsed.subject;
         }
+        if (isEmailInbound(fu)) {
+          try {
+            const parsed: unknown = JSON.parse(v);
+            if (
+              typeof parsed === "object" &&
+              parsed !== null &&
+              "subject" in parsed &&
+              typeof parsed.subject === "string" &&
+              parsed.subject !== ""
+            ) {
+              return parsed.subject;
+            }
+          } catch {
+            // Malformed payload; fall through to sliced preview
+          }
+        }
         return v.slice(0, 80);
       },
       denied: () => m.decrypt_placeholder_denied(),
@@ -913,6 +948,7 @@
     createdBy: string | null;
     encryptedContent: string | null;
     noteTypeId: string | null;
+    keyWrap?: ClusterRecord["keyWrap"];
     portalWrap?: string | null;
   }
 
@@ -960,7 +996,7 @@
     const result = decrypt.followUp(
       fu.id,
       fu.encryptedContent,
-      undefined,
+      fu.keyWrap,
       fu.portalWrap,
     );
     const plaintext = result.status === "ready" ? result.value : undefined;
@@ -1148,12 +1184,13 @@
       if (fu.source === "system") continue;
       if (decrypt == null) return false;
       // Same arguments as the bubble render below: omitting portalWrap
-      // here would decrypt a pending portal reply with the ticket key,
-      // fail AEAD, and poison the shared cache for the bubble path.
+      // or the follow-up's own key wrap here would decrypt a pending
+      // tk_temp row with the ticket key, fail AEAD, and poison the
+      // shared cache for the bubble path.
       const result = decrypt.followUp(
         fu.id,
         fu.encryptedContent,
-        undefined,
+        fu.keyWrap,
         fu.portalWrap,
       );
       if (result.status === "loading") return false;
@@ -1322,6 +1359,18 @@
                   encryptedContent={rec.encryptedContent}
                 />
               </ConversationBubble>
+            {:else if isEmailInbound(rec)}
+              <ConversationBubble
+                direction="received"
+                speaker={clientAlias}
+                source="client"
+                timestamp={rec.createdAt}
+              >
+                <EmailInboundBubbleContent
+                  result={recResult}
+                  encryptedContent={rec.encryptedContent}
+                />
+              </ConversationBubble>
             {:else}
               <ConversationBubble
                 direction={rec.source === "client" ? "received" : "sent"}
@@ -1459,7 +1508,7 @@
                     ? decrypt.followUp(
                         fu.id,
                         fu.encryptedContent,
-                        undefined,
+                        fu.keyWrap,
                         fu.portalWrap,
                       )
                     : resolveAsyncDecrypt(undefined, false)}
@@ -1595,6 +1644,18 @@
                       timestamp={fu.createdAt}
                     >
                       <EmailBubbleContent
+                        result={contentResult}
+                        encryptedContent={fu.encryptedContent}
+                      />
+                    </ConversationBubble>
+                  {:else if isEmailInbound(fu)}
+                    <ConversationBubble
+                      direction="received"
+                      speaker={clientAlias}
+                      source="client"
+                      timestamp={fu.createdAt}
+                    >
+                      <EmailInboundBubbleContent
                         result={contentResult}
                         encryptedContent={fu.encryptedContent}
                       />

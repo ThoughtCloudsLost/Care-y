@@ -89,3 +89,29 @@ export const updateOrgGeneralAdminInputSchema = z.object({
     .refine(isValidCountryCode, "Invalid country code"),
   portalSafeExitUrl: safeExitUrlSchema.nullish(),
 });
+
+// ---------------------------------------------------------------------------
+// Channel policy
+// ---------------------------------------------------------------------------
+
+export const channelPolicySchema = z.object({
+  smsEnabled: z.boolean(),
+  emailEnabled: z.boolean(),
+  secureLinkEnabled: z.boolean(),
+  voiceEnabled: z.boolean(),
+  shareLinkEnabled: z.boolean(),
+});
+
+export type ChannelPolicy = z.infer<typeof channelPolicySchema>;
+
+export const updateChannelPolicyInputSchema = z.object({
+  smsEnabled: z.boolean().optional(),
+  emailEnabled: z.boolean().optional(),
+  secureLinkEnabled: z.boolean().optional(),
+  voiceEnabled: z.boolean().optional(),
+  shareLinkEnabled: z.boolean().optional(),
+});
+
+export type UpdateChannelPolicyInput = z.infer<
+  typeof updateChannelPolicyInputSchema
+>;

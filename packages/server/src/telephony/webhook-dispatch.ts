@@ -199,6 +199,7 @@ export function createWebhookDispatch(
         clientRepo,
         greetingRepo,
         blocklistRepo,
+        tDb: org.tDb,
         orgId,
         orgSchema: org.orgSchema,
         webhookBaseUrl,

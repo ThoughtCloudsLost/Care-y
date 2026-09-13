@@ -46,15 +46,17 @@ const MEDIA_PAGE_SIZE = 200;
 /**
  * Follow-up types eligible for portal message copies. Must stay in step
  * with MESSAGE_COPY_TYPES in the server's reseed service, which rejects
- * anything outside its set. email_outbound is included because the live
- * send path already stores a portal copy for every org email; recovered
- * history should match the live thread.
+ * anything outside its set. email_outbound and email_inbound are included
+ * because the live send path stores a portal copy for every org email
+ * (outbound) and the ingest handler stores one for every client reply
+ * (inbound); recovered history should match the live thread.
  */
 const ELIGIBLE_TYPES = new Set([
   "message",
   "sms_outbound",
   "sms_inbound",
   "email_outbound",
+  "email_inbound",
 ]);
 
 // ── Public types ───────────────────────────────────────────────────────

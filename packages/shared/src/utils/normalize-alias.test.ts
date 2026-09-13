@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeAlias } from "./normalize-alias.js";
+import { normalizeAlias, normalizeUsername } from "./normalize-alias.js";
 
 /**
  * Normalization is what makes the alias uniqueness constraint meaningful.
@@ -70,5 +70,52 @@ describe("normalizeAlias", () => {
   it("handles the empty string and whitespace-only input", () => {
     expect(normalizeAlias("")).toBe("");
     expect(normalizeAlias("   ")).toBe("");
+  });
+});
+
+/**
+ * normalizeUsername delegates to normalizeAlias so the account service
+ * and client login paths produce identical blind index hashes for
+ * equivalent inputs. These tests mirror the normalizeAlias suite to
+ * verify the delegation is intact and the contract holds for usernames.
+ */
+describe("normalizeUsername", () => {
+  it("folds case", () => {
+    expect(normalizeUsername("Tester")).toBe(normalizeUsername("tester"));
+    expect(normalizeUsername("TESTER")).toBe(normalizeUsername("tester"));
+  });
+
+  it("trims surrounding whitespace", () => {
+    expect(normalizeUsername(" tester")).toBe(normalizeUsername("tester"));
+    expect(normalizeUsername("tester ")).toBe(normalizeUsername("tester"));
+    expect(normalizeUsername("\ttester\n")).toBe(normalizeUsername("tester"));
+  });
+
+  it("collapses runs of internal whitespace to a single space", () => {
+    expect(normalizeUsername("test  user")).toBe(
+      normalizeUsername("test user"),
+    );
+    expect(normalizeUsername("test\t\tuser")).toBe(
+      normalizeUsername("test user"),
+    );
+  });
+
+  it("applies NFKC, so compatibility forms fold together", () => {
+    expect(normalizeUsername("Ｔｅｓｔ")).toBe(normalizeUsername("test"));
+  });
+
+  it("agrees with normalizeAlias for the same input", () => {
+    const input = "  Test  USER ";
+    expect(normalizeUsername(input)).toBe(normalizeAlias(input));
+  });
+
+  it("is idempotent", () => {
+    const once = normalizeUsername("  Test  USER ");
+    expect(normalizeUsername(once)).toBe(once);
+  });
+
+  it("handles the empty string and whitespace-only input", () => {
+    expect(normalizeUsername("")).toBe("");
+    expect(normalizeUsername("   ")).toBe("");
   });
 });

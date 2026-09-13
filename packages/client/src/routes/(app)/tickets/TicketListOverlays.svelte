@@ -28,6 +28,7 @@
     replyClientPublic: string | null;
     replyPreviewFollowUps: RawFollowUpPreview[] | undefined;
     replyFollowUpCount: number;
+    replyLatestClientType: string | null;
     onreplydismiss: () => void;
     onreplysent: (ticketId: string) => void;
 
@@ -65,6 +66,7 @@
     replyClientPublic,
     replyPreviewFollowUps,
     replyFollowUpCount,
+    replyLatestClientType,
     onreplydismiss,
     onreplysent,
     callSheetOpen,
@@ -111,6 +113,7 @@
   clientPublic={replyClientPublic}
   previewFollowUps={replyPreviewFollowUps}
   followUpCount={replyFollowUpCount}
+  latestClientType={replyLatestClientType}
   ondismiss={onreplydismiss}
   onsent={onreplysent}
 />

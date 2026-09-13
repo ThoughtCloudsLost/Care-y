@@ -47,6 +47,72 @@ export function filterByDisplayStatus<T extends TicketForFilter>(
   });
 }
 
+export interface TicketServerFilterParams {
+  readonly statuses?: readonly string[];
+  readonly onHold?: boolean;
+  readonly queueIds?: readonly string[];
+  readonly priorities?: readonly string[];
+  readonly assignedTo?: string | null;
+  readonly createdAfter?: string;
+  readonly createdBefore?: string;
+}
+
+export interface TicketForServerFilter extends TicketForFilter {
+  readonly queueId: string;
+  readonly priority: string;
+  readonly assignedTo: string | null;
+  readonly createdAt: string | Date;
+}
+
+/**
+ * Client mirror of the server list query's WHERE clauses: every active
+ * param must match (AND-composed, same as the SQL). Pinned unread rows
+ * are fetched outside the filtered list query, so they must pass this
+ * check before joining the visible list.
+ */
+export function matchesServerFilters(
+  t: TicketForServerFilter,
+  p: TicketServerFilterParams,
+): boolean {
+  if (
+    p.statuses !== undefined &&
+    p.statuses.length > 0 &&
+    !p.statuses.includes(t.status)
+  ) {
+    return false;
+  }
+  if (p.onHold !== undefined && t.onHold !== p.onHold) return false;
+  if (
+    p.queueIds !== undefined &&
+    p.queueIds.length > 0 &&
+    !p.queueIds.includes(t.queueId)
+  ) {
+    return false;
+  }
+  if (
+    p.priorities !== undefined &&
+    p.priorities.length > 0 &&
+    !p.priorities.includes(t.priority)
+  ) {
+    return false;
+  }
+  if (p.assignedTo === null && t.assignedTo !== null) return false;
+  if (typeof p.assignedTo === "string" && t.assignedTo !== p.assignedTo) {
+    return false;
+  }
+  const created =
+    typeof t.createdAt === "string"
+      ? Date.parse(t.createdAt)
+      : t.createdAt.getTime();
+  if (p.createdAfter !== undefined && created < Date.parse(p.createdAfter)) {
+    return false;
+  }
+  if (p.createdBefore !== undefined && created > Date.parse(p.createdBefore)) {
+    return false;
+  }
+  return true;
+}
+
 export function reactionsForTicket(
   followUps: readonly { readonly id: string }[] | undefined,
   reactionsMap: ReadonlyMap<string, ReactionSummary[]>,
