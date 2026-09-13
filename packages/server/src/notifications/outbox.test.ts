@@ -9,15 +9,7 @@
  */
 
 import crypto from "node:crypto";
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  beforeEach,
-  afterAll,
-  vi,
-} from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { TestDb } from "../test-utils.js";
 import {
   createTestDb,
@@ -99,17 +91,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const q = await createTestQueue(testDb.db, { label: "Outbox Queue" });
       queueId = q.id;
     }, 30_000);
-
-    // drainOutbox claims at most DRAIN_BATCH_SIZE (20) rows, ordered by
-    // next_attempt_at ascending. Rows a previous test left behind stay
-    // eligible once their retry backoff elapses, and a freshly inserted
-    // row sorts last, so past twenty stale rows a test's own row is never
-    // claimed. That starves the row under test and hands the leftovers to
-    // whichever test drains next. Clearing between tests keeps each drain
-    // scoped to the row its own test inserted.
-    beforeEach(async () => {
-      await testDb.db.deleteFrom("notification_outbox").execute();
-    });
 
     afterAll(async () => {
       await testDb.cleanup();
