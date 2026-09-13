@@ -164,7 +164,7 @@ export async function getSaltForUsername(
 
 /**
  * Insert client_accounts row + portal_channels row (kind 'account',
- * random channel_id, random auth_hash, key check, account_offer false)
+ * random channel_id, random auth_hash, key check)
  * and set clients.communication_tier = 'account'.
  *
  * Takes a transaction handle: the intake branch and the upgrade run it
@@ -221,7 +221,6 @@ export async function createAccount(
       key_check_nonce: reg.keyCheck.nonce,
       key_check_ciphertext: reg.keyCheck.ciphertext,
       kind: "account",
-      account_offer: false,
     })
     .execute();
 

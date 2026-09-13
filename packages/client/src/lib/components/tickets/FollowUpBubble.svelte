@@ -4,11 +4,15 @@
   of follow-up records without the full detail-page features (long-press, media, editing).
 -->
 <script lang="ts">
-  import { followUpKind } from "$lib/tickets/follow-up-utils.js";
+  import {
+    followUpKind,
+    isEmailOutbound,
+  } from "$lib/tickets/follow-up-utils.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import ConversationBubble from "$lib/components/tickets/ConversationBubble.svelte";
+  import EmailBubbleContent from "$lib/components/tickets/EmailBubbleContent.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
 
@@ -71,6 +75,14 @@
     {currentUserId}
     {ontogglereaction}
   />
+{:else if isEmailOutbound(followUp)}
+  <ConversationBubble
+    direction="sent"
+    source="volunteer"
+    timestamp={followUp.createdAt}
+  >
+    <EmailBubbleContent {result} encryptedContent={followUp.encryptedContent} />
+  </ConversationBubble>
 {:else}
   <ConversationBubble
     direction={followUp.source === "client" ? "received" : "sent"}

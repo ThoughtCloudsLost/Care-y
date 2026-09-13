@@ -17,6 +17,8 @@ import type {
   ChannelSessionStartResponse,
   ChannelSessionRestartResponse,
   ChannelSessionFinishResponse,
+  ChannelPassphraseDeriveResponse,
+  ChannelPassphraseFinishResponse,
   VerifyKeyCheckResponse,
   DecryptMessageResponse,
   EncryptReplyResponse,
@@ -41,9 +43,11 @@ describe("portal-protocol types", () => {
       "decryptAttachmentBlob",
       "accountSessionStart",
       "accountSessionFinish",
+      "channelPassphraseDerive",
+      "channelPassphraseFinish",
       "zeroAll",
     ];
-    expect(allTypes).toHaveLength(12);
+    expect(allTypes).toHaveLength(14);
   });
 
   it("PortalResponseForRequest maps each type correctly (compile-time)", () => {
@@ -66,6 +70,10 @@ describe("portal-protocol types", () => {
       {} as DecryptAttachmentKeyResponse;
     const _attBlob: PortalResponseForRequest<"decryptAttachmentBlob"> =
       {} as DecryptAttachmentBlobResponse;
+    const _ppDerive: PortalResponseForRequest<"channelPassphraseDerive"> =
+      {} as ChannelPassphraseDeriveResponse;
+    const _ppFinish: PortalResponseForRequest<"channelPassphraseFinish"> =
+      {} as ChannelPassphraseFinishResponse;
     const _accStart: PortalResponseForRequest<"accountSessionStart"> =
       {} as AccountSessionStartResponse;
     const _accFinish: PortalResponseForRequest<"accountSessionFinish"> =
@@ -84,6 +92,8 @@ describe("portal-protocol types", () => {
       _encrypt,
       _attKey,
       _attBlob,
+      _ppDerive,
+      _ppFinish,
       _accStart,
       _accFinish,
       _zero,

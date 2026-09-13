@@ -11,7 +11,7 @@
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { clientKeys, ticketsKeys } from "$lib/query/keys.js";
+  import { clientKeys, ticketKeys, ticketsKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { requireRouter } from "$lib/errors.js";
@@ -34,6 +34,8 @@
     ) => void;
     /** Optional initial phone number to prefill step 1 (e.g. from a correction). */
     readonly initialPhone?: string;
+    /** Fired after a successful phone update (before ondismiss). */
+    readonly onsuccess?: () => void;
   }
 
   let {
@@ -43,6 +45,7 @@
     ondismiss,
     onmerge,
     initialPhone,
+    onsuccess,
   }: PhoneEditSheetProps = $props();
 
   // ---------------------------------------------------------------------------
@@ -129,6 +132,13 @@
         haptic();
         void queryClient.invalidateQueries({ queryKey: clientKeys.all });
         void queryClient.invalidateQueries({ queryKey: ticketsKeys.all });
+        // Detail views live under a separate namespace and hold the
+        // client's contact fields, so without this the ticket the
+        // volunteer is looking at keeps showing the old number.
+        void queryClient.invalidateQueries({
+          queryKey: ticketKeys.everyDetail,
+        });
+        onsuccess?.();
         ondismiss();
       }
     },

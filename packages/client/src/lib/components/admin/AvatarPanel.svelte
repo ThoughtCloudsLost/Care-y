@@ -57,6 +57,18 @@
 
   const orgLogoUrl = $derived(getOrgLogoUrl());
 
+  // Fall back to initials when the logo image fails to load.
+  let logoFailed = $state(false);
+
+  $effect(() => {
+    void orgLogoUrl;
+    logoFailed = false;
+  });
+
+  function handleLogoError(): void {
+    logoFailed = true;
+  }
+
   const visibleDestinations = $derived(getVisibleDestinations(permissions));
   const grouped = $derived(groupDestinations(visibleDestinations));
   const visibleGroups = $derived(
@@ -94,15 +106,17 @@
     <div class="panel-profile">
       <span
         class="panel-avatar"
-        class:identity-seal={orgLogoUrl === null && initials !== null}
+        class:identity-seal={(orgLogoUrl === null || logoFailed) &&
+          initials !== null}
         aria-hidden="true"
       >
-        {#if orgLogoUrl}
+        {#if orgLogoUrl !== null && !logoFailed}
           <img
             src={orgLogoUrl}
             alt=""
             class="panel-avatar-logo"
             loading="eager"
+            onerror={handleLogoError}
           />
         {:else if initials}
           {initials}

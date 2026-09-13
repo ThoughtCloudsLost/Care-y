@@ -459,6 +459,10 @@
             <Button small outline onclick={() => reseed.cancel()}>
               {m.reseed_cancel()}
             </Button>
+          {:else if reseedState.phase === "done" && reseedState.itemsTotal === 0}
+            <p class="reseed-partial" aria-live="polite">
+              {m.reseed_none_eligible()}
+            </p>
           {:else if reseedState.phase === "done" && reseedState.skippedCount === 0}
             <p class="reseed-done" aria-live="polite">{m.reseed_done()}</p>
           {:else if reseedState.phase === "done" && reseedState.skippedCount > 0}

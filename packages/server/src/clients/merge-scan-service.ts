@@ -5,6 +5,11 @@
  * detection: per-client intake form response blobs, key wraps, and
  * field-to-role mappings. The server returns ciphertext only; all
  * decryption and comparison happens browser-side in the Worker.
+ *
+ * This scan is the discovery surface for duplicates no volunteer typed
+ * (intake-originated contact matches and stored phone-hash collisions).
+ * Volunteer-entered duplicates are caught at write time by the inline
+ * conflict checks in email-service.ts and client-service.ts instead.
  */
 
 import type { Kysely } from "kysely";
@@ -14,6 +19,7 @@ import type {
   TicketId,
   IntakeFormId,
   PhoneMatchHash,
+  EmailMatchHash,
   UserId,
 } from "@care-y/shared";
 
@@ -41,6 +47,11 @@ export interface MergeScanFieldRoleRecord {
 export interface MergeScanPhoneHashRecord {
   readonly clientId: ClientId;
   readonly phoneMatchHash: PhoneMatchHash;
+}
+
+export interface MergeScanEmailHashRecord {
+  readonly clientId: ClientId;
+  readonly emailMatchHash: EmailMatchHash;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +83,12 @@ export interface MergeScanService {
    * appear here.
    */
   getPhoneHashes(): Promise<readonly MergeScanPhoneHashRecord[]>;
+
+  /**
+   * Returns browser-computed email blind index hashes for all non-merged
+   * clients whose email row has a non-null email_match_hash.
+   */
+  getEmailHashes(): Promise<readonly MergeScanEmailHashRecord[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +181,22 @@ export function createMergeScanService(
         clientId: r.clientId,
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- filtered by WHERE phone_match_hash IS NOT NULL
         phoneMatchHash: r.phoneMatchHash!,
+      }));
+    },
+
+    async getEmailHashes(): Promise<readonly MergeScanEmailHashRecord[]> {
+      const rows = await db
+        .selectFrom("clients as c")
+        .innerJoin("emails as e", "e.id", "c.email_id")
+        .select(["c.id as clientId", "e.email_match_hash as emailMatchHash"])
+        .where("c.merged_into", "is", null)
+        .where("e.email_match_hash", "is not", null)
+        .execute();
+
+      return rows.map((r) => ({
+        clientId: r.clientId,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- filtered by WHERE email_match_hash IS NOT NULL
+        emailMatchHash: r.emailMatchHash!,
       }));
     },
   };

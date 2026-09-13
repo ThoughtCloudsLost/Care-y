@@ -255,6 +255,68 @@ describe("PortalBridge", () => {
     });
   });
 
+  describe("channelPassphraseDerive", () => {
+    it("sends the passphrase and returns channelId + auth + blindedElement", async () => {
+      const bridge = await createReadyBridge();
+
+      const promise = bridge.channelPassphraseDerive("my new passphrase");
+
+      const call = await vi.waitFor(() => {
+        const calls = mockWorkerInstance?.postMessage.mock.calls;
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "channelPassphraseDerive",
+        ) as [{ type: string; id: number; passphrase: string }] | undefined;
+        expect(found).toBeDefined();
+        return found!;
+      });
+
+      expect(call[0].passphrase).toBe("my new passphrase");
+
+      respondFromWorker({
+        id: call[0].id,
+        ok: true,
+        type: "channelPassphraseDerive",
+        channelId: "chan-pp",
+        auth: "auth-pp",
+        blindedElement: "blind-pp",
+      });
+
+      const result = await promise;
+      expect(result.channelId).toBe("chan-pp");
+      expect(result.auth).toBe("auth-pp");
+      expect(result.blindedElement).toBe("blind-pp");
+    });
+  });
+
+  describe("channelPassphraseFinish", () => {
+    it("returns only the new clientPublic", async () => {
+      const bridge = await createReadyBridge();
+
+      const promise = bridge.channelPassphraseFinish("evaluated-pp");
+
+      const call = await vi.waitFor(() => {
+        const calls = mockWorkerInstance?.postMessage.mock.calls;
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "channelPassphraseFinish",
+        ) as [{ type: string; id: number }] | undefined;
+        expect(found).toBeDefined();
+        return found!;
+      });
+
+      respondFromWorker({
+        id: call[0].id,
+        ok: true,
+        type: "channelPassphraseFinish",
+        clientPublic: "new-pub-b64",
+      });
+
+      const result = await promise;
+      expect(result.clientPublic).toBe("new-pub-b64");
+    });
+  });
+
   describe("error handling", () => {
     it("rejects with PortalWorkerError on error response", async () => {
       const bridge = await createReadyBridge();

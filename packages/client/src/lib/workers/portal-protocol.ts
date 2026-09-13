@@ -194,6 +194,37 @@ export interface AccountSessionFinishRequest {
 }
 
 /**
+ * Derive a new keypair from the Worker-held seed plus a caller-supplied
+ * passphrase, without disturbing the active session's key material.
+ *
+ * Valid in CHANNEL_KEYED only (the add-passphrase flow runs from an
+ * already-authenticated plain-link session). Holds the pending blind
+ * state separately from the active session so a concurrent derive
+ * cannot clobber the live keys. A second concurrent derive is rejected.
+ *
+ * Returns channelId, auth, and blindedElement for the main-thread
+ * evaluate hop, just like channelSessionStart.
+ */
+export interface ChannelPassphraseDeriveRequest {
+  readonly type: "channelPassphraseDerive";
+  readonly id: number;
+  /** Spoken passphrase the client chose. */
+  readonly passphrase: string;
+}
+
+/**
+ * Finalize the passphrase-derive OPRF round. Returns ONLY the encoded
+ * public key; the private key and all intermediates are zeroed inside
+ * the Worker. Nothing but the public key crosses back.
+ */
+export interface ChannelPassphraseFinishRequest {
+  readonly type: "channelPassphraseFinish";
+  readonly id: number;
+  /** OPRF server evaluation result, base64url. */
+  readonly evaluated: string;
+}
+
+/**
  * Zero every held secret and return to uninitialized-session state.
  * Wired to quick exit and pagehide.
  */
@@ -214,6 +245,8 @@ export type PortalWorkerRequest =
   | DecryptAttachmentBlobRequest
   | AccountSessionStartRequest
   | AccountSessionFinishRequest
+  | ChannelPassphraseDeriveRequest
+  | ChannelPassphraseFinishRequest
   | PortalZeroAllRequest;
 
 /** All valid portal request type discriminants. */
@@ -322,6 +355,22 @@ export interface DecryptAttachmentBlobResponse extends PortalSuccessBase {
   readonly data: ArrayBuffer;
 }
 
+export interface ChannelPassphraseDeriveResponse extends PortalSuccessBase {
+  readonly type: "channelPassphraseDerive";
+  /** Hex channel identifier derived from the held seed. */
+  readonly channelId: string;
+  /** Base64url channel auth token. */
+  readonly auth: string;
+  /** Base64url blinded element for the OPRF server. */
+  readonly blindedElement: string;
+}
+
+export interface ChannelPassphraseFinishResponse extends PortalSuccessBase {
+  readonly type: "channelPassphraseFinish";
+  /** Base64url ristretto255 new client public key. */
+  readonly clientPublic: string;
+}
+
 export interface AccountSessionStartResponse extends PortalSuccessBase {
   readonly type: "accountSessionStart";
   /** Base64url blinded element for the OPRF server. */
@@ -350,6 +399,8 @@ export type PortalWorkerSuccessResponse =
   | EncryptReplyResponse
   | DecryptAttachmentKeyResponse
   | DecryptAttachmentBlobResponse
+  | ChannelPassphraseDeriveResponse
+  | ChannelPassphraseFinishResponse
   | AccountSessionStartResponse
   | AccountSessionFinishResponse
   | PortalZeroAllResponse;

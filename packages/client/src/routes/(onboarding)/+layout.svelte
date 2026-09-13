@@ -62,6 +62,18 @@
       : (readInjectedOrgName() ?? getBrandingTitle()),
   );
 
+  // Hide the navbar icon when it fails to load.
+  let iconFailed = $state(false);
+
+  $effect(() => {
+    void branding?.iconUrl;
+    iconFailed = false;
+  });
+
+  function handleIconError(): void {
+    iconFailed = true;
+  }
+
   let uiLocale = $state(getLocale());
 
   function handleLocaleChange(locale: Locale): void {
@@ -113,13 +125,14 @@
       {#snippet title()}
         <div class="navbar-title-group">
           <span class="navbar-brand">
-            {#if branding?.iconUrl}
+            {#if branding?.iconUrl != null && !iconFailed}
               <img
                 src={branding.iconUrl}
                 alt=""
                 class="navbar-icon"
                 width="24"
                 height="24"
+                onerror={handleIconError}
               />
             {/if}
             {navbarTitle}

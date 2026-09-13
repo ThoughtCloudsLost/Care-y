@@ -665,7 +665,6 @@ describe("client-portal router", () => {
         last_notified_at: null,
         revoked_at: null,
         kind: "secure_link",
-        account_offer: false,
       };
     }
 
@@ -684,7 +683,7 @@ describe("client-portal router", () => {
         callEntries: [],
         messagesExpireDays: 30,
         safeExitUrl: null,
-        accountOffer: false,
+        upgradeOptions: [],
       };
     }
 
@@ -870,7 +869,6 @@ describe("client-portal router", () => {
         last_notified_at: null,
         revoked_at: null,
         kind: "secure_link",
-        account_offer: false,
       };
     }
 
@@ -889,6 +887,7 @@ describe("client-portal router", () => {
             id: crypto.randomUUID(),
             followupId: crypto.randomUUID(),
             direction: "to_client",
+            type: "message",
             ephemeralPoint: "ep1",
             nonce: "n1",
             ciphertext: "ct1",
@@ -901,7 +900,7 @@ describe("client-portal router", () => {
         callEntries: [],
         messagesExpireDays: 30,
         safeExitUrl: null,
-        accountOffer: false,
+        upgradeOptions: [],
       };
 
       const portalDeps = buildDeps({
@@ -958,7 +957,6 @@ describe("client-portal router", () => {
         last_notified_at: null,
         revoked_at: null,
         kind: "secure_link",
-        account_offer: false,
       };
     }
 
@@ -1729,7 +1727,6 @@ describe("client-portal router", () => {
         last_notified_at: null,
         revoked_at: null,
         kind: "secure_link",
-        account_offer: false,
       };
     }
 
@@ -1748,7 +1745,7 @@ describe("client-portal router", () => {
         callEntries: [],
         messagesExpireDays: 30,
         safeExitUrl: null,
-        accountOffer: false,
+        upgradeOptions: [],
       };
     }
 
@@ -1879,7 +1876,6 @@ describe("client-portal router", () => {
         last_notified_at: null,
         revoked_at: null,
         kind: "secure_link",
-        account_offer: false,
       };
     }
 
@@ -2006,7 +2002,6 @@ describe("client-portal router", () => {
         last_notified_at: null,
         revoked_at: null,
         kind: "secure_link",
-        account_offer: false,
       };
     }
 
@@ -2137,7 +2132,6 @@ describe("client-portal router", () => {
         last_notified_at: null,
         revoked_at: null,
         kind: "secure_link",
-        account_offer: false,
       };
     }
 
@@ -2273,7 +2267,6 @@ describe("client-portal router", () => {
         last_notified_at: null,
         revoked_at: null,
         kind: "secure_link",
-        account_offer: false,
       };
     }
 

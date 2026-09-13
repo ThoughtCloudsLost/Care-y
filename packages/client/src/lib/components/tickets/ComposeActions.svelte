@@ -11,6 +11,7 @@
     MessageCircleReply,
     NotepadTextDashed,
     MessageSquare,
+    Mail,
   } from "@lucide/svelte";
   import { PORTAL_ALLOWED_CONTENT_TYPES } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
@@ -33,6 +34,8 @@
     ontextclient?: () => void;
     /** Called when a file is picked. The caller owns encryption and upload. */
     onattach?: (file: File) => void;
+    /** Called when "Email client" is tapped. Shown only when the client has an email. */
+    onemailclient?: () => void;
   }
 
   let {
@@ -44,6 +47,7 @@
     onreply,
     ontextclient,
     onattach,
+    onemailclient,
   }: ComposeActionsProps = $props();
 
   let fileInputEl = $state<HTMLInputElement | null>(null);
@@ -85,6 +89,11 @@
   function handleTextClient(): void {
     ondismiss();
     ontextclient?.();
+  }
+
+  function handleEmailClient(): void {
+    ondismiss();
+    onemailclient?.();
   }
 </script>
 
@@ -128,6 +137,16 @@
       >
         {#snippet media()}
           <MessageSquare size={20} aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/if}
+    {#if onemailclient}
+      <ListItem
+        title={m.ticket_email_title(withTerms())}
+        onclick={handleEmailClient}
+      >
+        {#snippet media()}
+          <Mail size={20} aria-hidden="true" />
         {/snippet}
       </ListItem>
     {/if}

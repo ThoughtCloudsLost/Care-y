@@ -66,6 +66,19 @@
       : getBrandingTitle(),
   );
 
+  // Hide the logo when the icon image fails to load. A broken-image
+  // placeholder on a sign-in form reads as a phishing tell.
+  let iconFailed = $state(false);
+
+  $effect(() => {
+    void branding?.iconUrl;
+    iconFailed = false;
+  });
+
+  function handleIconError(): void {
+    iconFailed = true;
+  }
+
   function handleSubmit(e: SubmitEvent): void {
     e.preventDefault();
     if (!canSubmit) return;
@@ -83,13 +96,14 @@
 
 <AuthCard>
   <div class="login-header">
-    {#if branding?.iconUrl}
+    {#if branding?.iconUrl != null && !iconFailed}
       <img
         src={branding.iconUrl}
         alt=""
         class="login-logo"
         width="48"
         height="48"
+        onerror={handleIconError}
       />
     {/if}
     <h1 class="login-org-name heading-display">{orgName}</h1>

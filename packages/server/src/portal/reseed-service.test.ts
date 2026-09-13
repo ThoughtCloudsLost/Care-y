@@ -216,6 +216,47 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(rows[0]!.direction).toBe("from_client");
       });
 
+      it("accepts email_outbound message copies", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "email_outbound",
+            encrypted_content: Buffer.from("ct"),
+          })
+          .execute();
+
+        const result = await reseedPortalHistory(
+          testDb.db,
+          access,
+          fixture.userId!,
+          {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [{ followupId: fuId, copy: fakeTriple() }],
+            attachmentWraps: [],
+            recordingWraps: [],
+          },
+        );
+
+        expect(result.inserted).toBe(1);
+        const rows = await testDb.db
+          .selectFrom("portal_messages")
+          .selectAll()
+          .where("channel_id", "=", channel.id)
+          .execute();
+        expect(rows[0]!.direction).toBe("to_client");
+      });
+
       it("rejects voicemail text copies", async () => {
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,
@@ -877,6 +918,66 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // Only the one in the user's queue should appear
         expect(result.length).toBe(1);
         expect(result[0]!.ticketId).toBe(fixture1.ticketId);
+      });
+
+      it("returns null keyWrap when the caller holds no wrap for the current generation", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const access = createTicketAccessChecker(testDb.db);
+
+        const result = await listTicketsForClient(
+          testDb.db,
+          access,
+          fixture.userId!,
+          fixture.clientId,
+        );
+
+        expect(result.length).toBe(1);
+        expect(result[0]!.keyWrap).toBeNull();
+      });
+
+      it("returns the caller's ticket-level keyWrap base64url-encoded", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const access = createTicketAccessChecker(testDb.db);
+
+        const ticketRow = await testDb.db
+          .selectFrom("tickets")
+          .select("key_generation")
+          .where("id", "=", fixture.ticketId)
+          .executeTakeFirstOrThrow();
+
+        const ephemeralPoint = crypto.randomBytes(32);
+        const nonce = crypto.randomBytes(24);
+        const wrappedKey = crypto.randomBytes(48);
+        await testDb.db
+          .insertInto("ticket_key_wraps")
+          .values({
+            ticket_id: fixture.ticketId,
+            volunteer_id: fixture.userId!,
+            key_generation: ticketRow.key_generation,
+            ephemeral_point: ephemeralPoint,
+            nonce,
+            wrapped_key: wrappedKey,
+            algorithm: "ecies-ristretto255-v1",
+          })
+          .execute();
+
+        const result = await listTicketsForClient(
+          testDb.db,
+          access,
+          fixture.userId!,
+          fixture.clientId,
+        );
+
+        expect(result.length).toBe(1);
+        const wrap = result[0]!.keyWrap;
+        expect(wrap).not.toBeNull();
+        expect(wrap!.ephemeralPoint).toBe(ephemeralPoint.toString("base64url"));
+        expect(wrap!.nonce).toBe(nonce.toString("base64url"));
+        expect(wrap!.wrappedKey).toBe(wrappedKey.toString("base64url"));
       });
     });
   },

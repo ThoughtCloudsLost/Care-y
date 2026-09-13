@@ -161,6 +161,78 @@ describe("createOprfEvaluateService under production", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Session binding tests
+// ---------------------------------------------------------------------------
+
+describe("evaluate session binding", () => {
+  let savedEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    Object.assign(process.env, TEST_ENV);
+    _resetEnvCache();
+  });
+
+  afterEach(() => {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) {
+        delete process.env[key];
+      }
+    }
+    Object.assign(process.env, savedEnv);
+    _resetEnvCache();
+  });
+
+  const VOLUNTEER_ID = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d" as UserId;
+  const OTHER_SESSION_ID = "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e" as UserId;
+  const BLINDED32 = Buffer.alloc(32, 0xab).toString("base64");
+
+  function baseRequest(
+    kind: OprfEvaluateRequest["kind"],
+    sessionUserId: UserId | null,
+  ): OprfEvaluateRequest {
+    return {
+      kind,
+      userId: VOLUNTEER_ID,
+      blindedElement: BLINDED32,
+      ip: "203.0.113.7",
+      sessionUserId,
+      powChallenge: undefined,
+      powSolution: undefined,
+    };
+  }
+
+  it("rejects a volunteer evaluation when the session belongs to another user", async () => {
+    const service = createOprfEvaluateService(makeDeps());
+    await expect(
+      service.evaluate(baseRequest("volunteer", OTHER_SESSION_ID)),
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("allows a volunteer evaluation when the session matches the userId", async () => {
+    const service = createOprfEvaluateService(makeDeps());
+    await expect(
+      service.evaluate(baseRequest("volunteer", VOLUNTEER_ID)),
+    ).resolves.toEqual({
+      evaluated: Buffer.alloc(32, 0xab).toString("base64url"),
+    });
+  });
+
+  it("allows an account evaluation despite an unrelated volunteer session (shared-device client)", async () => {
+    // The account id namespace is disjoint from volunteer user ids, so a
+    // volunteer session on the shared origin must not block a client
+    // creating or logging into an account (ADR-091 gates account
+    // evaluations through the per-account tag key instead).
+    const service = createOprfEvaluateService(makeDeps());
+    await expect(
+      service.evaluate(baseRequest("account", OTHER_SESSION_ID)),
+    ).resolves.toEqual({
+      evaluated: Buffer.alloc(32, 0xab).toString("base64url"),
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Channel evaluation gating tests
 // ---------------------------------------------------------------------------
 

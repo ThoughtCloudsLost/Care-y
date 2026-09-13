@@ -5,8 +5,9 @@
  * The list, get, suggestDuplicates, mergeScanData, getDismissals, and
  * putDismissals queries run on viewClientsProcedure (VIEW_CLIENTS,
  * manager and above). updateAlias and backfillAliasHash run on
- * adminProcedure. updatePhone runs on volunteerProcedure with a custom
- * access check. backfillPhoneMatchHash runs on viewClientsProcedure.
+ * adminProcedure. updatePhone and updateEmail run on volunteerProcedure
+ * with a custom access check. backfillPhoneMatchHash runs on
+ * viewClientsProcedure.
  *
  * Client aliases are org-key encrypted. The server stores ciphertext and a
  * browser-supplied blind index hash. Phone values returned to the client
@@ -33,6 +34,7 @@ import {
   updateAliasInputSchema,
   backfillAliasHashInputSchema,
   updatePhoneInputSchema,
+  updateEmailInputSchema,
   backfillPhoneMatchHashInputSchema,
   suggestDuplicatesInputSchema,
   aliasHashSchema,
@@ -41,6 +43,7 @@ import {
 } from "@care-y/shared";
 import type { OrgId, ClientId, UserId } from "@care-y/shared";
 import type { ClientService } from "../clients/client-service.js";
+import type { EmailService } from "../clients/email-service.js";
 import type { DismissalService } from "../clients/dismissal-service.js";
 import type { MergeScanService } from "../clients/merge-scan-service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
@@ -59,22 +62,32 @@ export interface ClientRouterDeps {
     db: Kysely<TenantDatabase>,
     orgId: OrgId,
   ) => ClientService;
+  readonly createEmailSvc: (
+    db: Kysely<TenantDatabase>,
+    orgId: OrgId,
+  ) => EmailService;
   readonly fieldEncryptor: FieldEncryptor;
   /**
    * Returns true if the user is assigned to at least one ticket belonging
-   * to the given client. Used for updatePhone volunteer access checks.
+   * to the given client. Used for updatePhone/updateEmail volunteer access
+   * checks.
    */
   readonly isAssignedToClientTicket: (
     db: Kysely<TenantDatabase>,
     clientId: ClientId,
     userId: UserId,
   ) => Promise<boolean>;
-  readonly createDismissalSvc?: (
-    db: Kysely<TenantDatabase>,
-  ) => DismissalService;
-  readonly createMergeScanSvc?: (
-    db: Kysely<TenantDatabase>,
-  ) => MergeScanService;
+  /**
+   * Required nullable (ADR-086 pattern): pass `null` to decline
+   * the merge-scan surface explicitly. When these were optional keys, the
+   * app wiring omitted them by accident and mergeScanData silently served
+   * its empty stub on every request; a required key makes omission a type
+   * error.
+   */
+  readonly createDismissalSvc:
+    ((db: Kysely<TenantDatabase>) => DismissalService) | null;
+  readonly createMergeScanSvc:
+    ((db: Kysely<TenantDatabase>) => MergeScanService) | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -98,6 +111,39 @@ function phoneForRole(
     return formatPhone(buf);
   }
   return maskPhone(buf);
+}
+
+// ---------------------------------------------------------------------------
+// Email formatting helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Decrypts an OPS-encrypted email Buffer and returns a formatted string
+ * based on the caller's role. Admin sees the full address; manager sees a
+ * masked form (first char + *** + @domain). The plaintext Buffer is zeroed
+ * in the finally block.
+ */
+function emailForRole(
+  encryptedAddress: Buffer | null,
+  roleId: string,
+  encryptor: FieldEncryptor,
+): string | null {
+  if (!encryptedAddress) return null;
+  // care-y-ignore-next-line server-no-decrypt -- OPS_SECRETS_KEY operational encryption (ADR-005); mirrors phoneForRole above
+  const buf = encryptor.decryptToBuffer(encryptedAddress);
+  try {
+    const full = buf.toString("utf-8");
+    if (roleId === RoleId.ADMIN) {
+      return full;
+    }
+    // Mask: show first character and domain, hide the rest of the local part.
+    const atIndex = full.indexOf("@");
+    if (atIndex <= 0) return "***";
+    const firstChar = full[0] ?? "";
+    return firstChar + "***" + full.slice(atIndex);
+  } finally {
+    buf.fill(0);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +183,12 @@ export function createClientRouter(deps: ClientRouterDeps) {
             deps.fieldEncryptor,
           ),
           phoneMatchHash: r.phoneMatchHash,
+          email: emailForRole(
+            r.encryptedAddress,
+            ctx.user.roleId,
+            deps.fieldEncryptor,
+          ),
+          emailMatchHash: r.emailMatchHash,
           ticketCount: r.ticketCount,
           createdAt: r.createdAt.toISOString(),
           mergedInto: r.mergedInto,
@@ -163,6 +215,12 @@ export function createClientRouter(deps: ClientRouterDeps) {
             deps.fieldEncryptor,
           ),
           phoneHash: record.phoneHash,
+          email: emailForRole(
+            record.encryptedAddress,
+            ctx.user.roleId,
+            deps.fieldEncryptor,
+          ),
+          emailHash: record.emailHash,
           ticketCount: record.ticketCount,
           createdAt: record.createdAt.toISOString(),
           tickets: record.tickets.map((t) => ({
@@ -358,6 +416,16 @@ export function createClientRouter(deps: ClientRouterDeps) {
      * browser-side. Gated on VIEW_CLIENTS (merging itself requires that
      * access level, so candidates shown to sessions that cannot act are
      * dead UI).
+     *
+     * Division of labor with the inline conflict card: updateEmail and
+     * updatePhone block a duplicate write and suggest a merge at entry
+     * time, so volunteer-typed duplicates never reach this scan. The
+     * dashboard section this feeds exists for duplicates nobody typed:
+     * a client whose intake form answers carry the same phone or email
+     * as a client created earlier (by call or by another intake), and
+     * stored phone-hash collisions. Stored email hashes cannot collide
+     * with each other (the updateEmail guard rejects them); the email
+     * hash list is here to be matched against intake-extracted emails.
      */
     mergeScanData: viewClientsProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
@@ -380,14 +448,20 @@ export function createClientRouter(deps: ClientRouterDeps) {
               clientId: string;
               phoneMatchHash: string;
             }[],
+            emailHashes: [] as readonly {
+              clientId: string;
+              emailMatchHash: string;
+            }[],
           };
         }
         const svc = deps.createMergeScanSvc(ctx.org.tenantDb);
-        const [clients, fieldRoles, phoneHashes] = await Promise.all([
-          svc.getResponsesByClient(ctx.user.id),
-          svc.getFieldRoles(),
-          svc.getPhoneHashes(),
-        ]);
+        const [clients, fieldRoles, phoneHashes, emailHashes] =
+          await Promise.all([
+            svc.getResponsesByClient(ctx.user.id),
+            svc.getFieldRoles(),
+            svc.getPhoneHashes(),
+            svc.getEmailHashes(),
+          ]);
 
         return {
           clients: clients.map((c) => ({
@@ -407,6 +481,58 @@ export function createClientRouter(deps: ClientRouterDeps) {
             clientId: ph.clientId,
             phoneMatchHash: ph.phoneMatchHash,
           })),
+          emailHashes: emailHashes.map((eh) => ({
+            clientId: eh.clientId,
+            emailMatchHash: eh.emailMatchHash,
+          })),
+        };
+      }),
+    ),
+
+    /**
+     * Email address update.
+     *
+     * Uses volunteerProcedure (lowest role) with a custom in-handler
+     * access check mirroring updatePhone. The caller must be admin,
+     * manager, or assigned to at least one ticket belonging to the target
+     * client.
+     */
+    updateEmail: volunteerProcedure.input(updateEmailInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        // Custom access check: admin and manager pass unconditionally.
+        // Volunteers must be assigned to at least one ticket for this client.
+        const roleId = ctx.user.roleId;
+        if (roleId !== RoleId.ADMIN && roleId !== RoleId.MANAGER) {
+          const assigned = await deps.isAssignedToClientTicket(
+            ctx.org.tenantDb,
+            input.clientId,
+            ctx.user.id,
+          );
+          if (!assigned) {
+            throw new ForbiddenError(ErrorCode.INSUFFICIENT_PERMISSIONS);
+          }
+        }
+
+        const emailSvc = deps.createEmailSvc(ctx.org.tenantDb, ctx.org.orgId);
+        const result = await emailSvc.updateEmail(
+          input.clientId,
+          input.emailAddress,
+          ctx.user.id,
+          input.emailMatchHash ?? null,
+        );
+        // The conflicting client's alias is ciphertext and leaves as base64,
+        // matching suggestDuplicates. Never includes the email address.
+        return {
+          success: result.success,
+          conflict: result.conflict
+            ? {
+                conflictingClientId: result.conflict.conflictingClientId,
+                conflictingClientEncryptedAlias:
+                  result.conflict.conflictingClientEncryptedAlias.toString(
+                    "base64",
+                  ),
+              }
+            : null,
         };
       }),
     ),

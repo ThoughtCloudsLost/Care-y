@@ -20,6 +20,8 @@
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import PhoneActionContent from "$lib/components/clients/PhoneActionContent.svelte";
   import PhoneEditSheet from "$lib/components/clients/PhoneEditSheet.svelte";
+  import EmailEditSheet from "$lib/components/clients/EmailEditSheet.svelte";
+  import EmailActionContent from "$lib/components/clients/EmailActionContent.svelte";
   import MergeSheet from "$lib/components/clients/MergeSheet.svelte";
   import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
   import type { TicketAction } from "$lib/tickets/types.js";
@@ -47,11 +49,25 @@
     phonePopoverOpen: boolean;
     phoneEditSheetOpen: boolean;
     phoneEditInitialPhone?: string;
+    emailPopoverOpen: boolean;
+    emailEditSheetOpen: boolean;
+    emailEditInitialEmail?: string;
     canCopyPhone: boolean;
+    canCopyEmail: boolean;
     onphonepopoverdismiss: () => void;
     onphonecopy: () => void;
     onphoneedit: () => void;
     onphoneeditdismiss: () => void;
+    onphoneeditsuccess?: () => void;
+    onemailpopoverdismiss: () => void;
+    onemailcopy: () => void;
+    onemailedit: () => void;
+    onemailedidismiss: () => void;
+    onemaileditsuccess?: () => void;
+    onemailmerge: (
+      conflictingClientId: string,
+      conflictingAlias: string,
+    ) => void;
     onphonemerge: (
       conflictingClientId: string,
       conflictingAlias: string,
@@ -86,6 +102,7 @@
     onreply?: () => void;
     ontextclient?: () => void;
     onattach?: (file: File) => void;
+    onemailclient?: () => void;
     ondraftset: (body: string) => void;
   }
 
@@ -101,11 +118,22 @@
     phonePopoverOpen,
     phoneEditSheetOpen,
     phoneEditInitialPhone,
+    emailPopoverOpen,
+    emailEditSheetOpen,
+    emailEditInitialEmail,
     canCopyPhone,
+    canCopyEmail,
     onphonepopoverdismiss,
     onphonecopy,
     onphoneedit,
     onphoneeditdismiss,
+    onphoneeditsuccess,
+    onemailpopoverdismiss,
+    onemailcopy,
+    onemailedit,
+    onemailedidismiss,
+    onemaileditsuccess,
+    onemailmerge,
     onphonemerge,
     mergeSheetOpen,
     mergeClientA,
@@ -137,6 +165,7 @@
     onreply,
     ontextclient,
     onattach,
+    onemailclient,
     ondraftset,
   }: Props = $props();
 </script>
@@ -179,6 +208,7 @@
   {onreply}
   {ontextclient}
   {onattach}
+  {onemailclient}
 />
 
 <ShellPopover
@@ -199,7 +229,30 @@
   {clientId}
   {clientAlias}
   ondismiss={onphoneeditdismiss}
+  onsuccess={onphoneeditsuccess}
   onmerge={onphonemerge}
+/>
+
+<ShellPopover
+  opened={emailPopoverOpen}
+  ondismiss={onemailpopoverdismiss}
+  ariaLabel={m.client_email_label()}
+>
+  <EmailActionContent
+    canCopy={canCopyEmail}
+    oncopy={onemailcopy}
+    onedit={onemailedit}
+  />
+</ShellPopover>
+
+<EmailEditSheet
+  opened={emailEditSheetOpen}
+  initialEmail={emailEditInitialEmail}
+  {clientId}
+  {clientAlias}
+  ondismiss={onemailedidismiss}
+  onsuccess={onemaileditsuccess}
+  onmerge={onemailmerge}
 />
 
 <MergeSheet

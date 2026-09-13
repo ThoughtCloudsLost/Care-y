@@ -7,6 +7,7 @@
   import { List, ListInput, Button } from "konsta/svelte";
   import type { LucideIcon } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
 
@@ -49,6 +50,12 @@
 
   const canSubmit = $derived(resolutionText.trim().length > 0 && !saving);
 
+  const effectiveTitle = $derived(
+    noteTypeName !== ""
+      ? noteTypeName
+      : m.ticket_close_resolution_title(withTerms()),
+  );
+
   function handleSubmit(): void {
     const text = resolutionText.trim();
     if (text.length === 0) return;
@@ -59,8 +66,8 @@
 <ShellSheet
   {opened}
   ondismiss={onskip}
-  ariaLabel={noteTypeName}
-  title={noteTypeName}
+  ariaLabel={effectiveTitle}
+  title={effectiveTitle}
 >
   {#snippet headerRight()}
     <SoftButton onclick={handleSubmit} disabled={!canSubmit}>

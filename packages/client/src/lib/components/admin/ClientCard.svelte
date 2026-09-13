@@ -15,6 +15,8 @@
     readonly alias: string;
     /** Already formatted by the server, full for admins and masked otherwise. */
     readonly phone: string | null;
+    /** Already formatted by the server, full for admins and masked otherwise. */
+    readonly email: string | null;
     readonly ticketCount: number;
     /** ISO timestamp. */
     readonly createdAt: string;
@@ -28,6 +30,7 @@
     clientId,
     alias,
     phone,
+    email,
     ticketCount,
     createdAt,
     mergedInto,
@@ -73,11 +76,16 @@
         </span>
       </div>
 
-      <!-- Phone sits in the right slot UserCard gives the role stamp, but a
-           phone number is a records fact rather than identity, so it stays
-           quiet ink instead of brand ink. -->
-      <div class="phone-area">
-        <span class="phone">{phone}</span>
+      <!-- Contact info sits in the right slot UserCard gives the role stamp,
+           but contact details are records facts rather than identity, so
+           they stay quiet ink instead of brand ink. -->
+      <div class="contact-area">
+        {#if phone}
+          <span class="contact-field">{phone}</span>
+        {/if}
+        {#if email}
+          <span class="contact-field contact-email">{email}</span>
+        {/if}
       </div>
 
       <!-- The row itself is inert, matching UserCard. This button is the only
@@ -169,15 +177,26 @@
     margin: 0 0.25rem;
   }
 
-  /* ── Phone ── */
-  .phone-area {
+  /* ── Contact ── */
+  .contact-area {
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
   }
 
-  .phone {
+  .contact-field {
     font-size: var(--text-sm);
     color: var(--ink-2);
     white-space: nowrap;
+  }
+
+  .contact-email {
+    font-size: var(--text-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 16ch;
   }
 
   /* ── Edit button (shares UserCard's anatomy) ── */

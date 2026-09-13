@@ -291,13 +291,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     // -----------------------------------------------------------------
-    // portal_channels: kind + account_offer columns
+    // portal_channels: kind column (account_offer dropped by migration 109)
     // -----------------------------------------------------------------
 
-    it("existing portal_channels rows read back kind='secure_link' and account_offer=false", async () => {
+    it("existing portal_channels rows read back kind='secure_link'", async () => {
       const fix = await createTestTicketFixture(testDb.db);
 
-      // Insert a channel without specifying kind/account_offer (defaults)
       await testDb.db
         .insertInto("portal_channels")
         .values({
@@ -313,12 +312,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       const row = await testDb.db
         .selectFrom("portal_channels")
-        .select(["kind", "account_offer"])
+        .select("kind")
         .where("client_id", "=", fix.clientId)
         .executeTakeFirstOrThrow();
 
       expect(row.kind).toBe("secure_link");
-      expect(row.account_offer).toBe(false);
     });
 
     it("portal_channels accepts kind='account'", async () => {
@@ -336,32 +334,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
           key_check_ciphertext: crypto.randomBytes(64),
           kind: "account",
         })
-        .returning(["kind", "account_offer"])
+        .returning("kind")
         .executeTakeFirstOrThrow();
 
       expect(row.kind).toBe("account");
-      expect(row.account_offer).toBe(false);
     });
 
-    it("portal_channels.account_offer can be set to true", async () => {
-      const fix = await createTestClientFixture(testDb.db);
+    it("account_offer column no longer exists after migration 109", async () => {
+      const result = await sql<{
+        column_name: string;
+      }>`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = ${testDb.schemaName}
+          AND table_name = 'portal_channels'
+          AND column_name = 'account_offer'
+      `.execute(testDb.platformDb);
 
-      const row = await testDb.db
-        .insertInto("portal_channels")
-        .values({
-          client_id: fix.clientId,
-          channel_id: crypto.randomBytes(24).toString("hex") as ChannelSecret,
-          auth_hash: crypto.randomBytes(32),
-          client_public: crypto.randomBytes(32),
-          key_check_ephemeral_point: crypto.randomBytes(32),
-          key_check_nonce: crypto.randomBytes(24),
-          key_check_ciphertext: crypto.randomBytes(64),
-          account_offer: true,
-        })
-        .returning("account_offer")
-        .executeTakeFirstOrThrow();
-
-      expect(row.account_offer).toBe(true);
+      expect(result.rows).toHaveLength(0);
     });
 
     // -----------------------------------------------------------------
@@ -386,26 +376,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(result.rows[0]?.data_type).toBe("text");
       expect(result.rows[0]?.is_nullable).toBe("NO");
       expect(result.rows[0]?.column_default).toContain("secure_link");
-    });
-
-    it("account_offer column has correct type and default", async () => {
-      const result = await sql<{
-        column_name: string;
-        data_type: string;
-        is_nullable: string;
-        column_default: string;
-      }>`
-        SELECT column_name, data_type, is_nullable, column_default
-        FROM information_schema.columns
-        WHERE table_schema = ${testDb.schemaName}
-          AND table_name = 'portal_channels'
-          AND column_name = 'account_offer'
-      `.execute(testDb.platformDb);
-
-      expect(result.rows).toHaveLength(1);
-      expect(result.rows[0]?.data_type).toBe("boolean");
-      expect(result.rows[0]?.is_nullable).toBe("NO");
-      expect(result.rows[0]?.column_default).toContain("false");
     });
   },
 );

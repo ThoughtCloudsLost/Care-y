@@ -88,6 +88,13 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   },
 }));
 
+// Mutable seam for the follow-up decrypt result: the module mock below is
+// created once per file, so tests that need a different decrypted payload
+// (the correction rendering test) set `content` instead of re-mocking.
+const followUpDecryptState = vi.hoisted(() => ({
+  content: "Decrypted message content",
+}));
+
 vi.mock("$lib/crypto/context.js", async (importOriginal) => {
   return {
     ...(await importOriginal<typeof CryptoContextModule>()),
@@ -95,7 +102,9 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => {
       decryptTitle: vi.fn().mockReturnValue("Test Ticket Title"),
     }),
     getFollowUpDecryptCache: () => ({
-      decryptContent: vi.fn().mockReturnValue("Decrypted message content"),
+      decryptContent: vi
+        .fn()
+        .mockImplementation(() => followUpDecryptState.content),
       get: vi.fn().mockReturnValue(undefined),
       has: vi.fn().mockReturnValue(false),
     }),
@@ -220,6 +229,7 @@ const baseTicket = {
 };
 
 beforeEach(() => {
+  followUpDecryptState.content = "Decrypted message content";
   ticketQueryState = {
     isLoading: false,
     isError: false,
@@ -539,6 +549,51 @@ describe("TicketDetail", () => {
       } finally {
         globalThis.requestAnimationFrame = originalRaf;
       }
+    });
+  });
+
+  describe("correction follow-up rendering (F-018)", () => {
+    it("renders structured correction rows without the raw JSON payload", async () => {
+      const correctionJson = JSON.stringify({
+        v: 1,
+        email: "corrected@example.com",
+      });
+      // Route the decrypt seam to the correction JSON; beforeEach
+      // restores the default message content.
+      followUpDecryptState.content = correctionJson;
+
+      const fu = makeFollowUp({
+        source: "client",
+        type: "contact_correction",
+        encryptedContent: "encrypted-correction",
+      });
+
+      followUpsQueryState = {
+        isLoading: false,
+        isError: false,
+        error: null,
+        data: [fu],
+      };
+
+      const { container } = render(TicketDetail, { props: baseProps });
+      await vi.waitFor(() => {
+        const correctionBody = container.querySelector(
+          "[data-testid='correction-body']",
+        );
+        expect(correctionBody).not.toBeNull();
+      });
+
+      // The structured row should display the email.
+      const correctionRow = container.querySelector(
+        "[data-testid='correction-row-email']",
+      );
+      expect(correctionRow).not.toBeNull();
+
+      // The raw JSON string should NOT appear in the rendered text.
+      const rawJsonVisible = container.textContent.includes(
+        '{"v":1,"email":"corrected@example.com"}',
+      );
+      expect(rawJsonVisible).toBe(false);
     });
   });
 

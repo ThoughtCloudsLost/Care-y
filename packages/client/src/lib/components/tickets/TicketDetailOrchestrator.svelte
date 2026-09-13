@@ -68,8 +68,10 @@
   import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
   import type { TicketComposeHandle } from "$lib/components/tickets/ticket-compose-types.js";
   import type { TicketAction } from "$lib/tickets/types.js";
+  import type { ProseMirrorDocJSON } from "@care-y/shared";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import TicketDetailOverlays from "$lib/components/tickets/TicketDetailOverlays.svelte";
+  import EmailComposeSheet from "$lib/components/tickets/EmailComposeSheet.svelte";
   import OutboundMessageEditSheet from "$lib/components/tickets/OutboundMessageEditSheet.svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys, ticketsKeys, consultantKeys } from "$lib/query/keys";
@@ -96,6 +98,7 @@
   import { createSendMessage } from "$lib/composables/ticket-detail/create-send-message.svelte.js";
   import { createAttachmentUpload } from "$lib/composables/ticket-detail/create-attachment-upload.svelte.js";
   import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
+  import { createEmailSend } from "$lib/composables/ticket-detail/create-email-send.svelte.js";
   import { createCallDispatch } from "$lib/composables/ticket-detail/create-call-dispatch.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { gestureMount } from "$lib/utils/gesture-focus.js";
@@ -176,6 +179,7 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
+    enabled: ticketId !== "",
   }));
 
   const ticket = $derived(ticketQuery.data);
@@ -194,6 +198,13 @@
   // sends the full number only to admin, so this is admin-only in effect
   // without needing a client-side role check.
   const canCopyPhone = $derived(clientPhone?.startsWith("+") ?? false);
+  const clientEmail = $derived(ticket?.clientEmail ?? null);
+  // Same reasoning as canCopyPhone: the server masks the local part for
+  // everyone below admin, and a masked address ("a***@example.org") is not
+  // worth copying. Presence of the mask marker is the signal.
+  const canCopyEmail = $derived(
+    clientEmail !== null && !clientEmail.includes("***"),
+  );
   const ticketDecryptCache = getTicketDecryptCache();
 
   const decryptedTitle = $derived.by((): string => {
@@ -371,6 +382,9 @@
   let phonePopoverOpen = $state(false);
   let phoneEditSheetOpen = $state(false);
   let phoneEditInitialPhone = $state<string | undefined>(undefined);
+  let emailPopoverOpen = $state(false);
+  let emailEditSheetOpen = $state(false);
+  let emailEditInitialEmail = $state<string | undefined>(undefined);
   let mergeSheetOpen = $state(false);
   let mergeConflictClientId = $state<string | null>(null);
   let mergeConflictAlias = $state<string | null>(null);
@@ -391,6 +405,7 @@
     conflictingAlias: string,
   ): void {
     phoneEditSheetOpen = false;
+    emailEditSheetOpen = false;
     mergeConflictClientId = conflictingClientId;
     mergeConflictAlias = conflictingAlias;
     mergeSheetOpen = true;
@@ -520,6 +535,24 @@
     onSuccess: () => {
       clearDraftForMode(ticketId, "sms");
       compose?.reset();
+    },
+  });
+
+  // --- Email send (composable) ---
+
+  let emailComposeOpen = $state(false);
+
+  const emailSend = createEmailSend({
+    getTicketId: () => ticketId,
+    cryptoBridge,
+    queryClient,
+    getClientPublic: () => ticket?.portalChannel?.clientPublic ?? null,
+    createFollowUpMutate: async (args) =>
+      ticketRouter.createFollowUp.mutate(args),
+    onSuccess: () => {
+      emailComposeOpen = false;
+      haptic();
+      toastStore.show(m.ticket_toast_message_sent());
     },
   });
 
@@ -707,7 +740,21 @@
       assignSheetOpen = true;
     },
     onphone: () => {
+      // Same reasoning as email: nothing on file, nothing to copy.
+      if (clientPhone === null) {
+        handleOpenPhoneEdit();
+        return;
+      }
       phonePopoverOpen = true;
+    },
+    onemail: () => {
+      // Nothing on file means nothing to copy, so the popover would offer
+      // a single action. Go straight to the edit sheet instead.
+      if (clientEmail === null) {
+        handleOpenEmailEdit();
+        return;
+      }
+      emailPopoverOpen = true;
     },
     oneditcontent: () => {
       closePanel();
@@ -809,9 +856,34 @@
     phoneEditSheetOpen = true;
   }
 
-  function handleApplyPhone(phone: string): void {
+  // Track which correction follow-up triggered the apply flow so the
+  // acknowledge reaction fires after the edit sheet succeeds.
+  let correctionApplyFollowUpId = $state<string | null>(null);
+
+  function handleApplyPhone(phone: string, followUpId: string): void {
+    correctionApplyFollowUpId = followUpId;
     phoneEditInitialPhone = phone;
     phoneEditSheetOpen = true;
+  }
+
+  function handleCopyEmail(): void {
+    emailPopoverOpen = false;
+    void copyToClipboard(clientEmail ?? undefined, toastStore, {
+      success: m.email_copy_clipboard(),
+      failure: m.common_copy_failed(),
+    });
+  }
+
+  function handleOpenEmailEdit(): void {
+    emailPopoverOpen = false;
+    emailEditInitialEmail = undefined;
+    emailEditSheetOpen = true;
+  }
+
+  function handleApplyEmail(email: string, followUpId: string): void {
+    correctionApplyFollowUpId = followUpId;
+    emailEditInitialEmail = email;
+    emailEditSheetOpen = true;
   }
 
   function openCallSheet(): void {
@@ -996,6 +1068,7 @@
     bind:loadedFollowUpCount
     bind:correctionPending
     onapplyphone={handleApplyPhone}
+    onapplyemail={handleApplyEmail}
   />
 {/snippet}
 
@@ -1171,7 +1244,11 @@
   {phonePopoverOpen}
   {phoneEditSheetOpen}
   {phoneEditInitialPhone}
+  {emailPopoverOpen}
+  {emailEditSheetOpen}
+  {emailEditInitialEmail}
   {canCopyPhone}
+  {canCopyEmail}
   onphonepopoverdismiss={() => {
     phonePopoverOpen = false;
   }}
@@ -1180,6 +1257,46 @@
   onphoneeditdismiss={() => {
     phoneEditSheetOpen = false;
     phoneEditInitialPhone = undefined;
+    correctionApplyFollowUpId = null;
+  }}
+  onphoneeditsuccess={() => {
+    if (correctionApplyFollowUpId !== null) {
+      void ticketRouter.toggleReaction
+        .mutate({
+          followUpId: correctionApplyFollowUpId,
+          reaction: "acknowledge",
+        })
+        .catch(() => {
+          // Reaction toggle failure is non-critical; the edit succeeded.
+        });
+      correctionApplyFollowUpId = null;
+    }
+  }}
+  onemailpopoverdismiss={() => {
+    emailPopoverOpen = false;
+  }}
+  onemailcopy={handleCopyEmail}
+  onemailedit={handleOpenEmailEdit}
+  onemailedidismiss={() => {
+    emailEditSheetOpen = false;
+    emailEditInitialEmail = undefined;
+    correctionApplyFollowUpId = null;
+  }}
+  onemaileditsuccess={() => {
+    if (correctionApplyFollowUpId !== null) {
+      void ticketRouter.toggleReaction
+        .mutate({
+          followUpId: correctionApplyFollowUpId,
+          reaction: "acknowledge",
+        })
+        .catch(() => {
+          // Reaction toggle failure is non-critical; the edit succeeded.
+        });
+      correctionApplyFollowUpId = null;
+    }
+  }}
+  onemailmerge={(conflictingClientId: string, conflictingAlias: string) => {
+    openMergeFromConflict(conflictingClientId, conflictingAlias);
   }}
   onphonemerge={(conflictingClientId: string, conflictingAlias: string) => {
     openMergeFromConflict(conflictingClientId, conflictingAlias);
@@ -1243,6 +1360,11 @@
         compose?.activateSms();
       }
     : undefined}
+  onemailclient={ticket?.hasEmail === true
+    ? () => {
+        emailComposeOpen = true;
+      }
+    : undefined}
   onattach={(file: File) => {
     // Activate reply mode so the volunteer sees the compose bar with
     // the pending attachment chip.
@@ -1253,6 +1375,21 @@
     setDraftForMode(ticketId, "reply", body);
     compose?.activateReply();
   }}
+/>
+
+<EmailComposeSheet
+  opened={emailComposeOpen}
+  ondismiss={() => {
+    emailComposeOpen = false;
+  }}
+  sending={emailSend.sending}
+  recipientEmail={clientEmail}
+  onsend={(
+    subject: string,
+    html: string,
+    text: string,
+    doc: ProseMirrorDocJSON,
+  ) => void emailSend.handleEmailSend(subject, html, text, doc)}
 />
 
 <OutboundMessageEditSheet

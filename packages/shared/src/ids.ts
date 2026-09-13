@@ -192,6 +192,10 @@ export type ClientId = z.infer<typeof clientIdSchema>;
 export const phoneIdSchema = z.uuid().brand<"PhoneId">();
 export type PhoneId = z.infer<typeof phoneIdSchema>;
 
+/** `emails.id`, `clients.email_id`. */
+export const emailIdSchema = z.uuid().brand<"EmailId">();
+export type EmailId = z.infer<typeof emailIdSchema>;
+
 /** `queues.id`, and every `*.queue_id` including `org_config.intake_queue_id`. */
 export const queueIdSchema = z.uuid().brand<"QueueId">();
 export type QueueId = z.infer<typeof queueIdSchema>;
@@ -512,6 +516,23 @@ export type PhoneHash = z.infer<typeof phoneHashSchema>;
  */
 export const phoneMatchHashSchema = z.string().brand<"PhoneMatchHash">();
 export type PhoneMatchHash = z.infer<typeof phoneMatchHashSchema>;
+
+/**
+ * Blind index over a client email address, shared indexer. `emails.email_hash`.
+ * Same OPS-keyed domain as PhoneHash but branded separately: an email hash
+ * should never be compared against a phone hash.
+ */
+export const emailHashSchema = z.string().brand<"EmailHash">();
+export type EmailHash = z.infer<typeof emailHashSchema>;
+
+/**
+ * Browser-computed HMAC over a normalized email address, keyed from the org
+ * secret under its own HKDF label. The server can neither compute nor invert
+ * it. Never interchangeable with EmailHash, which is OPS-keyed.
+ * `emails.email_match_hash`.
+ */
+export const emailMatchHashSchema = z.string().brand<"EmailMatchHash">();
+export type EmailMatchHash = z.infer<typeof emailMatchHashSchema>;
 
 /**
  * Browser-computed HMAC over a normalized client alias, under the alias index

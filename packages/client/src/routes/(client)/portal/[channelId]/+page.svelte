@@ -22,7 +22,7 @@
   import { browser } from "$app/environment";
   import { afterNavigate, goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { Block, BlockTitle, Card } from "konsta/svelte";
+  import { Block, BlockTitle } from "konsta/svelte";
   import {
     createQuery,
     createMutation,
@@ -45,7 +45,7 @@
   import PortalHint from "$lib/shell/PortalHint.svelte";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import PageLayout from "$lib/shell/PageLayout.svelte";
-  import { KeyRound, UserPen } from "@lucide/svelte";
+  import { KeyRound, UserPen, ShieldCheck, IdCard } from "@lucide/svelte";
   import {
     getClientShellCtx,
     DEFAULT_SAFE_URL,
@@ -59,15 +59,22 @@
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
   import ContactCorrectionSheet from "$lib/portal/ContactCorrectionSheet.svelte";
+  import ContactInfoCard from "$lib/portal/ContactInfoCard.svelte";
+  // care-y-ignore-next-line route-no-db-import -- UI component, no database access; validator heuristic false positive
+  import UpgradeChooser from "$lib/portal/UpgradeChooser.svelte";
+  import AddPassphraseForm from "$lib/portal/AddPassphraseForm.svelte";
+  import AccountCreateForm from "$lib/portal/AccountCreateForm.svelte";
+  import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import { buildAddPassphrasePayload } from "$lib/portal/add-passphrase-crypto.js";
   import { createChatPaginator } from "$lib/tickets/chat-paginator.svelte.js";
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
-  import AccountCreateForm from "$lib/portal/AccountCreateForm.svelte";
-  import { X } from "@lucide/svelte";
+
   import LinkErrorState from "$lib/portal/LinkErrorState.svelte";
   import { readRateLimitError } from "$lib/portal/rate-limit-error.js";
   import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
   import { createPortalFragment } from "$lib/composables/portal/create-portal-fragment.svelte.js";
   import { createPortalSessionState } from "$lib/composables/portal/create-portal-session.svelte.js";
+  import { getPortalBridgeFactory } from "$lib/portal/context.js";
   // care-y-ignore-next-line route-no-db-import -- client composable, no database access; validator heuristic misreads the module
   import { createPortalUpgrade } from "$lib/composables/portal/create-portal-upgrade.svelte.js";
   import { createPortalFilters } from "$lib/composables/portal/create-portal-filters.svelte.js";
@@ -107,7 +114,7 @@
   // Session state (composable scope, zeroed on exit)
   // ---------------------------------------------------------------------------
 
-  const portalSession = createPortalSessionState();
+  const portalSession = createPortalSessionState(getPortalBridgeFactory());
 
   /** Channel OPRF evaluate wired to the clientPortal tRPC mutation. */
   const channelEvaluate: ChannelEvaluateCallback = async (
@@ -122,6 +129,42 @@
       ...(chanAuth !== undefined ? { auth: chanAuth } : {}),
     });
   };
+
+  /**
+   * Evaluate with PoW retry for the passphrase-derive OPRF round.
+   * Same pattern as evaluateChannelWithPowRetry in the session composable.
+   */
+  async function evaluatePassphraseWithPowRetry(
+    channelId: string,
+    blindedElementB64: string,
+    auth: string | undefined,
+    evaluate: ChannelEvaluateCallback,
+    onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
+  ): Promise<string> {
+    try {
+      const result = await evaluate(channelId, blindedElementB64, auth);
+      return result.evaluated;
+    } catch (err: unknown) {
+      if (
+        typeof err !== "object" ||
+        err === null ||
+        !("data" in err) ||
+        typeof err.data !== "object" ||
+        err.data === null ||
+        !("code" in err.data) ||
+        err.data.code !== "POW_REQUIRED" ||
+        !("challenge" in err.data) ||
+        typeof err.data.challenge !== "string" ||
+        !("difficulty" in err.data) ||
+        typeof err.data.difficulty !== "number"
+      ) {
+        throw err;
+      }
+      await onPowRequired(err.data.challenge, err.data.difficulty);
+      const result = await evaluate(channelId, blindedElementB64, auth);
+      return result.evaluated;
+    }
+  }
 
   let hintShown = $state(false);
   let hintDismissed = $state(false);
@@ -511,6 +554,9 @@
             // written yet, and the thread groups files by follow-up, so it
             // carries the same id the reply was minted with.
             followupId: followUpId,
+            // Matches what the server will write for this reply, so the
+            // optimistic bubble renders the same as the row that replaces it.
+            type: "message",
             direction: "from_client",
             ephemeralPoint: payload.selfCopy.ephemeralPoint,
             nonce: payload.selfCopy.nonce,
@@ -570,15 +616,91 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Upgrade card (shows when bootstrap.accountOffer is true)
+  // Upgrade (drawer-driven; the in-chat card was removed with account_offer)
   // ---------------------------------------------------------------------------
 
   const upgrade = createPortalUpgrade();
 
-  const showAccountOffer = $derived(
-    bootstrapQuery.data?.accountOffer === true && !upgrade.success,
-  );
+  const upgradeOptions = $derived(bootstrapQuery.data?.upgradeOptions ?? []);
 
+  // ---------------------------------------------------------------------------
+  // Contact info + upgrade chooser sheets (drawer-driven)
+  // ---------------------------------------------------------------------------
+
+  let contactCardOpen = $state(false);
+  let upgradeChooserOpen = $state(false);
+  let passphraseFormOpen = $state(false);
+  let passphrasePending = $state(false);
+  let passphraseError = $state("");
+  let passphraseSuccess = $state(false);
+
+  /**
+   * Fetch the sealed contact envelope from the server. Called on card open.
+   * The query fires only when the card opens, never eagerly.
+   */
+  async function fetchSealedContact(): Promise<string> {
+    if (!trpc.clientPortal || !fragment.fragmentData) {
+      throw new Error("Portal not available");
+    }
+    const result = await trpc.clientPortal.contactInfo.query({
+      channelId: fragment.fragmentData.channelId,
+      auth: encode(fragment.fragmentData.auth),
+    });
+    return result.sealed;
+  }
+
+  /**
+   * Open a sealed contact envelope using the session's channel private key.
+   * The envelope is ephemeralPoint(32) | nonce(24) | ciphertext(N) as a
+   * single base64url string. Split it, re-encode each part, and decrypt
+   * through the session bridge.
+   */
+  async function openContactEnvelope(
+    sealed: string,
+  ): Promise<{ phone?: string; email?: string }> {
+    const sess = portalSession.session;
+    if (!sess) throw new Error("No session");
+    const raw = decode(sealed);
+    // Split: ephemeralPoint = bytes 0..31, nonce = 32..55, ciphertext = 56+
+    const ep = encode(raw.subarray(0, 32));
+    const nonce = encode(raw.subarray(32, 56));
+    const ct = encode(raw.subarray(56));
+    const json = await sess.decryptMessage(ep, nonce, ct);
+    const parsed: unknown = JSON.parse(json);
+    if (typeof parsed !== "object" || parsed === null) {
+      return {};
+    }
+    const result: { phone?: string; email?: string } = {};
+    if ("phone" in parsed && typeof parsed.phone === "string") {
+      result.phone = parsed.phone;
+    }
+    if ("email" in parsed && typeof parsed.email === "string") {
+      result.email = parsed.email;
+    }
+    return result;
+  }
+
+  /**
+   * Handle upgrade chooser selection. "account" opens the AccountCreateForm
+   * sheet via the createPortalUpgrade flow; "passphrase" opens the
+   * AddPassphraseForm sheet.
+   */
+  function handleUpgradeChoice(path: "passphrase" | "account"): void {
+    upgradeChooserOpen = false;
+    if (path === "account") {
+      upgrade.expand();
+    }
+    if (path === "passphrase") {
+      passphraseFormOpen = true;
+    }
+  }
+
+  /**
+   * Handle account-creation form submission: build the registration
+   * payload, re-encrypt the thread to the new account key, and submit.
+   * On success the session is destroyed (the channel is revoked
+   * server-side) and the success state replaces the thread.
+   */
   function handleUpgradeSubmit(username: string, password: string): void {
     const sess = portalSession.session;
     const frag = fragment.fragmentData;
@@ -597,7 +719,95 @@
       portalKeys.messages(routeChannelId),
       m.account_stale_thread(),
       m.account_login_failed(),
+      m.account_username_taken(),
     );
+  }
+
+  /**
+   * Handle passphrase form submission: derive the new keypair in the
+   * Worker (seed stays Worker-held), re-seal messages on the main thread,
+   * and call addPassphrase on the server. On success, refresh bootstrap
+   * so upgradeOptions recomputes.
+   *
+   * The two-phase Worker ops (channelPassphraseDerive, evaluate,
+   * channelPassphraseFinish) mirror the session-start path in
+   * create-portal-session.svelte.ts. The Worker derives the keypair and
+   * zeroes the private key internally; only the public key crosses back.
+   */
+  function handlePassphraseFormSubmit(passphrase: string): void {
+    if (passphrasePending) return;
+    passphrasePending = true;
+    passphraseError = "";
+
+    void (async () => {
+      try {
+        const frag = fragment.fragmentData;
+        const sess = portalSession.session;
+        if (!frag || !sess || !trpc.clientPortal) {
+          throw new Error("Portal session not available");
+        }
+
+        // Worker blinds seed+passphrase, returns blindedElement
+        const deriveResult = await sess.channelPassphraseDerive(passphrase);
+
+        // Evaluate via tRPC (main thread), with PoW retry
+        const evaluated = await evaluatePassphraseWithPowRetry(
+          deriveResult.channelId,
+          deriveResult.blindedElement,
+          deriveResult.auth,
+          channelEvaluate,
+          solveProofOfWork,
+        );
+
+        // Worker finalizes OPRF, returns only the new public key
+        const finishResult = await sess.channelPassphraseFinish(evaluated);
+
+        // Main-thread steps: seal key check and re-seal messages
+        const portalMessages = bootstrapQuery.data?.messages ?? [];
+
+        const payload = await buildAddPassphrasePayload(
+          finishResult.clientPublic,
+          portalMessages,
+          sess,
+        );
+
+        await trpc.clientPortal.addPassphrase.mutate({
+          channelId: frag.channelId,
+          auth: encode(frag.auth),
+          clientPublic: payload.clientPublic,
+          keyCheck: payload.keyCheck,
+          // Zod-derived input types are mutable; the payload is readonly,
+          // so this copies rather than casting the readonly away.
+          resealedMessages: [...payload.resealedMessages],
+        });
+
+        passphraseSuccess = true;
+
+        // Refresh bootstrap so upgradeOptions recomputes and the drawer
+        // no longer shows the add-passphrase entry.
+        void queryClient.invalidateQueries({
+          queryKey: portalKeys.bootstrap(routeChannelId),
+        });
+      } catch (err: unknown) {
+        if (typeof err === "object" && err !== null && "message" in err) {
+          const message = typeof err.message === "string" ? err.message : "";
+          if (message === "PORTAL_PASSPHRASE_ALREADY_SET") {
+            passphraseError = m.portal_passphrase_error_already_set();
+          } else if (message === "PORTAL_PASSPHRASE_COUNT_MISMATCH") {
+            passphraseError = m.portal_passphrase_error_stale();
+            void queryClient.invalidateQueries({
+              queryKey: portalKeys.bootstrap(routeChannelId),
+            });
+          } else {
+            passphraseError = m.portal_passphrase_error_generic();
+          }
+        } else {
+          passphraseError = m.portal_passphrase_error_generic();
+        }
+      } finally {
+        passphrasePending = false;
+      }
+    })();
   }
 
   // ---------------------------------------------------------------------------
@@ -625,23 +835,55 @@
       portalSession.session !== null,
   );
 
-  // The in-thread card can be dismissed; the drawer entry cannot, which is
-  // the point. Both drive the same upgrade composable. Contact correction
-  // lives here rather than under the composer: nothing renders below the
-  // reply bar on a thread page, so the drawer is the entry point and the
-  // indicator's cancel button is the way back out.
+  // The drawer entries are tier-driven:
+  //   bare link: upgrade chooser (both paths) + correction
+  //   passphrase link: contact card + direct account upgrade + correction
+  //   account: handled by the account page, not here
+  // Contact correction lives here rather than under the composer: nothing
+  // renders below the reply bar on a thread page, so the drawer is the
+  // entry point and the indicator's cancel button is the way back out.
   const drawerActions = $derived.by((): readonly ClientDrawerAction[] => {
     // Reading the locale establishes a dependency so labels recompute on switch
     void uiLocaleStore.locale;
     const actions: ClientDrawerAction[] = [];
-    if (showAccountOffer) {
+
+    const hasBothUpgrades =
+      upgradeOptions.includes("passphrase") &&
+      upgradeOptions.includes("account");
+    const hasAccountOnly =
+      !upgradeOptions.includes("passphrase") &&
+      upgradeOptions.includes("account");
+
+    // Bare link: chooser with both paths
+    if (hasBothUpgrades) {
       actions.push({
         id: "upgrade",
-        label: m.account_upgrade_card_title(),
+        label: m.portal_upgrade_title(),
+        icon: ShieldCheck,
+        onclick: () => {
+          upgradeChooserOpen = true;
+        },
+      });
+    }
+
+    // Passphrase link: contact card + direct account upgrade
+    if (hasAccountOnly) {
+      actions.push({
+        id: "contact-info",
+        label: m.portal_contact_title(),
+        icon: IdCard,
+        onclick: () => {
+          contactCardOpen = true;
+        },
+      });
+      actions.push({
+        id: "upgrade",
+        label: m.portal_upgrade_create_account(),
         icon: KeyRound,
         onclick: () => upgrade.expand(),
       });
     }
+
     if (threadShowing) {
       actions.push({
         id: "correct-contact",
@@ -808,22 +1050,24 @@
       error={portalSession.passphraseError}
     />
   {:else if upgrade.success}
-    <!-- Upgrade success state -->
-    <Block>
-      <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
-      <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
-      <p class="portal-body-text upgrade-username">
-        {m.account_login_username()}: {upgrade.username}
-      </p>
-      <button
-        type="button"
-        class="upgrade-go-link"
-        data-testid="upgrade-go-to-login"
-        onclick={() => void goto(resolve("/account"))}
-      >
-        {m.account_login_submit()}
-      </button>
-    </Block>
+    <!-- Upgrade success state, centred to match sibling portal steps -->
+    <div class="upgrade-success-wrapper">
+      <Block>
+        <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
+        <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
+        <p class="portal-body-text upgrade-username">
+          {m.account_login_username()}: {upgrade.username}
+        </p>
+        <button
+          type="button"
+          class="upgrade-go-link"
+          data-testid="upgrade-go-to-login"
+          onclick={() => void goto(resolve("/account"))}
+        >
+          {m.account_login_submit()}
+        </button>
+      </Block>
+    </div>
   {:else if portalSession.keyCheckPassed && portalSession.session}
     {@const activeSession = portalSession.session}
     <!-- State 4 + 5: Thread scrolls, composer pins to the bottom -->
@@ -846,45 +1090,6 @@
           draftKey={routeChannelId}
         />
       {/snippet}
-
-      <!-- Upgrade offer card (above thread when offered, dismissible).
-         Dismissing it does not remove the offer: the drawer keeps a
-         permanent entry to the same flow. -->
-      {#if showAccountOffer && !upgrade.dismissed}
-        {#if !upgrade.expanded}
-          <Card data-testid="upgrade-card" class="upgrade-card">
-            <div class="upgrade-card-header">
-              <p class="upgrade-card-title">{m.account_upgrade_card_title()}</p>
-              <button
-                type="button"
-                class="upgrade-card-dismiss"
-                aria-label={m.account_upgrade_card_dismiss()}
-                onclick={() => upgrade.dismiss()}
-                data-testid="upgrade-card-dismiss"
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </div>
-            <p class="upgrade-card-body">{m.account_upgrade_card_body()}</p>
-            <button
-              type="button"
-              class="upgrade-card-action"
-              onclick={() => upgrade.expand()}
-              data-testid="upgrade-card-setup"
-            >
-              {m.account_upgrade_setup()}
-            </button>
-          </Card>
-        {:else}
-          <AccountCreateForm
-            onsubmit={handleUpgradeSubmit}
-            pending={upgrade.pending}
-            errorMessage={upgrade.error || undefined}
-            showLinkNote={true}
-            submitLabel={m.account_upgrade_setup()}
-          />
-        {/if}
-      {/if}
 
       <PortalThread
         messages={allMessages}
@@ -932,6 +1137,59 @@
       pending={replyMutation.isPending}
       onsubmit={handleCorrectionSubmit}
     />
+
+    <ContactInfoCard
+      open={contactCardOpen}
+      onclose={() => {
+        contactCardOpen = false;
+      }}
+      fetchSealed={fetchSealedContact}
+      openEnvelope={openContactEnvelope}
+      orgName={supportLabel}
+    />
+
+    <UpgradeChooser
+      open={upgradeChooserOpen}
+      onclose={() => {
+        upgradeChooserOpen = false;
+      }}
+      options={upgradeOptions}
+      onchoose={handleUpgradeChoice}
+      accountUrl={resolve("/account")}
+    />
+
+    <AddPassphraseForm
+      open={passphraseFormOpen}
+      onclose={() => {
+        if (!passphrasePending) {
+          passphraseFormOpen = false;
+          if (passphraseSuccess) {
+            passphraseSuccess = false;
+            passphraseError = "";
+          }
+        }
+      }}
+      pending={passphrasePending}
+      error={passphraseError}
+      success={passphraseSuccess}
+      onsubmit={handlePassphraseFormSubmit}
+    />
+
+    <ShellSheet
+      opened={upgrade.expanded}
+      ondismiss={() => {
+        if (!upgrade.pending) upgrade.collapse();
+      }}
+      title={m.portal_upgrade_create_account()}
+    >
+      <AccountCreateForm
+        onsubmit={handleUpgradeSubmit}
+        pending={upgrade.pending}
+        errorMessage={upgrade.error || undefined}
+        showLinkNote={true}
+        submitLabel={m.account_upgrade_setup()}
+      />
+    </ShellSheet>
   {/if}
 {/key}
 
@@ -971,58 +1229,14 @@
     }
   }
 
-  .upgrade-card-header {
+  .upgrade-success-wrapper {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .upgrade-card-title {
-    font-weight: 600;
-    font-size: var(--text-base);
-    color: var(--ink);
-    margin: 0;
-  }
-
-  .upgrade-card-dismiss {
-    width: 32px;
-    height: 32px;
-    display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: none;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 0;
-    flex-shrink: 0;
-  }
-
-  .upgrade-card-body {
-    font-size: var(--text-sm);
-    color: var(--muted);
-    line-height: 1.5;
-    margin: var(--space-xs) 0 0;
-  }
-
-  .upgrade-card-action {
-    display: inline-block;
-    margin-top: var(--space-md);
-    padding: var(--space-sm) var(--space-md);
-    background: var(--brand-fill);
-    color: var(--brand-on);
-    border: none;
-    border-radius: 8px;
-    font-size: var(--text-sm);
-    font-weight: 600;
-    cursor: pointer;
-    min-height: 44px;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .upgrade-card-action:active {
-    opacity: 0.7;
+    min-height: 60vh;
+    padding: var(--space-lg);
+    text-align: center;
   }
 
   .upgrade-username {

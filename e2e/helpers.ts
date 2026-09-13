@@ -1025,9 +1025,10 @@ export async function longPress(
 
 /**
  * The one home for axe rule suppressions. Every entry is a documented
- * Konsta/shell gap that fires under the WCAG tag set; page-specific
- * suppressions go through AuditA11yOptions.disableRules at the call site
- * with a reason, never here.
+ * Konsta/shell gap or an app-wide tradeoff accepted in the markup itself,
+ * either of which fires under the WCAG tag set; page-specific suppressions
+ * go through AuditA11yOptions.disableRules at the call site with a reason,
+ * never here.
  *
  * Best-practice-only rules that older per-spec audits disabled
  * (aria-dialog-name, page-has-heading-one, landmark-unique,
@@ -1051,6 +1052,13 @@ const SHARED_AXE_DISABLES: readonly string[] = [
   "select-name",
   // Konsta List renders <li> inside styled <div> wrappers.
   "listitem",
+  // app.html sets maximum-scale=1 + user-scalable=no to match native app
+  // behavior (no auto-zoom on input focus, no pinch zoom). That is a
+  // deliberate trade of WCAG 2.1 SC 1.4.4 (Resize Text), documented at the
+  // meta tag; iOS Dynamic Type is the supported text-size path, and iOS
+  // Safari still allows pinch zoom as an accessibility override. Without
+  // this entry the rule fires on every page in every audit.
+  "meta-viewport",
 ];
 
 export interface AuditA11yOptions {

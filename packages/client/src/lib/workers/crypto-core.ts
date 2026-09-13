@@ -90,6 +90,7 @@ import type {
   ExportOrgSecretKeyRequest,
   AliasHashRequest,
   PhoneMatchHashRequest,
+  EmailMatchHashRequest,
   DetectMergeCandidatesRequest,
   MergeCandidate,
   SealFollowUpsToPublicRequest,
@@ -133,6 +134,7 @@ let orgSecret: Uint8Array | null = null;
 let orgPublicKey: Uint8Array | null = null;
 let aliasIndexKey: Uint8Array | null = null;
 let phoneMatchIndexKey: Uint8Array | null = null;
+let emailMatchIndexKey: Uint8Array | null = null;
 
 const tkCache = new TkCache({
   maxEntries: 50,
@@ -1105,6 +1107,7 @@ export function handleZeroAll(id: number, sink: Sink): void {
   orgSecret = zeroAndClear(sodium, orgSecret);
   aliasIndexKey = zeroAndClear(sodium, aliasIndexKey);
   phoneMatchIndexKey = zeroAndClear(sodium, phoneMatchIndexKey);
+  emailMatchIndexKey = zeroAndClear(sodium, emailMatchIndexKey);
 
   volPublic = null;
   orgPublicKey = null;
@@ -1146,6 +1149,7 @@ function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest, sink: Sink): void {
     orgSecret = zeroAndClear(sodium, orgSecret);
     aliasIndexKey = zeroAndClear(sodium, aliasIndexKey);
     phoneMatchIndexKey = zeroAndClear(sodium, phoneMatchIndexKey);
+    emailMatchIndexKey = zeroAndClear(sodium, emailMatchIndexKey);
     orgPublicKey = null;
 
     orgSecret = new Uint8Array(unwrappedOrgSecret.byteLength);
@@ -1621,6 +1625,48 @@ function handlePhoneMatchHash(req: PhoneMatchHashRequest, sink: Sink): void {
   sink(msg);
 }
 
+function ensureEmailMatchIndexKey(): Uint8Array {
+  if (emailMatchIndexKey) return emailMatchIndexKey;
+  const secret = assertPresent(orgSecret, "orgSecret");
+  emailMatchIndexKey = hkdfDerive32(secret, HKDF_LABELS.EMAIL_MATCH_INDEX);
+  return emailMatchIndexKey;
+}
+
+function handleEmailMatchHash(req: EmailMatchHashRequest, sink: Sink): void {
+  if (!requireOrgKeyed(sink, req.id, "emailMatchHash")) return;
+
+  const normalized = normalizeContactEmail(req.email);
+  if (normalized == null) {
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "emailMatchHash",
+      hash: null,
+    };
+    sink(msg);
+    return;
+  }
+
+  const sodium = requireSodium();
+  const key = ensureEmailMatchIndexKey();
+  const hmac = sodium.crypto_auth_hmacsha512(
+    textEncoder.encode(normalized),
+    key,
+  );
+
+  const hex = Array.from(hmac, (b) => b.toString(16).padStart(2, "0")).join("");
+
+  sodium.memzero(hmac);
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "emailMatchHash",
+    hash: hex,
+  };
+  sink(msg);
+}
+
 function handleOrgDecryptBatch(req: OrgDecryptBatchRequest, sink: Sink): void {
   if (!requireOrgKeyed(sink, req.id, "orgDecryptBatch")) return;
 
@@ -1779,15 +1825,21 @@ function handleDetectMergeCandidates(
 
   const sodium = requireSodium();
   const phoneKey = ensurePhoneMatchIndexKey();
+  const emailKey = ensureEmailMatchIndexKey();
   const fingerprints: ClientContactFingerprint[] = [];
 
   for (const client of req.clients) {
     const clientPhoneHashes: string[] = [];
-    const clientEmails: string[] = [];
+    const clientEmailHashes: string[] = [];
 
     // Stored phone match hash (server-persisted, browser-computed)
     if (client.phoneMatchHash != null) {
       clientPhoneHashes.push(client.phoneMatchHash);
+    }
+
+    // Stored email match hash (server-persisted, browser-computed)
+    if (client.emailMatchHash != null) {
+      clientEmailHashes.push(client.emailMatchHash);
     }
 
     // Decrypt intake response blobs and extract contacts
@@ -1863,7 +1915,18 @@ function handleDetectMergeCandidates(
             sodium.memzero(hmac);
             clientPhoneHashes.push(hex);
           }
-          clientEmails.push(...contacts.emails);
+          // Hash extracted email addresses for comparison
+          for (const email of contacts.emails) {
+            const hmac = sodium.crypto_auth_hmacsha512(
+              textEncoder.encode(email),
+              emailKey,
+            );
+            const hex = Array.from(hmac, (b) =>
+              b.toString(16).padStart(2, "0"),
+            ).join("");
+            sodium.memzero(hmac);
+            clientEmailHashes.push(hex);
+          }
         } finally {
           sodium.memzero(plaintext);
         }
@@ -1872,11 +1935,11 @@ function handleDetectMergeCandidates(
       }
     }
 
-    if (clientPhoneHashes.length > 0 || clientEmails.length > 0) {
+    if (clientPhoneHashes.length > 0 || clientEmailHashes.length > 0) {
       fingerprints.push({
         clientId: client.clientId,
         phones: clientPhoneHashes,
-        emails: clientEmails,
+        emails: clientEmailHashes,
       });
     }
   }
@@ -1914,9 +1977,9 @@ function handleDetectMergeCandidates(
       }
       if (seen.has(pairKey)) continue;
 
-      // Check email match
-      for (const email of a.emails) {
-        if (b.emails.includes(email)) {
+      // Check email hash match
+      for (const emailHash of a.emails) {
+        if (b.emails.includes(emailHash)) {
           candidates.push({
             clientIdA: a.clientId < b.clientId ? a.clientId : b.clientId,
             clientIdB: a.clientId < b.clientId ? b.clientId : a.clientId,
@@ -2570,6 +2633,9 @@ export function createDispatcher(
           break;
         case "phoneMatchHash":
           handlePhoneMatchHash(req, sink);
+          break;
+        case "emailMatchHash":
+          handleEmailMatchHash(req, sink);
           break;
         case "decryptIntakeResponse":
           handleDecryptIntakeResponse(req, sink);

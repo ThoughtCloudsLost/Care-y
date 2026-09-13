@@ -15,6 +15,7 @@ import type {
   TicketId,
   ChannelRowId,
   FollowupId,
+  PortalMessageId,
   BlobKey,
 } from "@care-y/shared";
 import {
@@ -35,9 +36,14 @@ import {
   revokeChannel,
   resolveAuthedChannel,
   getActiveChannelSummary,
+  addPassphrase,
   type ChannelRegistration,
 } from "./channel-service.js";
-import { ChannelAlreadyActiveError } from "./portal-errors.js";
+import {
+  ChannelAlreadyActiveError,
+  PassphraseAlreadySetError,
+  PassphraseCountMismatchError,
+} from "./portal-errors.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -101,7 +107,7 @@ async function insertPortalMessage(
   db: Kysely<TenantDatabase>,
   channelRowId: ChannelRowId,
   followupId: FollowupId,
-): Promise<string> {
+): Promise<PortalMessageId> {
   const row = await db
     .insertInto("portal_messages")
     .values({
@@ -970,6 +976,326 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
       await expect(
         insertPortalMessage(db, activeChannel.id, followupId),
       ).rejects.toThrow();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // addPassphrase
+  // -----------------------------------------------------------------------
+
+  describe("addPassphrase", () => {
+    it("atomically swaps client_public, key_check, has_passphrase, and message triples", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration({ hasPassphrase: false });
+      await createChannel(db, clientId, reg);
+
+      const channel = await db
+        .selectFrom("portal_channels")
+        .selectAll()
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      // Insert two portal messages
+      const fixture = await createTestTicketFixture(db);
+      const fid1 = await insertFollowup(db, fixture.ticketId);
+      const fid2 = await insertFollowup(db, fixture.ticketId);
+      const msgId1 = await insertPortalMessage(db, channel.id, fid1);
+      const msgId2 = await insertPortalMessage(db, channel.id, fid2);
+
+      const newPublic = crypto.randomBytes(32);
+      const newKeyCheck = {
+        ephemeralPoint: crypto.randomBytes(32),
+        nonce: crypto.randomBytes(24),
+        ciphertext: crypto.randomBytes(48),
+      };
+      const resealedMessages = [
+        {
+          id: msgId1,
+          copy: {
+            ephemeralPoint: Buffer.alloc(32, 0xaa),
+            nonce: Buffer.alloc(24, 0xbb),
+            ciphertext: Buffer.alloc(48, 0xcc),
+          },
+        },
+        {
+          id: msgId2,
+          copy: {
+            ephemeralPoint: Buffer.alloc(32, 0xdd),
+            nonce: Buffer.alloc(24, 0xee),
+            ciphertext: Buffer.alloc(48, 0xff),
+          },
+        },
+      ];
+
+      await addPassphrase(db, channel, {
+        clientPublic: newPublic,
+        keyCheck: newKeyCheck,
+        resealedMessages,
+      });
+
+      // Verify channel columns swapped
+      const updated = await db
+        .selectFrom("portal_channels")
+        .selectAll()
+        .where("id", "=", channel.id)
+        .executeTakeFirstOrThrow();
+
+      expect(updated.has_passphrase).toBe(true);
+      expect(Buffer.compare(updated.client_public, newPublic)).toBe(0);
+      expect(
+        Buffer.compare(
+          updated.key_check_ephemeral_point,
+          newKeyCheck.ephemeralPoint,
+        ),
+      ).toBe(0);
+      expect(Buffer.compare(updated.key_check_nonce, newKeyCheck.nonce)).toBe(
+        0,
+      );
+      expect(
+        Buffer.compare(updated.key_check_ciphertext, newKeyCheck.ciphertext),
+      ).toBe(0);
+
+      // Verify message triples swapped
+      const msg1 = await db
+        .selectFrom("portal_messages")
+        .select(["ephemeral_point", "nonce", "ciphertext"])
+        .where("id", "=", msgId1)
+        .executeTakeFirstOrThrow();
+
+      expect(Buffer.compare(msg1.ephemeral_point, Buffer.alloc(32, 0xaa))).toBe(
+        0,
+      );
+      expect(Buffer.compare(msg1.nonce, Buffer.alloc(24, 0xbb))).toBe(0);
+      expect(Buffer.compare(msg1.ciphertext, Buffer.alloc(48, 0xcc))).toBe(0);
+
+      const msg2 = await db
+        .selectFrom("portal_messages")
+        .select(["ephemeral_point", "nonce", "ciphertext"])
+        .where("id", "=", msgId2)
+        .executeTakeFirstOrThrow();
+
+      expect(Buffer.compare(msg2.ephemeral_point, Buffer.alloc(32, 0xdd))).toBe(
+        0,
+      );
+    });
+
+    it("rejects when has_passphrase is already true", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration({ hasPassphrase: true });
+      await createChannel(db, clientId, reg);
+
+      const channel = await db
+        .selectFrom("portal_channels")
+        .selectAll()
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      await expect(
+        addPassphrase(db, channel, {
+          clientPublic: crypto.randomBytes(32),
+          keyCheck: {
+            ephemeralPoint: crypto.randomBytes(32),
+            nonce: crypto.randomBytes(24),
+            ciphertext: crypto.randomBytes(48),
+          },
+          resealedMessages: [],
+        }),
+      ).rejects.toThrow(PassphraseAlreadySetError);
+    });
+
+    it("rejects on count mismatch and changes nothing", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration({ hasPassphrase: false });
+      await createChannel(db, clientId, reg);
+
+      const channel = await db
+        .selectFrom("portal_channels")
+        .selectAll()
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      // Insert one message but send zero resealed
+      const fixture = await createTestTicketFixture(db);
+      const fid = await insertFollowup(db, fixture.ticketId);
+      await insertPortalMessage(db, channel.id, fid);
+
+      await expect(
+        addPassphrase(db, channel, {
+          clientPublic: crypto.randomBytes(32),
+          keyCheck: {
+            ephemeralPoint: crypto.randomBytes(32),
+            nonce: crypto.randomBytes(24),
+            ciphertext: crypto.randomBytes(48),
+          },
+          resealedMessages: [], // mismatch: 0 vs 1
+        }),
+      ).rejects.toThrow(PassphraseCountMismatchError);
+
+      // Verify nothing changed
+      const unchanged = await db
+        .selectFrom("portal_channels")
+        .select(["has_passphrase", "client_public"])
+        .where("id", "=", channel.id)
+        .executeTakeFirstOrThrow();
+
+      expect(unchanged.has_passphrase).toBe(false);
+      expect(Buffer.compare(unchanged.client_public, reg.clientPublic)).toBe(0);
+    });
+
+    it("second call rejects with PassphraseAlreadySetError", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration({ hasPassphrase: false });
+      await createChannel(db, clientId, reg);
+
+      const channel = await db
+        .selectFrom("portal_channels")
+        .selectAll()
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      // First call succeeds (no messages)
+      await addPassphrase(db, channel, {
+        clientPublic: crypto.randomBytes(32),
+        keyCheck: {
+          ephemeralPoint: crypto.randomBytes(32),
+          nonce: crypto.randomBytes(24),
+          ciphertext: crypto.randomBytes(48),
+        },
+        resealedMessages: [],
+      });
+
+      // Second call rejects (has_passphrase is now true on the DB row,
+      // but the in-memory channel object still has has_passphrase=false;
+      // the transaction re-check catches it)
+      await expect(
+        addPassphrase(db, channel, {
+          clientPublic: crypto.randomBytes(32),
+          keyCheck: {
+            ephemeralPoint: crypto.randomBytes(32),
+            nonce: crypto.randomBytes(24),
+            ciphertext: crypto.randomBytes(48),
+          },
+          resealedMessages: [],
+        }),
+      ).rejects.toThrow(PassphraseAlreadySetError);
+    });
+
+    it("stored key check no longer opens with seed-only-derived key", async () => {
+      // Full pipeline assertion: derive a keypair with seed only,
+      // create a channel, then addPassphrase with a passphrase-derived
+      // keypair. Verify the stored key check is sealed to the new key.
+      const {
+        derivePortalKeypairFromOprf,
+        eciesEncrypt,
+        eciesDecrypt,
+        PORTAL_KEY_CHECK,
+        toRistrettoPoint,
+        toNonce,
+      } = await import("@care-y/crypto");
+
+      // Bypass the OPRF server for a unit test by deriving two keypairs
+      // from different 64-byte inputs via derivePortalKeypairFromOprf.
+      // This tests the key check property without a live OPRF server.
+
+      // Fake OPRF output for seed-only (64 random bytes)
+      const seedOnlyOprfOutput = crypto.randomBytes(64);
+      const seedOnlyKeypair = derivePortalKeypairFromOprf(seedOnlyOprfOutput);
+
+      // Fake OPRF output for passphrase (different 64 random bytes)
+      const passphraseOprfOutput = crypto.randomBytes(64);
+      const passphraseKeypair =
+        derivePortalKeypairFromOprf(passphraseOprfOutput);
+
+      // Verify the two keypairs differ
+      expect(
+        Buffer.compare(
+          Buffer.from(seedOnlyKeypair.clientPublic),
+          Buffer.from(passphraseKeypair.clientPublic),
+        ),
+      ).not.toBe(0);
+
+      // Seal a key check to the seed-only key
+      const keyCheckPlain = new TextEncoder().encode(PORTAL_KEY_CHECK);
+      const seedKeyCheck = eciesEncrypt(
+        keyCheckPlain,
+        seedOnlyKeypair.clientPublic,
+      );
+
+      // Create channel with seed-only key and the matching key check
+      const clientId = await insertClient(db);
+      const reg = makeRegistration({
+        hasPassphrase: false,
+        clientPublic: Buffer.from(seedOnlyKeypair.clientPublic),
+        keyCheck: {
+          ephemeralPoint: Buffer.from(seedKeyCheck.ephemeralPoint),
+          nonce: Buffer.from(seedKeyCheck.nonce),
+          ciphertext: Buffer.from(seedKeyCheck.ciphertext),
+        },
+      });
+
+      await createChannel(db, clientId, reg);
+
+      const channel = await db
+        .selectFrom("portal_channels")
+        .selectAll()
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      // Add passphrase: seal new key check to the passphrase keypair
+      const newKeyCheck = eciesEncrypt(
+        keyCheckPlain,
+        passphraseKeypair.clientPublic,
+      );
+
+      await addPassphrase(db, channel, {
+        clientPublic: Buffer.from(passphraseKeypair.clientPublic),
+        keyCheck: {
+          ephemeralPoint: Buffer.from(newKeyCheck.ephemeralPoint),
+          nonce: Buffer.from(newKeyCheck.nonce),
+          ciphertext: Buffer.from(newKeyCheck.ciphertext),
+        },
+        resealedMessages: [],
+      });
+
+      // Read the stored key check
+      const updated = await db
+        .selectFrom("portal_channels")
+        .select([
+          "key_check_ephemeral_point",
+          "key_check_nonce",
+          "key_check_ciphertext",
+        ])
+        .where("id", "=", channel.id)
+        .executeTakeFirstOrThrow();
+
+      // Decrypt with the passphrase key: should succeed
+      const decrypted = eciesDecrypt(
+        toRistrettoPoint(new Uint8Array(updated.key_check_ephemeral_point)),
+        toNonce(new Uint8Array(updated.key_check_nonce)),
+        new Uint8Array(updated.key_check_ciphertext),
+        passphraseKeypair.clientPrivate,
+      );
+      expect(new TextDecoder().decode(decrypted)).toBe(PORTAL_KEY_CHECK);
+
+      // Decrypt with the seed-only key: should fail
+      expect(() =>
+        eciesDecrypt(
+          toRistrettoPoint(new Uint8Array(updated.key_check_ephemeral_point)),
+          toNonce(new Uint8Array(updated.key_check_nonce)),
+          new Uint8Array(updated.key_check_ciphertext),
+          seedOnlyKeypair.clientPrivate,
+        ),
+      ).toThrow();
+
+      // Clean up key material
+      const sodium = (await import("@care-y/crypto")).requireSodium();
+      sodium.memzero(seedOnlyKeypair.clientPrivate);
+      sodium.memzero(passphraseKeypair.clientPrivate);
     });
   });
 });

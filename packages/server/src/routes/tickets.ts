@@ -34,10 +34,7 @@ import type {
   FollowUpPreview,
   PendingClient,
 } from "../tickets/ticket-service.js";
-import {
-  setAccountOfferForClient,
-  clientHasAccount,
-} from "../tickets/ticket-service.js";
+import { clientHasAccount } from "../tickets/ticket-service.js";
 import type {
   FollowUpService,
   FollowUpServiceDeps,
@@ -69,7 +66,6 @@ import {
   meetsRoleThreshold,
   upgradeToSecureLinkInputSchema,
   updateOutboundMessageInputSchema,
-  setAccountOfferInputSchema,
   resetClientAccountInputSchema,
   listTicketsForClientInputSchema,
   reseedPortalHistoryInputSchema,
@@ -105,7 +101,12 @@ import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
 import { rewrapFollowUp } from "../tickets/rewrap-service.js";
-import { maskPhone, formatPhone } from "../utils/sql.js";
+import {
+  maskPhone,
+  formatPhone,
+  maskEmail,
+  formatEmail,
+} from "../utils/sql.js";
 import {
   createTicketInputSchema,
   resolveCreateTargetInputSchema,
@@ -169,9 +170,9 @@ import { b64, b64n, b64KeyWrap } from "../utils/ciphertext-wire.js";
 
 /**
  * Ticket record shape after Buffer ciphertext is converted to base64url
- * strings and the raw phone buffer is replaced with a formatted/masked
- * clientPhone string. This is the shape that crosses the tRPC wire for
- * ticket.get and ticket.list.
+ * strings and the raw phone and email buffers are replaced with
+ * formatted/masked clientPhone and clientEmail strings. This is the shape
+ * that crosses the tRPC wire for ticket.get and ticket.list.
  */
 export interface TicketWireRecord {
   readonly id: string;
@@ -187,6 +188,7 @@ export interface TicketWireRecord {
   readonly createdAt: Date;
   readonly encryptedClientAlias: string;
   readonly hasPhone: boolean;
+  readonly hasEmail: boolean;
   readonly clientPhoneId: string | null;
   readonly encryptedQueueName: string;
   readonly queueSortOrder: number;
@@ -196,6 +198,14 @@ export interface TicketWireRecord {
   readonly keyWrap: TicketKeyWrap | null;
   readonly intakeWrap: string | null;
   readonly clientPhone: string | null;
+  readonly clientEmail: string | null;
+  /**
+   * True when contact details were withheld from this caller rather than
+   * absent from the client. Without it a null clientPhone/clientEmail is
+   * ambiguous, and the UI cannot tell "no email on file, offer to add
+   * one" from "not your ticket, show nothing".
+   */
+  readonly contactWithheld: boolean;
   readonly clientTier: string;
   readonly portalCapable: boolean;
   readonly portalChannel: {
@@ -204,7 +214,6 @@ export interface TicketWireRecord {
     readonly createdAt: string;
     readonly lastSeenAt: string | null;
     readonly kind: string;
-    readonly accountOffer: boolean;
   } | null;
 }
 
@@ -546,21 +555,33 @@ export function createTicketRouter(deps: TicketRouterDeps) {
   }
 
   /**
-   * Applies role-based phone formatting to a ticket record.
+   * Applies role-based contact formatting to a ticket record. Phone and
+   * email share one visibility decision so the two can never drift apart.
    *
-   * Admin: full formatted number (server decrypts, formats, zeros buffer).
-   * Manager/volunteer: masked last-4 (server decrypts, masks, zeros buffer).
-   * Volunteer not assigned to the ticket: null (phone hidden entirely).
+   * Admin: full formatted number and full email address.
+   * Manager or assigned volunteer: masked last-4 and masked local part.
+   * Volunteer not assigned to the ticket: null for both (contact details
+   * hidden entirely).
    *
-   * Returns a new object with `clientPhone` (string | null) replacing the
-   * raw `clientPhoneEncrypted` buffer, which is stripped from the output.
+   * The server decrypts, formats, and zeros each plaintext buffer. Returns
+   * a new object with `clientPhone` and `clientEmail` (string | null)
+   * replacing the raw `clientPhoneEncrypted` and `clientEmailEncrypted`
+   * buffers, which are stripped from the output.
+   *
+   * `contactWithheld` reports which kind of null the caller received, so
+   * the UI never has to infer a permission from an absent value.
    */
-  function applyPhoneFormatting(
+  function applyContactFormatting(
     ticket: TicketWithKeyWrap,
     roleId: string,
     userId: string,
   ): TicketWireRecord {
-    const { clientPhoneEncrypted, encryptedClientAlias, ...rest } = ticket;
+    const {
+      clientPhoneEncrypted,
+      clientEmailEncrypted,
+      encryptedClientAlias,
+      ...rest
+    } = ticket;
     const encryptor = deps.fieldEncryptor;
     // Convert all Buffer ciphertext to base64 for the wire. superjson expands
     // a Buffer into {type,data}, which is ~2.8x the bytes of base64.
@@ -573,25 +594,23 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       assignedDisplayName: b64n(rest.assignedDisplayName),
     };
 
-    // No phone on this client
-    if (clientPhoneEncrypted === null || !encryptor) {
-      return { ...base, clientPhone: null as string | null };
-    }
+    // Volunteer not assigned to this ticket sees no contact details.
+    const hidden = roleId === RoleId.VOLUNTEER && ticket.assignedTo !== userId;
+    const isAdmin = roleId === RoleId.ADMIN;
 
-    // Volunteer not assigned to this ticket sees no phone
-    if (roleId === RoleId.VOLUNTEER && ticket.assignedTo !== userId) {
-      return { ...base, clientPhone: null as string | null };
-    }
-
-    // Admin: full formatted number
-    if (roleId === RoleId.ADMIN) {
+    let clientPhone: string | null = null;
+    if (!hidden && clientPhoneEncrypted !== null && encryptor) {
       const buf = encryptor.decryptToBuffer(clientPhoneEncrypted);
-      return { ...base, clientPhone: formatPhone(buf) };
+      clientPhone = isAdmin ? formatPhone(buf) : maskPhone(buf);
     }
 
-    // Manager or assigned volunteer: masked
-    const buf = encryptor.decryptToBuffer(clientPhoneEncrypted);
-    return { ...base, clientPhone: maskPhone(buf) };
+    let clientEmail: string | null = null;
+    if (!hidden && clientEmailEncrypted !== null && encryptor) {
+      const buf = encryptor.decryptToBuffer(clientEmailEncrypted);
+      clientEmail = isAdmin ? formatEmail(buf) : maskEmail(buf);
+    }
+
+    return { ...base, clientPhone, clientEmail, contactWithheld: hidden };
   }
 
   return router({
@@ -647,7 +666,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const ticket = await svc.findById(input.ticketId, ctx.user.id);
-        return applyPhoneFormatting(ticket, ctx.user.roleId, ctx.user.id);
+        return applyContactFormatting(ticket, ctx.user.roleId, ctx.user.id);
       }),
     ),
 
@@ -656,7 +675,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const tickets = await svc.list(ctx.user.id, input);
         return tickets.map((t) =>
-          applyPhoneFormatting(t, ctx.user.roleId, ctx.user.id),
+          applyContactFormatting(t, ctx.user.roleId, ctx.user.id),
         );
       }),
     ),
@@ -2056,31 +2075,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    // --- Encrypted Account: volunteer-side offer toggle and reset ---
-
-    setAccountOffer: volunteerProcedure
-      .input(setAccountOfferInputSchema)
-      .mutation(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const { svc } = ticketSvc(ctx.org.tenantDb);
-          const ticket = await svc.findById(input.ticketId, ctx.user.id);
-
-          const updated = await setAccountOfferForClient(
-            ctx.org.tenantDb,
-            ticket.clientId,
-            input.enabled,
-          );
-          if (!updated) {
-            throw new NotFoundError(ErrorCode.PORTAL_CHANNEL_NOT_FOUND);
-          }
-
-          audit(ctx.org.tenantDb, {
-            eventType: "account_offer_changed",
-            actorId: ctx.user.id,
-            metadata: { operation: input.enabled ? "enabled" : "disabled" },
-          });
-        }),
-      ),
+    // --- Encrypted Account: volunteer-side reset ---
 
     resetClientAccount: volunteerProcedure
       .input(resetClientAccountInputSchema)

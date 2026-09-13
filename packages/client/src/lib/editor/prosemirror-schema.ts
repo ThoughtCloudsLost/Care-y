@@ -96,7 +96,8 @@ function tableCellSpec(
 // Schema
 // ---------------------------------------------------------------------------
 
-const nodes: Record<string, NodeSpec> = {
+/** Node spec map, exported for reuse by trimmed schema variants (e.g. email). */
+export const nodes: Record<string, NodeSpec> = {
   doc: { content: "block+" },
   paragraph: {
     content: "inline*",
@@ -146,7 +147,7 @@ const nodes: Record<string, NodeSpec> = {
     parseDOM: [
       {
         tag: "ol",
-        getAttrs: (dom) => {
+        getAttrs: (dom: HTMLElement | string): { order: number } => {
           const el = asElement(dom);
           return {
             order: el.hasAttribute("start")
@@ -277,7 +278,8 @@ const nodes: Record<string, NodeSpec> = {
   text: { group: "inline" },
 };
 
-const marks: Record<string, MarkSpec> = {
+/** Mark spec map, exported for reuse by trimmed schema variants (e.g. email). */
+export const marks: Record<string, MarkSpec> = {
   strong: {
     parseDOM: [
       { tag: "strong" },
@@ -328,7 +330,9 @@ const marks: Record<string, MarkSpec> = {
     parseDOM: [
       {
         tag: "a[href]",
-        getAttrs: (dom) => {
+        getAttrs: (
+          dom: HTMLElement | string,
+        ): { href: string | null; title: string | null } => {
           const el = asElement(dom);
           return {
             href: el.getAttribute("href"),

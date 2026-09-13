@@ -39,6 +39,9 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { splitByTerm, isHighlightable } from "$lib/search/highlight.js";
+  import { Node as PMNode, DOMSerializer } from "prosemirror-model";
+  import { emailSchema } from "$lib/editor/email-schema.js";
+  import { sanitizeArticleHtml } from "$lib/utils/render-article.js";
   import type {
     PortalAttachmentWire,
     PortalRecordingWire,
@@ -49,6 +52,8 @@
     readonly id: string;
     readonly followupId?: string;
     readonly direction: string;
+    /** Originating follow-up type (e.g. "message", "email_outbound"). */
+    readonly type?: string | null;
     readonly ephemeralPoint: string;
     readonly nonce: string;
     readonly ciphertext: string;
@@ -182,6 +187,7 @@
     readonly id: string;
     readonly followupId: string | undefined;
     readonly direction: string;
+    readonly type: string | null;
     readonly result: DecryptResult;
     readonly createdAt: string;
     readonly editedAt: string | null;
@@ -244,6 +250,7 @@
       id: msg.id,
       followupId: msg.followupId,
       direction: msg.direction,
+      type: msg.type ?? null,
       result: decryptCache.get(msg.id) ?? LOADING,
       createdAt: msg.createdAt,
       editedAt: msg.editedAt,
@@ -601,6 +608,37 @@
     }
     return { filename: cached.filename, error: false };
   }
+
+  /**
+   * Parse an email_outbound JSON payload into subject + sanitized body HTML.
+   * Returns null when the payload is not valid email JSON (triggers the
+   * plain-text fallback in the template). Mirrors the parsing logic in
+   * FollowUpBubble for org-thread parity.
+   */
+  function parseEmailPayload(
+    raw: string,
+  ): { subject: string; bodyHtml: string } | null {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        !("subject" in parsed) ||
+        !("doc" in parsed)
+      )
+        return null;
+      const subject = typeof parsed.subject === "string" ? parsed.subject : "";
+      const pmDoc = PMNode.fromJSON(emailSchema, parsed.doc);
+      const serializer = DOMSerializer.fromSchema(emailSchema);
+      const fragment = serializer.serializeFragment(pmDoc.content);
+      const div = document.createElement("div");
+      div.appendChild(fragment);
+      const bodyHtml = sanitizeArticleHtml(div.innerHTML);
+      return { subject, bodyHtml };
+    } catch {
+      return null;
+    }
+  }
 </script>
 
 <div
@@ -681,8 +719,32 @@
                 {@const portalCorrectionPayload = parseContactCorrection(
                   entry.result.value,
                 )}
+                {@const emailContent =
+                  entry.type === "email_outbound"
+                    ? parseEmailPayload(entry.result.value)
+                    : null}
                 {#if portalCorrectionPayload !== null}
                   <CorrectionBody payload={portalCorrectionPayload} />
+                {:else if entry.type === "email_outbound" && emailContent !== null}
+                  <span
+                    class="email-bubble-subject"
+                    data-testid="portal-email-subject"
+                  >
+                    {m.ticket_email_subject_label({
+                      subject: emailContent.subject,
+                    })}
+                  </span>
+                  <span
+                    class="email-bubble-body"
+                    data-testid="portal-email-body"
+                  >
+                    <!-- care-y-ignore-next-line no-decrypt-in-html -- bodyHtml passes through sanitizeArticleHtml (DOMPurify with PURIFY_CONFIG allowlist) before render; same accepted pattern as FollowUpBubble.svelte -->
+                    <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by sanitizeArticleHtml (DOMPurify with PURIFY_CONFIG allowlist) -->
+                    {@html emailContent.bodyHtml}
+                  </span>
+                {:else if entry.type === "email_outbound"}
+                  <!-- Malformed email JSON fallback: render as plain text -->
+                  <span class="bubble-text">{entry.result.value}</span>
                 {:else if highlighting}
                   {#each splitByTerm(entry.result.value, searchTerm ?? "") as seg, i (i)}
                     {#if seg.highlight}<mark>{seg.text}</mark
@@ -885,5 +947,35 @@
     font-size: 0.75rem;
     color: var(--muted);
     font-style: italic;
+  }
+
+  /* Email entry styles (parity with FollowUpBubble email_outbound) */
+
+  .email-bubble-subject {
+    display: block;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 0.25em;
+    font-size: 0.8125rem;
+  }
+
+  .email-bubble-body {
+    display: block;
+    color: var(--ink);
+  }
+
+  .email-bubble-body :global(p) {
+    margin: 0 0 0.375em;
+  }
+
+  .email-bubble-body :global(ul),
+  .email-bubble-body :global(ol) {
+    margin: 0.25em 0;
+    padding-left: 1.5em;
+  }
+
+  .email-bubble-body :global(a) {
+    color: var(--brand-accent, var(--ink));
+    text-decoration: underline;
   }
 </style>

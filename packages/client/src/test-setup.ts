@@ -163,6 +163,22 @@ vi.mock("$lib/crypto/context", () => {
 });
 
 // ---------------------------------------------------------------------------
+// $lib/portal/context
+// ---------------------------------------------------------------------------
+// vi.mock required: createContext from Svelte 5 throws "missing_context"
+// outside a live component tree. The portal bridge factory is set by
+// PortalBridgeProvider in the (client) layout. Stubs return a no-op
+// factory so components can import without crashing.
+vi.mock("$lib/portal/context", () => {
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- test mock stub
+  const noop = () => {};
+  return {
+    getPortalBridgeFactory: () => noop,
+    setPortalBridgeFactory: noop,
+  };
+});
+
+// ---------------------------------------------------------------------------
 // $lib/crypto/org-key-ready.svelte
 // ---------------------------------------------------------------------------
 // vi.mock required: uses $state rune which needs Svelte compiler pipeline.

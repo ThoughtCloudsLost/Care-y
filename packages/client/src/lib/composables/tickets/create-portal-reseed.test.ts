@@ -451,6 +451,110 @@ describe("createPortalReseed", () => {
     expect(items[0]!.followUpId).toBe("fu-ok");
   });
 
+  it("includes email_outbound follow-ups in the message copies", async () => {
+    const deps = makeDeps();
+    const trpc = deps.trpc as MockTrpc;
+
+    trpc.tickets.listForClient.query.mockResolvedValue([
+      { ticketId: "t-1", keyWrap: KEY_WRAP },
+    ]);
+
+    trpc.tickets.listFollowUps.query.mockResolvedValue({
+      followUps: [makeFollowUp("fu-email", { type: "email_outbound" })],
+      reactions: {},
+    });
+
+    trpc.tickets.reseedPortalHistory.mutate.mockResolvedValue({
+      inserted: 1,
+      skipped: 0,
+    });
+
+    const r = await reseed(deps);
+
+    expect(r.state.itemsTotal).toBe(1);
+    const sealCalls = vi.mocked(deps.bridge.sealFollowUpsToPublic).mock.calls;
+    const items = sealCalls[0]![2] as readonly { followUpId: string }[];
+    expect(items[0]!.followUpId).toBe("fu-email");
+  });
+
+  it("falls back to the ticket-level wrap for follow-ups with no per-row wrap", async () => {
+    const deps = makeDeps();
+    const trpc = deps.trpc as MockTrpc;
+    const ticketWrap = {
+      ephemeralPoint: "tw-ep",
+      nonce: "tw-nn",
+      wrappedKey: "tw-wk",
+    };
+
+    trpc.tickets.listForClient.query.mockResolvedValue([
+      { ticketId: "t-1", keyWrap: ticketWrap },
+    ]);
+
+    // Ordinary follow-up: key_generation null on the server, so no
+    // per-row keyWrap and no portalWrap arrive on the wire.
+    trpc.tickets.listFollowUps.query.mockResolvedValue({
+      followUps: [
+        makeFollowUp("fu-plain", { keyWrap: null, portalWrap: null }),
+      ],
+      reactions: {},
+    });
+
+    trpc.tickets.reseedPortalHistory.mutate.mockResolvedValue({
+      inserted: 1,
+      skipped: 0,
+    });
+
+    const r = await reseed(deps);
+
+    expect(r.state.itemsTotal).toBe(1);
+    const sealCalls = vi.mocked(deps.bridge.sealFollowUpsToPublic).mock.calls;
+    expect(sealCalls.length).toBe(1);
+    const items = sealCalls[0]![2] as readonly {
+      followUpId: string;
+      keyWrap?: unknown;
+    }[];
+    expect(items[0]!.followUpId).toBe("fu-plain");
+    expect(items[0]!.keyWrap).toEqual(ticketWrap);
+  });
+
+  it("uses the ticket-level wrap as the media warm-up without an extra page fetch", async () => {
+    const deps = makeDeps();
+    const trpc = deps.trpc as MockTrpc;
+    const bridge = deps.bridge;
+    const ticketWrap = {
+      ephemeralPoint: "tw-ep",
+      nonce: "tw-nn",
+      wrappedKey: "tw-wk",
+    };
+
+    trpc.tickets.listForClient.query.mockResolvedValue([
+      { ticketId: "t-1", keyWrap: ticketWrap },
+    ]);
+
+    trpc.tickets.listFollowUps.query.mockResolvedValue({
+      followUps: [makeFollowUp("fu-1", { keyWrap: null, portalWrap: null })],
+      reactions: {},
+    });
+
+    trpc.tickets.listAttachments.query.mockResolvedValue([
+      makeAttachment("att-1", "fu-1"),
+    ]);
+    trpc.tickets.listRecordings.query.mockResolvedValue([]);
+
+    trpc.tickets.reseedPortalHistory.mutate.mockResolvedValue({
+      inserted: 1,
+      skipped: 0,
+    });
+
+    await reseed(deps);
+
+    const fileKeyCalls = vi.mocked(bridge.sealFileKeysToPublic).mock.calls;
+    expect(fileKeyCalls.length).toBe(1);
+    expect(fileKeyCalls[0]![3]).toEqual(ticketWrap);
+    // Only the message enumeration page, no warm-up page fetch.
+    expect(trpc.tickets.listFollowUps.query).toHaveBeenCalledTimes(1);
+  });
+
   it("passes keyWrap warm-up to sealFileKeysToPublic", async () => {
     const deps = makeDeps();
     const trpc = deps.trpc as MockTrpc;

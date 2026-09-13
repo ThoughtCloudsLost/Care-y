@@ -139,6 +139,21 @@ export const ErrorCode = {
 
   // --- Client accounts ---
   ACCOUNT_USERNAME_TAKEN: "ACCOUNT_USERNAME_TAKEN",
+
+  // --- Client email ---
+  EMAIL_HASH_CONFLICT: "EMAIL_HASH_CONFLICT",
+  CLIENT_EMAIL_NOT_FOUND: "CLIENT_EMAIL_NOT_FOUND",
+  EMAIL_SEND_FAILED: "EMAIL_SEND_FAILED",
+
+  // --- Portal contact exposure ---
+  /** Bare-link channel refused: contact info requires a passphrase or account. */
+  PORTAL_CONTACT_LOCKED: "PORTAL_CONTACT_LOCKED",
+
+  // --- Portal add-passphrase ---
+  /** addPassphrase rejected: channel already has a passphrase. */
+  PORTAL_PASSPHRASE_ALREADY_SET: "PORTAL_PASSPHRASE_ALREADY_SET",
+  /** addPassphrase rejected: resealed message count does not match the channel's current count. */
+  PORTAL_PASSPHRASE_COUNT_MISMATCH: "PORTAL_PASSPHRASE_COUNT_MISMATCH",
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];

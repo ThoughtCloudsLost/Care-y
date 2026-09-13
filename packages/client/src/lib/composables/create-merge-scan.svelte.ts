@@ -144,6 +144,17 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
       }
     }
 
+    // Index email hashes from server payload
+    const emailHashMap = new SvelteMap<string, string>();
+    if ("emailHashes" in serverData && Array.isArray(serverData.emailHashes)) {
+      for (const eh of serverData.emailHashes as readonly {
+        clientId: string;
+        emailMatchHash: string;
+      }[]) {
+        emailHashMap.set(eh.clientId, eh.emailMatchHash);
+      }
+    }
+
     // Merge server intake data with dashboard key wraps
     const clients: MergeScanClient[] = [];
     const clientIdSet = new SvelteSet<string>();
@@ -169,26 +180,37 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
         });
       }
 
-      const hash = phoneHashMap.get(sc.clientId) ?? null;
+      const phoneHash = phoneHashMap.get(sc.clientId) ?? null;
+      const emailHash = emailHashMap.get(sc.clientId) ?? null;
 
-      if (intakeResponses.length > 0 || hash != null) {
+      if (
+        intakeResponses.length > 0 ||
+        phoneHash != null ||
+        emailHash != null
+      ) {
         clients.push({
           clientId: sc.clientId,
-          phoneMatchHash: hash,
+          phoneMatchHash: phoneHash,
+          emailMatchHash: emailHash,
           intakeResponses,
         });
         clientIdSet.add(sc.clientId);
       }
     }
 
-    // Include hash-only clients (have a stored phone match hash but no
-    // intake responses in the server data). These are telephony-only
-    // clients whose hash was backfilled by an authorized session.
-    for (const [clientId, hash] of phoneHashMap) {
+    // Include hash-only clients (have a stored phone or email match hash
+    // but no intake responses in the server data). These are telephony-only
+    // or email-only clients whose hash was backfilled by an authorized session.
+    const allHashClientIds = new SvelteSet([
+      ...phoneHashMap.keys(),
+      ...emailHashMap.keys(),
+    ]);
+    for (const clientId of allHashClientIds) {
       if (!clientIdSet.has(clientId)) {
         clients.push({
           clientId,
-          phoneMatchHash: hash,
+          phoneMatchHash: phoneHashMap.get(clientId) ?? null,
+          emailMatchHash: emailHashMap.get(clientId) ?? null,
           intakeResponses: [],
         });
       }

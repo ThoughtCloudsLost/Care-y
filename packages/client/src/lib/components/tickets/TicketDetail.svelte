@@ -82,13 +82,16 @@
   import ShareStatusLine from "$lib/components/tickets/ShareStatusLine.svelte";
   import CorrectionStatusLine from "$lib/components/tickets/CorrectionStatusLine.svelte";
   import CorrectionBody from "$lib/components/tickets/CorrectionBody.svelte";
+  import EmailBubbleContent from "$lib/components/tickets/EmailBubbleContent.svelte";
   import { parseContactCorrection } from "@care-y/shared";
+  import { parseEmailOutbound } from "$lib/editor/email-schema.js";
   import {
     followUpKind,
     followUpRenderVariant,
     groupConsecutive,
     isFollowUpGroup,
     followUpGroupKey,
+    isEmailOutbound,
     type GroupedFollowUp,
   } from "$lib/tickets/follow-up-utils.js";
   import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
@@ -184,7 +187,9 @@
      *  has no acknowledge reaction. Drives outbound-surface warnings. */
     correctionPending?: boolean;
     /** Called when the volunteer taps Apply on a structured correction phone row. */
-    onapplyphone?: (phone: string) => void;
+    onapplyphone?: (phone: string, followUpId: string) => void;
+    /** Called when the volunteer taps Apply on a structured correction email row. */
+    onapplyemail?: (email: string, followUpId: string) => void;
   }
 
   let {
@@ -218,6 +223,7 @@
     loadOlderPage: loadOlderPageProp = $bindable(undefined),
     correctionPending = $bindable(false),
     onapplyphone,
+    onapplyemail,
   }: TicketDetailProps = $props();
 
   const ticketCache = getTicketDecryptCache();
@@ -260,6 +266,7 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
+    enabled: ticketId !== "",
   }));
 
   // Initial query: most recent PAGE_SIZE follow-ups (direction='older', no cursor).
@@ -271,6 +278,7 @@
         limit: PAGE_SIZE,
         direction: "older",
       }),
+    enabled: ticketId !== "",
   }));
 
   // Share status query: resolves waiting/opened/expired for share_link bubbles.
@@ -875,7 +883,15 @@
     const time = formatRelativeTime(new Date(fu.createdAt));
     const preview = matchDecryptResult(fuResult, {
       loading: () => "",
-      ready: (v) => v.slice(0, 80),
+      ready: (v) => {
+        // Email payloads are stored as JSON; announce the subject, not
+        // the raw serialization.
+        if (isEmailOutbound(fu)) {
+          const parsed = parseEmailOutbound(v);
+          if (parsed !== null) return parsed.subject;
+        }
+        return v.slice(0, 80);
+      },
       denied: () => m.decrypt_placeholder_denied(),
       error: () => m.error_decryption_failed(),
     });
@@ -1295,6 +1311,17 @@
                   callDurationSeconds={rec.callDurationSeconds}
                 />
               </ConversationBubble>
+            {:else if isEmailOutbound(rec)}
+              <ConversationBubble
+                direction="sent"
+                source="volunteer"
+                timestamp={rec.createdAt}
+              >
+                <EmailBubbleContent
+                  result={recResult}
+                  encryptedContent={rec.encryptedContent}
+                />
+              </ConversationBubble>
             {:else}
               <ConversationBubble
                 direction={rec.source === "client" ? "received" : "sent"}
@@ -1302,38 +1329,6 @@
                 source={rec.source === "client" ? "client" : "volunteer"}
                 timestamp={rec.createdAt}
               >
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <span
-                  class="bubble-text"
-                  onpointerdown={startLongPress(rec)}
-                  onpointerup={cancelLongPress}
-                  onpointercancel={cancelLongPress}
-                >
-                  <DecryptPlaceholder
-                    result={recResult}
-                    ciphertext={rec.encryptedContent}
-                    length={30}
-                    block
-                    {searchTerm}
-                  />
-                </span>
-                {#if rec.hasRecording || rec.hasImage || rec.hasFile}
-                  <FollowUpMedia
-                    followupId={rec.id}
-                    {ticketId}
-                    keyWrap={ticket.keyWrap}
-                    hasRecording={rec.hasRecording}
-                    hasImage={rec.hasImage}
-                    hasFile={rec.hasFile}
-                    onlightbox={(url: string) => onlightbox?.(url)}
-                  />
-                {/if}
-                {#if variant === "share"}
-                  <ShareStatusLine
-                    share={findShareForFollowUp(rec.eventParams)}
-                    loading={sharesQuery.isLoading}
-                  />
-                {/if}
                 {#if variant === "correction"}
                   {@const correctionPayloadCluster =
                     recResult.status === "ready"
@@ -1342,8 +1337,29 @@
                   {#if correctionPayloadCluster !== null}
                     <CorrectionBody
                       payload={correctionPayloadCluster}
-                      {onapplyphone}
+                      onapplyphone={onapplyphone
+                        ? (phone: string) => onapplyphone(phone, rec.id)
+                        : undefined}
+                      onapplyemail={onapplyemail
+                        ? (email: string) => onapplyemail(email, rec.id)
+                        : undefined}
                     />
+                  {:else}
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <span
+                      class="bubble-text"
+                      onpointerdown={startLongPress(rec)}
+                      onpointerup={cancelLongPress}
+                      onpointercancel={cancelLongPress}
+                    >
+                      <DecryptPlaceholder
+                        result={recResult}
+                        ciphertext={rec.encryptedContent}
+                        length={30}
+                        block
+                        {searchTerm}
+                      />
+                    </span>
                   {/if}
                   <CorrectionStatusLine
                     reactions={getReactions(rec.id)}
@@ -1351,6 +1367,39 @@
                       handleToggleReaction(rec.id, "acknowledge")}
                     resolveUserName={(uid: string) => resolveVolunteerName(uid)}
                   />
+                {:else}
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <span
+                    class="bubble-text"
+                    onpointerdown={startLongPress(rec)}
+                    onpointerup={cancelLongPress}
+                    onpointercancel={cancelLongPress}
+                  >
+                    <DecryptPlaceholder
+                      result={recResult}
+                      ciphertext={rec.encryptedContent}
+                      length={30}
+                      block
+                      {searchTerm}
+                    />
+                  </span>
+                  {#if rec.hasRecording || rec.hasImage || rec.hasFile}
+                    <FollowUpMedia
+                      followupId={rec.id}
+                      {ticketId}
+                      keyWrap={ticket.keyWrap}
+                      hasRecording={rec.hasRecording}
+                      hasImage={rec.hasImage}
+                      hasFile={rec.hasFile}
+                      onlightbox={(url: string) => onlightbox?.(url)}
+                    />
+                  {/if}
+                  {#if variant === "share"}
+                    <ShareStatusLine
+                      share={findShareForFollowUp(rec.eventParams)}
+                      loading={sharesQuery.isLoading}
+                    />
+                  {/if}
                 {/if}
               </ConversationBubble>
             {/if}
@@ -1539,6 +1588,17 @@
                         callDurationSeconds={fu.callDurationSeconds ?? null}
                       />
                     </ConversationBubble>
+                  {:else if isEmailOutbound(fu)}
+                    <ConversationBubble
+                      direction="sent"
+                      source="volunteer"
+                      timestamp={fu.createdAt}
+                    >
+                      <EmailBubbleContent
+                        result={contentResult}
+                        encryptedContent={fu.encryptedContent}
+                      />
+                    </ConversationBubble>
                   {:else}
                     <ConversationBubble
                       direction={messageType(fu)}
@@ -1547,39 +1607,6 @@
                       timestamp={fu.createdAt}
                       editedAt={fu.editedAt}
                     >
-                      <!-- svelte-ignore a11y_no_static_element_interactions -->
-                      <span
-                        class="bubble-text"
-                        onpointerdown={startLongPress(fu)}
-                        onpointerup={cancelLongPress}
-                        onpointercancel={cancelLongPress}
-                      >
-                        <DecryptPlaceholder
-                          result={contentResult}
-                          ciphertext={fu.encryptedContent}
-                          length={30}
-                          block
-                          {searchTerm}
-                        />
-                      </span>
-
-                      {#if fu.hasRecording || fu.hasImage || fu.hasFile}
-                        <FollowUpMedia
-                          followupId={fu.id}
-                          {ticketId}
-                          keyWrap={ticket.keyWrap}
-                          hasRecording={fu.hasRecording}
-                          hasImage={fu.hasImage}
-                          hasFile={fu.hasFile}
-                          onlightbox={(url: string) => onlightbox?.(url)}
-                        />
-                      {/if}
-                      {#if variant === "share"}
-                        <ShareStatusLine
-                          share={findShareForFollowUp(fu.eventParams)}
-                          loading={sharesQuery.isLoading}
-                        />
-                      {/if}
                       {#if variant === "correction"}
                         {@const correctionPayload =
                           contentResult.status === "ready"
@@ -1588,8 +1615,29 @@
                         {#if correctionPayload !== null}
                           <CorrectionBody
                             payload={correctionPayload}
-                            {onapplyphone}
+                            onapplyphone={onapplyphone
+                              ? (phone: string) => onapplyphone(phone, fu.id)
+                              : undefined}
+                            onapplyemail={onapplyemail
+                              ? (email: string) => onapplyemail(email, fu.id)
+                              : undefined}
                           />
+                        {:else}
+                          <!-- svelte-ignore a11y_no_static_element_interactions -->
+                          <span
+                            class="bubble-text"
+                            onpointerdown={startLongPress(fu)}
+                            onpointerup={cancelLongPress}
+                            onpointercancel={cancelLongPress}
+                          >
+                            <DecryptPlaceholder
+                              result={contentResult}
+                              ciphertext={fu.encryptedContent}
+                              length={30}
+                              block
+                              {searchTerm}
+                            />
+                          </span>
                         {/if}
                         <CorrectionStatusLine
                           reactions={getReactions(fu.id)}
@@ -1598,6 +1646,40 @@
                           resolveUserName={(uid: string) =>
                             resolveVolunteerName(uid)}
                         />
+                      {:else}
+                        <!-- svelte-ignore a11y_no_static_element_interactions -->
+                        <span
+                          class="bubble-text"
+                          onpointerdown={startLongPress(fu)}
+                          onpointerup={cancelLongPress}
+                          onpointercancel={cancelLongPress}
+                        >
+                          <DecryptPlaceholder
+                            result={contentResult}
+                            ciphertext={fu.encryptedContent}
+                            length={30}
+                            block
+                            {searchTerm}
+                          />
+                        </span>
+
+                        {#if fu.hasRecording || fu.hasImage || fu.hasFile}
+                          <FollowUpMedia
+                            followupId={fu.id}
+                            {ticketId}
+                            keyWrap={ticket.keyWrap}
+                            hasRecording={fu.hasRecording}
+                            hasImage={fu.hasImage}
+                            hasFile={fu.hasFile}
+                            onlightbox={(url: string) => onlightbox?.(url)}
+                          />
+                        {/if}
+                        {#if variant === "share"}
+                          <ShareStatusLine
+                            share={findShareForFollowUp(fu.eventParams)}
+                            loading={sharesQuery.isLoading}
+                          />
+                        {/if}
                       {/if}
                     </ConversationBubble>
                   {/if}

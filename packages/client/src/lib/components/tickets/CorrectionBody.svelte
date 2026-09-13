@@ -6,7 +6,8 @@
 
   When the payload includes a phone and onapplyphone is provided,
   renders an Apply button that opens the phone-edit flow prefilled.
-  Email has no apply action yet (client email lands in a later phase).
+  When the payload includes an email and onapplyemail is provided,
+  renders an Apply button that opens the email-edit flow prefilled.
 -->
 <script lang="ts">
   import { ExternalLink } from "@lucide/svelte";
@@ -17,9 +18,10 @@
   interface CorrectionBodyProps {
     payload: ContactCorrectionPayload;
     onapplyphone?: (phone: string) => void;
+    onapplyemail?: (email: string) => void;
   }
 
-  let { payload, onapplyphone }: CorrectionBodyProps = $props();
+  let { payload, onapplyphone, onapplyemail }: CorrectionBodyProps = $props();
 </script>
 
 <div class="correction-body" data-testid="correction-body">
@@ -35,17 +37,30 @@
       <span class="correction-value">{payload.email}</span>
     </div>
   {/if}
-  {#if payload.phone !== undefined && onapplyphone !== undefined}
+  {#if (payload.phone !== undefined && onapplyphone !== undefined) || (payload.email !== undefined && onapplyemail !== undefined)}
     <div class="correction-apply">
-      <Button
-        small
-        outline
-        onclick={() => onapplyphone(payload.phone ?? "")}
-        data-testid="correction-apply-phone"
-      >
-        <ExternalLink size={14} />
-        {m.correction_body_apply_phone()}
-      </Button>
+      {#if payload.phone !== undefined && onapplyphone !== undefined}
+        <Button
+          small
+          outline
+          onclick={() => onapplyphone(payload.phone ?? "")}
+          data-testid="correction-apply-phone"
+        >
+          <ExternalLink size={14} />
+          {m.correction_body_apply_phone()}
+        </Button>
+      {/if}
+      {#if payload.email !== undefined && onapplyemail !== undefined}
+        <Button
+          small
+          outline
+          onclick={() => onapplyemail(payload.email ?? "")}
+          data-testid="correction-apply-email"
+        >
+          <ExternalLink size={14} />
+          {m.correction_body_apply_email()}
+        </Button>
+      {/if}
     </div>
   {/if}
 </div>

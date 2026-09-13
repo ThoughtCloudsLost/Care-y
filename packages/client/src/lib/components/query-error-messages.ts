@@ -106,6 +106,11 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.CLIENT_ALIAS_CONFLICT]: () => m.error_client_alias_conflict(),
   [ErrorCode.PHONE_HASH_CONFLICT]: () =>
     m.error_phone_hash_conflict(withTerms()),
+  [ErrorCode.EMAIL_HASH_CONFLICT]: () =>
+    m.error_email_hash_conflict(withTerms()),
+  [ErrorCode.CLIENT_EMAIL_NOT_FOUND]: () =>
+    m.error_client_email_not_found(withTerms()),
+  [ErrorCode.EMAIL_SEND_FAILED]: () => m.error_email_send_failed(),
 
   // Admin: user management
   [ErrorCode.CANNOT_DEACTIVATE_SELF]: () => m.error_cannot_deactivate_self(),
@@ -179,6 +184,13 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
     m.error_portal_reseed_validation(),
   [ErrorCode.PORTAL_RESEED_ALREADY_CONVERTED]: () =>
     m.error_portal_reseed_already_converted(),
+
+  // Portal contact / passphrase
+  [ErrorCode.PORTAL_CONTACT_LOCKED]: () => m.error_portal_contact_locked(),
+  [ErrorCode.PORTAL_PASSPHRASE_ALREADY_SET]: () =>
+    m.error_portal_passphrase_already_set(),
+  [ErrorCode.PORTAL_PASSPHRASE_COUNT_MISMATCH]: () =>
+    m.error_portal_passphrase_count_mismatch(),
 
   // Client accounts
   [ErrorCode.ACCOUNT_USERNAME_TAKEN]: () => m.error_account_username_taken(),

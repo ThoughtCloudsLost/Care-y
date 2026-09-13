@@ -5,7 +5,8 @@ import {
   createEmailSender,
   type EmailMessage,
 } from "./email-sender.js";
-import { EmailDeliveryError } from "../errors.js";
+import { ConfigError, EmailDeliveryError } from "../errors.js";
+import type * as NodemailerModule from "nodemailer";
 
 // vi.mock required: nodemailer is a CommonJS package. When imported as ESM,
 // the module namespace is non-configurable (Object.defineProperty fails),
@@ -13,7 +14,8 @@ import { EmailDeliveryError } from "../errors.js";
 // is called at factory construction time (top of createSmtpEmailSender),
 // before any spy could be attached to the returned transport.
 const mockSendMail = vi.fn();
-vi.mock("nodemailer", () => ({
+vi.mock("nodemailer", async (importOriginal) => ({
+  ...(await importOriginal<typeof NodemailerModule>()),
   createTransport: vi.fn(() => ({ sendMail: mockSendMail })),
 }));
 
@@ -51,7 +53,7 @@ describe("createConsoleEmailSender", () => {
 
   // Ops observability contract: structured log line is parsed by log aggregators.
   // Changing the format requires a coordinated update to log parsing rules.
-  it("emits structured log with subject and text length", async () => {
+  it("emits structured log with redacted recipient and text length", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
     const sender = createConsoleEmailSender();
 
@@ -60,8 +62,19 @@ describe("createConsoleEmailSender", () => {
     expect(consoleSpy).toHaveBeenCalledOnce();
     const loggedLine = consoleSpy.mock.calls[0]?.[0] as string;
     expect(loggedLine).toContain("<redacted>");
-    expect(loggedLine).toContain("Your verification code");
     expect(loggedLine).toContain(`length=${String(testMessage.text.length)}`);
+
+    consoleSpy.mockRestore();
+  });
+
+  it("never logs the subject (free-form field may carry PII)", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
+    const sender = createConsoleEmailSender();
+
+    await sender.send(testMessage);
+
+    const loggedLine = consoleSpy.mock.calls[0]?.[0] as string;
+    expect(loggedLine).not.toContain(testMessage.subject);
 
     consoleSpy.mockRestore();
   });
@@ -255,15 +268,19 @@ describe("createEmailSender", () => {
       host: "smtp.test.com",
       port: 587,
       from: TEST_FROM,
+      nodeEnv: "development",
     });
     await sender.send(testMessage);
 
     expect(mockSendMail).toHaveBeenCalledOnce();
   });
 
-  it("returns console sender when host is undefined", async () => {
+  it("returns console sender when host is undefined in development", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
-    const sender = createEmailSender({ from: TEST_FROM });
+    const sender = createEmailSender({
+      from: TEST_FROM,
+      nodeEnv: "development",
+    });
 
     await sender.send(testMessage);
     expect(consoleSpy).toHaveBeenCalled();
@@ -271,16 +288,57 @@ describe("createEmailSender", () => {
     consoleSpy.mockRestore();
   });
 
-  it("returns console sender when port is undefined", async () => {
+  it("returns console sender when port is undefined in development", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
     const sender = createEmailSender({
       host: "smtp.test.com",
       from: TEST_FROM,
+      nodeEnv: "development",
     });
 
     await sender.send(testMessage);
     expect(consoleSpy).toHaveBeenCalled();
 
     consoleSpy.mockRestore();
+  });
+
+  it("returns console sender when host is undefined in test", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockReturnValue(undefined);
+    const sender = createEmailSender({
+      from: TEST_FROM,
+      nodeEnv: "test",
+    });
+
+    await sender.send(testMessage);
+    expect(consoleSpy).toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
+  });
+
+  it("throws ConfigError when SMTP is absent in production", () => {
+    expect(() =>
+      createEmailSender({ from: TEST_FROM, nodeEnv: "production" }),
+    ).toThrow(ConfigError);
+  });
+
+  it("includes a descriptive message when throwing for missing SMTP in production", () => {
+    expect(() =>
+      createEmailSender({ from: TEST_FROM, nodeEnv: "production" }),
+    ).toThrow("SMTP_HOST and SMTP_PORT are required in production");
+  });
+
+  it("returns SMTP sender in production when host and port are provided", async () => {
+    mockSendMail.mockReset();
+    mockSendMail.mockResolvedValueOnce({});
+
+    const sender = createEmailSender({
+      host: "smtp.prod.com",
+      port: 465,
+      from: TEST_FROM,
+      nodeEnv: "production",
+    });
+    await sender.send(testMessage);
+
+    expect(mockSendMail).toHaveBeenCalledOnce();
   });
 });

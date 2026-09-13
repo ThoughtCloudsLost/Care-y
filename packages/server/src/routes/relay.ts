@@ -45,6 +45,8 @@ import {
 } from "./relay-utils.js";
 import { readFormBody } from "./webhooks.js";
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import type { EmailSender } from "../email/email-sender.js";
+import type { OrgEmailBranding } from "../notifications/email.js";
 import type {
   OrgId,
   OrgSchema,
@@ -55,6 +57,7 @@ import type {
   StoredProviderId,
 } from "@care-y/shared";
 import {
+  EMAIL_RELAY_LIMITS,
   phoneMatchHashSchema,
   orgSchemaNameSchema,
   callSidSchema,
@@ -116,6 +119,17 @@ export interface RelayHandlerDeps {
   readonly createConsultantService: (
     db: Kysely<TenantDatabase>,
   ) => ConsultantService;
+  readonly resolveClientEmail?: (
+    ticketId: TicketId,
+    tenantDb: Kysely<TenantDatabase>,
+    fieldEncryptor: FieldEncryptor,
+  ) => Promise<Buffer | null>;
+  /** SMTP email sender for the email relay endpoint. */
+  readonly emailSender?: EmailSender;
+  /** Loads per-org email branding (from name + address) from org_config. */
+  readonly loadOrgEmailBranding?: (
+    tDb: Kysely<TenantDatabase>,
+  ) => Promise<OrgEmailBranding>;
 }
 
 export interface PendingCall {
@@ -136,6 +150,7 @@ export interface PendingCall {
  * Creates the relay HTTP handler function.
  * Dispatches by URL path prefix:
  *   POST /relay/sms          -> SMS relay
+ *   POST /relay/email        -> Email relay
  *   POST /relay/call         -> Call relay (ticketId + consultantPhone)
  *   POST /relay/webrtc-token -> WebRTC capability token
  *   POST /relay/call-confirm/<orgSchema> -> DTMF callback from Twilio
@@ -184,6 +199,8 @@ export function createRelayHandler(deps: RelayHandlerDeps): RelayHandler {
 
     if (url === "/relay/sms") {
       await handleSmsRelay(req, res, session, deps);
+    } else if (url === "/relay/email") {
+      await handleEmailRelay(req, res, session, deps);
     } else if (url === "/relay/call") {
       await handleCallRelay(req, res, session, deps);
     } else if (url === "/relay/webrtc-token") {
@@ -984,6 +1001,146 @@ export async function resolveClientPhone(
 
   if (!row) return null;
   return fieldEncryptor.decryptToBuffer(row.encrypted_number);
+}
+
+// ---------------------------------------------------------------------------
+// Email Relay (POST /relay/email)
+// ---------------------------------------------------------------------------
+
+/**
+ * Raw-body ceiling for the email relay only. The shared MAX_RELAY_BODY
+ * (64 KiB) sits below the html field cap (EMAIL_RELAY_LIMITS.html,
+ * 100 KB), which would destroy over-cap requests at the socket read and
+ * never reach the per-field 400. 128 KiB covers every field at its cap
+ * plus JSON overhead, so oversized fields get the typed BODY_TOO_LONG.
+ */
+const MAX_EMAIL_RELAY_BODY = 128 * 1024;
+
+/**
+ * Receives { ticketId, subject, html, text }. Resolves client email
+ * server-side via OPS decryption, forwards through EmailSender, zeros Buffers.
+ */
+async function handleEmailRelay(
+  req: IncomingMessage,
+  res: ServerResponse,
+  session: RelaySession,
+  deps: RelayHandlerDeps,
+): Promise<void> {
+  let rawBody: Buffer | null = null;
+  let ticketIdBuf: Buffer | null = null;
+  let subjectBuf: Buffer | null = null;
+  let htmlBuf: Buffer | null = null;
+  let textBuf: Buffer | null = null;
+  let emailBuf: Buffer | null = null;
+
+  try {
+    if (!deps.emailSender || !deps.loadOrgEmailBranding) {
+      sendRelayError(res, 500, "EMAIL_NOT_CONFIGURED");
+      return;
+    }
+
+    rawBody = await readRawBody(req, MAX_EMAIL_RELAY_BODY);
+
+    ticketIdBuf = extractBufferField(rawBody, "ticketId");
+    subjectBuf = extractBufferField(rawBody, "subject");
+    htmlBuf = extractBufferField(rawBody, "html");
+    textBuf = extractBufferField(rawBody, "text");
+
+    if (
+      !ticketIdBuf ||
+      !subjectBuf ||
+      !htmlBuf ||
+      !textBuf ||
+      ticketIdBuf.length === 0 ||
+      subjectBuf.length === 0 ||
+      htmlBuf.length === 0 ||
+      textBuf.length === 0
+    ) {
+      sendRelayError(res, 400, "MISSING_FIELDS");
+      return;
+    }
+
+    if (
+      subjectBuf.length > EMAIL_RELAY_LIMITS.subject ||
+      textBuf.length > EMAIL_RELAY_LIMITS.text ||
+      htmlBuf.length > EMAIL_RELAY_LIMITS.html
+    ) {
+      sendRelayError(res, 400, "BODY_TOO_LONG");
+      return;
+    }
+
+    const tenantDb = deps.getTenantDb(session.orgSchema);
+    const ticketIdRaw = ticketIdBuf.toString("utf-8");
+    const ticketIdResult = ticketIdSchema.safeParse(ticketIdRaw);
+    if (!ticketIdResult.success) {
+      sendRelayError(res, 400, "MISSING_FIELDS");
+      return;
+    }
+    const ticketId = ticketIdResult.data;
+
+    const resolveEmail = deps.resolveClientEmail ?? resolveClientEmail;
+    emailBuf = await resolveEmail(ticketId, tenantDb, deps.fieldEncryptor);
+    if (!emailBuf) {
+      sendRelayError(res, 404, "CLIENT_EMAIL_NOT_FOUND");
+      return;
+    }
+
+    const branding = await deps.loadOrgEmailBranding(tenantDb);
+    const safeName = branding.fromName.replace(/[\r\n\0]/g, "");
+    const safeAddr = branding.fromAddress.replace(/[\r\n\0]/g, "");
+    const fromHeader = `"${safeName}" <${safeAddr}>`;
+
+    // RESIDUAL RISK: JS string copies are immutable and persist until GC.
+    // The EmailSender interface accepts strings, not Buffers.
+    // Exposure window is short (emailSender.send awaits a single SMTP call).
+    const toStr = emailBuf.toString("utf-8");
+    const subjectStr = subjectBuf.toString("utf-8");
+    const textStr = textBuf.toString("utf-8");
+    const htmlStr = htmlBuf.toString("utf-8");
+
+    try {
+      await deps.emailSender.send({
+        to: toStr,
+        subject: subjectStr,
+        text: textStr,
+        html: htmlStr,
+        from: fromHeader,
+      });
+    } catch {
+      sendRelayError(res, 502, "EMAIL_SEND_FAILED");
+      return;
+    }
+
+    sendJsonResponse(res, 200, { sent: true });
+  } finally {
+    rawBody?.fill(0);
+    ticketIdBuf?.fill(0);
+    subjectBuf?.fill(0);
+    htmlBuf?.fill(0);
+    textBuf?.fill(0);
+    emailBuf?.fill(0);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Client email resolution (ticket -> client -> email -> OPS decrypt)
+// ---------------------------------------------------------------------------
+
+export async function resolveClientEmail(
+  ticketId: TicketId,
+  tenantDb: Kysely<TenantDatabase>,
+  fieldEncryptor: FieldEncryptor,
+): Promise<Buffer | null> {
+  const row = await tenantDb
+    .selectFrom("tickets as t")
+    .innerJoin("clients as c", "c.id", "t.client_id")
+    .innerJoin("emails as e", "e.id", "c.email_id")
+    .select("e.encrypted_address")
+    .where("t.id", "=", ticketId)
+    .executeTakeFirst();
+
+  if (!row) return null;
+  return fieldEncryptor.decryptToBuffer(row.encrypted_address);
 }
 
 // ---------------------------------------------------------------------------

@@ -204,12 +204,26 @@ export function createOprfEvaluateService(
   const delayTiers = resolveDelayTiers(nodeEnv);
   const powThreshold = resolvePowThreshold(nodeEnv);
 
-  /** If authenticated, the session owner must match the requested userId. */
+  /**
+   * If authenticated, the session owner must match the requested userId.
+   *
+   * Volunteer kind only. Session user ids and account ids are disjoint
+   * namespaces, so for kind "account" the comparison can only false
+   * positive; it blocked a client creating an account in a browser
+   * holding a volunteer session on the shared origin. Skipping it there
+   * removes no protection: the procedure accepts anonymous callers by
+   * design (evaluation happens before login), and even same-origin
+   * script can drop the cookie with fetch credentials "omit" (MDN,
+   * Request.credentials). Account evaluations are gated by the
+   * per-account tag key (ADR-091), rate limits, PoW, and delays.
+   */
   async function assertSessionBinding(
+    kind: OprfEvaluateKind,
     userId: UserId,
     ip: string,
     sessionUserId: UserId | null,
   ): Promise<void> {
+    if (kind !== "volunteer") return;
     if (sessionUserId !== null && sessionUserId !== userId) {
       await deps.auditLogger.logFailure(userId, ip, "session_mismatch");
       throw new ForbiddenError("Session userId mismatch");
@@ -298,7 +312,7 @@ export function createOprfEvaluateService(
     async evaluate(req: OprfEvaluateRequest): Promise<OprfEvaluateResult> {
       const { userId, ip, sessionUserId, blindedElement } = req;
 
-      await assertSessionBinding(userId, ip, sessionUserId);
+      await assertSessionBinding(req.kind, userId, ip, sessionUserId);
       await enforceUserRateLimit(userId, ip);
       await enforceIpRateLimit(userId, ip);
 

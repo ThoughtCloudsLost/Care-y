@@ -47,11 +47,7 @@ import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { maskPhone } from "../utils/sql.js";
 import { createDependencyService } from "./dependency-service.js";
 import { createReadCursorService } from "./read-cursor-service.js";
-import {
-  ErrorCode,
-  aliasHashSchema,
-  PORTAL_SURFACE_KINDS,
-} from "@care-y/shared";
+import { ErrorCode, aliasHashSchema } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 
 export interface TicketRecord {
@@ -72,10 +68,13 @@ export interface TicketRecord {
 export interface TicketListRecord extends TicketRecord {
   readonly encryptedClientAlias: Buffer;
   readonly hasPhone: boolean;
+  readonly hasEmail: boolean;
   /** OPS-encrypted phone number buffer, or null when the client has no phone. */
   readonly clientPhoneEncrypted: Buffer | null;
   /** Phone record id, or null when the client has no phone. */
   readonly clientPhoneId: PhoneId | null;
+  /** OPS-encrypted email address buffer, or null when the client has no email. */
+  readonly clientEmailEncrypted: Buffer | null;
   readonly encryptedQueueName: Buffer;
   readonly queueSortOrder: number;
   readonly lastActivityAt: Date | null;
@@ -96,7 +95,6 @@ export interface PortalChannelMeta {
   readonly createdAt: string;
   readonly lastSeenAt: string | null;
   readonly kind: string;
-  readonly accountOffer: boolean;
 }
 
 export interface TicketWithKeyWrap extends TicketListRecord {
@@ -310,8 +308,10 @@ interface BaseTicketRow {
 interface EnrichedTicketRow extends BaseTicketRow {
   encrypted_client_alias: Buffer;
   has_phone: boolean | 0 | 1;
+  has_email: boolean | 0 | 1;
   client_phone_encrypted: Buffer | null;
   client_phone_id: PhoneId | null;
+  client_email_encrypted: Buffer | null;
   encrypted_queue_name: Buffer;
   queue_sort_order: number;
   last_activity_at: Date | null;
@@ -340,8 +340,10 @@ function toListRecord(row: EnrichedTicketRow): TicketListRecord {
     ...toRecord(row),
     encryptedClientAlias: row.encrypted_client_alias,
     hasPhone: Boolean(row.has_phone),
+    hasEmail: Boolean(row.has_email),
     clientPhoneEncrypted: row.client_phone_encrypted ?? null,
     clientPhoneId: row.client_phone_id ?? null,
+    clientEmailEncrypted: row.client_email_encrypted ?? null,
     encryptedQueueName: row.encrypted_queue_name,
     queueSortOrder: row.queue_sort_order,
     lastActivityAt: row.last_activity_at,
@@ -376,7 +378,6 @@ function toRecordWithKeyWrap(
     portal_created_at?: Date | null;
     portal_last_seen_at?: Date | null;
     portal_kind?: string | null;
-    portal_account_offer?: boolean | null;
   },
 ): TicketWithKeyWrap {
   const keyWrap = buildKeyWrap(row.ephemeral_point, row.nonce, row.wrapped_key);
@@ -406,7 +407,6 @@ function toRecordWithKeyWrap(
             ? row.portal_last_seen_at.toISOString()
             : null,
           kind: row.portal_kind ?? "secure_link",
-          accountOffer: Boolean(row.portal_account_offer),
         }
       : null;
 
@@ -636,6 +636,7 @@ export function createTicketService(
         .leftJoin("intake_key_wraps as ikw", "ikw.ticket_id", "t.id")
         .innerJoin("clients as c", "c.id", "t.client_id")
         .leftJoin("phones as ph", "ph.id", "c.phone_id")
+        .leftJoin("emails as em", "em.id", "c.email_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
         .leftJoin("users as u", (join) =>
           join.on((eb) =>
@@ -654,8 +655,10 @@ export function createTicketService(
         .select("c.encrypted_alias as encrypted_client_alias")
         .select("c.communication_tier")
         .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
+        .select((eb) => eb("c.email_id", "is not", null).as("has_email"))
         .select("ph.encrypted_number as client_phone_encrypted")
         .select("ph.id as client_phone_id")
+        .select("em.encrypted_address as client_email_encrypted")
         .select("q.encrypted_name as encrypted_queue_name")
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
@@ -665,7 +668,6 @@ export function createTicketService(
         .select("pc.created_at as portal_created_at")
         .select("pc.last_seen_at as portal_last_seen_at")
         .select("pc.kind as portal_kind")
-        .select("pc.account_offer as portal_account_offer")
         .select((eb) => [
           // Creation counts as the ticket's first activity: GREATEST
           // ignores the NULL max() of an empty follow-up set, so tickets
@@ -715,6 +717,7 @@ export function createTicketService(
         .leftJoin("intake_key_wraps as ikw", "ikw.ticket_id", "t.id")
         .innerJoin("clients as c", "c.id", "t.client_id")
         .leftJoin("phones as ph", "ph.id", "c.phone_id")
+        .leftJoin("emails as em", "em.id", "c.email_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
         .leftJoin("users as u", (join) =>
           join.on((eb) =>
@@ -726,8 +729,10 @@ export function createTicketService(
         .select("ikw.wrapped_tk as intake_wrapped_tk")
         .select("c.encrypted_alias as encrypted_client_alias")
         .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
+        .select((eb) => eb("c.email_id", "is not", null).as("has_email"))
         .select("ph.encrypted_number as client_phone_encrypted")
         .select("ph.id as client_phone_id")
+        .select("em.encrypted_address as client_email_encrypted")
         .select("q.encrypted_name as encrypted_queue_name")
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
@@ -1741,27 +1746,6 @@ export function createTicketService(
 // ---------------------------------------------------------------------------
 // Encrypted Account helpers (volunteer-side, called from tickets router)
 // ---------------------------------------------------------------------------
-
-/**
- * Toggles the account_offer flag on a client's active secure_link channel.
- * Returns true when a row was updated. Returns false when no qualifying
- * channel exists (the caller maps this to a typed NotFound).
- */
-export async function setAccountOfferForClient(
-  db: Kysely<TenantDatabase>,
-  clientId: ClientId,
-  enabled: boolean,
-): Promise<boolean> {
-  const result = await db
-    .updateTable("portal_channels")
-    .set({ account_offer: enabled })
-    .where("client_id", "=", clientId)
-    .where("status", "=", "active")
-    .where("kind", "in", [...PORTAL_SURFACE_KINDS])
-    .executeTakeFirst();
-
-  return result.numUpdatedRows > 0n;
-}
 
 /**
  * Checks whether a client has an encrypted account row.

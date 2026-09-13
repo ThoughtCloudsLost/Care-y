@@ -88,6 +88,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_mention_volunteers: () => "Mention a volunteer",
   contact_correction_pending_warning: () =>
     "A contact correction is pending below.",
+  ticket_compose_enter_hint: () => "Enter to send, Shift+Enter for new line",
 }));
 
 const TICKET_ID = "ticket-1";
@@ -331,6 +332,101 @@ describe("TicketCompose", () => {
       expect(getDraftForMode(TICKET_ID, "reply")).toBe("");
       expect(getDraftForMode(TICKET_ID, "sms")).toBe("untouched");
       expect(screen.queryByText("Replying securely")).toBeNull();
+    });
+  });
+
+  describe("Enter-sends keymap", () => {
+    it("sends the reply on Enter when the draft is non-empty", async () => {
+      setDraftForMode(TICKET_ID, "reply", "hello");
+      const props = baseProps();
+      const { component } = render(TicketCompose, { props });
+      component.activateReply();
+      await tick();
+
+      const textarea = replyTextarea();
+      await fireEvent.keyDown(textarea, { key: "Enter" });
+
+      expect(props.onsendreply).toHaveBeenCalledWith("hello");
+    });
+
+    it("does not send on Enter when the draft is empty", async () => {
+      const props = baseProps();
+      const { component } = render(TicketCompose, { props });
+      component.activateReply();
+      await tick();
+
+      const textarea = replyTextarea();
+      await fireEvent.keyDown(textarea, { key: "Enter" });
+
+      expect(props.onsendreply).not.toHaveBeenCalled();
+    });
+
+    it("does not send on Shift+Enter (newline)", async () => {
+      setDraftForMode(TICKET_ID, "reply", "hello");
+      const props = baseProps();
+      const { component } = render(TicketCompose, { props });
+      component.activateReply();
+      await tick();
+
+      const textarea = replyTextarea();
+      await fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+
+      expect(props.onsendreply).not.toHaveBeenCalled();
+    });
+
+    it("does not send on Enter while sending is in progress", async () => {
+      setDraftForMode(TICKET_ID, "reply", "hello");
+      const props = baseProps();
+      const { component } = render(TicketCompose, {
+        props: { ...props, sending: true },
+      });
+      component.activateReply();
+      await tick();
+
+      const textarea = replyTextarea();
+      await fireEvent.keyDown(textarea, { key: "Enter" });
+
+      expect(props.onsendreply).not.toHaveBeenCalled();
+    });
+
+    it("does not send on Enter when the software keyboard is open", async () => {
+      setDraftForMode(TICKET_ID, "reply", "hello");
+      const props = baseProps();
+      const { component } = render(TicketCompose, { props });
+      component.activateReply();
+      await tick();
+
+      document.documentElement.classList.add("keyboard-open");
+      try {
+        const textarea = replyTextarea();
+        await fireEvent.keyDown(textarea, { key: "Enter" });
+        expect(props.onsendreply).not.toHaveBeenCalled();
+      } finally {
+        document.documentElement.classList.remove("keyboard-open");
+      }
+    });
+
+    it("sends SMS on Enter in SMS mode", async () => {
+      setDraftForMode(TICKET_ID, "sms", "text msg");
+      const props = baseProps();
+      const { component } = render(TicketCompose, { props });
+      component.activateSms();
+      await tick();
+
+      const textarea = smsTextarea();
+      await fireEvent.keyDown(textarea, { key: "Enter" });
+
+      expect(props.onsendsms).toHaveBeenCalledWith("text msg");
+    });
+
+    it("renders the Enter-sends hint when compose is active", async () => {
+      const { component } = render(TicketCompose, { props: baseProps() });
+      component.activateReply();
+      await tick();
+
+      expect(
+        screen.getByText("Enter to send, Shift+Enter for new line"),
+      ).toBeTruthy();
     });
   });
 });

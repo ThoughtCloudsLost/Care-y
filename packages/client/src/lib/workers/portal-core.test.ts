@@ -30,6 +30,8 @@ import type {
   ChannelSessionStartResponse,
   ChannelSessionRestartResponse,
   ChannelSessionFinishResponse,
+  ChannelPassphraseDeriveResponse,
+  ChannelPassphraseFinishResponse,
   VerifyKeyCheckResponse,
   DecryptMessageResponse,
   EncryptReplyResponse,
@@ -644,6 +646,180 @@ describe("portal-core", () => {
       });
       expect(resp.ok).toBe(false);
       expect((resp as PortalErrorResponse).code).toBe("INVALID_STATE");
+    });
+  });
+
+  describe("channelPassphraseDerive / channelPassphraseFinish", () => {
+    it("derives a new keypair without disturbing the active session", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+
+      // Establish a plain-link session (no passphrase)
+      const { clientPublic: originalPublic } = await fullChannelSessionFlow(
+        seed,
+        oprfKey,
+      );
+
+      // Derive a new keypair with passphrase, via the side-channel ops
+      const deriveResp = (await dispatchAndWait({
+        type: "channelPassphraseDerive",
+        id: 200,
+        passphrase: "new passphrase words",
+      })) as ChannelPassphraseDeriveResponse;
+      expect(deriveResp.ok).toBe(true);
+      expect(deriveResp.channelId).toBe(deriveChannelId(seed));
+      expect(deriveResp.blindedElement.length).toBeGreaterThan(0);
+
+      // Simulate OPRF evaluation for the derive round
+      const evaluatedB64 = simulateOprfEvaluate(
+        deriveResp.blindedElement,
+        oprfKey,
+      );
+
+      const finishResp = (await dispatchAndWait({
+        type: "channelPassphraseFinish",
+        id: 201,
+        evaluated: evaluatedB64,
+      })) as ChannelPassphraseFinishResponse;
+      expect(finishResp.ok).toBe(true);
+      expect(finishResp.clientPublic.length).toBeGreaterThan(0);
+
+      // The new public key differs from the original (passphrase changes it)
+      expect(finishResp.clientPublic).not.toBe(originalPublic);
+
+      // The active session's key material is untouched: decrypt still works
+      // with the original keypair
+      const clientPub = toRistrettoPoint(decode(originalPublic));
+      const triple = eciesEncrypt(
+        new TextEncoder().encode("still works"),
+        clientPub,
+      );
+      const decResp = (await dispatchAndWait({
+        type: "decryptMessage",
+        id: 202,
+        ephemeralPoint: encode(triple.ephemeralPoint),
+        nonce: encode(triple.nonce),
+        ciphertext: encode(triple.ciphertext),
+      })) as DecryptMessageResponse;
+      expect(decResp.ok).toBe(true);
+      expect(decResp.plaintext).toBe("still works");
+
+      sodium.memzero(oprfKey);
+    });
+
+    it("rejects when not CHANNEL_KEYED", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 210 });
+
+      const resp = await dispatchAndWait({
+        type: "channelPassphraseDerive",
+        id: 211,
+        passphrase: "any words",
+      });
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("NOT_READY");
+    });
+
+    it("rejects a second concurrent derive", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      // First derive: succeeds
+      const resp1 = (await dispatchAndWait({
+        type: "channelPassphraseDerive",
+        id: 220,
+        passphrase: "first derive",
+      })) as ChannelPassphraseDeriveResponse;
+      expect(resp1.ok).toBe(true);
+
+      // Second derive before finish: rejected
+      const resp2 = await dispatchAndWait({
+        type: "channelPassphraseDerive",
+        id: 221,
+        passphrase: "second derive",
+      });
+      expect(resp2.ok).toBe(false);
+      expect((resp2 as PortalErrorResponse).code).toBe("INVALID_STATE");
+
+      sodium.memzero(oprfKey);
+    });
+
+    it("rejects channelPassphraseFinish when no derive is pending", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      const resp = await dispatchAndWait({
+        type: "channelPassphraseFinish",
+        id: 230,
+        evaluated: encode(new Uint8Array(32)),
+      });
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("INVALID_STATE");
+
+      sodium.memzero(oprfKey);
+    });
+
+    it("allows a new derive after a completed round", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      // First complete round
+      const d1 = (await dispatchAndWait({
+        type: "channelPassphraseDerive",
+        id: 240,
+        passphrase: "round one",
+      })) as ChannelPassphraseDeriveResponse;
+      const ev1 = simulateOprfEvaluate(d1.blindedElement, oprfKey);
+      const f1 = (await dispatchAndWait({
+        type: "channelPassphraseFinish",
+        id: 241,
+        evaluated: ev1,
+      })) as ChannelPassphraseFinishResponse;
+      expect(f1.ok).toBe(true);
+
+      // Second round: allowed because the first finished and cleared ppDerivePending
+      const d2 = (await dispatchAndWait({
+        type: "channelPassphraseDerive",
+        id: 242,
+        passphrase: "round two",
+      })) as ChannelPassphraseDeriveResponse;
+      expect(d2.ok).toBe(true);
+
+      const ev2 = simulateOprfEvaluate(d2.blindedElement, oprfKey);
+      const f2 = (await dispatchAndWait({
+        type: "channelPassphraseFinish",
+        id: 243,
+        evaluated: ev2,
+      })) as ChannelPassphraseFinishResponse;
+      expect(f2.ok).toBe(true);
+
+      // Different passphrases produce different keys
+      expect(f1.clientPublic).not.toBe(f2.clientPublic);
+
+      sodium.memzero(oprfKey);
     });
   });
 

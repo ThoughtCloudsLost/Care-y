@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { sanitizeLike, maskPhone, formatPhone } from "./sql.js";
+import {
+  sanitizeLike,
+  maskPhone,
+  formatPhone,
+  maskEmail,
+  formatEmail,
+} from "./sql.js";
 
 describe("sanitizeLike", () => {
   it("escapes percent wildcard", () => {
@@ -90,6 +96,65 @@ describe("formatPhone", () => {
   it("handles empty buffer", () => {
     const buf = Buffer.alloc(0);
     expect(formatPhone(buf)).toBe("");
+    expect(buf.every((b) => b === 0)).toBe(true);
+  });
+});
+
+describe("maskEmail", () => {
+  it("keeps the first character and the domain", () => {
+    const buf = Buffer.from("alice@example.org");
+    expect(maskEmail(buf)).toBe("a***@example.org");
+  });
+
+  it("zeros the buffer after masking", () => {
+    const buf = Buffer.from("alice@example.org");
+    maskEmail(buf);
+    expect(buf.every((b) => b === 0)).toBe(true);
+  });
+
+  it("masks a single-character local part without revealing more", () => {
+    const buf = Buffer.from("a@example.org");
+    expect(maskEmail(buf)).toBe("a***@example.org");
+  });
+
+  it("returns *** for an address with no local part", () => {
+    const buf = Buffer.from("@example.org");
+    expect(maskEmail(buf)).toBe("***");
+    expect(buf.every((b) => b === 0)).toBe(true);
+  });
+
+  it("returns *** for a value with no @ at all", () => {
+    const buf = Buffer.from("not-an-address");
+    expect(maskEmail(buf)).toBe("***");
+    expect(buf.every((b) => b === 0)).toBe(true);
+  });
+
+  it("handles empty buffer", () => {
+    const buf = Buffer.alloc(0);
+    expect(maskEmail(buf)).toBe("***");
+  });
+
+  it("masks only the first @ so plus-addressing stays hidden", () => {
+    const buf = Buffer.from("alice+tag@example.org");
+    expect(maskEmail(buf)).toBe("a***@example.org");
+  });
+});
+
+describe("formatEmail", () => {
+  it("returns the full address", () => {
+    const buf = Buffer.from("alice@example.org");
+    expect(formatEmail(buf)).toBe("alice@example.org");
+  });
+
+  it("zeros the buffer after formatting", () => {
+    const buf = Buffer.from("alice@example.org");
+    formatEmail(buf);
+    expect(buf.every((b) => b === 0)).toBe(true);
+  });
+
+  it("handles empty buffer", () => {
+    const buf = Buffer.alloc(0);
+    expect(formatEmail(buf)).toBe("");
     expect(buf.every((b) => b === 0)).toBe(true);
   });
 });

@@ -9,6 +9,10 @@ function getInitialTitle(): string {
 let brandingTitle = $state(getInitialTitle());
 
 export function setBrandingTitle(title: string): void {
+  // An org without a configured name keeps the current title. A blank
+  // tab title fails WCAG 2.4.2 and several writers pass the org name
+  // through unchecked.
+  if (title === "") return;
   brandingTitle = title;
 }
 

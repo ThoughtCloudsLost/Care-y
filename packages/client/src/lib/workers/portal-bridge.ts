@@ -250,6 +250,42 @@ export class PortalBridge {
     return resp.passed;
   }
 
+  // -- Public API: passphrase-derive (add-a-password) -------------------------
+
+  /**
+   * Start a passphrase-derive round from the Worker-held seed plus a
+   * new passphrase, without disturbing the active session's keys.
+   * Returns channelId, auth, and blindedElement for the evaluate hop.
+   */
+  async channelPassphraseDerive(
+    passphrase: string,
+  ): Promise<{ channelId: string; auth: string; blindedElement: string }> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "channelPassphraseDerive", passphrase }),
+      "channelPassphraseDerive",
+    );
+    return {
+      channelId: resp.channelId,
+      auth: resp.auth,
+      blindedElement: resp.blindedElement,
+    };
+  }
+
+  /**
+   * Finalize the passphrase-derive OPRF round. Returns only the new
+   * client public key (base64url). The private key and all intermediates
+   * are zeroed inside the Worker.
+   */
+  async channelPassphraseFinish(
+    evaluated: string,
+  ): Promise<{ clientPublic: string }> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "channelPassphraseFinish", evaluated }),
+      "channelPassphraseFinish",
+    );
+    return { clientPublic: resp.clientPublic };
+  }
+
   // -- Public API: message operations -----------------------------------------
 
   /**

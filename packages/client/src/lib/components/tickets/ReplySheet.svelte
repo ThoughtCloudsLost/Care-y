@@ -312,18 +312,19 @@
   let composeActionsOpen = $state(false);
   let composeActionsAnchor = $state<HTMLElement | undefined>();
 
+  const sheetTitle = $derived(
+    clientAlias !== null && clientAlias !== ""
+      ? m.ticket_reply_sheet_title({ alias: clientAlias })
+      : m.ticket_reply_sheet_title_standalone(),
+  );
+
   function handlePlus(anchor: HTMLElement): void {
     composeActionsAnchor = anchor;
     composeActionsOpen = true;
   }
 </script>
 
-<ShellSheet
-  {opened}
-  {ondismiss}
-  title={m.ticket_reply_sheet_title({ alias: clientAlias ?? "..." })}
-  class="reply-shell-sheet"
->
+<ShellSheet {opened} {ondismiss} title={sheetTitle} class="reply-shell-sheet">
   <div class="reply-sheet-messages">
     <div class="thread">
       {#if moreCount > 0}

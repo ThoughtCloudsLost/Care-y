@@ -6,6 +6,7 @@
  */
 
 import { encode } from "@care-y/crypto";
+import { ErrorCode } from "@care-y/shared";
 import {
   buildAccountRegistration,
   rewrapMessages,
@@ -32,6 +33,7 @@ export interface PortalUpgradeState {
   readonly username: string;
   dismiss(): void;
   expand(): void;
+  collapse(): void;
   submit(
     username: string,
     password: string,
@@ -48,7 +50,57 @@ export interface PortalUpgradeState {
     messagesQueryKey: readonly unknown[],
     staleThreadLabel: string,
     loginFailedLabel: string,
+    usernameTakenLabel: string,
   ): void;
+}
+
+/**
+ * Extract the tRPC error code (from the error shape's data) and the
+ * error message from an unknown thrown value. Both empty when the value
+ * is not a tRPC error.
+ */
+function readTrpcError(err: unknown): { code: string; message: string } {
+  if (typeof err !== "object" || err === null) {
+    return { code: "", message: "" };
+  }
+  const message =
+    "message" in err && typeof err.message === "string" ? err.message : "";
+  if (!("data" in err) || typeof err.data !== "object" || err.data === null) {
+    return { code: "", message };
+  }
+  const code =
+    "code" in err.data && typeof err.data.code === "string"
+      ? err.data.code
+      : "";
+  return { code, message };
+}
+
+export interface UpgradeErrorLabels {
+  readonly staleThread: string;
+  readonly loginFailed: string;
+  readonly usernameTaken: string;
+}
+
+/**
+ * Map an upgrade-submit failure to the message to render and whether
+ * the messages query should be refetched. Only a CONFLICT is the
+ * stale-thread race worth an invalidate-and-retry; anything else (a
+ * 403, a rate limit, a network failure) rendered as "the conversation
+ * changed, try again" sends the client into a retry loop that can
+ * never succeed.
+ */
+export function mapUpgradeError(
+  err: unknown,
+  labels: UpgradeErrorLabels,
+): { message: string; invalidate: boolean } {
+  const { code, message } = readTrpcError(err);
+  if (code === "CONFLICT") {
+    if (message === ErrorCode.ACCOUNT_USERNAME_TAKEN) {
+      return { message: labels.usernameTaken, invalidate: false };
+    }
+    return { message: labels.staleThread, invalidate: true };
+  }
+  return { message: labels.loginFailed, invalidate: false };
 }
 
 export function createPortalUpgrade(): PortalUpgradeState {
@@ -70,6 +122,12 @@ export function createPortalUpgrade(): PortalUpgradeState {
     expanded = true;
   }
 
+  function collapse(): void {
+    // Closes the create-account sheet without marking the flow dismissed:
+    // the drawer entry reopens it at any time.
+    expanded = false;
+  }
+
   function submit(
     username: string,
     password: string,
@@ -86,6 +144,7 @@ export function createPortalUpgrade(): PortalUpgradeState {
     messagesQueryKey: readonly unknown[],
     staleThreadLabel: string,
     loginFailedLabel: string,
+    usernameTakenLabel: string,
   ): void {
     if (pending) return;
     pending = true;
@@ -126,18 +185,16 @@ export function createPortalUpgrade(): PortalUpgradeState {
         savedUsername = username;
         success = true;
       } catch (err: unknown) {
-        if (
-          typeof err === "object" &&
-          err !== null &&
-          "data" in err &&
-          typeof (err as Record<string, unknown>).data === "object"
-        ) {
-          error = staleThreadLabel;
+        const mapped = mapUpgradeError(err, {
+          staleThread: staleThreadLabel,
+          loginFailed: loginFailedLabel,
+          usernameTaken: usernameTakenLabel,
+        });
+        error = mapped.message;
+        if (mapped.invalidate) {
           void queryClient.invalidateQueries({
             queryKey: messagesQueryKey,
           });
-        } else {
-          error = loginFailedLabel;
         }
       } finally {
         pending = false;
@@ -166,6 +223,7 @@ export function createPortalUpgrade(): PortalUpgradeState {
     },
     dismiss,
     expand,
+    collapse,
     submit,
   };
 }

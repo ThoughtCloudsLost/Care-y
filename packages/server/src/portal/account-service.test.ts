@@ -236,7 +236,6 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
         .where("status", "=", "active")
         .executeTakeFirstOrThrow();
       expect(channel.kind).toBe("account");
-      expect(channel.account_offer).toBe(false);
       expect(Buffer.compare(channel.client_public, reg.publicKey)).toBe(0);
 
       // Verify account row

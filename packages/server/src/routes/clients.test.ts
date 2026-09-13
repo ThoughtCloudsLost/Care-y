@@ -45,6 +45,7 @@ import { createClientRouter, type ClientRouterDeps } from "./clients.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import { createClientService } from "../clients/client-service.js";
+import { createEmailService } from "../clients/email-service.js";
 import { createAuditService } from "../tickets/audit.js";
 import { createMergeService } from "../tickets/merge-service.js";
 import { createDismissalService } from "../clients/dismissal-service.js";
@@ -130,6 +131,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
             mergeService: createMergeService(db),
             orgId,
           }),
+        createEmailSvc: (db, orgId) =>
+          createEmailService({
+            db,
+            audit: createAuditService(db),
+            encryptor: noopEncryptor,
+            indexer: testNoopIndexer,
+            orgId,
+          }),
         fieldEncryptor: noopEncryptor,
         async isAssignedToClientTicket(db, clientId, userId) {
           const row = await db
@@ -140,6 +149,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             .executeTakeFirst();
           return (row?.cnt ?? 0) > 0;
         },
+        createDismissalSvc: (db) => createDismissalService(db),
+        createMergeScanSvc: (db) => createMergeScanService(db),
       };
     }
 
@@ -873,6 +884,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(result).toHaveProperty("phoneHashes");
       });
 
+      it("returns the empty stub when the scan dep is declined with null", async () => {
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager, {
+          deps: { createMergeScanSvc: null },
+        });
+
+        const result = await caller.clients.mergeScanData();
+        expect(result).toEqual({
+          clients: [],
+          fieldRoles: [],
+          phoneHashes: [],
+          emailHashes: [],
+        });
+      });
+
       it("includes phoneHashes for hash-bearing clients", async () => {
         const fixture = await createTestClientFixture(tenantDb);
         const hashVal = "e".repeat(128) as PhoneMatchHash;
@@ -1006,6 +1034,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         const result = await caller.clients.getDismissals();
         // No dismissals stored yet, so null is expected
+        expect(result).toBeNull();
+      });
+
+      it("returns null when the dismissal dep is declined with null", async () => {
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager, {
+          deps: { createDismissalSvc: null },
+        });
+
+        const result = await caller.clients.getDismissals();
         expect(result).toBeNull();
       });
     });

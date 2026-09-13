@@ -367,6 +367,26 @@ describe("ReplySheet", () => {
     expect(title?.textContent).toContain("Sparrow");
   });
 
+  it("uses a standalone title when clientAlias is null", () => {
+    const { container } = render(ReplySheet, {
+      props: { ...baseProps, clientAlias: null },
+    });
+    const shell = container.querySelector("[data-testid='passthrough-shell']");
+    const title = shell?.getAttribute("data-title");
+    expect(title).toBeTruthy();
+    expect(title?.endsWith(" ")).toBe(false);
+  });
+
+  it("uses a standalone title when clientAlias is empty string", () => {
+    const { container } = render(ReplySheet, {
+      props: { ...baseProps, clientAlias: "" },
+    });
+    const shell = container.querySelector("[data-testid='passthrough-shell']");
+    const title = shell?.getAttribute("data-title");
+    expect(title).toBeTruthy();
+    expect(title?.endsWith(" ")).toBe(false);
+  });
+
   // ── moreCount conditional ──
 
   it("shows more-count message when followUpCount exceeds preview length", () => {

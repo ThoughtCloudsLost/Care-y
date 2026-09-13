@@ -2,6 +2,7 @@
 export type TicketAction =
   | "call"
   | "phone"
+  | "email"
   | "take"
   | "release"
   | "assign"

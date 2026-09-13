@@ -133,6 +133,7 @@ function makeMessage(
   keypairPublic: Uint8Array,
   editedAt: string | null = null,
   createdAt: string = new Date().toISOString(),
+  type?: string | null,
 ): PortalMessageWire {
   const encrypted = eciesEncrypt(
     new TextEncoder().encode(text),
@@ -142,12 +143,45 @@ function makeMessage(
   return {
     id: `msg-${String(messageSeq)}`,
     direction,
+    type: type ?? null,
     ephemeralPoint: encode(encrypted.ephemeralPoint),
     nonce: encode(encrypted.nonce),
     ciphertext: encode(encrypted.ciphertext),
     createdAt,
     editedAt,
   };
+}
+
+/** Build a ProseMirror doc JSON for email tests. */
+function emailDocJson(text: string): Record<string, unknown> {
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text }],
+      },
+    ],
+  };
+}
+
+/** Build an email_outbound portal message with { subject, doc } JSON payload. */
+function makeEmailMessage(
+  subject: string,
+  bodyText: string,
+  direction: PortalMessageWire["direction"],
+  keypairPublic: Uint8Array,
+  createdAt: string = new Date().toISOString(),
+): PortalMessageWire {
+  const payload = JSON.stringify({ subject, doc: emailDocJson(bodyText) });
+  return makeMessage(
+    payload,
+    direction,
+    keypairPublic,
+    null,
+    createdAt,
+    "email_outbound",
+  );
 }
 
 describe("PortalThread", () => {
@@ -369,6 +403,7 @@ describe("PortalThread", () => {
       id: `msg-${String(++messageSeq)}`,
       followupId,
       direction,
+      type: null,
       ephemeralPoint: encode(encrypted.ephemeralPoint),
       nonce: encode(encrypted.nonce),
       ciphertext: encode(encrypted.ciphertext),
@@ -921,6 +956,132 @@ describe("PortalThread", () => {
         expect(lastMatch).toBeDefined();
         expect(lastMatch!.length).toBe(1);
         expect(lastMatch![0]).toBe(msg.id);
+      });
+    });
+  });
+
+  // ── Email entry rendering ───────────────────────────────────────────
+
+  describe("email entries", () => {
+    it("renders an email_outbound entry with subject and formatted body", async () => {
+      const ctx = buildDecryptContext();
+
+      const emailMsg = makeEmailMessage(
+        "Re: your appointment",
+        "Please confirm your visit.",
+        "to_client",
+        ctx.keypairPublic,
+      );
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [emailMsg],
+          decryptMessage: ctx.decryptMessage,
+          decryptAttachmentKey: ctx.decryptAttachmentKey,
+          decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+          loading: false,
+        },
+      });
+
+      await vi.waitFor(() => {
+        const subject = container.querySelector(
+          "[data-testid='portal-email-subject']",
+        );
+        expect(subject).toBeTruthy();
+        expect(subject!.textContent).toContain("Re: your appointment");
+      });
+
+      const body = container.querySelector("[data-testid='portal-email-body']");
+      expect(body).toBeTruthy();
+      expect(body!.textContent).toContain("Please confirm your visit.");
+      // Body renders through the sanitized HTML pipeline (contains <p>)
+      expect(body!.querySelector("p")).toBeTruthy();
+    });
+
+    it("falls back to plain text when email JSON is malformed", async () => {
+      const ctx = buildDecryptContext();
+
+      // Malformed: not a valid { subject, doc } structure
+      const malformed = makeMessage(
+        "This is not valid JSON email payload",
+        "to_client",
+        ctx.keypairPublic,
+        null,
+        new Date().toISOString(),
+        "email_outbound",
+      );
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [malformed],
+          decryptMessage: ctx.decryptMessage,
+          decryptAttachmentKey: ctx.decryptAttachmentKey,
+          decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+          loading: false,
+        },
+      });
+
+      // Wait for the decrypt to resolve, not just for the bubble shell:
+      // bubbles render immediately with a placeholder before the async
+      // decrypt lands.
+      await vi.waitFor(() => {
+        const bubble = container.querySelector(
+          "[data-testid='conversation-bubble']",
+        );
+        expect(bubble).toBeTruthy();
+        expect(bubble!.textContent).toContain(
+          "This is not valid JSON email payload",
+        );
+      });
+
+      // No email-specific elements
+      expect(
+        container.querySelector("[data-testid='portal-email-subject']"),
+      ).toBeNull();
+      expect(
+        container.querySelector("[data-testid='portal-email-body']"),
+      ).toBeNull();
+    });
+
+    it("does not affect non-email message entries", async () => {
+      const ctx = buildDecryptContext();
+
+      const plainMsg = makeMessage(
+        "Regular message",
+        "to_client",
+        ctx.keypairPublic,
+      );
+      const emailMsg = makeEmailMessage(
+        "Test subject",
+        "Email body here.",
+        "to_client",
+        ctx.keypairPublic,
+      );
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [plainMsg, emailMsg],
+          decryptMessage: ctx.decryptMessage,
+          decryptAttachmentKey: ctx.decryptAttachmentKey,
+          decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+          loading: false,
+        },
+      });
+
+      // Wait for both decrypts to resolve: the bubble shells render
+      // before the async decrypt lands, so waiting on count alone races.
+      await vi.waitFor(() => {
+        // Only one email subject element (from the email message)
+        const subjects = container.querySelectorAll(
+          "[data-testid='portal-email-subject']",
+        );
+        expect(subjects.length).toBe(1);
+
+        // The regular message renders its text directly
+        const firstBubble = container.querySelectorAll(
+          "[data-testid='conversation-bubble']",
+        )[0];
+        expect(firstBubble!.textContent).toContain("Regular message");
       });
     });
   });

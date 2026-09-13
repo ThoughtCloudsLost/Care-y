@@ -10,6 +10,7 @@
     LockOpen,
     RotateCcw,
     Phone,
+    Mail,
     HeartHandshake,
     Save,
   } from "@lucide/svelte";
@@ -17,7 +18,7 @@
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { clientKeys, ticketsKeys } from "$lib/query/keys.js";
-  import { ErrorCode } from "@care-y/shared";
+  import { ErrorCode, updateEmailInputSchema } from "@care-y/shared";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -33,6 +34,7 @@
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ClientCard from "./ClientCard.svelte";
   import PhoneChangeSteps from "$lib/components/clients/PhoneChangeSteps.svelte";
+  import EmailChangeSteps from "$lib/components/clients/EmailChangeSteps.svelte";
   import MergeSheet from "$lib/components/clients/MergeSheet.svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -48,7 +50,9 @@
     readonly encryptedAlias: string;
     readonly aliasHash: string | null;
     readonly phoneMatchHash: string | null;
+    readonly emailMatchHash: string | null;
     readonly phone: string | null;
+    readonly email: string | null;
     readonly ticketCount: number;
     readonly createdAt: string;
     readonly mergedInto: string | null;
@@ -195,11 +199,12 @@
 
   let sheetClientId = $state<string | null>(null);
 
-  // The sheet body swaps between editing and the two gated phone steps. A
-  // phone change rewrites the number across every ticket for the client, so
-  // it passes through a confirmation, and the server may answer that another
-  // client already holds the number.
-  type SheetStep = "edit" | "confirm" | "conflict";
+  // The sheet body swaps between editing and the gated phone/email steps.
+  // A phone or email change rewrites the value across every ticket for
+  // the client, so it passes through a confirmation, and the server may
+  // answer that another client already holds the value.
+  type SheetStep =
+    "edit" | "confirm" | "conflict" | "email-confirm" | "email-conflict";
   let sheetStep = $state<SheetStep>("edit");
 
   let mergeSheetOpened = $state(false);
@@ -259,6 +264,9 @@
     editPhone = "";
     phoneError = null;
     phoneConflict = null;
+    editEmail = "";
+    emailError = null;
+    emailConflict = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -392,15 +400,86 @@
   }));
 
   // ---------------------------------------------------------------------------
+  // Email editing
+  // ---------------------------------------------------------------------------
+
+  // Same approach as phone: an empty field means "leave the address alone";
+  // anything typed is a full replacement. Not seeded from the detail response
+  // because managers see a masked address.
+  let editEmail = $state("");
+  let emailError = $state<string | null>(null);
+  let emailConflict = $state<{
+    conflictingClientId: string;
+    conflictingClientEncryptedAlias: string;
+  } | null>(null);
+
+  const emailConflictAlias = $derived(
+    emailConflict === null
+      ? null
+      : orgCache.decrypt(
+          `client-alias:${emailConflict.conflictingClientId}`,
+          emailConflict.conflictingClientEncryptedAlias,
+        ),
+  );
+
+  const trimmedEmail = $derived(editEmail.trim());
+  const emailEntered = $derived(trimmedEmail !== "");
+  const emailValid = $derived.by((): boolean => {
+    if (!emailEntered) return false;
+    return updateEmailInputSchema.shape.emailAddress.safeParse(trimmedEmail)
+      .success;
+  });
+
+  const updateEmailMutation = createMutation(() => ({
+    mutationFn: async (input: { clientId: string; emailAddress: string }) => {
+      const emailMatchHash = await orgKeyManager.emailMatchHash(
+        input.emailAddress,
+      );
+      return clientsRouter.updateEmail.mutate({
+        ...input,
+        emailMatchHash: emailMatchHash ?? null,
+      });
+    },
+    onSuccess: (result: {
+      success: boolean;
+      conflict: {
+        conflictingClientId: string;
+        conflictingClientEncryptedAlias: string;
+      } | null;
+    }) => {
+      if (result.conflict) {
+        emailConflict = result.conflict;
+        sheetStep = "email-conflict";
+        return;
+      }
+      haptic();
+      void queryClient.invalidateQueries({ queryKey: clientKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ticketsKeys.all });
+      const msg = m.client_email_changed_toast();
+      toastStore.show(msg);
+      announceToLiveRegion("polite", msg);
+      closeSheet();
+    },
+    onError: () => {
+      toastStore.show(m.error_generic());
+      sheetStep = "edit";
+    },
+  }));
+
+  // ---------------------------------------------------------------------------
   // Saving
   // ---------------------------------------------------------------------------
 
   const savePending = $derived(
-    updateAliasMutation.isPending || updatePhoneMutation.isPending,
+    updateAliasMutation.isPending ||
+      updatePhoneMutation.isPending ||
+      updateEmailMutation.isPending,
   );
 
   const canSave = $derived(
-    (aliasChanged || phoneEntered) && (!phoneEntered || phoneValid),
+    (aliasChanged || phoneEntered || emailEntered) &&
+      (!phoneEntered || phoneValid) &&
+      (!emailEntered || emailValid),
   );
 
   function handleSave(): void {
@@ -410,6 +489,12 @@
       // warning is shown before anything is written.
       phoneError = null;
       sheetStep = "confirm";
+      return;
+    }
+    if (emailEntered) {
+      // Gate the email write behind the confirmation, alias included.
+      emailError = null;
+      sheetStep = "email-confirm";
       return;
     }
     handleSaveAlias();
@@ -449,6 +534,31 @@
     const conflict = phoneConflict;
     if (conflict === null) return;
     openMerge(conflict.conflictingClientId, phoneConflictAlias ?? "");
+  }
+
+  function handleConfirmEmail(): void {
+    if (sheetClientId === null) return;
+    if (aliasChanged) handleSaveAlias();
+    updateEmailMutation.mutate({
+      clientId: sheetClientId,
+      emailAddress: trimmedEmail,
+    });
+  }
+
+  function handleCancelEmail(): void {
+    sheetStep = "edit";
+  }
+
+  function handleTryAnotherEmail(): void {
+    emailConflict = null;
+    editEmail = "";
+    sheetStep = "edit";
+  }
+
+  function handleMergeFromEmailConflict(): void {
+    const conflict = emailConflict;
+    if (conflict === null) return;
+    openMerge(conflict.conflictingClientId, emailConflictAlias ?? "");
   }
 
   // ---------------------------------------------------------------------------
@@ -531,6 +641,7 @@
           clientId={client.id}
           alias={decryptAlias(client) ?? "..."}
           phone={client.phone}
+          email={client.email}
           ticketCount={client.ticketCount}
           createdAt={client.createdAt}
           mergedInto={client.mergedInto}
@@ -573,7 +684,7 @@
   {/snippet}
 
   <div class="edit-client-content">
-    {#if sheetStep !== "edit"}
+    {#if sheetStep === "confirm" || sheetStep === "conflict"}
       <PhoneChangeSteps
         step={sheetStep === "conflict" ? "conflict" : "confirm"}
         clientAlias={detailDecryptedAlias ?? ""}
@@ -583,6 +694,17 @@
         oncancel={handleCancelPhone}
         onmerge={handleMergeFromConflict}
         ontryanother={handleTryAnotherPhone}
+      />
+    {:else if sheetStep === "email-confirm" || sheetStep === "email-conflict"}
+      <EmailChangeSteps
+        step={sheetStep === "email-conflict" ? "conflict" : "confirm"}
+        clientAlias={detailDecryptedAlias ?? ""}
+        conflictAlias={emailConflictAlias}
+        pending={savePending}
+        onconfirm={handleConfirmEmail}
+        oncancel={handleCancelEmail}
+        onmerge={handleMergeFromEmailConflict}
+        ontryanother={handleTryAnotherEmail}
       />
     {:else if clientDetailQuery.isLoading}
       <Block>
@@ -650,6 +772,40 @@
           />
         </List>
         <FieldError message={phoneError ?? undefined} />
+      </div>
+
+      <!-- Email section. Same approach as phone: read-only display of the
+           current email (masked for manager), empty input for replacement. -->
+      <div class="detail-section">
+        <p class="section-label">{m.client_email_label()}</p>
+        {#if detail.email !== null && detail.email !== ""}
+          <p class="current-email">
+            <Mail size={16} aria-hidden="true" />
+            {detail.email}
+          </p>
+        {/if}
+        <List nested>
+          <ListInput
+            label={m.client_email_label()}
+            type="email"
+            value={editEmail}
+            placeholder={m.client_email_placeholder()}
+            oninput={(e: Event) => {
+              if (e.target instanceof HTMLInputElement) {
+                editEmail = e.target.value;
+                emailError =
+                  e.target.value.trim() === "" ||
+                  updateEmailInputSchema.shape.emailAddress.safeParse(
+                    e.target.value.trim(),
+                  ).success
+                    ? null
+                    : m.client_email_invalid_error();
+              }
+            }}
+            disabled={savePending}
+          />
+        </List>
+        <FieldError message={emailError ?? undefined} />
       </div>
 
       <!-- Tickets section -->
@@ -813,7 +969,8 @@
     margin-bottom: var(--space-lg);
   }
 
-  .current-phone {
+  .current-phone,
+  .current-email {
     display: flex;
     align-items: center;
     gap: var(--space-sm);

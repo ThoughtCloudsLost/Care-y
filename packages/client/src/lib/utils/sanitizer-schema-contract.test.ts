@@ -14,6 +14,7 @@
 import { describe, it, expect } from "vitest";
 import { Node as PMNode, DOMSerializer } from "prosemirror-model";
 import { editorSchema } from "$lib/editor/prosemirror-schema.js";
+import { emailSchema } from "$lib/editor/email-schema.js";
 import { sanitizeArticleHtml, ALLOWED_URI_REGEXP } from "./render-article.js";
 
 // ---------------------------------------------------------------------------
@@ -779,6 +780,107 @@ describe("ALLOWED_URI_REGEXP allows and rejects the correct schemes", () => {
     for (const [scheme, uri] of rejected) {
       it(`rejects ${scheme} URIs`, () => {
         expect(ALLOWED_URI_REGEXP.test(uri)).toBe(false);
+      });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Deliverable 3: Email schema contract (trimmed node set survives sanitizer)
+// ---------------------------------------------------------------------------
+
+/** Lookup helper that throws on missing fixture, narrowing the return to non-undefined. */
+function requireFixture(
+  map: Record<string, Fixture>,
+  key: string,
+  label: string,
+): Fixture {
+  const fixture = map[key];
+  if (fixture === undefined) {
+    throw new Error(
+      `No fixture for ${label} "${key}". Add one to the fixture map.`,
+    );
+  }
+  return fixture;
+}
+
+describe("sanitizer allowlist covers every emailSchema node and mark", () => {
+  /**
+   * Email-specific fixtures for the trimmed schema (paragraph, lists,
+   * hard_break, text, strong, em, link). The email schema is a strict
+   * subset of editorSchema, so the PURIFY_CONFIG must already cover
+   * every node/mark it contains.
+   */
+  const EMAIL_NODE_FIXTURES: Record<string, Fixture> = {
+    doc: requireFixture(NODE_FIXTURES, "doc", "node"),
+    paragraph: requireFixture(NODE_FIXTURES, "paragraph", "node"),
+    bullet_list: requireFixture(NODE_FIXTURES, "bullet_list", "node"),
+    ordered_list: requireFixture(NODE_FIXTURES, "ordered_list", "node"),
+    list_item: requireFixture(NODE_FIXTURES, "list_item", "node"),
+    hard_break: requireFixture(NODE_FIXTURES, "hard_break", "node"),
+    text: requireFixture(NODE_FIXTURES, "text", "node"),
+  };
+
+  const EMAIL_MARK_FIXTURES: Record<string, Fixture> = {
+    strong: requireFixture(MARK_FIXTURES, "strong", "mark"),
+    em: requireFixture(MARK_FIXTURES, "em", "mark"),
+    link: requireFixture(MARK_FIXTURES, "link", "mark"),
+  };
+
+  describe("every emailSchema node has a fixture and survives sanitization", () => {
+    const emailNodeNames: string[] = [];
+    emailSchema.spec.nodes.forEach((name: string) => {
+      emailNodeNames.push(name);
+    });
+
+    for (const nodeName of emailNodeNames) {
+      it(`email node "${nodeName}" fixture survives PURIFY_CONFIG`, () => {
+        const fixture = requireFixture(
+          EMAIL_NODE_FIXTURES,
+          nodeName,
+          "email node",
+        );
+
+        const doc = PMNode.fromJSON(emailSchema, fixture.doc);
+        const serializer = DOMSerializer.fromSchema(emailSchema);
+        const fragment = serializer.serializeFragment(doc.content);
+        const div = document.createElement("div");
+        div.appendChild(fragment);
+        const raw = div.innerHTML;
+        const sanitized = sanitizeArticleHtml(raw);
+
+        for (const substr of fixture.expected) {
+          expect(sanitized).toContain(substr);
+        }
+      });
+    }
+  });
+
+  describe("every emailSchema mark has a fixture and survives sanitization", () => {
+    const emailMarkNames: string[] = [];
+    emailSchema.spec.marks.forEach((name: string) => {
+      emailMarkNames.push(name);
+    });
+
+    for (const markName of emailMarkNames) {
+      it(`email mark "${markName}" fixture survives PURIFY_CONFIG`, () => {
+        const fixture = requireFixture(
+          EMAIL_MARK_FIXTURES,
+          markName,
+          "email mark",
+        );
+
+        const doc = PMNode.fromJSON(emailSchema, fixture.doc);
+        const serializer = DOMSerializer.fromSchema(emailSchema);
+        const fragment = serializer.serializeFragment(doc.content);
+        const div = document.createElement("div");
+        div.appendChild(fragment);
+        const raw = div.innerHTML;
+        const sanitized = sanitizeArticleHtml(raw);
+
+        for (const substr of fixture.expected) {
+          expect(sanitized).toContain(substr);
+        }
       });
     }
   });

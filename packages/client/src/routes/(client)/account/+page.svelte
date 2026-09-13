@@ -28,12 +28,16 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
-  import { SvelteSet } from "svelte/reactivity";
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { encode } from "@care-y/crypto";
-  import { newFollowupId, newKeyGeneration } from "@care-y/shared";
+  import { decode, encode } from "@care-y/crypto";
+  import {
+    newFollowupId,
+    newKeyGeneration,
+    serializeContactCorrection,
+    type ContactCorrectionPayload,
+  } from "@care-y/shared";
   import { requireRouter } from "$lib/errors.js";
   import {
     buildAccountRegistration,
@@ -41,7 +45,8 @@
   } from "$lib/portal/account-crypto.js";
   import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
   import type { LoginPhaseId } from "$lib/components/onboarding/login-phase.js";
-  import { PortalBridge } from "$lib/workers/portal-bridge.js";
+  import { getPortalBridgeFactory } from "$lib/portal/context.js";
+  import type { PortalBridge } from "$lib/workers/portal-bridge.js";
   import type { DerivationPhase } from "$lib/workers/portal-protocol.js";
   import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
@@ -59,13 +64,18 @@
   import AccountSettings from "$lib/portal/AccountSettings.svelte";
   import PageLayout from "$lib/shell/PageLayout.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import { Settings as Cog, LogOut } from "@lucide/svelte";
+  import { Settings as Cog, LogOut, IdCard, UserPen } from "@lucide/svelte";
+  import ContactInfoCard from "$lib/portal/ContactInfoCard.svelte";
+  import ContactCorrectionSheet from "$lib/portal/ContactCorrectionSheet.svelte";
   import {
     getClientShellCtx,
     DEFAULT_SAFE_URL,
     type ClientDrawerAction,
   } from "$lib/client-shell/context.js";
+  import { createPortalFilters } from "$lib/composables/portal/create-portal-filters.svelte.js";
   import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
+
+  const createPortalBridge = getPortalBridgeFactory();
 
   // ---------------------------------------------------------------------------
   // Account session handle (ADR-091: bridge-backed, key material in the worker)
@@ -228,7 +238,7 @@
     loginPhase = "auth";
 
     void (async () => {
-      const bridge = new PortalBridge();
+      const bridge = createPortalBridge();
       try {
         await bridge.waitReady();
 
@@ -338,8 +348,8 @@
       if (!trpc.branding) return null;
       const data = await trpc.branding.getPublicBranding.query();
       if (data.orgPublicKey === null) return null;
-      const { decode } = await import("@care-y/crypto");
-      return decode(data.orgPublicKey);
+      const { decode: decodeKey } = await import("@care-y/crypto");
+      return decodeKey(data.orgPublicKey);
     },
     staleTime: 5 * 60 * 1000,
     retry: false,
@@ -470,6 +480,11 @@
       });
   }
 
+  function handleCorrectionSubmit(payload: ContactCorrectionPayload): void {
+    handleSend(serializeContactCorrection(payload), "contact_correction");
+    correctionSheetOpen = false;
+  }
+
   // ---------------------------------------------------------------------------
   // Change password handler
   // ---------------------------------------------------------------------------
@@ -490,7 +505,7 @@
     const callbacks = buildLoginCallbacks(() => undefined);
 
     // Proof bridge: a temporary worker for the current-password proof
-    const proofBridge = new PortalBridge();
+    const proofBridge = createPortalBridge();
 
     try {
       await proofBridge.waitReady();
@@ -565,7 +580,7 @@
 
       // The new session is established by re-logging in (the cookie is
       // still valid from the change-password mutation). Build a new bridge.
-      const newBridge = new PortalBridge();
+      const newBridge = createPortalBridge();
       await newBridge.waitReady();
 
       const newPwBuf = new TextEncoder().encode(newPassword).buffer;
@@ -675,6 +690,46 @@
   const shellContainer = getClientShellCtx();
 
   let settingsOpen = $state(false);
+  let contactCardOpen = $state(false);
+  let correctionSheetOpen = $state(false);
+
+  /**
+   * Fetch the sealed contact envelope from the account session endpoint.
+   * Called on card open, never eagerly.
+   */
+  async function fetchSealedAccountContact(): Promise<string> {
+    const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+    const result = await portalRouter.accountContactInfo.query();
+    return result.sealed;
+  }
+
+  /**
+   * Open a sealed contact envelope using the account session's bridge.
+   * The envelope is ephemeralPoint(32) | nonce(24) | ciphertext(N) as
+   * a single base64url string.
+   */
+  async function openAccountContactEnvelope(
+    sealed: string,
+  ): Promise<{ phone?: string; email?: string }> {
+    if (!session) throw new Error("No session");
+    const raw = decode(sealed);
+    const ep = encode(raw.subarray(0, 32));
+    const nonce = encode(raw.subarray(32, 56));
+    const ct = encode(raw.subarray(56));
+    const json = await session.decryptMessage(ep, nonce, ct);
+    const parsed: unknown = JSON.parse(json);
+    if (typeof parsed !== "object" || parsed === null) {
+      return {};
+    }
+    const result: { phone?: string; email?: string } = {};
+    if ("phone" in parsed && typeof parsed.phone === "string") {
+      result.phone = parsed.phone;
+    }
+    if ("email" in parsed && typeof parsed.email === "string") {
+      result.email = parsed.email;
+    }
+    return result;
+  }
 
   // Locale-reactive title (the read establishes a $derived dependency)
   const pageTitle = $derived.by((): string => {
@@ -687,6 +742,22 @@
     void uiLocaleStore.locale;
     if (!session) return [];
     return [
+      {
+        id: "contact-info",
+        label: m.portal_contact_title(),
+        icon: IdCard,
+        onclick: () => {
+          contactCardOpen = true;
+        },
+      },
+      {
+        id: "correct-contact",
+        label: m.portal_correction_mode_button(),
+        icon: UserPen,
+        onclick: () => {
+          correctionSheetOpen = true;
+        },
+      },
       {
         id: "settings",
         label: m.account_settings_title(),
@@ -767,92 +838,24 @@
   const accountRecordings = $derived(bootstrapQuery.data?.recordings ?? []);
   const accountCallEntries = $derived(bootstrapQuery.data?.callEntries ?? []);
 
-  // --- Filter pills (images / files) ---
+  // --- Filter composable (Type / Author / Date) ---
+  // Same composable as the portal page so both surfaces show the same chips.
 
-  type AttachmentFilter = "images" | "files" | null;
-  let activeFilter = $state<AttachmentFilter>(null);
-
-  const imageFollowupIds = $derived.by((): ReadonlySet<string> => {
-    const ids = new SvelteSet<string>();
-    for (const att of accountAttachments) {
-      if (att.contentType?.startsWith("image/") === true) {
-        ids.add(att.followupId);
-      }
-    }
-    return ids;
+  const portalFilters = createPortalFilters({
+    get labels() {
+      void uiLocaleStore.locale;
+      return {
+        filterType: m.ticket_filter_type(),
+        filterAuthor: m.ticket_filter_author(),
+        filterDate: m.ticket_filter_date(),
+        typeMessages: m.ticket_filter_type_messages(),
+        typeImages: m.ticket_filter_type_images(),
+        typeFiles: m.ticket_filter_type_files(),
+        authorYou: m.portal_you(),
+        authorSupport: m.portal_support_team(),
+      };
+    },
   });
-
-  const fileFollowupIds = $derived.by((): ReadonlySet<string> => {
-    const ids = new SvelteSet<string>();
-    for (const att of accountAttachments) {
-      if (att.contentType !== null && !att.contentType.startsWith("image/")) {
-        ids.add(att.followupId);
-      }
-    }
-    return ids;
-  });
-
-  const filteredMessages = $derived.by(() => {
-    if (activeFilter === null) return allMessages;
-    const targetIds =
-      activeFilter === "images" ? imageFollowupIds : fileFollowupIds;
-    return allMessages.filter(
-      (msg) =>
-        "followupId" in msg &&
-        typeof msg.followupId === "string" &&
-        targetIds.has(msg.followupId),
-    );
-  });
-
-  function handleFilterToggle(pillId: string): void {
-    // The layout hands back the id of a pill this page defined, so anything
-    // else is a wiring mistake rather than a filter nobody selected.
-    const next: AttachmentFilter =
-      pillId === "images" || pillId === "files" ? pillId : null;
-    activeFilter = activeFilter === next ? null : next;
-  }
-
-  const filterPillDefs = $derived.by(() => {
-    if (accountAttachments.length === 0) return [];
-
-    const pills: {
-      id: string;
-      label: string;
-      mode: "multi" | "single" | "date";
-      options: { value: string; label: string }[];
-      selected: ReadonlySet<string> | string | null;
-    }[] = [];
-
-    if (imageFollowupIds.size > 0) {
-      pills.push({
-        id: "images",
-        label: m.portal_filter_images(),
-        mode: "single",
-        options: [{ value: "images", label: m.portal_filter_images() }],
-        selected: activeFilter === "images" ? "images" : null,
-      });
-    }
-
-    if (fileFollowupIds.size > 0) {
-      pills.push({
-        id: "files",
-        label: m.portal_filter_files(),
-        mode: "single",
-        options: [{ value: "files", label: m.portal_filter_files() }],
-        selected: activeFilter === "files" ? "files" : null,
-      });
-    }
-
-    return pills;
-  });
-
-  const filterActiveCount = $derived(activeFilter !== null ? 1 : 0);
-
-  function clearFilters(): void {
-    activeFilter = null;
-  }
-
-  const noop = (): void => undefined;
 
   $effect(() => {
     shellContainer.current = {
@@ -889,18 +892,24 @@
   />
 {/snippet}
 
+{#snippet accountStats()}
+  {#if allMessages.length > 0}
+    <span>
+      {allMessages.length === 1
+        ? m.ticket_detail_one_message_stat()
+        : m.ticket_detail_messages_stat({
+            count: String(allMessages.length),
+          })}
+    </span>
+  {/if}
+{/snippet}
+
 {#snippet threadSubnavbar()}
   <SubNavbarFilterLayout
     title={m.account_title()}
     hideTitle
-    filterPills={{
-      pills: filterPillDefs,
-      activeCount: filterActiveCount,
-      ontoggle: handleFilterToggle,
-      onselect: handleFilterToggle,
-      ondatechange: noop,
-      onclearall: clearFilters,
-    }}
+    stats={accountStats}
+    filterPills={portalFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     onsearch={searchActive ? undefined : openSearch}
     searchLabel={m.portal_search_label()}
@@ -948,7 +957,7 @@
       {/snippet}
 
       <PortalThread
-        messages={filteredMessages}
+        messages={allMessages}
         decryptMessage={async (ep: string, n: string, ct: string) =>
           activeSession.decryptMessage(ep, n, ct)}
         decryptAttachmentKey={async (ep: string, n: string, ct: string) =>
@@ -970,6 +979,11 @@
         onmatches={(ids: readonly string[]) => {
           matchIds = ids;
         }}
+        filterTypes={portalFilters.filterTypesArr}
+        filterAuthors={portalFilters.filterAuthorsArr}
+        filterDateFrom={portalFilters.filterDateFrom}
+        filterDateTo={portalFilters.filterDateTo}
+        onclearfilters={() => portalFilters.clearAll()}
       />
     </PageLayout>
 
@@ -992,6 +1006,23 @@
         errorMessage={changePasswordError || undefined}
       />
     </ShellSheet>
+
+    <ContactInfoCard
+      open={contactCardOpen}
+      onclose={() => {
+        contactCardOpen = false;
+      }}
+      fetchSealed={fetchSealedAccountContact}
+      openEnvelope={openAccountContactEnvelope}
+      orgName={supportLabel}
+    />
+
+    <ContactCorrectionSheet
+      opened={correctionSheetOpen}
+      ondismiss={() => (correctionSheetOpen = false)}
+      pending={replyMutation.isPending}
+      onsubmit={handleCorrectionSubmit}
+    />
   {/if}
 {/key}
 

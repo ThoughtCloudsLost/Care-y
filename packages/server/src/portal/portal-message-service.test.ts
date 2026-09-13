@@ -318,26 +318,99 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(result.ticketId).toBeNull();
       });
 
-      it("returns accountOffer true for an intake_continuation channel with account_offer set", async () => {
+      it("returns upgradeOptions ['passphrase','account'] for a bare secure_link channel", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
         const channel = await insertChannel(testDb.db, fixture.clientId, {
-          kind: "intake_continuation",
-          account_offer: true,
+          kind: "secure_link",
         });
 
         const result = await bootstrap(testDb.db, channel);
-        expect(result.accountOffer).toBe(true);
+        expect(result.upgradeOptions).toEqual(["passphrase", "account"]);
       });
 
-      it("returns accountOffer false for an intake_continuation channel without account_offer", async () => {
+      it("returns upgradeOptions ['account'] for a passphrase channel", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
         const channel = await insertChannel(testDb.db, fixture.clientId, {
-          kind: "intake_continuation",
-          account_offer: false,
+          kind: "secure_link",
+          has_passphrase: true,
         });
 
         const result = await bootstrap(testDb.db, channel);
-        expect(result.accountOffer).toBe(false);
+        expect(result.upgradeOptions).toEqual(["account"]);
+      });
+
+      it("returns upgradeOptions [] for an account channel", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId, {
+          kind: "account",
+        });
+
+        const result = await bootstrap(testDb.db, channel);
+        expect(result.upgradeOptions).toEqual([]);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // bootstrap message type field
+    // -----------------------------------------------------------------------
+
+    describe("bootstrap message type field", () => {
+      it("carries the originating follow-up type on each message wire entry", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        // Insert a regular message follow-up
+        const fuMsg = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuMsg,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct-msg"),
+          })
+          .execute();
+        await storeClientCopy(
+          testDb.db,
+          channel.id,
+          fuMsg,
+          fakeTriple(),
+          "to_client",
+        );
+
+        // Insert an email_outbound follow-up
+        const fuEmail = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuEmail,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "email_outbound",
+            encrypted_content: Buffer.from("ct-email"),
+          })
+          .execute();
+        await storeClientCopy(
+          testDb.db,
+          channel.id,
+          fuEmail,
+          fakeTriple(),
+          "to_client",
+        );
+
+        const result = await bootstrap(testDb.db, channel);
+        expect(result.messages.length).toBe(2);
+
+        const msgEntry = result.messages.find((m) => m.followupId === fuMsg);
+        expect(msgEntry).toBeDefined();
+        expect(msgEntry!.type).toBe("message");
+
+        const emailEntry = result.messages.find(
+          (m) => m.followupId === fuEmail,
+        );
+        expect(emailEntry).toBeDefined();
+        expect(emailEntry!.type).toBe("email_outbound");
       });
     });
 

@@ -39,3 +39,33 @@ export function formatPhone(phoneBuf: Buffer): string {
     phoneBuf.fill(0);
   }
 }
+
+/**
+ * Returns a masked email string (`a***@example.org`) from a decrypted
+ * Buffer: first character of the local part, then the domain. An address
+ * with no local part before the `@` masks to `***`, so a malformed value
+ * can never leak through the mask. Zeros the buffer before returning.
+ */
+export function maskEmail(emailBuf: Buffer): string {
+  try {
+    const full = emailBuf.toString("utf-8");
+    const atIndex = full.indexOf("@");
+    if (atIndex <= 0) return "***";
+    const firstChar = full[0] ?? "";
+    return firstChar + "***" + full.slice(atIndex);
+  } finally {
+    emailBuf.fill(0);
+  }
+}
+
+/**
+ * Returns the full email address from a decrypted Buffer for admin
+ * display. Zeros the buffer before returning.
+ */
+export function formatEmail(emailBuf: Buffer): string {
+  try {
+    return emailBuf.toString("utf-8");
+  } finally {
+    emailBuf.fill(0);
+  }
+}

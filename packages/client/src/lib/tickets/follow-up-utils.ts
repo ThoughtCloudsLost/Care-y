@@ -14,6 +14,11 @@ export function followUpRenderVariant(fu: {
   return registry[fu.type]?.renderVariant;
 }
 
+/** Whether a follow-up is a sent email (renders subject + formatted body). */
+export function isEmailOutbound(fu: { type: string }): boolean {
+  return fu.type === "email_outbound";
+}
+
 // --- F6 grouping ---
 
 export interface FollowUpGroup<T> {

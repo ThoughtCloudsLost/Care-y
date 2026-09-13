@@ -14,9 +14,13 @@ import { timingSafeEqual } from "node:crypto";
 import type { Kysely, Selectable, Transaction } from "kysely";
 import type { TenantDatabase, PortalChannelsTable } from "../db/types.js";
 import { hashChannelAuth } from "@care-y/crypto";
-import { ChannelAlreadyActiveError } from "./portal-errors.js";
+import {
+  ChannelAlreadyActiveError,
+  PassphraseAlreadySetError,
+  PassphraseCountMismatchError,
+} from "./portal-errors.js";
 import { PORTAL_SURFACE_KINDS } from "@care-y/shared";
-import type { ClientId, ChannelSecret } from "@care-y/shared";
+import type { ClientId, ChannelSecret, PortalMessageId } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -376,4 +380,103 @@ export async function getActiveChannelSummary(
     createdAt: row.created_at,
     hasPassphrase: row.has_passphrase,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Add passphrase to a bare-link channel
+// ---------------------------------------------------------------------------
+
+/** ECIES triple as Buffers, matching the portal message service shape. */
+export interface EciesTripleBuffers {
+  readonly ephemeralPoint: Buffer;
+  readonly nonce: Buffer;
+  readonly ciphertext: Buffer;
+}
+
+/** A single re-sealed portal message row. */
+export interface ResealedMessageInput {
+  readonly id: PortalMessageId;
+  readonly copy: EciesTripleBuffers;
+}
+
+/** Input for the addPassphrase transaction. */
+export interface AddPassphraseInput {
+  readonly clientPublic: Buffer;
+  readonly keyCheck: EciesTripleBuffers;
+  readonly resealedMessages: readonly ResealedMessageInput[];
+}
+
+/**
+ * Atomically add a passphrase to a bare-link channel.
+ *
+ * One transaction swaps client_public, the key_check triple,
+ * has_passphrase = true, and every portal_messages row for the channel.
+ *
+ * Rejects when:
+ *   - has_passphrase is already true (PassphraseAlreadySetError)
+ *   - resealedMessages count does not match the channel's portal_messages
+ *     count at transaction time (PassphraseCountMismatchError, meaning a
+ *     concurrent inbound copy landed; the client refetches and retries)
+ */
+export async function addPassphrase(
+  db: Kysely<TenantDatabase>,
+  channel: PortalChannelRow,
+  input: AddPassphraseInput,
+): Promise<void> {
+  if (channel.has_passphrase) {
+    throw new PassphraseAlreadySetError();
+  }
+
+  await db.transaction().execute(async (trx) => {
+    // Re-check inside the transaction (serializable guard)
+    const current = await trx
+      .selectFrom("portal_channels")
+      .select("has_passphrase")
+      .where("id", "=", channel.id)
+      .where("status", "=", "active")
+      .executeTakeFirst();
+
+    if (!current || current.has_passphrase) {
+      throw new PassphraseAlreadySetError();
+    }
+
+    // Count portal_messages for this channel inside the transaction
+    const countResult = await trx
+      .selectFrom("portal_messages")
+      .select((eb) => eb.fn.countAll<number>().as("cnt"))
+      .where("channel_id", "=", channel.id)
+      .executeTakeFirstOrThrow();
+
+    if (countResult.cnt !== input.resealedMessages.length) {
+      throw new PassphraseCountMismatchError();
+    }
+
+    // Swap channel columns
+    await trx
+      .updateTable("portal_channels")
+      .set({
+        client_public: input.clientPublic,
+        has_passphrase: true,
+        key_check_ephemeral_point: input.keyCheck.ephemeralPoint,
+        key_check_nonce: input.keyCheck.nonce,
+        key_check_ciphertext: input.keyCheck.ciphertext,
+      })
+      .where("id", "=", channel.id)
+      .execute();
+
+    // Swap each portal_messages row's ciphertext triple.
+    // The WHERE channel_id guard prevents cross-channel writes.
+    for (const msg of input.resealedMessages) {
+      await trx
+        .updateTable("portal_messages")
+        .set({
+          ephemeral_point: msg.copy.ephemeralPoint,
+          nonce: msg.copy.nonce,
+          ciphertext: msg.copy.ciphertext,
+        })
+        .where("id", "=", msg.id)
+        .where("channel_id", "=", channel.id)
+        .execute();
+    }
+  });
 }

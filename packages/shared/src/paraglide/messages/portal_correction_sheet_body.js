@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Portal_Correction_Sheet_BodyInputs */
 
 const en_portal_correction_sheet_body = /** @type {(inputs: Portal_Correction_Sheet_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Enter the phone number or email you want the support team to use. A volunteer will review it before anything changes. For your safety this page never shows the information currently on file.`)
+	return /** @type {LocalizedString} */ (`Enter the phone number or email you want the support team to use. A volunteer will review the correction before anything changes.`)
 };
 
 const es_portal_correction_sheet_body = /** @type {(inputs: Portal_Correction_Sheet_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Escribe el número de teléfono o correo electrónico que quieres que use el equipo de apoyo. Una persona voluntaria lo revisará antes de aplicar cualquier cambio. Por tu seguridad, esta página nunca muestra la información registrada.`)
+	return /** @type {LocalizedString} */ (`Escribe el número de teléfono o correo electrónico que quieres que use el equipo de apoyo. Una persona voluntaria revisará la corrección antes de aplicar cualquier cambio.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Enter the phone number or email you want the support team to use. A volunteer will review it before anything changes. For your safety this page never shows t..." |
+* | "Enter the phone number or email you want the support team to use. A volunteer will review the correction before anything changes." |
 *
 * @param {Portal_Correction_Sheet_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

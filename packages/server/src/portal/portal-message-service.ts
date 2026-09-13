@@ -29,7 +29,6 @@ import { resolveClientPhone } from "../routes/relay.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
-import { PORTAL_SURFACE_KINDS } from "@care-y/shared";
 import type {
   TicketId,
   FollowupId,
@@ -102,6 +101,8 @@ export interface PortalMessageWire {
   readonly id: string;
   readonly followupId: string;
   readonly direction: string;
+  /** Originating follow-up type (plaintext metadata, same exposure class as direction). */
+  readonly type: string | null;
   readonly ephemeralPoint: string;
   readonly nonce: string;
   readonly ciphertext: string;
@@ -139,8 +140,8 @@ export interface PortalBootstrapResult {
   readonly messagesExpireDays: number;
   /** Org-configured quick-exit target; null falls back to the client default. */
   readonly safeExitUrl: string | null;
-  /** True when a Secure Link channel has the account offer enabled. */
-  readonly accountOffer: boolean;
+  /** Upgrade paths available to this channel's tier. */
+  readonly upgradeOptions: readonly ("passphrase" | "account")[];
 }
 
 export interface PortalMessageServiceDeps {
@@ -162,6 +163,8 @@ interface PortalMessageRow {
   readonly id: string;
   readonly followup_id: string;
   readonly direction: string;
+  /** Follow-up type joined from the followups table; null when the row is orphaned. */
+  readonly followup_type: string | null;
   readonly ephemeral_point: Buffer;
   readonly nonce: Buffer;
   readonly ciphertext: Buffer;
@@ -175,6 +178,7 @@ function rowToWire(r: PortalMessageRow): PortalMessageWire {
     id: r.id,
     followupId: r.followup_id,
     direction: r.direction,
+    type: r.followup_type,
     ephemeralPoint: encode(new Uint8Array(r.ephemeral_point)),
     nonce: encode(new Uint8Array(r.nonce)),
     ciphertext: encode(new Uint8Array(r.ciphertext)),
@@ -247,21 +251,25 @@ export async function bootstrap(
     .orderBy("created_at", "desc")
     .executeTakeFirst();
 
-  // Load messages (both directions, ordered by created_at)
+  // Load messages (both directions, ordered by created_at).
+  // Left-join followups to carry the originating type (plaintext metadata,
+  // same exposure class as direction). Null when the followup row is gone.
   const rows = await db
-    .selectFrom("portal_messages")
+    .selectFrom("portal_messages as pm")
+    .leftJoin("followups as f", "f.id", "pm.followup_id")
     .select([
-      "id",
-      "followup_id",
-      "direction",
-      "ephemeral_point",
-      "nonce",
-      "ciphertext",
-      "created_at",
-      "edited_at",
+      "pm.id",
+      "pm.followup_id",
+      "pm.direction",
+      "f.type as followup_type",
+      "pm.ephemeral_point",
+      "pm.nonce",
+      "pm.ciphertext",
+      "pm.created_at",
+      "pm.edited_at",
     ])
-    .where("channel_id", "=", channel.id)
-    .orderBy("created_at", "asc")
+    .where("pm.channel_id", "=", channel.id)
+    .orderBy("pm.created_at", "asc")
     .execute();
 
   const messages: PortalMessageWire[] = rows.map(rowToWire);
@@ -317,9 +325,12 @@ export async function bootstrap(
     callEntries,
     messagesExpireDays: EXPIRY_DAYS,
     safeExitUrl: orgConfig?.portal_safe_exit_url ?? null,
-    accountOffer:
-      (PORTAL_SURFACE_KINDS as readonly string[]).includes(channel.kind) &&
-      channel.account_offer,
+    upgradeOptions:
+      channel.kind === "account"
+        ? []
+        : channel.has_passphrase
+          ? ["account"]
+          : ["passphrase", "account"],
   };
 }
 
@@ -547,18 +558,20 @@ export async function listMessages(
   const isOlder = opts.direction === "older";
 
   let query = db
-    .selectFrom("portal_messages")
+    .selectFrom("portal_messages as pm")
+    .leftJoin("followups as f", "f.id", "pm.followup_id")
     .select([
-      "id",
-      "followup_id",
-      "direction",
-      "ephemeral_point",
-      "nonce",
-      "ciphertext",
-      "created_at",
-      "edited_at",
+      "pm.id",
+      "pm.followup_id",
+      "pm.direction",
+      "f.type as followup_type",
+      "pm.ephemeral_point",
+      "pm.nonce",
+      "pm.ciphertext",
+      "pm.created_at",
+      "pm.edited_at",
     ])
-    .where("channel_id", "=", channel.id);
+    .where("pm.channel_id", "=", channel.id);
 
   if (opts.cursor !== undefined) {
     const cursorId = opts.cursor;
@@ -573,10 +586,10 @@ export async function listMessages(
 
     query = query.where((eb) =>
       eb.or([
-        eb("created_at", timeOp, cursorCreatedAt),
+        eb("pm.created_at", timeOp, cursorCreatedAt),
         eb.and([
-          eb("created_at", "=", cursorCreatedAt),
-          eb("id", tieOp, cursorId),
+          eb("pm.created_at", "=", cursorCreatedAt),
+          eb("pm.id", tieOp, cursorId),
         ]),
       ]),
     );
@@ -584,8 +597,8 @@ export async function listMessages(
 
   const sortDir = isOlder ? "desc" : "asc";
   const rows = await query
-    .orderBy("created_at", sortDir)
-    .orderBy("id", sortDir)
+    .orderBy("pm.created_at", sortDir)
+    .orderBy("pm.id", sortDir)
     .limit(opts.limit)
     .execute();
 

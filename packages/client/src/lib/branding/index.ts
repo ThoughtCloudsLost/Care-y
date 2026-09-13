@@ -99,7 +99,11 @@ export async function applyBranding(branding: CachedBranding): Promise<void> {
     primary: branding.primaryColor,
     accent: branding.accentColor ?? undefined,
   });
-  document.title = branding.orgName;
+  // An org without a name must not blank the title a page already set
+  // (WCAG 2.4.2: documents need a non-empty title).
+  if (branding.orgName !== "") {
+    document.title = branding.orgName;
+  }
 }
 
 /** Clear branding cache and reset palette (called on logout). */

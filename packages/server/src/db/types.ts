@@ -36,6 +36,9 @@ import type {
   PhoneId,
   PhoneHash,
   PhoneMatchHash,
+  EmailId,
+  EmailHash,
+  EmailMatchHash,
   AliasHash,
   ClientId,
   PhoneGreetingId,
@@ -337,11 +340,23 @@ export interface PhonesTable {
   updated_at: Generated<Date>;
 }
 
+export interface EmailsTable {
+  id: Generated<EmailId>;
+  email_hash: EmailHash;
+  encrypted_address: Buffer;
+  locale: string;
+  is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  email_match_hash: EmailMatchHash | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface ClientsTable {
   id: Generated<ClientId>;
   encrypted_alias: Buffer;
   alias_hash: AliasHash | null;
   phone_id: PhoneId | null;
+  email_id: EmailId | null;
   merged_into: ClientId | null;
   communication_tier: ColumnType<string, string | undefined, string>;
   created_at: Generated<Date>;
@@ -844,7 +859,6 @@ export interface PortalChannelsTable {
   key_check_ciphertext: Buffer;
   status: ColumnType<string, string | undefined, string>;
   kind: ColumnType<string, string | undefined, string>;
-  account_offer: ColumnType<boolean, boolean | undefined, boolean>;
   created_at: Generated<Date>;
   last_seen_at: Date | null;
   last_notified_at: Date | null;
@@ -966,6 +980,7 @@ export interface TenantDatabase {
   ticket_key_wraps: TicketKeyWrapsTable;
   // Telephony data models
   phones: PhonesTable;
+  emails: EmailsTable;
   clients: ClientsTable;
   phone_greetings: PhoneGreetingsTable;
   sms_responses: SmsResponsesTable;

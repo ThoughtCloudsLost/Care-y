@@ -61,6 +61,7 @@ export const followUpTypeSchema = z.enum([
   "merge_note",
   "share_link",
   "contact_correction",
+  "email_outbound",
 ]);
 export type FollowUpType = z.infer<typeof followUpTypeSchema>;
 
@@ -608,13 +609,6 @@ export type UpdateOutboundMessageInput = z.infer<
 
 // --- Encrypted Account (volunteer side, 8c) ---
 
-/** Volunteer enables or disables the account upgrade offer on a Secure Link channel. */
-export const setAccountOfferInputSchema = z.object({
-  ticketId: ticketIdSchema,
-  enabled: z.boolean(),
-});
-export type SetAccountOfferInput = z.infer<typeof setAccountOfferInputSchema>;
-
 /** Volunteer resets (deletes) a client's encrypted account. */
 export const resetClientAccountInputSchema = z.object({
   ticketId: ticketIdSchema,
@@ -630,7 +624,6 @@ export const portalChannelMetaSchema = z.object({
   createdAt: z.string(),
   lastSeenAt: z.string().nullable(),
   kind: portalChannelKindSchema,
-  accountOffer: z.boolean(),
 });
 export type PortalChannelMetaWire = z.infer<typeof portalChannelMetaSchema>;
 
@@ -724,3 +717,31 @@ export const convertBlobForReseedInputSchema = z
 export type ConvertBlobForReseedInput = z.infer<
   typeof convertBlobForReseedInputSchema
 >;
+
+// --- Email relay send (8f) ---
+
+/** Max byte lengths for the email relay payload. */
+export const EMAIL_RELAY_LIMITS = {
+  subject: 512,
+  text: 20_000,
+  html: 100_000,
+} as const;
+
+/**
+ * Input schema for POST /relay/email. Subject is stripped of control
+ * characters that could cause SMTP header injection.
+ */
+export const emailSendInputSchema = z.object({
+  ticketId: ticketIdSchema,
+  subject: z
+    .string()
+    .min(1)
+    .max(EMAIL_RELAY_LIMITS.subject)
+    .refine(
+      (s) => !/[\r\n\x00]/.test(s),
+      "Subject must not contain control characters",
+    ),
+  html: z.string().min(1).max(EMAIL_RELAY_LIMITS.html),
+  text: z.string().min(1).max(EMAIL_RELAY_LIMITS.text),
+});
+export type EmailSendInput = z.infer<typeof emailSendInputSchema>;

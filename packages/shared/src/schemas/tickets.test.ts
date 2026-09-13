@@ -27,9 +27,10 @@ import {
   updateTicketContentInputSchema,
   upgradeToSecureLinkInputSchema,
   updateOutboundMessageInputSchema,
-  setAccountOfferInputSchema,
   resetClientAccountInputSchema,
   portalChannelMetaSchema,
+  emailSendInputSchema,
+  EMAIL_RELAY_LIMITS,
 } from "./tickets.js";
 
 /** Base64-encode a string of n arbitrary bytes. */
@@ -105,6 +106,7 @@ describe("followUpTypeSchema", () => {
       "merge_note",
       "share_link",
       "contact_correction",
+      "email_outbound",
     ];
     for (const t of valid) {
       expect(followUpTypeSchema.safeParse(t).success).toBe(true);
@@ -1043,39 +1045,6 @@ describe("createFollowUpInputSchema (portalCopy)", () => {
 
 // --- Encrypted Account (volunteer side) ---
 
-describe("setAccountOfferInputSchema", () => {
-  it("accepts a valid offer toggle (enabled)", () => {
-    const result = setAccountOfferInputSchema.safeParse({
-      ticketId: VALID_UUID,
-      enabled: true,
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("accepts a valid offer toggle (disabled)", () => {
-    const result = setAccountOfferInputSchema.safeParse({
-      ticketId: VALID_UUID,
-      enabled: false,
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects non-UUID ticketId", () => {
-    const result = setAccountOfferInputSchema.safeParse({
-      ticketId: "not-a-uuid",
-      enabled: true,
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects missing enabled field", () => {
-    const result = setAccountOfferInputSchema.safeParse({
-      ticketId: VALID_UUID,
-    });
-    expect(result.success).toBe(false);
-  });
-});
-
 describe("resetClientAccountInputSchema", () => {
   it("accepts a valid reset input", () => {
     const result = resetClientAccountInputSchema.safeParse({
@@ -1105,7 +1074,6 @@ describe("portalChannelMetaSchema", () => {
       createdAt: "2026-08-20T12:00:00Z",
       lastSeenAt: null,
       kind: "secure_link",
-      accountOffer: false,
     };
   }
 
@@ -1115,11 +1083,6 @@ describe("portalChannelMetaSchema", () => {
 
   it("accepts a valid meta with kind account", () => {
     const input = { ...validMeta(), kind: "account" };
-    expect(portalChannelMetaSchema.safeParse(input).success).toBe(true);
-  });
-
-  it("accepts accountOffer true", () => {
-    const input = { ...validMeta(), accountOffer: true };
     expect(portalChannelMetaSchema.safeParse(input).success).toBe(true);
   });
 
@@ -1133,10 +1096,116 @@ describe("portalChannelMetaSchema", () => {
     delete input.kind;
     expect(portalChannelMetaSchema.safeParse(input).success).toBe(false);
   });
+});
 
-  it("rejects missing accountOffer", () => {
-    const input = validMeta();
-    delete input.accountOffer;
-    expect(portalChannelMetaSchema.safeParse(input).success).toBe(false);
+// --- Email outbound (8f) ---
+
+describe("followUpTypeSchema (email_outbound)", () => {
+  it("accepts email_outbound type", () => {
+    expect(followUpTypeSchema.safeParse("email_outbound").success).toBe(true);
+  });
+
+  it("rejects email_inbound (not in scope)", () => {
+    expect(followUpTypeSchema.safeParse("email_inbound").success).toBe(false);
+  });
+});
+
+describe("emailSendInputSchema", () => {
+  it("accepts a valid send payload", () => {
+    const result = emailSendInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      subject: "Hello",
+      html: "<p>Body</p>",
+      text: "Body",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a subject with CR", () => {
+    expect(
+      emailSendInputSchema.safeParse({
+        ticketId: VALID_UUID,
+        subject: "Hello\rWorld",
+        html: "<p>ok</p>",
+        text: "ok",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a subject with LF", () => {
+    expect(
+      emailSendInputSchema.safeParse({
+        ticketId: VALID_UUID,
+        subject: "Hello\nWorld",
+        html: "<p>ok</p>",
+        text: "ok",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a subject with null byte", () => {
+    expect(
+      emailSendInputSchema.safeParse({
+        ticketId: VALID_UUID,
+        subject: "Hello\x00World",
+        html: "<p>ok</p>",
+        text: "ok",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects an empty subject", () => {
+    expect(
+      emailSendInputSchema.safeParse({
+        ticketId: VALID_UUID,
+        subject: "",
+        html: "<p>ok</p>",
+        text: "ok",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a subject exceeding the limit", () => {
+    expect(
+      emailSendInputSchema.safeParse({
+        ticketId: VALID_UUID,
+        subject: "x".repeat(EMAIL_RELAY_LIMITS.subject + 1),
+        html: "<p>ok</p>",
+        text: "ok",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects html exceeding the limit", () => {
+    expect(
+      emailSendInputSchema.safeParse({
+        ticketId: VALID_UUID,
+        subject: "ok",
+        html: "x".repeat(EMAIL_RELAY_LIMITS.html + 1),
+        text: "ok",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects text exceeding the limit", () => {
+    expect(
+      emailSendInputSchema.safeParse({
+        ticketId: VALID_UUID,
+        subject: "ok",
+        html: "<p>ok</p>",
+        text: "x".repeat(EMAIL_RELAY_LIMITS.text + 1),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a non-UUID ticketId", () => {
+    expect(
+      emailSendInputSchema.safeParse({
+        ticketId: "not-a-uuid",
+        subject: "ok",
+        html: "<p>ok</p>",
+        text: "ok",
+      }).success,
+    ).toBe(false);
   });
 });
