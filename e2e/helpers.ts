@@ -1133,9 +1133,24 @@ export async function putTicketOnHold(
       hasText: title,
     })
     .first();
+  // The card flips to the held state optimistically, so the icon alone
+  // does not prove the server committed the hold; later tests read the
+  // hold system event from the timeline. Wait for the tickets.update
+  // response, listener armed before the click so the signal cannot slip
+  // past, then assert the card icon (accessible name "On hold"; the held
+  // state renders as an icon, not text).
+  const updateResponsePromise = page.waitForResponse(
+    (r) =>
+      r.url().includes("tickets.update") &&
+      r.request().method() === "POST" &&
+      r.status() === 200,
+    { timeout: CRYPTO_TIMEOUT },
+  );
   await card.getByRole("button", { name: /hold/i }).click();
-
-  await page.waitForTimeout(1_000);
+  await updateResponsePromise;
+  await expect(card.getByRole("img", { name: /on hold/i })).toBeVisible({
+    timeout: CRYPTO_TIMEOUT,
+  });
 }
 
 /** Navigate to /library/new via SPA tab + navbar button. Avoids full reload. */
@@ -1340,4 +1355,108 @@ export async function auditA11y(
     .catch(() => undefined);
   const results = await builder.analyze();
   expect(results.violations).toEqual([]);
+}
+
+// ── Secure link creation ─────────────────────────────────────────────
+
+export interface CreateSecureLinkOptions {
+  /** Enable the passphrase toggle and return the generated words. */
+  readonly withPassphrase?: boolean;
+}
+
+export interface CreateSecureLinkResult {
+  readonly link: string;
+  /** Non-empty only when withPassphrase is true. */
+  readonly passphrase: string;
+}
+
+/**
+ * Create a Secure Link through the volunteer-side SecureLinkSheet.
+ *
+ * Assumes the info panel is already open with the "Set up secure link"
+ * button visible. The caller must have opened the panel (via
+ * openTicketInfoPanel) before calling this. Clicks the setup button,
+ * optionally enables the passphrase toggle, generates the link, reads
+ * it, asserts the format contract, and closes the sheet with "Done".
+ */
+export async function createSecureLink(
+  page: Page,
+  opts: CreateSecureLinkOptions = {},
+): Promise<CreateSecureLinkResult> {
+  const setupBtn = page
+    .getByRole("button", { name: /set up secure link/i })
+    .first();
+  await expect(setupBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+  await setupBtn.dispatchEvent("click");
+
+  // Name the sheet by its step titles so it does not re-resolve to the
+  // info panel (which is also a dialog and stays open underneath).
+  const sheet = page.getByRole("dialog", {
+    name: /set up secure link|link ready/i,
+  });
+  await expect(sheet).toBeVisible({ timeout: 5_000 });
+
+  let passphrase = "";
+  if (opts.withPassphrase === true) {
+    // The Konsta Toggle's checkbox carries the aria-label.
+    const toggle = sheet.getByRole("checkbox", {
+      name: /add a passphrase/i,
+    });
+    await expect(toggle).toBeVisible({ timeout: 5_000 });
+    await toggle.dispatchEvent("click");
+
+    const wordsEl = sheet.locator('[data-testid="secure-link-words"]');
+    await expect(wordsEl).toBeVisible({ timeout: 5_000 });
+    passphrase = ((await wordsEl.textContent()) ?? "").trim();
+    // Security parameter: 5 diceware words from the EFF list (~64 bits).
+    expect(passphrase.split(/\s+/).length).toBe(5);
+  }
+
+  const generateBtn = sheet.getByRole("button", {
+    name: /set up secure link/i,
+  });
+  await generateBtn.dispatchEvent("click");
+
+  // The link renders in a code block; two testid variants exist across
+  // the sheet's lifecycle (secure-link-url when passphrase is set,
+  // code.link-block otherwise). Accept either.
+  const linkEl = sheet
+    .locator('[data-testid="secure-link-url"]')
+    .or(sheet.locator("code.link-block"));
+  await expect(linkEl.first()).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+  const link = ((await linkEl.first().textContent()) ?? "").trim();
+  // Link-format contract: 48 hex chars = the 24-byte channel id,
+  // 32 base64url chars = the 192-bit fragment seed.
+  expect(link).toMatch(/\/portal\/[0-9a-f]{48}#[A-Za-z0-9_-]{32}/);
+
+  await sheet.getByRole("button", { name: /done/i }).dispatchEvent("click");
+
+  return { link, passphrase };
+}
+
+// ── Admin hub navigation ─────────────────────────────────────────────
+
+/**
+ * Navigate to an admin section via the SPA sidebar hub.
+ *
+ * Uses the sidebar admin link (not page.goto, which would reload and
+ * drop the crypto Worker session), waits for the hub content to load
+ * past the crypto unlock, then clicks the destination row. The hub
+ * readiness gate waits for "People" to be visible (first hub row,
+ * always rendered after unlock).
+ */
+export async function navigateToAdminSection(
+  page: Page,
+  destination: string,
+  urlPattern: RegExp,
+): Promise<void> {
+  await page.locator('[data-sidebar-id="admin"]').click();
+  await expect(page).toHaveURL("/admin", { timeout: 10_000 });
+  // Hub rows are not interactive until the content loads past the
+  // crypto unlock (same gate as a11y-sweep).
+  await expect(page.getByText("People").first()).toBeVisible({
+    timeout: CRYPTO_TIMEOUT,
+  });
+  await page.getByText(destination, { exact: true }).first().click();
+  await expect(page).toHaveURL(urlPattern, { timeout: 10_000 });
 }

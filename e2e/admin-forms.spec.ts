@@ -1,7 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { CRYPTO_TIMEOUT, login, navigateToAdminSection } from "./helpers";
 
 /**
  * Admin form builder E2E.
@@ -31,17 +31,7 @@ test.describe.serial("Admin Form Builder", () => {
 
     // SPA navigation via the sidebar (page.goto would reload and drop
     // the crypto Worker session; same convention as a11y-sweep).
-    await page.locator('[data-sidebar-id="admin"]').click();
-    await expect(page).toHaveURL("/admin", { timeout: 10_000 });
-    // Hub readiness gate (same as a11y-sweep): the rows are not
-    // interactive until the hub content loads past the crypto unlock.
-    await expect(page.getByText("People").first()).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
-    await page.getByText("Intake Forms", { exact: true }).first().click();
-    await expect(page).toHaveURL(/\/admin\/organization/, {
-      timeout: 10_000,
-    });
+    await navigateToAdminSection(page, "Intake Forms", /\/admin\/organization/);
     await expect(page.getByText("Intake Forms").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
@@ -157,9 +147,24 @@ test.describe.serial("Admin Form Builder", () => {
   test("preview switcher walks the form, submitted, and closed states", async () => {
     const switcher = page.getByTestId("preview-state-switcher");
     await expect(switcher).toBeVisible({ timeout: 10_000 });
-    for (const state of ["Submitted", "Closed", "Form"]) {
-      await switcher.getByText(state, { exact: true }).click();
-    }
+    const preview = page.getByTestId("split-right-pane");
+
+    // Each state replaces the preview content with its own UI.
+    await switcher.getByText("Submitted", { exact: true }).click();
+    await expect(preview.getByText(/submitted/i).first()).toBeVisible({
+      timeout: 5_000,
+    });
+
+    await switcher.getByText("Closed", { exact: true }).click();
+    await expect(preview.getByText(/closed|no longer/i).first()).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Returning to Form re-renders the live field preview.
+    await switcher.getByText("Form", { exact: true }).click();
+    await expect(preview.getByText("Contact name").first()).toBeVisible({
+      timeout: 5_000,
+    });
   });
 
   test("save persists the form", async () => {
@@ -171,14 +176,7 @@ test.describe.serial("Admin Form Builder", () => {
 
   test("activate toggle flips the form active state", async () => {
     // Back to the organization section (SPA path via the hub).
-    await page.locator('[data-sidebar-id="admin"]').click();
-    await expect(page).toHaveURL("/admin", { timeout: 10_000 });
-    // Hub readiness gate (same as a11y-sweep): the rows are not
-    // interactive until the hub content loads past the crypto unlock.
-    await expect(page.getByText("People").first()).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
-    await page.getByText("Intake Forms", { exact: true }).first().click();
+    await navigateToAdminSection(page, "Intake Forms", /\/admin\/organization/);
     await expect(page.getByText(FORM_NAME).first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
@@ -224,14 +222,7 @@ test.describe.serial("Admin Form Builder", () => {
 
   test("delete removes the form after confirmation", async () => {
     // Back to the organization section, then delete the fixture form.
-    await page.locator('[data-sidebar-id="admin"]').click();
-    await expect(page).toHaveURL("/admin", { timeout: 10_000 });
-    // Hub readiness gate (same as a11y-sweep): the rows are not
-    // interactive until the hub content loads past the crypto unlock.
-    await expect(page.getByText("People").first()).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
-    await page.getByText("Intake Forms", { exact: true }).first().click();
+    await navigateToAdminSection(page, "Intake Forms", /\/admin\/organization/);
     await expect(page.getByText(FORM_NAME).first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });

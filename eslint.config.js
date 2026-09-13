@@ -475,6 +475,11 @@ export default tseslint.config(
   },
 
   // The same brand-cast block for the packages the server config does not cover.
+  // packages/demo is deliberately absent: the demo engine seeds large fixture
+  // structures by casting literals to branded ids, the same allowance the
+  // test-and-fixtures block below grants, and demo code never writes to a
+  // production database. Listing it here would force factory calls through
+  // hundreds of static fixture rows for no trust-boundary gain.
   {
     files: [
       "packages/client/src/**/*.ts",

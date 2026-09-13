@@ -79,8 +79,28 @@ export function resetCommunicationTiers(): void {
       "DELETE FROM portal_messages;",
       "DELETE FROM portal_channels;",
       "DELETE FROM client_accounts;",
+      "DELETE FROM share_links;",
       "UPDATE clients SET communication_tier = 'sms_email'",
       "  WHERE communication_tier <> 'sms_email';",
+    ].join("\n"),
+  );
+}
+
+/**
+ * Mark all to_client volunteer messages as edited.
+ *
+ * Sets edited_at on both the followup and the portal_message so the
+ * portal thread renders the "(edited)" marker. Used by portal.spec and
+ * account-portal.spec to verify the cross-surface render without
+ * driving the interactive edit sheet.
+ */
+export function markVolunteerMessagesEdited(): void {
+  queryDb(
+    [
+      "UPDATE followups SET edited_at = now()",
+      "  WHERE source = 'volunteer' AND type = 'message'",
+      "    AND id IN (SELECT followup_id FROM portal_messages WHERE direction = 'to_client');",
+      "UPDATE portal_messages SET edited_at = now() WHERE direction = 'to_client';",
     ].join("\n"),
   );
 }

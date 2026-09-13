@@ -913,10 +913,22 @@ test.describe.serial("Ticket Detail (Note Reactions)", () => {
     const pill = page.locator(".reaction-pill").first();
     await expect(pill).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
-    // Toggling the same option again removes the reaction.
+    // Toggling the same option again removes the reaction. Wait for the
+    // pill to stabilize before reopening the picker: the add mutation's
+    // server response can arrive after the optimistic render but before
+    // the second click, triggering a re-render that detaches the picker
+    // anchor. Waiting on the pill's visible state with the server count
+    // (the "1" badge) confirms the mutation settled.
+    await expect(pill).toContainText("1", { timeout: CRYPTO_TIMEOUT });
     await addBtn.click();
     await expect(picker).toBeVisible({ timeout: 5_000 });
     await picker.getByText("Approve", { exact: true }).click();
+
+    // The pill disappears after the removal mutation completes. The
+    // picker closes optimistically, but the pill removal depends on the
+    // server confirming the toggle; use an explicit wait so a slow
+    // response does not leave a stale pill visible.
     await expect(picker).not.toBeVisible({ timeout: 5_000 });
+    await expect(pill).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
   });
 });

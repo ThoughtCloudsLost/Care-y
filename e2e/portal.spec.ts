@@ -8,6 +8,7 @@ import type { Page, Request } from "@playwright/test";
 import {
   auditA11y,
   clickComposeAction,
+  createSecureLink,
   CRYPTO_TIMEOUT,
   expectPortalReady,
   openTicketInfoPanel,
@@ -16,7 +17,12 @@ import {
   openTicketByTitle,
   reopenTicketByTitle,
 } from "./helpers";
-import { countRows, queryDb, resetCommunicationTiers } from "./db-probe";
+import {
+  countRows,
+  markVolunteerMessagesEdited,
+  queryDb,
+  resetCommunicationTiers,
+} from "./db-probe";
 
 /**
  * Secure Link portal E2E roundtrip.
@@ -100,45 +106,11 @@ test.describe.serial("Secure Link Portal", () => {
       }
     });
 
-    const setupBtn = volunteerPage
-      .getByRole("button", { name: /set up secure link/i })
-      .first();
-    await expect(setupBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await setupBtn.dispatchEvent("click");
-
-    const sheet = volunteerPage.getByRole("dialog").last();
-    await expect(sheet).toBeVisible({ timeout: 5_000 });
-
-    // Enable the passphrase and capture the diceware words. The list
-    // item title is inert; the Konsta Toggle's checkbox carries the
-    // aria-label and is what actually flips the state.
-    const passphraseToggle = sheet.getByRole("checkbox", {
-      name: /add a passphrase/i,
+    const result = await createSecureLink(volunteerPage, {
+      withPassphrase: true,
     });
-    await expect(passphraseToggle).toBeVisible({ timeout: 5_000 });
-    await passphraseToggle.dispatchEvent("click");
-
-    const wordsEl = sheet.locator('[data-testid="secure-link-words"]');
-    await expect(wordsEl).toBeVisible({ timeout: 5_000 });
-    passphrase = ((await wordsEl.textContent()) ?? "").trim();
-    // Security parameter: 5 diceware words from the EFF list (~64 bits).
-    // A silent drop in word count weakens every generated passphrase.
-    expect(passphrase.split(/\s+/).length).toBe(5);
-
-    // Generate. With the fast KDF this completes quickly; the link then
-    // renders in a copyable code block.
-    const generateBtn = sheet.getByRole("button", {
-      name: /set up secure link/i,
-    });
-    await generateBtn.dispatchEvent("click");
-
-    const linkEl = sheet.locator('[data-testid="secure-link-url"]');
-    await expect(linkEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    portalLink = ((await linkEl.textContent()) ?? "").trim();
-    // Link-format contract: 48 hex chars = the 24-byte channel id,
-    // 32 base64url chars = the 192-bit fragment seed that never leaves
-    // the URL fragment (servers never see fragments).
-    expect(portalLink).toMatch(/\/portal\/[0-9a-f]{48}#[A-Za-z0-9_-]{32}/);
+    portalLink = result.link;
+    passphrase = result.passphrase;
 
     // The registration payload carries the auth HASH and public key,
     // never the seed (the fragment) or the passphrase words.
@@ -151,10 +123,6 @@ test.describe.serial("Secure Link Portal", () => {
     }
     expect(body).toContain("authHash");
     expect(body).toContain("clientPublic");
-
-    // Close the sheet ("Done").
-    const doneBtn = sheet.getByRole("button", { name: /done/i });
-    await doneBtn.dispatchEvent("click");
   });
 
   test("volunteer sends an in-app reply (dual copy)", async ({}, testInfo) => {
@@ -329,14 +297,7 @@ test.describe.serial("Secure Link Portal", () => {
     // edit flow produces (edited_at on both rows), then verify the portal
     // renders the marker after a refetch. The interactive edit sheet is
     // covered by component tests; this asserts the cross-surface render.
-    queryDb(
-      `UPDATE followups SET edited_at = now()
-       WHERE source = 'volunteer' AND type = 'message'
-         AND id IN (SELECT followup_id FROM portal_messages WHERE direction = 'to_client');`,
-    );
-    queryDb(
-      `UPDATE portal_messages SET edited_at = now() WHERE direction = 'to_client';`,
-    );
+    markVolunteerMessagesEdited();
 
     // Re-open the saved link rather than reloading: fragment custody
     // strips location.hash after parsing, so a bare reload lands on the

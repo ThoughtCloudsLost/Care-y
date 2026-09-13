@@ -7,7 +7,9 @@ import {
 import type { Page, Request } from "@playwright/test";
 import {
   auditA11y,
+  createSecureLink,
   CRYPTO_TIMEOUT,
+  E2eError,
   expectPortalReady,
   login,
   openComposeActions,
@@ -52,7 +54,7 @@ test.describe.serial("Portal Upgrade + Email", () => {
   /** Narrow portalPage to Page, throwing if the serial test that assigns it has not run yet. */
   function portal(): Page {
     if (portalPage === undefined) {
-      throw new Error("portalPage not yet assigned by a prior serial test");
+      throw new E2eError("portalPage not yet assigned by a prior serial test");
     }
     return portalPage;
   }
@@ -238,30 +240,8 @@ test.describe.serial("Portal Upgrade + Email", () => {
 
     await openTicketInfoPanel(volunteerPage, "Communication");
 
-    const setupBtn = volunteerPage
-      .getByRole("button", { name: /set up secure link/i })
-      .first();
-    await expect(setupBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await setupBtn.dispatchEvent("click");
-
-    // Name the sheet (both step titles), never `.last()` over the panel.
-    const sheet = volunteerPage.getByRole("dialog", {
-      name: /set up secure link|link ready/i,
-    });
-    await expect(sheet).toBeVisible({ timeout: 5_000 });
-
-    // Generate the link (no passphrase toggle: bare link).
-    const generateBtn = sheet.getByRole("button", {
-      name: /set up secure link/i,
-    });
-    await generateBtn.dispatchEvent("click");
-
-    const linkEl = sheet.locator("code.link-block");
-    await expect(linkEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    portalLink = ((await linkEl.textContent()) ?? "").trim();
-    expect(portalLink).toMatch(/\/portal\/[0-9a-f]{48}#[A-Za-z0-9_-]{32}/);
-
-    await sheet.getByRole("button", { name: /done/i }).dispatchEvent("click");
+    const linkResult = await createSecureLink(volunteerPage);
+    portalLink = linkResult.link;
   });
 
   test("bare-link drawer shows upgrade entry with both paths", async ({
@@ -496,26 +476,8 @@ test.describe.serial("Portal Upgrade + Email", () => {
 
     await openTicketInfoPanel(volunteerPage, "Communication");
 
-    const setupBtn = volunteerPage
-      .getByRole("button", { name: /set up secure link/i })
-      .first();
-    await expect(setupBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await setupBtn.dispatchEvent("click");
-
-    const sheet = volunteerPage.getByRole("dialog", {
-      name: /set up secure link|link ready/i,
-    });
-    await expect(sheet).toBeVisible({ timeout: 5_000 });
-    const generateBtn = sheet.getByRole("button", {
-      name: /set up secure link/i,
-    });
-    await generateBtn.dispatchEvent("click");
-
-    const linkEl = sheet.locator("code.link-block");
-    await expect(linkEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    const bareLink = ((await linkEl.textContent()) ?? "").trim();
-    expect(bareLink).toMatch(/\/portal\/[0-9a-f]{48}#[A-Za-z0-9_-]{32}/);
-    await sheet.getByRole("button", { name: /done/i }).dispatchEvent("click");
+    const bareLinkResult = await createSecureLink(volunteerPage);
+    const bareLink = bareLinkResult.link;
 
     // Open the bare link in a fresh browser context.
     const barePage = await browser.newPage();

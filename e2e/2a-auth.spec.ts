@@ -12,6 +12,7 @@ import { test, expect } from "./coverage-fixture";
 import {
   auditA11y,
   CRYPTO_TIMEOUT,
+  E2eError,
   loadTotpSecret,
   generateTotpCode,
 } from "./helpers";
@@ -86,7 +87,7 @@ test.describe("2a-auth: login page", () => {
     const twofaHeading = page.getByText(/verify your identity/i);
     await twofaHeading.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
     const secret = loadTotpSecret();
-    if (!secret) throw new Error("No TOTP secret found");
+    if (!secret) throw new E2eError("No TOTP secret found");
     const codeInput = page.getByPlaceholder("000000");
     await codeInput.fill(generateTotpCode(secret));
     await page.getByRole("button", { name: /verify/i }).click();
@@ -124,7 +125,7 @@ test.describe("2a-auth: login page", () => {
     const twofaHeading = page.getByText(/verify your identity/i);
     await twofaHeading.waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
     const secret = loadTotpSecret();
-    if (!secret) throw new Error("No TOTP secret found");
+    if (!secret) throw new E2eError("No TOTP secret found");
     const codeInput = page.getByPlaceholder("000000");
     await codeInput.fill(generateTotpCode(secret));
     await page.getByRole("button", { name: /verify/i }).click();
@@ -226,7 +227,7 @@ test.describe.serial("2a-auth: two-factor challenge", () => {
 
     // The challenge stays usable: a valid code still completes the login.
     const secret = loadTotpSecret();
-    if (!secret) throw new Error("No TOTP secret found");
+    if (!secret) throw new E2eError("No TOTP secret found");
     await codeInput.fill(generateTotpCode(secret));
     await page.getByRole("button", { name: /verify/i }).click();
     await page.waitForURL(/\/(complete)?$/, { timeout: CRYPTO_TIMEOUT });

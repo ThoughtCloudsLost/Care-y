@@ -5,14 +5,9 @@ import {
   stopCoverageAndClose,
 } from "./coverage-fixture";
 import type { Page, Request } from "@playwright/test";
-import {
-  auditA11y,
-  CRYPTO_TIMEOUT,
-  E2eError,
-  login,
-  openTicketByTitle,
-} from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login, openTicketByTitle } from "./helpers";
 import { countRows, queryDb } from "./db-probe";
+import { createIntakeFormFixture } from "./intake-fixtures";
 
 /**
  * Public intake form E2E roundtrip.
@@ -228,18 +223,16 @@ test.describe.serial("Public Intake Form", () => {
 
   // ── Error state a11y ─────────────────────────────────────────────
 
-  // Named for what it verifies: the dev/e2e stack runs with
-  // INTAKE_SUBMISSION_LIMIT=500 (docker-compose.yml), so the 3/IP/hour
-  // production limit cannot trip here and the rate-limited error state
-  // is unreachable in this environment. Auditing the limited state
-  // would need a stack with a low limit configured.
-  test("a11y: intake form after repeated submissions passes axe audit", async ({
+  // The dev/e2e stack runs with INTAKE_SUBMISSION_LIMIT=500
+  // (docker-compose.yml), so the 3/IP/hour production limit cannot trip
+  // here and the rate-limited error state is unreachable in this
+  // environment. This test audits the form after multiple successful
+  // submissions (the state the spec leaves the page in), not the
+  // rate-limited error state.
+  test("a11y: intake form after multiple submissions passes axe audit", async ({
     browser,
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
-    // Submit multiple times rapidly to trigger the rate limiter.
-    // The first submission already used one slot. Fire three more to hit the
-    // 3/IP/hour limit (the first test already consumed one).
     const errorPage = await browser.newPage();
     await startCoverage(errorPage);
     await errorPage.goto("/intake");
@@ -247,39 +240,8 @@ test.describe.serial("Public Intake Form", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    // Fill and submit twice more to trigger the rate limit (total 4 including
-    // the original test submission). On the rate-limited request, the page
-    // should show an error state.
-    for (let i = 0; i < 3; i++) {
-      const nameInput = errorPage.getByLabel(/name/i);
-      if (await nameInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await nameInput.fill(`Rate test ${String(i)}`);
-      }
-      const msgInput = errorPage.locator("textarea").first();
-      if (await msgInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await msgInput.fill("Testing rate limit");
-      }
-      const submitBtn = errorPage.getByRole("button", {
-        name: /send encrypted message/i,
-      });
-      if (await submitBtn.isEnabled({ timeout: 3_000 }).catch(() => false)) {
-        await submitBtn.click();
-        // Wait briefly for error or success
-        await errorPage.waitForTimeout(2_000);
-      }
-
-      // If a success state appeared, reload to reset the form
-      const successEl = errorPage.locator("code").first();
-      if (await successEl.isVisible({ timeout: 1_000 }).catch(() => false)) {
-        await errorPage.goto("/intake");
-        await expect(errorPage.getByRole("banner")).toBeVisible({
-          timeout: CRYPTO_TIMEOUT,
-        });
-      }
-    }
-
     await auditA11y(errorPage);
-    await stopCoverageAndClose(errorPage, "intake-rate-limited");
+    await stopCoverageAndClose(errorPage, "intake-post-submit");
   });
 });
 
@@ -346,162 +308,27 @@ test.describe.serial("Multi-form Intake Routing", () => {
     await startCoverage(setupPage);
     await login(setupPage);
 
-    const formResults = await setupPage.evaluate(
-      async (args: {
-        slugA: string;
-        slugB: string;
-        queueA: string;
-        queueB: string;
-      }) => {
-        // Dynamic imports resolve through the Vite dev server, giving
-        // access to the same crypto helpers the admin form editor uses.
-        // Specifiers go through variables: the e2e tsconfig cannot type
-        // browser-served module paths, and a bare package specifier does
-        // not resolve in a native browser import, so the crypto barrel
-        // goes through Vite's /@id/ resolution endpoint.
-        const formCryptoUrl = "/src/lib/portal/intake-form-crypto.ts";
-        const cryptoBarrelUrl = "/@id/@care-y/crypto";
-        const { encryptFieldContent } = (await import(formCryptoUrl)) as {
-          encryptFieldContent: (
-            plain: {
-              label: Record<string, string>;
-              config: { type: string };
-            },
-            orgPub: Uint8Array,
-          ) => { encryptedLabel: string; encryptedConfig: string };
-        };
-        const { decode } = (await import(cryptoBarrelUrl)) as {
-          decode: (b64: string) => Uint8Array;
-        };
+    const resultA = await createIntakeFormFixture(setupPage, {
+      name: "Alpha Form",
+      slug: SLUG_A,
+      destinationQueueId: queueAId,
+      fields: [
+        { label: "Message", config: { type: "textarea" }, required: true },
+      ],
+    });
+    formAId = resultA.formId;
 
-        // Fetch the org public key from the public branding endpoint.
-        const brandingRes = await fetch("/trpc/branding.getPublicBranding", {
-          credentials: "include",
-        });
-        if (!brandingRes.ok) {
-          return { ok: false as const, error: "branding fetch failed" };
-        }
-        const brandingJson = (await brandingRes.json()) as {
-          result: { data: { orgPublicKey: string | null } };
-        };
-        const orgPubB64 = brandingJson.result.data.orgPublicKey;
-        if (orgPubB64 === null) {
-          return { ok: false as const, error: "org public key is null" };
-        }
-        const orgPub = decode(orgPubB64);
-
-        // Encrypt a single textarea field for each form.
-        // Labels are LocalizedText (D3); config carries the full type shape.
-        const encA = encryptFieldContent(
-          { label: { en: "Message" }, config: { type: "textarea" } },
-          orgPub,
-        );
-        const encB = encryptFieldContent(
-          { label: { en: "Details" }, config: { type: "textarea" } },
-          orgPub,
-        );
-
-        // Stable field keys (D1): client-minted UUIDs, one per field.
-        const fieldKeyA = crypto.randomUUID();
-        const fieldKeyB = crypto.randomUUID();
-
-        // Save form A via the admin tRPC mutation.
-        const saveA = await fetch("/trpc/intakeForms.save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            formId: null,
-            name: "Alpha Form",
-            slug: args.slugA,
-            isDefault: false,
-            destinationQueueId: args.queueA,
-            fields: [
-              {
-                fieldKey: fieldKeyA,
-                fieldType: "textarea",
-                encryptedLabel: encA.encryptedLabel,
-                encryptedConfig: encA.encryptedConfig,
-                isRequired: true,
-              },
-            ],
-          }),
-        });
-        if (!saveA.ok) {
-          const body = await saveA.text();
-          return { ok: false as const, error: `save form A failed: ${body}` };
-        }
-        const dataA = (await saveA.json()) as {
-          result: { data: { formId: string } };
-        };
-
-        // Save form B via the admin tRPC mutation.
-        const saveB = await fetch("/trpc/intakeForms.save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            formId: null,
-            name: "Beta Form",
-            slug: args.slugB,
-            isDefault: false,
-            destinationQueueId: args.queueB,
-            fields: [
-              {
-                fieldKey: fieldKeyB,
-                fieldType: "textarea",
-                encryptedLabel: encB.encryptedLabel,
-                encryptedConfig: encB.encryptedConfig,
-                isRequired: true,
-              },
-            ],
-          }),
-        });
-        if (!saveB.ok) {
-          const body = await saveB.text();
-          return { ok: false as const, error: `save form B failed: ${body}` };
-        }
-        const dataB = (await saveB.json()) as {
-          result: { data: { formId: string } };
-        };
-
-        // New forms are drafts (is_active defaults to false) and the
-        // public slug lookup only returns active forms; activate both.
-        for (const formId of [
-          dataA.result.data.formId,
-          dataB.result.data.formId,
-        ]) {
-          const act = await fetch("/trpc/intakeForms.setActive", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ formId, active: true }),
-          });
-          if (!act.ok) {
-            const body = await act.text();
-            return { ok: false as const, error: `activate failed: ${body}` };
-          }
-        }
-
-        return {
-          ok: true as const,
-          formAId: dataA.result.data.formId,
-          formBId: dataB.result.data.formId,
-        };
-      },
-      { slugA: SLUG_A, slugB: SLUG_B, queueA: queueAId, queueB: queueBId },
-    );
+    const resultB = await createIntakeFormFixture(setupPage, {
+      name: "Beta Form",
+      slug: SLUG_B,
+      destinationQueueId: queueBId,
+      fields: [
+        { label: "Details", config: { type: "textarea" }, required: true },
+      ],
+    });
+    formBId = resultB.formId;
 
     await stopCoverageAndClose(setupPage, "intake-multiform-setup");
-
-    if (!formResults.ok) {
-      throw new E2eError(
-        `Multi-form fixture setup failed: ${formResults.error}`,
-      );
-    }
-
-    formAId = formResults.formAId;
-    formBId = formResults.formBId;
   });
 
   test("not-available state for unknown slug", async ({
@@ -652,89 +479,50 @@ test.describe.serial("Intake validation matrix", () => {
     await startCoverage(setupPage);
     await login(setupPage);
 
-    const result = await setupPage.evaluate(
-      async (args: { slug: string; labels: Record<string, string> }) => {
-        const formCryptoUrl = "/src/lib/portal/intake-form-crypto.ts";
-        const cryptoBarrelUrl = "/@id/@care-y/crypto";
-        const { encryptFieldContent } = (await import(formCryptoUrl)) as {
-          encryptFieldContent: (
-            plain: {
-              label: Record<string, string>;
-              config: Record<string, unknown>;
-              visibleWhen?: Record<string, unknown>;
-            },
-            orgPub: Uint8Array,
-          ) => { encryptedLabel: string; encryptedConfig: string };
-        };
-        const { decode } = (await import(cryptoBarrelUrl)) as {
-          decode: (b64: string) => Uint8Array;
-        };
+    // The topic field key is minted here so the urgent field's
+    // visibleWhen can reference it by key.
+    const topicKey = crypto.randomUUID();
 
-        const brandingRes = await fetch("/trpc/branding.getPublicBranding", {
-          credentials: "include",
-        });
-        if (!brandingRes.ok) {
-          return { ok: false as const, error: "branding fetch failed" };
-        }
-        const brandingJson = (await brandingRes.json()) as {
-          result: { data: { orgPublicKey: string | null } };
-        };
-        const orgPubB64 = brandingJson.result.data.orgPublicKey;
-        if (orgPubB64 === null) {
-          return { ok: false as const, error: "org public key is null" };
-        }
-        const orgPub = decode(orgPubB64);
-
-        const topicKey = crypto.randomUUID();
-        const mkField = (
-          label: string,
-          config: Record<string, unknown>,
-          visibleWhen?: Record<string, unknown>,
-        ): {
-          fieldKey: string;
-          enc: { encryptedLabel: string; encryptedConfig: string };
-        } => ({
-          fieldKey: crypto.randomUUID(),
-          enc: encryptFieldContent(
-            {
-              label: { en: label },
-              config,
-              ...(visibleWhen && { visibleWhen }),
-            },
-            orgPub,
-          ),
-        });
-
-        const email = mkField(args.labels.email!, {
-          type: "text",
-          subtype: "email",
-        });
-        const phone = mkField(args.labels.phone!, {
-          type: "text",
-          subtype: "phone",
-        });
-        const amount = mkField(args.labels.amount!, {
-          type: "text",
-          subtype: "number",
-          numberRange: { min: 1, max: 5 },
-        });
-        const topicEnc = encryptFieldContent(
-          {
-            label: { en: args.labels.topic! },
-            config: {
-              type: "select",
-              options: [
-                { key: "opt-urgent", label: { en: "Urgent help" } },
-                { key: "opt-normal", label: { en: "General question" } },
-              ],
-            },
+    const result = await createIntakeFormFixture(setupPage, {
+      name: "Validation Matrix Form",
+      slug: SLUG_V,
+      fields: [
+        {
+          label: LABELS.email,
+          config: { type: "text", subtype: "email" },
+          required: true,
+        },
+        {
+          label: LABELS.phone,
+          config: { type: "text", subtype: "phone" },
+          required: false,
+        },
+        {
+          label: LABELS.amount,
+          config: {
+            type: "text",
+            subtype: "number",
+            numberRange: { min: 1, max: 5 },
           },
-          orgPub,
-        );
-        const urgent = mkField(
-          args.labels.urgent!,
-          { type: "text" },
-          {
+          required: false,
+        },
+        {
+          label: LABELS.topic,
+          fieldKey: topicKey,
+          config: {
+            type: "select",
+            options: [
+              { key: "opt-urgent", label: { en: "Urgent help" } },
+              { key: "opt-normal", label: { en: "General question" } },
+            ],
+          },
+          required: true,
+        },
+        {
+          label: LABELS.urgent,
+          config: { type: "text" },
+          required: true,
+          visibleWhen: {
             version: 2,
             groups: [
               [
@@ -746,93 +534,42 @@ test.describe.serial("Intake validation matrix", () => {
               ],
             ],
           },
-        );
-        const tags = mkField(args.labels.tags!, {
-          type: "multiselect",
-          options: [
-            { key: "k-housing", label: { en: "Housing" } },
-            { key: "k-legal", label: { en: "Legal" } },
-          ],
-        });
-        const consent = mkField(args.labels.consent!, {
-          type: "checkbox",
-          requiredTrue: true,
-        });
-        const date = mkField(args.labels.date!, { type: "date" });
-        const message = mkField(args.labels.message!, { type: "textarea" });
-        const pageBreak = mkField("More details", {
-          type: "pageBreak",
-          title: { en: "More details" },
-        });
-        const details = mkField(args.labels.details!, { type: "textarea" });
-
-        const fields = [
-          { f: email, type: "text", required: true },
-          { f: phone, type: "text", required: false },
-          { f: amount, type: "text", required: false },
-          {
-            f: { fieldKey: topicKey, enc: topicEnc },
-            type: "select",
-            required: true,
+        },
+        {
+          label: LABELS.tags,
+          config: {
+            type: "multiselect",
+            options: [
+              { key: "k-housing", label: { en: "Housing" } },
+              { key: "k-legal", label: { en: "Legal" } },
+            ],
           },
-          { f: urgent, type: "text", required: true },
-          { f: tags, type: "multiselect", required: true },
-          { f: consent, type: "checkbox", required: true },
-          { f: date, type: "date", required: true },
-          { f: message, type: "textarea", required: true },
-          { f: pageBreak, type: "pageBreak", required: false },
-          { f: details, type: "textarea", required: true },
-        ].map((x) => ({
-          fieldKey: x.f.fieldKey,
-          fieldType: x.type,
-          encryptedLabel: x.f.enc.encryptedLabel,
-          encryptedConfig: x.f.enc.encryptedConfig,
-          isRequired: x.required,
-        }));
-
-        const save = await fetch("/trpc/intakeForms.save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            formId: null,
-            name: "Validation Matrix Form",
-            slug: args.slug,
-            isDefault: false,
-            fields,
-          }),
-        });
-        if (!save.ok) {
-          const body = await save.text();
-          return { ok: false as const, error: `save failed: ${body}` };
-        }
-        const data = (await save.json()) as {
-          result: { data: { formId: string } };
-        };
-
-        const act = await fetch("/trpc/intakeForms.setActive", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            formId: data.result.data.formId,
-            active: true,
-          }),
-        });
-        if (!act.ok) {
-          const body = await act.text();
-          return { ok: false as const, error: `activate failed: ${body}` };
-        }
-
-        return { ok: true as const, formId: data.result.data.formId };
-      },
-      { slug: SLUG_V, labels: LABELS },
-    );
+          required: true,
+        },
+        {
+          label: LABELS.consent,
+          config: { type: "checkbox", requiredTrue: true },
+          required: true,
+        },
+        { label: LABELS.date, config: { type: "date" }, required: true },
+        {
+          label: LABELS.message,
+          config: { type: "textarea" },
+          required: true,
+        },
+        {
+          label: "More details",
+          config: { type: "pageBreak", title: { en: "More details" } },
+          required: false,
+        },
+        {
+          label: LABELS.details,
+          config: { type: "textarea" },
+          required: true,
+        },
+      ],
+    });
     await stopCoverageAndClose(setupPage, "intake-validation-setup");
-
-    if (!result.ok) {
-      throw new E2eError(`Validation form fixture failed: ${result.error}`);
-    }
     formVId = result.formId;
 
     page = await browser.newPage();

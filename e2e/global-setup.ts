@@ -13,6 +13,7 @@
 
 import { execSync } from "node:child_process";
 import { E2eError } from "./helpers";
+import { queryDb } from "./db-probe";
 
 const API_PORT = 3000;
 const API_URL = `http://localhost:${String(API_PORT)}`;
@@ -46,6 +47,20 @@ function run(label: string, cmd: string): void {
   execSync(cmd, { stdio: "inherit", cwd: process.cwd() });
 }
 
+/**
+ * Run a SQL statement against the e2e org's tenant schema. Wraps queryDb
+ * in a try/catch so a failing step logs a warning but does not abort the
+ * entire setup (the same non-fatal contract the old inline blocks had).
+ */
+function setupSql(label: string, sql: string): void {
+  console.log(`[e2e] ${label}...`);
+  try {
+    queryDb(sql);
+  } catch {
+    console.warn(`[e2e] Could not ${label.toLowerCase()} (non-fatal)`);
+  }
+}
+
 export default async function globalSetup(): Promise<void> {
   console.log("[e2e] Waiting for Docker API server...");
   await waitForServer(`${API_URL}/health`, MAX_WAIT_MS);
@@ -65,23 +80,10 @@ export default async function globalSetup(): Promise<void> {
   // Give the e2e org a client-facing name (org_config.name, plaintext per
   // ADR-094) so branding assertions can verify the real data flow:
   // org_config -> getPublicBranding -> client shell navbar. Idempotent.
-  console.log("[e2e] Setting e2e org display name...");
-  try {
-    const sql = [
-      "DO $fn$ DECLARE s TEXT; BEGIN",
-      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
-      "IF s IS NOT NULL THEN",
-      "EXECUTE format('UPDATE %I.org_config SET name = ''E2E Test Org''', s);",
-      "END IF; END $fn$;",
-    ].join("\n");
-    execSync(`${COMPOSE} exec -T db psql -U care_y -d care_y`, {
-      input: sql,
-      stdio: ["pipe", "inherit", "inherit"],
-      cwd: process.cwd(),
-    });
-  } catch {
-    console.warn("[e2e] Could not set org display name (non-fatal)");
-  }
+  setupSql(
+    "Setting e2e org display name",
+    "UPDATE org_config SET name = 'E2E Test Org';",
+  );
 
   // Delete ALL tickets. Same reasoning as the KB wipe below: tickets
   // created by specs (lifecycle, create, intake) accumulate across runs
@@ -94,128 +96,52 @@ export default async function globalSetup(): Promise<void> {
   // DELETE CASCADE, and seed-data.setup.ts re-creates the 14 seed
   // tickets each run (devSeedTickets seeds per-client when the client
   // has no ticket).
-  console.log("[e2e] Cleaning E2E tickets...");
-  try {
-    const sql = [
-      "DO $fn$ DECLARE s TEXT; BEGIN",
-      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
-      "IF s IS NOT NULL THEN",
-      "EXECUTE format('DELETE FROM %I.tickets', s);",
-      "END IF; END $fn$;",
-    ].join("\n");
-    execSync(`${COMPOSE} exec -T db psql -U care_y -d care_y`, {
-      input: sql,
-      stdio: ["pipe", "inherit", "inherit"],
-      cwd: process.cwd(),
-    });
-  } catch {
-    console.warn("[e2e] Could not clean stale tickets (non-fatal)");
-  }
+  setupSql("Cleaning E2E tickets", "DELETE FROM tickets;");
 
   // Delete all KB articles. They accumulate across runs (kb-create.spec.ts
   // and kb-editor.spec.ts each create articles) and eventually push seeded
   // articles past the page size, breaking tests that look for seed titles.
   // Articles are re-created client-side by seed-data.setup.ts on each run.
   // kb_votes and kb_attachments cascade from kb_items.
-  console.log("[e2e] Cleaning stale E2E KB articles...");
-  try {
-    const kbSql = [
-      "DO $fn$ DECLARE s TEXT; BEGIN",
-      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
-      "IF s IS NOT NULL THEN",
-      "EXECUTE format('DELETE FROM %I.kb_items', s);",
-      "END IF; END $fn$;",
-    ].join("\n");
-    execSync(`${COMPOSE} exec -T db psql -U care_y -d care_y`, {
-      input: kbSql,
-      stdio: ["pipe", "inherit", "inherit"],
-      cwd: process.cwd(),
-    });
-  } catch {
-    console.warn("[e2e] Could not clean stale KB articles (non-fatal)");
-  }
+  setupSql("Cleaning stale E2E KB articles", "DELETE FROM kb_items;");
 
   // Delete non-default intake forms from prior runs. The multi-form routing
   // spec creates forms with known slugs (e2e-form-alpha, e2e-form-beta).
   // Stale forms cause slug-uniqueness conflicts on the next run.
   // intake_form_fields cascade from intake_forms via FK.
-  console.log("[e2e] Cleaning stale E2E intake forms...");
-  try {
-    const intakeFormSql = [
-      "DO $fn$ DECLARE s TEXT; BEGIN",
-      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
-      "IF s IS NOT NULL THEN",
-      "EXECUTE format('DELETE FROM %I.intake_form_responses WHERE form_id IN (SELECT id FROM %I.intake_forms WHERE is_default = false)', s, s);",
-      "EXECUTE format('DELETE FROM %I.intake_forms WHERE is_default = false', s);",
-      "END IF; END $fn$;",
-    ].join("\n");
-    execSync(
-      `${COMPOSE} exec -T db psql -U care_y -d care_y -v ON_ERROR_STOP=1`,
-      {
-        input: intakeFormSql,
-        stdio: ["pipe", "inherit", "inherit"],
-        cwd: process.cwd(),
-      },
-    );
-  } catch {
-    console.warn("[e2e] Could not clean stale intake forms (non-fatal)");
-  }
+  setupSql(
+    "Cleaning stale E2E intake forms",
+    [
+      "DELETE FROM intake_form_responses WHERE form_id IN (SELECT id FROM intake_forms WHERE is_default = false);",
+      "DELETE FROM intake_forms WHERE is_default = false;",
+    ].join("\n"),
+  );
 
   // Point the org at an intake queue. The seed creates queues but leaves
   // org_config.intake_queue_id null, which an admin would set during
   // onboarding. Without it every public intake submission fails with
   // IntakeQueueNotConfiguredError and the form shows a generic "didn't
   // go through" error, so no intake flow can be tested at all.
-  console.log("[e2e] Ensuring intake queue is configured...");
-  try {
-    const queueSql = [
-      "DO $fn$ DECLARE s TEXT; BEGIN",
-      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
-      "IF s IS NOT NULL THEN",
-      "EXECUTE format('UPDATE %I.org_config SET intake_queue_id = (SELECT id FROM %I.queues ORDER BY sort_order, created_at LIMIT 1) WHERE intake_queue_id IS NULL', s, s);",
-      "END IF; END $fn$;",
-    ].join("\n");
-    execSync(
-      `${COMPOSE} exec -T db psql -U care_y -d care_y -v ON_ERROR_STOP=1`,
-      {
-        input: queueSql,
-        stdio: ["pipe", "inherit", "inherit"],
-        cwd: process.cwd(),
-      },
-    );
-  } catch {
-    console.warn("[e2e] Could not configure intake queue (non-fatal)");
-  }
+  setupSql(
+    "Ensuring intake queue is configured",
+    "UPDATE org_config SET intake_queue_id = (SELECT id FROM queues ORDER BY sort_order, created_at LIMIT 1) WHERE intake_queue_id IS NULL;",
+  );
 
   // Reset client communication tiers. The portal and share-link specs
   // both assume they are starting from a fresh SMS/Email client, but
   // upgrading one to Secure Link or Account persists in the org across
   // runs, after which "Set up secure link" is gone and the spec fails
   // looking for it. Each run recreates whatever channels it needs.
-  console.log("[e2e] Resetting communication tiers...");
-  try {
-    const tierSql = [
-      "DO $fn$ DECLARE s TEXT; BEGIN",
-      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
-      "IF s IS NOT NULL THEN",
-      "EXECUTE format('DELETE FROM %I.portal_messages', s);",
-      "EXECUTE format('DELETE FROM %I.portal_channels', s);",
-      "EXECUTE format('DELETE FROM %I.client_accounts', s);",
-      "EXECUTE format('DELETE FROM %I.share_links', s);",
-      "EXECUTE format('UPDATE %I.clients SET communication_tier = ''sms_email'' WHERE communication_tier <> ''sms_email''', s);",
-      "END IF; END $fn$;",
-    ].join("\n");
-    execSync(
-      `${COMPOSE} exec -T db psql -U care_y -d care_y -v ON_ERROR_STOP=1`,
-      {
-        input: tierSql,
-        stdio: ["pipe", "inherit", "inherit"],
-        cwd: process.cwd(),
-      },
-    );
-  } catch {
-    console.warn("[e2e] Could not reset client tiers (non-fatal)");
-  }
+  setupSql(
+    "Resetting communication tiers",
+    [
+      "DELETE FROM portal_messages;",
+      "DELETE FROM portal_channels;",
+      "DELETE FROM client_accounts;",
+      "DELETE FROM share_links;",
+      "UPDATE clients SET communication_tier = 'sms_email' WHERE communication_tier <> 'sms_email';",
+    ].join("\n"),
+  );
 
   // Clear per-run activity records. Every block above deletes an entity
   // specs create directly; these are the byproducts of running them at
@@ -235,36 +161,22 @@ export default async function globalSetup(): Promise<void> {
   // them without a cascade. Ticket-rooted activity (notification_outbox,
   // ticket_read_cursors, followup_reactions, intake_key_wraps) already
   // cascades from the ticket wipe above and is not repeated here.
-  console.log("[e2e] Clearing per-run activity records...");
-  try {
-    const activitySql = [
-      "DO $fn$ DECLARE s TEXT; BEGIN",
-      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
-      "IF s IS NOT NULL THEN",
-      "EXECUTE format('DELETE FROM %I.audit_log', s);",
-      "EXECUTE format('DELETE FROM %I.sessions', s);",
-      "EXECUTE format('DELETE FROM %I.user_recent_views', s);",
-      "EXECUTE format('DELETE FROM %I.merge_candidate_dismissals', s);",
-      "EXECUTE format('DELETE FROM %I.client_merge_events', s);",
-      "EXECUTE format('DELETE FROM %I.tracked_calls', s);",
-      "EXECUTE format('DELETE FROM %I.voicemail_quarantine', s);",
-      "EXECUTE format('DELETE FROM %I.push_subscriptions', s);",
-      "EXECUTE format('DELETE FROM %I.push_challenges', s);",
-      "EXECUTE format('DELETE FROM %I.invite_tokens', s);",
-      "EXECUTE format('DELETE FROM %I.emails AS e WHERE NOT EXISTS (SELECT 1 FROM %I.clients c WHERE c.email_id = e.id)', s, s);",
-      "END IF; END $fn$;",
-    ].join("\n");
-    execSync(
-      `${COMPOSE} exec -T db psql -U care_y -d care_y -v ON_ERROR_STOP=1`,
-      {
-        input: activitySql,
-        stdio: ["pipe", "inherit", "inherit"],
-        cwd: process.cwd(),
-      },
-    );
-  } catch {
-    console.warn("[e2e] Could not clear activity records (non-fatal)");
-  }
+  setupSql(
+    "Clearing per-run activity records",
+    [
+      "DELETE FROM audit_log;",
+      "DELETE FROM sessions;",
+      "DELETE FROM user_recent_views;",
+      "DELETE FROM merge_candidate_dismissals;",
+      "DELETE FROM client_merge_events;",
+      "DELETE FROM tracked_calls;",
+      "DELETE FROM voicemail_quarantine;",
+      "DELETE FROM push_subscriptions;",
+      "DELETE FROM push_challenges;",
+      "DELETE FROM invite_tokens;",
+      "DELETE FROM emails AS e WHERE NOT EXISTS (SELECT 1 FROM clients c WHERE c.email_id = e.id);",
+    ].join("\n"),
+  );
 
   console.log("[e2e] E2E org ready");
 }
