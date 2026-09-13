@@ -20,11 +20,13 @@ const KEY_WRAP = {
   wrappedKey: "wk-base64",
 };
 const ENCRYPTED_CONTENT = "SGVsbG8";
+const PORTAL_WRAP = "cG9ydGFsLXdyYXAtYmFzZTY0";
 
 function createMockBridge(): {
   bridge: CryptoBridge;
   mockDecrypt: ReturnType<typeof vi.fn>;
   mockDecryptAndRewrap: ReturnType<typeof vi.fn>;
+  mockDecryptPortalReply: ReturnType<typeof vi.fn>;
 } {
   const mockDecrypt =
     vi.fn<
@@ -53,14 +55,27 @@ function createMockBridge(): {
     >();
   mockDecryptAndRewrap.mockResolvedValue("Rewrap-decrypted content");
 
+  const mockDecryptPortalReply =
+    vi.fn<
+      (
+        followUpId: string,
+        ticketId: string,
+        sealedWrap: string,
+        ct: string,
+      ) => Promise<string>
+    >();
+  mockDecryptPortalReply.mockResolvedValue("Portal-decrypted content");
+
   return {
     bridge: {
       decrypt: mockDecrypt,
       decryptAndRewrap: mockDecryptAndRewrap,
+      decryptPortalReply: mockDecryptPortalReply,
       getState: () => "KEYED",
     } as unknown as CryptoBridge,
     mockDecrypt,
     mockDecryptAndRewrap,
+    mockDecryptPortalReply,
   };
 }
 
@@ -75,6 +90,7 @@ describe("FollowUpDecryptCache", () => {
   let cache: FollowUpDecryptCache;
   let mockDecrypt: ReturnType<typeof vi.fn>;
   let mockDecryptAndRewrap: ReturnType<typeof vi.fn>;
+  let mockDecryptPortalReply: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     cacheRegistry.reset();
@@ -82,9 +98,11 @@ describe("FollowUpDecryptCache", () => {
       bridge,
       mockDecrypt: md,
       mockDecryptAndRewrap: mdr,
+      mockDecryptPortalReply: mdpr,
     } = createMockBridge();
     mockDecrypt = md;
     mockDecryptAndRewrap = mdr;
+    mockDecryptPortalReply = mdpr;
     cache = new FollowUpDecryptCache(bridge);
   });
 
@@ -216,6 +234,56 @@ describe("FollowUpDecryptCache", () => {
       );
       expect(result).toBeUndefined();
       expect(mockDecryptAndRewrap).not.toHaveBeenCalled();
+      expect(mockDecrypt).toHaveBeenCalledOnce();
+    });
+
+    it("routes to decryptPortalReply when portalWrap is provided", () => {
+      const result = cache.decryptContent(
+        FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
+        null,
+        ENCRYPTED_CONTENT,
+        undefined,
+        PORTAL_WRAP,
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecrypt).not.toHaveBeenCalled();
+      expect(mockDecryptAndRewrap).not.toHaveBeenCalled();
+      expect(mockDecryptPortalReply).toHaveBeenCalledOnce();
+      expect(mockDecryptPortalReply).toHaveBeenCalledWith(
+        FOLLOW_UP_ID,
+        TICKET_ID,
+        PORTAL_WRAP,
+        ENCRYPTED_CONTENT,
+      );
+    });
+
+    it("prefers rewrapContext over portalWrap when both are present", () => {
+      cache.decryptContent(
+        FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
+        null,
+        ENCRYPTED_CONTENT,
+        { followUpKeyWrap: FOLLOW_UP_KEY_WRAP, ticketId: TICKET_ID },
+        PORTAL_WRAP,
+      );
+      expect(mockDecryptPortalReply).not.toHaveBeenCalled();
+      expect(mockDecryptAndRewrap).toHaveBeenCalledOnce();
+    });
+
+    it("ignores empty portalWrap and falls through to keyWrap decrypt", () => {
+      cache.decryptContent(
+        FOLLOW_UP_ID,
+        TICKET_ID,
+        followupSlot(FOLLOW_UP_ID),
+        KEY_WRAP,
+        ENCRYPTED_CONTENT,
+        undefined,
+        "",
+      );
+      expect(mockDecryptPortalReply).not.toHaveBeenCalled();
       expect(mockDecrypt).toHaveBeenCalledOnce();
     });
   });

@@ -141,6 +141,7 @@ export interface OrgConfigTable {
     Date | null
   >;
   setup_completed: ColumnType<boolean, boolean | undefined, boolean>;
+  portal_safe_exit_url: string | null;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -258,6 +259,7 @@ export interface ClientsTable {
   alias_hash: string | null;
   phone_id: string | null;
   merged_into: string | null;
+  communication_tier: ColumnType<string, string | undefined, string>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -358,6 +360,7 @@ export interface FollowupsTable {
   call_status: string | null;
   call_duration_seconds: number | null;
   key_generation: string | null;
+  edited_at: Date | null;
   event_params: ColumnType<
     Record<string, unknown> | null,
     Record<string, unknown> | null | undefined,
@@ -699,6 +702,43 @@ export interface IntakeKeyWrapsTable {
   created_at: Generated<Date>;
 }
 
+// --- Portal channels (communication tier, encrypted client copies) ---
+
+export interface PortalChannelsTable {
+  id: Generated<string>;
+  client_id: string;
+  channel_id: string;
+  auth_hash: Buffer;
+  client_public: Buffer;
+  has_passphrase: ColumnType<boolean, boolean | undefined, boolean>;
+  key_check_ephemeral_point: Buffer;
+  key_check_nonce: Buffer;
+  key_check_ciphertext: Buffer;
+  status: ColumnType<string, string | undefined, string>;
+  created_at: Generated<Date>;
+  last_seen_at: Date | null;
+  last_notified_at: Date | null;
+  revoked_at: Date | null;
+}
+
+export interface PortalMessagesTable {
+  id: Generated<string>;
+  channel_id: string;
+  followup_id: string;
+  direction: string;
+  ephemeral_point: Buffer;
+  nonce: Buffer;
+  ciphertext: Buffer;
+  edited_at: Date | null;
+  created_at: Generated<Date>;
+}
+
+export interface PortalReplyKeyWrapsTable {
+  followup_id: string;
+  wrapped_tk: Buffer;
+  created_at: Generated<Date>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -768,5 +808,8 @@ export interface TenantDatabase {
   intake_key_wraps: IntakeKeyWrapsTable;
   // Merge candidate dismissals
   merge_candidate_dismissals: MergeCandidateDismissalsTable;
-  // Client portal (portal_channels)
+  // Client portal
+  portal_channels: PortalChannelsTable;
+  portal_messages: PortalMessagesTable;
+  portal_reply_key_wraps: PortalReplyKeyWrapsTable;
 }

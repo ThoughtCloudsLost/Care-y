@@ -69,4 +69,5 @@ export const updateOrgGeneralAdminInputSchema = z.object({
     .min(1)
     .max(5)
     .refine(isValidCountryCode, "Invalid country code"),
+  portalSafeExitUrl: z.url().max(2048).nullish(),
 });

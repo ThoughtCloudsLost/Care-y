@@ -9,6 +9,7 @@ import {
   type SymmetricKey,
 } from "@care-y/crypto";
 import { eciesWrapAndStore } from "./key-wrap.js";
+import { reopenClosedTicket } from "./ticket-reopen.js";
 
 export interface ResolveTicketResult {
   readonly ticketId: string;
@@ -66,21 +67,7 @@ export async function resolveOrCreateTicket(
       .executeTakeFirst();
 
     if (closedTicket) {
-      await trx
-        .updateTable("tickets")
-        .set({ status: "open" })
-        .where("id", "=", closedTicket.id)
-        .execute();
-
-      await trx
-        .insertInto("followups")
-        .values({
-          ticket_id: closedTicket.id,
-          source: "system",
-          type: "status_opened",
-          encrypted_content: Buffer.alloc(0),
-        })
-        .execute();
+      await reopenClosedTicket(trx, closedTicket.id);
 
       title.fill(0);
       description.fill(0);

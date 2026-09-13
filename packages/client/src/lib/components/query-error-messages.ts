@@ -165,6 +165,13 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.FORM_HAS_RESPONSES]: () => m.error_form_has_responses(),
   [ErrorCode.INTAKE_SLUG_TAKEN]: () => m.error_intake_slug_taken(),
   [ErrorCode.INTAKE_DISABLED]: () => m.error_intake_disabled(),
+
+  // Portal channels
+  [ErrorCode.PORTAL_CHANNEL_EXISTS]: () =>
+    m.error_portal_channel_exists(withTerms()),
+  // Deliberately generic: the portal surface never distinguishes
+  // unknown, revoked, and bad-auth channels.
+  [ErrorCode.PORTAL_CHANNEL_NOT_FOUND]: () => m.error_generic(),
 };
 
 /** Type guard: returns true when the string is a recognized ErrorCode value. */

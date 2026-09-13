@@ -656,3 +656,25 @@ describe("auditEventTypeSchema (7.5c additions)", () => {
     expect(auditEventTypeSchema.safeParse("user_deleted").success).toBe(false);
   });
 });
+
+describe("auditEventTypeSchema (portal additions)", () => {
+  const portalAuditTypes = [
+    "client_tier_changed",
+    "portal_channel_regenerated",
+    "portal_channel_revoked",
+  ] as const;
+
+  it.each(portalAuditTypes)(
+    "accepts portal audit event type '%s'",
+    (eventType) => {
+      expect(auditEventTypeSchema.safeParse(eventType).success).toBe(true);
+    },
+  );
+
+  it("still accepts pre-existing audit event types after portal additions", () => {
+    expect(auditEventTypeSchema.safeParse("ticket_created").success).toBe(true);
+    expect(auditEventTypeSchema.safeParse("web_intake_toggled").success).toBe(
+      true,
+    );
+  });
+});

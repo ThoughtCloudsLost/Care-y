@@ -75,6 +75,13 @@ export interface TicketKeyWrap {
   readonly wrappedKey: string; // base64url (no padding)
 }
 
+export interface PortalChannelMeta {
+  readonly clientPublic: string;
+  readonly hasPassphrase: boolean;
+  readonly createdAt: string;
+  readonly lastSeenAt: string | null;
+}
+
 export interface TicketWithKeyWrap extends TicketListRecord {
   readonly keyWrap: TicketKeyWrap | null;
   /**
@@ -84,6 +91,12 @@ export interface TicketWithKeyWrap extends TicketListRecord {
    * The Worker uses crypto_box_seal_open to recover tk from this wrap.
    */
   readonly intakeWrap: string | null;
+  /** Communication tier of the ticket's client. */
+  readonly clientTier: string;
+  /** True iff the client has an active portal channel (server-computed). */
+  readonly portalCapable: boolean;
+  /** Active portal channel metadata, or null when none exists. */
+  readonly portalChannel: PortalChannelMeta | null;
 }
 
 export interface FollowUpPreview {
@@ -339,6 +352,12 @@ function toRecordWithKeyWrap(
     nonce: Buffer | null;
     wrapped_key: Buffer | null;
     intake_wrapped_tk?: Buffer | null;
+    communication_tier?: string;
+    portal_channel_id?: string | null;
+    portal_client_public?: Buffer | null;
+    portal_has_passphrase?: boolean | null;
+    portal_created_at?: Date | null;
+    portal_last_seen_at?: Date | null;
   },
 ): TicketWithKeyWrap {
   const keyWrap = buildKeyWrap(row.ephemeral_point, row.nonce, row.wrapped_key);
@@ -349,10 +368,34 @@ function toRecordWithKeyWrap(
     keyWrap === null && row.intake_wrapped_tk
       ? encode(new Uint8Array(row.intake_wrapped_tk))
       : null;
+
+  const clientTier = row.communication_tier ?? "sms_email";
+  const hasActiveChannel =
+    row.portal_channel_id !== undefined && row.portal_channel_id !== null;
+
+  // The join guarantees the key-material columns whenever the channel id
+  // is present; narrow on the columns themselves rather than asserting.
+  const portalChannel: PortalChannelMeta | null =
+    hasActiveChannel &&
+    row.portal_client_public != null &&
+    row.portal_created_at != null
+      ? {
+          clientPublic: encode(new Uint8Array(row.portal_client_public)),
+          hasPassphrase: Boolean(row.portal_has_passphrase),
+          createdAt: row.portal_created_at.toISOString(),
+          lastSeenAt: row.portal_last_seen_at
+            ? row.portal_last_seen_at.toISOString()
+            : null,
+        }
+      : null;
+
   return {
     ...toListRecord(row),
     keyWrap,
     intakeWrap,
+    clientTier,
+    portalCapable: hasActiveChannel,
+    portalChannel,
   };
 }
 
@@ -578,16 +621,27 @@ export function createTicketService(
             eb(eb.cast("t.assigned_to", "uuid"), "=", eb.ref("u.id")),
           ),
         )
+        .leftJoin("portal_channels as pc", (join) =>
+          join
+            .onRef("pc.client_id", "=", "c.id")
+            .on("pc.status", "=", "active"),
+        )
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("ikw.wrapped_tk as intake_wrapped_tk")
         .select("c.encrypted_alias as encrypted_client_alias")
+        .select("c.communication_tier")
         .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
         .select("ph.encrypted_number as client_phone_encrypted")
         .select("ph.id as client_phone_id")
         .select("q.encrypted_name as encrypted_queue_name")
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
+        .select("pc.id as portal_channel_id")
+        .select("pc.client_public as portal_client_public")
+        .select("pc.has_passphrase as portal_has_passphrase")
+        .select("pc.created_at as portal_created_at")
+        .select("pc.last_seen_at as portal_last_seen_at")
         .select((eb) => [
           // Creation counts as the ticket's first activity: GREATEST
           // ignores the NULL max() of an empty follow-up set, so tickets

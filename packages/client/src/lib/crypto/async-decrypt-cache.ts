@@ -170,6 +170,36 @@ export class AsyncDecryptCache {
   }
 
   /**
+   * Decrypt a portal client reply whose tk_temp is sealed to the org key
+   * instead of ECIES-wrapped. Same fire-and-forget contract and rewrap
+   * side-effect as decryptAndRewrap; only the Worker-side unwrap differs.
+   */
+  protected decryptPortalReply(
+    cacheKey: string,
+    followUpId: string,
+    ticketId: string,
+    sealedWrap: string,
+    ciphertext: string,
+  ): string | undefined {
+    const cached = this.cache.get(cacheKey);
+    if (cached !== undefined) return cached;
+    if (this.pending.has(cacheKey)) return undefined;
+    if (this.bridge.getState() === "DESTROYED") return undefined;
+
+    this.fireAndForget(
+      cacheKey,
+      this.bridge.decryptPortalReply(
+        followUpId,
+        ticketId,
+        sealedWrap,
+        ciphertext,
+      ),
+      "decryptPortalReply",
+    );
+    return undefined;
+  }
+
+  /**
    * Store the error sentinel for a cache key. Used by subclasses when
    * decryption is known to be impossible (e.g., missing key material)
    * without going through the async bridge path.

@@ -123,6 +123,11 @@ export const ErrorCode = {
   FORM_HAS_RESPONSES: "FORM_HAS_RESPONSES",
   INTAKE_SLUG_TAKEN: "INTAKE_SLUG_TAKEN",
   INTAKE_DISABLED: "INTAKE_DISABLED",
+
+  // --- Portal channels ---
+  PORTAL_CHANNEL_EXISTS: "PORTAL_CHANNEL_EXISTS",
+  /** Generic portal error: unknown, revoked, or bad-auth (indistinguishable). */
+  PORTAL_CHANNEL_NOT_FOUND: "PORTAL_CHANNEL_NOT_FOUND",
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];

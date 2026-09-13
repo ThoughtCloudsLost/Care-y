@@ -6,7 +6,7 @@
  * Extracted from TicketDetail for testability.
  */
 
-export type ContextActionId = "copy" | "edit" | "delete";
+export type ContextActionId = "copy" | "edit" | "editMessage" | "delete";
 
 export interface ContextAction {
   readonly id: ContextActionId;
@@ -31,6 +31,7 @@ interface FollowUpFields {
 interface Labels {
   readonly copy: string;
   readonly editNote: string;
+  readonly editMessage: string;
   readonly deleteNote: string;
 }
 
@@ -44,6 +45,15 @@ export function getContextMenuActions(
 
   // Copy is available for all decrypted message content
   actions.push({ id: "copy", label: labels.copy });
+
+  // Edit for own outbound in-app messages (not sms_outbound, not client messages)
+  if (
+    fu.type === "message" &&
+    fu.source === "volunteer" &&
+    fu.createdBy === currentUserId
+  ) {
+    actions.push({ id: "editMessage", label: labels.editMessage });
+  }
 
   // Edit/delete only for own internal notes
   if (fu.type === "internal_note" && fu.createdBy === currentUserId) {

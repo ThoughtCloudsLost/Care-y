@@ -895,6 +895,172 @@ describe("crypto-core decryptAndRewrap", () => {
   });
 });
 
+describe("crypto-core decryptPortalReply", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("portal-reply-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  async function loadOrgKey(): Promise<string> {
+    const sodium = requireSodium();
+    const orgSecret = sodium.crypto_core_ristretto255_scalar_random();
+    const wrap = eciesEncrypt(
+      orgSecret,
+      decode(volPublicStr) as RistrettoPoint,
+    );
+
+    const resp = (await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 700,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+    })) as UnwrapOrgKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    sodium.memzero(orgSecret);
+    return resp.orgPublicKey;
+  }
+
+  it("unseals tk_temp, decrypts, and emits a RewrapEvent", async () => {
+    const sodium = requireSodium();
+    const orgPub = decode(await loadOrgKey());
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 701,
+      ticketId: "t-portal",
+      keyCacheId: "t-portal",
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    const tkTemp = generateContentKey();
+    const sealedWrap = sodium.crypto_box_seal(tkTemp, orgPub);
+    const tempPlaintext = new TextEncoder().encode("portal reply");
+    const tempCt = encryptContent(
+      tempPlaintext,
+      tkTemp,
+      buildContentAad("t-portal", followupSlot("fu-portal-1")),
+    );
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "decryptPortalReply",
+      id: 702,
+      ticketId: "t-portal",
+      followUpId: "fu-portal-1",
+      sealedWrap: encode(sealedWrap),
+      ciphertext: encode(tempCt),
+    })) as WorkerResponse;
+
+    expect(resp.ok).toBe(true);
+    expect((resp as { plaintext: string }).plaintext).toBe("portal reply");
+
+    const rewrapEvent = sinkMessages.find((m): m is RewrapEvent => "kind" in m);
+    expect(rewrapEvent).toBeDefined();
+    expect(rewrapEvent?.followUpId).toBe("fu-portal-1");
+    expect(rewrapEvent?.ticketId).toBe("t-portal");
+
+    // Convergence re-encrypts under the canonical tk with the SAME
+    // followup-slot AAD (ADR-053), exactly like decryptAndRewrap.
+    const reEncrypted = decryptContent(
+      decode(rewrapEvent!.encryptedContent) as Ciphertext,
+      canonicalTk as SymmetricKey,
+      buildContentAad("t-portal", followupSlot("fu-portal-1")),
+    );
+    expect(new TextDecoder().decode(reEncrypted)).toBe("portal reply");
+
+    handleRewrapResult({
+      kind: "rewrap-result",
+      followUpId: "fu-portal-1",
+      success: true,
+    });
+
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
+  });
+
+  it("posts DECRYPT_FAILED for a tampered sealed wrap", async () => {
+    const sodium = requireSodium();
+    const orgPub = decode(await loadOrgKey());
+
+    const tkTemp = generateContentKey();
+    const sealedWrap = sodium.crypto_box_seal(tkTemp, orgPub);
+    sealedWrap[0] = (sealedWrap[0] ?? 0) ^ 0xff;
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "decryptPortalReply",
+      id: 703,
+      ticketId: "t-portal",
+      followUpId: "fu-portal-2",
+      sealedWrap: encode(sealedWrap),
+      ciphertext: encode(sodium.randombytes_buf(64)),
+    })) as ErrorResponse;
+
+    expect(resp.ok).toBe(false);
+    expect(resp.code).toBe("DECRYPT_FAILED");
+    sodium.memzero(tkTemp);
+  });
+
+  it("posts DECRYPT_FAILED for AAD-mismatched content", async () => {
+    const sodium = requireSodium();
+    const orgPub = decode(await loadOrgKey());
+
+    const tkTemp = generateContentKey();
+    const sealedWrap = sodium.crypto_box_seal(tkTemp, orgPub);
+    // Encrypted under a different follow-up's slot: AAD binding must fail.
+    const wrongCt = encryptContent(
+      new TextEncoder().encode("wrong slot"),
+      tkTemp,
+      buildContentAad("t-portal", followupSlot("fu-other")),
+    );
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "decryptPortalReply",
+      id: 704,
+      ticketId: "t-portal",
+      followUpId: "fu-portal-3",
+      sealedWrap: encode(sealedWrap),
+      ciphertext: encode(wrongCt),
+    })) as ErrorResponse;
+
+    expect(resp.ok).toBe(false);
+    expect(resp.code).toBe("DECRYPT_FAILED");
+    sodium.memzero(tkTemp);
+  });
+
+  it("rejects when the org key is not loaded", async () => {
+    const sodium = requireSodium();
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "decryptPortalReply",
+      id: 705,
+      ticketId: "t-portal",
+      followUpId: "fu-portal-4",
+      sealedWrap: encode(sodium.randombytes_buf(80)),
+      ciphertext: encode(sodium.randombytes_buf(64)),
+    })) as ErrorResponse;
+
+    expect(resp.ok).toBe(false);
+    expect(resp.code).toBe("NOT_READY");
+  });
+});
+
 describe("crypto-core error paths", () => {
   beforeEach(async () => {
     handleZeroAll(-1, testSink);

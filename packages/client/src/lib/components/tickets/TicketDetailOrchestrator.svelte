@@ -68,6 +68,7 @@
   import type { TicketAction } from "$lib/tickets/types.js";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import TicketDetailOverlays from "$lib/components/tickets/TicketDetailOverlays.svelte";
+  import OutboundMessageEditSheet from "$lib/components/tickets/OutboundMessageEditSheet.svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys, ticketsKeys, consultantKeys } from "$lib/query/keys";
   import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
@@ -144,9 +145,18 @@
   $effect(() => {
     if (!ticket || !compose || autoActivatedForTicket === ticketId) return;
     autoActivatedForTicket = ticketId;
-    if (!ticket.hasPhone) {
+
+    const hasReply = ticket.portalCapable;
+    const hasSms = ticket.hasPhone;
+
+    // Auto-activate when exactly one client-reply method exists.
+    if (hasReply && !hasSms) {
       compose.activateReply();
+    } else if (hasSms && !hasReply) {
+      // SMS-only: leave collapsed (volunteer taps + to see options).
+      // No auto-activation for SMS; it goes through the exposure hint.
     }
+    // Both available or neither: stay collapsed, let volunteer tap +.
   });
 
   // Recently-viewed history: a detail open counts as a view. Covers the
@@ -486,6 +496,8 @@
         callDurationSeconds: null,
         keyGeneration: null,
         keyWrap: null,
+        portalWrap: null,
+        editedAt: null,
         eventParams: null,
       }) satisfies FollowUpList[number],
     createFollowUpMutate: async (args) =>
@@ -726,6 +738,18 @@
 
   const lightbox = createLightbox();
 
+  // --- Outbound message edit state ---
+
+  let editMessageSheetOpen = $state(false);
+  let editMessageFollowUpId = $state("");
+  let editMessageContent = $state("");
+
+  function openEditMessage(followUpId: string, content: string): void {
+    editMessageFollowUpId = followUpId;
+    editMessageContent = content;
+    editMessageSheetOpen = true;
+  }
+
   const contextMenu = createContextMenu({
     oncopy: async (plaintext) =>
       copyToClipboard(plaintext, toastStore, {
@@ -734,6 +758,8 @@
       }),
     onedit: (followUpId, content, noteTypeId) =>
       noteEdit.open(followUpId, content, noteTypeId),
+    oneditmessage: (followUpId, content) =>
+      openEditMessage(followUpId, content),
     ondelete: (followUpId) => deleteConfirm.openConfirm(followUpId),
   });
 
@@ -1139,13 +1165,26 @@
   oncallaction={handleCallAction}
   oncalldismiss={closeCallSheet}
   oncomposedismiss={closeComposeActions}
-  onreply={() => compose?.activateReply()}
+  onreply={ticket?.portalCapable === true
+    ? () => compose?.activateReply()
+    : undefined}
   ontextclient={ticket?.hasPhone === true
     ? () => exposureHint.show("sms", () => compose?.activateSms())
     : undefined}
   ondraftset={(body: string) => {
     setDraftForMode(ticketId, "reply", body);
     compose?.activateReply();
+  }}
+/>
+
+<OutboundMessageEditSheet
+  opened={editMessageSheetOpen}
+  {ticketId}
+  followUpId={editMessageFollowUpId}
+  initialContent={editMessageContent}
+  clientPublic={ticket?.portalChannel?.clientPublic ?? null}
+  ondismiss={() => {
+    editMessageSheetOpen = false;
   }}
 />
 

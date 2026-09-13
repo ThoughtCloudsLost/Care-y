@@ -48,4 +48,10 @@ export interface ClusterRecord {
     nonce: string;
     wrappedKey: string;
   } | null;
+  /**
+   * Org-key sealed tk_temp wrap for portal client replies awaiting
+   * convergence. Present only when keyGeneration is non-null and no
+   * per-volunteer keyWrap exists for it.
+   */
+  portalWrap: string | null;
 }

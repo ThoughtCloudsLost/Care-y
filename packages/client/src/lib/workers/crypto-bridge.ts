@@ -743,6 +743,31 @@ export class CryptoBridge {
   }
 
   /**
+   * Decrypt a portal client reply whose tk_temp is sealed to the org key.
+   * Same contract as decryptAndRewrap (plaintext out, RewrapEvent side
+   * effect, tk_temp cached for rewrapBlob), differing only in the unwrap
+   * step inside the Worker.
+   */
+  async decryptPortalReply(
+    followUpId: string,
+    ticketId: string,
+    sealedWrap: string,
+    ciphertext: string,
+  ): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "decryptPortalReply",
+        followUpId,
+        ticketId,
+        sealedWrap,
+        ciphertext,
+      }),
+      "decryptPortalReply",
+    );
+    return resp.plaintext;
+  }
+
+  /**
    * Detect merge candidates by batch-decrypting intake responses and
    * comparing normalized contact values. Returns only client-id pairs
    * and match kind. Contact values never leave the Worker.

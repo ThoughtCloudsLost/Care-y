@@ -8,9 +8,37 @@ import {
   openComposeActions,
   openTicketByTitle,
 } from "./helpers";
+import { queryDb } from "./db-probe";
 
 const REPLY_SUFFIX = String(Date.now()).slice(-6);
 const REPLY_TEXT = `E2E reply ${REPLY_SUFFIX}`;
+
+/**
+ * "Reply to client" only appears for portal-capable clients (an active
+ * portal channel exists). Give the ticket's client an active channel so
+ * the compose option renders. The channel row carries placeholder key
+ * material: these tests exercise the volunteer send path, not the portal.
+ */
+function makeClientPortalCapable(ticketId: string): void {
+  queryDb(
+    `UPDATE clients SET communication_tier = 'secure_link'
+     WHERE id = (SELECT client_id FROM tickets WHERE id = '${ticketId}');`,
+  );
+  queryDb(
+    `INSERT INTO portal_channels
+       (client_id, channel_id, auth_hash, client_public,
+        key_check_ephemeral_point, key_check_nonce, key_check_ciphertext)
+     SELECT client_id,
+       substr(md5(random()::text) || md5(random()::text), 1, 48),
+       decode(md5(random()::text) || md5(random()::text), 'hex'),
+       decode(md5(random()::text) || md5(random()::text), 'hex'),
+       decode(md5(random()::text) || md5(random()::text), 'hex'),
+       decode(substr(md5(random()::text) || md5(random()::text), 1, 48), 'hex'),
+       decode(md5(random()::text) || md5(random()::text), 'hex')
+     FROM tickets WHERE id = '${ticketId}'
+     ON CONFLICT DO NOTHING;`,
+  );
+}
 
 test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
   let page: Page;
@@ -34,6 +62,16 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
 
   test("opens a ticket with decrypted content", async () => {
     await openTicketByTitle(page, "Help with housing");
+
+    // Grant the client portal capability so "Reply to client" renders,
+    // then reload so the detail payload picks up the new flag.
+    const ticketId = /\/tickets\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+    expect(ticketId).toBeTruthy();
+    makeClientPortalCapable(ticketId!);
+    await page.reload();
+    await expect(page.locator('[role="log"]')).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
   });
 
   // ── 2. Messagebar visible ─────────────────────────────────────

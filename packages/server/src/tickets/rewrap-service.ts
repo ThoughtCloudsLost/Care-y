@@ -84,6 +84,15 @@ export async function rewrapFollowUp(
       .where("key_generation", "=", keyGen)
       .execute();
 
+    // Delete the portal reply key wrap for this follow-up (if any).
+    // Portal client replies store a sealed tk_temp here; once converged
+    // to the canonical tk, the sealed wrap is no longer needed. No-op
+    // for non-portal follow-ups (no row exists).
+    await trx
+      .deleteFrom("portal_reply_key_wraps")
+      .where("followup_id", "=", input.followUpId)
+      .execute();
+
     // Update blob references in attachment/recording rows
     for (const { oldKey, newKey } of blobReplacements) {
       await trx

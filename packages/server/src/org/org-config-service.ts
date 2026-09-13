@@ -6,12 +6,14 @@ export interface OrgGeneralResult {
   readonly encryptedName: string | null;
   readonly defaultLanguage: string;
   readonly countryCode: string;
+  readonly portalSafeExitUrl: string | null;
 }
 
 export interface UpdateOrgGeneralInput {
   readonly encryptedOrgName: string;
   readonly defaultLanguage: string;
   readonly countryCode: string;
+  readonly portalSafeExitUrl?: string | null;
 }
 
 export interface OrgConfigService {
@@ -28,7 +30,12 @@ export function createOrgConfigService(
     async getOrgGeneral(): Promise<OrgGeneralResult> {
       const config = await tenantDb
         .selectFrom("org_config")
-        .select(["encrypted_name", "default_language", "default_country_code"])
+        .select([
+          "encrypted_name",
+          "default_language",
+          "default_country_code",
+          "portal_safe_exit_url",
+        ])
         .executeTakeFirst();
 
       if (!config) {
@@ -42,18 +49,22 @@ export function createOrgConfigService(
             : null,
         defaultLanguage: config.default_language,
         countryCode: config.default_country_code,
+        portalSafeExitUrl: config.portal_safe_exit_url,
       };
     },
 
     async updateOrgGeneral(input: UpdateOrgGeneralInput): Promise<void> {
-      const result = await tenantDb
-        .updateTable("org_config")
-        .set({
-          encrypted_name: Buffer.from(input.encryptedOrgName, "base64"),
-          default_language: input.defaultLanguage,
-          default_country_code: input.countryCode,
-        })
-        .executeTakeFirst();
+      let query = tenantDb.updateTable("org_config").set({
+        encrypted_name: Buffer.from(input.encryptedOrgName, "base64"),
+        default_language: input.defaultLanguage,
+        default_country_code: input.countryCode,
+      });
+      if (input.portalSafeExitUrl !== undefined) {
+        query = query.set({
+          portal_safe_exit_url: input.portalSafeExitUrl ?? null,
+        });
+      }
+      const result = await query.executeTakeFirst();
 
       if (result.numUpdatedRows === 0n) {
         throw new NotFoundError("Org config not found");

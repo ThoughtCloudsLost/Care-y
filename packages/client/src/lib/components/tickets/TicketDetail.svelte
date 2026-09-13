@@ -673,7 +673,12 @@
   function resolveExpandedDecrypt(rec: ClusterRecord): DecryptResult {
     if (decrypt == null) return resolveAsyncDecrypt(undefined, false);
     if (rec.encryptedContent !== null) {
-      return decrypt.followUp(rec.id, rec.encryptedContent, rec.keyWrap);
+      return decrypt.followUp(
+        rec.id,
+        rec.encryptedContent,
+        rec.keyWrap,
+        rec.portalWrap,
+      );
     }
     return resolveAsyncDecrypt(followUpCache.get(rec.id), true);
   }
@@ -699,6 +704,7 @@
     callDurationSeconds?: number | null;
     keyGeneration?: string | null;
     keyWrap?: ClusterRecord["keyWrap"];
+    portalWrap?: string | null;
   }): ClusterRecord {
     return {
       id: fu.id,
@@ -717,6 +723,7 @@
       callDurationSeconds: fu.callDurationSeconds ?? null,
       keyGeneration: fu.keyGeneration ?? null,
       keyWrap: fu.keyWrap ?? null,
+      portalWrap: fu.portalWrap ?? null,
     };
   }
 
@@ -765,6 +772,7 @@
         callDurationSeconds: summary?.callDurationSeconds ?? null,
         keyGeneration: summary?.keyGeneration ?? null,
         keyWrap: null,
+        portalWrap: null,
       };
     });
     expandedClusters.set(key, initial);
@@ -862,6 +870,7 @@
       {
         copy: m.common_copy(),
         editNote: m.ticket_edit_note(),
+        editMessage: m.ticket_edit_message_title(),
         deleteNote: m.ticket_delete_note(),
       },
     );
@@ -1292,7 +1301,12 @@
                 {@const kind = followUpKind(fu)}
                 {@const contentResult =
                   decrypt != null
-                    ? decrypt.followUp(fu.id, fu.encryptedContent)
+                    ? decrypt.followUp(
+                        fu.id,
+                        fu.encryptedContent,
+                        undefined,
+                        fu.portalWrap,
+                      )
                     : resolveAsyncDecrypt(undefined, false)}
                 {@const prevEntry =
                   i > 0 ? groupedDisplayFollowUps[i - 1] : undefined}
@@ -1428,6 +1442,7 @@
                       speaker={fu.source === "client" ? clientAlias : undefined}
                       source={fu.source === "client" ? "client" : "volunteer"}
                       timestamp={fu.createdAt}
+                      editedAt={fu.editedAt}
                     >
                       <!-- svelte-ignore a11y_no_static_element_interactions -->
                       <span

@@ -62,16 +62,21 @@
 
   const serverLanguage = $derived(generalQuery.data?.defaultLanguage ?? "en");
   const serverCountry = $derived(generalQuery.data?.countryCode ?? "");
+  const serverSafeExitUrl = $derived(
+    generalQuery.data?.portalSafeExitUrl ?? "",
+  );
 
   let sheetOpened = $state(false);
   let editName = $state("");
   let editLanguage = $state("en");
   let editCountry = $state("");
+  let editSafeExitUrl = $state("");
 
   function openSheet(): void {
     editName = decryptedName ?? "";
     editLanguage = serverLanguage;
     editCountry = serverCountry;
+    editSafeExitUrl = serverSafeExitUrl;
     sheetOpened = true;
   }
 
@@ -82,7 +87,10 @@
   const nameChanged = $derived(editName !== (decryptedName ?? ""));
   const languageChanged = $derived(editLanguage !== serverLanguage);
   const countryChanged = $derived(editCountry !== serverCountry);
-  const hasChanges = $derived(nameChanged || languageChanged || countryChanged);
+  const safeExitUrlChanged = $derived(editSafeExitUrl !== serverSafeExitUrl);
+  const hasChanges = $derived(
+    nameChanged || languageChanged || countryChanged || safeExitUrlChanged,
+  );
 
   const brandingRouter = trpc.branding
     ? requireRouter(trpc.branding, "branding")
@@ -135,6 +143,7 @@
       encryptedOrgName: string;
       defaultLanguage: string;
       countryCode: string;
+      portalSafeExitUrl?: string | null;
     }) => orgRouter.updateOrgGeneral.mutate(input),
     onSuccess: () => {
       haptic();
@@ -168,11 +177,23 @@
 
     const encryptedOrgName = await orgKeyManager.encryptText(editName.trim());
 
-    saveMutation.mutate({
+    const payload: {
+      encryptedOrgName: string;
+      defaultLanguage: string;
+      countryCode: string;
+      portalSafeExitUrl?: string | null;
+    } = {
       encryptedOrgName,
       defaultLanguage: editLanguage,
       countryCode: editCountry,
-    });
+    };
+
+    if (safeExitUrlChanged) {
+      payload.portalSafeExitUrl =
+        editSafeExitUrl.trim() === "" ? null : editSafeExitUrl.trim();
+    }
+
+    saveMutation.mutate(payload);
   }
 
   function countryLabel(code: string): string {
@@ -202,6 +223,12 @@
         <div class="field-row">
           <span class="field-label">{m.onboarding_org_country_label()}</span>
           <DecryptPlaceholder length={12} />
+        </div>
+        <div class="field-row">
+          <span class="field-label"
+            >{m.admin_org_general_safe_exit_url_label()}</span
+          >
+          <DecryptPlaceholder length={20} />
         </div>
       </div>
     </Card>
@@ -239,6 +266,15 @@
           <span class="field-label">{m.onboarding_org_country_label()}</span>
           <span class="field-value">
             {serverCountry ? countryLabel(serverCountry) : "-"}
+          </span>
+        </div>
+
+        <div class="field-row">
+          <span class="field-label"
+            >{m.admin_org_general_safe_exit_url_label()}</span
+          >
+          <span class="field-value">
+            {serverSafeExitUrl || "-"}
           </span>
         </div>
 
@@ -319,6 +355,19 @@
           <option value={opt.code}>{opt.name} ({opt.code})</option>
         {/each}
       </ListInput>
+
+      <ListInput
+        label={m.admin_org_general_safe_exit_url_label()}
+        type="url"
+        placeholder={m.admin_org_general_safe_exit_url_placeholder()}
+        value={editSafeExitUrl}
+        onInput={(e: Event) => {
+          if (e.target instanceof HTMLInputElement)
+            editSafeExitUrl = e.target.value;
+        }}
+        disabled={saveMutation.isPending}
+        info={m.admin_org_general_safe_exit_url_hint()}
+      />
     </List>
   </div>
 </ShellSheet>

@@ -68,6 +68,9 @@ import type {
   UnwrapOrgKeyRequest,
   UnwrapTkRequest,
   UnwrapIntakeTkRequest,
+  DecryptPortalReplyRequest,
+  DecryptAndRewrapResponse,
+  DecryptPortalReplyResponse,
   WrapWithVolPublicRequest,
   SealSelfBlobRequest,
   OpenSelfBlobRequest,
@@ -466,22 +469,30 @@ function unwrapTkTemp(
   }
 }
 
-function handleDecryptAndRewrap(
-  req: DecryptAndRewrapRequest,
+/**
+ * Shared tail for tk_temp-based follow-up decrypts: cache tk_temp for
+ * later rewrapBlob calls, decrypt with the slot AAD, respond, and
+ * trigger the background rewrap to the canonical tk. The unwrap step
+ * differs per caller (ECIES via vol_private vs sealed box via org keys);
+ * everything after it must stay identical so there is one convergence
+ * path.
+ */
+function decryptWithTkTempAndRewrap(
+  reqId: number,
+  respType: "decryptAndRewrap" | "decryptPortalReply",
+  followUpId: string,
+  ticketId: string,
+  ciphertext: string,
+  tkTemp: Uint8Array,
   sink: Sink,
 ): void {
-  if (!requireKeyed(sink, req.id, "decryptAndRewrap")) return;
-
   const sodium = requireSodium();
-  const tkTemp = unwrapTkTemp(req, sink);
-  if (!tkTemp) return;
+  rewrapTkTempCache.set(followUpId, tkTemp);
 
-  rewrapTkTempCache.set(req.followUpId, tkTemp);
-
-  const ciphertextBuf = decode(req.ciphertext);
+  const ciphertextBuf = decode(ciphertext);
   // Same AAD before and after the rewrap: the content stays in the same
   // followup slot of the same ticket, only the key changes (ADR-053).
-  const aad = buildContentAad(req.ticketId, followupSlot(req.followUpId));
+  const aad = buildContentAad(ticketId, followupSlot(followUpId));
 
   try {
     const plaintext = decryptContent(
@@ -491,25 +502,85 @@ function handleDecryptAndRewrap(
     );
 
     try {
-      const msg: WorkerResponse = {
-        id: req.id,
-        ok: true,
-        type: "decryptAndRewrap",
-        plaintext: textDecoder.decode(plaintext),
-      };
+      const text = textDecoder.decode(plaintext);
+      const msg: DecryptAndRewrapResponse | DecryptPortalReplyResponse =
+        respType === "decryptAndRewrap"
+          ? { id: reqId, ok: true, type: "decryptAndRewrap", plaintext: text }
+          : {
+              id: reqId,
+              ok: true,
+              type: "decryptPortalReply",
+              plaintext: text,
+            };
       sink(msg);
     } finally {
-      triggerRewrap(req.followUpId, req.ticketId, plaintext, aad, sodium, sink);
+      triggerRewrap(followUpId, ticketId, plaintext, aad, sodium, sink);
     }
   } catch (err: unknown) {
     postError(
       sink,
-      req.id,
-      "decryptAndRewrap",
+      reqId,
+      respType,
       err instanceof Error ? err.message : String(err),
       "DECRYPT_FAILED",
     );
   }
+}
+
+function handleDecryptAndRewrap(
+  req: DecryptAndRewrapRequest,
+  sink: Sink,
+): void {
+  if (!requireKeyed(sink, req.id, "decryptAndRewrap")) return;
+
+  const tkTemp = unwrapTkTemp(req, sink);
+  if (!tkTemp) return;
+
+  decryptWithTkTempAndRewrap(
+    req.id,
+    "decryptAndRewrap",
+    req.followUpId,
+    req.ticketId,
+    req.ciphertext,
+    tkTemp,
+    sink,
+  );
+}
+
+function handleDecryptPortalReply(
+  req: DecryptPortalReplyRequest,
+  sink: Sink,
+): void {
+  if (!requireOrgKeyed(sink, req.id, "decryptPortalReply")) return;
+
+  const sodium = requireSodium();
+  const sealedWrap = decode(req.sealedWrap);
+  const pk = assertPresent(orgPublicKey, "orgPublicKey");
+  const sk = assertPresent(orgSecret, "orgSecret");
+
+  let tkTemp: Uint8Array;
+  try {
+    tkTemp = sodium.crypto_box_seal_open(sealedWrap, pk, sk);
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "decryptPortalReply",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+    return;
+  }
+
+  decryptWithTkTempAndRewrap(
+    req.id,
+    "decryptPortalReply",
+    req.followUpId,
+    req.ticketId,
+    req.ciphertext,
+    tkTemp,
+    sink,
+  );
 }
 
 function triggerRewrap(
@@ -1630,6 +1701,9 @@ export function createDispatcher(
           break;
         case "unwrapIntakeTk":
           handleUnwrapIntakeTk(req, sink);
+          break;
+        case "decryptPortalReply":
+          handleDecryptPortalReply(req, sink);
           break;
         case "wrapWithVolPublic":
           handleWrapWithVolPublic(req, sink);

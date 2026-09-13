@@ -18,6 +18,13 @@ import {
 } from "@care-y/shared";
 import { REACTION_TYPES } from "@care-y/shared";
 import type { ReactionSummary, ReactionType } from "@care-y/shared";
+import { encode } from "@care-y/crypto";
+import {
+  storeClientCopy,
+  nudgeClient,
+  type PortalMessageServiceDeps,
+} from "../portal/portal-message-service.js";
+import type { PortalChannelRow } from "../portal/channel-service.js";
 
 export interface FollowUpKeyWrap {
   readonly ephemeralPoint: Buffer;
@@ -35,6 +42,7 @@ export interface FollowUpRecord {
   readonly encryptedContent: Buffer;
   readonly createdBy: string | null;
   readonly createdAt: Date;
+  readonly editedAt: Date | null;
   readonly hasRecording: boolean;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
@@ -45,8 +53,20 @@ export interface FollowUpRecord {
   readonly keyGeneration: string | null;
   readonly keyWrap: FollowUpKeyWrap | null;
   readonly eventParams: Record<string, unknown> | null;
+  /**
+   * Base64-encoded sealed-box wrap of tk_temp from portal_reply_key_wraps.
+   * Present only for follow-ups with a pending portal reply wrap that has
+   * not yet converged (key_generation is non-null and the wrap row exists).
+   */
+  readonly portalWrap: string | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
+}
+
+export interface PortalCopyInput {
+  readonly ephemeralPoint: Buffer;
+  readonly nonce: Buffer;
+  readonly ciphertext: Buffer;
 }
 
 export interface CreateFollowUpInput {
@@ -62,6 +82,8 @@ export interface CreateFollowUpInput {
   readonly callSid?: string;
   readonly callStatus?: string;
   readonly callDurationSeconds?: number;
+  /** ECIES copy for the client's active portal channel. */
+  readonly portalCopy?: PortalCopyInput;
 }
 
 /** Lightweight follow-up for timeline rendering. Plain messages omit encryptedContent. */
@@ -152,6 +174,17 @@ export interface FollowUpService {
   ): Promise<ReactionSummary[]>;
   /** Batch-load reactions for a list of followup IDs. */
   getReactions(followUpIds: string[]): Promise<Map<string, ReactionSummary[]>>;
+  /**
+   * Update an outbound in-app message (type "message", source "volunteer", author only).
+   * Re-encrypts the follow-up content and optionally updates the portal_messages
+   * client copy. sms_outbound and client-sourced messages are never editable.
+   */
+  updateOutboundMessage(
+    userId: string,
+    followUpId: string,
+    encryptedContent: Buffer,
+    portalCopy?: PortalCopyInput,
+  ): Promise<FollowUpRecord>;
 }
 
 /**
@@ -188,6 +221,36 @@ async function fetchFollowUpKeyWraps(
   return result;
 }
 
+/**
+ * Batch-fetch portal reply key wraps for follow-ups with non-null key_generation.
+ * Returns a Map keyed by followup_id with base64url-encoded wrapped_tk.
+ * Used to populate the portalWrap field in the detail payload, mirroring
+ * the intakeWrap inclusion rule: present only when a pending sealed wrap
+ * exists for convergence.
+ */
+async function fetchPortalWraps(
+  db: Kysely<TenantDatabase>,
+  rows: readonly { id: string; key_generation?: string | null }[],
+): Promise<Map<string, string>> {
+  const eligibleIds = rows
+    .filter((r) => r.key_generation !== null && r.key_generation !== undefined)
+    .map((r) => r.id);
+
+  if (eligibleIds.length === 0) return new Map();
+
+  const wraps = await db
+    .selectFrom("portal_reply_key_wraps")
+    .select(["followup_id", "wrapped_tk"])
+    .where("followup_id", "in", eligibleIds)
+    .execute();
+
+  const result = new Map<string, string>();
+  for (const w of wraps) {
+    result.set(w.followup_id, encode(new Uint8Array(w.wrapped_tk)));
+  }
+  return result;
+}
+
 function toRecord(
   row: {
     id: string;
@@ -200,6 +263,7 @@ function toRecord(
     created_by: string | null;
     deleted_at: Date | null;
     created_at: Date;
+    edited_at?: Date | null;
     key_generation?: string | null;
     note_type_id?: string | null;
     call_sid?: string | null;
@@ -213,6 +277,7 @@ function toRecord(
     total_count?: string | number | bigint;
   },
   keyWrap?: FollowUpKeyWrap | null,
+  portalWrap?: string | null,
 ): FollowUpRecord {
   return {
     id: row.id,
@@ -224,6 +289,7 @@ function toRecord(
     encryptedContent: row.encrypted_content,
     createdBy: row.created_by,
     createdAt: row.created_at,
+    editedAt: row.edited_at ?? null,
     hasRecording: Boolean(row.has_recording),
     hasImage: Boolean(row.has_image),
     hasFile: Boolean(row.has_file),
@@ -234,6 +300,7 @@ function toRecord(
     keyGeneration: row.key_generation ?? null,
     keyWrap: keyWrap ?? null,
     eventParams: row.event_params ?? null,
+    portalWrap: portalWrap ?? null,
     fullPosition:
       row.full_position !== undefined ? Number(row.full_position) : undefined,
     totalCount:
@@ -332,9 +399,14 @@ function hasActiveFilters(opts: FollowUpListOpts): boolean {
   );
 }
 
+export interface FollowUpServiceDeps {
+  readonly portalMessageDeps?: PortalMessageServiceDeps;
+}
+
 export function createFollowUpService(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
+  deps?: FollowUpServiceDeps,
 ): FollowUpService {
   return {
     async create(userId, input) {
@@ -343,7 +415,7 @@ export function createFollowUpService(
       // Verify ticket is open
       const ticket = await db
         .selectFrom("tickets")
-        .select(["id", "status"])
+        .select(["id", "status", "client_id"])
         .where("id", "=", input.ticketId)
         .executeTakeFirst();
 
@@ -352,24 +424,63 @@ export function createFollowUpService(
         throw new NotFoundError(ErrorCode.CANNOT_FOLLOWUP_CLOSED_TICKET);
       }
 
-      const row = await db
-        .insertInto("followups")
-        .values({
-          id: input.id,
-          ticket_id: input.ticketId,
-          source: input.source,
-          type: input.type,
-          is_private: input.isPrivate,
-          mentioned_pseudonyms: JSON.stringify(input.mentionedPseudonyms),
-          encrypted_content: input.encryptedContent,
-          created_by: userId,
-          note_type_id: input.noteTypeId ?? null,
-          call_sid: input.callSid ?? null,
-          call_status: input.callStatus ?? null,
-          call_duration_seconds: input.callDurationSeconds ?? null,
-        })
-        .returningAll()
-        .executeTakeFirstOrThrow();
+      // The transaction returns the resolved portal channel alongside the
+      // row (a closure-mutated outer variable would defeat narrowing).
+      const { row, resolvedChannel } = await db
+        .transaction()
+        .execute(async (trx) => {
+          let channel: PortalChannelRow | null = null;
+          const inserted = await trx
+            .insertInto("followups")
+            .values({
+              id: input.id,
+              ticket_id: input.ticketId,
+              source: input.source,
+              type: input.type,
+              is_private: input.isPrivate,
+              mentioned_pseudonyms: JSON.stringify(input.mentionedPseudonyms),
+              encrypted_content: input.encryptedContent,
+              created_by: userId,
+              note_type_id: input.noteTypeId ?? null,
+              call_sid: input.callSid ?? null,
+              call_status: input.callStatus ?? null,
+              call_duration_seconds: input.callDurationSeconds ?? null,
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow();
+
+          // When portalCopy is present, resolve the client's ACTIVE channel
+          // inside the transaction and store the client copy atomically.
+          if (input.portalCopy) {
+            const activeChannel = await trx
+              .selectFrom("portal_channels")
+              .selectAll()
+              .where("client_id", "=", ticket.client_id)
+              .where("status", "=", "active")
+              .executeTakeFirst();
+
+            if (activeChannel) {
+              channel = activeChannel;
+              await storeClientCopy(
+                trx,
+                activeChannel.id,
+                input.id,
+                input.portalCopy,
+              );
+            } else {
+              // Channel revoked between page load and send; silent drop with warn log.
+              // The org copy (follow-up) is the truth.
+              console.warn("Portal copy dropped: no active channel for client");
+            }
+          }
+
+          return { row: inserted, resolvedChannel: channel };
+        });
+
+      // After commit: fire-and-forget nudge when a channel was resolved
+      if (resolvedChannel !== null && deps?.portalMessageDeps) {
+        void nudgeClient(db, deps.portalMessageDeps, resolvedChannel);
+      }
 
       return toRecord(row);
     },
@@ -460,9 +571,16 @@ export function createFollowUpService(
         .limit(opts.limit)
         .execute();
 
-      const keyWraps = await fetchFollowUpKeyWraps(db, userId, rows);
+      const [keyWraps, pWraps] = await Promise.all([
+        fetchFollowUpKeyWraps(db, userId, rows),
+        fetchPortalWraps(db, rows),
+      ]);
       const records = rows.map((row) =>
-        toRecord(row, keyWraps.get(row.key_generation ?? "")),
+        toRecord(
+          row,
+          keyWraps.get(row.key_generation ?? ""),
+          pWraps.get(row.id),
+        ),
       );
       return isOlder ? records.reverse() : records;
     },
@@ -682,9 +800,16 @@ export function createFollowUpService(
         .orderBy("id", "asc")
         .execute();
 
-      const keyWraps = await fetchFollowUpKeyWraps(db, userId, rows);
+      const [keyWraps, pWraps] = await Promise.all([
+        fetchFollowUpKeyWraps(db, userId, rows),
+        fetchPortalWraps(db, rows),
+      ]);
       return rows.map((row) =>
-        toRecord(row, keyWraps.get(row.key_generation ?? "")),
+        toRecord(
+          row,
+          keyWraps.get(row.key_generation ?? ""),
+          pWraps.get(row.id),
+        ),
       );
     },
 
@@ -880,6 +1005,76 @@ export function createFollowUpService(
         result.set(fId, summaries);
       }
       return result;
+    },
+
+    async updateOutboundMessage(
+      userId,
+      followUpId,
+      encryptedContent,
+      portalCopy,
+    ) {
+      // Load the follow-up row
+      const existing = await db
+        .selectFrom("followups")
+        .selectAll()
+        .where("id", "=", followUpId)
+        .executeTakeFirst();
+
+      if (!existing) throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
+      if (existing.deleted_at !== null) {
+        throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
+      }
+
+      // Guard: only type "message" with source "volunteer" is editable.
+      // sms_outbound and client-sourced messages are never editable.
+      if (existing.type !== "message" || existing.source !== "volunteer") {
+        throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_EDITABLE);
+      }
+
+      // Guard: author only
+      if (existing.created_by !== userId) {
+        throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_OWNED);
+      }
+
+      // Guard: key_generation must be null (fully converged row).
+      // Volunteer messages should always have null key_generation, but guard
+      // anyway: an unconverged row's AAD/tk assumptions differ.
+      if (existing.key_generation !== null) {
+        throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_EDITABLE);
+      }
+
+      await access.assertAccess(userId, existing.ticket_id);
+
+      const row = await db.transaction().execute(async (trx) => {
+        const updated = await trx
+          .updateTable("followups")
+          .set({
+            encrypted_content: encryptedContent,
+            edited_at: new Date(),
+          })
+          .where("id", "=", followUpId)
+          .returningAll()
+          .executeTakeFirstOrThrow();
+
+        // Update the portal_messages client copy when portalCopy is present.
+        // 0 rows updated is a no-op (no backfill for pre-upgrade messages).
+        if (portalCopy) {
+          await trx
+            .updateTable("portal_messages")
+            .set({
+              ephemeral_point: portalCopy.ephemeralPoint,
+              nonce: portalCopy.nonce,
+              ciphertext: portalCopy.ciphertext,
+              edited_at: new Date(),
+            })
+            .where("followup_id", "=", followUpId)
+            .execute();
+        }
+
+        return updated;
+      });
+
+      return toRecord(row);
     },
   };
 }

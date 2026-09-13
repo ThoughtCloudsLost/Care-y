@@ -260,6 +260,7 @@ function makeRecord(
     callDurationSeconds: null,
     keyGeneration: null,
     keyWrap: null,
+    portalWrap: null,
     ...overrides,
   };
 }

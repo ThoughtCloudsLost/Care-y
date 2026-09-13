@@ -2324,5 +2324,234 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(oldBlobExists).toBe(false);
       });
     });
+
+    // --- Secure Link tier procedures ---
+
+    describe("upgradeToSecureLink", () => {
+      it("sets tier and creates a channel row", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        const channelId = "a".repeat(48);
+        const authHash = Buffer.alloc(32, 0xab).toString("base64url");
+        const clientPublic = Buffer.alloc(32, 0xcd).toString("base64url");
+
+        await caller.tickets.upgradeToSecureLink({
+          ticketId: fixture.ticketId,
+          channelId,
+          authHash,
+          clientPublic,
+          hasPassphrase: false,
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0x01).toString("base64url"),
+            nonce: Buffer.alloc(24, 0x02).toString("base64url"),
+            ciphertext: Buffer.alloc(64, 0x03).toString("base64url"),
+          },
+        });
+
+        const client = await tenantDb
+          .selectFrom("clients")
+          .select("communication_tier")
+          .where("id", "=", fixture.clientId)
+          .executeTakeFirstOrThrow();
+        expect(client.communication_tier).toBe("secure_link");
+
+        const channel = await tenantDb
+          .selectFrom("portal_channels")
+          .select(["channel_id", "status"])
+          .where("client_id", "=", fixture.clientId)
+          .where("status", "=", "active")
+          .executeTakeFirst();
+        expect(channel).toBeDefined();
+        expect(channel!.channel_id).toBe(channelId);
+      });
+
+      it("emits client_tier_changed audit event", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        const channelId = "b".repeat(48);
+
+        await caller.tickets.upgradeToSecureLink({
+          ticketId: fixture.ticketId,
+          channelId,
+          authHash: Buffer.alloc(32, 0xab).toString("base64url"),
+          clientPublic: Buffer.alloc(32, 0xcd).toString("base64url"),
+          hasPassphrase: true,
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0x01).toString("base64url"),
+            nonce: Buffer.alloc(24, 0x02).toString("base64url"),
+            ciphertext: Buffer.alloc(64, 0x03).toString("base64url"),
+          },
+        });
+
+        const auditRow = await tenantDb
+          .selectFrom("audit_log")
+          .select(["event_type", "actor_id"])
+          .where("event_type", "=", "client_tier_changed")
+          .where("actor_id", "=", user.id)
+          .orderBy("created_at", "desc")
+          .executeTakeFirst();
+        expect(auditRow).toBeDefined();
+        expect(auditRow!.event_type).toBe("client_tier_changed");
+      });
+    });
+
+    describe("ticket detail portal fields", () => {
+      it("carries clientTier and portalCapable on the detail payload", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        // Before upgrade: sms_email, not portal-capable
+        const beforeDetail = await caller.tickets.get({
+          ticketId: fixture.ticketId,
+        });
+        expect(beforeDetail.clientTier).toBe("sms_email");
+        expect(beforeDetail.portalCapable).toBe(false);
+        expect(beforeDetail.portalChannel).toBeNull();
+
+        // Upgrade
+        const channelId = "c".repeat(48);
+        await caller.tickets.upgradeToSecureLink({
+          ticketId: fixture.ticketId,
+          channelId,
+          authHash: Buffer.alloc(32, 0xab).toString("base64url"),
+          clientPublic: Buffer.alloc(32, 0xcd).toString("base64url"),
+          hasPassphrase: false,
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0x01).toString("base64url"),
+            nonce: Buffer.alloc(24, 0x02).toString("base64url"),
+            ciphertext: Buffer.alloc(64, 0x03).toString("base64url"),
+          },
+        });
+
+        const afterDetail = await caller.tickets.get({
+          ticketId: fixture.ticketId,
+        });
+        expect(afterDetail.clientTier).toBe("secure_link");
+        expect(afterDetail.portalCapable).toBe(true);
+        expect(afterDetail.portalChannel).not.toBeNull();
+        expect(afterDetail.portalChannel!.hasPassphrase).toBe(false);
+      });
+    });
+
+    describe("revokeSecureLink", () => {
+      it("rejects when no active channel exists", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        await expectTrpcError(
+          caller.tickets.revokeSecureLink({
+            ticketId: fixture.ticketId,
+          }),
+          "NOT_FOUND",
+        );
+      });
+    });
+
+    describe("regenerateSecureLink", () => {
+      it("rejects when no active channel exists", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        await expectTrpcError(
+          caller.tickets.regenerateSecureLink({
+            ticketId: fixture.ticketId,
+            channelId: "d".repeat(48),
+            authHash: Buffer.alloc(32, 0xab).toString("base64url"),
+            clientPublic: Buffer.alloc(32, 0xcd).toString("base64url"),
+            hasPassphrase: false,
+            keyCheck: {
+              ephemeralPoint: Buffer.alloc(32, 0x01).toString("base64url"),
+              nonce: Buffer.alloc(24, 0x02).toString("base64url"),
+              ciphertext: Buffer.alloc(64, 0x03).toString("base64url"),
+            },
+          }),
+          "NOT_FOUND",
+        );
+      });
+    });
+
+    describe("rewrap portal wrap cleanup", () => {
+      it("deletes portal_reply_key_wraps row on rewrap", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        const ticketId = fixture.ticketId;
+
+        const tempKeyGen = randomUUID();
+        const followUpRow = await tenantDb
+          .insertInto("followups")
+          .values({
+            ticket_id: ticketId,
+            source: "client",
+            type: "message",
+            encrypted_content: Buffer.alloc(64, 0xf1),
+            key_generation: tempKeyGen,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        // Insert a key wrap for the temp key generation so rewrap can find it
+        await tenantDb
+          .insertInto("ticket_key_wraps")
+          .values({
+            ticket_id: ticketId,
+            volunteer_id: user.id,
+            key_generation: tempKeyGen,
+            ephemeral_point: Buffer.alloc(32, 0x01),
+            nonce: Buffer.alloc(24, 0x02),
+            wrapped_key: Buffer.alloc(48, 0x03),
+            algorithm: "ecies-ristretto255-v1",
+          })
+          .execute();
+
+        // Insert a portal reply key wrap
+        await tenantDb
+          .insertInto("portal_reply_key_wraps")
+          .values({
+            followup_id: followUpRow.id,
+            wrapped_tk: Buffer.alloc(80, 0xfe),
+          })
+          .execute();
+
+        // Rewrap
+        await caller.tickets.rewrapFollowUp({
+          followUpId: followUpRow.id,
+          encryptedContent: testEncryptedContent(0xf4),
+        });
+
+        // Verify portal wrap deleted
+        const wrapRow = await tenantDb
+          .selectFrom("portal_reply_key_wraps")
+          .select("followup_id")
+          .where("followup_id", "=", followUpRow.id)
+          .executeTakeFirst();
+        expect(wrapRow).toBeUndefined();
+      });
+    });
+
+    describe("updateOutboundMessage route", () => {
+      it("updates content and returns the record", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        // Create a follow-up via the route
+        const fu = await caller.tickets.createFollowUp({
+          id: randomUUID(),
+          ticketId: fixture.ticketId,
+          encryptedContent: testEncryptedContent(0xbb),
+          source: "volunteer",
+          type: "message",
+          isPrivate: false,
+          mentionedPseudonyms: [],
+        });
+
+        const updated = await caller.tickets.updateOutboundMessage({
+          followUpId: fu.id,
+          encryptedContent: testEncryptedContent(0xcc),
+        });
+
+        expect(updated.encryptedContent).toBeTruthy();
+        expect(updated.id).toBe(fu.id);
+      });
+    });
   },
 );

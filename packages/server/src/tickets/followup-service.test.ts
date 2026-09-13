@@ -1877,4 +1877,162 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       svc.softDeleteInternalNote(userId, crypto.randomUUID(), false),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
+
+  // ── updateOutboundMessage ──
+
+  it("updateOutboundMessage updates encrypted_content and sets edited_at", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("original"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    const updated = await svc.updateOutboundMessage(
+      userId,
+      fu.id,
+      Buffer.from("edited-content"),
+    );
+
+    expect(updated.encryptedContent.toString()).toBe("edited-content");
+    expect(updated.editedAt).not.toBeNull();
+  });
+
+  it("updateOutboundMessage rejects sms_outbound type", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("sms"),
+      source: "volunteer",
+      type: "sms_outbound",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    await expect(
+      svc.updateOutboundMessage(userId, fu.id, Buffer.from("x")),
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("updateOutboundMessage rejects client-sourced messages", async () => {
+    const { ticketId } = await createTicketFixture();
+
+    // Insert a client-sourced message directly (bypassing access checks)
+    const fuId = crypto.randomUUID();
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        id: fuId,
+        ticket_id: ticketId,
+        source: "client",
+        type: "message",
+        encrypted_content: Buffer.from("client-msg"),
+        created_by: null,
+      })
+      .execute();
+
+    const { userId } = await createTicketFixture();
+
+    await expect(
+      svc.updateOutboundMessage(userId, fuId, Buffer.from("x")),
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("updateOutboundMessage rejects non-author", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("msg"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    // Create a second user
+    const otherUser = await createTestUser(testDb.db);
+
+    // Add queue membership so assertAccess passes for the other user
+    const ticket = await testDb.db
+      .selectFrom("tickets")
+      .select("queue_id")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: ticket.queue_id, user_id: otherUser.id })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+
+    await expect(
+      svc.updateOutboundMessage(otherUser.id, fu.id, Buffer.from("x")),
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("updateOutboundMessage rejects deleted follow-up", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fu = await svc.create(userId, {
+      id: crypto.randomUUID(),
+      ticketId,
+      encryptedContent: Buffer.from("msg"),
+      source: "volunteer",
+      type: "message",
+      isPrivate: false,
+      mentionedPseudonyms: [],
+    });
+
+    // Soft-delete by setting deleted_at (internal_note type needed for soft delete method)
+    await testDb.db
+      .updateTable("followups")
+      .set({ deleted_at: new Date() })
+      .where("id", "=", fu.id)
+      .execute();
+
+    await expect(
+      svc.updateOutboundMessage(userId, fu.id, Buffer.from("x")),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("updateOutboundMessage rejects non-existent follow-up", async () => {
+    const { userId } = await createTicketFixture();
+
+    await expect(
+      svc.updateOutboundMessage(userId, crypto.randomUUID(), Buffer.from("x")),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("updateOutboundMessage rejects unconverged follow-up (key_generation non-null)", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const fuId = crypto.randomUUID();
+    const keyGen = crypto.randomUUID();
+
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        id: fuId,
+        ticket_id: ticketId,
+        source: "volunteer",
+        type: "message",
+        encrypted_content: Buffer.from("unconverged"),
+        created_by: userId,
+        key_generation: keyGen,
+      })
+      .execute();
+
+    await expect(
+      svc.updateOutboundMessage(userId, fuId, Buffer.from("x")),
+    ).rejects.toThrow(ForbiddenError);
+  });
 });

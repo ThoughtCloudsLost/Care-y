@@ -8,8 +8,9 @@
  */
 
 import { z } from "zod";
-import { base64String } from "./validators.js";
+import { base64Bytes, base64String } from "./validators.js";
 import { ROLE_ID_VALUES_TUPLE } from "../roles.js";
+import { portalChannelIdSchema, eciesTripleSchema } from "./client-portal.js";
 
 // --- Ticket enums ---
 
@@ -91,6 +92,8 @@ export const createFollowUpInputSchema = z.object({
   isPrivate: z.boolean().default(false),
   mentionedPseudonyms: z.array(z.string()).default([]),
   noteTypeId: z.uuid().optional(),
+  /** ECIES copy for the client's portal channel (present when client is Secure Link tier). */
+  portalCopy: eciesTripleSchema.optional(),
 });
 export type CreateFollowUpInput = z.infer<typeof createFollowUpInputSchema>;
 
@@ -541,4 +544,33 @@ export const updateTicketContentInputSchema = z
   );
 export type UpdateTicketContentInput = z.infer<
   typeof updateTicketContentInputSchema
+>;
+
+// --- Secure Link tier upgrade + outbound message editing ---
+
+/** Volunteer upgrades a client to Secure Link tier. Browser sends the auth HASH, never the raw token. */
+export const upgradeToSecureLinkInputSchema = z.object({
+  ticketId: z.uuid(),
+  channelId: portalChannelIdSchema,
+  authHash: base64Bytes(32, "authHash"),
+  clientPublic: base64Bytes(32, "clientPublic"),
+  hasPassphrase: z.boolean(),
+  keyCheck: eciesTripleSchema,
+});
+export type UpgradeToSecureLinkInput = z.infer<
+  typeof upgradeToSecureLinkInputSchema
+>;
+
+/** Volunteer edits an outbound in-app message (re-encryption of both copies). */
+export const updateOutboundMessageInputSchema = z.object({
+  followUpId: z.uuid(),
+  encryptedContent: base64String("encryptedContent").refine(
+    (s) => s.length <= 28_000,
+    "too large",
+  ),
+  /** Re-encrypted client copy (present when the client has an active portal channel). */
+  portalCopy: eciesTripleSchema.optional(),
+});
+export type UpdateOutboundMessageInput = z.infer<
+  typeof updateOutboundMessageInputSchema
 >;

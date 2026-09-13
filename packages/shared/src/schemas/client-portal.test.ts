@@ -7,6 +7,12 @@ import {
   intakeConfigResponseSchema,
   publicIntakeFieldSchema,
   publicIntakeFormSchema,
+  communicationTierSchema,
+  portalChannelIdSchema,
+  portalAuthSchema,
+  eciesTripleSchema,
+  portalBootstrapInputSchema,
+  portalReplyInputSchema,
 } from "./client-portal.js";
 
 /**
@@ -399,5 +405,185 @@ describe("publicIntakeFormSchema", () => {
       fields: [],
     });
     expect(result.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Secure Link portal schemas
+// ---------------------------------------------------------------------------
+
+describe("communicationTierSchema", () => {
+  it("accepts 'sms_email'", () => {
+    expect(communicationTierSchema.safeParse("sms_email").success).toBe(true);
+  });
+
+  it("accepts 'secure_link'", () => {
+    expect(communicationTierSchema.safeParse("secure_link").success).toBe(true);
+  });
+
+  it("rejects 'account' (reserved for 8c)", () => {
+    expect(communicationTierSchema.safeParse("account").success).toBe(false);
+  });
+
+  it("rejects free strings", () => {
+    expect(communicationTierSchema.safeParse("premium").success).toBe(false);
+    expect(communicationTierSchema.safeParse("").success).toBe(false);
+  });
+});
+
+describe("portalChannelIdSchema", () => {
+  const valid48 = "a".repeat(48);
+
+  it("accepts 48 lowercase hex chars", () => {
+    expect(portalChannelIdSchema.safeParse(valid48).success).toBe(true);
+  });
+
+  it("accepts mixed hex digits", () => {
+    const mixed = "0123456789abcdef".repeat(3);
+    expect(portalChannelIdSchema.safeParse(mixed).success).toBe(true);
+  });
+
+  it("rejects 47-char string", () => {
+    expect(portalChannelIdSchema.safeParse("a".repeat(47)).success).toBe(false);
+  });
+
+  it("rejects 49-char string", () => {
+    expect(portalChannelIdSchema.safeParse("a".repeat(49)).success).toBe(false);
+  });
+
+  it("rejects uppercase hex", () => {
+    expect(portalChannelIdSchema.safeParse("A".repeat(48)).success).toBe(false);
+  });
+
+  it("rejects non-hex characters", () => {
+    const withG = "g" + "a".repeat(47);
+    expect(portalChannelIdSchema.safeParse(withG).success).toBe(false);
+  });
+});
+
+describe("portalAuthSchema", () => {
+  it("accepts exactly 32-byte base64", () => {
+    expect(portalAuthSchema.safeParse(base64OfBytes(32)).success).toBe(true);
+  });
+
+  it("rejects 31-byte value", () => {
+    expect(portalAuthSchema.safeParse(base64OfBytes(31)).success).toBe(false);
+  });
+
+  it("rejects 33-byte value", () => {
+    expect(portalAuthSchema.safeParse(base64OfBytes(33)).success).toBe(false);
+  });
+});
+
+describe("eciesTripleSchema", () => {
+  function validTriple(): Record<string, unknown> {
+    return {
+      ephemeralPoint: base64OfBytes(32),
+      nonce: base64OfBytes(24),
+      ciphertext: base64Chars(100),
+    };
+  }
+
+  it("accepts a valid triple", () => {
+    expect(eciesTripleSchema.safeParse(validTriple()).success).toBe(true);
+  });
+
+  it("rejects wrong-length ephemeralPoint (31 bytes)", () => {
+    const t = { ...validTriple(), ephemeralPoint: base64OfBytes(31) };
+    expect(eciesTripleSchema.safeParse(t).success).toBe(false);
+  });
+
+  it("rejects wrong-length ephemeralPoint (33 bytes)", () => {
+    const t = { ...validTriple(), ephemeralPoint: base64OfBytes(33) };
+    expect(eciesTripleSchema.safeParse(t).success).toBe(false);
+  });
+
+  it("rejects wrong-length nonce (23 bytes)", () => {
+    const t = { ...validTriple(), nonce: base64OfBytes(23) };
+    expect(eciesTripleSchema.safeParse(t).success).toBe(false);
+  });
+
+  it("rejects wrong-length nonce (25 bytes)", () => {
+    const t = { ...validTriple(), nonce: base64OfBytes(25) };
+    expect(eciesTripleSchema.safeParse(t).success).toBe(false);
+  });
+
+  it("rejects oversized ciphertext (> 28_000 chars)", () => {
+    const t = { ...validTriple(), ciphertext: base64Chars(28_001) };
+    expect(eciesTripleSchema.safeParse(t).success).toBe(false);
+  });
+
+  it("accepts ciphertext at the 28_000 char boundary", () => {
+    const t = { ...validTriple(), ciphertext: base64Chars(28_000) };
+    expect(eciesTripleSchema.safeParse(t).success).toBe(true);
+  });
+});
+
+describe("portalBootstrapInputSchema", () => {
+  function validBootstrap(): Record<string, unknown> {
+    return {
+      channelId: "a".repeat(48),
+      auth: base64OfBytes(32),
+    };
+  }
+
+  it("accepts a valid bootstrap input", () => {
+    expect(portalBootstrapInputSchema.safeParse(validBootstrap()).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects invalid channelId length", () => {
+    const input = { ...validBootstrap(), channelId: "a".repeat(47) };
+    expect(portalBootstrapInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects wrong-length auth", () => {
+    const input = { ...validBootstrap(), auth: base64OfBytes(16) };
+    expect(portalBootstrapInputSchema.safeParse(input).success).toBe(false);
+  });
+});
+
+describe("portalReplyInputSchema", () => {
+  function validReply(): Record<string, unknown> {
+    return {
+      channelId: "a".repeat(48),
+      auth: base64OfBytes(32),
+      ticketId: crypto.randomUUID(),
+      followUpId: crypto.randomUUID(),
+      keyGeneration: crypto.randomUUID(),
+      encryptedContent: base64Chars(500),
+      wrappedTkTemp: base64OfBytes(80),
+      selfCopy: {
+        ephemeralPoint: base64OfBytes(32),
+        nonce: base64OfBytes(24),
+        ciphertext: base64Chars(100),
+      },
+    };
+  }
+
+  it("accepts a valid reply input", () => {
+    expect(portalReplyInputSchema.safeParse(validReply()).success).toBe(true);
+  });
+
+  it("rejects oversized encryptedContent", () => {
+    const input = { ...validReply(), encryptedContent: base64Chars(28_001) };
+    expect(portalReplyInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects wrong-length wrappedTkTemp", () => {
+    const input = { ...validReply(), wrappedTkTemp: base64OfBytes(32) };
+    expect(portalReplyInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects non-UUID ticketId", () => {
+    const input = { ...validReply(), ticketId: "not-a-uuid" };
+    expect(portalReplyInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects missing selfCopy", () => {
+    const input = validReply();
+    delete input.selfCopy;
+    expect(portalReplyInputSchema.safeParse(input).success).toBe(false);
   });
 });

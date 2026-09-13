@@ -65,6 +65,12 @@ const EVENT_LABELS = new Map<string, (terms: Terms) => string>([
   ["intake_form_deleted", () => m.audit_event_intake_form_deleted()],
   ["intake_form_bound", () => m.audit_event_intake_form_bound()],
   ["web_intake_toggled", () => m.audit_event_web_intake_toggled()],
+  ["client_tier_changed", (t) => m.audit_event_client_tier_changed(t)],
+  [
+    "portal_channel_regenerated",
+    () => m.audit_event_portal_channel_regenerated(),
+  ],
+  ["portal_channel_revoked", () => m.audit_event_portal_channel_revoked()],
 ]);
 
 /**
