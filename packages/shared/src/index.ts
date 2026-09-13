@@ -320,6 +320,8 @@ export {
   type ReactionSummary,
   searchClientsInputSchema,
   type SearchClientsInput,
+  updateTicketContentInputSchema,
+  type UpdateTicketContentInput,
 } from "./schemas/tickets.js";
 
 // --- Client management ---
@@ -428,6 +430,10 @@ export {
   type MonthlyVolume,
   type MonthlyResolution,
   type PriorityStat,
+  callDirectionSchema,
+  callLogQueryInputSchema,
+  type CallDirection,
+  type CallLogQueryInput,
 } from "./schemas/reports.js";
 
 // --- Recently viewed history schemas ---

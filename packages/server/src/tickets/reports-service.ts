@@ -1,5 +1,7 @@
 import { type Kysely, sql } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { CallLogQueryInput } from "@care-y/shared";
+import { toCount } from "../db/query-utils.js";
 
 export interface QueueStat {
   readonly queueId: string;
@@ -24,6 +26,27 @@ export interface PriorityStat {
   readonly count: number;
 }
 
+// --- Call log types (7.5b) ---
+
+export interface CallLogEntry {
+  readonly id: string;
+  readonly type: string;
+  readonly source: string;
+  readonly callStatus: string | null;
+  readonly callDurationSeconds: number | null;
+  readonly createdAt: Date;
+  readonly ticketId: string;
+  readonly clientId: string;
+  readonly encryptedClientAlias: Buffer;
+}
+
+export interface CallLogResult {
+  readonly entries: readonly CallLogEntry[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
 const PRIORITY_ORDER = new Map<string, number>([
   ["low", 0],
   ["normal", 1],
@@ -46,6 +69,7 @@ export interface ReportsService {
   resolutionTrends(): Promise<readonly MonthlyResolution[]>;
   priorityBreakdown(): Promise<readonly PriorityStat[]>;
   activeCount(): Promise<number>;
+  callLog(input: CallLogQueryInput): Promise<CallLogResult>;
 }
 
 function twelveMonthCutoff(): Date {
@@ -215,6 +239,66 @@ export function createReportsService(
         .executeTakeFirstOrThrow();
 
       return result.count;
+    },
+
+    async callLog(input: CallLogQueryInput): Promise<CallLogResult> {
+      // Build the filtered base ONCE before branching into count and
+      // entries queries. Both branches share the same WHERE predicates,
+      // so the two can never drift. Do NOT copy the audit.ts $call
+      // pattern that duplicates filters across two separately-selected
+      // builders.
+      let q = tenantDb
+        .selectFrom("followups as f")
+        .innerJoin("tickets as t", "t.id", "f.ticket_id")
+        .innerJoin("clients as c", "c.id", "t.client_id")
+        .where("f.type", "in", ["phone_call", "voicemail"])
+        .where("f.deleted_at", "is", null);
+
+      if (input.direction !== undefined) {
+        q = q.where(
+          "f.source",
+          "=",
+          input.direction === "inbound" ? "client" : "volunteer",
+        );
+      }
+      if (input.callStatus !== undefined) {
+        q = q.where("f.call_status", "=", input.callStatus);
+      }
+      if (input.dateFrom !== undefined) {
+        q = q.where("f.created_at", ">=", new Date(input.dateFrom));
+      }
+      if (input.dateTo !== undefined) {
+        q = q.where("f.created_at", "<=", new Date(input.dateTo));
+      }
+
+      const countRow = await q
+        .select((eb) => eb.fn.countAll().as("count"))
+        .executeTakeFirstOrThrow();
+
+      const entries = await q
+        .select([
+          "f.id",
+          "f.type",
+          "f.source",
+          "f.call_status as callStatus",
+          "f.call_duration_seconds as callDurationSeconds",
+          "f.created_at as createdAt",
+          "f.ticket_id as ticketId",
+          "c.id as clientId",
+          "c.encrypted_alias as encryptedClientAlias",
+        ])
+        .orderBy("f.created_at", "desc")
+        .orderBy("f.id", "desc")
+        .limit(input.pageSize)
+        .offset((input.page - 1) * input.pageSize)
+        .execute();
+
+      return {
+        entries,
+        total: toCount(countRow),
+        page: input.page,
+        pageSize: input.pageSize,
+      };
     },
   };
 }

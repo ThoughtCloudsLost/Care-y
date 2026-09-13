@@ -324,4 +324,178 @@ describe.skipIf(!process.env.DATABASE_URL)("ReportsService (DB)", () => {
       expect(await svc.activeCount()).toBe(4);
     });
   });
+
+  describe("callLog", () => {
+    let testDb: TestDb;
+    let svc: ReportsService;
+    let aliasBytes: Buffer;
+    let ticketId: string;
+
+    beforeAll(async () => {
+      testDb = await createTestDb();
+      await seedOrgPublicKey(testDb.db);
+      svc = createReportsService(testDb.db);
+
+      const queue = await createTestQueue(testDb.db, { label: "CL-Q" });
+      const fix = await createTestTicketFixture(testDb.db, {
+        queueId: queue.id,
+      });
+      ticketId = fix.ticketId;
+
+      // Read the seeded alias ciphertext for later assertion.
+      const clientRow = await testDb.db
+        .selectFrom("clients")
+        .select("encrypted_alias")
+        .where("id", "=", fix.clientId)
+        .executeTakeFirstOrThrow();
+      aliasBytes = clientRow.encrypted_alias;
+
+      // Seed follow-ups:
+      // 1. phone_call, source client (inbound), completed, 120s
+      // 2. phone_call, source volunteer (outbound), null status
+      // 3. voicemail, source client
+      // 4. soft-deleted phone_call (must not appear)
+      // 5. message follow-up (must not appear)
+
+      const baseDate = new Date("2026-06-15T12:00:00Z");
+      const followups = [
+        {
+          ticket_id: ticketId,
+          source: "client",
+          type: "phone_call",
+          call_status: "completed",
+          call_duration_seconds: 120,
+          encrypted_content: noopEncryptor.encrypt(""),
+          created_at: new Date(baseDate.getTime() + 3000),
+        },
+        {
+          ticket_id: ticketId,
+          source: "volunteer",
+          type: "phone_call",
+          call_status: null,
+          call_duration_seconds: null,
+          encrypted_content: noopEncryptor.encrypt(""),
+          created_at: new Date(baseDate.getTime() + 2000),
+        },
+        {
+          ticket_id: ticketId,
+          source: "client",
+          type: "voicemail",
+          call_status: null,
+          call_duration_seconds: 30,
+          encrypted_content: noopEncryptor.encrypt(""),
+          created_at: new Date(baseDate.getTime() + 1000),
+        },
+        {
+          ticket_id: ticketId,
+          source: "client",
+          type: "phone_call",
+          call_status: "completed",
+          call_duration_seconds: 60,
+          encrypted_content: noopEncryptor.encrypt(""),
+          deleted_at: new Date(),
+          created_at: new Date(baseDate.getTime() + 500),
+        },
+        {
+          ticket_id: ticketId,
+          source: "volunteer",
+          type: "message",
+          encrypted_content: noopEncryptor.encrypt(""),
+          created_at: baseDate,
+        },
+      ];
+      for (const fu of followups) {
+        await testDb.db.insertInto("followups").values(fu).execute();
+      }
+    }, 30_000);
+
+    afterAll(async () => {
+      await testDb.cleanup();
+    });
+
+    it("returns only live phone_call and voicemail follow-ups", async () => {
+      const result = await svc.callLog({ page: 1, pageSize: 50 });
+
+      // 3 live call rows; soft-deleted and message excluded
+      expect(result.total).toBe(3);
+      expect(result.entries).toHaveLength(3);
+      const types = result.entries.map((e) => e.type);
+      expect(types).toContain("phone_call");
+      expect(types).toContain("voicemail");
+    });
+
+    it("orders results newest-first", async () => {
+      const result = await svc.callLog({ page: 1, pageSize: 50 });
+      const timestamps = result.entries.map((e) => e.createdAt.getTime());
+      for (let i = 1; i < timestamps.length; i++) {
+        expect(timestamps[i - 1]!).toBeGreaterThanOrEqual(timestamps[i]!);
+      }
+    });
+
+    it("direction filter inbound returns client-source rows only", async () => {
+      const result = await svc.callLog({
+        direction: "inbound",
+        page: 1,
+        pageSize: 50,
+      });
+
+      expect(result.total).toBe(2);
+      for (const e of result.entries) {
+        expect(e.source).toBe("client");
+      }
+    });
+
+    it("direction filter outbound returns volunteer-source rows only", async () => {
+      const result = await svc.callLog({
+        direction: "outbound",
+        page: 1,
+        pageSize: 50,
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.entries[0]!.source).toBe("volunteer");
+    });
+
+    it("callStatus filter narrows correctly", async () => {
+      const result = await svc.callLog({
+        callStatus: "completed",
+        page: 1,
+        pageSize: 50,
+      });
+
+      // Only one live completed phone_call (the other is soft-deleted)
+      expect(result.total).toBe(1);
+      expect(result.entries[0]!.callStatus).toBe("completed");
+    });
+
+    it("date range excludes rows outside it", async () => {
+      // Only the two rows created before +2500ms should match
+      const result = await svc.callLog({
+        dateFrom: "2026-06-15T12:00:00Z",
+        dateTo: "2026-06-15T12:00:02.500Z",
+        page: 1,
+        pageSize: 50,
+      });
+
+      expect(result.total).toBe(2);
+    });
+
+    it("pagination returns correct total with split pages", async () => {
+      const page1 = await svc.callLog({ page: 1, pageSize: 2 });
+      expect(page1.total).toBe(3);
+      expect(page1.entries).toHaveLength(2);
+      expect(page1.page).toBe(1);
+      expect(page1.pageSize).toBe(2);
+
+      const page2 = await svc.callLog({ page: 2, pageSize: 2 });
+      expect(page2.total).toBe(3);
+      expect(page2.entries).toHaveLength(1);
+      expect(page2.page).toBe(2);
+    });
+
+    it("encryptedClientAlias bytes equal the seeded alias ciphertext", async () => {
+      const result = await svc.callLog({ page: 1, pageSize: 1 });
+      expect(result.entries[0]!.encryptedClientAlias).toEqual(aliasBytes);
+    });
+  });
 });

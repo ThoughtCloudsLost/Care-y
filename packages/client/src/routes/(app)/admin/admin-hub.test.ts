@@ -139,6 +139,10 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   hub_analytics_overview_subtitle: () => "Dashboard overview",
   hub_analytics_operations_subtitle: () => "Operational metrics",
   hub_analytics_deep_subtitle: () => "Advanced analytics",
+  panel_call_log: () => "Call Log",
+  hub_call_log_subtitle: () => "Browse call and voicemail history",
+  panel_audit_log: () => "Audit Log",
+  hub_audit_log_subtitle: () => "Review system activity and change history",
 }));
 
 vi.mock("$lib/components/SectionScrollNav.svelte", async () => ({
@@ -383,6 +387,58 @@ describe("Admin hub page", () => {
       renderPage();
 
       expect(mockNavbarCtx.current).toHaveProperty("subnavbar");
+    });
+  });
+
+  describe("log destinations", () => {
+    it("renders Call Log destination for a manager with VIEW_REPORTS", () => {
+      setPermissions(
+        "manage_users",
+        "manage_keys",
+        "manage_org_config",
+        "manage_queues",
+        "manage_infrastructure",
+        "view_reports",
+      );
+      renderPage();
+
+      expect(screen.getByText("Call Log")).toBeTruthy();
+      expect(
+        screen.getByText("Browse call and voicemail history"),
+      ).toBeTruthy();
+    });
+
+    it("renders Audit Log destination for a manager with MANAGE_USERS", () => {
+      setPermissions(
+        "manage_users",
+        "manage_keys",
+        "manage_org_config",
+        "manage_queues",
+        "manage_infrastructure",
+        "view_reports",
+      );
+      renderPage();
+
+      expect(screen.getByText("Audit Log")).toBeTruthy();
+      expect(
+        screen.getByText("Review system activity and change history"),
+      ).toBeTruthy();
+    });
+
+    it("hides both log destinations for a volunteer without VIEW_REPORTS or MANAGE_USERS", () => {
+      setPermissions("manage_queues");
+      renderPage();
+
+      expect(screen.queryByText("Call Log")).toBeNull();
+      expect(screen.queryByText("Audit Log")).toBeNull();
+    });
+
+    it("shows Call Log but hides Audit Log when user has VIEW_REPORTS without MANAGE_USERS", () => {
+      setPermissions("view_reports");
+      renderPage();
+
+      expect(screen.getByText("Call Log")).toBeTruthy();
+      expect(screen.queryByText("Audit Log")).toBeNull();
     });
   });
 });

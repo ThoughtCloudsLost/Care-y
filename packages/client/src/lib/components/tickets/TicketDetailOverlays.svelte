@@ -13,6 +13,7 @@
   } from "$lib/components/tickets/CallOptionsContent.svelte";
   import CloseResolutionSheet from "$lib/components/tickets/CloseResolutionSheet.svelte";
   import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
+  import TicketContentEditSheet from "$lib/components/tickets/TicketContentEditSheet.svelte";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import PhoneActionContent from "$lib/components/clients/PhoneActionContent.svelte";
@@ -23,6 +24,7 @@
   import type {
     DeleteConfirmState,
     NoteEditState,
+    ContentEditState,
   } from "$lib/composables/ticket-detail/create-overlay-state.svelte.js";
   import type { ExposureHintState } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
   import type { LightboxState } from "$lib/composables/ticket-detail/create-lightbox.svelte.js";
@@ -58,6 +60,7 @@
     currentAssigneeId: string | null;
     deleteConfirm: DeleteConfirmState;
     noteEdit: NoteEditState;
+    contentEdit: ContentEditState;
     exposureHint: ExposureHintState;
     lightbox: LightboxState;
     contextMenu: ContextMenuState;
@@ -102,6 +105,7 @@
     currentAssigneeId,
     deleteConfirm,
     noteEdit,
+    contentEdit,
     exposureHint,
     lightbox,
     contextMenu,
@@ -246,6 +250,12 @@
     noteEdit.dismiss();
     deleteConfirm.openConfirm(followUpId);
   }}
+/>
+
+<TicketContentEditSheet
+  opened={contentEdit.sheetOpen}
+  ondismiss={() => contentEdit.dismiss()}
+  {ticketId}
 />
 
 <ShellDialog

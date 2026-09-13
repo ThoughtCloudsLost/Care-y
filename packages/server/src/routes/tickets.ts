@@ -108,6 +108,7 @@ import {
   updateNoteTypeInputSchema,
   toggleReactionInputSchema,
   searchClientsInputSchema,
+  updateTicketContentInputSchema,
   RoleId,
 } from "@care-y/shared";
 
@@ -1598,6 +1599,35 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     // --- Audit log query (manager+ only, injected by 5d wiring) ---
     ...(deps.createAuditSvc ? buildAuditRoutes(deps.createAuditSvc) : {}),
+
+    // --- Ticket content editing (7.5b) ---
+    // No audit() call here: the service writes the snapshot row
+    // transactionally. No notify either: audit-only event.
+    updateContent: volunteerProcedure
+      .input(updateTicketContentInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const record = await svc.updateContent(ctx.user.id, {
+            ticketId: input.ticketId,
+            actorId: ctx.user.id,
+            encryptedTitle:
+              input.encryptedTitle !== undefined
+                ? Buffer.from(input.encryptedTitle, "base64")
+                : undefined,
+            encryptedDescription:
+              input.encryptedDescription !== undefined
+                ? Buffer.from(input.encryptedDescription, "base64")
+                : undefined,
+            keyGeneration: input.keyGeneration,
+          });
+          return {
+            ...record,
+            encryptedTitle: b64(record.encryptedTitle),
+            encryptedDescription: b64(record.encryptedDescription),
+          };
+        }),
+      ),
 
     // --- Re-wrap: volunteer re-encrypts tk_temp content with canonical tk ---
     rewrapFollowUp: volunteerProcedure

@@ -108,6 +108,9 @@ export const ErrorCode = {
   INVALID_VERIFICATION_CODE: "INVALID_VERIFICATION_CODE",
   GREETING_NOT_FOUND: "GREETING_NOT_FOUND",
   SMS_RESPONSE_NOT_FOUND: "SMS_RESPONSE_NOT_FOUND",
+
+  // --- Ticket content editing (7.5b) ---
+  TICKET_KEY_GENERATION_STALE: "TICKET_KEY_GENERATION_STALE",
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];

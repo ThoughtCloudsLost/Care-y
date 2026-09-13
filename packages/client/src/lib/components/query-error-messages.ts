@@ -64,6 +64,8 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
     m.error_cannot_take_closed_ticket(withTerms()),
   [ErrorCode.TICKET_ALREADY_OPEN]: () =>
     m.error_ticket_already_open(withTerms()),
+  [ErrorCode.TICKET_KEY_GENERATION_STALE]: () =>
+    m.error_ticket_key_generation_stale(withTerms()),
   [ErrorCode.TICKET_CREATE_TARGET_CHANGED]: () =>
     m.error_ticket_create_target_changed(withTerms()),
   [ErrorCode.TOKEN_EXPIRED]: () => m.error_token_expired(),

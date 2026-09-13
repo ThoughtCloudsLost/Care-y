@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { callStatusSchema } from "./tickets.js";
 
 export const queueStatSchema = z.object({
   queueId: z.string(),
@@ -30,3 +31,18 @@ export const priorityStatSchema = z.object({
 });
 
 export type PriorityStat = z.infer<typeof priorityStatSchema>;
+
+// --- Call log (7.5b) ---
+
+export const callDirectionSchema = z.enum(["inbound", "outbound"]);
+export type CallDirection = z.infer<typeof callDirectionSchema>;
+
+export const callLogQueryInputSchema = z.object({
+  direction: callDirectionSchema.optional(),
+  callStatus: callStatusSchema.optional(),
+  dateFrom: z.iso.datetime().optional(),
+  dateTo: z.iso.datetime().optional(),
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(100).default(50),
+});
+export type CallLogQueryInput = z.infer<typeof callLogQueryInputSchema>;

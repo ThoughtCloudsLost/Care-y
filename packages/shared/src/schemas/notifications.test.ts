@@ -349,6 +349,7 @@ describe("auditEventTypeSchema", () => {
     "voicemail_quarantine_dismissed",
     "client_alias_changed",
     "client_phone_changed",
+    "ticket_content_updated",
   ];
 
   it.each(validTypes)("accepts '%s'", (type) => {
@@ -400,5 +401,19 @@ describe("auditLogQueryInputSchema", () => {
     expect(auditLogQueryInputSchema.safeParse({ pageSize: 101 }).success).toBe(
       false,
     );
+  });
+});
+
+describe("ticket_content_updated audit-only boundary", () => {
+  it("auditEventTypeSchema accepts ticket_content_updated", () => {
+    expect(
+      auditEventTypeSchema.safeParse("ticket_content_updated").success,
+    ).toBe(true);
+  });
+
+  it("notificationEventTypeSchema rejects ticket_content_updated", () => {
+    expect(
+      notificationEventTypeSchema.safeParse("ticket_content_updated").success,
+    ).toBe(false);
   });
 });

@@ -70,6 +70,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ticket_action_reopen: () => "Reopen",
   ticket_action_release: () => "Release",
   ticket_action_take: () => "Take",
+  ticket_action_edit_case: () => "Edit case",
   ticket_recent_history: () => "Recent History",
   ticket_panel_recent_coming_soon: () => "Coming soon",
 }));
@@ -300,5 +301,37 @@ describe("TicketPanelContent phone row", () => {
     expect(phoneRow).toBeDefined();
     expect(phoneRow?.getAttribute("tabindex")).toBe("0");
     expect(phoneRow?.getAttribute("role")).toBe("button");
+  });
+});
+
+describe("TicketPanelContent edit case action", () => {
+  it('"Edit case" item is present and dispatches editContent', async () => {
+    const onaction = vi.fn();
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction,
+      },
+    });
+
+    // The "Edit case" row should be in the actions list.
+    expect(container.textContent).toContain("Edit case");
+
+    // Find the list item containing "Edit case" and click it.
+    const editRow = Array.from(container.querySelectorAll("li")).find((li) =>
+      li.textContent.includes("Edit case"),
+    );
+    expect(editRow).toBeDefined();
+    if (editRow) {
+      await fireEvent.click(editRow);
+      expect(onaction).toHaveBeenCalledWith("editContent");
+    }
   });
 });

@@ -12,7 +12,7 @@ import {
   requireRole,
   withErrorWrapping,
 } from "../trpc/trpc.js";
-import { Permission } from "@care-y/shared";
+import { Permission, callLogQueryInputSchema } from "@care-y/shared";
 import { createReportsService } from "../tickets/reports-service.js";
 
 const reportsProcedure = authed2faProcedure.use(
@@ -61,6 +61,20 @@ export function createReportsRouter() {
       withErrorWrapping(async ({ ctx }) => {
         const svc = createReportsService(ctx.org.tenantDb);
         return svc.activeCount();
+      }),
+    ),
+
+    callLog: reportsProcedure.input(callLogQueryInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = createReportsService(ctx.org.tenantDb);
+        const result = await svc.callLog(input);
+        return {
+          ...result,
+          entries: result.entries.map((e) => ({
+            ...e,
+            encryptedClientAlias: e.encryptedClientAlias.toString("base64url"),
+          })),
+        };
       }),
     ),
   });
