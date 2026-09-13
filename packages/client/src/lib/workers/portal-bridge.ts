@@ -143,28 +143,65 @@ export class PortalBridge {
   }
 
   /**
-   * Destroy the bridge: send zeroAll, then terminate the Worker.
-   * All pending promises are rejected with BRIDGE_DESTROYED.
+   * Destroy the bridge. Marks the state DESTROYED, rejects pending
+   * callers, sends zeroAll to the Worker, and terminates on the ack
+   * (or after a 250 ms timeout).
+   *
+   * Marking DESTROYED first prevents new requests from racing in while
+   * the zeroAll round-trip is in flight. Callers that fire-and-forget
+   * destroy() (quick exit, page teardown) are never blocked because the
+   * method stays synchronous; the ack/timeout is internal sequencing only.
    */
   destroy(): void {
     if (this.state === "DESTROYED") return;
+    this.state = "DESTROYED";
 
-    if (this.worker) {
+    const w = this.worker;
+
+    // Reject callers' pending requests BEFORE issuing zeroAll, so the
+    // zeroAll ack itself is not rejected by this sweep.
+    this.rejectAllPending("Worker destroyed", "BRIDGE_DESTROYED");
+
+    if (w) {
+      const id = this.nextId++;
+      const terminate = (): void => {
+        w.terminate();
+      };
+
+      // Race the ack against a 250 ms timeout.
+      const timer = setTimeout(terminate, 250);
+
+      // Track the zeroAll round-trip so terminate waits for the ack.
+      const onAck = (resolve: () => void): void => {
+        this.pending.set(id, {
+          resolve: () => {
+            clearTimeout(timer);
+            resolve();
+            terminate();
+          },
+          reject: () => {
+            clearTimeout(timer);
+            terminate();
+          },
+        });
+      };
+
+      // Send zeroAll; on post failure, terminate immediately.
       try {
-        this.post({ type: "zeroAll", id: this.nextId++ });
+        // eslint-disable-next-line @typescript-eslint/no-empty-function -- resolve unused in fire-and-forget
+        onAck(() => {});
+        this.post({ type: "zeroAll", id });
       } catch (err: unknown) {
+        clearTimeout(timer);
         if (import.meta.env.DEV) {
           console.warn(
             "PortalBridge: could not send zeroAll before terminate",
             err instanceof Error ? err.message : String(err),
           );
         }
+        terminate();
       }
-      this.worker.terminate();
     }
-
-    this.state = "DESTROYED";
-    this.rejectAllPending("Worker destroyed", "BRIDGE_DESTROYED");
   }
 
   // -- Public API: channel session --------------------------------------------

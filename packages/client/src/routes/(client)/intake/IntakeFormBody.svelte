@@ -1062,12 +1062,16 @@
           chanId: string,
           blindedB64: string,
           chanAuth?: string,
+          pow?: { challenge: string; solution: string },
         ): Promise<{ evaluated: string }> => {
           const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
           return portalRouter.evaluateChannelOprf.mutate({
             channelId: chanId,
             blindedElement: blindedB64,
             ...(chanAuth !== undefined ? { auth: chanAuth } : {}),
+            ...(pow != null
+              ? { powChallenge: pow.challenge, powSolution: pow.solution }
+              : {}),
           });
         };
 

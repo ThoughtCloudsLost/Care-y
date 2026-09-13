@@ -249,7 +249,11 @@ describe("createPortalSessionState (bridge-backed)", () => {
 
       state.destroySession();
       expect(state.session).toBeNull();
-      expect(mockWorkerInstance?.terminate).toHaveBeenCalled();
+      // terminate waits for the worker's zeroAll ack (or the bounded
+      // timeout), so it lands asynchronously after destroy returns.
+      await vi.waitFor(() => {
+        expect(mockWorkerInstance?.terminate).toHaveBeenCalled();
+      });
     });
   });
 
@@ -371,6 +375,40 @@ describe("createPortalSessionState (bridge-backed)", () => {
       expect(state.keyCheckPassed).toBe(false);
       expect(state.session).toBeNull();
       expect(state.passphraseError).toBe(true);
+      expect(state.passphraseDerivePending).toBe(false);
+    });
+
+    it("sets connectionError (not passphraseError) on network failure", async () => {
+      const state = createPortalSessionState(() => new PortalBridge());
+      const fragData = buildFragmentData();
+
+      // The evaluate callback rejects with a non-worker error (simulating
+      // a tRPC network failure).
+      const failEvaluate = vi.fn().mockRejectedValue(new Error("fetch failed"));
+
+      const promise = state.submitPassphrase(
+        "some passphrase",
+        fragData,
+        { ephemeralPoint: "ep", nonce: "n", ciphertext: "ct" },
+        failEvaluate,
+        noopPow,
+      );
+
+      // Auto-respond to init and channelSessionStart (evaluate happens
+      // on the main thread, so the bridge responds normally up to that
+      // point).
+      autoRespondSuccess();
+      const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        (c: unknown[]) => (c[0] as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      if (initCall) {
+        respondFromWorker({ id: initCall[0].id, ok: true, type: "init" });
+      }
+
+      await promise;
+      expect(state.connectionError).toBe(true);
+      expect(state.passphraseError).toBe(false);
+      expect(state.session).toBeNull();
       expect(state.passphraseDerivePending).toBe(false);
     });
   });

@@ -51,6 +51,9 @@ import {
 // cross-context ciphertext acceptance (ADR-053).
 const INTAKE_FORM_AAD = encodeLabel("care-y-intake-form-aad-v1");
 
+/** AAD slot for encrypted intake form responses (buildContentAad). */
+export const INTAKE_RESPONSE_SLOT = "intake-form-response";
+
 export interface EncryptedFieldContent {
   encryptedLabel: string;
   encryptedConfig: string;

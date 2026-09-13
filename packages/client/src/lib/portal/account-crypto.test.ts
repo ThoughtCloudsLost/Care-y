@@ -166,7 +166,7 @@ describe("buildAccountRegistration", () => {
     ).toBe(PORTAL_KEY_CHECK);
   });
 
-  it("returns the derived keypair for re-encryption", async () => {
+  it("returns clientPublic (not clientPrivate) for re-encryption", async () => {
     const expected = deriveExpectedKeys();
     const callbacks = makeCallbacks();
     const result = await buildAccountRegistration(
@@ -176,10 +176,34 @@ describe("buildAccountRegistration", () => {
       callbacks,
     );
 
-    expect(result.keypair.clientPublic).toEqual(expected.keypair.clientPublic);
-    expect(result.keypair.clientPrivate).toEqual(
-      expected.keypair.clientPrivate,
-    );
+    expect(result.clientPublic).toEqual(expected.keypair.clientPublic);
+    // clientPrivate must not be exposed on the return value
+    expect(result).not.toHaveProperty("keypair");
+  });
+
+  it("zeroes clientPrivate internally after return", async () => {
+    const callbacks = makeCallbacks();
+
+    // Capture the internal keypair.clientPrivate buffer via a spy on
+    // deriveClientAccountKeys. The returned buffer is the same object
+    // that buildAccountRegistration zeroes in its finally block.
+    let capturedPrivate: Uint8Array | null = null;
+    const origDerive = deriveClientAccountKeys;
+    vi.spyOn(
+      await import("@care-y/crypto"),
+      "deriveClientAccountKeys",
+    ).mockImplementation((input) => {
+      const keys = origDerive(input);
+      capturedPrivate = keys.keypair.clientPrivate;
+      return keys;
+    });
+
+    await buildAccountRegistration("user", "pass", null, callbacks);
+
+    expect(capturedPrivate).not.toBeNull();
+    expect(capturedPrivate!.every((b: number) => b === 0)).toBe(true);
+
+    vi.mocked(deriveClientAccountKeys).mockRestore();
   });
 });
 

@@ -70,11 +70,18 @@
   const serverAccent = $derived(brandingQuery.data?.accentColor ?? null);
   const serverText = $derived(brandingQuery.data?.clientText ?? null);
 
-  // Logo: base64 from server, displayed via data URL
+  // The wire format is base64url (schemas/branding.ts); data URIs need the
+  // standard alphabet.
+  function base64FromUrlSafe(s: string): string {
+    const std = s.replace(/-/g, "+").replace(/_/g, "/");
+    return std.padEnd(std.length + ((4 - (std.length % 4)) % 4), "=");
+  }
+
+  // Logo: base64url from server, converted to standard base64 for data URI
   const logoBlobUrl = $derived.by((): string | null => {
     const logo = brandingQuery.data?.logo;
     if (logo === null || logo === undefined) return null;
-    return `data:image/png;base64,${logo}`;
+    return `data:image/png;base64,${base64FromUrlSafe(logo)}`;
   });
 
   // ── Sheet state ──

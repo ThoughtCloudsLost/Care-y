@@ -717,12 +717,12 @@ export async function nudgeClient(
       .set({ last_notified_at: new Date() })
       .where("id", "=", channel.id)
       .execute();
-  } catch (err: unknown) {
+  } catch {
     console.error(
       "Portal nudge failed:",
       JSON.stringify({
         orgSlug: deps.orgSlug,
-        reason: err instanceof Error ? err.message : String(err),
+        reason: "nudge_setup_failed",
       }),
     );
   } finally {

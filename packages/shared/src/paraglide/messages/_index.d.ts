@@ -131,6 +131,7 @@ export * from "./error_twofa_required.js";
 export * from "./error_insufficient_permissions.js";
 export * from "./error_invalid_credentials.js";
 export * from "./error_account_already_exists.js";
+export * from "./error_account_not_found.js";
 export * from "./error_user_not_found.js";
 export * from "./error_cannot_change_own_role.js";
 export * from "./error_cannot_demote_last_admin.js";

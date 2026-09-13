@@ -64,6 +64,7 @@ export type ChannelEvaluateCallback = (
   channelId: string,
   blindedElementB64: string,
   auth?: string,
+  pow?: { challenge: string; solution: string },
 ) => Promise<{ evaluated: string }>;
 
 /** Options for performChannelOprf. */
@@ -178,9 +179,15 @@ async function evaluateChannelWithPowRetry(
   } catch (err: unknown) {
     if (!isChannelPowRequired(err)) throw err;
 
-    // Solve the PoW challenge, then retry the evaluate call.
-    await onPowRequired(err.data.challenge, err.data.difficulty);
-    const result = await evaluate(channelId, blindedElementB64, auth);
+    // Solve the PoW challenge, then retry with the solved fields.
+    const solution = await onPowRequired(
+      err.data.challenge,
+      err.data.difficulty,
+    );
+    const result = await evaluate(channelId, blindedElementB64, auth, {
+      challenge: err.data.challenge,
+      solution,
+    });
     return result.evaluated;
   }
 }

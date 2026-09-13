@@ -132,6 +132,7 @@
   "error_insufficient_permissions": "No tienes permiso para hacer esto.",
   "error_invalid_credentials": "Usuario de inicio de sesión o contraseña incorrectos.",
   "error_account_already_exists": "Ya existe una cuenta con este usuario de inicio de sesión.",
+  "error_account_not_found": "No existe una cuenta para este cliente.",
   "error_user_not_found": "Usuario no encontrado.",
   "error_cannot_change_own_role": "No puedes cambiar tu propio rol.",
   "error_cannot_demote_last_admin": "No se puede degradar al último administrador.",

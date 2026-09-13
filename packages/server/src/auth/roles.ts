@@ -8,7 +8,7 @@ import {
 } from "@care-y/shared";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import { ForbiddenError } from "../errors.js";
+import { ForbiddenError, ConfigError } from "../errors.js";
 
 export interface RoleConfig {
   readonly id: RoleIdValue;
@@ -277,6 +277,27 @@ export async function requirePermissionForOrg(
  */
 export function invalidateRolePermissionCache(orgSchema: OrgSchema): void {
   permissionCache.delete(orgSchema);
+}
+
+/**
+ * Refuse to boot when the process-local in-memory permission cache would run
+ * across more than one app instance. Each instance caches overrides
+ * independently, so an invalidation on one instance (after a role override
+ * mutation) would not propagate to the others: they would keep serving the
+ * revoked permission set until their process restarts. A shared-store
+ * implementation (same cache interface) must back multi-instance deployments;
+ * until one is wired, multi-instance is unsupported.
+ */
+export function assertSingleInstancePermissionCache(
+  multiInstance: boolean,
+): void {
+  if (multiInstance) {
+    throw new ConfigError(
+      "In-memory role permission cache is not safe across multiple app " +
+        "instances. Configure a shared-store permission cache before " +
+        "enabling APP_MULTI_INSTANCE.",
+    );
+  }
 }
 
 /** All known Permission string values, for type-guard lookups. */

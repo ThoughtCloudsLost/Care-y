@@ -22,6 +22,7 @@ import {
   deriveChannelAuth,
   hashChannelAuth,
   PORTAL_KEY_CHECK,
+  INTAKE_RESPONSE_SLOT,
   type SymmetricKey,
   type Ciphertext,
   type EciesOutput,
@@ -57,11 +58,8 @@ export interface EncryptedIntake {
   readonly wrappedTk: string;
 }
 
-/**
- * AAD slot for the structured form response blob.
- * The Worker reconstructs the same slot string to verify the binding.
- */
-const FORM_RESPONSE_SLOT = "intake-form-response";
+// AAD slot imported from @care-y/crypto (INTAKE_RESPONSE_SLOT).
+// The Worker uses the same constant to verify the binding.
 
 /**
  * Encrypt an intake form submission. All four ciphertexts are AAD-bound
@@ -91,7 +89,7 @@ export function encryptIntake(
     // AAD bindings
     const titleAad = buildContentAad(ids.ticketId, "title");
     const descriptionAad = buildContentAad(ids.ticketId, "description");
-    const formResponseAad = buildContentAad(ids.ticketId, FORM_RESPONSE_SLOT);
+    const formResponseAad = buildContentAad(ids.ticketId, INTAKE_RESPONSE_SLOT);
 
     // Encrypt title, description, form response (always present)
     const encTitle = encryptContent(textEncoder.encode(title), tk, titleAad);
@@ -254,42 +252,36 @@ export async function buildAccountPayload(
   message: string | null,
   callbacks: LoginCryptoCallbacks,
 ): Promise<IntakeAccountPayload> {
-  const { payload, keypair } = await buildAccountRegistration(
+  const { payload, clientPublic } = await buildAccountRegistration(
     username,
     password,
     null,
     callbacks,
   );
 
-  try {
-    let selfCopy: IntakeAccountPayload["selfCopy"] | undefined;
+  // clientPrivate is zeroed inside buildAccountRegistration.
 
-    if (message !== null && message.length > 0) {
-      const messageBytes = textEncoder.encode(message);
-      const triple: EciesOutput = eciesEncrypt(
-        messageBytes,
-        keypair.clientPublic,
-      );
-      selfCopy = {
-        ephemeralPoint: encode(triple.ephemeralPoint),
-        nonce: encode(triple.nonce),
-        ciphertext: encode(triple.ciphertext),
-      };
-    }
+  let selfCopy: IntakeAccountPayload["selfCopy"] | undefined;
 
-    return {
-      accountId: payload.accountId,
-      username: payload.username,
-      salt: payload.salt,
-      publicKey: payload.publicKey,
-      authHash: payload.authHash,
-      keyCheck: payload.keyCheck,
-      ...(selfCopy != null ? { selfCopy } : {}),
+  if (message !== null && message.length > 0) {
+    const messageBytes = textEncoder.encode(message);
+    const triple: EciesOutput = eciesEncrypt(messageBytes, clientPublic);
+    selfCopy = {
+      ephemeralPoint: encode(triple.ephemeralPoint),
+      nonce: encode(triple.nonce),
+      ciphertext: encode(triple.ciphertext),
     };
-  } finally {
-    const sodium = requireSodium();
-    sodium.memzero(keypair.clientPrivate);
   }
+
+  return {
+    accountId: payload.accountId,
+    username: payload.username,
+    salt: payload.salt,
+    publicKey: payload.publicKey,
+    authHash: payload.authHash,
+    keyCheck: payload.keyCheck,
+    ...(selfCopy != null ? { selfCopy } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------

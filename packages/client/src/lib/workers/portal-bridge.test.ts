@@ -363,12 +363,56 @@ describe("PortalBridge", () => {
   });
 
   describe("destroy", () => {
-    it("sends zeroAll, terminates the Worker, and rejects pending promises", async () => {
+    it("does not terminate until zeroAll response arrives", async () => {
+      const bridge = await createReadyBridge();
+      const worker = mockWorkerInstance!;
+
+      bridge.destroy();
+
+      expect(bridge.getState()).toBe("DESTROYED");
+      // terminate should NOT have been called yet (waiting for ack)
+      expect(worker.terminate).not.toHaveBeenCalled();
+
+      // Find the zeroAll request
+      const zeroAllCall = worker.postMessage.mock.calls.find(
+        (c: unknown[]) => (c[0] as { type: string }).type === "zeroAll",
+      ) as [{ type: string; id: number }] | undefined;
+      expect(zeroAllCall).toBeDefined();
+
+      // Simulate the worker ack
+      respondFromWorker({
+        id: zeroAllCall![0].id,
+        ok: true,
+        type: "zeroAll",
+      });
+
+      // Now terminate should have been called
+      await vi.waitFor(() => {
+        expect(worker.terminate).toHaveBeenCalled();
+      });
+    });
+
+    it("terminates after timeout when zeroAll response never arrives", async () => {
+      vi.useFakeTimers();
+      const bridge = await createReadyBridge();
+      const worker = mockWorkerInstance!;
+
+      bridge.destroy();
+
+      expect(worker.terminate).not.toHaveBeenCalled();
+
+      // Advance past the 250 ms timeout
+      vi.advanceTimersByTime(300);
+
+      expect(worker.terminate).toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it("rejects pending promises with BRIDGE_DESTROYED", async () => {
       const bridge = await createReadyBridge();
 
       const promise = bridge.decryptMessage("ep", "n", "ct");
 
-      // Let the decryptMessage postMessage happen
       await vi.waitFor(() => {
         const calls = mockWorkerInstance?.postMessage.mock.calls;
         const found = calls?.find(
@@ -379,9 +423,6 @@ describe("PortalBridge", () => {
       });
 
       bridge.destroy();
-
-      expect(bridge.getState()).toBe("DESTROYED");
-      expect(mockWorkerInstance?.terminate).toHaveBeenCalled();
 
       await expect(promise).rejects.toThrow(PortalWorkerError);
       await expect(promise).rejects.toMatchObject({

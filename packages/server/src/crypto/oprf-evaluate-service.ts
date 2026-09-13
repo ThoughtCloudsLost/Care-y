@@ -159,6 +159,8 @@ export interface ChannelEvaluateRequest {
   readonly channelId: ChannelSecret;
   readonly blindedElement: string;
   readonly auth?: string;
+  readonly powChallenge?: string;
+  readonly powSolution?: string;
   readonly ip: string;
   readonly orgUuid: OrgId;
 }
@@ -376,7 +378,13 @@ export function createOprfEvaluateService(
 
       // PoW gate keyed on channelId
       const attemptCount = attemptTracker.increment(channelKey);
-      await enforcePowGate(channelKey, ip, attemptCount, undefined, undefined);
+      await enforcePowGate(
+        channelKey,
+        ip,
+        attemptCount,
+        req.powChallenge,
+        req.powSolution,
+      );
 
       // Channel gating rules (ADR-091):
       // - No row (unknown channelId): allow (mint path)
@@ -415,8 +423,13 @@ export function createOprfEvaluateService(
       const tag = channelTag(orgUuid, channelId);
       const blindedBuf = Buffer.from(blindedElement, "base64");
 
-      const evaluated = await deps.evaluator.evaluate(blindedBuf, tag);
-      return { evaluated: Buffer.from(evaluated).toString("base64url") };
+      try {
+        const evaluated = await deps.evaluator.evaluate(blindedBuf, tag);
+        return { evaluated: Buffer.from(evaluated).toString("base64url") };
+      } catch (err: unknown) {
+        await deps.auditLogger.logFailure(channelKey, ip, "oprf_failed");
+        throw err;
+      }
     },
   };
 }

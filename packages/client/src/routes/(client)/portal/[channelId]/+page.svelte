@@ -141,12 +141,16 @@
     chanId: string,
     blindedB64: string,
     chanAuth?: string,
+    pow?: { challenge: string; solution: string },
   ): Promise<{ evaluated: string }> => {
     const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
     return portalRouter.evaluateChannelOprf.mutate({
       channelId: chanId,
       blindedElement: blindedB64,
       ...(chanAuth !== undefined ? { auth: chanAuth } : {}),
+      ...(pow != null
+        ? { powChallenge: pow.challenge, powSolution: pow.solution }
+        : {}),
     });
   };
 
@@ -180,8 +184,14 @@
       ) {
         throw err;
       }
-      await onPowRequired(err.data.challenge, err.data.difficulty);
-      const result = await evaluate(channelId, blindedElementB64, auth);
+      const solution = await onPowRequired(
+        err.data.challenge,
+        err.data.difficulty,
+      );
+      const result = await evaluate(channelId, blindedElementB64, auth, {
+        challenge: err.data.challenge,
+        solution,
+      });
       return result.evaluated;
     }
   }

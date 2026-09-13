@@ -1868,6 +1868,45 @@ describe("portal-core", () => {
 
       spy.mockRestore();
     });
+
+    it("zeroes accountStretched when oprfBlind throws after Argon2id", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 525 });
+
+      // Let deriveAccountKey succeed so accountStretched is populated,
+      // then make oprfBlind throw so the catch path runs.
+      let captured: Uint8Array | null = null;
+      vi.spyOn(cryptoPkg, "deriveAccountKey").mockImplementation(() => {
+        const buf = new Uint8Array(64).fill(0xaa);
+        captured = buf;
+        return buf;
+      });
+      const blindSpy = vi
+        .spyOn(cryptoPkg, "oprfBlind")
+        .mockImplementation(() => {
+          throw new Error("oprfBlind-test-fault");
+        });
+
+      const password = new TextEncoder().encode("stretch-zero-pw");
+      const pwBuf = new ArrayBuffer(password.byteLength);
+      new Uint8Array(pwBuf).set(password);
+
+      const resp = await dispatchAndWait({
+        type: "accountSessionStart",
+        id: 526,
+        password: pwBuf,
+        salt: encode(new Uint8Array(generateSalt())),
+      });
+
+      expect(resp.ok).toBe(false);
+      // The captured buffer should be zeroed (memzero fills with 0)
+      expect(captured).not.toBeNull();
+      expect(captured!.every((b: number) => b === 0)).toBe(true);
+
+      blindSpy.mockRestore();
+      vi.mocked(cryptoPkg.deriveAccountKey).mockRestore();
+    });
   });
 
   describe("handleAccountSessionFinish catch", () => {

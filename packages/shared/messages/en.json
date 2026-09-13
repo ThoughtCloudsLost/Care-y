@@ -132,6 +132,7 @@
   "error_insufficient_permissions": "You do not have permission to do this.",
   "error_invalid_credentials": "Invalid login username or password.",
   "error_account_already_exists": "An account with this login username already exists.",
+  "error_account_not_found": "No account exists for this client.",
   "error_user_not_found": "User not found.",
   "error_cannot_change_own_role": "You cannot change your own role.",
   "error_cannot_demote_last_admin": "Cannot demote the last admin.",

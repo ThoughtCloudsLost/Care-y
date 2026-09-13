@@ -1007,6 +1007,8 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           channelId: channelSecretSchema,
           blindedElement: z.string().min(1).max(64),
           auth: z.string().min(1).max(128).optional(),
+          powChallenge: z.string().max(256).optional(),
+          powSolution: z.string().max(256).optional(),
         }),
       )
       .mutation(
@@ -1024,6 +1026,8 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
             channelId: input.channelId,
             blindedElement: input.blindedElement,
             auth: input.auth,
+            powChallenge: input.powChallenge,
+            powSolution: input.powSolution,
             ip,
             orgUuid: ctx.org.orgId,
           });

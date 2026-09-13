@@ -222,6 +222,12 @@ describe("performChannelOprf", () => {
 
     expect(onPow).toHaveBeenCalledWith("ch-test", 8);
     expect(evaluate).toHaveBeenCalledTimes(2);
+    // The retry call must carry the solved PoW fields
+    const retryCall = evaluate.mock.calls[1];
+    expect(retryCall![3]).toEqual({
+      challenge: "ch-test",
+      solution: "solved",
+    });
     expect(kp.clientPrivate.length).toBe(32);
   });
 

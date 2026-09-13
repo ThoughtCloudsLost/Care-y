@@ -2096,7 +2096,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             ticket.clientId,
           );
           if (!hasAccount) {
-            throw new NotFoundError(ErrorCode.ACCOUNT_ALREADY_EXISTS);
+            throw new NotFoundError(ErrorCode.ACCOUNT_NOT_FOUND);
           }
 
           const { resetAccount } = await import("../portal/account-service.js");

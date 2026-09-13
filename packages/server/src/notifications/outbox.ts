@@ -249,28 +249,27 @@ export async function drainOutbox(
   db: Kysely<TenantDatabase>,
   deps: OutboxDrainDeps,
 ): Promise<number> {
-  // Claim pending rows whose next_attempt has passed
+  // One statement = one transaction: locks hold through the status flip.
   const rows = await db
-    .selectFrom("notification_outbox")
-    .selectAll()
-    .where("status", "=", "pending")
-    .where("next_attempt_at", "<=", new Date())
-    .orderBy("next_attempt_at", "asc")
-    .limit(DRAIN_BATCH_SIZE)
-    .forUpdate()
-    .skipLocked()
+    .updateTable("notification_outbox")
+    .set({ status: "active" })
+    .where("id", "in", (eb) =>
+      eb
+        .selectFrom("notification_outbox")
+        .select("id")
+        .where("status", "=", "pending")
+        .where("next_attempt_at", "<=", new Date())
+        .orderBy("next_attempt_at", "asc")
+        .limit(DRAIN_BATCH_SIZE)
+        .forUpdate()
+        .skipLocked(),
+    )
+    .returningAll()
     .execute();
 
   let processed = 0;
 
   for (const row of rows) {
-    // Mark active
-    await db
-      .updateTable("notification_outbox")
-      .set({ status: "active" })
-      .where("id", "=", row.id)
-      .execute();
-
     try {
       // Parsed rather than asserted: the column is text, and a row written
       // by an older or newer deploy could carry a value outside the union.

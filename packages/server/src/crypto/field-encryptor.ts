@@ -300,6 +300,34 @@ export function createFieldEncryptor(key: Buffer): FieldEncryptor {
 // --- Blind Indexing ---
 
 /**
+ * ASCII-range lowercase and trim without converting to a JS string.
+ * Skips leading/trailing bytes <= 0x20 (space and below), maps
+ * 0x41-0x5A (A-Z) to 0x61-0x7A (a-z), and copies into a fresh Buffer.
+ * The returned Buffer must be zeroed by the caller after use.
+ *
+ * Output-identical to `toString().toLowerCase().trim()` for the E.164
+ * domain (digits, plus sign) so the blind index stays compatible with
+ * existing rows.
+ */
+function asciiLowerTrim(input: Buffer): Buffer {
+  let start = 0;
+  let end = input.length;
+
+  // Skip leading whitespace (bytes <= 0x20)
+  while (start < end && (input.at(start) ?? 0) <= 0x20) start++;
+  // Skip trailing whitespace (bytes <= 0x20)
+  while (end > start && (input.at(end - 1) ?? 0) <= 0x20) end--;
+
+  const out = Buffer.allocUnsafe(end - start);
+  for (let i = start; i < end; i++) {
+    const b = input.at(i) ?? 0;
+    // Map A-Z (0x41-0x5A) to a-z (0x61-0x7A)
+    out.writeUInt8(b >= 0x41 && b <= 0x5a ? b + 0x20 : b, i - start);
+  }
+  return out;
+}
+
+/**
  * Creates a BlindIndexer using HMAC-SHA256 via Node crypto.
  * Input is normalized (lowercase + trim) before hashing for case-insensitive lookup.
  * The orgId is prepended to the HMAC input to prevent cross-org correlation:
@@ -321,14 +349,14 @@ export function createBlindIndexer(key: Buffer): BlindIndexer {
     },
 
     hashBuffer(input: Buffer, orgId: OrgId): string {
-      // Normalize by converting to lowercase + trim via a temporary Buffer.
-      // The temporary is zeroed after use (relay-grade plaintext rule).
-      const normalized = Buffer.from(
-        input.toString("utf-8").toLowerCase().trim(),
-      );
+      // ASCII-range trim + lowercase, byte-level: the input domain is
+      // E.164-shaped ASCII (see isE164Buffer). No JS string of the plaintext.
+      const normalized = asciiLowerTrim(input);
       try {
         return createHmac("sha256", key)
-          .update(orgId + ":" + normalized.toString("utf-8"))
+          .update(orgId)
+          .update(":")
+          .update(normalized)
           .digest("hex");
       } finally {
         normalized.fill(0);

@@ -17,6 +17,7 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
     m.error_insufficient_permissions(),
   [ErrorCode.INVALID_CREDENTIALS]: () => m.error_invalid_credentials(),
   [ErrorCode.ACCOUNT_ALREADY_EXISTS]: () => m.error_account_already_exists(),
+  [ErrorCode.ACCOUNT_NOT_FOUND]: () => m.error_account_not_found(),
   [ErrorCode.USER_NOT_FOUND]: () => m.error_user_not_found(),
   [ErrorCode.CANNOT_CHANGE_OWN_ROLE]: () => m.error_cannot_change_own_role(),
   [ErrorCode.CANNOT_DEMOTE_LAST_ADMIN]: () =>

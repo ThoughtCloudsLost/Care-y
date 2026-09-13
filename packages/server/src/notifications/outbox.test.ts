@@ -1668,5 +1668,117 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
       expect(actorRecipient).toBeUndefined();
     });
+
+    it("concurrent drainOutbox calls never dispatch the same row", async () => {
+      const dispatchedIds: string[][] = [[], []];
+
+      // A watcher so recipient resolution is non-empty and dispatch fires
+      const watcher = await createTestUser(testDb.db);
+      await testDb.db
+        .insertInto("queue_watchers")
+        .values({ queue_id: queueId, user_id: watcher.id })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+
+      // Insert 5 pending rows
+      const ticketIds: TicketId[] = [];
+      for (let i = 0; i < 5; i++) {
+        const tid = await createTicketRow();
+        ticketIds.push(tid);
+        await enqueueNotificationDurable(testDb.db, {
+          eventType: "ticket_created",
+          ticketId: tid,
+          queueId,
+          formId: null,
+          actorUserId: null,
+        });
+      }
+
+      // Run two concurrent drain calls, each recording which ticket_ids they dispatch
+      const dispatch0 = vi.fn(
+        async (
+          _db: unknown,
+          _orgId: unknown,
+          _orgSchema: unknown,
+          _orgSlug: unknown,
+          _eventType: unknown,
+          ticketId: TicketId,
+        ) => {
+          dispatchedIds[0]!.push(ticketId);
+        },
+      );
+      const dispatch1 = vi.fn(
+        async (
+          _db: unknown,
+          _orgId: unknown,
+          _orgSchema: unknown,
+          _orgSlug: unknown,
+          _eventType: unknown,
+          ticketId: TicketId,
+        ) => {
+          dispatchedIds[1]!.push(ticketId);
+        },
+      );
+
+      const deps0: OutboxDrainDeps = {
+        ...makeDrainDeps({ dispatch: dispatch0 }),
+        orgSchema: testDb.schemaName as OrgSchema,
+      };
+      const deps1: OutboxDrainDeps = {
+        ...makeDrainDeps({ dispatch: dispatch1 }),
+        orgSchema: testDb.schemaName as OrgSchema,
+      };
+
+      await Promise.all([
+        drainOutbox(testDb.db, deps0),
+        drainOutbox(testDb.db, deps1),
+      ]);
+
+      // Both sets combined should contain all 5 ticket IDs
+      const all = [...dispatchedIds[0]!, ...dispatchedIds[1]!];
+      expect(all.sort()).toEqual([...ticketIds].sort());
+
+      // No ticket ID should appear in both sets (disjoint)
+      const set0 = new Set(dispatchedIds[0]!);
+      const set1 = new Set(dispatchedIds[1]!);
+      for (const id of set0) {
+        expect(set1.has(id)).toBe(false);
+      }
+
+      // Cleanup
+      await testDb.db
+        .deleteFrom("queue_watchers")
+        .where("queue_id", "=", queueId)
+        .where("user_id", "=", watcher.id)
+        .execute();
+    });
+
+    it("created_at defaults to now() at insert time (not migration time)", async () => {
+      const before = new Date();
+      const ticketId = await createTicketRow();
+      await enqueueNotificationDurable(testDb.db, {
+        eventType: "ticket_created",
+        ticketId,
+        queueId,
+        formId: null,
+        actorUserId: null,
+      });
+      const after = new Date();
+
+      const row = await testDb.db
+        .selectFrom("notification_outbox")
+        .select("created_at")
+        .where("ticket_id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+
+      // The timestamp should be between the before and after snapshots,
+      // confirming the default is evaluated at insert time, not frozen.
+      expect(row.created_at.getTime()).toBeGreaterThanOrEqual(
+        before.getTime() - 1000,
+      );
+      expect(row.created_at.getTime()).toBeLessThanOrEqual(
+        after.getTime() + 1000,
+      );
+    });
   },
 );

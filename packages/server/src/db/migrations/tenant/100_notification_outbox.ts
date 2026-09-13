@@ -19,6 +19,7 @@
 //   last_error      - truncated error message (never ciphertext or PII)
 
 import type { Kysely } from "kysely";
+import { sql } from "kysely";
 
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
@@ -37,10 +38,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn("attempt_count", "integer", (col) => col.notNull().defaultTo(0))
     .addColumn("max_attempts", "integer", (col) => col.notNull().defaultTo(5))
     .addColumn("next_attempt_at", "timestamptz", (col) =>
-      col.notNull().defaultTo("now()"),
+      col.notNull().defaultTo(sql`now()`),
     )
     .addColumn("created_at", "timestamptz", (col) =>
-      col.notNull().defaultTo("now()"),
+      col.notNull().defaultTo(sql`now()`),
     )
     .addColumn("completed_at", "timestamptz")
     .addColumn("failed_at", "timestamptz")

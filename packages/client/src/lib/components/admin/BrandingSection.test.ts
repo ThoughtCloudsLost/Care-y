@@ -711,6 +711,25 @@ describe("BrandingSection", () => {
     expect(emptyPlaceholder).toBeTruthy();
   });
 
+  it("converts base64url logo to standard base64 in the data URI", () => {
+    // A logo string with URL-safe characters (-_ instead of +/)
+    const urlSafeLogo = "iVBORw0KGgo-_AA";
+    renderWithData({ logo: urlSafeLogo });
+
+    const img = document.querySelector(
+      'img[alt="Logo"]',
+    ) as HTMLImageElement | null;
+    if (img) {
+      const src = img.getAttribute("src") ?? "";
+      const afterComma = src.split(",")[1] ?? "";
+      // Standard base64 alphabet: no - or _ present
+      expect(afterComma).not.toContain("-");
+      expect(afterComma).not.toContain("_");
+      // atob should not throw on the converted string
+      expect(() => atob(afterComma)).not.toThrow();
+    }
+  });
+
   it("shows dash placeholder when no primary color is set", () => {
     renderWithData({
       primaryColor: null,

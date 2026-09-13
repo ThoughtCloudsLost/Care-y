@@ -839,6 +839,38 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ).resolves.toBeUndefined();
       });
 
+      it("logs a static reason string with no phone digits on outer failure", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId, {
+          last_seen_at: new Date(Date.now() - 60_000),
+          last_notified_at: null,
+        });
+
+        // Make getProvider throw to trigger the outer catch
+        const deps = makeDeps({
+          getProvider: vi
+            .fn()
+            .mockRejectedValue(new Error("+15550009999 failure")),
+        });
+
+        const spy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          await nudgeClient(testDb.db, deps, channel);
+
+          expect(spy).toHaveBeenCalledOnce();
+          const args = spy.mock.calls[0]!;
+          // The log must contain only the static reason string
+          const fullLog = args.join(" ");
+          expect(fullLog).toContain("nudge_setup_failed");
+          // No phone digits should appear anywhere in the log output
+          expect(fullLog).not.toMatch(/\+?\d{7,}/);
+        } finally {
+          spy.mockRestore();
+        }
+      });
+
       it("passes the org UUID to getProvider and OrgIdentifiers to the resolver", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
         const channel = await insertChannel(testDb.db, fixture.clientId, {

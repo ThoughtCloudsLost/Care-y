@@ -2818,7 +2818,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(client.communication_tier).toBe("sms_email");
       });
 
-      it("404s when the client has no account", async () => {
+      it("404s with ACCOUNT_NOT_FOUND when the client has no account", async () => {
         const { user, ...fixture } = await setupUserWithTicket();
         const caller = createAuthedCaller(user);
 
@@ -2827,6 +2827,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             ticketId: fixture.ticketId,
           }),
           "NOT_FOUND",
+          "ACCOUNT_NOT_FOUND",
         );
       });
 

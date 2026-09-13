@@ -35,6 +35,7 @@ import {
   createTotpReplayCache,
   assertSingleInstanceTotpReplayCache,
 } from "./auth/totp-replay-cache.js";
+import { assertSingleInstancePermissionCache } from "./auth/roles.js";
 import {
   deriveKeys,
   createFieldEncryptor,
@@ -450,6 +451,7 @@ const env: EnvVars = getEnv();
 // available.
 assertSingleInstanceRateLimiting(env.APP_MULTI_INSTANCE);
 assertSingleInstanceTotpReplayCache(env.APP_MULTI_INSTANCE);
+assertSingleInstancePermissionCache(env.APP_MULTI_INSTANCE);
 
 const {
   encryptor,

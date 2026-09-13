@@ -570,7 +570,7 @@
       }
 
       // 2. Build new registration material (fresh salt, same accountId)
-      const { payload: newPayload, keypair: newKeypair } =
+      const { payload: newPayload, clientPublic: newPublicKey } =
         await buildAccountRegistration(null, newPassword, accountId, callbacks);
 
       // 3. Re-encrypt existing messages to the new key. Decrypt each
@@ -579,7 +579,7 @@
       //    path). Undecryptable messages are declared as skipped for the
       //    server's coverage guard.
       const { decrypted, skippedIds } = await collectThreadMessages();
-      const rewrapped = rewrapMessages(decrypted, newKeypair.clientPublic);
+      const rewrapped = rewrapMessages(decrypted, newPublicKey);
 
       // 4. Submit change-password mutation
       await portalRouter.accountChangePassword.mutate({
@@ -598,13 +598,10 @@
       session.destroy();
       proofBridge.destroy();
 
-      // Log back in with the new password to establish a new bridge session
-      // with the new keys. This is the cleanest path: the new keypair lives
-      // in the new bridge's worker memory, not on the main thread.
-      const { requireSodium } = await import("@care-y/crypto");
-      requireSodium().memzero(newKeypair.clientPrivate);
+      // clientPrivate is zeroed inside buildAccountRegistration.
 
-      // The new session is established by re-logging in (the cookie is
+      // Log back in with the new password. The new session is established
+      // by re-logging in (the cookie is
       // still valid from the change-password mutation). Build a new bridge.
       const newBridge = createPortalBridge();
       await newBridge.waitReady();

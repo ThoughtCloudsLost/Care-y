@@ -103,3 +103,15 @@ export class BlobFetchError extends ClientError {
     this.status = status;
   }
 }
+
+/**
+ * Channel session derivation failed for reasons other than wrong passphrase
+ * (network outage, server error, etc.). Allows callers to distinguish
+ * connectivity issues from authentication failures.
+ */
+export class ChannelSessionError extends ClientError {
+  constructor(message: string) {
+    super(message);
+    this.name = "ChannelSessionError";
+  }
+}

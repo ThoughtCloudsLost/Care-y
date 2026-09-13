@@ -498,6 +498,24 @@ describe("portal attachment downloads", () => {
     expect(res.statusCode).toBe(401);
     expect(mockResolveChannel).not.toHaveBeenCalled();
   });
+
+  it("rejects a malformed (non-UUID) portal attachment id before auth", async () => {
+    // The outer handler validates UUID format for all categories. A non-UUID
+    // id is rejected before reaching servePortalBlob. The servePortalBlob
+    // ZodError catch is defensive against future schema changes that reject
+    // valid-format UUIDs.
+    const req = mockReq("GET", "/api/blobs/portal-attachments/not-a-uuid", {
+      "x-portal-channel": "a".repeat(48),
+      "x-portal-auth": "dGVzdA==",
+    });
+    const deps = buildDeps();
+    const res = mockRes();
+    await createBlobDownloadHandler(deps)(req, res);
+
+    expect(res.statusCode).toBe(400);
+    // Channel resolution is never attempted for a malformed id
+    expect(mockResolveChannel).not.toHaveBeenCalled();
+  });
 });
 
 describe("portal recording downloads", () => {

@@ -107,6 +107,9 @@ export function createNotificationSmsJobHandler(
       try {
         // care-y-ignore-next-line server-no-decrypt -- OPS-tier phone for server-initiated SMS ping (same tier as notification email addresses)
         phoneBuf = deps.encryptor.decryptToBuffer(row.ops_encrypted_phone);
+        // provider.sendSms takes a string; the toString copy is the accepted
+        // residual (zeroing phoneBuf in the finally block covers the Buffer,
+        // but the string copy lives until GC collects it).
         await provider.sendSms(phoneBuf.toString("utf-8"), body, from);
       } catch {
         // Per-recipient failures are non-critical. Log only the user ID

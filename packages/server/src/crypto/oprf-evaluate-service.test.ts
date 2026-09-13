@@ -12,6 +12,7 @@
  * verify every gating branch without a live database.
  */
 
+import { createHash } from "node:crypto";
 import {
   describe,
   it,
@@ -21,6 +22,7 @@ import {
   afterEach,
   vi,
 } from "vitest";
+import { hasLeadingZeroBits } from "./pow.js";
 import {
   createOprfEvaluateService,
   resolveDelayTiers,
@@ -405,6 +407,100 @@ describe("evaluateChannel gating", () => {
     // Third should be rate limited
     await expect(service.evaluateChannel(db, makeRequest())).rejects.toThrow(
       RateLimitError,
+    );
+  });
+
+  it("requires PoW past the threshold and succeeds when solved", async () => {
+    // Use production env so the threshold is 5 (not 100)
+    const prodSavedEnv = { ...process.env };
+    Object.assign(process.env, PROD_ENV);
+    _resetEnvCache();
+
+    try {
+      const deps = makeDeps();
+      const auditSpy = vi
+        .spyOn(deps.auditLogger, "logFailure")
+        .mockResolvedValue(undefined);
+      const service = createOprfEvaluateService(deps);
+      const db = makeMockDb(null);
+
+      // First 4 evaluations succeed without PoW
+      for (let i = 0; i < 4; i++) {
+        await service.evaluateChannel(db, makeRequest());
+      }
+
+      // 5th triggers PowRequiredError
+      let challenge: string | undefined;
+      let difficulty: number | undefined;
+      try {
+        await service.evaluateChannel(db, makeRequest());
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(PowRequiredError);
+        const powErr = err as PowRequiredError;
+        challenge = powErr.challenge;
+        difficulty = powErr.difficulty;
+      }
+      expect(challenge).toBeDefined();
+      expect(difficulty).toBeDefined();
+
+      // Brute-force solve the challenge (difficulty 16 = ~65k tries, fast)
+      let solution = "";
+      for (let i = 0; ; i++) {
+        const candidate = String(i);
+        const hash = createHash("sha256")
+          .update(challenge!)
+          .update(candidate)
+          .digest();
+        if (hasLeadingZeroBits(hash, difficulty!)) {
+          solution = candidate;
+          break;
+        }
+      }
+      const result = await service.evaluateChannel(
+        db,
+        makeRequest({
+          powChallenge: challenge,
+          powSolution: solution,
+        }),
+      );
+      expect(result.evaluated).toBeDefined();
+
+      // Verify that audit was called for pow_required
+      expect(auditSpy).toHaveBeenCalledWith(
+        expect.stringContaining("channel:"),
+        IP,
+        "pow_required",
+      );
+    } finally {
+      for (const key of Object.keys(process.env)) {
+        if (!(key in prodSavedEnv)) {
+          delete process.env[key];
+        }
+      }
+      Object.assign(process.env, prodSavedEnv);
+      _resetEnvCache();
+    }
+  });
+
+  it("logs oprf_failed audit on evaluator failure in channel path", async () => {
+    const deps = makeDeps();
+    const evalError = new Error("evaluator down");
+    deps.evaluator.evaluate = vi.fn().mockRejectedValue(evalError);
+    const auditSpy = vi
+      .spyOn(deps.auditLogger, "logFailure")
+      .mockResolvedValue(undefined);
+
+    const service = createOprfEvaluateService(deps);
+    const db = makeMockDb(null);
+
+    await expect(service.evaluateChannel(db, makeRequest())).rejects.toThrow(
+      evalError,
+    );
+
+    expect(auditSpy).toHaveBeenCalledWith(
+      expect.stringContaining("channel:"),
+      IP,
+      "oprf_failed",
     );
   });
 

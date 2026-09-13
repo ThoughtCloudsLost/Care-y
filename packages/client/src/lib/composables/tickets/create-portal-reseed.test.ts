@@ -944,6 +944,46 @@ describe("createPortalReseed", () => {
     // "Hello" in base64url = "SGVsbG8"
     expect(blobCall[0].encryptedData).toBe("SGVsbG8");
   });
+
+  it("retries convertBlobForPortal with a non-detached buffer", async () => {
+    const deps = makeDeps();
+    const trpc = deps.trpc as MockTrpc;
+    const bridge = deps.bridge;
+
+    trpc.tickets.listForClient.query.mockResolvedValue([{ ticketId: "t-1" }]);
+    trpc.tickets.listFollowUps.query.mockResolvedValue({
+      followUps: [],
+      reactions: {},
+    });
+    trpc.tickets.listAttachments.query.mockResolvedValue([
+      makeAttachment("att-retry", "fu-1", { fileKeyWrap: null }),
+    ]);
+    trpc.tickets.listRecordings.query.mockResolvedValue([]);
+
+    // First call fails (simulating a network error), second succeeds.
+    const receivedByteLengths: number[] = [];
+    vi.mocked(bridge.convertBlobForPortal)
+      .mockImplementationOnce((_tid, _pub, _kind, _rid, buf) => {
+        receivedByteLengths.push((buf as ArrayBuffer).byteLength);
+        return Promise.reject(new Error("network-blip"));
+      })
+      .mockImplementationOnce((_tid, _pub, _kind, _rid, buf) => {
+        receivedByteLengths.push((buf as ArrayBuffer).byteLength);
+        return Promise.resolve({
+          encryptedData: new ArrayBuffer(4),
+          fileKeyWrap: "fkw",
+          copy: COPY,
+        });
+      });
+
+    await reseed(deps);
+
+    // Both calls must receive a buffer with non-zero byteLength.
+    // A detached ArrayBuffer reports byteLength === 0.
+    expect(receivedByteLengths).toHaveLength(2);
+    expect(receivedByteLengths[0]).toBeGreaterThan(0);
+    expect(receivedByteLengths[1]).toBeGreaterThan(0);
+  });
 });
 
 // ── Helper ─────────────────────────────────────────────────────────────

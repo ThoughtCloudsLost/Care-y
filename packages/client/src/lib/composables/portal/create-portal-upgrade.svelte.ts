@@ -159,7 +159,7 @@ export function createPortalUpgrade(): PortalUpgradeState {
 
     void (async () => {
       try {
-        const { payload, keypair: newKeypair } = await buildAccountRegistration(
+        const { payload, clientPublic } = await buildAccountRegistration(
           username,
           password,
           null,
@@ -173,7 +173,7 @@ export function createPortalUpgrade(): PortalUpgradeState {
           serverMessages,
           session,
         );
-        const rewrapped = rewrapMessages(decrypted, newKeypair.clientPublic);
+        const rewrapped = rewrapMessages(decrypted, clientPublic);
 
         await trpcPortal.accountUpgrade.mutate({
           channelId: fragmentChannelId,
@@ -183,9 +183,7 @@ export function createPortalUpgrade(): PortalUpgradeState {
           skippedMessageIds: [...skippedIds],
         });
 
-        // Clean up new keypair
-        const { requireSodium } = await import("@care-y/crypto");
-        requireSodium().memzero(newKeypair.clientPrivate);
+        // clientPrivate is zeroed inside buildAccountRegistration.
 
         // Destroy the old session (channel is revoked server-side)
         session.destroy();
