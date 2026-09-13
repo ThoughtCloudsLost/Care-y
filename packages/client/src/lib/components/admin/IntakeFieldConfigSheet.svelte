@@ -14,6 +14,7 @@
     Button,
     BlockTitle,
     Checkbox,
+    Link,
   } from "konsta/svelte";
   import {
     ROLE_WIDGET_COMPATIBILITY,
@@ -61,6 +62,8 @@
   }: IntakeFieldConfigSheetProps = $props();
 
   let label = $state("");
+  let labelError = $state("");
+  let optionsError = $state("");
   let isRequired = $state(false);
 
   // Type-specific config state
@@ -151,6 +154,7 @@
       target instanceof HTMLInputElement ||
       target instanceof HTMLTextAreaElement
     ) {
+      labelError = "";
       label = target.value;
     }
   }
@@ -173,6 +177,7 @@
   function handleOptionInput(index: number, e: Event): void {
     const target = e.target;
     if (target instanceof HTMLInputElement) {
+      optionsError = "";
       options = options.map((o, i) => (i === index ? target.value : o));
     }
   }
@@ -409,6 +414,17 @@
   }
 
   function handleDone(): void {
+    if (label.trim().length === 0) {
+      labelError = m.intake_forms_config_label_required();
+      return;
+    }
+    if (
+      (fieldType === "select" || fieldType === "multiselect") &&
+      !options.some((o) => o.trim().length > 0)
+    ) {
+      optionsError = m.intake_forms_config_options_required();
+      return;
+    }
     const result: FieldConfigState = {
       label,
       isRequired,
@@ -442,15 +458,18 @@
   title={m.intake_forms_config_title()}
 >
   {#snippet headerRight()}
-    <Button small clear onclick={handleDone}>
+    <Link role="button" onclick={ondismiss}>{m.common_cancel()}</Link>
+    <Link role="button" onclick={handleDone}>
       {m.intake_forms_config_done()}
-    </Button>
+    </Link>
   {/snippet}
 
   <List strong inset>
     <ListInput
       label={m.intake_forms_config_label()}
       type="text"
+      placeholder={m.intake_forms_config_label_placeholder()}
+      error={labelError}
       value={label}
       onInput={handleLabelInput}
     />
@@ -466,6 +485,25 @@
       {/snippet}
     </ListItem>
   </List>
+
+  <!-- Role picker (ADR-068) -->
+  {#if compatibleRoles.length > 0}
+    <List strong inset>
+      <ListInput
+        label={m.intake_forms_config_role_label()}
+        info={m.intake_forms_config_role_hint()}
+        type="select"
+        dropdown
+        value={selectedRole ?? ""}
+        onChange={handleRoleChange}
+      >
+        <option value="">{m.intake_forms_config_role_none()}</option>
+        {#each compatibleRoles as role (role)}
+          <option value={role}>{getRoleLabel(role)}</option>
+        {/each}
+      </ListInput>
+    </List>
+  {/if}
 
   {#if fieldType === "text" || fieldType === "textarea"}
     <List strong inset>
@@ -488,7 +526,7 @@
     <List strong inset>
       {#each options as option, index (index)}
         <ListInput
-          label={`${m.intake_forms_config_options()} ${String(index + 1)}`}
+          label={m.intake_forms_config_option_label({ n: String(index + 1) })}
           type="text"
           value={option}
           onInput={(e: Event) => handleOptionInput(index, e)}
@@ -505,6 +543,7 @@
         </ListInput>
       {/each}
     </List>
+    <FieldError message={optionsError} />
     <div class="config-action">
       <Button small outline onclick={addOption}>
         {m.intake_forms_config_add_option()}
@@ -539,24 +578,6 @@
       </ListItem>
     </List>
     <FieldError message={atLeastOneError} />
-  {/if}
-
-  <!-- Role picker (ADR-068) -->
-  {#if compatibleRoles.length > 0}
-    <BlockTitle>{m.intake_forms_config_role_label()}</BlockTitle>
-    <List strong inset>
-      <ListInput
-        type="select"
-        dropdown
-        value={selectedRole ?? ""}
-        onChange={handleRoleChange}
-      >
-        <option value="">{m.intake_forms_config_role_none()}</option>
-        {#each compatibleRoles as role (role)}
-          <option value={role}>{getRoleLabel(role)}</option>
-        {/each}
-      </ListInput>
-    </List>
   {/if}
 
   <!-- Queue routing mapping editor -->

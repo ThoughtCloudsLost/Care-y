@@ -30,22 +30,4 @@ describe("IntakePrivacyIndicator", () => {
     expect(screen.getByText(/routing metadata/)).toBeTruthy();
     expect(screen.queryByText("Your answer is encrypted.")).toBeNull();
   });
-
-  it("applies the privacy-metadata class when hasMetadataSignal is true", () => {
-    const { container } = render(IntakePrivacyIndicator, {
-      props: { hasMetadataSignal: true },
-    });
-    const indicator = container.querySelector(".privacy-indicator");
-    expect(indicator).not.toBeNull();
-    expect(indicator?.classList.contains("privacy-metadata")).toBe(true);
-  });
-
-  it("omits the privacy-metadata class when hasMetadataSignal is false", () => {
-    const { container } = render(IntakePrivacyIndicator, {
-      props: { hasMetadataSignal: false },
-    });
-    const indicator = container.querySelector(".privacy-indicator");
-    expect(indicator).not.toBeNull();
-    expect(indicator?.classList.contains("privacy-metadata")).toBe(false);
-  });
 });

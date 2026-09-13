@@ -23,20 +23,19 @@
   import { haptic } from "$lib/utils/haptic.js";
   import SecureLinkSheet from "./SecureLinkSheet.svelte";
 
+  export interface PortalChannelWire {
+    clientPublic: string;
+    hasPassphrase: boolean;
+    createdAt: string;
+    lastSeenAt: string | null;
+    kind: string;
+    accountOffer: boolean;
+  }
+
   interface PortalTierSectionProps {
     ticketId: string;
     clientTier: string | undefined;
-    portalChannel:
-      | {
-          clientPublic: string;
-          hasPassphrase: boolean;
-          createdAt: string;
-          lastSeenAt: string | null;
-          kind: string;
-          accountOffer: boolean;
-        }
-      | null
-      | undefined;
+    portalChannel: PortalChannelWire | null | undefined;
     clientPhone: string | null | undefined;
     isLoading: boolean;
   }
@@ -91,7 +90,8 @@
       void queryClient.invalidateQueries({
         queryKey: ticketKeys.detail(ticketId),
       });
-    } catch {
+    } catch (_err: unknown) {
+      // Intentional discard: mutation error only, no decrypted content.
       toastStore.show(m.error_generic(), 3000);
     } finally {
       revoking = false;
@@ -127,7 +127,8 @@
       void queryClient.invalidateQueries({
         queryKey: ticketKeys.detail(ticketId),
       });
-    } catch {
+    } catch (_err: unknown) {
+      // Intentional discard: mutation error only, no decrypted content.
       toastStore.show(m.error_generic(), 3000);
     } finally {
       offerUpdating = false;
@@ -154,7 +155,8 @@
       void queryClient.invalidateQueries({
         queryKey: ticketKeys.detail(ticketId),
       });
-    } catch {
+    } catch (_err: unknown) {
+      // Intentional discard: mutation error only, no decrypted content.
       toastStore.show(m.error_generic(), 3000);
     } finally {
       resetting = false;

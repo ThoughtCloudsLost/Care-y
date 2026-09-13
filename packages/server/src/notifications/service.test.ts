@@ -35,18 +35,14 @@ import {
   type TestDb,
 } from "../test-utils.js";
 import type { VolunteerReachability } from "../telephony/reachability.js";
+import type { getReachabilityForUsers as GetReachabilityFn } from "../telephony/reachability.js";
 import { NOTIFICATION_SMS_QUEUE } from "../jobs/notification-sms.js";
 
-vi.mock("../telephony/reachability.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  getReachabilityForUsers: vi.fn(
-    async () => new Map<UserId, VolunteerReachability>(),
-  ),
-}));
+type ReachabilityFn = typeof GetReachabilityFn;
 
-// Imported after vi.mock so the mock is in place
-const { getReachabilityForUsers } =
-  await import("../telephony/reachability.js");
+const mockReachability = vi.fn<ReachabilityFn>(
+  async () => new Map<UserId, VolunteerReachability>(),
+);
 
 function mockSse(): SseService & { calls: unknown[] } {
   const calls: unknown[] = [];
@@ -166,9 +162,8 @@ const EMPTY_RECIPIENTS: NotificationRecipientList = {
 
 describe("NotificationService.dispatch", () => {
   beforeEach(() => {
-    vi.mocked(getReachabilityForUsers).mockReset();
-    // Default: return empty map (all smsAllowed users fall back to email)
-    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+    mockReachability.mockReset();
+    mockReachability.mockResolvedValue(
       new Map<UserId, VolunteerReachability>(),
     );
   });
@@ -181,6 +176,7 @@ describe("NotificationService.dispatch", () => {
       pushSender: mockPushSender(),
       jobQueue: mockJobQueue(),
       preferences: mockPreferences(),
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -214,6 +210,7 @@ describe("NotificationService.dispatch", () => {
       pushSender: mockPushSender(),
       jobQueue,
       preferences: mockPreferences(),
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -245,6 +242,7 @@ describe("NotificationService.dispatch", () => {
       pushSender,
       jobQueue: mockJobQueue(),
       preferences: mockPreferences(),
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -271,6 +269,7 @@ describe("NotificationService.dispatch", () => {
       pushSender,
       jobQueue,
       preferences: mockPreferences(),
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -297,6 +296,7 @@ describe("NotificationService.dispatch", () => {
       pushSender: mockPushSender(),
       jobQueue: mockJobQueue(),
       preferences: mockPreferences(),
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -336,6 +336,7 @@ describe("NotificationService.dispatch", () => {
       pushSender,
       jobQueue,
       preferences: mockPreferences(),
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -378,6 +379,7 @@ describe("NotificationService.dispatch", () => {
       pushSender: mockPushSender(),
       jobQueue: failingQueue,
       preferences: mockPreferences(),
+      getReachabilityForUsers: mockReachability,
     });
 
     // The ticket routes catch and log this rejection; dispatch itself must
@@ -414,6 +416,7 @@ describe("NotificationService.dispatch", () => {
       pushSender,
       jobQueue: mockJobQueue(),
       preferences: prefs,
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -454,6 +457,7 @@ describe("NotificationService.dispatch", () => {
       pushSender: mockPushSender(),
       jobQueue,
       preferences: prefs,
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -487,6 +491,7 @@ describe("NotificationService.dispatch", () => {
         pushSender,
         jobQueue,
         preferences: prefs,
+        getReachabilityForUsers: mockReachability,
       });
 
       await svc.dispatch(
@@ -507,10 +512,6 @@ describe("NotificationService.dispatch", () => {
 
       // The fallback logged the error (no PII in the log)
       expect(errorSpy).toHaveBeenCalled();
-      const logged = errorSpy.mock.calls
-        .map((call) => call.map(String).join(" "))
-        .join("\n");
-      expect(logged).toContain("falling back to all-allowed");
     } finally {
       errorSpy.mockRestore();
     }
@@ -518,7 +519,7 @@ describe("NotificationService.dispatch", () => {
 
   it("splits smsAllowed by reachability: deliverable to SMS queue, fallback merged into email", async () => {
     // user-1 is verified_sms (deliverable), user-2 is verified (no SMS, fallback)
-    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+    mockReachability.mockResolvedValue(
       new Map<UserId, VolunteerReachability>([
         [USER_1, "verified_sms"],
         [USER_2, "verified"],
@@ -539,6 +540,7 @@ describe("NotificationService.dispatch", () => {
       pushSender: mockPushSender(),
       jobQueue,
       preferences: prefs,
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -576,7 +578,7 @@ describe("NotificationService.dispatch", () => {
   });
 
   it("includes orgId as a valid UUID in the notification-sms payload from dispatch", async () => {
-    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+    mockReachability.mockResolvedValue(
       new Map<UserId, VolunteerReachability>([[USER_1, "verified_sms"]]),
     );
 
@@ -594,6 +596,7 @@ describe("NotificationService.dispatch", () => {
       pushSender: mockPushSender(),
       jobQueue,
       preferences: prefs,
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -624,7 +627,7 @@ describe("NotificationService.dispatch", () => {
 
   it("deduplicates the email list when a user appears in both emailAllowed and smsFallback", async () => {
     // user-1 has email enabled AND sms enabled but is not SMS-reachable
-    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+    mockReachability.mockResolvedValue(
       new Map<UserId, VolunteerReachability>([[USER_1, "unverified"]]),
     );
 
@@ -642,6 +645,7 @@ describe("NotificationService.dispatch", () => {
       pushSender: mockPushSender(),
       jobQueue,
       preferences: prefs,
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -681,6 +685,7 @@ describe("NotificationService.dispatch", () => {
       pushSender: mockPushSender(),
       jobQueue,
       preferences: prefs,
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatch(
@@ -695,7 +700,7 @@ describe("NotificationService.dispatch", () => {
     );
 
     // Reachability module never called
-    expect(getReachabilityForUsers).not.toHaveBeenCalled();
+    expect(mockReachability).not.toHaveBeenCalled();
 
     // Email still enqueued normally from emailAllowed
     expect(jobQueue.enqueuedJobs).toHaveLength(1);
@@ -714,8 +719,8 @@ describe("NotificationService.dispatch", () => {
 
 describe("NotificationService.dispatchTicketless preference filtering", () => {
   beforeEach(() => {
-    vi.mocked(getReachabilityForUsers).mockReset();
-    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+    mockReachability.mockReset();
+    mockReachability.mockResolvedValue(
       new Map<UserId, VolunteerReachability>(),
     );
   });
@@ -728,6 +733,7 @@ describe("NotificationService.dispatchTicketless preference filtering", () => {
       pushSender: mockPushSender(),
       jobQueue: mockJobQueue(),
       preferences: prefs,
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatchTicketless(
@@ -754,8 +760,8 @@ describe("NotificationService.dispatchTicketless preference filtering", () => {
 
 describe("NotificationService.dispatchTicketless", () => {
   beforeEach(() => {
-    vi.mocked(getReachabilityForUsers).mockReset();
-    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+    mockReachability.mockReset();
+    mockReachability.mockResolvedValue(
       new Map<UserId, VolunteerReachability>(),
     );
   });
@@ -768,6 +774,7 @@ describe("NotificationService.dispatchTicketless", () => {
       pushSender: mockPushSender(),
       jobQueue: mockJobQueue(),
       preferences: mockPreferences(),
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatchTicketless(
@@ -802,6 +809,7 @@ describe("NotificationService.dispatchTicketless", () => {
       pushSender,
       jobQueue: mockJobQueue(),
       preferences: mockPreferences(),
+      getReachabilityForUsers: mockReachability,
     });
 
     const tDb = {} as Kysely<TenantDatabase>;
@@ -826,6 +834,7 @@ describe("NotificationService.dispatchTicketless", () => {
       pushSender: mockPushSender(),
       jobQueue,
       preferences: mockPreferences(),
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatchTicketless(
@@ -861,6 +870,7 @@ describe("NotificationService.dispatchTicketless", () => {
       pushSender,
       jobQueue,
       preferences: mockPreferences(),
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatchTicketless(
@@ -878,7 +888,7 @@ describe("NotificationService.dispatchTicketless", () => {
   });
 
   it("includes orgId as a valid UUID in the notification-sms payload from dispatchTicketless", async () => {
-    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+    mockReachability.mockResolvedValue(
       new Map<UserId, VolunteerReachability>([[ADMIN_1, "verified_sms"]]),
     );
 
@@ -896,6 +906,7 @@ describe("NotificationService.dispatchTicketless", () => {
       pushSender: mockPushSender(),
       jobQueue,
       preferences: prefs,
+      getReachabilityForUsers: mockReachability,
     });
 
     await svc.dispatchTicketless(

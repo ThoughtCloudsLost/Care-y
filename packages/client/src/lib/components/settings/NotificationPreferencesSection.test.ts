@@ -15,14 +15,12 @@ import {
 } from "./notification-preferences-utils.js";
 
 describe("NotificationPreferencesSection constants", () => {
-  it("renders a 9x3 matrix (9 event types, 3 channels)", () => {
+  it("exports the expected event types and channels", () => {
     expect(NOTIFICATION_EVENT_TYPES).toHaveLength(9);
     expect(NOTIFICATION_CHANNELS).toHaveLength(3);
-    const totalToggles =
-      NOTIFICATION_EVENT_TYPES.length * NOTIFICATION_CHANNELS.length;
-    expect(totalToggles).toBe(27);
   });
 
+  // Pins the server wire contract: preference rows map 1:1 to these event types.
   it("all event types are valid notification events", () => {
     const validEvents = new Set([
       "ticket_created",

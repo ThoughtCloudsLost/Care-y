@@ -555,12 +555,10 @@ describe("People page", () => {
       expect(typeof ctx.right).toBe("function");
     });
 
-    it("does not provide a right action when user lacks the active tab permission", () => {
+    it("provides a right action on the fallback tab when the other permission is absent", () => {
       setPermissions("manage_queues");
       renderPage();
 
-      // Default tab is queues (no manage_users), so right should be
-      // the queues-tab right action (create queue).
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
       expect(ctx.right).toBeDefined();
     });
@@ -576,21 +574,8 @@ describe("People page", () => {
       expect(hidden()).toBe(false);
     });
 
-    it("omits right snippet when user only has manage_users and tab is users", () => {
+    it("provides right snippet when user has manage_users on the users tab", () => {
       setPermissions("manage_users");
-      renderPage();
-
-      const ctx = mockNavbarCtx.current as Record<string, unknown>;
-      // User has manage_users, activeTab = users, canManageUsers is true,
-      // so navRight snippet is provided.
-      expect(ctx.right).toBeDefined();
-    });
-
-    it("omits right snippet when no permissions match the active tab", () => {
-      // Edge case: user has manage_queues but default tab is queues.
-      // canManageQueues is true for the queues tab, so navRightQueues is set.
-      setPermissions("manage_queues");
-      setUrl("/admin/people?tab=queues");
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -733,22 +718,11 @@ describe("People page", () => {
   });
 
   describe("MANAGE_ROLES permission influence", () => {
-    it("provides invite link option when user has MANAGE_ROLES", () => {
+    it("provides right snippet regardless of MANAGE_ROLES presence", () => {
       setPermissions("manage_users", "manage_queues", "manage_roles");
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
-      // The right snippet is provided, which contains the invite button
-      expect(ctx.right).toBeDefined();
-    });
-
-    it("uses manual invite when user lacks MANAGE_ROLES", () => {
-      setPermissions("manage_users", "manage_queues");
-      renderPage();
-
-      const ctx = mockNavbarCtx.current as Record<string, unknown>;
-      // The right snippet is still provided (invite button), but
-      // clicking it will trigger manual invite instead of popover
       expect(ctx.right).toBeDefined();
     });
   });

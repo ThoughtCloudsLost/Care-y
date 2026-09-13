@@ -21,7 +21,22 @@ import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { isTrpcServerError } from "./caller-adapter.js";
 import { TRPCClientError } from "@trpc/client";
-import { RoleId, type RoleIdValue, type Permission } from "@care-y/shared";
+import {
+  RoleId,
+  type RoleIdValue,
+  type Permission,
+  type OrgSchema,
+  type UserId,
+  type SessionId,
+  type SessionToken,
+  type IpToken,
+  type UaToken,
+  type BlobKey,
+  type TicketId,
+  type RecordingId,
+  type AttachmentId,
+  type KbAttachmentId,
+} from "@care-y/shared";
 
 import { initDb, db, tenantDb } from "./server/db-shim.js";
 import { markSodiumReady } from "./server/node-crypto-shim.js";
@@ -67,6 +82,7 @@ import type {
 } from "../../../../server/src/trpc/context.js";
 import type { SessionData } from "../../../../server/src/auth/session-repository.js";
 import type { UserRecord } from "../../../../server/src/auth/service.js";
+import type { SessionTokenizer } from "../../../../server/src/crypto/session-tokenizer.js";
 import type { PlatformDatabase } from "../../../../server/src/db/types.js";
 import type { SeedStructureResult } from "./server/seed-structure.js";
 import type { ProcedureProxy } from "./proc-proxy.js";
@@ -143,22 +159,23 @@ function createMapBlobStore(): BlobStore {
   const store = new Map<string, Buffer>();
   return {
     async put(
-      orgSchema: string,
+      orgSchema: OrgSchema,
       category: BlobCategory,
       blob: Buffer,
-    ): Promise<string> {
-      const key = `${orgSchema}/${category}/${globalThis.crypto.randomUUID()}`;
+    ): Promise<BlobKey> {
+      const key =
+        `${orgSchema}/${category}/${globalThis.crypto.randomUUID()}` as BlobKey;
       store.set(key, Buffer.from(blob));
       return Promise.resolve(key);
     },
-    async get(key: string): Promise<Buffer | null> {
+    async get(key: BlobKey): Promise<Buffer | null> {
       return Promise.resolve(store.get(key) ?? null);
     },
-    async delete(key: string): Promise<void> {
+    async delete(key: BlobKey): Promise<void> {
       store.delete(key);
       return Promise.resolve();
     },
-    async exists(key: string): Promise<boolean> {
+    async exists(key: BlobKey): Promise<boolean> {
       return Promise.resolve(store.has(key));
     },
   };
@@ -266,9 +283,15 @@ export async function bootDemoEngine(
   const sessionHmacKey = Buffer.from(
     hkdfSync("sha256", opsKey, Buffer.alloc(0), SESSION_TOKEN_INFO, 32),
   );
-  const tokenizer = {
+  const tokenizer: SessionTokenizer = {
     tokenize(value: string): string {
       return createHmac("sha256", sessionHmacKey).update(value).digest("hex");
+    },
+    tokenizeIp(value: string): IpToken {
+      return this.tokenize(value) as IpToken;
+    },
+    tokenizeUa(value: string): UaToken {
+      return this.tokenize(value) as UaToken;
     },
   };
 
@@ -362,7 +385,7 @@ export async function bootDemoEngine(
   }
   await tDb
     .deleteFrom("ticket_key_wraps")
-    .where("ticket_id", "=", deniedTicketId)
+    .where("ticket_id", "=", deniedTicketId as TicketId)
     .execute();
 
   const kbResult = await seedKbMod.seedKbArticles(
@@ -402,7 +425,7 @@ export async function bootDemoEngine(
     return {
       event_type: eventType,
       actor_id: seedResult.adminUserId,
-      ticket_id: ticketId,
+      ticket_id: ticketId as TicketId,
       metadata: {},
       created_at: createdAt,
     };
@@ -439,11 +462,11 @@ export async function bootDemoEngine(
   };
 
   const adminSession: SessionData = {
-    id: globalThis.crypto.randomUUID(),
-    token: globalThis.crypto.randomUUID(),
+    id: globalThis.crypto.randomUUID() as SessionId,
+    token: globalThis.crypto.randomUUID() as SessionToken,
     userId: seedResult.adminUserId,
-    ipToken: "demo",
-    uaToken: "demo",
+    ipToken: "demo" as IpToken,
+    uaToken: "demo" as UaToken,
     expiresAt: new Date(Date.now() + 86400000),
     twofaVerified: true,
     webauthnChallenge: null,
@@ -522,7 +545,7 @@ export async function bootDemoEngine(
 
   // Non-admin context for middleware testing
   const volunteerUser: UserRecord = {
-    id: globalThis.crypto.randomUUID(),
+    id: globalThis.crypto.randomUUID() as UserId,
     encryptedIdentifier: "",
     encryptedDisplayName: "",
     encryptedPreferredLocale: null,
@@ -576,10 +599,15 @@ export async function bootDemoEngine(
               ? ("attachments" as const)
               : ("kb_attachments" as const);
 
+        // The id parameter is a plain string from the DemoBlobResolver
+        // interface, but the three tables have distinct branded id columns.
+        // A single cast to the union's common shape is the cleanest fix
+        // for this generic lookup across recordings/attachments/kb_attachments.
+        const brandedId = id as RecordingId & AttachmentId & KbAttachmentId;
         const row = await tDb
           .selectFrom(tableName)
           .select("blob_key")
-          .where("id", "=", id)
+          .where("id", "=", brandedId)
           .where("deleted_at", "is", null)
           .executeTakeFirst();
 

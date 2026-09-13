@@ -58,13 +58,6 @@ vi.mock("$lib/shell/context.js", async (importOriginal) => ({
 }));
 
 // care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/components/QueryError.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
-
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
 vi.mock("$lib/components/EmptyState.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
@@ -155,7 +148,7 @@ describe("CallLogSection", () => {
           onticketopen: vi.fn(),
         },
       });
-      expect(screen.getByTestId("passthrough-shell")).toBeTruthy();
+      expect(screen.getByText("Retry")).toBeTruthy();
     });
 
     it("fires onretry when retry is triggered in error state", async () => {
@@ -170,12 +163,9 @@ describe("CallLogSection", () => {
           onticketopen: vi.fn(),
         },
       });
-      // QueryError is stubbed to PassthroughShell, which passes onretry through
-      const retryBtn = screen.queryByText("Retry");
-      if (retryBtn) {
-        await fireEvent.click(retryBtn);
-        expect(onretry).toHaveBeenCalled();
-      }
+      const retryBtn = screen.getByText("Retry");
+      await fireEvent.click(retryBtn);
+      expect(onretry).toHaveBeenCalled();
     });
 
     it("renders EmptyState when rows array is empty", () => {
@@ -257,9 +247,7 @@ describe("CallLogSection", () => {
       });
       const meta = container.querySelector(".row-meta");
       expect(meta?.textContent).toContain("No answer");
-      // No duration separator or value
-      const separators = container.querySelectorAll(".meta-sep");
-      expect(separators.length).toBe(1); // only status separator
+      expect(meta?.textContent).not.toMatch(/\d+:\d{2}/);
     });
   });
 

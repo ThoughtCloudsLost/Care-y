@@ -1600,6 +1600,15 @@
     flex-direction: column;
   }
 
+  /* Children of the scroll column must keep their natural height so
+     content overflows and scrolls. Without this, once a page grows
+     taller than the viewport, flex shrinks its items; anything with
+     overflow hidden (Konsta inset lists) has a zero automatic minimum
+     size and visually collapses. */
+  :global(.main-content > *) {
+    flex-shrink: 0;
+  }
+
   :global(.k-ios .main-content) {
     padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
   }

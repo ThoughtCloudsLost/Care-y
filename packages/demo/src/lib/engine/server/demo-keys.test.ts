@@ -32,6 +32,7 @@ import {
   type Salt,
   type RistrettoPoint,
 } from "@care-y/crypto";
+import type { UserId } from "@care-y/shared";
 
 beforeAll(async () => {
   await _sodium.ready;
@@ -99,7 +100,7 @@ describe("createDemoOprfService", () => {
 
     // Evaluate via the service (base64url round-trip)
     const evalResponse = await service.evaluate({
-      userId: "test-user",
+      userId: "test-user" as UserId,
       blindedElement: encode(blindedElement),
       ip: "127.0.0.1",
       sessionUserId: null,
@@ -144,7 +145,7 @@ describe("createDemoOprfService", () => {
     const b64Blinded = encode(blindedElement);
 
     const evalResult = await service.evaluate({
-      userId: "u1",
+      userId: "u1" as UserId,
       blindedElement: b64Blinded,
       ip: "127.0.0.1",
       sessionUserId: null,
@@ -152,7 +153,7 @@ describe("createDemoOprfService", () => {
       powSolution: undefined,
     });
     const adminResult = await service.adminEvaluate({
-      userId: "u1",
+      userId: "u1" as UserId,
       blindedElement: b64Blinded,
       ip: "127.0.0.1",
       sessionUserId: null,

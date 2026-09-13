@@ -8,7 +8,7 @@ import {
   createGreetingRepository,
   type GreetingRepository,
 } from "./greeting-repo.js";
-import { e164Schema, type E164 } from "@care-y/shared";
+import { e164Schema, type E164, type PhoneGreetingId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
   let testDb: TestDb;
@@ -65,7 +65,7 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
 
   it("findById returns null for missing ID", async () => {
     const found = await greetingRepo.findById(
-      "00000000-0000-4000-8000-000000000099",
+      "00000000-0000-4000-8000-000000000099" as PhoneGreetingId,
     );
     expect(found).toBeNull();
   });

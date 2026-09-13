@@ -77,7 +77,7 @@
    *  sampling over a 13-bit range (8192 > 7776). */
   function pickWordIndex(): number {
     const buf = new Uint16Array(1);
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive loop
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- rejection sampling loop: re-draws until value < wordlist length to avoid modulo bias
     while (true) {
       crypto.getRandomValues(buf);
       const val = (buf[0] ?? 0) & 0x1fff; // 13-bit mask
@@ -151,7 +151,9 @@
       generatedLink = `${location.origin}/portal/${channelId}#${encode(seed)}`;
       step = "ready";
       onsuccess();
-    } catch {
+    } catch (_err: unknown) {
+      // Intentional discard: error may carry decrypted content or key
+      // material from the crypto pipeline. Toast is the only safe signal.
       step = "setup";
       toastStore.show(m.error_generic(), 3000);
     } finally {
@@ -180,7 +182,9 @@
 
       haptic();
       toastStore.show(m.ticket_toast_link_sent());
-    } catch {
+    } catch (_err: unknown) {
+      // Intentional discard: the SMS body contains the portal link,
+      // so the error context is not safe to log.
       toastStore.show(m.error_generic(), 3000);
     } finally {
       smsSending = false;
@@ -194,7 +198,9 @@
       await navigator.clipboard.writeText(generatedLink);
       haptic();
       toastStore.show(m.ticket_toast_link_copied());
-    } catch {
+    } catch (_err: unknown) {
+      // Intentional discard: clipboard errors are opaque and harmless,
+      // but the link value in scope contains the portal seed.
       toastStore.show(m.error_generic(), 3000);
     }
   }

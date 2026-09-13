@@ -201,12 +201,15 @@ describe("AuditLogSection", () => {
     });
 
     it("renders rows when data is present", () => {
-      const rows = [makeRow("1"), makeRow("2")];
+      const rows = [
+        makeRow("1", { eventType: "ticket_closed" }),
+        makeRow("2", { eventType: "ticket_reopened" }),
+      ];
       const actorNames = new Map([
         ["actor-1", "enc-name-1"],
         ["actor-2", "enc-name-2"],
       ]);
-      const { container } = render(AuditLogSection, {
+      render(AuditLogSection, {
         props: {
           rows,
           actorNames,
@@ -215,7 +218,8 @@ describe("AuditLogSection", () => {
           onticketopen: vi.fn(),
         },
       });
-      expect(container.querySelector(".audit-log-section")).toBeTruthy();
+      expect(screen.getByText("Ticket closed")).toBeTruthy();
+      expect(screen.getByText("Ticket reopened")).toBeTruthy();
     });
   });
 

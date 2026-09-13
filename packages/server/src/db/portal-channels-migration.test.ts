@@ -405,14 +405,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("org_config.portal_safe_exit_url defaults to null", async () => {
+      await testDb.db
+        .insertInto("org_config")
+        .values({ pii_retention_days: null })
+        .onConflict((oc) => oc.doNothing())
+        .execute();
+
       const row = await testDb.db
         .selectFrom("org_config")
         .select("portal_safe_exit_url")
-        .executeTakeFirst();
+        .executeTakeFirstOrThrow();
 
-      if (row != null) {
-        expect(row.portal_safe_exit_url).toBeNull();
-      }
+      expect(row.portal_safe_exit_url).toBeNull();
     });
 
     // -----------------------------------------------------------------

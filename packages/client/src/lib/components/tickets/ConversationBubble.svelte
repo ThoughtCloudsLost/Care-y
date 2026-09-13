@@ -37,11 +37,12 @@
 <div
   class="msg"
   class:msg-sent={direction === "sent"}
+  data-testid="conversation-bubble"
   data-direction={direction}
   data-source={source}
 >
   {#if direction === "received" && speaker !== undefined}
-    <span class="msg-who">{speaker}</span>
+    <span class="msg-who" data-testid="bubble-speaker">{speaker}</span>
   {/if}
   <div class="msg-body">
     {@render children()}
@@ -51,7 +52,9 @@
       {formatRelativeTime(new Date(timestamp))}
     </time>
     {#if editedAt}
-      <span class="msg-edited">{m.ticket_message_edited()}</span>
+      <span class="msg-edited" data-testid="bubble-edited"
+        >{m.ticket_message_edited()}</span
+      >
     {/if}
   </div>
 </div>

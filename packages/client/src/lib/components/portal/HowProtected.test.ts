@@ -2,7 +2,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import HowProtected from "./HowProtected.svelte";
-import IntakeSubmitHint from "./IntakeSubmitHint.svelte";
 import PrivacyPage from "../../../routes/(client)/intake/privacy/+page.svelte";
 
 // --- i18n mock ---
@@ -153,67 +152,8 @@ describe("HowProtected", () => {
   });
 });
 
-// --- IntakeSubmitHint ---
-
-describe("IntakeSubmitHint", () => {
-  describe("rendering", () => {
-    it("renders hint message when opened", () => {
-      const { container } = render(IntakeSubmitHint, {
-        props: { opened: true, ondismiss: vi.fn() },
-      });
-      expect(container.textContent).toContain(
-        "What you wrote has been encrypted.",
-      );
-    });
-
-    it("does not render content when opened is false", () => {
-      const { container } = render(IntakeSubmitHint, {
-        props: { opened: false, ondismiss: vi.fn() },
-      });
-      expect(container.textContent).not.toContain(
-        "What you wrote has been encrypted.",
-      );
-    });
-
-    it("renders dismiss button with correct text", () => {
-      const { container } = render(IntakeSubmitHint, {
-        props: { opened: true, ondismiss: vi.fn() },
-      });
-      const dismissBtn = container.querySelector(
-        '[data-testid="intake-hint-dismiss"]',
-      );
-      expect(dismissBtn).not.toBeNull();
-      expect(dismissBtn!.textContent!.trim()).toBe("Got it");
-    });
-  });
-
-  describe("accessibility", () => {
-    it("has role=status and aria-live=polite on the content region", () => {
-      const { container } = render(IntakeSubmitHint, {
-        props: { opened: true, ondismiss: vi.fn() },
-      });
-      const liveRegion = container.querySelector('[role="status"]');
-      expect(liveRegion).not.toBeNull();
-      expect(liveRegion!.getAttribute("aria-live")).toBe("polite");
-    });
-  });
-
-  describe("interactions", () => {
-    it("calls ondismiss when dismiss button is clicked", async () => {
-      const ondismiss = vi.fn();
-      const { container } = render(IntakeSubmitHint, {
-        props: { opened: true, ondismiss },
-      });
-
-      const dismissBtn = container.querySelector(
-        '[data-testid="intake-hint-dismiss"]',
-      )!;
-      await fireEvent.click(dismissBtn);
-
-      expect(ondismiss).toHaveBeenCalledOnce();
-    });
-  });
-});
+// The submit hint's component tests live in PortalHint.test.ts (the
+// shared hint component); IntakeFormBody wires it with the intake copy.
 
 // --- Privacy page ---
 

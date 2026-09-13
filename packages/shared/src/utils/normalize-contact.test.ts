@@ -7,6 +7,8 @@ import {
 } from "./normalize-contact.js";
 
 describe("normalizeContactPhone", () => {
+  // Contract: the normalized output feeds stored blind indexes; changing the
+  // normalization changes the hashes and orphans every stored index entry.
   it("keys E.164 phone number by its last 10 digits", () => {
     expect(normalizeContactPhone("+12125551234")).toBe("2125551234");
   });

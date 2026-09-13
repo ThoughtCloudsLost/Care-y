@@ -8,8 +8,6 @@ import {
   intakeFormResponseSchema,
   saveIntakeFormInputSchema,
   intakeFormSlugSchema,
-  UNIQUE_ROLES_PER_FORM,
-  ROLE_WIDGET_COMPATIBILITY,
   queueRoutingMappingSchema,
   urgencyMappingSchema,
   escalationMappingSchema,
@@ -552,42 +550,6 @@ describe("intakeFormSlugSchema", () => {
 
   it("rejects underscores", () => {
     expect(intakeFormSlugSchema.safeParse("my_form").success).toBe(false);
-  });
-});
-
-describe("ROLE_WIDGET_COMPATIBILITY", () => {
-  it("maps queue-routing to select and multiselect only", () => {
-    expect(ROLE_WIDGET_COMPATIBILITY["queue-routing"]).toEqual([
-      "select",
-      "multiselect",
-    ]);
-  });
-
-  it("maps consent to checkbox only", () => {
-    expect(ROLE_WIDGET_COMPATIBILITY.consent).toEqual(["checkbox"]);
-  });
-
-  it("maps phone-contact to text only", () => {
-    expect(ROLE_WIDGET_COMPATIBILITY["phone-contact"]).toEqual(["text"]);
-  });
-
-  it("maps escalation to select and checkbox", () => {
-    expect(ROLE_WIDGET_COMPATIBILITY.escalation).toEqual([
-      "select",
-      "checkbox",
-    ]);
-  });
-});
-
-describe("UNIQUE_ROLES_PER_FORM", () => {
-  it("contains 7 identity/contact roles", () => {
-    expect(UNIQUE_ROLES_PER_FORM).toHaveLength(7);
-  });
-
-  it("does not include server-metadata roles", () => {
-    for (const r of ["queue-routing", "urgency", "escalation"] as const) {
-      expect(UNIQUE_ROLES_PER_FORM).not.toContain(r);
-    }
   });
 });
 

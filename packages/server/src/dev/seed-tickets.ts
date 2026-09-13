@@ -122,7 +122,7 @@ export async function seedTestTickets(
      * Set to another user's id so a thread can show a real handoff
      * (earlier messages and notes belong to the previous volunteer).
      */
-    authorId?: string;
+    authorId?: UserId;
   }
 
   interface MediaDef {

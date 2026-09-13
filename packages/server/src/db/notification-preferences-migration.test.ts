@@ -215,17 +215,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(remaining).toHaveLength(0);
     });
 
-    it("migration up/down roundtrip succeeds", async () => {
-      // The createTestDb() call in beforeAll already ran the up migration.
-      // Verify the table exists by selecting from it.
-      const rows = await testDb.db
+    it("table and dispatch index exist after migration", async () => {
+      await testDb.db
         .selectFrom("notification_preferences")
         .selectAll()
         .execute();
-      expect(Array.isArray(rows)).toBe(true);
 
-      // Verify the dispatch read-path index exists via pg_indexes
-      // (scoped to the test schema).
       const indexResult = await sql<{ indexname: string }>`
         SELECT indexname FROM pg_indexes
         WHERE schemaname = ${testDb.schemaName}

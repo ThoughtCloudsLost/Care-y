@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import type { DemoEngineResult } from "./engine.js";
 import { bootDemoEngine } from "./engine.js";
 import type { SeedMediaAssets } from "../../../../server/src/dev/seed-tickets.js";
+import type { TicketId } from "@care-y/shared";
 
 /**
  * Smoke tests for the SeedMediaAssets plumbing: verifies that provided
@@ -42,7 +43,7 @@ describe("seedTestTickets media assets", () => {
       const recordings = await engine.tDb
         .selectFrom("recordings")
         .select(["duration_seconds", "blob_key"])
-        .where("ticket_id", "=", storyTicketId as string)
+        .where("ticket_id", "=", storyTicketId as TicketId)
         .execute();
 
       expect(recordings.length).toBeGreaterThan(0);
@@ -61,7 +62,7 @@ describe("seedTestTickets media assets", () => {
       const recording = await engine.tDb
         .selectFrom("recordings")
         .select("blob_key")
-        .where("ticket_id", "=", storyTicketId as string)
+        .where("ticket_id", "=", storyTicketId as TicketId)
         .executeTakeFirst();
 
       expect(recording).toBeDefined();
@@ -77,7 +78,7 @@ describe("seedTestTickets media assets", () => {
       const phoneCalls = await engine.tDb
         .selectFrom("followups")
         .select(["call_status", "call_duration_seconds"])
-        .where("ticket_id", "=", storyTicketId as string)
+        .where("ticket_id", "=", storyTicketId as TicketId)
         .where("type", "=", "phone_call")
         .orderBy("created_at", "asc")
         .execute();
@@ -101,7 +102,7 @@ describe("seedTestTickets media assets", () => {
       const systemEvents = await engine.tDb
         .selectFrom("followups")
         .select("type")
-        .where("ticket_id", "=", storyTicketId as string)
+        .where("ticket_id", "=", storyTicketId as TicketId)
         .where("source", "=", "system")
         .execute();
 
@@ -129,7 +130,7 @@ describe("seedTestTickets media assets", () => {
       const recordings = await engine.tDb
         .selectFrom("recordings")
         .select(["blob_key", "duration_seconds"])
-        .where("ticket_id", "=", storyTicketId as string)
+        .where("ticket_id", "=", storyTicketId as TicketId)
         .execute();
 
       expect(recordings.length).toBeGreaterThan(0);
@@ -148,7 +149,7 @@ describe("seedTestTickets media assets", () => {
       const attachments = await engine.tDb
         .selectFrom("attachments")
         .select("blob_key")
-        .where("ticket_id", "=", storyTicketId as string)
+        .where("ticket_id", "=", storyTicketId as TicketId)
         .execute();
 
       expect(attachments.length).toBeGreaterThan(0);

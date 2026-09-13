@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createTestDb, type TestDb, seedOrgPublicKey } from "../test-utils.js";
-import { e164Schema, type OrgSchema } from "@care-y/shared";
+import {
+  e164Schema,
+  type OrgSchema,
+  type PhoneGreetingId,
+} from "@care-y/shared";
 import { createTelephonyContentService } from "./telephony-content-service.js";
 import type { TelephonyContentService } from "./telephony-content-service.js";
 
@@ -333,7 +337,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
     // Upload audio to the greeting first
     await service.uploadGreetingAudio(
       mockBlobStore,
-      "org_test",
+      "org_test" as OrgSchema,
       greeting.id,
       audioBase64,
       "audio/wav",
@@ -357,7 +361,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
     await expect(
       service.getGreetingAudio(
         mockBlobStore,
-        "00000000-0000-4000-8000-000000000099",
+        "00000000-0000-4000-8000-000000000099" as PhoneGreetingId,
       ),
     ).rejects.toThrow(/GREETING_NOT_FOUND/);
   });

@@ -702,13 +702,11 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
 
   describe("no rules", () => {
     it("returns zero when no active rules exist", async () => {
-      // Use a fresh queue with no rules
+      await db.deleteFrom("escalation_rules").execute();
+
       const queue = await createTestQueue(db);
       await createTestTicketFixture(db, { queueId: queue.id });
 
-      // The test DB may have rules from other tests, but none for this queue.
-      // runEscalationCheck evaluates ALL active rules in the schema, so
-      // we test this by confirming the count covers only matching tickets.
       const deps = createDeps();
       const result = await runEscalationCheck(
         db,
@@ -718,10 +716,8 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         deps,
       );
 
-      // Firings for this queue's tickets should be 0 since there are no rules
-      // for this queue (or they already fired in prior tests). The key assertion
-      // is that the function completes without error.
-      expect(result.rulesEvaluated).toBeGreaterThanOrEqual(0);
+      expect(result.rulesEvaluated).toBe(0);
+      expect(result.firings).toBe(0);
     });
   });
 });

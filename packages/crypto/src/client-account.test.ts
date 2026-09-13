@@ -179,6 +179,8 @@ describe("client-account key derivation", () => {
 
   describe("HKDF_LABELS constants", () => {
     it("client account labels have the expected values", () => {
+      // Contract: every stored client-account-derived key depends on these
+      // literals; changing one invalidates all previously derived keys.
       expect(HKDF_LABELS.CLIENT_ACCOUNT_ECIES).toBe("care-y-client-ecies-v1");
       expect(HKDF_LABELS.CLIENT_ACCOUNT_AUTH).toBe("care-y-client-auth-v1");
     });

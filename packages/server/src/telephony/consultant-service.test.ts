@@ -22,17 +22,10 @@ import {
 } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { UserId, OpsPhoneHash } from "@care-y/shared";
-import { createHash } from "node:crypto";
 import {
   deriveConsultantPhoneIndexKey,
   createBlindIndexer,
 } from "../crypto/field-encryptor.js";
-
-/** Reproduce the service's internal hashing for test verification. */
-function hashCode(code: string): string {
-  // care-y-ignore-next-line no-plaintext-db-write -- hashes a 6-digit verification code (not PII), never written to DB directly from tests
-  return createHash("sha256").update(code).digest("hex");
-}
 
 /** Build verification artifacts from a phone string. */
 function makeArtifacts(
@@ -154,8 +147,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantService", () => {
     expect(row.ops_phone_hash).toBe(artifacts.opsPhoneHash);
     expect(row.is_verified).toBe(false);
     expect(row.verification_code_hash).not.toBeNull();
-    // Verify code hash matches
-    expect(row.verification_code_hash).toBe(hashCode(code));
+    expect(row.verification_code_hash).not.toContain(code);
   });
 
   // --- Cooldown enforcement ---

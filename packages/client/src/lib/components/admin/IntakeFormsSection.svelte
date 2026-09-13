@@ -1,16 +1,21 @@
 <!--
-  Admin intake forms list section. Displays all forms with their name, field count,
-  active state, slug, destination queue, and default flag. Allows toggling active
-  state and opening the editor for each form. Includes the org-wide web-intake
-  enable toggle.
+  Admin intake forms list section (Organization page). Mirrors the follow-up
+  types card anatomy (raised card, section description, icon rows with
+  name/sub lines, divider, tonal add action). Rows link to the intake form
+  editor page; the active toggle sits outside the link so both stay
+  independently operable. When web intake is enabled and no active custom
+  form is marked default, a read-only row surfaces the built-in default form
+  that /intake serves.
 -->
 <script lang="ts">
-  import { List, ListItem, Toggle, Chip, Button, Block } from "konsta/svelte";
+  import { resolve } from "$app/paths";
+  import { Card, Toggle } from "konsta/svelte";
   import {
     createMutation,
     createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
+  import { ClipboardList, FileText, Globe, Plus } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
@@ -18,14 +23,8 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { getErrorMessage } from "$lib/components/query-error-messages.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
-
-  interface IntakeFormsSectionProps {
-    readonly onedit: (formId: string) => void;
-    readonly oncreate: () => void;
-  }
-
-  let { onedit, oncreate }: IntakeFormsSectionProps = $props();
 
   const intakeFormsRouter = requireRouter(trpc.intakeForms, "intakeForms");
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
@@ -93,95 +92,249 @@
       toastStore.show(getErrorMessage(err));
     },
   }));
+
+  /** The built-in form serves /intake only while no active custom form is default. */
+  const showBuiltinDefault = $derived(
+    webIntakeEnabled &&
+      !(formsQuery.data ?? []).some((f) => f.isDefault && f.isActive),
+  );
+
+  function formSubtitle(form: {
+    fieldCount: number;
+    slug: string | null;
+    destinationQueueId: string | null;
+    isDefault: boolean;
+  }): string {
+    const parts: string[] = [];
+    if (form.isDefault) parts.push(m.intake_forms_default_toggle());
+    parts.push(m.intake_forms_field_count({ count: String(form.fieldCount) }));
+    if (form.slug !== null && form.slug !== "") parts.push(`/${form.slug}`);
+    if (form.destinationQueueId !== null && form.destinationQueueId !== "")
+      parts.push(getQueueName(form.destinationQueueId));
+    return parts.join(" · ");
+  }
 </script>
 
-<!-- Web intake enable toggle -->
-<List strong inset>
-  <ListItem title={m.intake_forms_web_intake_enabled()}>
-    {#snippet after()}
+<Card raised contentWrap={false} class="ifs-card">
+  <div class="ifs-card-inner">
+    <p class="section-desc">{m.hub_intake_forms_subtitle()}</p>
+
+    <div class="ifs-row">
+      <span class="ifs-row-label">
+        <Globe size={16} aria-hidden="true" class="ifs-cfg-icon" />
+        <span class="ifs-row-text">
+          <span>{m.intake_forms_web_intake_enabled()}</span>
+          {#if !webIntakeEnabled}
+            <span class="ifs-row-sub">
+              {m.intake_forms_web_intake_disabled_hint()}
+            </span>
+          {/if}
+        </span>
+      </span>
       <Toggle
         checked={webIntakeEnabled}
         onChange={() => webIntakeToggleMutation.mutate(!webIntakeEnabled)}
+        aria-label={m.intake_forms_web_intake_enabled()}
       />
-    {/snippet}
-  </ListItem>
-</List>
-{#if !webIntakeEnabled}
-  <Block>
-    <p class="disabled-hint">{m.intake_forms_web_intake_disabled_hint()}</p>
-  </Block>
-{/if}
+    </div>
 
-{#if formsQuery.isLoading}
-  <List strong inset>
-    <ListItem title="..." />
-    <ListItem title="..." />
-  </List>
-{:else if formsQuery.isError}
-  <QueryError error={formsQuery.error} />
-{:else if formsQuery.data?.length === 0}
-  <Block>
-    <p class="empty-message">{m.intake_forms_empty()}</p>
-  </Block>
-{:else if formsQuery.data}
-  <List strong inset>
-    {#each formsQuery.data as form (form.id)}
-      <ListItem
-        title={form.name}
-        subtitle={m.intake_forms_field_count({
-          count: String(form.fieldCount),
-        })}
-        onclick={() => onedit(form.id)}
-      >
-        {#snippet after()}
-          <div class="form-list-actions">
-            {#if form.isDefault}
-              <Chip outline>{m.intake_forms_default_toggle()}</Chip>
-            {/if}
-            {#if form.slug}
-              <Chip outline>/{form.slug}</Chip>
-            {/if}
-            {#if form.destinationQueueId}
-              <Chip outline>{getQueueName(form.destinationQueueId)}</Chip>
-            {/if}
-            <Toggle
-              checked={form.isActive}
-              onChange={() =>
-                setActiveMutation.mutate({
-                  formId: form.id,
-                  active: !form.isActive,
-                })}
-              aria-label={`${form.name} ${form.isActive ? m.intake_forms_active() : m.intake_forms_inactive()}`}
-            />
-          </div>
-        {/snippet}
-      </ListItem>
-    {/each}
-  </List>
-{/if}
+    <div class="section-divider" role="separator"></div>
 
-<Block>
-  <Button outline onclick={oncreate}>
-    {m.intake_forms_create()}
-  </Button>
-</Block>
+    {#if formsQuery.isLoading}
+      {#each { length: 2 } as _, i (i)}
+        <div class="ifs-row">
+          <DecryptPlaceholder length={12} />
+        </div>
+      {/each}
+    {:else if formsQuery.isError}
+      <QueryError
+        error={formsQuery.error}
+        onretry={() => void formsQuery.refetch()}
+      />
+    {:else if formsQuery.data}
+      {#each formsQuery.data as form (form.id)}
+        <div class="ifs-row" class:ifs-row-inactive={!form.isActive}>
+          <a
+            class="ifs-row-link touch-feedback"
+            href={resolve(`/admin/forms?id=${encodeURIComponent(form.id)}`)}
+          >
+            <ClipboardList size={16} aria-hidden="true" class="ifs-cfg-icon" />
+            <span class="ifs-row-text">
+              <span class="ifs-row-name">
+                {form.name}
+                {#if !form.isActive}
+                  <span class="inactive-badge">{m.intake_forms_inactive()}</span
+                  >
+                {/if}
+              </span>
+              <span class="ifs-row-sub">{formSubtitle(form)}</span>
+            </span>
+          </a>
+          <Toggle
+            checked={form.isActive}
+            onChange={() =>
+              setActiveMutation.mutate({
+                formId: form.id,
+                active: !form.isActive,
+              })}
+            aria-label={`${form.name} ${form.isActive ? m.intake_forms_active() : m.intake_forms_inactive()}`}
+          />
+        </div>
+      {/each}
+
+      {#if showBuiltinDefault}
+        <div class="ifs-row">
+          <span class="ifs-row-label">
+            <FileText size={16} aria-hidden="true" class="ifs-sys-icon" />
+            <span class="ifs-row-text">
+              <span>{m.intake_forms_default_toggle()}</span>
+              <span class="ifs-row-sub">{m.intake_forms_default_hint()}</span>
+            </span>
+          </span>
+        </div>
+      {/if}
+
+      {#if formsQuery.data.length === 0 && !showBuiltinDefault}
+        <p class="empty-message">{m.intake_forms_empty()}</p>
+      {/if}
+    {/if}
+
+    <a class="ifs-add-btn touch-feedback" href={resolve("/admin/forms")}>
+      <Plus size={16} aria-hidden="true" />
+      {m.intake_forms_create()}
+    </a>
+  </div>
+</Card>
 
 <style>
-  .form-list-actions {
+  :global(.ifs-card) {
+    margin: var(--space-sm) var(--space-md) !important;
+  }
+
+  .ifs-card-inner {
+    padding: var(--space-md) var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .section-desc {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
+    margin-bottom: var(--space-sm);
+  }
+
+  .section-divider {
+    height: 1px;
+    background: var(--paper-deep, var(--surface-2));
+    margin: var(--space-md) 0 var(--space-sm);
+  }
+
+  .ifs-row {
     display: flex;
     align-items: center;
-    gap: var(--space-xs, 4px);
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: 0.5rem 0;
+    min-height: 2.5rem;
+  }
+
+  .ifs-row-inactive {
+    opacity: 0.5;
+  }
+
+  .ifs-row-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.25rem;
+    margin: 0 -0.25rem;
+  }
+
+  .ifs-row-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .ifs-row-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  /* A deactivated form is a records fact, not an alarm. */
+  .inactive-badge {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .ifs-row-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .ifs-row-sub {
+    font-size: 0.6875rem;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  :global(.ifs-cfg-icon) {
+    color: var(--brand-accent, var(--brand-primary));
+    flex-shrink: 0;
+  }
+
+  :global(.ifs-sys-icon) {
+    color: var(--muted);
+    flex-shrink: 0;
   }
 
   .empty-message {
     color: var(--muted);
+    font-size: var(--text-sm);
     text-align: center;
-    padding: var(--space-lg) 0;
+    padding: var(--space-md) 0;
   }
 
-  .disabled-hint {
-    color: var(--muted);
-    font-size: var(--text-sm);
-    font-style: italic;
+  /* Link twin of SoftButton's tonal anatomy (SoftButton is button-only;
+     navigation from a content component stays declarative). */
+  .ifs-add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm, 8px);
+    width: 100%;
+    margin-top: var(--space-sm);
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    color: var(--ink);
+    font-size: var(--text-sm, 0.875rem);
+    font-weight: 500;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+    min-height: 44px;
+  }
+
+  .ifs-add-btn:active {
+    background: color-mix(in srgb, var(--ink) 15%, transparent);
+  }
+
+  .ifs-add-btn:focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
   }
 </style>

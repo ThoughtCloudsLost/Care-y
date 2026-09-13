@@ -118,26 +118,28 @@ describe("IntakeFormsSection", () => {
   });
 
   it("renders form list items", () => {
-    render(IntakeFormsSection, {
-      props: { onedit: vi.fn(), oncreate: vi.fn() },
-    });
+    render(IntakeFormsSection);
 
     expect(screen.getByText("Main Intake")).toBeTruthy();
   });
 
-  it("renders create button", () => {
-    render(IntakeFormsSection, {
-      props: { onedit: vi.fn(), oncreate: vi.fn() },
-    });
+  it("renders the create link to the editor page", () => {
+    render(IntakeFormsSection);
 
-    expect(screen.getByText("Create new form")).toBeTruthy();
+    const create = screen.getByText("Create new form");
+    expect(create.closest("a")?.getAttribute("href")).toBe("/admin/forms");
   });
 
-  it("shows field count in subtitle", () => {
-    render(IntakeFormsSection, {
-      props: { onedit: vi.fn(), oncreate: vi.fn() },
-    });
+  it("links each form row to its editor page", () => {
+    render(IntakeFormsSection);
 
-    expect(screen.getByText("5 fields")).toBeTruthy();
+    const row = screen.getByText("Main Intake").closest("a");
+    expect(row?.getAttribute("href")).toBe("/admin/forms?id=form-1");
+  });
+
+  it("shows field count in the row subtitle", () => {
+    render(IntakeFormsSection);
+
+    expect(screen.getByText(/5 fields/)).toBeTruthy();
   });
 });

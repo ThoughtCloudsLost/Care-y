@@ -3,6 +3,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
+import type * as IntakeCrypto from "./intake-crypto.js";
+import type * as IntakeFormCrypto from "$lib/portal/intake-form-crypto.js";
+import type * as CryptoPkg from "@care-y/crypto";
+import type * as PowSolver from "$lib/auth/pow-solver.js";
+import type * as AnnounceModule from "$lib/utils/announce.js";
 
 // --- Controllable mock state ---
 
@@ -112,28 +117,28 @@ const { mockEncryptIntake, mockBuildAccountPayload } = vi.hoisted(() => ({
 }));
 
 vi.mock("./intake-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof IntakeCrypto>()),
   encryptIntake: mockEncryptIntake,
   buildAccountPayload: mockBuildAccountPayload,
 }));
 
 vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof IntakeFormCrypto>()),
   decryptFieldContent: vi.fn(),
 }));
 
 vi.mock("@care-y/crypto", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof CryptoPkg>()),
   decode: (s: string) => new Uint8Array(Buffer.from(s, "base64")),
 }));
 
 vi.mock("$lib/auth/pow-solver.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PowSolver>()),
   solveProofOfWork: vi.fn().mockResolvedValue("solution-hex"),
 }));
 
 vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof AnnounceModule>()),
   announceToLiveRegion: vi.fn(),
 }));
 
@@ -376,25 +381,6 @@ describe("intake page", () => {
     expect(screen.queryByTestId("intake-submit")).toBeNull();
   });
 
-  it("renders not-available state for unknown slug", () => {
-    // When formId is null and slug was given but not intakeDisabled,
-    // the component shows not-available. We simulate this by setting
-    // formId to null while not setting intakeDisabled.
-    mockFormData = { formId: null, fields: null };
-    // The page component renders IntakeFormBody with slug=null from the
-    // route, so slugNotFound won't trigger. Instead verify the not-available
-    // message appears when intakeDisabled is set.
-    mockFormData = {
-      formId: null,
-      fields: null,
-      intakeDisabled: true,
-    } as typeof mockFormData;
-    render(IntakePage);
-    const notAvailable = screen.getByRole("status");
-    expect(notAvailable).toBeTruthy();
-    expect(notAvailable.textContent).toContain("not available");
-  });
-
   // -----------------------------------------------------------------
   // Account opt-in tests
   // -----------------------------------------------------------------
@@ -454,7 +440,7 @@ describe("intake page", () => {
     });
   });
 
-  it("username-taken error keeps form state and focuses username field", async () => {
+  it("username-taken error keeps form state and shows inline error", async () => {
     const usernameTakenError = {
       data: { code: "CONFLICT" },
       message: "ACCOUNT_USERNAME_TAKEN",

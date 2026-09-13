@@ -92,7 +92,7 @@ describe("UserCard reachability chip", () => {
     const { container } = render(UserCard, {
       props: { ...BASE_PROPS, reachability: "verified_sms" },
     });
-    const chip = container.querySelector(".reachability-chip");
+    const chip = container.querySelector("[data-testid='reachability-chip']");
     expect(chip).not.toBeNull();
     expect(chip!.textContent).toContain("Callable + SMS");
   });
@@ -101,7 +101,7 @@ describe("UserCard reachability chip", () => {
     const { container } = render(UserCard, {
       props: { ...BASE_PROPS, reachability: "verified" },
     });
-    const chip = container.querySelector(".reachability-chip");
+    const chip = container.querySelector("[data-testid='reachability-chip']");
     expect(chip).not.toBeNull();
     expect(chip!.textContent).toContain("Callable");
     // Must not contain SMS
@@ -112,7 +112,7 @@ describe("UserCard reachability chip", () => {
     const { container } = render(UserCard, {
       props: { ...BASE_PROPS, reachability: "unverified" },
     });
-    const chip = container.querySelector(".reachability-chip");
+    const chip = container.querySelector("[data-testid='reachability-chip']");
     expect(chip).not.toBeNull();
     expect(chip!.textContent).toContain("Phone unverified");
   });
@@ -121,7 +121,7 @@ describe("UserCard reachability chip", () => {
     const { container } = render(UserCard, {
       props: { ...BASE_PROPS, reachability: "none" },
     });
-    const chip = container.querySelector(".reachability-chip");
+    const chip = container.querySelector("[data-testid='reachability-chip']");
     expect(chip).toBeNull();
   });
 
@@ -129,7 +129,7 @@ describe("UserCard reachability chip", () => {
     const { container } = render(UserCard, {
       props: BASE_PROPS,
     });
-    const chip = container.querySelector(".reachability-chip");
+    const chip = container.querySelector("[data-testid='reachability-chip']");
     expect(chip).toBeNull();
   });
 
@@ -137,7 +137,7 @@ describe("UserCard reachability chip", () => {
     const { container } = render(UserCard, {
       props: { ...BASE_PROPS, reachability: "verified" },
     });
-    const chip = container.querySelector(".reachability-chip");
+    const chip = container.querySelector("[data-testid='reachability-chip']");
     expect(chip).not.toBeNull();
     // Lucide icons render as SVG elements.
     const svg = chip!.querySelector("svg");
@@ -153,8 +153,8 @@ describe("UserCard reachability chip", () => {
       props: { ...BASE_PROPS, reachability: "verified_sms", userId: "u-v2" },
     });
 
-    const chipV = c1.querySelector(".reachability-chip");
-    const chipS = c2.querySelector(".reachability-chip");
+    const chipV = c1.querySelector("[data-testid='reachability-chip']");
+    const chipS = c2.querySelector("[data-testid='reachability-chip']");
     expect(chipV!.textContent).not.toBe(chipS!.textContent);
   });
 });

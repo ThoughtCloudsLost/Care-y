@@ -74,6 +74,7 @@ import { createManifestHandler } from "./routes/manifest.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
 import { authenticateRelay, type OrgResolved } from "./routes/relay-utils.js";
 import { createDbCallTracker } from "./telephony/call-tracker.js";
+import { getReachabilityForUsers } from "./telephony/reachability.js";
 import { extractOrgSlug } from "./org/slug-resolver.js";
 import { NotFoundError } from "./errors.js";
 import { createPhoneResolver } from "./telephony/phone-resolver.js";
@@ -478,6 +479,7 @@ const notificationService = createNotificationService({
   pushSender,
   jobQueue,
   preferences: preferencesService,
+  getReachabilityForUsers,
 });
 
 const createContext = createContextFactory({

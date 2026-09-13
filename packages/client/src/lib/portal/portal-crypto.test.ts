@@ -169,7 +169,7 @@ describe("encryptReply", () => {
     expect(new TextDecoder().decode(selfPlain)).toBe("Client reply text");
   });
 
-  it("zeroes tkTemp after encryption (no reference leak)", () => {
+  it("generates a fresh tk_temp per call", () => {
     // We verify this indirectly: encryptReply does not throw and
     // subsequent calls produce different wrappedTkTemp values
     // (fresh tk_temp each time).

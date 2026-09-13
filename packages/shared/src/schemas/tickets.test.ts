@@ -882,8 +882,19 @@ describe("upgradeToSecureLinkInputSchema", () => {
 
   it("portalCopy is not a field on this schema", () => {
     // Ensure no extra fields leak through
-    const result = upgradeToSecureLinkInputSchema.safeParse(validUpgrade());
+    const input = {
+      ...validUpgrade(),
+      portalCopy: {
+        ephemeralPoint: fakeBase64(32),
+        nonce: fakeBase64(24),
+        ciphertext: fakeBase64(64),
+      },
+    };
+    const result = upgradeToSecureLinkInputSchema.safeParse(input);
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect("portalCopy" in result.data).toBe(false);
+    }
   });
 });
 
@@ -910,13 +921,6 @@ describe("updateOutboundMessageInputSchema", () => {
         ciphertext: fakeBase64(64),
       },
     };
-    expect(updateOutboundMessageInputSchema.safeParse(input).success).toBe(
-      true,
-    );
-  });
-
-  it("portalCopy is optional", () => {
-    const input = validEdit();
     expect(updateOutboundMessageInputSchema.safeParse(input).success).toBe(
       true,
     );

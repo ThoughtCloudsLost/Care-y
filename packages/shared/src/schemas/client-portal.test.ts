@@ -988,6 +988,7 @@ describe("accountChangePasswordInputSchema", () => {
     // Zod's .omit() strips unrecognized keys in strict mode. With default
     // stripping, the extra keys are silently dropped and the parse succeeds.
     // Verify the parsed output does NOT contain accountId or username.
+    expect(result.success).toBe(true);
     if (result.success) {
       const parsed = result.data.account as Record<string, unknown>;
       expect("accountId" in parsed).toBe(false);

@@ -16,7 +16,7 @@
     onsend: (text: string) => void;
     /** Whether a send mutation is in flight. */
     pending: boolean;
-    /** Called on first focus (for the WebChatHint). */
+    /** Called on first focus (for the web chat hint). */
     onfirstfocus?: () => void;
     /** Error message displayed below the composer on send failure. */
     errorMessage?: string;

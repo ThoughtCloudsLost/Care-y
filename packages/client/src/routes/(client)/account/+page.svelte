@@ -49,7 +49,7 @@
   import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
   import QuickExit from "$lib/components/portal/QuickExit.svelte";
-  import WebChatHint from "$lib/components/portal/WebChatHint.svelte";
+  import PortalHint from "$lib/components/portal/PortalHint.svelte";
   import PortalThread from "$lib/portal/PortalThread.svelte";
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
   import AccountLoginForm from "$lib/portal/AccountLoginForm.svelte";
@@ -453,7 +453,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // WebChatHint (session-once)
+  // Web chat hint (session-once)
   // ---------------------------------------------------------------------------
 
   function handleFirstFocus(): void {
@@ -510,7 +510,13 @@
     errorMessage={sendError || undefined}
   />
 
-  <WebChatHint opened={hintShown} ondismiss={dismissHint} />
+  <PortalHint
+    opened={hintShown}
+    ondismiss={dismissHint}
+    message={m.portal_web_chat_hint()}
+    dismissLabel={m.portal_hint_dismiss()}
+    dismissTestid="web-chat-hint-dismiss"
+  />
 
   <AccountSettings
     onchangepassword={(current: string, newPw: string) =>

@@ -10,6 +10,13 @@
 import _sodium from "libsodium-wrappers-sumo";
 import { hkdfSync, createHmac } from "./node-crypto-shim.js";
 import { assertSodiumReady } from "./sodium-ready.js";
+import type {
+  OrgId,
+  IdentifierHash,
+  UsernameHash,
+  PhoneHash,
+  OpsPhoneHash,
+} from "@care-y/shared";
 
 class CryptoError extends Error {
   constructor(message: string) {
@@ -22,12 +29,19 @@ class CryptoError extends Error {
 
 export interface FieldEncryptor {
   encrypt(plaintext: string): Buffer;
+  encryptBuffer(plaintext: Buffer): Buffer;
   decrypt(ciphertext: Buffer): string;
   decryptToBuffer(ciphertext: Buffer): Buffer;
 }
 
 export interface BlindIndexer {
-  hash(input: string, orgId: string): string;
+  hash(input: string, orgId: OrgId): string;
+  hashBuffer(input: Buffer, orgId: OrgId): string;
+  hashIdentifier(input: string, orgId: OrgId): IdentifierHash;
+  hashUsername(input: string, orgId: OrgId): UsernameHash;
+  hashPhone(input: string, orgId: OrgId): PhoneHash;
+  hashPhoneBuffer(input: Buffer, orgId: OrgId): PhoneHash;
+  hashConsultantPhoneBuffer(input: Buffer, orgId: OrgId): OpsPhoneHash;
 }
 
 export interface DerivedKeys {
@@ -113,6 +127,20 @@ export function createFieldEncryptor(key: Buffer): FieldEncryptor {
       }
     },
 
+    encryptBuffer(plaintext: Buffer): Buffer {
+      try {
+        const nonce = _sodium.randombytes_buf(NONCE_BYTES);
+        const ciphertext = _sodium.crypto_secretbox_easy(
+          new Uint8Array(plaintext),
+          nonce,
+          keyU8,
+        );
+        return Buffer.concat([Buffer.from(nonce), Buffer.from(ciphertext)]);
+      } finally {
+        plaintext.fill(0);
+      }
+    },
+
     decrypt(sealed: Buffer): string {
       const plaintext = decryptRaw(sealed, key);
       try {
@@ -144,12 +172,32 @@ export function createBlindIndexer(key: Buffer): BlindIndexer {
     );
   }
 
+  function hashRaw(input: string, orgId: OrgId): string {
+    const normalized = input.toLowerCase().trim();
+    return createHmac("sha256", key)
+      .update(orgId + ":" + normalized)
+      .digest("hex");
+  }
+
   return {
-    hash(input: string, orgId: string): string {
-      const normalized = input.toLowerCase().trim();
-      return createHmac("sha256", key)
-        .update(orgId + ":" + normalized)
-        .digest("hex");
+    hash: hashRaw,
+    hashBuffer(input: Buffer, orgId: OrgId): string {
+      return hashRaw(input.toString("utf-8"), orgId);
+    },
+    hashIdentifier(input: string, orgId: OrgId): IdentifierHash {
+      return hashRaw(input, orgId) as IdentifierHash;
+    },
+    hashUsername(input: string, orgId: OrgId): UsernameHash {
+      return hashRaw(input, orgId) as UsernameHash;
+    },
+    hashPhone(input: string, orgId: OrgId): PhoneHash {
+      return hashRaw(input, orgId) as PhoneHash;
+    },
+    hashPhoneBuffer(input: Buffer, orgId: OrgId): PhoneHash {
+      return hashRaw(input.toString("utf-8"), orgId) as PhoneHash;
+    },
+    hashConsultantPhoneBuffer(input: Buffer, orgId: OrgId): OpsPhoneHash {
+      return hashRaw(input.toString("utf-8"), orgId) as OpsPhoneHash;
     },
   };
 }
@@ -160,6 +208,9 @@ export function createNoopFieldEncryptor(): FieldEncryptor {
   return {
     encrypt(plaintext: string): Buffer {
       return Buffer.from(plaintext, "utf-8");
+    },
+    encryptBuffer(plaintext: Buffer): Buffer {
+      return Buffer.from(plaintext);
     },
     decrypt(ciphertext: Buffer): string {
       return ciphertext.toString("utf-8");

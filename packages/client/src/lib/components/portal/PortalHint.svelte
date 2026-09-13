@@ -1,35 +1,44 @@
 <!--
-  Post-submission contextual hint. Mirrors ExposureHint structurally:
-  ShellToast, role="status", aria-live="polite", dismiss button.
-  Shown once per session after successful intake submission.
+  Shared contextual hint toast for client portal surfaces (intake submit,
+  web chat, share view). ShellToast, role="status", aria-live="polite",
+  dismiss button. Each surface passes its own message, dismiss label, and
+  testid; trigger and session scoping stay with the caller.
 -->
 <script lang="ts">
   import ShellToast from "$lib/shell/ShellToast.svelte";
-  import * as m from "$lib/paraglide/messages.js";
 
-  interface IntakeSubmitHintProps {
+  interface PortalHintProps {
     opened: boolean;
     ondismiss: () => void;
+    message: string;
+    dismissLabel: string;
+    dismissTestid: string;
   }
 
-  let { opened, ondismiss }: IntakeSubmitHintProps = $props();
+  let {
+    opened,
+    ondismiss,
+    message,
+    dismissLabel,
+    dismissTestid,
+  }: PortalHintProps = $props();
 </script>
 
 {#snippet dismissButton()}
   <button
     type="button"
     class="hint-dismiss"
-    data-testid="intake-hint-dismiss"
+    data-testid={dismissTestid}
     onclick={ondismiss}
   >
-    {m.intake_hint_dismiss()}
+    {dismissLabel}
   </button>
 {/snippet}
 
 {#if opened}
   <ShellToast opened position="center" button={dismissButton}>
     <div class="hint-content" role="status" aria-live="polite">
-      {m.intake_submit_hint()}
+      {message}
     </div>
   </ShellToast>
 {/if}

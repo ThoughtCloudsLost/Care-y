@@ -210,6 +210,23 @@
   overflow: visible; /* inset lists clip; the focus ring must not */
 }
 
+/* A block title used as a group heading directly before a flattened
+   input list keeps its breathing room. Konsta's block-title -mb-2
+   assumes the following list brings its own my-8, which the flatten
+   above removes; without this the heading collides with the first
+   field's eyebrow label. */
+.theme-default .k-block-title:has(+ .k-list .k-list-input) {
+  margin-bottom: var(--space-xs);
+}
+
+/* Two flattened input lists rendered back to back collapse to zero
+   gap (both lost their my-8 and the trailing field's margin-bottom is
+   zeroed). Restore the between-field rhythm so the next group's first
+   eyebrow label clears the input above it. */
+.theme-default .k-list:has(.k-list-input) + .k-list:has(.k-list-input) {
+  margin-top: var(--space-md);
+}
+
 .theme-default .k-list:has(.k-list-input) .hairline-b::after,
 .theme-default .k-list:has(.k-list-input) .hairline-t::after {
   display: none;
