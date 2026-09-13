@@ -481,27 +481,8 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     portalBootstrap: orgProcedure.input(portalBootstrapInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-
         if (deps.portalReadLimiter !== null) {
-          const limitResult = deps.portalReadLimiter.check(ip);
-          if (!limitResult.allowed) {
-            console.warn("Portal read rate limited", {
-              orgSlug: ctx.org.orgSlug,
-              ip,
-              reason: "rate_limit",
-            });
-            const retryAfterSeconds = Math.ceil(
-              limitResult.retryAfterMs / 1000,
-            );
-            // AppError instead of raw TRPCError: withErrorWrapping maps it to
-            // TOO_MANY_REQUESTS and the errorFormatter forwards
-            // retryAfterSeconds so the portal can schedule its retry.
-            throw new RateLimitError(
-              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
-              retryAfterSeconds,
-            );
-          }
+          checkIpReadLimit(deps.portalReadLimiter, ctx, "Portal read");
         }
 
         const { channel, portalMessageService } = await requirePortalChannel(
@@ -520,27 +501,8 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     portalMessages: orgProcedure.input(portalBootstrapInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-
         if (deps.portalReadLimiter !== null) {
-          const limitResult = deps.portalReadLimiter.check(ip);
-          if (!limitResult.allowed) {
-            console.warn("Portal read rate limited", {
-              orgSlug: ctx.org.orgSlug,
-              ip,
-              reason: "rate_limit",
-            });
-            const retryAfterSeconds = Math.ceil(
-              limitResult.retryAfterMs / 1000,
-            );
-            // AppError instead of raw TRPCError: withErrorWrapping maps it to
-            // TOO_MANY_REQUESTS and the errorFormatter forwards
-            // retryAfterSeconds so the portal can schedule its retry.
-            throw new RateLimitError(
-              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
-              retryAfterSeconds,
-            );
-          }
+          checkIpReadLimit(deps.portalReadLimiter, ctx, "Portal read");
         }
 
         const { channel, portalMessageService } = await requirePortalChannel(
@@ -549,45 +511,17 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           input,
         );
 
-        // Reuse bootstrap (stamps last_seen_at, lazy expiry, returns
-        // messages); strip the keyCheck and hasPassphrase fields so
-        // the polling endpoint returns only the message list.
-        const result = await portalMessageService.bootstrap(
-          ctx.org.tenantDb,
-          channel,
-        );
-
-        return {
-          ticketId: result.ticketId,
-          messages: result.messages,
-          messagesExpireDays: result.messagesExpireDays,
-        };
+        return portalMessageService.listMessages(ctx.org.tenantDb, channel, {
+          limit: 50,
+          direction: "older",
+        });
       }),
     ),
 
     portalMessagePage: orgProcedure.input(portalMessagePageInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-
         if (deps.portalReadLimiter !== null) {
-          const limitResult = deps.portalReadLimiter.check(ip);
-          if (!limitResult.allowed) {
-            console.warn("Portal read rate limited", {
-              orgSlug: ctx.org.orgSlug,
-              ip,
-              reason: "rate_limit",
-            });
-            const retryAfterSeconds = Math.ceil(
-              limitResult.retryAfterMs / 1000,
-            );
-            // AppError instead of raw TRPCError: withErrorWrapping maps it to
-            // TOO_MANY_REQUESTS and the errorFormatter forwards
-            // retryAfterSeconds so the portal can schedule its retry.
-            throw new RateLimitError(
-              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
-              retryAfterSeconds,
-            );
-          }
+          checkIpReadLimit(deps.portalReadLimiter, ctx, "Portal read");
         }
 
         const { channel, portalMessageService } = await requirePortalChannel(
@@ -673,18 +607,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
     openShare: orgProcedure.input(openShareInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         if (deps.shareLimiter !== null) {
-          const ip = extractClientIp(ctx.req);
-          const limit = deps.shareLimiter.check(ip);
-          if (!limit.allowed) {
-            console.warn("Share open rate limited", {
-              orgSlug: ctx.org.orgSlug,
-              reason: "rate_limit",
-            });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limit.retryAfterMs / 1000))}s`,
-            });
-          }
+          checkIpReadLimit(deps.shareLimiter, ctx, "Share open");
         }
 
         const result = await openShare(ctx.org.tenantDb, input.shareId);
@@ -704,21 +627,8 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     getAccountSalt: orgProcedure.input(getAccountSaltInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-
         if (deps.accountSaltLimiter !== null) {
-          const limitResult = deps.accountSaltLimiter.check(ip);
-          if (!limitResult.allowed) {
-            console.warn("Account salt rate limited", {
-              orgSlug: ctx.org.orgSlug,
-              ip,
-              reason: "rate_limit",
-            });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
-          }
+          checkIpReadLimit(deps.accountSaltLimiter, ctx, "Account salt");
         }
 
         const acctDeps = requireAccountDeps(deps, ctx.org.orgId);
@@ -737,23 +647,11 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     accountLogin: orgProcedure.input(accountLoginInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-
         if (deps.accountLoginLimiter !== null) {
-          const limitResult = deps.accountLoginLimiter.check(ip);
-          if (!limitResult.allowed) {
-            console.warn("Account login rate limited", {
-              orgSlug: ctx.org.orgSlug,
-              ip,
-              reason: "rate_limit",
-            });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
-          }
+          checkIpReadLimit(deps.accountLoginLimiter, ctx, "Account login");
         }
 
+        const ip = extractClientIp(ctx.req);
         const authTokenBuf = Buffer.from(input.authToken, "base64");
         const result = await accountService.login(
           ctx.org.tenantDb,
@@ -810,16 +708,10 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
         const session = await requireAccountSession(ctx);
 
         const msgService = requirePortalMessageService(deps);
-        const result = await msgService.bootstrap(
-          ctx.org.tenantDb,
-          session.channel,
-        );
-
-        return {
-          ticketId: result.ticketId,
-          messages: result.messages,
-          messagesExpireDays: result.messagesExpireDays,
-        };
+        return msgService.listMessages(ctx.org.tenantDb, session.channel, {
+          limit: 50,
+          direction: "older",
+        });
       }),
     ),
 
@@ -1037,24 +929,8 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     contactInfo: orgProcedure.input(contactInfoInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-
         if (deps.portalReadLimiter !== null) {
-          const limitResult = deps.portalReadLimiter.check(ip);
-          if (!limitResult.allowed) {
-            console.warn("Portal contact info rate limited", {
-              orgSlug: ctx.org.orgSlug,
-              ip,
-              reason: "rate_limit",
-            });
-            const retryAfterSeconds = Math.ceil(
-              limitResult.retryAfterMs / 1000,
-            );
-            throw new RateLimitError(
-              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
-              retryAfterSeconds,
-            );
-          }
+          checkIpReadLimit(deps.portalReadLimiter, ctx, "Portal contact info");
         }
 
         const fieldEncryptor = deps.fieldEncryptor;
@@ -1425,6 +1301,33 @@ function resetReplyAuthGate(
 ): void {
   if (deps.portalReplyIpLimiter === null) return;
   deps.portalReplyIpLimiter.reset(`authgate:${extractClientIp(req)}`);
+}
+
+/**
+ * Shared per-IP rate-limit check for all portal read and public
+ * endpoints. Throws RateLimitError with retryAfterSeconds so
+ * withErrorWrapping maps it to TOO_MANY_REQUESTS and the client
+ * can schedule a retry.
+ */
+function checkIpReadLimit(
+  limiter: RateLimiter,
+  ctx: { org: { orgSlug: string }; req: IncomingMessage },
+  surface: string,
+): void {
+  const ip = extractClientIp(ctx.req);
+  const limitResult = limiter.check(ip);
+  if (!limitResult.allowed) {
+    console.warn(`${surface} rate limited`, {
+      orgSlug: ctx.org.orgSlug,
+      ip,
+      reason: "rate_limit",
+    });
+    const retryAfterSeconds = Math.ceil(limitResult.retryAfterMs / 1000);
+    throw new RateLimitError(
+      `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+      retryAfterSeconds,
+    );
+  }
 }
 
 async function requirePortalChannel(

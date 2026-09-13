@@ -1659,11 +1659,13 @@ export function createTicketService(
         .where("c.merged_into", "is", null);
 
       if (query !== "") {
-        search = search.where(
-          "c.alias_hash",
-          "=",
-          aliasHashSchema.parse(query),
-        );
+        // A non-hash query cannot match any row (alias_hash is always a
+        // 128-hex blind index), so it returns no results rather than
+        // throwing. The browser always sends a computed hash; anything
+        // else is a hand-built request.
+        const parsedHash = aliasHashSchema.safeParse(query);
+        if (!parsedHash.success) return [];
+        search = search.where("c.alias_hash", "=", parsedHash.data);
       }
 
       if (!isAdmin) {

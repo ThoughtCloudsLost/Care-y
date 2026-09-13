@@ -29,6 +29,7 @@ import {
   keyGenerationSchema,
   presetReplyIdSchema,
   clientMergeEventIdSchema,
+  channelSecretSchema,
 } from "../ids.js";
 
 // --- Ticket enums ---
@@ -550,7 +551,9 @@ export interface ReactionSummary {
 // --- Client search ---
 
 export const searchClientsInputSchema = z.object({
-  query: z.string().max(100).default(""),
+  // Long enough for a 128-hex alias blind index; free text is also
+  // accepted and simply matches nothing server-side.
+  query: z.string().max(128).default(""),
   limit: z.number().int().min(1).max(50).default(20),
 });
 export type SearchClientsInput = z.infer<typeof searchClientsInputSchema>;
@@ -646,7 +649,7 @@ export type ListTicketsForClientInput = z.infer<
 export const reseedPortalHistoryInputSchema = z
   .object({
     clientId: clientIdSchema,
-    channelId: z.string().regex(/^[0-9a-f]{48}$/),
+    channelId: channelSecretSchema,
     messages: z
       .array(
         z.object({
@@ -697,7 +700,7 @@ export type ReseedPortalHistoryInput = z.infer<
 export const convertBlobForReseedInputSchema = z
   .object({
     clientId: clientIdSchema,
-    channelId: z.string().regex(/^[0-9a-f]{48}$/),
+    channelId: channelSecretSchema,
     kind: z.enum(["attachment", "recording"]),
     rowId: z.string().min(1),
     followupId: followupIdSchema,

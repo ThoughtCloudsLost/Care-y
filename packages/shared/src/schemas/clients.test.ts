@@ -9,6 +9,7 @@ import {
 } from "./clients.js";
 
 const VALID_UUID = "550e8400-e29b-41d4-a716-446655440000";
+const VALID_ALIAS_HASH = "ab".repeat(64);
 const VALID_UUID_2 = "660e8400-e29b-41d4-a716-446655440001";
 
 describe("clientListInputSchema", () => {
@@ -94,12 +95,12 @@ describe("updateAliasInputSchema", () => {
     const result = updateAliasInputSchema.safeParse({
       clientId: VALID_UUID,
       encryptedAlias: "c2VhbGVkOmNhbG0tcml2ZXItNDI=",
-      aliasHash: "hmac-abc123",
+      aliasHash: VALID_ALIAS_HASH,
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.encryptedAlias).toBe("c2VhbGVkOmNhbG0tcml2ZXItNDI=");
-      expect(result.data.aliasHash).toBe("hmac-abc123");
+      expect(result.data.aliasHash).toBe(VALID_ALIAS_HASH);
     }
   });
 
@@ -108,7 +109,7 @@ describe("updateAliasInputSchema", () => {
       updateAliasInputSchema.safeParse({
         clientId: VALID_UUID,
         encryptedAlias: "",
-        aliasHash: "hmac-abc123",
+        aliasHash: VALID_ALIAS_HASH,
       }).success,
     ).toBe(false);
   });
@@ -118,7 +119,7 @@ describe("updateAliasInputSchema", () => {
       updateAliasInputSchema.safeParse({
         clientId: VALID_UUID,
         encryptedAlias: "a".repeat(4097),
-        aliasHash: "hmac-abc123",
+        aliasHash: VALID_ALIAS_HASH,
       }).success,
     ).toBe(false);
   });
@@ -147,7 +148,7 @@ describe("updateAliasInputSchema", () => {
       updateAliasInputSchema.safeParse({
         clientId: "not-a-uuid",
         encryptedAlias: "c2VhbGVk",
-        aliasHash: "hmac-abc123",
+        aliasHash: VALID_ALIAS_HASH,
       }).success,
     ).toBe(false);
   });

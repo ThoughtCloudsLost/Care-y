@@ -21,7 +21,12 @@ import {
 } from "./portal-errors.js";
 import { hasExactMessageCoverage } from "./message-coverage.js";
 import { PORTAL_SURFACE_KINDS } from "@care-y/shared";
-import type { ClientId, ChannelSecret, PortalMessageId } from "@care-y/shared";
+import type {
+  ClientId,
+  ChannelSecret,
+  ChannelRowId,
+  PortalMessageId,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -87,6 +92,40 @@ function isActiveChannelConstraintViolation(err: unknown): boolean {
 }
 
 /**
+ * Purge portal carriers (attachments, recordings, messages) for a channel
+ * and mark it as revoked. The expiry-bounded copy lifetime (ADR-092) means
+ * no carrier row should outlive the channel it was sealed to.
+ *
+ * Accepts a Transaction so callers inside an existing transaction (regenerate,
+ * revoke, merge) share one DB session.
+ */
+export async function purgeAndRevokeChannel(
+  trx: Transaction<TenantDatabase>,
+  channelRowId: ChannelRowId,
+): Promise<void> {
+  await trx
+    .deleteFrom("portal_attachments")
+    .where("channel_id", "=", channelRowId)
+    .execute();
+
+  await trx
+    .deleteFrom("portal_recordings")
+    .where("channel_id", "=", channelRowId)
+    .execute();
+
+  await trx
+    .deleteFrom("portal_messages")
+    .where("channel_id", "=", channelRowId)
+    .execute();
+
+  await trx
+    .updateTable("portal_channels")
+    .set({ status: "revoked", revoked_at: new Date() })
+    .where("id", "=", channelRowId)
+    .execute();
+}
+
+/**
  * Upgrade a client to Secure Link: set communication_tier and insert
  * the channel row in one transaction.
  *
@@ -138,30 +177,7 @@ export async function regenerateChannel(
       .executeTakeFirst();
 
     if (active) {
-      // Purge portal carriers for the old channel. The expiry-bounded
-      // copy lifetime (ADR-092) means no carrier row should outlive
-      // the channel it was sealed to.
-      await trx
-        .deleteFrom("portal_attachments")
-        .where("channel_id", "=", active.id)
-        .execute();
-
-      await trx
-        .deleteFrom("portal_recordings")
-        .where("channel_id", "=", active.id)
-        .execute();
-
-      await trx
-        .deleteFrom("portal_messages")
-        .where("channel_id", "=", active.id)
-        .execute();
-
-      // Mark old channel as revoked.
-      await trx
-        .updateTable("portal_channels")
-        .set({ status: "revoked", revoked_at: new Date() })
-        .where("id", "=", active.id)
-        .execute();
+      await purgeAndRevokeChannel(trx, active.id);
     }
 
     // Set tier (idempotent if already secure_link).
@@ -194,29 +210,7 @@ export async function revokeChannel(
       .executeTakeFirst();
 
     if (active) {
-      // Purge portal carriers for the old channel. The expiry-bounded
-      // copy lifetime (ADR-092) means no carrier row should outlive
-      // the channel it was sealed to.
-      await trx
-        .deleteFrom("portal_attachments")
-        .where("channel_id", "=", active.id)
-        .execute();
-
-      await trx
-        .deleteFrom("portal_recordings")
-        .where("channel_id", "=", active.id)
-        .execute();
-
-      await trx
-        .deleteFrom("portal_messages")
-        .where("channel_id", "=", active.id)
-        .execute();
-
-      await trx
-        .updateTable("portal_channels")
-        .set({ status: "revoked", revoked_at: new Date() })
-        .where("id", "=", active.id)
-        .execute();
+      await purgeAndRevokeChannel(trx, active.id);
 
       // Only reset tier when a channel was actually revoked
       await trx

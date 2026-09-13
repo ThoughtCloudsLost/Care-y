@@ -5,7 +5,10 @@ import { FileMigrationProvider, Migrator } from "kysely/migration";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import type { PlatformDatabase } from "../db/types.js";
-import { ensureRecurringJob } from "./ensure-recurring.js";
+import {
+  ensureRecurringJob,
+  registerRecurringHandler,
+} from "./ensure-recurring.js";
 import {
   registerEscalationRulesHandler,
   ESCALATION_RULES_QUEUE,
@@ -85,6 +88,54 @@ describe("registerEscalationRulesHandler", () => {
       ESCALATION_RULES_QUEUE,
       {},
       { delay: DEFAULT_ESCALATION_RULES_INTERVAL_MS },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// registerRecurringHandler (unit tests)
+// ---------------------------------------------------------------------------
+
+describe("registerRecurringHandler", () => {
+  it("registers a handler on the given queue", () => {
+    const { jobQueue, handlers } = createMockJobQueue();
+    const handler = vi.fn().mockResolvedValue(undefined);
+
+    registerRecurringHandler(jobQueue, "test-recurring", handler, 5_000);
+
+    expect(handlers.has("test-recurring")).toBe(true);
+  });
+
+  it("runs the handler and re-enqueues with the given delay", async () => {
+    const { jobQueue, handlers } = createMockJobQueue();
+    const handler = vi.fn().mockResolvedValue(undefined);
+
+    registerRecurringHandler(jobQueue, "test-recurring", handler, 7_000);
+
+    const registered = handlers.get("test-recurring");
+    await registered!({});
+
+    expect(handler).toHaveBeenCalledOnce();
+    expect(jobQueue.enqueue).toHaveBeenCalledWith(
+      "test-recurring",
+      {},
+      { delay: 7_000 },
+    );
+  });
+
+  it("re-enqueues even when the handler throws", async () => {
+    const { jobQueue, handlers } = createMockJobQueue();
+    const handler = vi.fn().mockRejectedValue(new Error("boom"));
+
+    registerRecurringHandler(jobQueue, "test-recurring", handler, 3_000);
+
+    const registered = handlers.get("test-recurring");
+    await expect(registered!({})).rejects.toThrow("boom");
+
+    expect(jobQueue.enqueue).toHaveBeenCalledWith(
+      "test-recurring",
+      {},
+      { delay: 3_000 },
     );
   });
 });

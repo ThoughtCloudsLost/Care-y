@@ -5,6 +5,7 @@ import {
   ROLE_ID_VALUES,
   type RoleIdValue,
   type OrgSchema,
+  type UserId,
 } from "@care-y/shared";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
@@ -298,6 +299,50 @@ export function assertSingleInstancePermissionCache(
         "enabling APP_MULTI_INSTANCE.",
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Permission holder query (shared by intake services)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns active user IDs with vol_public who hold the given permission
+ * in any role, accounting for per-org permission overrides.
+ *
+ * Used by intake-conversion-service and intake-response-service to build
+ * the set of principals who should receive ECIES wraps.
+ */
+export async function getUsersWithPermission(
+  db: Kysely<TenantDatabase>,
+  orgSchema: OrgSchema,
+  permission: Permission,
+): Promise<Map<UserId, Buffer>> {
+  const rolesWithPerm: RoleIdValue[] = [];
+  for (const roleId of ROLE_ID_VALUES) {
+    const perms = await getEffectivePermissions(db, orgSchema, roleId);
+    if (perms.has(permission)) {
+      rolesWithPerm.push(roleId);
+    }
+  }
+
+  if (rolesWithPerm.length === 0) return new Map();
+
+  const users = await db
+    .selectFrom("users")
+    .innerJoin("user_keys", "user_keys.user_id", "users.id")
+    .select(["users.id", "user_keys.vol_public"])
+    .where("users.role_id", "in", rolesWithPerm)
+    .where("users.is_active", "=", true)
+    .where("user_keys.vol_public", "is not", null)
+    .execute();
+
+  const result = new Map<UserId, Buffer>();
+  for (const u of users) {
+    if (u.vol_public !== null) {
+      result.set(u.id, u.vol_public);
+    }
+  }
+  return result;
 }
 
 /** All known Permission string values, for type-guard lookups. */

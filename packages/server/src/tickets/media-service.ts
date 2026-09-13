@@ -12,6 +12,7 @@ import type { TenantDatabase } from "../db/types.js";
 import type { BlobStore } from "../storage/store.js";
 import type { TicketAccessChecker } from "./access.js";
 import type { JobQueue } from "../jobs/queue.js";
+import { registerRecurringHandler } from "../jobs/ensure-recurring.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import { purgeUnlinkedAttachments } from "../portal/portal-attachment-service.js";
@@ -430,8 +431,10 @@ export function registerMediaCleanupHandler(
   blobStore: BlobStore,
   listOrgSchemas: () => Promise<OrgSchema[]>,
 ): void {
-  jobQueue.process(MEDIA_CLEANUP_QUEUE, async () => {
-    try {
+  registerRecurringHandler(
+    jobQueue,
+    MEDIA_CLEANUP_QUEUE,
+    async () => {
       const schemas = await listOrgSchemas();
 
       for (const schema of schemas) {
@@ -467,13 +470,7 @@ export function registerMediaCleanupHandler(
         await purgeDeletedMedia(tDb, "attachments", purgeCutoff, blobStore);
         await purgeDeletedMedia(tDb, "kb_attachments", purgeCutoff, blobStore);
       }
-    } finally {
-      // Self-enqueue in finally so the chain survives a failing run
-      await jobQueue.enqueue(
-        MEDIA_CLEANUP_QUEUE,
-        {},
-        { delay: MEDIA_CLEANUP_INTERVAL_MS },
-      );
-    }
-  });
+    },
+    MEDIA_CLEANUP_INTERVAL_MS,
+  );
 }

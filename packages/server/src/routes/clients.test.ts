@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomBytes } from "node:crypto";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import {
@@ -373,7 +374,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await caller.clients.updateAlias({
           clientId: fixture.clientId,
           encryptedAlias: Buffer.from(`sealed-alias-${uid}`).toString("base64"),
-          aliasHash: `hash-${uid}`,
+          aliasHash: randomBytes(64).toString("hex"),
         });
 
         // Verify via get: the response carries encrypted alias, not plaintext
@@ -391,7 +392,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
         const caller = createAuthedCaller(admin);
 
-        const sharedHash = `hash-dup-${crypto.randomUUID().slice(0, 8)}`;
+        const sharedHash = randomBytes(64).toString("hex");
 
         // Set fixture1's alias with a specific hash
         await caller.clients.updateAlias({

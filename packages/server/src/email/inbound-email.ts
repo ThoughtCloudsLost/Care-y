@@ -17,15 +17,15 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import type { ChannelRowId, FollowupId, TicketId } from "@care-y/shared";
+import type { FollowupId, TicketId } from "@care-y/shared";
 import { EMAIL_RELAY_LIMITS, emailInboundPayloadSchema } from "@care-y/shared";
-import { eciesEncrypt, toRistrettoPoint } from "@care-y/crypto";
 import { InboundEmailError } from "../errors.js";
 import { reopenClosedTicket } from "../tickets/ticket-reopen.js";
 import { createEncryptedFollowUp } from "../tickets/server-followup-create.js";
-import { findActiveChannel } from "../portal/channel-service.js";
-import { storeClientCopy } from "../portal/portal-message-service.js";
-import type { EciesTripleBuffers } from "../portal/portal-message-service.js";
+import {
+  sealInboundClientCopy,
+  writeInboundClientCopy,
+} from "../portal/portal-message-service.js";
 
 /** Maximum stored length of the claimed From value (RFC 5321 path limit). */
 const FROM_MAX = 320;
@@ -108,28 +108,12 @@ export async function handleInboundEmail(
   const bodyBuf = Buffer.from(JSON.stringify(payload), "utf-8");
 
   // 4. Seal the portal copy BEFORE follow-up creation zeroes bodyBuf
-  // (ADR-090). Best-effort: a failure here drops the copy, never the
-  // forward path, and logs nothing that identifies the message.
-  let portalChannelId: ChannelRowId | null = null;
-  let portalCopy: EciesTripleBuffers | null = null;
-
-  try {
-    const activeChannel = await findActiveChannel(tDb, ticket.client_id);
-    if (activeChannel) {
-      portalChannelId = activeChannel.id;
-      const clientPoint = toRistrettoPoint(
-        new Uint8Array(activeChannel.client_public),
-      );
-      const sealed = eciesEncrypt(bodyBuf, clientPoint);
-      portalCopy = {
-        ephemeralPoint: Buffer.from(sealed.ephemeralPoint),
-        nonce: Buffer.from(sealed.nonce),
-        ciphertext: Buffer.from(sealed.ciphertext),
-      };
-    }
-  } catch {
-    console.warn("Portal copy dropped: channel lookup failed for client");
-  }
+  // (ADR-090). Best-effort via the shared ingest helper.
+  const copyResult = await sealInboundClientCopy(
+    tDb,
+    ticket.client_id,
+    bodyBuf,
+  );
 
   // 5. Existing-ticket path always: tk_temp with its own ECIES wraps
   // (ADR-041). bodyBuf is zeroed inside, in a finally block.
@@ -142,18 +126,13 @@ export async function handleInboundEmail(
   );
 
   // 6. Store the portal copy (best-effort, ADR-090 fault isolation).
-  if (portalChannelId !== null && portalCopy !== null) {
-    try {
-      await storeClientCopy(
-        tDb,
-        portalChannelId,
-        result.followUpId,
-        portalCopy,
-        "from_client",
-      );
-    } catch {
-      console.warn("Portal copy dropped: copy write failed for client");
-    }
+  if (copyResult.channelRowId !== null && copyResult.portalCopy !== null) {
+    await writeInboundClientCopy(
+      tDb,
+      copyResult.channelRowId,
+      result.followUpId,
+      copyResult.portalCopy,
+    );
   }
 
   return { followUpId: result.followUpId, reopened };

@@ -1980,7 +1980,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(
         z.object({
           ticketId: ticketIdSchema,
-          channelId: z.string().regex(/^[0-9a-f]{48}$/),
+          channelId: channelSecretSchema,
           authHash: z.string().min(1),
           clientPublic: z.string().min(1),
           hasPassphrase: z.boolean(),
@@ -2003,7 +2003,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           }
 
           const reg: ChannelRegistration = {
-            channelId: channelSecretSchema.parse(input.channelId),
+            channelId: input.channelId,
             authHash: Buffer.from(input.authHash, "base64"),
             clientPublic: Buffer.from(input.clientPublic, "base64"),
             hasPassphrase: input.hasPassphrase,

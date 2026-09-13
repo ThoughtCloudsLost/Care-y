@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import {
@@ -34,6 +34,7 @@ import {
   RoleId,
   ErrorCode,
   channelSecretSchema,
+  aliasHashSchema,
   type RoleIdValue,
   type EmailHash,
 } from "@care-y/shared";
@@ -56,6 +57,11 @@ import type {
   BlobKey,
   ReplyTokenHash,
 } from "@care-y/shared";
+
+/** Unique, schema-valid alias hash for search fixtures (128 lowercase hex). */
+function fakeAliasHash(): AliasHash {
+  return aliasHashSchema.parse(randomBytes(64).toString("hex"));
+}
 import { createTicketRouter, type TicketRouterDeps } from "./tickets.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
@@ -1847,7 +1853,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("returns a fixed placeholder mask when no field encryptor is configured", async () => {
         const { user, clientId } = await setupUserWithTicket();
         // Set a known alias_hash so the exact-match query finds this client
-        const hash = `mask-hash-${randomUUID().slice(0, 8)}` as AliasHash;
+        const hash = fakeAliasHash();
         await tenantDb
           .updateTable("clients")
           .set({ alias_hash: hash })
@@ -1865,7 +1871,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("masks decrypted phone numbers to the last four digits", async () => {
         const { user, clientId, phoneId } = await setupUserWithTicket();
-        const hash = `phone-hash-${randomUUID().slice(0, 8)}` as AliasHash;
+        const hash = fakeAliasHash();
         // Re-encrypt the fixture phone with the real OPS encryptor so the
         // route's decrypt-and-mask path runs against real ciphertext.
         // care-y-ignore-next-line no-plaintext-db-write -- value passes through testFieldEncryptor.encrypt(), result is ciphertext
@@ -1901,10 +1907,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // exclude the merged one.
         const merged = await createTestTicketFixture(tenantDb, { queueId });
         const survivor = await createTestTicketFixture(tenantDb, { queueId });
-        const mergedHash =
-          `merged-hash-${randomUUID().slice(0, 8)}` as AliasHash;
-        const survivorHash =
-          `survivor-hash-${randomUUID().slice(0, 8)}` as AliasHash;
+        const mergedHash = fakeAliasHash();
+        const survivorHash = fakeAliasHash();
         await tenantDb
           .updateTable("clients")
           .set({ alias_hash: mergedHash, merged_into: survivor.clientId })
@@ -1930,8 +1934,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("hides clients whose tickets live in queues the volunteer is not assigned to", async () => {
         const { user } = await setupUserWithTicket();
         const foreign = await createTestTicketFixture(tenantDb);
-        const foreignHash =
-          `foreign-hash-${randomUUID().slice(0, 8)}` as AliasHash;
+        const foreignHash = fakeAliasHash();
         await tenantDb
           .updateTable("clients")
           .set({ alias_hash: foreignHash })
@@ -1949,8 +1952,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("returns clients from every queue for admins", async () => {
         const { user } = await setupUserWithTicket(RoleId.ADMIN);
         const foreign = await createTestTicketFixture(tenantDb);
-        const foreignHash =
-          `admin-hash-${randomUUID().slice(0, 8)}` as AliasHash;
+        const foreignHash = fakeAliasHash();
         await tenantDb
           .updateTable("clients")
           .set({ alias_hash: foreignHash })

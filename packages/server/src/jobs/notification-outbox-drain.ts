@@ -2,9 +2,8 @@
  * Notification outbox drain job.
  *
  * Recurring self-enqueue job that polls notification_outbox in every
- * active tenant schema. Follows the same pattern as escalation-checker
- * and portal-message-expiry: the handler re-enqueues itself in a
- * finally block so the chain survives a throwing tenant.
+ * active tenant schema. Uses the shared registerRecurringHandler so the
+ * self-chain pattern is not duplicated.
  *
  * Target interval: ~5 seconds. The outbox drainer is the single sender
  * for intake notifications. There is no parallel immediate-send path.
@@ -15,6 +14,7 @@ import type { TenantDatabase } from "../db/types.js";
 import type { JobQueue } from "./queue.js";
 import type { OutboxDrainDeps } from "../notifications/outbox.js";
 import { drainOutbox } from "../notifications/outbox.js";
+import { registerRecurringHandler } from "./ensure-recurring.js";
 import type { OrgId, OrgSchema, OrgSlug } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -52,15 +52,16 @@ export interface OutboxDrainJobDeps {
  *
  * Iterates all active org schemas and drains each tenant's outbox.
  * Errors in one tenant are logged and do not stop other tenants.
- * The handler re-enqueues itself in a finally block.
  */
 export function registerOutboxDrainHandler(
   jobQueue: JobQueue,
   deps: OutboxDrainJobDeps,
   intervalMs: number = DEFAULT_OUTBOX_DRAIN_INTERVAL_MS,
 ): void {
-  jobQueue.process(OUTBOX_DRAIN_QUEUE, async () => {
-    try {
+  registerRecurringHandler(
+    jobQueue,
+    OUTBOX_DRAIN_QUEUE,
+    async () => {
       const orgs = await deps.listActiveOrgs();
       for (const org of orgs) {
         try {
@@ -74,9 +75,7 @@ export function registerOutboxDrainHandler(
           );
         }
       }
-    } finally {
-      // Self-chain: re-enqueue so the loop never dies
-      await jobQueue.enqueue(OUTBOX_DRAIN_QUEUE, {}, { delay: intervalMs });
-    }
-  });
+    },
+    intervalMs,
+  );
 }

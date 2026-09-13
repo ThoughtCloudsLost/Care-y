@@ -23,14 +23,9 @@ import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "../tickets/access.js";
 import { ForbiddenError, ValidationError } from "../errors.js";
 import { encode } from "@care-y/crypto";
-import {
-  Permission,
-  ROLE_ID_VALUES,
-  type RoleIdValue,
-  type OrgSchema,
-} from "@care-y/shared";
+import { Permission, type OrgSchema } from "@care-y/shared";
 import type { TicketId, UserId } from "@care-y/shared";
-import { getEffectivePermissions } from "../auth/roles.js";
+import { getUsersWithPermission } from "../auth/roles.js";
 
 export interface ConversionTarget {
   readonly volunteerId: UserId;
@@ -54,39 +49,18 @@ export interface ConvertIntakeKeyWrapResult {
 }
 
 /**
- * Returns active user IDs with vol_public who hold VIEW_INTAKE_RESPONSES
- * in any role, accounting for per-org permission overrides.
+ * Returns active user IDs with vol_public who hold VIEW_INTAKE_RESPONSES,
+ * delegating to the shared getUsersWithPermission helper in auth/roles.
  */
 async function getResponsePermissionHolders(
   db: Kysely<TenantDatabase>,
   orgSchema: OrgSchema,
 ): Promise<Map<UserId, Buffer>> {
-  const rolesWithPerm: RoleIdValue[] = [];
-  for (const roleId of ROLE_ID_VALUES) {
-    const perms = await getEffectivePermissions(db, orgSchema, roleId);
-    if (perms.has(Permission.VIEW_INTAKE_RESPONSES)) {
-      rolesWithPerm.push(roleId);
-    }
-  }
-
-  if (rolesWithPerm.length === 0) return new Map();
-
-  const users = await db
-    .selectFrom("users")
-    .innerJoin("user_keys", "user_keys.user_id", "users.id")
-    .select(["users.id", "user_keys.vol_public"])
-    .where("users.role_id", "in", rolesWithPerm)
-    .where("users.is_active", "=", true)
-    .where("user_keys.vol_public", "is not", null)
-    .execute();
-
-  const result = new Map<UserId, Buffer>();
-  for (const u of users) {
-    if (u.vol_public !== null) {
-      result.set(u.id, u.vol_public);
-    }
-  }
-  return result;
+  return getUsersWithPermission(
+    db,
+    orgSchema,
+    Permission.VIEW_INTAKE_RESPONSES,
+  );
 }
 
 /**

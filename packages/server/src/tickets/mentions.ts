@@ -23,20 +23,31 @@ export interface MentionsService {
   resolveValidMentions(userIds: UserId[]): Promise<UserId[]>;
 }
 
+/**
+ * Validate user IDs against the users table and return the subset that
+ * exists. Shared between MentionsService and the outbox drain path.
+ */
+export async function resolveValidMentionIds(
+  db: Kysely<TenantDatabase>,
+  userIds: UserId[],
+): Promise<UserId[]> {
+  if (userIds.length === 0) return [];
+
+  const rows = await db
+    .selectFrom("users")
+    .select("id")
+    .where("id", "in", userIds)
+    .execute();
+
+  return rows.map((r) => r.id);
+}
+
 export function createMentionsService(
   db: Kysely<TenantDatabase>,
 ): MentionsService {
   return {
     async resolveValidMentions(userIds) {
-      if (userIds.length === 0) return [];
-
-      const rows = await db
-        .selectFrom("users")
-        .select("id")
-        .where("id", "in", userIds)
-        .execute();
-
-      return rows.map((r) => r.id);
+      return resolveValidMentionIds(db, userIds);
     },
   };
 }

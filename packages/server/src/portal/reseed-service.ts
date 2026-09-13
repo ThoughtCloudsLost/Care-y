@@ -14,7 +14,7 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "../tickets/access.js";
-import type { BlobStore, BlobCategory } from "../storage/store.js";
+import type { BlobStore } from "../storage/store.js";
 import {
   attachmentIdSchema,
   recordingIdSchema,
@@ -24,7 +24,9 @@ import {
   type TicketId,
   type AttachmentId,
   type RecordingId,
+  type ChannelRowId,
   type OrgSchema,
+  type BlobKey,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import { findActiveChannel } from "./channel-service.js";
@@ -378,6 +380,123 @@ export async function reseedPortalHistory(
 // convertBlobForReseed
 // ---------------------------------------------------------------------------
 
+/**
+ * Shared inner logic for both attachment and recording branches of
+ * convertBlobForReseed. The table name, id schema, and wrap writer
+ * are the only differences between the two branches.
+ */
+/**
+ * Callback that inserts the portal carrier row (attachment or recording
+ * wrap) inside the blob-swap transaction. The caller's closure captures
+ * the typed id so the inner function stays type-agnostic.
+ */
+type WrapWriter = (
+  trx: Kysely<TenantDatabase>,
+  channelRowId: ChannelRowId,
+  followupId: FollowupId,
+  direction: "from_client" | "to_client",
+  copy: EciesTripleBuffers,
+  createdAt: Date,
+) => Promise<boolean>;
+
+/** Columns the shared conversion path reads, identical across both tables. */
+interface ConvertBlobRow {
+  readonly ticket_id: TicketId;
+  readonly followup_id: FollowupId | null;
+  readonly blob_key: BlobKey;
+  readonly file_key_wrap: Buffer | null;
+  readonly deleted_at: Date | null;
+}
+
+async function convertBlobInner(
+  db: Kysely<TenantDatabase>,
+  access: TicketAccessChecker,
+  userId: UserId,
+  input: ConvertBlobForReseedInput,
+  blobStore: BlobStore,
+  orgSchema: OrgSchema,
+  channelRowId: ChannelRowId,
+  opts: {
+    kind: "attachment" | "recording";
+    label: string;
+    idText: string;
+    loadRow: (
+      db: Kysely<TenantDatabase>,
+    ) => Promise<ConvertBlobRow | undefined>;
+    markConverted: (
+      trx: Kysely<TenantDatabase>,
+      newBlobKey: BlobKey,
+    ) => Promise<void>;
+    writeWrap: WrapWriter;
+  },
+): Promise<void> {
+  const row = await opts.loadRow(db);
+
+  if (row === undefined) {
+    throw new ReseedRowNotFoundError(opts.kind);
+  }
+  if (row.deleted_at !== null) {
+    throw new ReseedRowNotFoundError(opts.kind);
+  }
+  if (row.followup_id !== input.followupId) {
+    throw new ReseedValidationError(
+      `${opts.label} ${opts.idText} followup_id mismatch`,
+    );
+  }
+  if (row.file_key_wrap !== null) {
+    throw new ReseedAlreadyConvertedError();
+  }
+
+  // Load the parent followup for access and direction
+  const fu = await db
+    .selectFrom("followups as f")
+    .innerJoin("tickets as t", "t.id", "f.ticket_id")
+    .select(["f.id", "f.source", "f.created_at", "t.client_id"])
+    .where("f.id", "=", input.followupId)
+    .executeTakeFirst();
+
+  if (fu === undefined) {
+    throw new ReseedValidationError(
+      "Parent followup not found or wrong client",
+    );
+  }
+  if (fu.client_id !== input.clientId) {
+    throw new ReseedValidationError(
+      "Parent followup not found or wrong client",
+    );
+  }
+
+  await access.assertAccess(userId, row.ticket_id);
+
+  const newBlobKey = await blobStore.put(
+    orgSchema,
+    opts.kind,
+    input.encryptedData,
+  );
+  const oldBlobKey = row.blob_key;
+
+  await db.transaction().execute(async (trx) => {
+    await opts.markConverted(trx, newBlobKey);
+
+    const direction: "from_client" | "to_client" =
+      fu.source === "client" ? "from_client" : "to_client";
+
+    await opts.writeWrap(
+      trx,
+      channelRowId,
+      input.followupId,
+      direction,
+      input.copy,
+      fu.created_at,
+    );
+  });
+
+  // Orphan-tolerant old blob cleanup after commit
+  await blobStore.delete(oldBlobKey).catch((_: unknown) => {
+    // Intentional: orphaned blob is harmless
+  });
+}
+
 export async function convertBlobForReseed(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
@@ -386,7 +505,7 @@ export async function convertBlobForReseed(
   blobStore: BlobStore,
   orgSchema: OrgSchema,
 ): Promise<ConvertBlobForReseedResult> {
-  // 1. Channel validation
+  // Channel validation
   const channel = await findActiveChannel(db, input.clientId);
   if (channel === undefined) {
     throw new PortalChannelMismatchError();
@@ -395,195 +514,106 @@ export async function convertBlobForReseed(
     throw new PortalChannelMismatchError();
   }
 
-  const category: BlobCategory =
-    input.kind === "attachment" ? "attachment" : "recording";
-
   if (input.kind === "attachment") {
     const attId = attachmentIdSchema.parse(input.rowId);
-
-    // Load the attachment row
-    const att = await db
-      .selectFrom("attachments")
-      .select([
-        "id",
-        "ticket_id",
-        "followup_id",
-        "blob_key",
-        "file_key_wrap",
-        "deleted_at",
-      ])
-      .where("id", "=", attId)
-      .executeTakeFirst();
-
-    if (att === undefined) {
-      throw new ReseedRowNotFoundError("attachment");
-    }
-    if (att.deleted_at !== null) {
-      throw new ReseedRowNotFoundError("attachment");
-    }
-    if (att.followup_id !== input.followupId) {
-      throw new ReseedValidationError(
-        `Attachment ${attId} followup_id mismatch`,
-      );
-    }
-    if (att.file_key_wrap !== null) {
-      throw new ReseedAlreadyConvertedError();
-    }
-
-    // Load the parent followup for access + direction
-    const fu = await db
-      .selectFrom("followups as f")
-      .innerJoin("tickets as t", "t.id", "f.ticket_id")
-      .select(["f.id", "f.source", "f.created_at", "t.client_id"])
-      .where("f.id", "=", input.followupId)
-      .executeTakeFirst();
-
-    if (fu === undefined) {
-      throw new ReseedValidationError(
-        "Parent followup not found or wrong client",
-      );
-    }
-    if (fu.client_id !== input.clientId) {
-      throw new ReseedValidationError(
-        "Parent followup not found or wrong client",
-      );
-    }
-
-    // Ticket access check
-    await access.assertAccess(userId, att.ticket_id);
-
-    // Re-store the blob under a fresh key
-    const newBlobKey = await blobStore.put(
+    await convertBlobInner(
+      db,
+      access,
+      userId,
+      input,
+      blobStore,
       orgSchema,
-      category,
-      input.encryptedData,
-    );
-    const oldBlobKey = att.blob_key;
-
-    // Transaction: update the attachment row and insert the portal carrier
-    await db.transaction().execute(async (trx) => {
-      await trx
-        .updateTable("attachments")
-        .set({
-          blob_key: newBlobKey,
-          file_key_wrap: input.fileKeyWrap,
-        })
-        .where("id", "=", attId)
-        .execute();
-
-      const direction: "from_client" | "to_client" =
-        fu.source === "client" ? "from_client" : "to_client";
-
-      await insertClientWrap(
-        trx,
-        {
-          attachmentId: attId,
-          channelRowId: channel.id,
-          followupId: input.followupId,
-          direction,
-          copy: input.copy,
+      channel.id,
+      {
+        kind: "attachment",
+        label: "Attachment",
+        idText: attId,
+        loadRow: async (qdb) =>
+          qdb
+            .selectFrom("attachments")
+            .select([
+              "ticket_id",
+              "followup_id",
+              "blob_key",
+              "file_key_wrap",
+              "deleted_at",
+            ])
+            .where("id", "=", attId)
+            .executeTakeFirst(),
+        markConverted: async (trx, newBlobKey) => {
+          await trx
+            .updateTable("attachments")
+            .set({
+              blob_key: newBlobKey,
+              file_key_wrap: input.fileKeyWrap,
+            })
+            .where("id", "=", attId)
+            .execute();
         },
-        { createdAt: fu.created_at, onConflictIgnore: true },
-      );
-    });
-
-    // Orphan-tolerant old blob cleanup after commit
-    await blobStore.delete(oldBlobKey).catch((_: unknown) => {
-      // Intentional: orphaned blob is harmless
-    });
+        writeWrap: async (trx, chId, followupId, direction, copy, createdAt) =>
+          insertClientWrap(
+            trx,
+            {
+              attachmentId: attId,
+              channelRowId: chId,
+              followupId,
+              direction,
+              copy,
+            },
+            { createdAt, onConflictIgnore: true },
+          ),
+      },
+    );
   } else {
     const recId = recordingIdSchema.parse(input.rowId);
-
-    // Load the recording row
-    const rec = await db
-      .selectFrom("recordings")
-      .select([
-        "id",
-        "ticket_id",
-        "followup_id",
-        "blob_key",
-        "file_key_wrap",
-        "deleted_at",
-      ])
-      .where("id", "=", recId)
-      .executeTakeFirst();
-
-    if (rec === undefined) {
-      throw new ReseedRowNotFoundError("recording");
-    }
-    if (rec.deleted_at !== null) {
-      throw new ReseedRowNotFoundError("recording");
-    }
-    if (rec.followup_id !== input.followupId) {
-      throw new ReseedValidationError(
-        `Recording ${recId} followup_id mismatch`,
-      );
-    }
-    if (rec.file_key_wrap !== null) {
-      throw new ReseedAlreadyConvertedError();
-    }
-
-    // Load the parent followup for access + direction
-    const fu = await db
-      .selectFrom("followups as f")
-      .innerJoin("tickets as t", "t.id", "f.ticket_id")
-      .select(["f.id", "f.source", "f.created_at", "t.client_id"])
-      .where("f.id", "=", input.followupId)
-      .executeTakeFirst();
-
-    if (fu === undefined) {
-      throw new ReseedValidationError(
-        "Parent followup not found or wrong client",
-      );
-    }
-    if (fu.client_id !== input.clientId) {
-      throw new ReseedValidationError(
-        "Parent followup not found or wrong client",
-      );
-    }
-
-    // Ticket access check
-    await access.assertAccess(userId, rec.ticket_id);
-
-    // Re-store the blob under a fresh key
-    const newBlobKey = await blobStore.put(
+    await convertBlobInner(
+      db,
+      access,
+      userId,
+      input,
+      blobStore,
       orgSchema,
-      category,
-      input.encryptedData,
-    );
-    const oldBlobKey = rec.blob_key;
-
-    // Transaction: update the recording row and insert the portal carrier
-    await db.transaction().execute(async (trx) => {
-      await trx
-        .updateTable("recordings")
-        .set({
-          blob_key: newBlobKey,
-          file_key_wrap: input.fileKeyWrap,
-        })
-        .where("id", "=", recId)
-        .execute();
-
-      const direction: "from_client" | "to_client" =
-        fu.source === "client" ? "from_client" : "to_client";
-
-      await insertClientRecordingWrap(
-        trx,
-        {
-          recordingId: recId,
-          channelRowId: channel.id,
-          followupId: input.followupId,
-          direction,
-          copy: input.copy,
+      channel.id,
+      {
+        kind: "recording",
+        label: "Recording",
+        idText: recId,
+        loadRow: async (qdb) =>
+          qdb
+            .selectFrom("recordings")
+            .select([
+              "ticket_id",
+              "followup_id",
+              "blob_key",
+              "file_key_wrap",
+              "deleted_at",
+            ])
+            .where("id", "=", recId)
+            .executeTakeFirst(),
+        markConverted: async (trx, newBlobKey) => {
+          await trx
+            .updateTable("recordings")
+            .set({
+              blob_key: newBlobKey,
+              file_key_wrap: input.fileKeyWrap,
+            })
+            .where("id", "=", recId)
+            .execute();
         },
-        { createdAt: fu.created_at, onConflictIgnore: true },
-      );
-    });
-
-    // Orphan-tolerant old blob cleanup after commit
-    await blobStore.delete(oldBlobKey).catch((_: unknown) => {
-      // Intentional: orphaned blob is harmless
-    });
+        writeWrap: async (trx, chId, followupId, direction, copy, createdAt) =>
+          insertClientRecordingWrap(
+            trx,
+            {
+              recordingId: recId,
+              channelRowId: chId,
+              followupId,
+              direction,
+              copy,
+            },
+            { createdAt, onConflictIgnore: true },
+          ),
+      },
+    );
   }
 
   return { inserted: true };

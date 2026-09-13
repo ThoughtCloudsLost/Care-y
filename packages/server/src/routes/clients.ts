@@ -39,9 +39,7 @@ import {
   suggestDuplicatesInputSchema,
   getPhoneSharedLineInputSchema,
   setPhoneSharedLineInputSchema,
-  aliasHashSchema,
   phoneHashSchema,
-  phoneMatchHashSchema,
 } from "@care-y/shared";
 import type { OrgId, ClientId, UserId } from "@care-y/shared";
 import type { ClientService } from "../clients/client-service.js";
@@ -49,7 +47,12 @@ import type { EmailService } from "../clients/email-service.js";
 import type { DismissalService } from "../clients/dismissal-service.js";
 import type { MergeScanService } from "../clients/merge-scan-service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
-import { maskPhone, formatPhone } from "../utils/sql.js";
+import {
+  maskPhone,
+  formatPhone,
+  maskEmail,
+  formatEmail,
+} from "../utils/sql.js";
 import { ForbiddenError, InternalError } from "../errors.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
@@ -122,8 +125,8 @@ function phoneForRole(
 /**
  * Decrypts an OPS-encrypted email Buffer and returns a formatted string
  * based on the caller's role. Admin sees the full address; manager sees a
- * masked form (first char + *** + @domain). The plaintext Buffer is zeroed
- * in the finally block.
+ * masked form (first char + *** + @domain). Delegates to the shared
+ * formatEmail/maskEmail helpers in utils/sql.ts, which zero the Buffer.
  */
 function emailForRole(
   encryptedAddress: Buffer | null,
@@ -133,19 +136,10 @@ function emailForRole(
   if (!encryptedAddress) return null;
   // care-y-ignore-next-line server-no-decrypt -- OPS_SECRETS_KEY operational encryption (ADR-005); mirrors phoneForRole above
   const buf = encryptor.decryptToBuffer(encryptedAddress);
-  try {
-    const full = buf.toString("utf-8");
-    if (roleId === RoleId.ADMIN) {
-      return full;
-    }
-    // Mask: show first character and domain, hide the rest of the local part.
-    const atIndex = full.indexOf("@");
-    if (atIndex <= 0) return "***";
-    const firstChar = full[0] ?? "";
-    return firstChar + "***" + full.slice(atIndex);
-  } finally {
-    buf.fill(0);
+  if (roleId === RoleId.ADMIN) {
+    return formatEmail(buf);
   }
+  return maskEmail(buf);
 }
 
 // ---------------------------------------------------------------------------
@@ -261,7 +255,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
         await svc.updateAlias(
           input.clientId,
           input.encryptedAlias,
-          aliasHashSchema.parse(input.aliasHash),
+          input.aliasHash,
           ctx.user.id,
         );
       }),
@@ -277,10 +271,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
-          await svc.backfillAliasHash(
-            input.clientId,
-            aliasHashSchema.parse(input.aliasHash),
-          );
+          await svc.backfillAliasHash(input.clientId, input.aliasHash);
         }),
       ),
 
@@ -296,7 +287,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
           const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
           await svc.backfillPhoneMatchHash(
             input.clientId,
-            phoneMatchHashSchema.parse(input.phoneMatchHash),
+            input.phoneMatchHash,
           );
         }),
       ),
@@ -506,8 +497,10 @@ export function createClientRouter(deps: ClientRouterDeps) {
           const svc = deps.createMergeScanSvc(ctx.org.tenantDb);
 
           if ("matchHash" in input) {
-            const parsed = phoneMatchHashSchema.parse(input.matchHash);
-            const n = await svc.setSharedLineByMatchHash(parsed, input.shared);
+            const n = await svc.setSharedLineByMatchHash(
+              input.matchHash,
+              input.shared,
+            );
             return { updated: n };
           }
 

@@ -366,7 +366,7 @@ export type ChannelRowId = z.infer<typeof channelRowIdSchema>;
  */
 export const channelSecretSchema = z
   .string()
-  .regex(/^[0-9a-f]+$/)
+  .regex(/^[0-9a-f]{48}$/)
   .brand<"ChannelSecret">();
 export type ChannelSecret = z.infer<typeof channelSecretSchema>;
 
@@ -536,7 +536,10 @@ export type PhoneHash = z.infer<typeof phoneHashSchema>;
  * invert it. Never interchangeable with PhoneHash, which is OPS-keyed.
  * `phones.phone_match_hash`.
  */
-export const phoneMatchHashSchema = z.string().brand<"PhoneMatchHash">();
+export const phoneMatchHashSchema = z
+  .string()
+  .regex(/^[0-9a-f]{128}$/)
+  .brand<"PhoneMatchHash">();
 export type PhoneMatchHash = z.infer<typeof phoneMatchHashSchema>;
 
 /**
@@ -553,14 +556,20 @@ export type EmailHash = z.infer<typeof emailHashSchema>;
  * it. Never interchangeable with EmailHash, which is OPS-keyed.
  * `emails.email_match_hash`.
  */
-export const emailMatchHashSchema = z.string().brand<"EmailMatchHash">();
+export const emailMatchHashSchema = z
+  .string()
+  .regex(/^[0-9a-f]{128}$/)
+  .brand<"EmailMatchHash">();
 export type EmailMatchHash = z.infer<typeof emailMatchHashSchema>;
 
 /**
  * Browser-computed HMAC over a normalized client alias, under the alias index
  * label. `clients.alias_hash`.
  */
-export const aliasHashSchema = z.string().brand<"AliasHash">();
+export const aliasHashSchema = z
+  .string()
+  .regex(/^[0-9a-f]{128}$/)
+  .brand<"AliasHash">();
 export type AliasHash = z.infer<typeof aliasHashSchema>;
 
 /**

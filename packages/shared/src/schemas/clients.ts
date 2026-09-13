@@ -26,7 +26,7 @@ export const clientListInputSchema = z.object({
   cursor: clientIdSchema.optional(),
 
   // Exact-alias lookup via blind index hash (browser-computed)
-  aliasHash: z.string().max(256).pipe(aliasHashSchema).optional(),
+  aliasHash: aliasHashSchema.optional(),
 
   // Filter: tri-state application ownership. true = has tickets, false = no
   // tickets, undefined = no filtering. The list query already computes a
@@ -55,7 +55,7 @@ export type ClientGetInput = z.infer<typeof clientGetInputSchema>;
 export const updateAliasInputSchema = z.object({
   clientId: clientIdSchema,
   encryptedAlias: z.string().min(1).max(4096),
-  aliasHash: z.string().min(1).max(256),
+  aliasHash: aliasHashSchema,
 });
 export type UpdateAliasInput = z.infer<typeof updateAliasInputSchema>;
 
@@ -63,7 +63,7 @@ export type UpdateAliasInput = z.infer<typeof updateAliasInputSchema>;
 
 export const backfillAliasHashInputSchema = z.object({
   clientId: clientIdSchema,
-  aliasHash: z.string().min(1).max(256),
+  aliasHash: aliasHashSchema,
 });
 export type BackfillAliasHashInput = z.infer<
   typeof backfillAliasHashInputSchema
@@ -75,12 +75,7 @@ export const updatePhoneInputSchema = z.object({
   clientId: clientIdSchema,
   phoneNumber: z.string().regex(/^\+[1-9]\d{1,14}$/, "Must be E.164 format"),
   /** Browser-computed HMAC-SHA512 blind index (128 hex chars), nullable. */
-  phoneMatchHash: z
-    .string()
-    .regex(/^[0-9a-f]{128}$/)
-    .pipe(phoneMatchHashSchema)
-    .nullable()
-    .optional(),
+  phoneMatchHash: phoneMatchHashSchema.nullable().optional(),
 });
 export type UpdatePhoneInput = z.infer<typeof updatePhoneInputSchema>;
 
@@ -88,7 +83,7 @@ export type UpdatePhoneInput = z.infer<typeof updatePhoneInputSchema>;
 
 export const backfillPhoneMatchHashInputSchema = z.object({
   clientId: clientIdSchema,
-  phoneMatchHash: z.string().regex(/^[0-9a-f]{128}$/),
+  phoneMatchHash: phoneMatchHashSchema,
 });
 export type BackfillPhoneMatchHashInput = z.infer<
   typeof backfillPhoneMatchHashInputSchema
@@ -110,12 +105,7 @@ export const updateEmailInputSchema = z.object({
   clientId: clientIdSchema,
   emailAddress: z.string().trim().toLowerCase().pipe(z.email().max(254)),
   /** Browser-computed HMAC-SHA512 blind index (128 hex chars), nullable. */
-  emailMatchHash: z
-    .string()
-    .regex(/^[0-9a-f]{128}$/)
-    .pipe(emailMatchHashSchema)
-    .nullable()
-    .optional(),
+  emailMatchHash: emailMatchHashSchema.nullable().optional(),
 });
 export type UpdateEmailInput = z.infer<typeof updateEmailInputSchema>;
 
@@ -134,10 +124,7 @@ export const setPhoneSharedLineInputSchema = z.union([
     shared: z.boolean(),
   }),
   z.object({
-    matchHash: z
-      .string()
-      .regex(/^[0-9a-f]{128}$/)
-      .pipe(phoneMatchHashSchema),
+    matchHash: phoneMatchHashSchema,
     shared: z.boolean(),
   }),
 ]);

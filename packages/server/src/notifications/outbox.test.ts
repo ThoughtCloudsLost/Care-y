@@ -385,7 +385,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row).toBeDefined();
       expect(row!.status).toBe("pending");
       expect(row!.attempt_count).toBe(1);
-      expect(row!.last_error).toBe("transient failure");
+      // Only the classification persists, never the raw message
+      expect(row!.last_error).toBe("Error");
       // next_attempt_at should be in the future
       expect(row!.next_attempt_at.getTime()).toBeGreaterThan(Date.now());
 
@@ -435,7 +436,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row).toBeDefined();
       expect(row!.status).toBe("dead");
       expect(row!.failed_at).not.toBeNull();
-      expect(row!.last_error).toBe("permanent");
+      expect(row!.last_error).toBe("Error");
 
       // Cleanup
       await testDb.db
@@ -558,7 +559,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row!.status).toBe("completed");
     });
 
-    it("drain truncates long error messages in last_error", async () => {
+    it("drain never persists error message content in last_error", async () => {
       const ticketId = await createTicketRow();
       const watcher = await createTestUser(testDb.db);
 
@@ -578,8 +579,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
       });
 
-      const longError = "x".repeat(500);
-      const dispatch = vi.fn().mockRejectedValue(new Error(longError));
+      // A provider-shaped message echoing a phone number must never
+      // reach the row; only the error classification persists.
+      const dispatch = vi
+        .fn()
+        .mockRejectedValue(new Error("delivery to +15550001234 failed"));
       const deps: OutboxDrainDeps = {
         ...makeDrainDeps({ dispatch }),
         orgSchema: testDb.schemaName as OrgSchema,
@@ -593,9 +597,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .where("ticket_id", "=", ticketId)
         .executeTakeFirst();
 
-      expect(row!.last_error).toBeDefined();
-      // Should be truncated to MAX_ERROR_LENGTH (200)
-      expect(row!.last_error!.length).toBeLessThanOrEqual(200);
+      expect(row!.last_error).toBe("Error");
+      expect(row!.last_error).not.toMatch(/\d/);
 
       // Cleanup
       await testDb.db
@@ -1574,8 +1577,47 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // Additional cold branch coverage
     // -----------------------------------------------------------------
 
-    it("stores String(err) in last_error when dispatch throws a non-Error value", async () => {
-      // Covers L306 cond-expr[1]: the String(err) fallback path
+    it("appends the driver code to the classification when present", async () => {
+      const ticketId = await createTicketRow();
+      const watcher = await createTestUser(testDb.db);
+
+      await testDb.db
+        .insertInto("queue_watchers")
+        .values({ queue_id: queueId, user_id: watcher.id })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+
+      await testDb.db
+        .insertInto("notification_outbox")
+        .values({
+          event_type: "ticket_created",
+          ticket_id: ticketId,
+          queue_id: queueId,
+          max_attempts: 5,
+        })
+        .execute();
+
+      const codedError = Object.assign(new Error("duplicate key value"), {
+        code: "23505",
+      });
+      const dispatch = vi.fn().mockRejectedValue(codedError);
+      const deps: OutboxDrainDeps = {
+        ...makeDrainDeps({ dispatch }),
+        orgSchema: testDb.schemaName as OrgSchema,
+      };
+
+      await drainOutbox(testDb.db, deps);
+
+      const row = await testDb.db
+        .selectFrom("notification_outbox")
+        .selectAll()
+        .where("ticket_id", "=", ticketId)
+        .executeTakeFirst();
+
+      expect(row?.last_error).toBe("Error:23505");
+    });
+
+    it("stores the unknown classification when dispatch throws a non-Error value", async () => {
       const ticketId = await createTicketRow();
       const watcher = await createTestUser(testDb.db);
 
@@ -1610,8 +1652,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .where("ticket_id", "=", ticketId)
         .executeTakeFirst();
 
-      // String() coercion of the thrown value
-      expect(row?.last_error).toBe("dispatch-string-error");
+      // Non-Error throws carry no name; the static fallback persists
+      expect(row?.last_error).toBe("unknown");
       expect(row?.status).toBe("pending");
       expect(row?.attempt_count).toBe(1);
 

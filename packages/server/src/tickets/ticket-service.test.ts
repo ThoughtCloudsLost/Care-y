@@ -2132,8 +2132,8 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     it("narrows to exact alias_hash match when query is non-empty", async () => {
       const { userId, clientId } = await createTicketFixture();
-      const hash =
-        `search-hash-${crypto.randomUUID().slice(0, 8)}` as AliasHash;
+      // A schema-valid blind index (128 lowercase hex), unique per run
+      const hash = crypto.randomBytes(64).toString("hex") as AliasHash;
 
       await testDb.db
         .updateTable("clients")
