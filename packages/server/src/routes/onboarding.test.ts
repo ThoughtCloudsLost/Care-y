@@ -27,7 +27,6 @@ import {
   testSealedBox,
   testUnseal,
   TestSetupError,
-  TEST_OPS_KEY,
   TEST_ORG_PUBLIC_KEY,
   mockReq,
   mockRes,
@@ -62,7 +61,6 @@ import {
 } from "./onboarding.js";
 import { createCallerFactory, router } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
-import { deriveSecretsKey, createSecretsEncryptor } from "../config/secrets.js";
 
 const HAS_DB = Boolean(process.env.DATABASE_URL);
 
@@ -119,7 +117,6 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       testDb.platformDb,
       makeTenantDbFactory(testDb.platformDb),
     );
-    const secretsKey = deriveSecretsKey(TEST_OPS_KEY);
     return {
       orgService,
       hasher,
@@ -132,7 +129,6 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       }),
       isSecureCookie: false,
       tenantDbFactory: makeTenantDbFactory(testDb.platformDb),
-      secretsEncryptor: createSecretsEncryptor(secretsKey),
     };
   }
 
@@ -785,29 +781,6 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       expect(config.encrypted_name?.equals(encryptedName)).toBe(true);
       expect(config.default_country_code).toBe("+49");
       expect(config.default_language).toBe("de");
-    });
-
-    it("saveTelephonyChoice stores credentials only in encrypted form", async () => {
-      const { caller } = adminCaller();
-
-      const result = await caller.onboarding.saveTelephonyChoice({
-        mode: "byot",
-        accountSid: "ACtest00000000000000000000000000",
-        authToken: "synthetic-test-auth-token-value",
-      });
-      expect(result).toEqual({ success: true, mode: "byot" });
-
-      const config = await setupOrg.tenantDb
-        .selectFrom("org_config")
-        .select("setup_telephony_config")
-        .executeTakeFirstOrThrow();
-      expect(config.setup_telephony_config).not.toBeNull();
-      // OPS-tier secrets: the stored blob must not contain the plaintext token
-      expect(
-        config.setup_telephony_config!.includes(
-          Buffer.from("synthetic-test-auth-token-value"),
-        ),
-      ).toBe(false);
     });
 
     it("markBriefingSeen flips the user's briefing flag", async () => {

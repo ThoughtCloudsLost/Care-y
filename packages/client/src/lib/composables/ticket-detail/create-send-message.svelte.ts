@@ -2,7 +2,13 @@ import type { QueryClient } from "@tanstack/svelte-query";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { AsyncDecryptCache } from "$lib/crypto/async-decrypt-cache.js";
 import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
-import { followupSlot } from "@care-y/crypto";
+import {
+  followupSlot,
+  eciesEncrypt,
+  toRistrettoPoint,
+  decode,
+  encode,
+} from "@care-y/crypto";
 import { newFollowupId, newPendingFollowupId } from "@care-y/shared";
 import type { FollowupId } from "@care-y/shared";
 import { ticketKeys } from "$lib/query/keys.js";
@@ -28,6 +34,12 @@ export interface SendMessageConfig<TFollowUp> {
   readonly followUpCache: AsyncDecryptCache;
   readonly queryClient: QueryClient;
   readonly buildPendingEntry: (opts: PendingEntryOpts) => TFollowUp;
+  /**
+   * Base64 client public key from the active portal channel, or null.
+   * When present, the message also gets an ECIES client copy so the
+   * client can read the reply in the portal (dual-copy write).
+   */
+  readonly getClientPublic: () => string | null;
   readonly createFollowUpMutate: (args: {
     id: string;
     ticketId: string;
@@ -36,6 +48,11 @@ export interface SendMessageConfig<TFollowUp> {
     type: "message";
     isPrivate: false;
     mentionedPseudonyms: string[];
+    portalCopy?: {
+      ephemeralPoint: string;
+      nonce: string;
+      ciphertext: string;
+    };
   }) => Promise<unknown>;
 }
 
@@ -56,6 +73,7 @@ export function createSendMessage<TFollowUp extends { id: string }>(
     followUpCache,
     queryClient,
     buildPendingEntry,
+    getClientPublic,
     createFollowUpMutate,
   } = config;
 
@@ -96,6 +114,25 @@ export function createSendMessage<TFollowUp extends { id: string }>(
 
       followUpCache.seed(pendingId, text);
 
+      // Dual-copy write: when the client has an active portal channel,
+      // the same text is also sealed to the client's public key so the
+      // reply is readable in the portal. Without it the server writes
+      // only the org copy and the client never sees the message.
+      const clientPublic = getClientPublic();
+      let portalCopy:
+        | { ephemeralPoint: string; nonce: string; ciphertext: string }
+        | undefined;
+      if (clientPublic != null && clientPublic !== "") {
+        const pubBytes = toRistrettoPoint(decode(clientPublic));
+        const textBytes = new TextEncoder().encode(text);
+        const ecies = eciesEncrypt(textBytes, pubBytes);
+        portalCopy = {
+          ephemeralPoint: encode(ecies.ephemeralPoint),
+          nonce: encode(ecies.nonce),
+          ciphertext: encode(ecies.ciphertext),
+        };
+      }
+
       await createFollowUpMutate({
         id: followUpId,
         ticketId,
@@ -104,6 +141,7 @@ export function createSendMessage<TFollowUp extends { id: string }>(
         type: "message" as const,
         isPrivate: false,
         mentionedPseudonyms: mentions,
+        portalCopy,
       });
 
       await queryClient.invalidateQueries({

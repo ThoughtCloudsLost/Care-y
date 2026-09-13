@@ -67,6 +67,10 @@ test.describe.serial("Secure Link Portal", () => {
   test("upgrade with passphrase sends no seed to the server", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
+    // Defensive reopen: the panel from the previous test can close on a
+    // background refetch; the helper is a no-op when it is still open.
+    await openTicketInfoPanel(volunteerPage, "Communication");
+
     let upgradeRequest: Request | null = null;
     volunteerPage.on("request", (req) => {
       if (
@@ -145,6 +149,7 @@ test.describe.serial("Secure Link Portal", () => {
     // app returns to a blocked state with nothing decrypted.
     await volunteerPage.keyboard.press("Escape");
     await volunteerPage.getByRole("tab", { name: "Overview" }).click();
+    await expect(volunteerPage).toHaveURL("/");
     await volunteerPage.getByRole("tab", { name: "Tickets" }).click();
     await openTicketByTitle(volunteerPage, TICKET_TITLE);
     await expect(volunteerPage.locator('[role="log"]')).toBeVisible({
@@ -221,12 +226,12 @@ test.describe.serial("Secure Link Portal", () => {
   test("client reply request carries only ciphertext", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
 
-    let replyRequest: Request | null = null;
-    portalPage.on("request", (req) => {
-      if (req.url().includes("portalReply") && req.method() === "POST") {
-        replyRequest = req;
-      }
-    });
+    // Register the request predicate BEFORE the triggering action so the
+    // tRPC httpBatchLink POST is captured even if it fires on a later tick.
+    const replyRequestPromise = portalPage.waitForRequest(
+      (req) => req.url().includes("portalReply") && req.method() === "POST",
+      { timeout: CRYPTO_TIMEOUT },
+    );
 
     const composer = portalPage.getByRole("textbox").first();
     await composer.click();
@@ -240,8 +245,8 @@ test.describe.serial("Secure Link Portal", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    expect(replyRequest).not.toBeNull();
-    const body = replyRequest!.postData() ?? "";
+    const replyRequest = await replyRequestPromise;
+    const body = replyRequest.postData() ?? "";
     expect(body).not.toContain(CLIENT_REPLY);
     expect(body).toContain("wrappedTkTemp");
     expect(body).toContain("selfCopy");
@@ -271,7 +276,14 @@ test.describe.serial("Secure Link Portal", () => {
   test("client reply converges to a normal follow-up on open", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
-    await volunteerPage.reload();
+    // Navigate away and back inside the app instead of reloading: a
+    // reload drops the volunteer's in-memory keys and bricks the session
+    // (same repair as the dual-copy test above).
+    await volunteerPage.keyboard.press("Escape");
+    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
+    await expect(volunteerPage).toHaveURL("/");
+    await volunteerPage.getByRole("tab", { name: "Tickets" }).click();
+    await openTicketByTitle(volunteerPage, TICKET_TITLE);
     await expect(volunteerPage.locator('[role="log"]')).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });

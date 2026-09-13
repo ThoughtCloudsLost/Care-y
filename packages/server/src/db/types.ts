@@ -207,7 +207,6 @@ export interface OrgConfigTable {
   icon_512_blob_key: BlobKey | null;
   icon_maskable_blob_key: BlobKey | null;
   default_language: ColumnType<string, string | undefined, string>;
-  setup_telephony_config: Buffer | null; // encrypted JSON blob (nonce || ciphertext), set during wizard
   encrypted_terminology: Buffer | null; // encrypted JSON blob (nonce || ciphertext), per-language labels
   default_note_type_id: NoteTypeId | null;
   intake_queue_id: QueueId | null;

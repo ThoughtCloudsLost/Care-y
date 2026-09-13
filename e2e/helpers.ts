@@ -485,8 +485,12 @@ export async function openTicketByTitle(
 ): Promise<void> {
   const currentUrl = page.url();
   if (!currentUrl.endsWith("/tickets")) {
-    await page.getByRole("tab", { name: "Tickets" }).click();
-    await expect(page).toHaveURL("/tickets");
+    // A click during the post-login key unlock is swallowed; retry the
+    // click until the route actually changes instead of clicking once.
+    await expect(async () => {
+      await page.getByRole("tab", { name: "Tickets" }).click();
+      await expect(page).toHaveURL("/tickets", { timeout: 2_000 });
+    }).toPass({ timeout: CRYPTO_TIMEOUT });
   }
 
   const card = page.locator('[data-testid="ticket-card-wrap"]', {
@@ -495,7 +499,14 @@ export async function openTicketByTitle(
 
   await expect(card).toBeVisible({ timeout: CRYPTO_TIMEOUT });
   // Each card exposes a single "Open <ticket> <alias>" overlay button.
-  await card.getByRole("button", { name: /^open /i }).click();
+  // The list re-renders as decrypts land and rows re-sort, which can
+  // detach the resolved node mid-click; re-resolve and retry until the
+  // click sticks.
+  await expect(async () => {
+    await card
+      .getByRole("button", { name: /^open /i })
+      .click({ timeout: 2_000 });
+  }).toPass({ timeout: CRYPTO_TIMEOUT });
 
   // On desktop, ticket detail opens in a split-view pane via pushState
   // (URL stays at /tickets). On mobile, it navigates to /tickets/{uuid}.
@@ -1067,6 +1078,11 @@ export async function auditA11y(
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .exclude("#splash")
     .exclude("[inert]")
+    // Dev-only floating panel trigger: absent from production builds, and
+    // its overlay position trips target-size/target-offset on buttons it
+    // happens to float over during dev-server audits.
+    .exclude(".dev-trigger")
+    .exclude(".dev-panel")
     .disableRules([...SHARED_AXE_DISABLES, ...(opts.disableRules ?? [])]);
   if (opts.include !== undefined) {
     builder = builder.include(opts.include);

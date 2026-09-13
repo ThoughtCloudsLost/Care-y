@@ -16,6 +16,7 @@ import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as AppState from "$app/state";
 import type * as AppNavigation from "$app/navigation";
 import type * as AppPaths from "$app/paths";
+import type * as CryptoPkg from "@care-y/crypto";
 
 // --- Controllable mock state ---
 
@@ -48,6 +49,13 @@ vi.mock("$app/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof AppNavigation>()),
   replaceState: mockReplaceState,
   onNavigate: vi.fn(),
+  // The page runs its flow in afterNavigate (router-init safety). The
+  // real hook fires after mount; queueMicrotask approximates that.
+  afterNavigate: (cb: () => void) => {
+    queueMicrotask(() => {
+      cb();
+    });
+  },
 }));
 
 vi.mock("$app/paths", async (importOriginal) => ({
@@ -69,6 +77,13 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
       openShare: { mutate: (...args: unknown[]) => mockMutateFn(...args) },
     },
   },
+}));
+
+// Page awaits getSodium() before decrypting; stub it so jsdom never loads
+// the libsodium JS fallback (~500ms penalty per file).
+vi.mock("@care-y/crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoPkg>()),
+  getSodium: vi.fn().mockResolvedValue({}),
 }));
 
 const { mockDecryptShare } = vi.hoisted(() => ({

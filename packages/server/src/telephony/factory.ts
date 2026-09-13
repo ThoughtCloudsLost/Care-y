@@ -56,13 +56,10 @@ export function createProviderFactory(
       plaintext.fill(0);
     }
 
-    // Validate against the provider's schema
+    // Validate against the provider's schema. The schema record is
+    // complete over StoredProviderId and the DB column carries a CHECK
+    // constraint on the same ids, so the lookup cannot miss.
     const schema = providerConfigSchemas[row.provider];
-    if (!schema) {
-      throw new TelephonyConfigError(
-        `Unknown telephony provider: ${row.provider}`,
-      );
-    }
 
     const parseResult = schema.safeParse(rawConfig);
     if (!parseResult.success) {

@@ -1318,6 +1318,7 @@ export function createTicketService(
           eb.ref("f.created_at").as("created_at"),
           eb.ref("f.note_type_id").as("note_type_id"),
           eb.ref("f.event_params").as("event_params"),
+          eb.ref("f.key_generation").as("key_generation"),
           eb.fn
             .agg<number>("row_number")
             .over((ob) =>
@@ -1392,6 +1393,7 @@ export function createTicketService(
           "ranked_f.has_file",
           "ranked_f.note_type_id",
           "ranked_f.event_params",
+          "ranked_f.key_generation",
           "tkw.ephemeral_point",
           "tkw.nonce",
           "tkw.wrapped_key",
@@ -1411,11 +1413,16 @@ export function createTicketService(
           type: row.type,
           encryptedContent: row.encrypted_content,
           createdAt: row.created_at,
-          keyWrap: buildKeyWrap(
-            row.ephemeral_point,
-            row.nonce,
-            row.wrapped_key,
-          ),
+          // A pending-convergence row (non-null key_generation) is
+          // encrypted under tk_temp, not the canonical tk; attaching the
+          // ticket wrap would make the list preview decrypt with the
+          // wrong key and poison the shared client cache with an error
+          // sentinel before the detail's sealed-wrap path can run. The
+          // preview shows a placeholder until convergence instead.
+          keyWrap:
+            row.key_generation == null
+              ? buildKeyWrap(row.ephemeral_point, row.nonce, row.wrapped_key)
+              : null,
           hasRecording: Boolean(row.has_recording),
           hasImage: Boolean(row.has_image),
           hasFile: Boolean(row.has_file),

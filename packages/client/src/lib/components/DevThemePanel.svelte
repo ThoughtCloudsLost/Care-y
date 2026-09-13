@@ -213,7 +213,11 @@
   /* Trigger: fixed top-right, sits in the navbar band on all pages */
   .dev-trigger {
     position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    /* Mid-edge, not a corner: top-right collides with QuickExit on the
+       portal pages (obscuring the panic button and tripping the axe
+       target-size audit), bottom edges collide with the tab bar. */
+    top: 50%;
+    transform: translateY(-50%);
     right: 12px;
     z-index: 99997;
     background: none;
@@ -221,6 +225,10 @@
     color: var(--muted);
     cursor: pointer;
     padding: 4px;
+    /* Touch-target floor: keeps dev-only chrome out of axe target-size
+       findings when specs audit pages it happens to float over. */
+    min-width: 24px;
+    min-height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;

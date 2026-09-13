@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import { tick } from "svelte";
 import ReplySheet from "./ReplySheet.svelte";
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
@@ -34,6 +34,8 @@ import type * as CreateExposureHint from "$lib/composables/ticket-detail/create-
 import type * as CreateSmsSend from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
 import type * as CreateReactionsQuery from "$lib/tickets/create-reactions-query.svelte.js";
 import type * as TicketQueries from "$lib/tickets/queries.js";
+import type * as CareYCrypto from "@care-y/crypto";
+import type * as TicketComposeMod from "$lib/components/tickets/TicketCompose.svelte";
 
 // jsdom has no ResizeObserver; ShellMessagebar and Konsta may observe.
 vi.stubGlobal(
@@ -70,6 +72,7 @@ const {
   mockCreateFollowUp,
   mockToggleReaction,
   mockGetReactions,
+  mockEciesEncrypt,
 } = vi.hoisted(() => ({
   mockEncrypt: vi
     .fn<(ticketId: string, slot: string, text: string) => Promise<string>>()
@@ -88,6 +91,23 @@ const {
       ) => Promise<Record<string, never>>
     >()
     .mockResolvedValue({}),
+  mockEciesEncrypt: vi.fn().mockReturnValue({
+    ephemeralPoint: new Uint8Array([1, 2, 3]),
+    nonce: new Uint8Array([4, 5, 6]),
+    ciphertext: new Uint8Array([7, 8, 9]),
+  }),
+}));
+
+// vi.mock required: @care-y/crypto barrel triggers libsodium WASM
+// initialization via getSodium() singleton. eciesEncrypt, toRistrettoPoint,
+// decode, and encode all call requireSodium() which needs the WASM backend.
+// Spread importOriginal to keep pure helpers like followupSlot working.
+vi.mock("@care-y/crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof CareYCrypto>()),
+  eciesEncrypt: mockEciesEncrypt,
+  toRistrettoPoint: (bytes: Uint8Array) => bytes,
+  decode: (s: string) => new TextEncoder().encode(s),
+  encode: (bytes: Uint8Array) => `b64:${String(bytes.length)}`,
 }));
 
 // vi.mock required: $lib/trpc/index.js creates a live tRPC HTTP client via
@@ -269,6 +289,17 @@ vi.mock(
     }) satisfies typeof ShellCtxModule,
 );
 
+// vi.mock required: TicketCompose wraps ShellMessagebar (mocked to passthrough)
+// and uses $state-driven mode logic that cannot fire onsendreply without the
+// real messagebar. Replace with a stub that renders a send button.
+vi.mock(
+  "$lib/components/tickets/TicketCompose.svelte",
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof TicketComposeMod>()),
+    default: (await import("./test-helpers/TicketComposeStub.svelte")).default,
+  }),
+);
+
 function makePreview(
   overrides: Partial<RawFollowUpPreview> = {},
 ): RawFollowUpPreview {
@@ -293,6 +324,7 @@ const baseProps = {
   ticketId: "ticket-001",
   clientAlias: "Sparrow",
   hasPhone: false,
+  clientPublic: null as string | null,
   previewFollowUps: undefined as RawFollowUpPreview[] | undefined,
   followUpCount: 0,
   ondismiss: vi.fn(),
@@ -305,6 +337,7 @@ beforeEach(() => {
   mockCreateFollowUp.mockClear();
   mockToggleReaction.mockClear();
   mockGetReactions.mockClear();
+  mockEciesEncrypt.mockClear();
   baseProps.ondismiss.mockClear();
   baseProps.onsent.mockClear();
 });
@@ -597,5 +630,78 @@ describe("ReplySheet", () => {
 
     const thread = container.querySelector(".thread");
     expect(thread!.children.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // ── Portal copy in reply send ──
+
+  it("includes portalCopy in mutation input when clientPublic is set", async () => {
+    const { container } = render(ReplySheet, {
+      props: {
+        ...baseProps,
+        clientPublic: "base64-client-public-key",
+      },
+    });
+
+    const textarea = container.querySelector(
+      "[data-testid='compose-textarea']",
+    ) as HTMLTextAreaElement;
+    const sendBtn = container.querySelector(
+      "[data-testid='compose-send']",
+    ) as HTMLButtonElement;
+
+    await fireEvent.input(textarea, {
+      target: { value: "Hello from volunteer" },
+    });
+    await fireEvent.click(sendBtn);
+    await tick();
+
+    // Let the async handleReplySend complete (encrypt is mocked as resolved).
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockCreateFollowUp).toHaveBeenCalledTimes(1);
+    const callArg = mockCreateFollowUp.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(callArg).toHaveProperty("portalCopy");
+
+    const portalCopy = callArg.portalCopy as Record<string, string>;
+    expect(portalCopy).toHaveProperty("ephemeralPoint");
+    expect(portalCopy).toHaveProperty("nonce");
+    expect(portalCopy).toHaveProperty("ciphertext");
+
+    expect(mockEciesEncrypt).toHaveBeenCalledTimes(1);
+  });
+
+  it("omits portalCopy from mutation input when clientPublic is null", async () => {
+    const { container } = render(ReplySheet, {
+      props: {
+        ...baseProps,
+        clientPublic: null,
+      },
+    });
+
+    const textarea = container.querySelector(
+      "[data-testid='compose-textarea']",
+    ) as HTMLTextAreaElement;
+    const sendBtn = container.querySelector(
+      "[data-testid='compose-send']",
+    ) as HTMLButtonElement;
+
+    await fireEvent.input(textarea, {
+      target: { value: "Hello from volunteer" },
+    });
+    await fireEvent.click(sendBtn);
+    await tick();
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockCreateFollowUp).toHaveBeenCalledTimes(1);
+    const callArg = mockCreateFollowUp.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(callArg.portalCopy).toBeUndefined();
+    expect(mockEciesEncrypt).not.toHaveBeenCalled();
   });
 });

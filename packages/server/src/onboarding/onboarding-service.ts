@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Kysely } from "kysely";
-import { RoleId, ErrorCode } from "@care-y/shared";
+import { RoleId, ErrorCode, sessionTokenSchema } from "@care-y/shared";
 import type {
   OrgId,
   OrgSlug,
@@ -8,9 +8,8 @@ import type {
   InviteTokenId,
   SessionToken,
   UserId,
+  RoleIdValue,
 } from "@care-y/shared";
-import { sessionTokenSchema } from "@care-y/shared";
-import type { RoleIdValue } from "@care-y/shared";
 import type { TenantDatabase } from "../db/types.js";
 import { isPgUniqueViolation } from "../db/pg-errors.js";
 import { ConflictError } from "../errors.js";
@@ -29,7 +28,6 @@ import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { createSealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { PasswordHasher } from "../auth/password.js";
-import type { SecretsEncryptor } from "../config/secrets.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -38,7 +36,6 @@ export interface OnboardingServiceDeps {
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
   readonly tokenizer: SessionTokenizer;
-  readonly secretsEncryptor: SecretsEncryptor;
 }
 
 export interface BootstrapAdminInput {
@@ -72,12 +69,6 @@ export interface UpdateOrgGeneralInput {
   readonly encryptedTerminology?: string;
 }
 
-export interface SaveTelephonyInput {
-  readonly mode: string;
-  readonly accountSid?: string;
-  readonly authToken?: string;
-}
-
 export interface OnboardingService {
   getSetupStatus(): Promise<{ needsSetup: boolean }>;
 
@@ -92,8 +83,6 @@ export interface OnboardingService {
   ): Promise<{ userId: UserId; sessionToken: SessionToken }>;
 
   updateOrgGeneral(input: UpdateOrgGeneralInput): Promise<void>;
-
-  saveTelephonyChoice(input: SaveTelephonyInput): Promise<{ mode: string }>;
 }
 
 // ── Standalone helper ────────────────────────────────────────────────
@@ -116,7 +105,7 @@ export function createOnboardingService(
   db: Kysely<TenantDatabase>,
   deps: OnboardingServiceDeps,
 ): OnboardingService {
-  const { hasher, encryptor, indexer, tokenizer, secretsEncryptor } = deps;
+  const { hasher, encryptor, indexer, tokenizer } = deps;
 
   return {
     async getSetupStatus(): Promise<{ needsSetup: boolean }> {
@@ -280,38 +269,6 @@ export function createOnboardingService(
       }
 
       await db.updateTable("org_config").set(updates).execute();
-    },
-
-    async saveTelephonyChoice(
-      input: SaveTelephonyInput,
-    ): Promise<{ mode: string }> {
-      let telephonyConfig: Record<string, string>;
-
-      if (
-        input.mode === "byot" &&
-        input.accountSid != null &&
-        input.authToken != null
-      ) {
-        telephonyConfig = {
-          mode: "byot",
-          provider: "twilio",
-          accountSid: input.accountSid,
-          authToken: input.authToken,
-        };
-      } else {
-        telephonyConfig = { mode: input.mode };
-      }
-
-      const encrypted = secretsEncryptor.encrypt(
-        Buffer.from(JSON.stringify(telephonyConfig), "utf8"),
-      );
-
-      await db
-        .updateTable("org_config")
-        .set({ setup_telephony_config: encrypted })
-        .execute();
-
-      return { mode: input.mode };
     },
   };
 }

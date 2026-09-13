@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { page } from "$app/state";
-  import { replaceState } from "$app/navigation";
+  import { afterNavigate, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { Block, Preloader } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { getSodium } from "@care-y/crypto";
   import { decryptShare } from "$lib/portal/share-crypto.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
 
@@ -19,7 +19,15 @@
 
   let viewState: ShareViewState = $state({ kind: "loading" });
 
-  onMount(() => {
+  // afterNavigate, not onMount: replaceState throws if called before the
+  // router initializes, which is exactly the hard-load case of a client
+  // opening the SMS link. afterNavigate fires post-init on mount and on
+  // later navigations; the guard keeps the one-shot consume semantics.
+  let opened = false;
+  afterNavigate(() => {
+    if (opened) return;
+    opened = true;
+
     const shareId = page.params.id;
     const fragment = location.hash.slice(1);
 
@@ -33,13 +41,17 @@
 
     void trpc.clientPortal.openShare
       .mutate({ shareId })
-      .then((result) => {
+      .then(async (result) => {
         if (result.status === "ready") {
           try {
+            // CryptoProvider only fires sodium init without awaiting it;
+            // this page must not race the WASM load.
+            await getSodium();
             const text = decryptShare(shareId, result.ciphertext, fragment);
             viewState = { kind: "content", text };
             announceToLiveRegion("polite", m.share_view_heading());
-          } catch {
+          } catch (err: unknown) {
+            console.error("[share] decrypt failed:", err);
             viewState = { kind: "badLink" };
             announceToLiveRegion("polite", m.share_view_bad_link());
           }

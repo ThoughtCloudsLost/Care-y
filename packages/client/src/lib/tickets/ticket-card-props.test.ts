@@ -189,6 +189,45 @@ describe("mapTicketDisplayFields", () => {
     ).toEqual({ status: "ready", value: "Shelter referral" });
   });
 
+  it("treats intake-wrap tickets as having access (not denied)", () => {
+    const record = makeRecord({
+      id: "t-intake",
+      keyWrap: null,
+      intakeWrap: "sealed-wrap-base64",
+    });
+    const result = mapTicketDisplayFields(
+      record,
+      makeFieldDeps({ decryptTitle: () => undefined }),
+    );
+    expect(result.titleResult).toEqual({ status: "loading" });
+  });
+
+  it("resolves intake-wrap ticket to ready when cache returns plaintext", () => {
+    const record = makeRecord({
+      id: "t-intake",
+      keyWrap: null,
+      intakeWrap: "sealed-wrap-base64",
+    });
+    const result = mapTicketDisplayFields(
+      record,
+      makeFieldDeps({ decryptTitle: () => "Web intake - Jane" }),
+    );
+    expect(result.titleResult).toEqual({
+      status: "ready",
+      value: "Web intake - Jane",
+    });
+  });
+
+  it("stays denied when both keyWrap and intakeWrap are absent", () => {
+    const record = makeRecord({
+      id: "t-no-key",
+      keyWrap: null,
+      intakeWrap: null,
+    });
+    const result = mapTicketDisplayFields(record, makeFieldDeps());
+    expect(result.titleResult).toEqual({ status: "denied" });
+  });
+
   it("parses timestamp strings into Dates and keeps a null last activity", () => {
     const fields = mapTicketDisplayFields(
       makeRecord({ id: "t1", lastActivityAt: "2026-02-03T04:05:06Z" }),

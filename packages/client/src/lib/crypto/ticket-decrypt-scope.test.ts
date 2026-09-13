@@ -3,6 +3,7 @@ import { followupSlot } from "@care-y/crypto";
 import { DECRYPT_ERROR_SENTINEL } from "./async-decrypt-cache.js";
 import {
   createTicketDecryptScope,
+  hasTicketKeyMaterial,
   type TicketDecryptScopeDeps,
 } from "./ticket-decrypt-scope.js";
 import type {
@@ -294,5 +295,37 @@ describe("TicketDecryptScope", () => {
 
       expect(scope.hasAccess).toBe(true);
     });
+  });
+});
+
+describe("hasTicketKeyMaterial", () => {
+  it("returns false when keyWrap is null and intakeWrap is null", () => {
+    expect(hasTicketKeyMaterial(null, null)).toBe(false);
+  });
+
+  it("returns false when keyWrap is null and intakeWrap is undefined", () => {
+    expect(hasTicketKeyMaterial(null, undefined)).toBe(false);
+  });
+
+  it("returns false when keyWrap is null and intakeWrap is empty string", () => {
+    expect(hasTicketKeyMaterial(null, "")).toBe(false);
+  });
+
+  it("returns false when keyWrap is null and intakeWrap is omitted", () => {
+    expect(hasTicketKeyMaterial(null)).toBe(false);
+  });
+
+  it("returns true when keyWrap is a non-null object", () => {
+    expect(hasTicketKeyMaterial({ wrapped: true }, null)).toBe(true);
+  });
+
+  it("returns true when keyWrap is null and intakeWrap is a non-empty string", () => {
+    expect(hasTicketKeyMaterial(null, "sealed-wrap-base64")).toBe(true);
+  });
+
+  it("returns true when both keyWrap and intakeWrap are present", () => {
+    expect(hasTicketKeyMaterial({ wrapped: true }, "sealed-wrap-base64")).toBe(
+      true,
+    );
   });
 });

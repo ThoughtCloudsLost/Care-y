@@ -886,6 +886,7 @@
   ticketId={replyFlow.targetTicketId}
   clientAlias={replyFlow.clientAlias}
   hasPhone={replyFlow.hasPhone}
+  clientPublic={replyFlow.clientPublic}
   previewFollowUps={replyFlow.previewFollowUps}
   followUpCount={replyFlow.followUpCount}
   ondismiss={() => replyFlow.dismiss()}

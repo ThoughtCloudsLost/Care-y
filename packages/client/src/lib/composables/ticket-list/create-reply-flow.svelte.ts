@@ -10,6 +10,7 @@ export interface ReplyFlowDeps {
     clientAlias: string | null;
     hasPhone: boolean;
     followUpCount: number;
+    portalChannel?: { clientPublic: string } | null;
   }[];
   readonly getPreviewFollowUps: (
     ticketId: string,
@@ -22,6 +23,7 @@ export interface ReplyFlowState {
   readonly targetTicketId: string;
   readonly clientAlias: string | null;
   readonly hasPhone: boolean;
+  readonly clientPublic: string | null;
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
   readonly followUpCount: number;
   open(ticketId: string): void;
@@ -34,6 +36,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
   let targetTicketId = $state("");
   let clientAlias = $state<string | null>("");
   let hasPhone = $state(false);
+  let clientPublic = $state<string | null>(null);
   let previewFollowUps = $state<RawFollowUpPreview[] | undefined>(undefined);
   let followUpCount = $state(0);
 
@@ -43,6 +46,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     targetTicketId = ticketId;
     clientAlias = ticket.clientAlias;
     hasPhone = ticket.hasPhone;
+    clientPublic = ticket.portalChannel?.clientPublic ?? null;
     previewFollowUps = deps.getPreviewFollowUps(ticketId);
     followUpCount = ticket.followUpCount;
     sheetOpen = true;
@@ -62,6 +66,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     targetTicketId = "";
     clientAlias = "";
     hasPhone = false;
+    clientPublic = null;
     previewFollowUps = undefined;
     followUpCount = 0;
   }
@@ -78,6 +83,9 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     },
     get hasPhone(): boolean {
       return hasPhone;
+    },
+    get clientPublic(): string | null {
+      return clientPublic;
     },
     get previewFollowUps(): RawFollowUpPreview[] | undefined {
       return previewFollowUps;

@@ -79,6 +79,22 @@ export default async function globalSetup(): Promise<void> {
       "EXECUTE format('DELETE FROM %I.ticket_watchers WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
       "EXECUTE format('DELETE FROM %I.ticket_read_cursors WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
       "EXECUTE format('DELETE FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id)', s, s);",
+      // Stale web-intake tickets escape the sweep above (they carry a
+      // client-authored intake followup) and their unconverted interim
+      // wraps break the intake spec's wrap-count probes. An
+      // intake_key_wraps row exactly identifies "unconverted web-intake
+      // ticket from a prior run": seed tickets never have one and this
+      // run has not submitted yet. Children first, then the tickets.
+      "EXECUTE format('DELETE FROM %I.followups WHERE ticket_id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
+      "EXECUTE format('DELETE FROM %I.ticket_watchers WHERE ticket_id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
+      "EXECUTE format('DELETE FROM %I.ticket_read_cursors WHERE ticket_id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
+      "EXECUTE format('DELETE FROM %I.tickets WHERE id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
+      // Stale pending-convergence follow-ups (non-null key_generation)
+      // from prior runs are sealed under rotated org keys and can never
+      // converge; they break the specs' wrap-count probes and render as
+      // permanent decrypt errors. Nothing is legitimately pending at
+      // setup time. portal_reply_key_wraps and portal_messages cascade.
+      "EXECUTE format('DELETE FROM %I.followups WHERE key_generation IS NOT NULL', s);",
       "END IF; END $fn$;",
     ].join("\n");
     execSync(`${COMPOSE} exec -T db psql -U care_y -d care_y`, {
@@ -113,6 +129,32 @@ export default async function globalSetup(): Promise<void> {
     console.warn("[e2e] Could not clean stale KB articles (non-fatal)");
   }
 
+  // Delete non-default intake forms from prior runs. The multi-form routing
+  // spec creates forms with known slugs (e2e-form-alpha, e2e-form-beta).
+  // Stale forms cause slug-uniqueness conflicts on the next run.
+  // intake_form_fields cascade from intake_forms via FK.
+  console.log("[e2e] Cleaning stale E2E intake forms...");
+  try {
+    const intakeFormSql = [
+      "DO $fn$ DECLARE s TEXT; BEGIN",
+      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
+      "IF s IS NOT NULL THEN",
+      "EXECUTE format('DELETE FROM %I.intake_form_responses WHERE form_id IN (SELECT id FROM %I.intake_forms WHERE is_default = false)', s, s);",
+      "EXECUTE format('DELETE FROM %I.intake_forms WHERE is_default = false', s);",
+      "END IF; END $fn$;",
+    ].join("\n");
+    execSync(
+      `${COMPOSE} exec -T db psql -U care_y -d care_y -v ON_ERROR_STOP=1`,
+      {
+        input: intakeFormSql,
+        stdio: ["pipe", "inherit", "inherit"],
+        cwd: process.cwd(),
+      },
+    );
+  } catch {
+    console.warn("[e2e] Could not clean stale intake forms (non-fatal)");
+  }
+
   // Point the org at an intake queue. The seed creates queues but leaves
   // org_config.intake_queue_id null, which an admin would set during
   // onboarding. Without it every public intake submission fails with
@@ -144,7 +186,7 @@ export default async function globalSetup(): Promise<void> {
   // upgrading one to Secure Link or Account persists in the org across
   // runs, after which "Set up secure link" is gone and the spec fails
   // looking for it. Each run recreates whatever channels it needs.
-  console.log("[e2e] Resetting client communication tiers...");
+  console.log("[e2e] Resetting communication tiers...");
   try {
     const tierSql = [
       "DO $fn$ DECLARE s TEXT; BEGIN",

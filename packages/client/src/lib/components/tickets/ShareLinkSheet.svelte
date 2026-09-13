@@ -137,7 +137,12 @@
           }),
           5000,
         );
+      } else if (err instanceof RelayError) {
+        // Share row and follow-up exist at this point; only the SMS failed.
+        console.error("[ShareLinkSheet] SMS relay failed:", err);
+        toastStore.show(m.ticket_sms_error_send(), 3000);
       } else {
+        console.error("[ShareLinkSheet] send failed before relay:", err);
         toastStore.show(m.error_generic(), 3000);
       }
     } finally {

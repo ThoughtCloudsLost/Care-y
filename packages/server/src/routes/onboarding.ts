@@ -20,7 +20,6 @@ import {
   registerFromInviteInputSchema,
   generateInviteInputSchema,
   revokeInviteInputSchema,
-  saveTelephonyChoiceInputSchema,
   ErrorCode,
   Permission,
 } from "@care-y/shared";
@@ -362,24 +361,6 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           await service.updateOrgGeneral(input);
 
           return { success: true as const };
-        }),
-      ),
-
-    saveTelephonyChoice: authedProcedure
-      .input(saveTelephonyChoiceInputSchema)
-      .mutation(
-        withErrorWrapping(async ({ ctx, input }) => {
-          await requirePermissionForOrg(
-            ctx.org.tenantDb,
-            ctx.org.orgSchema,
-            ctx.user.roleId,
-            Permission.MANAGE_ROLES,
-          );
-
-          const service = createOnboardingService(ctx.org.tenantDb, deps);
-          const result = await service.saveTelephonyChoice(input);
-
-          return { success: true as const, mode: result.mode };
         }),
       ),
 
