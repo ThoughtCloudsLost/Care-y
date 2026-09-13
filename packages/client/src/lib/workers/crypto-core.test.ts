@@ -5066,7 +5066,12 @@ describe("detectMergeCandidates cap, suppression, and canonical ordering", () =>
     await loadOrgKey();
     const hash = await phoneMatchHashVia("+15550060001", 10_070);
 
-    // 21 clients on one hash: C(21,2) = 210 > 200
+    // 21 clients on one hash: C(21,2) = 210 > 200.
+    // 200 is MAX_MERGE_CANDIDATES, the agreed bound on how many pairs the
+    // Worker generates (ADR-103). It is module-private, so the literal below
+    // is the only way to pin it. Tuning the cap should update this
+    // deliberately: the number is what stops a shared phone line from
+    // producing a quadratic candidate list.
     const clients = Array.from({ length: 21 }, (_, i) => ({
       clientId: `c-cap-${String(i).padStart(4, "0")}`,
       phoneMatchHash: hash,
