@@ -2488,6 +2488,7 @@
   "intake_submit_hint": "What you wrote has been encrypted. Only assigned volunteers can read it. Even if someone breaks into this server, they cannot read it.",
   "intake_hint_dismiss": "Got it",
   "intake_error_generic": "Your message didn't go through. Nothing was sent. Try again.",
+  "intake_error_load": "The form couldn't load. Check your connection and try again.",
   "intake_error_rate_limited": "Too many messages from this connection. Try again in about {minutes} minutes, or call us.",
   "intake_error_encryption_unavailable": "This form can't encrypt right now. Please call instead.",
   "intake_error_field_required": "This field is required.",

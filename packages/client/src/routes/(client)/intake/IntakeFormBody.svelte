@@ -159,6 +159,10 @@
 
   // ---- Org public key query (dedicated, not from branding cache) ----
 
+  // These three queries retry transient failures: this is the public front
+  // door, visitors arrive on bad connections, and every not-available
+  // condition arrives as a data flag rather than a thrown error, so a
+  // throw here is transport-shaped.
   const orgKeyQuery = createQuery(() => ({
     queryKey: portalKeys.orgPublicKey(),
     queryFn: async (): Promise<Uint8Array | null> => {
@@ -168,7 +172,7 @@
       return decode(data.orgPublicKey);
     },
     staleTime: 5 * 60 * 1000,
-    retry: false,
+    retry: 2,
   }));
 
   const orgPublicKey = $derived(orgKeyQuery.data ?? null);
@@ -185,7 +189,7 @@
       return trpc.clientPortal.getIntakeConfig.query();
     },
     staleTime: 5 * 60 * 1000,
-    retry: false,
+    retry: 2,
   }));
 
   const powRequired = $derived(configQuery.data?.powRequired === true);
@@ -210,7 +214,7 @@
       return trpc.clientPortal.getIntakeForm.query(input);
     },
     staleTime: 5 * 60 * 1000,
-    retry: false,
+    retry: 2,
   }));
 
   // Disabled intake, an unknown slug, and a disabled builtin form all
@@ -222,13 +226,27 @@
   );
   const slugNotFound = $derived(
     slug != null &&
-      formQuery.data?.formId == null &&
+      formQuery.data != null &&
+      formQuery.data.formId == null &&
       !intakeDisabled &&
       !formClosed,
   );
   const notAvailable = $derived(
     intakeDisabled || slugNotFound || builtinFormDisabled,
   );
+
+  // A failed load is a distinct state from "not available": without the
+  // data-arrived guard above, an errored query's undefined data would
+  // read as an unknown slug and tell the visitor the form does not exist.
+  const loadFailed = $derived(formQuery.isError || orgKeyQuery.isError);
+
+  // Refetch both unconditionally: a field-decrypt failure reports both
+  // queries as successful while one of the cached responses is bad, and
+  // fresh data reruns the derivation.
+  function retryLoad(): void {
+    void orgKeyQuery.refetch();
+    void formQuery.refetch();
+  }
 
   // Decrypt form fields when a custom form is returned
   interface ResolvedForm {
@@ -1040,6 +1058,7 @@
       accountPending ||
       submitted ||
       orgKeyUnavailable ||
+      loadFailed ||
       resolvedForm.error ||
       (powRequired && powSolving && powSolution === null),
   );
@@ -1218,11 +1237,17 @@
 
   <HowProtected />
 
-  {#if resolvedForm.error}
+  {#if loadFailed || resolvedForm.error}
+    <!-- Load-stage failure (fetch or field decrypt): nothing the visitor
+         wrote is involved, so this copy talks about loading, not sending.
+         Retry refetches, which also replaces a bad cached response. -->
     <Block>
       <p class="intake-error" role="alert">
-        {m.intake_error_generic()}
+        {m.intake_error_load()}
       </p>
+      <Button outline onclick={retryLoad} data-testid="intake-load-retry">
+        {m.app_retry()}
+      </Button>
     </Block>
   {:else if orgKeyUnavailable}
     <Block>

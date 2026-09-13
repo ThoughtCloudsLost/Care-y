@@ -17,6 +17,10 @@ import type * as ParaglideRuntime from "$lib/paraglide/runtime.js";
 const localeState = vi.hoisted(() => ({ current: "en" }));
 let mockOrgKey: Uint8Array | null = new Uint8Array(32);
 let mockOrgKeyLoading = false;
+let mockOrgKeyError = false;
+let mockFormError = false;
+let mockOrgKeyRefetch: ReturnType<typeof vi.fn<() => void>>;
+let mockFormRefetch: ReturnType<typeof vi.fn<() => void>>;
 let mockPowRequired = false;
 let mockFormData: {
   formId: string | null;
@@ -46,13 +50,18 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => {
       if (key.includes("orgPublicKey")) {
         return {
           get data() {
-            return mockOrgKey;
+            return mockOrgKeyError ? undefined : mockOrgKey;
           },
           get isLoading() {
             return mockOrgKeyLoading;
           },
-          isError: false,
+          get isError() {
+            return mockOrgKeyError;
+          },
           error: null,
+          refetch: (): void => {
+            mockOrgKeyRefetch();
+          },
         };
       }
       if (key.includes("intakeConfig")) {
@@ -65,10 +74,17 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => {
       }
       if (key.includes("intakeForm")) {
         return {
-          data: mockFormData,
+          get data() {
+            return mockFormError ? undefined : mockFormData;
+          },
           isLoading: false,
-          isError: false,
+          get isError() {
+            return mockFormError;
+          },
           error: null,
+          refetch: (): void => {
+            mockFormRefetch();
+          },
         };
       }
       if (key.includes("intakeChallenge")) {
@@ -319,6 +335,7 @@ if (typeof Element.prototype.animate !== "function") {
 
 import * as m from "$lib/paraglide/messages.js";
 import IntakePage from "./+page.svelte";
+import IntakeFormBody from "./IntakeFormBody.svelte";
 
 // --- Tests ---
 
@@ -327,6 +344,10 @@ describe("intake page", () => {
     localeState.current = "en";
     mockOrgKey = new Uint8Array(32);
     mockOrgKeyLoading = false;
+    mockOrgKeyError = false;
+    mockFormError = false;
+    mockOrgKeyRefetch = vi.fn<() => void>();
+    mockFormRefetch = vi.fn<() => void>();
     mockPowRequired = false;
     mockFormData = { formId: null, fields: null };
     mockMutationPending = false;
@@ -380,6 +401,51 @@ describe("intake page", () => {
     expect(nameInput).toBeTruthy();
     const msgInput = screen.getByPlaceholderText("What's going on?");
     expect(msgInput).toBeTruthy();
+  });
+
+  it("shows the load error with a retry button when the form query fails", () => {
+    mockFormError = true;
+    render(IntakePage);
+    expect(
+      screen.getByText(
+        "The form couldn't load. Check your connection and try again.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByTestId("intake-load-retry")).toBeTruthy();
+  });
+
+  it("shows the load error, not encryption-unavailable, when the org key query fails", () => {
+    mockOrgKeyError = true;
+    render(IntakePage);
+    expect(
+      screen.getByText(
+        "The form couldn't load. Check your connection and try again.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(
+        "This form can't encrypt right now. Please call instead.",
+      ),
+    ).toBeNull();
+  });
+
+  it("retry refetches both queries", async () => {
+    mockFormError = true;
+    render(IntakePage);
+    await fireEvent.click(screen.getByTestId("intake-load-retry"));
+    expect(mockFormRefetch).toHaveBeenCalledTimes(1);
+    expect(mockOrgKeyRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed query on a slug page shows the load error, not not-available", () => {
+    mockFormError = true;
+    render(IntakeFormBody, { props: { slug: "some-slug" } });
+    expect(
+      screen.getByText(
+        "The form couldn't load. Check your connection and try again.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/This form is not available/)).toBeNull();
   });
 
   it("shows encryption unavailable when org key is null", () => {
