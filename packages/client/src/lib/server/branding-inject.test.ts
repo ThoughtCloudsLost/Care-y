@@ -7,21 +7,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type * as CryptoPkg from "@care-y/crypto";
-
-// vi.mock required: @care-y/crypto barrel triggers libsodium WASM
-// initialization via getSodium() singleton. Node test environment
-// cannot load WASM without the JS fallback (~500ms penalty per file).
-vi.mock("@care-y/crypto", async (importOriginal) => ({
-  ...(await importOriginal<typeof CryptoPkg>()),
-  getSodium: vi.fn(async () => undefined),
-  decode: vi.fn(
-    (input: string) => new Uint8Array(Buffer.from(input, "base64url")),
-  ),
-  decryptClientBranding: vi.fn((_blob: Uint8Array, _pubKey: Uint8Array) =>
-    new TextEncoder().encode(JSON.stringify({ name: "Test Org" })),
-  ),
-}));
 
 import {
   escapeHtml,
@@ -29,7 +14,6 @@ import {
   resolveInjectionSlug,
   buildBrandStyle,
   parseBrandingEnvelope,
-  decryptBrandingPayload,
   buildInjectedBranding,
   applyBrandingToHtml,
   loadInjectedBranding,
@@ -37,8 +21,6 @@ import {
   BRANDING_CACHE_TTL_MS,
   type InjectedBranding,
 } from "./branding-inject.js";
-
-import { decryptClientBranding } from "@care-y/crypto";
 
 // ---------------------------------------------------------------------------
 // escapeHtml
@@ -173,8 +155,10 @@ describe("parseBrandingEnvelope", () => {
   const wellFormed = {
     result: {
       data: {
-        orgPublicKey: "abc",
-        clientEncryptedBranding: "xyz",
+        name: "Test Org",
+        primaryColor: "#112233",
+        accentColor: "#445566",
+        supportLabel: "Our team",
         hasIcons: true,
         iconVersion: "v1",
         safeExitUrl: "https://example.com",
@@ -185,8 +169,10 @@ describe("parseBrandingEnvelope", () => {
   it("parses a well-formed envelope", () => {
     const parsed = parseBrandingEnvelope(wellFormed);
     expect(parsed).toEqual({
-      orgPublicKey: "abc",
-      clientEncryptedBranding: "xyz",
+      name: "Test Org",
+      primaryColor: "#112233",
+      accentColor: "#445566",
+      supportLabel: "Our team",
       hasIcons: true,
       iconVersion: "v1",
       safeExitUrl: "https://example.com",
@@ -217,118 +203,62 @@ describe("parseBrandingEnvelope", () => {
     expect(parseBrandingEnvelope(null)).toBeNull();
   });
 
-  it("treats non-string orgPublicKey as null", () => {
+  it("treats non-string name as null", () => {
     const body = {
       result: {
         data: {
-          orgPublicKey: 42,
-          clientEncryptedBranding: "ok",
+          name: 42,
+          primaryColor: "#aabbcc",
           hasIcons: false,
         },
       },
     };
     const parsed = parseBrandingEnvelope(body);
-    expect(parsed?.orgPublicKey).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// decryptBrandingPayload
-// ---------------------------------------------------------------------------
-
-describe("decryptBrandingPayload", () => {
-  it("returns null when orgPublicKey is null", () => {
-    const result = decryptBrandingPayload({
-      orgPublicKey: null,
-      clientEncryptedBranding: "abc",
-      hasIcons: false,
-      iconVersion: null,
-      safeExitUrl: null,
-    });
-    expect(result).toBeNull();
+    expect(parsed?.name).toBeNull();
   });
 
-  it("returns null when clientEncryptedBranding is null", () => {
-    const result = decryptBrandingPayload({
-      orgPublicKey: "abc",
-      clientEncryptedBranding: null,
-      hasIcons: false,
-      iconVersion: null,
-      safeExitUrl: null,
-    });
-    expect(result).toBeNull();
-  });
-
-  it("returns the parsed payload on success", () => {
-    const result = decryptBrandingPayload({
-      orgPublicKey: "abc",
-      clientEncryptedBranding: "xyz",
-      hasIcons: false,
-      iconVersion: null,
-      safeExitUrl: null,
-    });
-    expect(result).toEqual({ name: "Test Org" });
-  });
-
-  it("returns null when decryptClientBranding throws", () => {
-    const warnSpy = vi
-      .spyOn(console, "warn")
-      .mockImplementation(() => undefined);
-    vi.mocked(decryptClientBranding).mockImplementationOnce(() => {
-      throw new Error("decrypt failed");
-    });
-
-    const result = decryptBrandingPayload({
-      orgPublicKey: "abc",
-      clientEncryptedBranding: "xyz",
-      hasIcons: false,
-      iconVersion: null,
-      safeExitUrl: null,
-    });
-    expect(result).toBeNull();
-    warnSpy.mockRestore();
-  });
-
-  it("logs a warning with slug and error constructor on decrypt failure", () => {
-    const warnSpy = vi
-      .spyOn(console, "warn")
-      .mockImplementation(() => undefined);
-    vi.mocked(decryptClientBranding).mockImplementationOnce(() => {
-      throw new TypeError("bad key");
-    });
-
-    decryptBrandingPayload(
-      {
-        orgPublicKey: "abc",
-        clientEncryptedBranding: "xyz",
-        hasIcons: false,
-        iconVersion: null,
-        safeExitUrl: null,
+  it("treats non-string primaryColor as null", () => {
+    const body = {
+      result: {
+        data: {
+          name: "Org",
+          primaryColor: 999,
+          hasIcons: false,
+        },
       },
-      "harbor-org",
-    );
-
-    expect(warnSpy).toHaveBeenCalledWith(
-      "[branding-inject] decrypt failed for harbor-org: TypeError",
-    );
-    warnSpy.mockRestore();
+    };
+    const parsed = parseBrandingEnvelope(body);
+    expect(parsed?.primaryColor).toBeNull();
   });
 
-  it("returns null when plaintext is not a JSON object", () => {
-    vi.mocked(decryptClientBranding).mockReturnValueOnce(
-      new TextEncoder().encode('"just a string"') as Uint8Array & {
-        __brand: "Ciphertext";
+  it("handles script tag in name (wire-level, not yet escaped)", () => {
+    const body = {
+      result: {
+        data: {
+          name: '<script>alert("xss")</script>',
+          hasIcons: false,
+        },
       },
-    );
+    };
+    const parsed = parseBrandingEnvelope(body);
+    expect(parsed?.name).toBe('<script>alert("xss")</script>');
+  });
 
-    const result = decryptBrandingPayload({
-      orgPublicKey: "abc",
-      clientEncryptedBranding: "xyz",
-      hasIcons: false,
-      iconVersion: null,
-      safeExitUrl: null,
-    });
-    expect(result).toBeNull();
+  it("handles url(evil) in color fields by returning the string as-is", () => {
+    const body = {
+      result: {
+        data: {
+          primaryColor: "url(evil)",
+          accentColor: "url(data:image/svg)",
+          hasIcons: false,
+        },
+      },
+    };
+    const parsed = parseBrandingEnvelope(body);
+    // parseBrandingEnvelope reads strings without validating; buildInjectedBranding
+    // is where isValidHexColor gates them.
+    expect(parsed?.primaryColor).toBe("url(evil)");
+    expect(parsed?.accentColor).toBe("url(data:image/svg)");
   });
 });
 
@@ -338,8 +268,10 @@ describe("decryptBrandingPayload", () => {
 
 describe("buildInjectedBranding", () => {
   const baseResponse = {
-    orgPublicKey: "abc",
-    clientEncryptedBranding: "xyz",
+    name: null,
+    primaryColor: null,
+    accentColor: null,
+    supportLabel: null,
     hasIcons: false,
     iconVersion: null,
     safeExitUrl: null,
@@ -347,27 +279,25 @@ describe("buildInjectedBranding", () => {
 
   it("sanitises the org name", () => {
     const b = buildInjectedBranding(
-      baseResponse,
-      { name: "Good <script>bad</script> Org" },
+      { ...baseResponse, name: "Good <script>bad</script> Org" },
       "test-org",
     );
     expect(b.orgName).toBe("Good bad Org");
   });
 
   it("returns null orgName when name is empty after sanitisation", () => {
-    const b = buildInjectedBranding(baseResponse, { name: "" }, "test-org");
+    const b = buildInjectedBranding({ ...baseResponse, name: "" }, "test-org");
     expect(b.orgName).toBeNull();
   });
 
-  it("returns null orgName when payload is null", () => {
-    const b = buildInjectedBranding(baseResponse, null, "test-org");
+  it("returns null orgName when name is null", () => {
+    const b = buildInjectedBranding(baseResponse, "test-org");
     expect(b.orgName).toBeNull();
   });
 
   it("returns valid primary colour", () => {
     const b = buildInjectedBranding(
-      baseResponse,
-      { primaryColor: "#aabbcc" },
+      { ...baseResponse, primaryColor: "#aabbcc" },
       "test-org",
     );
     expect(b.primaryColor).toBe("#aabbcc");
@@ -375,8 +305,15 @@ describe("buildInjectedBranding", () => {
 
   it("returns null for an invalid primary colour", () => {
     const b = buildInjectedBranding(
-      baseResponse,
-      { primaryColor: "red" },
+      { ...baseResponse, primaryColor: "red" },
+      "test-org",
+    );
+    expect(b.primaryColor).toBeNull();
+  });
+
+  it("rejects url(evil) as a primary colour", () => {
+    const b = buildInjectedBranding(
+      { ...baseResponse, primaryColor: "url(evil)" },
       "test-org",
     );
     expect(b.primaryColor).toBeNull();
@@ -384,8 +321,7 @@ describe("buildInjectedBranding", () => {
 
   it("returns null for an invalid accent colour", () => {
     const b = buildInjectedBranding(
-      baseResponse,
-      { accentColor: "#abc" },
+      { ...baseResponse, accentColor: "#abc" },
       "test-org",
     );
     expect(b.accentColor).toBeNull();
@@ -394,21 +330,19 @@ describe("buildInjectedBranding", () => {
   it("builds iconUrl when hasIcons is true", () => {
     const b = buildInjectedBranding(
       { ...baseResponse, hasIcons: true, iconVersion: "v2" },
-      null,
       "test-org",
     );
     expect(b.iconUrl).toBe("/api/branding/test-org/icon-192.png?v=v2");
   });
 
   it("returns null iconUrl when hasIcons is false", () => {
-    const b = buildInjectedBranding(baseResponse, null, "test-org");
+    const b = buildInjectedBranding(baseResponse, "test-org");
     expect(b.iconUrl).toBeNull();
   });
 
   it("accepts a valid safe exit URL", () => {
     const b = buildInjectedBranding(
       { ...baseResponse, safeExitUrl: "https://weather.com" },
-      null,
       "test-org",
     );
     expect(b.safeExitUrl).toBe("https://weather.com");
@@ -417,7 +351,6 @@ describe("buildInjectedBranding", () => {
   it("rejects a non-https exit URL", () => {
     const b = buildInjectedBranding(
       { ...baseResponse, safeExitUrl: "http://weather.com" },
-      null,
       "test-org",
     );
     expect(b.safeExitUrl).toBeNull();
@@ -426,7 +359,6 @@ describe("buildInjectedBranding", () => {
   it("rejects a malformed exit URL", () => {
     const b = buildInjectedBranding(
       { ...baseResponse, safeExitUrl: "not-a-url" },
-      null,
       "test-org",
     );
     expect(b.safeExitUrl).toBeNull();
@@ -579,8 +511,10 @@ describe("loadInjectedBranding", () => {
   const goodEnvelope = {
     result: {
       data: {
-        orgPublicKey: "abc",
-        clientEncryptedBranding: "xyz",
+        name: "Test Org",
+        primaryColor: "#aabbcc",
+        accentColor: null,
+        supportLabel: null,
         hasIcons: true,
         iconVersion: "v1",
         safeExitUrl: "https://weather.com",
@@ -633,14 +567,21 @@ describe("loadInjectedBranding", () => {
 
     time += BRANDING_CACHE_TTL_MS + 1;
 
-    // Second call with a new fetch mock that returns different data
-    vi.mocked(decryptClientBranding).mockReturnValueOnce(
-      new TextEncoder().encode(
-        JSON.stringify({ name: "Updated Org" }),
-      ) as Uint8Array & { __brand: "Ciphertext" },
-    );
+    const updatedEnvelope = {
+      result: {
+        data: {
+          name: "Updated Org",
+          primaryColor: "#aabbcc",
+          accentColor: null,
+          supportLabel: null,
+          hasIcons: true,
+          iconVersion: "v1",
+          safeExitUrl: "https://weather.com",
+        },
+      },
+    };
 
-    const secondFetch = makeFetchOk(goodEnvelope);
+    const secondFetch = makeFetchOk(updatedEnvelope);
     const staleResult = await loadInjectedBranding({
       ...baseOptions,
       fetchImpl: secondFetch,
@@ -755,31 +696,37 @@ describe("loadInjectedBranding", () => {
   });
 
   it("does not share cache entries between different slugs", async () => {
-    const fetchImpl = makeFetchOk(goodEnvelope);
+    const firstEnvelope = goodEnvelope;
+    const secondEnvelope = {
+      result: {
+        data: {
+          ...goodEnvelope.result.data,
+          name: "Beta Org",
+        },
+      },
+    };
+
     const time = 1000;
 
+    const fetchAlpha = makeFetchOk(firstEnvelope);
     await loadInjectedBranding({
       ...baseOptions,
       slug: "org-alpha",
-      fetchImpl,
+      fetchImpl: fetchAlpha,
       now: () => time,
     });
 
-    vi.mocked(decryptClientBranding).mockReturnValueOnce(
-      new TextEncoder().encode(
-        JSON.stringify({ name: "Beta Org" }),
-      ) as Uint8Array & { __brand: "Ciphertext" },
-    );
-
+    const fetchBeta = makeFetchOk(secondEnvelope);
     const resultB = await loadInjectedBranding({
       ...baseOptions,
       slug: "org-beta",
-      fetchImpl,
+      fetchImpl: fetchBeta,
       now: () => time,
     });
 
     expect(resultB?.orgName).toBe("Beta Org");
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchAlpha).toHaveBeenCalledOnce();
+    expect(fetchBeta).toHaveBeenCalledOnce();
   });
 
   it("sends x-org-slug header in dev mode", async () => {

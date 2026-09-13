@@ -2,16 +2,16 @@ import { browser } from "$app/environment";
 
 function getInitialLogoUrl(): string | null {
   if (!browser) return null;
+  // The server injects the apple-touch-icon link element via the
+  // %carey.touchIcon% placeholder. If present, extract its href for
+  // the reactive logo URL used by shell components.
   try {
-    const slug = localStorage.getItem("care-y-brand-slug");
-    const hasIcons = localStorage.getItem("care-y-brand-has-icons");
-    if (slug !== null && slug !== "" && hasIcons !== null) {
-      const v = localStorage.getItem("care-y-brand-icon-v");
-      const base = `/api/branding/${slug}/icon-192.png`;
-      return v !== null ? `${base}?v=${v}` : base;
+    const link = document.querySelector('link[rel="apple-touch-icon"]');
+    if (link instanceof HTMLLinkElement && link.href) {
+      return link.href;
     }
   } catch {
-    // localStorage unavailable
+    // DOM unavailable
   }
   return null;
 }

@@ -16,6 +16,7 @@
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
   import { getBrandingTitle } from "$lib/branding/title.svelte.js";
+  import { readInjectedOrgName } from "$lib/branding/injected-branding.js";
   import PageShell from "$lib/shell/PageShell.svelte";
   import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
   import {
@@ -58,7 +59,7 @@
   const navbarTitle = $derived(
     branding?.orgName !== undefined && branding.orgName !== ""
       ? branding.orgName
-      : getBrandingTitle(),
+      : (readInjectedOrgName() ?? getBrandingTitle()),
   );
 
   let uiLocale = $state(getLocale());

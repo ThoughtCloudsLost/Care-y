@@ -1,10 +1,10 @@
 /**
  * DB integration tests for the org config general-settings service.
  *
- * Pins the read contract page loads depend on: base64 wire encoding of
- * the encrypted org name, non-null language and country values backed by
- * DB defaults, and the behavior when the org_config singleton row is
- * missing (fresh schema before onboarding seeds it).
+ * Pins the read contract page loads depend on: plaintext org name, non-null
+ * language and country values backed by DB defaults, and the behavior when
+ * the org_config singleton row is missing (fresh schema before onboarding
+ * seeds it).
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -14,15 +14,16 @@ import { createTestDb, type TestDb } from "../test-utils.js";
 import { NotFoundError } from "../errors.js";
 import type { TenantDatabase } from "../db/types.js";
 
-/** Opaque bytes standing in for client-produced org name ciphertext. */
-const SEED_ENCRYPTED_NAME = Buffer.from("enc-org-name-bytes");
+/** Plaintext org name for seeding (ADR-094). */
+const SEED_NAME = "Test Organization";
 
 /** Restores the seeded row after tests that mutate it. */
 async function resetOrgConfig(db: Kysely<TenantDatabase>): Promise<void> {
   await db
     .updateTable("org_config")
     .set({
-      encrypted_name: SEED_ENCRYPTED_NAME,
+      // care-y-ignore-next-line ast-pii-in-db-write -- plaintext branding column (ADR-094)
+      name: SEED_NAME,
       default_language: "en",
       default_country_code: "+1",
     })
@@ -41,7 +42,8 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
       // defaults apply (migrations 069 and 015 respectively).
       await db
         .insertInto("org_config")
-        .values({ encrypted_name: SEED_ENCRYPTED_NAME })
+        // care-y-ignore-next-line ast-pii-in-db-write -- plaintext branding column (ADR-094)
+        .values({ name: SEED_NAME })
         .execute();
     }, 30_000);
 
@@ -50,20 +52,14 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
     });
 
     describe("getOrgGeneral", () => {
-      it("returns the encrypted name as base64 (wire format sent to clients)", async () => {
+      it("returns the plaintext org name", async () => {
         const svc = createOrgConfigService(db);
         const result = await svc.getOrgGeneral();
 
-        // base64 is the tRPC wire encoding of the bytea column.
-        expect(result.encryptedName).toBe(
-          SEED_ENCRYPTED_NAME.toString("base64url"),
-        );
+        expect(result.name).toBe(SEED_NAME);
       });
 
       it("returns the DB defaults for language and country when the insert omitted them", async () => {
-        // Schema contract: default_language defaults to 'en' and
-        // default_country_code to '+1', both NOT NULL, so page loads
-        // never receive null for either field.
         const svc = createOrgConfigService(db);
         const result = await svc.getOrgGeneral();
 
@@ -71,16 +67,14 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
         expect(result.countryCode).toBe("+1");
       });
 
-      it("returns null encryptedName when the encrypted_name column is null", async () => {
-        await db
-          .updateTable("org_config")
-          .set({ encrypted_name: null })
-          .execute();
+      it("returns null name when the name column is null", async () => {
+        // care-y-ignore-next-line ast-pii-in-db-write -- clearing plaintext branding column (ADR-094)
+        await db.updateTable("org_config").set({ name: null }).execute();
 
         const svc = createOrgConfigService(db);
         const result = await svc.getOrgGeneral();
 
-        expect(result.encryptedName).toBeNull();
+        expect(result.name).toBeNull();
 
         await resetOrgConfig(db);
       });
@@ -89,29 +83,28 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
     describe("updateOrgGeneral", () => {
       it("persists all three fields and roundtrips through getOrgGeneral", async () => {
         const svc = createOrgConfigService(db);
-        const updatedName = Buffer.from("updated-enc-name");
+        const updatedName = "Updated Org Name";
 
         await svc.updateOrgGeneral({
-          encryptedOrgName: updatedName.toString("base64"),
+          orgName: updatedName,
           defaultLanguage: "es",
           countryCode: "+34",
         });
 
         const result = await svc.getOrgGeneral();
         expect(result).toEqual({
-          encryptedName: updatedName.toString("base64url"),
+          name: updatedName,
           defaultLanguage: "es",
           countryCode: "+34",
           portalSafeExitUrl: null,
         });
 
-        // At rest the name is the decoded bytes; base64 exists only on
-        // the wire.
+        // At rest the name is a plain string.
         const row = await db
           .selectFrom("org_config")
-          .select("encrypted_name")
+          .select("name")
           .executeTakeFirstOrThrow();
-        expect(row.encrypted_name).toEqual(updatedName);
+        expect(row.name).toBe(updatedName);
 
         await resetOrgConfig(db);
       });
@@ -138,7 +131,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
       const svc = createOrgConfigService(testDb.db);
       await expect(
         svc.updateOrgGeneral({
-          encryptedOrgName: Buffer.from("no-row-name").toString("base64"),
+          orgName: "No Row Name",
           defaultLanguage: "es",
           countryCode: "+34",
         }),

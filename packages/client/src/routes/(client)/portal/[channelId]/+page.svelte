@@ -33,7 +33,12 @@
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { decode, encode } from "@care-y/crypto";
-  import { newFollowupId, newKeyGeneration } from "@care-y/shared";
+  import {
+    newFollowupId,
+    newKeyGeneration,
+    serializeContactCorrection,
+    type ContactCorrectionPayload,
+  } from "@care-y/shared";
   import { solveProofOfWork } from "$lib/auth/pow-solver.js";
   import { requireRouter } from "$lib/errors.js";
   import type { ChannelEvaluateCallback } from "$lib/composables/portal/create-portal-session.svelte.js";
@@ -534,8 +539,8 @@
       });
   }
 
-  function handleCorrectionSubmit(phone: string): void {
-    handleSend(m.portal_correction_message({ phone }), "contact_correction");
+  function handleCorrectionSubmit(payload: ContactCorrectionPayload): void {
+    handleSend(serializeContactCorrection(payload), "contact_correction");
     correctionSheetOpen = false;
   }
 

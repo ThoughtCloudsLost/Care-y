@@ -1,11 +1,10 @@
 /**
- * Server-side branding blob decryption.
- *
- * Branding (org name, colors, PWA icons) is encrypted at rest under a key
- * derived from the org's PUBLIC key, so unauthenticated surfaces (icon
- * serving, the PWA manifest) can decrypt it without any user secret. This
- * is encryption at rest, not E2E, and is deliberate: the payload is public
- * branding, never client PII (ADR-006, ADR-024).
+ * Server-side branding key derivation and blob decryption for intake form
+ * assets (ADR-026). Org branding itself no longer uses this module (ADR-094
+ * moved branding to plaintext storage). Intake form labels, field configs,
+ * and uploaded form assets remain encrypted under the derived key with
+ * their own AAD, and `routes/form-assets.ts` plus
+ * `portal/form-asset-service.ts` depend on the functions exported here.
  *
  * The wire format is produced by the browser via `encryptClientBranding` in
  * `@care-y/crypto`, which routes through `encryptContent`:

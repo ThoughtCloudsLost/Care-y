@@ -92,53 +92,12 @@
         d.style.colorScheme = cs;
         var m = document.querySelector('meta[name="color-scheme"]');
         if (m) m.setAttribute("content", cs);
-        // Hydrate brand colors from localStorage (instant, no FOUC).
-        // The branding module writes these on save; app.html reads them before paint.
-        //
-        // An injected value always wins, so a stale cache on an org
-        // device cannot override a fresh server value. Only an
-        // authenticated org session ever writes these keys, so on a
-        // client device every read below is null and the injected values
-        // are the only source.
-        var injectedColor = d.style.getPropertyValue("--brand-primary");
+        // Org identity is injected server-side via the %carey.*% placeholders.
+        // No localStorage branding cache: writing which organization was
+        // contacted to a client device creates a record that can be read
+        // by whoever the person is hiding from.
         var injectedName = d.getAttribute("data-org-name") || "";
-        var injectedIcon = !!document.querySelector(
-          'link[rel="apple-touch-icon"]',
-        );
-        var bp = injectedColor ? null : s.getItem("care-y-brand-primary");
-        if (bp) {
-          d.style.setProperty("--brand-primary", bp);
-          // Konsta uses rgb() format for --k-color-primary
-          var hex = bp.replace("#", "");
-          if (hex.length === 3)
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-          var r = parseInt(hex.substring(0, 2), 16);
-          var g = parseInt(hex.substring(2, 4), 16);
-          var b = parseInt(hex.substring(4, 6), 16);
-          if (!isNaN(r))
-            d.style.setProperty(
-              "--k-color-primary",
-              "rgb(" + r + " " + g + " " + b + ")",
-            );
-        }
-        var ba = injectedColor ? null : s.getItem("care-y-brand-accent");
-        if (ba) d.style.setProperty("--brand-accent", ba);
-        var bts = Number(s.getItem("care-y-brand-ts") || "0");
-        var fresh = Date.now() - bts < 300000;
-        // Name is read without a freshness gate: a stale org name is better
-        // than the product name, and logout clears the key so staleness is
-        // bounded by the session. Icons remain gated below.
-        var bn = !injectedName ? s.getItem("care-y-brand-name") : null;
         if (injectedName) document.title = injectedName;
-        else if (bn) document.title = bn;
-        var useCachedIcon = fresh && !injectedIcon;
-        var bslug = useCachedIcon ? s.getItem("care-y-brand-slug") : null;
-        var bicons = useCachedIcon ? s.getItem("care-y-brand-has-icons") : null;
-        var biv = useCachedIcon ? s.getItem("care-y-brand-icon-v") : null;
-        function iconUrl(slug, size) {
-          var u = "/api/branding/" + slug + "/icon-" + size + ".png";
-          return biv ? u + "?v=" + biv : u;
-        }
         function revealLogo(el) {
           if (el.complete && el.naturalWidth > 0) {
             el.classList.add("visible");
@@ -150,30 +109,14 @@
         }
         // rAF fires after DOM is built but before first paint
         requestAnimationFrame(function () {
-          if (bn) {
-            var nameEl = document.getElementById("splash-name");
-            if (nameEl) nameEl.textContent = bn;
-          }
           var logoEl = document.getElementById("splash-logo");
           if (!logoEl) return;
           // A server-injected src starts loading during parse, so it can
           // already be decoded by this frame and never fire onload.
           if (logoEl.getAttribute("src")) {
             revealLogo(logoEl);
-          } else if (bslug && bicons) {
-            logoEl.onload = function () {
-              logoEl.classList.add("visible");
-            };
-            logoEl.src = iconUrl(bslug, "192");
           }
         });
-        if (bslug && bicons) {
-          var link = document.createElement("link");
-          link.rel = "apple-touch-icon";
-          link.setAttribute("sizes", "180x180");
-          link.href = iconUrl(bslug, "192");
-          document.head.appendChild(link);
-        }
       })();
     </script>
     %sveltekit.head%

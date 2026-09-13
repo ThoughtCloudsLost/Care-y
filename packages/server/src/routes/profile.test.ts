@@ -87,11 +87,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await tenantDb
         .insertInto("org_config")
         .values({
-          encrypted_name: null,
-          encrypted_logo: null,
-          encrypted_primary_color: null,
-          encrypted_client_text: null,
-          client_encrypted_branding: null,
+          // care-y-ignore-next-line ast-pii-in-db-write -- seeding plaintext branding columns (ADR-094)
+          name: null,
+          logo: null,
+          primary_color: null,
+          client_text: null,
           pii_retention_days: null,
         })
         .execute();

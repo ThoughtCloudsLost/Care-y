@@ -4,29 +4,27 @@
    length is validated by crypto_generichash output (always 32 bytes). */
 
 /**
- * Client-side branding key derivation and encryption.
+ * Branding key derivation, encryption, and decryption for intake form assets.
  *
- * Branding (org name, logo, colors) is encrypted at rest but derivable from
- * the org's public key. Public intake pages need to display branding before
- * any user authenticates, so the key must be derivable from public information.
+ * Org branding itself (name, logo, colors) is plaintext (ADR-094). This
+ * module survives because intake form labels, field configs, and form
+ * assets are encrypted under the same derived key with their own AAD
+ * (ADR-026). IntakeFormEditor, FormContentEditor, and the server's
+ * form-asset routes are the remaining callers.
  *
  * Uses BLAKE2b with a domain prefix (NOT HKDF) to signal that this key is
  * intentionally separate from the OPRF-derived key tree.
  *
- * Two-tier model:
- *   Volunteer-side: encrypted with org key (full E2E, handled by keywrap/ecies)
- *   Client-side: encrypted with BLAKE2b(label || orgPublicKey) (this module)
- *
  * The org public key is Curve25519 (from crypto_box_keypair), NOT ristretto255.
  * See org-keypair.ts and crypto-architecture-v2.md section 6 tier table.
  *
- * Encryption and decryption run through content.ts, so branding blobs use
+ * Encryption and decryption run through content.ts, so payloads use
  * XChaCha20-Poly1305 AEAD with a fixed AAD, not crypto_secretbox (ADR-053).
  *
  * References:
  *   SEC-041  OWASP Key Management (nonce || ciphertext storage format)
  *   libsodium AEAD docs (XChaCha20-Poly1305-ietf construction)
- *   B1 decision (crypto-architecture-v2.md, org branding two-tier)
+ *   ADR-026  intake form asset encryption
  */
 
 import { requireSodium } from "./sodium.js";

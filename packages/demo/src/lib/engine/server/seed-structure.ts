@@ -185,20 +185,20 @@ export async function seedStructure(
   const sealedBox = createSealedBoxEncryptor(orgPublicKey);
 
   // 3b. Update org_config with branding/general config fields.
-  // OrgGeneralSection reads encrypted_name, default_language, default_country_code.
-  // BrandingSection reads encrypted_primary_color, encrypted_accent_color,
-  // encrypted_client_text, encrypted_terminology.
+  // OrgGeneralSection reads name, default_language, default_country_code.
+  // BrandingSection reads primary_color, accent_color, client_text.
+  // Branding columns are plaintext (ADR-094); terminology stays sealed.
   await tenantDb
     .updateTable("org_config")
     .set({
-      encrypted_name: sealedBox.seal("Handbook Example Org"),
+      // care-y-ignore-next-line ast-pii-in-db-write -- plaintext branding column (ADR-094)
+      name: "Handbook Example Org",
       default_language: "en",
       default_country_code: "US",
-      encrypted_primary_color: sealedBox.seal("#4A6FA5"),
-      encrypted_accent_color: sealedBox.seal("#E07A5F"),
-      encrypted_client_text: sealedBox.seal(
+      primary_color: "#4A6FA5",
+      accent_color: "#E07A5F",
+      client_text:
         "If you or someone you know needs help, please call our support line. All calls are confidential.",
-      ),
     })
     .execute();
 
@@ -633,9 +633,16 @@ export async function seedStructure(
   }
 
   for (const g of greetings) {
+    // phone_greetings.phone_number is the org's own inbound line (migration
+    // 054), operational config rather than client PII, and plaintext by
+    // design. The demo value is a fixture number.
+    // care-y-ignore-next-line no-plaintext-db-write -- org line number, not client PII
     await tenantDb
+      // care-y-ignore-next-line no-plaintext-db-write -- org line number, not client PII
       .insertInto("phone_greetings")
+      // care-y-ignore-next-line no-plaintext-db-write -- org line number, not client PII
       .values({
+        // care-y-ignore-next-line ast-pii-in-db-write -- org line number, not client PII
         phone_number: g.phone_number as E164,
         greeting_type: g.greeting_type,
         locale: g.locale,

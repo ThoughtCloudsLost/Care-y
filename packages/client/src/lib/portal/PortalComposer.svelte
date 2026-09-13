@@ -114,11 +114,14 @@
       {/if}
       {#if overLimit}
         <p class="char-over" aria-live="polite" data-testid="char-over">
-          {m.portal_composer_placeholder()}
+          {m.portal_composer_too_long()}
         </p>
       {:else if showCounter}
         <p class="char-counter" data-testid="char-counter">
-          {charCount} / {CHAR_LIMIT}
+          {m.portal_composer_counter({
+            count: String(charCount),
+            max: String(CHAR_LIMIT),
+          })}
         </p>
       {/if}
     {/snippet}

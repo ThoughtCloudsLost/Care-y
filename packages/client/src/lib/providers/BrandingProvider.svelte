@@ -2,10 +2,12 @@
   BrandingProvider: org branding lifecycle.
 
   Two paths populate branding state:
-  1. Pre-login (instant): reads localStorage + Cache API from a previous session.
+  1. Pre-login (instant): reads Cache API from a previous session.
      Provides org name, colors, and icon href without waiting for auth.
-  2. Post-login (authoritative): once the org key is loaded, fetches encrypted
-     branding from the server, decrypts, applies, and caches for path 1 next time.
+  2. Post-login (authoritative): once the org key is loaded, fetches
+     branding from the server, applies, and caches for path 1 next time.
+     Branding fields are plaintext (ADR-094). Only terminology is still
+     encrypted under the org key.
 
   This provider exists as a boundary so the branding lifecycle has a clear home.
   Do not fold branding logic into CryptoProvider or ThemeProvider.
@@ -72,34 +74,6 @@
 
   setTerminology(() => terminologyLabels);
 
-  function syncToLocalStorage(
-    cached: NonNullable<Awaited<ReturnType<typeof getCachedBranding>>>,
-  ): void {
-    try {
-      localStorage.setItem("care-y-brand-name", cached.orgName);
-      localStorage.setItem("care-y-brand-primary", cached.primaryColor);
-      if (cached.accentColor !== null) {
-        localStorage.setItem("care-y-brand-accent", cached.accentColor);
-      }
-      if (cached.orgSlug !== null) {
-        localStorage.setItem("care-y-brand-slug", cached.orgSlug);
-      }
-      if (cached.hasIcons) {
-        localStorage.setItem("care-y-brand-has-icons", "1");
-      } else {
-        localStorage.removeItem("care-y-brand-has-icons");
-      }
-      if (cached.iconVersion !== null) {
-        localStorage.setItem("care-y-brand-icon-v", cached.iconVersion);
-      } else {
-        localStorage.removeItem("care-y-brand-icon-v");
-      }
-      localStorage.setItem("care-y-brand-ts", String(Date.now()));
-    } catch {
-      // localStorage unavailable
-    }
-  }
-
   // Path 1: instant hydration from cache (pre-login)
   $effect(() => {
     if (!browser) return;
@@ -120,8 +94,6 @@
         setAppleTouchIconHref(iconUrl);
         setOrgLogoUrl(iconUrl);
       }
-      // Sync SW cache state to localStorage for next page load's splash screen.
-      syncToLocalStorage(cached);
       dismissSplash();
     });
   });
@@ -129,7 +101,7 @@
   // Path 2: authoritative fetch after org key is available.
   // Always runs once when the org key is ready, even if Path 1 already
   // hydrated from cache. The cache may hold stale colors from a previous
-  // session; only a server fetch + decrypt is authoritative.
+  // session; only a server fetch is authoritative.
   $effect(() => {
     if (!browser || orgKeyManager === null || !isOrgKeyReady()) return;
     if (serverHydrated) return;
@@ -147,14 +119,12 @@
 
       const data = await brandingRouter.getBranding.query();
 
-      const orgName = (await decryptField(data.encryptedName)) ?? "CARE-Y";
-      const primaryColor =
-        (await decryptField(data.encryptedPrimaryColor)) ?? DEFAULT_PRIMARY;
-      const accentColor =
-        (await decryptField(data.encryptedAccentColor)) ?? null;
+      const orgName = data.name ?? "CARE-Y";
+      const primaryColor = data.primaryColor ?? DEFAULT_PRIMARY;
+      const accentColor = data.accentColor ?? null;
       const orgSlug = getOrgSlug();
 
-      // Decrypt and cache terminology
+      // Decrypt and cache terminology (still org-key encrypted, ADR-094)
       const terminologyJson = await decryptField(data.encryptedTerminology);
       if (terminologyJson !== null) {
         try {

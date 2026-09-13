@@ -8,22 +8,24 @@ import {
   waitFor,
 } from "@testing-library/svelte";
 
-const {
-  mockToastShow,
-  mockAnnounce,
-  mockGetBranding,
-  mockSaveBrandingField,
-  mockUpdateOrgGeneral,
-} = vi.hoisted(() => ({
-  mockToastShow: vi.fn(),
-  mockAnnounce: vi.fn(),
-  mockGetBranding: vi.fn(),
-  mockSaveBrandingField: vi.fn(),
-  mockUpdateOrgGeneral: vi.fn(),
-}));
+import type * as ParaglideMessages from "$lib/paraglide/messages.js";
+import type * as TrpcIndex from "$lib/trpc/index.js";
+import type * as TanstackQuery from "@tanstack/svelte-query";
+import type * as HapticMod from "$lib/utils/haptic.js";
+import type * as ToastStore from "$lib/stores/toast.svelte.js";
+import type * as AnnounceMod from "$lib/utils/announce.js";
+import type * as ErrorsMod from "$lib/errors.js";
+
+const { mockToastShow, mockAnnounce, mockUpdateOrgGeneral } = vi.hoisted(
+  () => ({
+    mockToastShow: vi.fn(),
+    mockAnnounce: vi.fn(),
+    mockUpdateOrgGeneral: vi.fn(),
+  }),
+);
 
 interface OrgGeneralData {
-  encryptedName: string | null;
+  name: string | null;
   defaultLanguage: string;
   countryCode: string;
   portalSafeExitUrl: string | null;
@@ -32,10 +34,8 @@ interface OrgGeneralData {
 let mockGeneralData: OrgGeneralData | undefined;
 let mockIsLoading: boolean;
 
-const CLIENT_BLOB_ERROR =
-  "Name saved. The public login page could not be updated and will show the old name until branding is saved again.";
-
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ParaglideMessages>()),
   onboarding_org_language_en: () => "English",
   onboarding_org_language_es: () => "Spanish",
   onboarding_org_name_label: () => "Organization name",
@@ -51,34 +51,36 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_org_general_saved: () => "Organization details saved",
   admin_org_general_error: () =>
     "Could not save organization details. Try again.",
-  admin_org_general_client_blob_error: () => CLIENT_BLOB_ERROR,
   admin_org_general_safe_exit_url_label: () => "Quick-exit URL",
   admin_org_general_safe_exit_url_placeholder: () => "https://weather.gov",
   admin_org_general_safe_exit_url_hint: () =>
     "Where the quick-exit button sends portal visitors.",
-  decrypt_placeholder_loading: () => "Decrypting...",
-  decrypt_placeholder_denied: () => "Access denied",
-  error_decryption_failed: () => "Decryption failed",
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- SvelteKit virtual module with no on-disk source
 vi.mock("$app/environment", () => ({ dev: false }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+// vi.mock required: tRPC client starts a live HTTP connection on import.
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcIndex>()),
   trpc: {
     org: {
       getOrgGeneral: { query: vi.fn() },
       updateOrgGeneral: { mutate: mockUpdateOrgGeneral },
     },
     branding: {
-      getBranding: { query: mockGetBranding },
-      saveBrandingField: { mutate: mockSaveBrandingField },
+      getBranding: { query: vi.fn() },
+      saveBrandingField: { mutate: vi.fn() },
     },
   },
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+// vi.mock required: @tanstack/svelte-query creates reactive query state
+// bound to a QueryClient context that does not exist in jsdom.
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof TanstackQuery>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     optsFn();
     return {
@@ -110,6 +112,17 @@ vi.mock("@tanstack/svelte-query", () => ({
           () => onError?.(),
         );
       },
+      // Mirrors TanStack semantics: callbacks fire, the rejection rethrows.
+      async mutateAsync(input: unknown) {
+        try {
+          const result = await mutationFn(input);
+          onSuccess?.();
+          return result;
+        } catch (err) {
+          onError?.();
+          throw err;
+        }
+      },
     };
   },
   useQueryClient: () => ({
@@ -118,84 +131,39 @@ vi.mock("@tanstack/svelte-query", () => ({
   }),
 }));
 
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: vi.fn() }));
-vi.mock("$lib/stores/toast.svelte.js", () => ({
+vi.mock("$lib/utils/haptic.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof HapticMod>()),
+  haptic: vi.fn(),
+}));
+vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ToastStore>()),
   toastStore: { show: mockToastShow },
 }));
-vi.mock("$lib/utils/announce.js", () => ({
+vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof AnnounceMod>()),
   announceToLiveRegion: mockAnnounce,
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
-  getOrgDecryptCache: () => ({
-    decrypt: (_id: string, encrypted: unknown) => {
-      if (encrypted instanceof Uint8Array) {
-        return new TextDecoder().decode(encrypted);
-      }
-      return typeof encrypted === "string" ? encrypted : null;
-    },
-    delete: vi.fn(),
-    whenSettled: vi.fn().mockResolvedValue(undefined),
-  }),
-  getOrgKeyManager: () => ({
-    isLoaded: true,
-    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
-  }),
+vi.mock("$lib/errors.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ErrorsMod>()),
+  requireRouter: (_r: unknown, _n: string) => _r,
 }));
 
-vi.mock("$lib/branding/encrypt.js", () => ({
-  buildClientBrandingBlob: vi.fn().mockReturnValue("client-blob"),
-}));
-
-vi.mock("$lib/utils/buffer-encoding.js", () => ({
-  base64ToUint8Array: (encoded: string) =>
-    Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0)),
-}));
-
+// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
 vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
 vi.mock("$lib/components/QueryError.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
 }));
 
-vi.mock("$lib/crypto/async-decrypt-cache.js", () => ({
-  DECRYPT_ERROR_SENTINEL: "\0DECRYPT_FAILED",
-  isDecryptError: (v: unknown) => v === "\0DECRYPT_FAILED",
-}));
-
-vi.mock("$lib/crypto/decrypt-result.js", () => ({
-  LOADING: Object.freeze({ status: "loading" }),
-  ERROR: Object.freeze({ status: "error" }),
-  DENIED: Object.freeze({ status: "denied" }),
-}));
-
-// IntersectionObserver stub for DecryptPlaceholder
-vi.stubGlobal(
-  "IntersectionObserver",
-  vi.fn(function (this: {
-    observe: () => void;
-    disconnect: () => void;
-    unobserve: () => void;
-  }) {
-    this.observe = vi.fn();
-    this.disconnect = vi.fn();
-    this.unobserve = vi.fn();
-  }),
-);
-
 import OrgGeneralSection from "./OrgGeneralSection.svelte";
-
-const LOADED_BRANDING = {
-  encryptedPrimaryColor: btoa("#636366"),
-  encryptedAccentColor: null,
-  encryptedClientText: null,
-};
 
 async function openSheetAndRename(newName: string): Promise<void> {
   await fireEvent.click(screen.getByRole("button", { name: /edit general/i }));
@@ -214,43 +182,56 @@ describe("OrgGeneralSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGeneralData = {
-      encryptedName: btoa("Safe Harbor"),
+      name: "Safe Harbor",
       defaultLanguage: "en",
       countryCode: "+1",
       portalSafeExitUrl: null,
     };
     mockIsLoading = false;
     mockUpdateOrgGeneral.mockResolvedValue(undefined);
-    mockSaveBrandingField.mockResolvedValue(undefined);
   });
 
   afterEach(cleanup);
 
-  it("shows the failure toast and polite announcement when the public blob rebuild fails", async () => {
-    mockGetBranding.mockRejectedValue(new Error("network down"));
+  it("sends plaintext orgName to updateOrgGeneral on rename", async () => {
     render(OrgGeneralSection);
 
     await openSheetAndRename("New Harbor");
 
     await waitFor(() => {
-      expect(mockToastShow).toHaveBeenCalledWith(CLIENT_BLOB_ERROR, 6000);
-    });
-    expect(mockAnnounce).toHaveBeenCalledWith("polite", CLIENT_BLOB_ERROR);
-  });
-
-  it("closes the sheet and skips the failure toast when the rebuild succeeds", async () => {
-    mockGetBranding.mockResolvedValue(LOADED_BRANDING);
-    render(OrgGeneralSection);
-
-    await openSheetAndRename("New Harbor");
-
-    await waitFor(() => {
-      expect(mockSaveBrandingField).toHaveBeenCalledWith(
-        expect.objectContaining({ field: "name" }),
+      expect(mockUpdateOrgGeneral).toHaveBeenCalledWith(
+        expect.objectContaining({ orgName: "New Harbor" }),
       );
     });
+  });
+
+  it("closes the sheet and shows success toast after saving", async () => {
+    render(OrgGeneralSection);
+
+    await openSheetAndRename("New Harbor");
+
+    await waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith("Organization details saved");
+    });
     expect(sheetOpenedAttr()).toBe("false");
-    expect(mockToastShow).not.toHaveBeenCalledWith(CLIENT_BLOB_ERROR, 6000);
-    expect(mockToastShow).toHaveBeenCalledWith("Organization details saved");
+  });
+
+  it("shows error toast when save fails", async () => {
+    mockUpdateOrgGeneral.mockRejectedValue(new Error("save-failed"));
+    render(OrgGeneralSection);
+
+    await openSheetAndRename("New Harbor");
+
+    await waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith(
+        "Could not save organization details. Try again.",
+        3000,
+      );
+    });
+  });
+
+  it("displays the org name from the query data", () => {
+    render(OrgGeneralSection);
+    expect(screen.getByText("Safe Harbor")).toBeTruthy();
   });
 });

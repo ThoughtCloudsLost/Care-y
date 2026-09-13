@@ -69,6 +69,7 @@ import { createWebhookHandler } from "./routes/webhooks.js";
 import { createTelephonyContentService } from "./telephony/telephony-content-service.js";
 import { createGreetingAudioHandler } from "./routes/greeting-audio.js";
 import { createBrandingIconHandler } from "./routes/branding-icons.js";
+import { createBrandingService } from "./branding/branding-service.js";
 import { createFormAssetHandler } from "./routes/form-assets.js";
 import { createBlobDownloadHandler } from "./routes/blob-download.js";
 import { withNoStore } from "./http/response-headers.js";
@@ -1195,6 +1196,7 @@ const brandingIconHandler = createBrandingIconHandler({
   blobStore,
   orgService,
   corsHeaders: cors.base,
+  createBrandingSvc: (orgSchema) => createBrandingService(tenantDb(orgSchema)),
 });
 
 const formAssetHandler = createFormAssetHandler({
@@ -1226,7 +1228,10 @@ const blobDownloadHandler = createBlobDownloadHandler({
   createTenantDb: (orgSchema) => tenantDb(orgSchema),
 });
 
-const manifestHandler = createManifestHandler({ orgService });
+const manifestHandler = createManifestHandler({
+  orgService,
+  createBrandingSvc: (orgSchema) => createBrandingService(tenantDb(orgSchema)),
+});
 
 const server = createHttpServer(trpcHandler, cors.preflight, [
   { prefix: "/webhooks/", handler: webhookHandler },

@@ -4,35 +4,36 @@
  * Path: /api/branding/<orgSlug>/icon-<size>.png
  * Variants: standard and maskable
  *
- * Unauthenticated. Icons are encrypted at rest in the BlobStore and decrypted
- * on-the-fly using branding_key = BLAKE2b("care-y-branding-v1" || orgPublicKey).
- * This key is deterministically derivable from the publicly available org public
- * key, so serving does not weaken the security model (ADR-024).
+ * Unauthenticated. Icons are stored as plain PNG bytes (ADR-094 overturns the
+ * encryption rationale in ADR-024; the BlobStore storage split itself stands).
  *
- * ETag (blob key) + must-revalidate ensures clients always get the current
- * icon while skipping decryption on 304 responses.
+ * ETag (blob key) + must-revalidate keeps clients current while allowing 304
+ * responses that skip the blob read entirely.
+ *
+ * The handler owns HTTP concerns only; tenant reads go through the injected
+ * branding service factory.
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import sodium from "sodium-native";
+import type { OrgSchema } from "@care-y/shared";
 import type { BlobStore } from "../storage/store.js";
 import type { OrgService } from "../org/service.js";
-import { tenantDb } from "../db/db.js";
-import {
-  deriveBrandingKey,
-  decryptBrandingBlob,
-} from "../branding/branding-crypto.js";
+import type {
+  BrandingService,
+  IconSize,
+} from "../branding/branding-service.js";
 
 export interface BrandingIconHandlerDeps {
   readonly blobStore: BlobStore;
   readonly orgService: OrgService;
   readonly corsHeaders: Readonly<Record<string, string>>;
+  readonly createBrandingSvc: (
+    orgSchema: OrgSchema,
+  ) => Pick<BrandingService, "iconBlobKey">;
 }
 
 const CACHE_CONTROL = "public, max-age=300, must-revalidate";
 const PATH_PREFIX = "/api/branding/";
-
-type IconSize = "192" | "512" | "maskable";
 
 function parseIconSize(filename: string): IconSize | null {
   if (filename === "icon-192.png") return "192";
@@ -44,7 +45,7 @@ function parseIconSize(filename: string): IconSize | null {
 export function createBrandingIconHandler(
   deps: BrandingIconHandlerDeps,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  const { blobStore, orgService, corsHeaders } = deps;
+  const { blobStore, orgService, corsHeaders, createBrandingSvc } = deps;
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== "GET") {
@@ -89,32 +90,10 @@ export function createBrandingIconHandler(
         return;
       }
 
-      const tDb = tenantDb(org.schemaName);
-      const config = await tDb
-        .selectFrom("org_config")
-        .select([
-          "org_public_key",
-          "icon_192_blob_key",
-          "icon_512_blob_key",
-          "icon_maskable_blob_key",
-        ])
-        .executeTakeFirst();
-
-      if (!config) {
-        res.writeHead(404);
-        res.end();
-        return;
-      }
-
-      const blobKey =
-        iconSize === "192"
-          ? config.icon_192_blob_key
-          : iconSize === "512"
-            ? config.icon_512_blob_key
-            : config.icon_maskable_blob_key;
-      const orgPublicKey = config.org_public_key;
-
-      if (blobKey === null || orgPublicKey === null) {
+      const blobKey = await createBrandingSvc(org.schemaName).iconBlobKey(
+        iconSize,
+      );
+      if (blobKey === null) {
         res.writeHead(404);
         res.end();
         return;
@@ -128,23 +107,9 @@ export function createBrandingIconHandler(
         return;
       }
 
-      const encryptedBlob = await blobStore.get(blobKey);
-      if (encryptedBlob === null) {
+      const iconBlob = await blobStore.get(blobKey);
+      if (iconBlob === null) {
         res.writeHead(404);
-        res.end();
-        return;
-      }
-
-      const key = deriveBrandingKey(orgPublicKey);
-      let plaintext: Buffer | null;
-      try {
-        plaintext = decryptBrandingBlob(encryptedBlob, key);
-      } finally {
-        sodium.sodium_memzero(key);
-      }
-
-      if (plaintext === null) {
-        res.writeHead(500);
         res.end();
         return;
       }
@@ -152,13 +117,13 @@ export function createBrandingIconHandler(
       res.writeHead(200, {
         ...corsHeaders,
         "Content-Type": "image/png",
-        "Content-Length": String(plaintext.length),
+        "Content-Length": String(iconBlob.length),
         "Content-Disposition": "inline",
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": CACHE_CONTROL,
         ETag: etag,
       });
-      res.end(plaintext);
+      res.end(iconBlob);
     } catch {
       res.writeHead(500);
       res.end();

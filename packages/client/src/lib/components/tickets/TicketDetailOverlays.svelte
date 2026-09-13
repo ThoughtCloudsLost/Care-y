@@ -46,6 +46,7 @@
     composeActionsAnchor: HTMLElement | undefined;
     phonePopoverOpen: boolean;
     phoneEditSheetOpen: boolean;
+    phoneEditInitialPhone?: string;
     canCopyPhone: boolean;
     onphonepopoverdismiss: () => void;
     onphonecopy: () => void;
@@ -99,6 +100,7 @@
     composeActionsAnchor,
     phonePopoverOpen,
     phoneEditSheetOpen,
+    phoneEditInitialPhone,
     canCopyPhone,
     onphonepopoverdismiss,
     onphonecopy,
@@ -193,6 +195,7 @@
 
 <PhoneEditSheet
   opened={phoneEditSheetOpen}
+  initialPhone={phoneEditInitialPhone}
   {clientId}
   {clientAlias}
   ondismiss={onphoneeditdismiss}

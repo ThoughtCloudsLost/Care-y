@@ -33,9 +33,6 @@
   import { cacheTerminology, normalizeLabels } from "$lib/terminology/index.js";
   import { capitalize } from "$lib/terminology/with-terms.js";
   import { requireRouter } from "$lib/errors.js";
-  import { isValidHexColor } from "$lib/branding/color-utils.js";
-  import { buildClientBrandingBlob } from "$lib/branding/encrypt.js";
-  import { DEFAULT_PRIMARY, DEFAULT_ACCENT } from "$lib/branding/index.js";
   import type { BrandingField } from "@care-y/shared";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -130,41 +127,10 @@
     queryFn: async () => brandingRouter.getBranding.query(),
   }));
 
-  // ── Branding blob fields (read-only, needed for client blob rebuild) ──
+  // ── Support label (plaintext, ADR-094) ──
 
-  const decryptedName = $derived(
-    orgCache.decrypt(
-      "branding:name",
-      brandingQuery.data?.encryptedName ?? null,
-    ),
-  );
-
-  const decryptedColor = $derived(
-    orgCache.decrypt(
-      "branding:color",
-      brandingQuery.data?.encryptedPrimaryColor ?? null,
-    ),
-  );
-
-  const decryptedAccent = $derived(
-    orgCache.decrypt(
-      "branding:accent",
-      brandingQuery.data?.encryptedAccentColor ?? null,
-    ),
-  );
-
-  const decryptedText = $derived(
-    orgCache.decrypt(
-      "branding:text",
-      brandingQuery.data?.encryptedClientText ?? null,
-    ),
-  );
-
-  const decryptedSupportLabel = $derived(
-    orgCache.decrypt(
-      "branding:support_label",
-      brandingQuery.data?.encryptedClientSupportLabel ?? null,
-    ),
+  const serverSupportLabel = $derived(
+    brandingQuery.data?.clientSupportLabel ?? null,
   );
 
   // ── Terminology config ──
@@ -238,7 +204,7 @@
 
   function openSheet(): void {
     pluralTouched.clear();
-    editSupportLabel = decryptedSupportLabel ?? "";
+    editSupportLabel = serverSupportLabel ?? "";
     for (const lang of LANGS) {
       if (serverConfig?.[lang]) {
         editState[lang] = { ...serverConfig[lang] };
@@ -268,7 +234,7 @@
   // ── Change detection ──
 
   const supportLabelChanged = $derived(
-    editSupportLabel !== (decryptedSupportLabel ?? ""),
+    editSupportLabel !== (serverSupportLabel ?? ""),
   );
 
   const terminologyLabelsChanged = $derived.by(() => {
@@ -307,24 +273,19 @@
     mutationFn: async (
       fields: {
         field: BrandingField;
-        encryptedValue: string;
-        clientEncryptedBranding?: string;
+        value: string;
       }[],
     ) => {
       for (const f of fields) {
         await brandingRouter.saveBrandingField.mutate({
           field: f.field,
-          encryptedValue: f.encryptedValue,
-          ...(f.clientEncryptedBranding !== undefined
-            ? { clientEncryptedBranding: f.clientEncryptedBranding }
-            : {}),
+          value: f.value,
         });
       }
     },
     onSuccess: () => {
       haptic();
       orgCache.delete("branding:terminology");
-      orgCache.delete("branding:support_label");
       toastStore.show(m.admin_terminology_saved());
       announceToLiveRegion("polite", m.admin_terminology_saved());
 
@@ -342,32 +303,15 @@
     },
   }));
 
-  function currentColor(): string {
-    return decryptedColor !== null &&
-      decryptedColor !== "" &&
-      isValidHexColor(decryptedColor)
-      ? decryptedColor
-      : DEFAULT_PRIMARY;
-  }
-
-  function currentAccent(): string {
-    return decryptedAccent !== null &&
-      decryptedAccent !== "" &&
-      isValidHexColor(decryptedAccent)
-      ? decryptedAccent
-      : DEFAULT_ACCENT;
-  }
-
   async function handleSave(): Promise<void> {
     if (!hasChanges) return;
 
     const fields: {
       field: BrandingField;
-      encryptedValue: string;
-      clientEncryptedBranding?: string;
+      value: string;
     }[] = [];
 
-    // Terminology config (language labels)
+    // Terminology config (language labels, still org-key encrypted)
     if (terminologyLabelsChanged) {
       const config: TerminologyConfig = {};
       for (const lang of LANGS) {
@@ -376,34 +320,15 @@
       const json = JSON.stringify(config);
       fields.push({
         field: "terminology",
-        encryptedValue: await orgKeyManager.encryptText(json),
+        value: await orgKeyManager.encryptText(json),
       });
     }
 
-    // Support label: part of the client branding blob, needs read-modify-write
+    // Support label: plaintext (ADR-094)
     if (supportLabelChanged) {
-      // Whole-value rewrite: every carried-through field must have finished
-      // its fire-and-forget decrypt, or this save wipes it from the blob.
-      // Same settlement contract as BrandingSection and OrgGeneralSection.
-      void decryptedName;
-      void decryptedText;
-      await orgCache.whenSettled();
-
-      const clientBlob = buildClientBrandingBlob(
-        {
-          name: decryptedName ?? "",
-          primaryColor: currentColor(),
-          accentColor: currentAccent(),
-          clientText: decryptedText ?? "",
-          supportLabel: editSupportLabel,
-        },
-        orgKeyManager,
-      );
-
       fields.push({
         field: "support_label",
-        encryptedValue: await orgKeyManager.encryptText(editSupportLabel),
-        clientEncryptedBranding: clientBlob,
+        value: editSupportLabel,
       });
     }
 
@@ -475,10 +400,8 @@
             {m.admin_terminology_support_label_label()}
           </span>
           <span class="term-value">
-            {#if brandingQuery.data?.encryptedClientSupportLabel}
-              <DecryptPlaceholder content={decryptedSupportLabel}>
-                {decryptedSupportLabel}
-              </DecryptPlaceholder>
+            {#if serverSupportLabel}
+              {serverSupportLabel}
             {:else}
               <span class="text-[--muted]">{m.portal_support_team()}</span>
             {/if}

@@ -130,7 +130,10 @@
   <OrgGeneralSection
     bind:this={orgGeneralRef}
     externalSave
-    onnamechange={() => void brandingRef?.rebuildBlob()}
+    onnamechange={() => {
+      // Branding query re-fetches to pick up the new plaintext name.
+      // No client-side blob rebuild needed (ADR-094).
+    }}
   />
 
   <CollapsibleSection

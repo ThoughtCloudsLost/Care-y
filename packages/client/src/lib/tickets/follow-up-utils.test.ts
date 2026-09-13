@@ -34,6 +34,10 @@ describe("followUpKind", () => {
     expect(followUpKind({ type })).toBe("message");
   });
 
+  it("classifies contact_correction as correction", () => {
+    expect(followUpKind({ type: "contact_correction" })).toBe("correction");
+  });
+
   it("falls back to message for unknown types", () => {
     expect(followUpKind({ type: "some_future_type" })).toBe("message");
   });

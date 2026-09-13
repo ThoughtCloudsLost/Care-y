@@ -1,9 +1,10 @@
 import type { Kysely } from "kysely";
-import sodium from "sodium-native";
 import type { OrgConfigTable, TenantDatabase } from "../db/types.js";
 import type { BlobStore } from "../storage/store.js";
 import type {
+  BlobKey,
   BrandingData,
+  PublicBrandingData,
   SaveBrandingFieldInput,
   UploadIconsInput,
   OrgSchema,
@@ -11,65 +12,15 @@ import type {
 import { safeExitUrlSchema } from "@care-y/shared";
 import { validateMagicBytes } from "../telephony/attachment-validator.js";
 import { ValidationError } from "../errors.js";
-import { deriveBrandingKey, decryptBrandingBlob } from "./branding-crypto.js";
 
 const ICON_MAX_BYTES = 2 * 1024 * 1024; // 2 MB per icon
+const LOGO_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+
+/** Content types accepted for the logo field. */
+const LOGO_ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 
 function noop(): void {
   // intentional no-op for best-effort catch
-}
-
-function bufferToBase64(buf: Buffer | null): string | null {
-  return buf === null ? null : buf.toString("base64url");
-}
-
-function brandingColumnUpdate(
-  field: SaveBrandingFieldInput["field"],
-  value: Buffer,
-): Partial<
-  Pick<
-    OrgConfigTable,
-    | "encrypted_name"
-    | "encrypted_logo"
-    | "encrypted_primary_color"
-    | "encrypted_accent_color"
-    | "encrypted_client_text"
-    | "encrypted_client_support_label"
-    | "encrypted_terminology"
-  >
-> {
-  switch (field) {
-    case "name":
-      return { encrypted_name: value };
-    case "logo":
-      return { encrypted_logo: value };
-    case "primary_color":
-      return { encrypted_primary_color: value };
-    case "accent_color":
-      return { encrypted_accent_color: value };
-    case "client_text":
-      return { encrypted_client_text: value };
-    case "support_label":
-      return { encrypted_client_support_label: value };
-    case "terminology":
-      return { encrypted_terminology: value };
-  }
-}
-
-export interface PublicBrandingData {
-  readonly orgPublicKey: string | null;
-  readonly clientEncryptedBranding: string | null;
-  readonly hasIcons: boolean;
-  readonly iconVersion: string | null;
-  /**
-   * Where quick exit sends a client. Reaches the browser here rather than
-   * only through the portal bootstrap, which needs a channel and therefore
-   * never covered intake or share links.
-   *
-   * Not secret and not PII, so it rides beside the slug as a plain field
-   * rather than inside the encrypted blob.
-   */
-  readonly safeExitUrl: string | null;
 }
 
 /**
@@ -86,9 +37,13 @@ export function readSafeExitUrl(stored: string | null): string | null {
   return safeExitUrlSchema.safeParse(stored).success ? stored : null;
 }
 
+/** Icon size variants served by the public icon route. */
+export type IconSize = "192" | "512" | "maskable";
+
 export interface BrandingService {
   getBranding(): Promise<BrandingData>;
   getPublicBranding(): Promise<PublicBrandingData>;
+  iconBlobKey(size: IconSize): Promise<BlobKey | null>;
   saveBrandingField(input: SaveBrandingFieldInput): Promise<void>;
   uploadIcons(
     store: BlobStore,
@@ -105,31 +60,28 @@ export function createBrandingService(
       const config = await tenantDb
         .selectFrom("org_config")
         .select([
-          "encrypted_name",
-          "encrypted_logo",
-          "encrypted_primary_color",
-          "encrypted_accent_color",
-          "encrypted_client_text",
-          "encrypted_client_support_label",
-          "client_encrypted_branding",
+          "name",
+          "logo",
+          "primary_color",
+          "accent_color",
+          "client_text",
+          "client_support_label",
           "encrypted_terminology",
           "icon_192_blob_key",
         ])
         .executeTakeFirstOrThrow();
 
       return {
-        encryptedName: bufferToBase64(config.encrypted_name),
-        encryptedLogo: bufferToBase64(config.encrypted_logo),
-        encryptedPrimaryColor: bufferToBase64(config.encrypted_primary_color),
-        encryptedAccentColor: bufferToBase64(config.encrypted_accent_color),
-        encryptedClientText: bufferToBase64(config.encrypted_client_text),
-        encryptedClientSupportLabel: bufferToBase64(
-          config.encrypted_client_support_label,
-        ),
-        clientEncryptedBranding: bufferToBase64(
-          config.client_encrypted_branding,
-        ),
-        encryptedTerminology: bufferToBase64(config.encrypted_terminology),
+        name: config.name,
+        logo: config.logo !== null ? config.logo.toString("base64url") : null,
+        primaryColor: config.primary_color,
+        accentColor: config.accent_color,
+        clientText: config.client_text,
+        clientSupportLabel: config.client_support_label,
+        encryptedTerminology:
+          config.encrypted_terminology !== null
+            ? config.encrypted_terminology.toString("base64url")
+            : null,
         hasIcons: config.icon_192_blob_key !== null,
         iconVersion: config.icon_192_blob_key?.slice(0, 8) ?? null,
       };
@@ -140,41 +92,115 @@ export function createBrandingService(
         .selectFrom("org_config")
         .select([
           "org_public_key",
-          "client_encrypted_branding",
+          "name",
+          "primary_color",
+          "accent_color",
+          "client_text",
+          "client_support_label",
           "icon_192_blob_key",
           "portal_safe_exit_url",
         ])
         .executeTakeFirst();
 
       return {
-        orgPublicKey: bufferToBase64(config?.org_public_key ?? null),
-        clientEncryptedBranding: bufferToBase64(
-          config?.client_encrypted_branding ?? null,
-        ),
+        orgPublicKey:
+          config?.org_public_key !== null &&
+          config?.org_public_key !== undefined
+            ? config.org_public_key.toString("base64url")
+            : null,
+        name: config?.name ?? null,
+        primaryColor: config?.primary_color ?? null,
+        accentColor: config?.accent_color ?? null,
+        clientText: config?.client_text ?? null,
+        supportLabel: config?.client_support_label ?? null,
         hasIcons: config?.icon_192_blob_key != null,
         iconVersion: config?.icon_192_blob_key?.slice(0, 8) ?? null,
         safeExitUrl: readSafeExitUrl(config?.portal_safe_exit_url ?? null),
       };
     },
 
-    async saveBrandingField(input: SaveBrandingFieldInput): Promise<void> {
-      const value = Buffer.from(input.encryptedValue, "base64");
+    async iconBlobKey(size: IconSize): Promise<BlobKey | null> {
+      const config = await tenantDb
+        .selectFrom("org_config")
+        .select([
+          "icon_192_blob_key",
+          "icon_512_blob_key",
+          "icon_maskable_blob_key",
+        ])
+        .executeTakeFirst();
 
-      // Both volunteer-side and client-side blobs saved atomically
-      await tenantDb.transaction().execute(async (tx) => {
-        const columnUpdate = brandingColumnUpdate(input.field, value);
-        const updates =
-          input.clientEncryptedBranding !== undefined
-            ? {
-                ...columnUpdate,
-                client_encrypted_branding: Buffer.from(
-                  input.clientEncryptedBranding,
-                  "base64",
-                ),
-              }
-            : columnUpdate;
-        await tx.updateTable("org_config").set(updates).execute();
-      });
+      if (config === undefined) return null;
+      if (size === "192") return config.icon_192_blob_key;
+      if (size === "512") return config.icon_512_blob_key;
+      return config.icon_maskable_blob_key;
+    },
+
+    async saveBrandingField(input: SaveBrandingFieldInput): Promise<void> {
+      let update: Partial<
+        Pick<
+          OrgConfigTable,
+          | "name"
+          | "logo"
+          | "primary_color"
+          | "accent_color"
+          | "client_text"
+          | "client_support_label"
+          | "encrypted_terminology"
+        >
+      >;
+
+      switch (input.field) {
+        case "name":
+          update = { name: input.value };
+          break;
+        case "logo": {
+          const buf = Buffer.from(input.value, "base64");
+          if (buf.byteLength > LOGO_MAX_BYTES) {
+            throw new ValidationError(
+              `Logo exceeds ${String(LOGO_MAX_BYTES)} byte limit`,
+            );
+          }
+          // Accept png, jpeg, or webp
+          let matched = false;
+          for (const ct of LOGO_ALLOWED_TYPES) {
+            try {
+              validateMagicBytes(buf, ct);
+              matched = true;
+              break;
+            } catch {
+              // Not this type, try next
+            }
+          }
+          if (!matched) {
+            throw new ValidationError(
+              "Logo must be PNG, JPEG, or WebP (magic bytes did not match)",
+            );
+          }
+          update = { logo: buf };
+          break;
+        }
+        case "primary_color":
+          update = { primary_color: input.value };
+          break;
+        case "accent_color":
+          update = { accent_color: input.value };
+          break;
+        case "client_text":
+          update = { client_text: input.value };
+          break;
+        case "support_label":
+          update = { client_support_label: input.value };
+          break;
+        case "terminology":
+          // Opaque org-key ciphertext (ADR-043, ADR-094). The server
+          // stores but never interprets these bytes.
+          update = {
+            encrypted_terminology: Buffer.from(input.value, "base64"),
+          };
+          break;
+      }
+
+      await tenantDb.updateTable("org_config").set(update).execute();
     },
 
     async uploadIcons(
@@ -192,36 +218,17 @@ export function createBrandingService(
             `Icon exceeds ${String(ICON_MAX_BYTES)} byte limit`,
           );
         }
+        validateMagicBytes(buf, "image/png");
       }
 
-      const config = await tenantDb
+      const existing = await tenantDb
         .selectFrom("org_config")
         .select([
-          "org_public_key",
           "icon_192_blob_key",
           "icon_512_blob_key",
           "icon_maskable_blob_key",
         ])
         .executeTakeFirstOrThrow();
-
-      if (config.org_public_key === null) {
-        throw new ValidationError("Org public key not available");
-      }
-
-      const brandingKey = deriveBrandingKey(config.org_public_key);
-      try {
-        for (const buf of [buf192, buf512, bufMaskable]) {
-          const plaintext = decryptBrandingBlob(buf, brandingKey);
-          if (plaintext === null) {
-            throw new ValidationError("Icon decryption failed");
-          }
-          validateMagicBytes(plaintext, "image/png");
-        }
-      } finally {
-        sodium.sodium_memzero(brandingKey);
-      }
-
-      const existing = config;
 
       const [key192, key512, keyMaskable] = await Promise.all([
         store.put(orgSchema, "branding", buf192),

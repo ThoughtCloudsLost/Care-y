@@ -3,15 +3,7 @@ import { readInjectedOrgName } from "$lib/branding/injected-branding.js";
 
 function getInitialTitle(): string {
   if (!browser) return "CARE-Y";
-  try {
-    return (
-      localStorage.getItem("care-y-brand-name") ??
-      readInjectedOrgName() ??
-      "CARE-Y"
-    );
-  } catch {
-    return "CARE-Y";
-  }
+  return readInjectedOrgName() ?? "CARE-Y";
 }
 
 let brandingTitle = $state(getInitialTitle());

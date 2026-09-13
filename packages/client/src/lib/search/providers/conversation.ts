@@ -10,7 +10,7 @@ export interface ConversationSearchData {
   readonly followUpId: string;
   readonly source: string;
   readonly type: string;
-  readonly kind: "message" | "system" | "note" | "article";
+  readonly kind: "message" | "system" | "note" | "article" | "correction";
   readonly plaintext: string;
   readonly searchTerm: string;
   readonly authorName: string | undefined;

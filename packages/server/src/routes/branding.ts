@@ -1,16 +1,23 @@
 /**
  * Branding router: public branding query + admin CRUD + PWA icon upload.
  *
- * getPublicBranding: org-scoped, no auth. Returns encrypted blob + org public
- * key for client-side BLAKE2b derivation (B1 two-tier branding).
- * All other endpoints require admin-level permissions (MANAGE_ROLES).
+ * getPublicBranding: org-scoped, no auth. Returns plaintext branding fields
+ * plus the org public key (still needed by intake form crypto, ADR-026).
+ * getBranding: every authenticated org member. Each volunteer's session
+ * hydrates branding and terminology from it, and nothing in the payload is
+ * admin-only (the public fields are served unauthenticated anyway, and the
+ * terminology ciphertext is org-key tier every volunteer holds the key for).
+ * Write endpoints require admin-level permissions (MANAGE_ROLES).
  * Business logic is delegated to BrandingService.
- * Server never decrypts branding data; it stores and returns ciphertext only.
+ *
+ * Branding is stored and served as plaintext (ADR-094). XSS defense for
+ * admin-authored text is per-context escaping at the injection/render point.
  */
 
 import {
   router,
   orgProcedure,
+  volunteerProcedure,
   adminProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
@@ -42,7 +49,7 @@ export function createBrandingRouter(deps: BrandingRouterDeps) {
       }),
     ),
 
-    getBranding: adminProcedure.query(
+    getBranding: volunteerProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = createBrandingService(ctx.org.tenantDb);
         return svc.getBranding();

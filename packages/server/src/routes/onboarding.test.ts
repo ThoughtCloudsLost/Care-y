@@ -762,12 +762,11 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       });
     }
 
-    it("updateOrgGeneral stores the encrypted org name verbatim with locale defaults", async () => {
-      const encryptedName = Buffer.from("sealed-org-name-blob-01");
+    it("updateOrgGeneral stores the plaintext org name with locale defaults", async () => {
       const { caller } = adminCaller();
 
       const result = await caller.onboarding.updateOrgGeneral({
-        encryptedOrgName: encryptedName.toString("base64"),
+        orgName: "Harbor Women's Shelter",
         countryCode: "+49",
         defaultLanguage: "de",
       });
@@ -775,10 +774,10 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
 
       const config = await setupOrg.tenantDb
         .selectFrom("org_config")
-        .select(["encrypted_name", "default_country_code", "default_language"])
+        .select(["name", "default_country_code", "default_language"])
         .executeTakeFirstOrThrow();
-      // The org name blob is client-encrypted; the server stores it untouched
-      expect(config.encrypted_name?.equals(encryptedName)).toBe(true);
+      // Org name is stored as plaintext (ADR-094)
+      expect(config.name).toBe("Harbor Women's Shelter");
       expect(config.default_country_code).toBe("+49");
       expect(config.default_language).toBe("de");
     });

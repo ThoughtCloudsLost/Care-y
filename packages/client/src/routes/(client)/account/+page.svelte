@@ -165,7 +165,7 @@
       timeoutMs: 15 * 60 * 1000,
       warningMs: 5 * 60 * 1000,
       onWarning: () => {
-        announceToLiveRegion("assertive", m.account_signed_out());
+        announceToLiveRegion("polite", m.account_idle_warning());
       },
       onTimeout: () => {
         returnToLogin(m.account_signed_out());

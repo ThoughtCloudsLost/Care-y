@@ -3,41 +3,32 @@
  *
  * Path: /manifest.webmanifest
  *
- * Unauthenticated. Decrypts the client branding blob (same branding_key
- * derivation as icon serving) to populate name and theme_color. Falls back
- * to defaults when branding is not configured.
- *
- * The branding_key is deterministically derivable from the org public key
- * (which is publicly available), so this does not weaken the security model.
+ * Unauthenticated. Reads the org's plaintext name and primary color through
+ * the branding service to populate the manifest name and theme_color, and
+ * falls back to defaults when branding is not configured.
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import sodium from "sodium-native";
+import type { OrgSchema } from "@care-y/shared";
 import type { OrgService } from "../org/service.js";
-import { tenantDb } from "../db/db.js";
+import type { BrandingService } from "../branding/branding-service.js";
 import { extractOrgSlug } from "../org/slug-resolver.js";
-import {
-  deriveBrandingKey,
-  decryptBrandingBlob,
-} from "../branding/branding-crypto.js";
 
 export interface ManifestHandlerDeps {
   readonly orgService: OrgService;
+  readonly createBrandingSvc: (
+    orgSchema: OrgSchema,
+  ) => Pick<BrandingService, "getPublicBranding">;
 }
 
 const DEFAULT_NAME = "CARE-Y";
 const DEFAULT_THEME = "#000000";
 const DEFAULT_BG = "#0C0C0C";
 
-interface BrandingPayload {
-  name?: string;
-  primaryColor?: string;
-}
-
 export function createManifestHandler(
   deps: ManifestHandlerDeps,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  const { orgService } = deps;
+  const { orgService, createBrandingSvc } = deps;
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== "GET") {
@@ -58,51 +49,22 @@ export function createManifestHandler(
         const org = await orgService.findBySlug(slug);
         if (org?.isActive === true) {
           orgSlug = slug;
-          const tDb = tenantDb(org.schemaName);
-          const config = await tDb
-            .selectFrom("org_config")
-            .select([
-              "org_public_key",
-              "client_encrypted_branding",
-              "icon_192_blob_key",
-            ])
-            .executeTakeFirst();
+          const branding = await createBrandingSvc(
+            org.schemaName,
+          ).getPublicBranding();
 
-          if (config?.org_public_key && config.client_encrypted_branding) {
-            const key = deriveBrandingKey(config.org_public_key);
-            try {
-              const plaintext = decryptBrandingBlob(
-                config.client_encrypted_branding,
-                key,
-              );
-              if (plaintext !== null) {
-                const parsed: unknown = JSON.parse(plaintext.toString("utf-8"));
-                if (typeof parsed === "object" && parsed !== null) {
-                  const p = parsed as BrandingPayload;
-                  if (typeof p.name === "string" && p.name.length > 0)
-                    name = p.name;
-                  if (
-                    typeof p.primaryColor === "string" &&
-                    p.primaryColor.length > 0
-                  )
-                    themeColor = p.primaryColor;
-                }
-              }
-            } finally {
-              sodium.sodium_memzero(key);
-            }
+          if (branding.name !== null && branding.name.length > 0) {
+            name = branding.name;
           }
-
-          hasIcons =
-            config?.icon_192_blob_key !== null &&
-            config?.icon_192_blob_key !== undefined;
           if (
-            hasIcons &&
-            config?.icon_192_blob_key !== null &&
-            config?.icon_192_blob_key !== undefined
+            branding.primaryColor !== null &&
+            branding.primaryColor.length > 0
           ) {
-            iconVersion = config.icon_192_blob_key.slice(0, 8);
+            themeColor = branding.primaryColor;
           }
+
+          hasIcons = branding.hasIcons;
+          iconVersion = branding.iconVersion;
         }
       }
     } catch {

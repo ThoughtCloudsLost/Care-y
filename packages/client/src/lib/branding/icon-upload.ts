@@ -1,14 +1,11 @@
 /**
  * PWA icon upload pipeline shared by onboarding and admin branding flows.
  *
- * Generates three icon variants from a source image, encrypts each with
- * the public-key-derived branding key, uploads via tRPC, then updates
- * the branding cache and apple-touch-icon link.
+ * Generates three icon variants from a source image, base64-encodes the raw
+ * PNG bytes, uploads via tRPC, then updates the branding cache and
+ * apple-touch-icon link.
  */
 
-import { encryptClientBranding, encode } from "@care-y/crypto";
-import type { OrgKeyManager } from "$lib/crypto/org-key.js";
-import { OrgKeyNotLoadedError } from "$lib/crypto/org-key.js";
 import { generateIconVariants } from "$lib/branding/icon-generator.js";
 import { updateBrandingCache } from "$lib/branding/index.js";
 import { setAppleTouchIconHref } from "$lib/branding/icon-link.svelte.js";
@@ -28,16 +25,19 @@ export interface IconUploadResult {
   readonly version: string;
 }
 
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
 export async function uploadPwaIcons(
   source: Blob,
-  orgKeyManager: OrgKeyManager,
   router: IconUploadRouter,
 ): Promise<IconUploadResult> {
-  const orgPubKey = orgKeyManager.getPublicKey();
-  if (!orgPubKey) {
-    throw new OrgKeyNotLoadedError();
-  }
-
   const variants = await generateIconVariants(source);
 
   let icon192 = "";
@@ -46,11 +46,7 @@ export async function uploadPwaIcons(
 
   for (const variant of variants) {
     const arrayBuffer = await variant.blob.arrayBuffer();
-    const encrypted = encryptClientBranding(
-      new Uint8Array(arrayBuffer),
-      orgPubKey,
-    );
-    const b64 = encode(encrypted);
+    const b64 = uint8ArrayToBase64(new Uint8Array(arrayBuffer));
 
     if (variant.purpose === "maskable") {
       iconMaskable = b64;

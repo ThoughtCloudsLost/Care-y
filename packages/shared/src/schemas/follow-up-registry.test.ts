@@ -8,8 +8,10 @@ describe("CONTENT_TYPE_REGISTRY", () => {
     expect(entry).toBeDefined();
   });
 
-  it("contact_correction entry has category 'message'", () => {
-    expect(CONTENT_TYPE_REGISTRY.contact_correction.category).toBe("message");
+  it("contact_correction entry has category 'correction'", () => {
+    expect(CONTENT_TYPE_REGISTRY.contact_correction.category).toBe(
+      "correction",
+    );
   });
 
   it("contact_correction allows only client source", () => {

@@ -5,6 +5,7 @@
  * - adminProcedure permission enforcement (volunteer/manager rejected, admin allowed)
  * - Rate limiter enforcement on uploadIcons
  * - Service delegation and input forwarding
+ * - Zod schema rejection for invalid inputs (bad hex, oversized name, missing value)
  *
  * Service-layer logic is tested in branding-service.test.ts.
  */
@@ -12,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createBrandingRouter, type BrandingRouterDeps } from "./branding.js";
 import { createCallerFactory } from "../trpc/trpc.js";
-import { stubTenantDbDefaultRoles } from "../test-utils.js";
+import { expectTrpcError, stubTenantDbDefaultRoles } from "../test-utils.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import { RoleId, type RoleIdValue } from "@care-y/shared";
 import type {
@@ -30,12 +31,20 @@ import type {
 // --- Mock branding service ---
 
 const mockGetBranding = vi.fn();
+const mockGetPublicBranding = vi.fn();
 const mockSaveBrandingField = vi.fn();
 const mockUploadIcons = vi.fn();
 
-vi.mock("../branding/branding-service.js", () => ({
+// vi.mock required: replaces the service factory so route tests verify
+// delegation and permissions without a real DB.
+import type * as BrandingServiceMod from "../branding/branding-service.js";
+
+vi.mock("../branding/branding-service.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BrandingServiceMod>()),
   createBrandingService: () => ({
     getBranding: mockGetBranding,
+    getPublicBranding: mockGetPublicBranding,
+    iconBlobKey: vi.fn(async () => null),
     saveBrandingField: mockSaveBrandingField,
     uploadIcons: mockUploadIcons,
   }),
@@ -124,14 +133,26 @@ describe("branding router", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetBranding.mockResolvedValue({
-      encryptedName: "dGVzdA==",
-      encryptedLogo: null,
-      encryptedPrimaryColor: null,
-      encryptedAccentColor: null,
-      encryptedClientText: null,
-      clientEncryptedBranding: null,
+      name: "Test Org",
+      logo: null,
+      primaryColor: null,
+      accentColor: null,
+      clientText: null,
+      clientSupportLabel: null,
+      encryptedTerminology: null,
       hasIcons: false,
       iconVersion: null,
+    });
+    mockGetPublicBranding.mockResolvedValue({
+      orgPublicKey: null,
+      name: "Test Org",
+      primaryColor: null,
+      accentColor: null,
+      clientText: null,
+      supportLabel: null,
+      hasIcons: false,
+      iconVersion: null,
+      safeExitUrl: null,
     });
     mockSaveBrandingField.mockResolvedValue(undefined);
     mockUploadIcons.mockResolvedValue(undefined);
@@ -140,25 +161,23 @@ describe("branding router", () => {
   // --- Permission enforcement ---
 
   describe("permission enforcement", () => {
-    it("getBranding rejects volunteer with FORBIDDEN", async () => {
+    it("getBranding allows volunteer (session branding hydration)", async () => {
       const caller = buildVolunteerCaller();
-      await expect(caller.getBranding()).rejects.toThrow(
-        "INSUFFICIENT_PERMISSIONS",
-      );
+      const result = await caller.getBranding();
+      expect(result.name).toBe("Test Org");
     });
 
-    it("getBranding rejects manager with FORBIDDEN", async () => {
+    it("getBranding allows manager", async () => {
       const caller = buildManagerCaller();
-      await expect(caller.getBranding()).rejects.toThrow(
-        "INSUFFICIENT_PERMISSIONS",
-      );
+      const result = await caller.getBranding();
+      expect(result.name).toBe("Test Org");
     });
 
     it("getBranding allows admin", async () => {
       const caller = buildAdminCaller();
       const result = await caller.getBranding();
       expect(result).toBeDefined();
-      expect(result.encryptedName).toBe("dGVzdA==");
+      expect(result.name).toBe("Test Org");
     });
 
     it("saveBrandingField rejects volunteer with FORBIDDEN", async () => {
@@ -166,7 +185,7 @@ describe("branding router", () => {
       await expect(
         caller.saveBrandingField({
           field: "name",
-          encryptedValue: VALID_BASE64,
+          value: "New Name",
         }),
       ).rejects.toThrow("INSUFFICIENT_PERMISSIONS");
     });
@@ -186,18 +205,16 @@ describe("branding router", () => {
   // --- Service delegation ---
 
   describe("service delegation", () => {
-    it("saveBrandingField forwards input to service", async () => {
+    it("saveBrandingField forwards field/value input to service", async () => {
       const caller = buildAdminCaller();
       await caller.saveBrandingField({
         field: "name",
-        encryptedValue: VALID_BASE64,
-        clientEncryptedBranding: "Y2xpZW50",
+        value: "New Org Name",
       });
 
       expect(mockSaveBrandingField).toHaveBeenCalledWith({
         field: "name",
-        encryptedValue: VALID_BASE64,
-        clientEncryptedBranding: "Y2xpZW50",
+        value: "New Org Name",
       });
     });
 
@@ -210,6 +227,56 @@ describe("branding router", () => {
       });
 
       expect(mockUploadIcons).toHaveBeenCalledOnce();
+    });
+  });
+
+  // --- Zod rejection ---
+
+  describe("input validation", () => {
+    it("rejects saveBrandingField with invalid hex color", async () => {
+      const caller = buildAdminCaller();
+      await expectTrpcError(
+        caller.saveBrandingField({ field: "primary_color", value: "#fff" }),
+        "BAD_REQUEST",
+      );
+    });
+
+    it("rejects saveBrandingField with CSS function in color", async () => {
+      const caller = buildAdminCaller();
+      await expectTrpcError(
+        caller.saveBrandingField({
+          field: "accent_color",
+          value: "url(evil)",
+        }),
+        "BAD_REQUEST",
+      );
+    });
+
+    it("rejects saveBrandingField with color word instead of hex", async () => {
+      const caller = buildAdminCaller();
+      await expectTrpcError(
+        caller.saveBrandingField({ field: "primary_color", value: "red" }),
+        "BAD_REQUEST",
+      );
+    });
+
+    it("rejects saveBrandingField with oversized name", async () => {
+      const caller = buildAdminCaller();
+      await expectTrpcError(
+        caller.saveBrandingField({
+          field: "name",
+          value: "x".repeat(121),
+        }),
+        "BAD_REQUEST",
+      );
+    });
+
+    it("rejects saveBrandingField with empty name", async () => {
+      const caller = buildAdminCaller();
+      await expectTrpcError(
+        caller.saveBrandingField({ field: "name", value: "" }),
+        "BAD_REQUEST",
+      );
     });
   });
 

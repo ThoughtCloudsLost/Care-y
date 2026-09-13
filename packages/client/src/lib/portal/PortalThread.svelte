@@ -29,6 +29,8 @@
   import BaseAttachmentChip from "$lib/components/shared/BaseAttachmentChip.svelte";
   import VoicemailPlayer from "$lib/components/tickets/VoicemailPlayer.svelte";
   import CallEntry from "$lib/components/tickets/CallEntry.svelte";
+  import CorrectionBody from "$lib/components/tickets/CorrectionBody.svelte";
+  import { parseContactCorrection } from "@care-y/shared";
   import { triggerBlobDownload } from "$lib/components/shared/attachment-download.js";
   import { fetchBlob } from "$lib/utils/fetch-blob.js";
   import { needsDateSeparator, formatDateSeparator } from "$lib/utils/time.js";
@@ -676,7 +678,12 @@
               editedAt={entry.editedAt}
             >
               {#if entry.result.status === "ready"}
-                {#if highlighting}
+                {@const portalCorrectionPayload = parseContactCorrection(
+                  entry.result.value,
+                )}
+                {#if portalCorrectionPayload !== null}
+                  <CorrectionBody payload={portalCorrectionPayload} />
+                {:else if highlighting}
                   {#each splitByTerm(entry.result.value, searchTerm ?? "") as seg, i (i)}
                     {#if seg.highlight}<mark>{seg.text}</mark
                       >{:else}{seg.text}{/if}
