@@ -9,6 +9,18 @@ import {
   within,
 } from "@testing-library/svelte";
 import * as m from "$lib/paraglide/messages.js";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as KeysNS from "$lib/query/keys.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as BackupCodesSheetNS from "$lib/components/settings/BackupCodesSheet.svelte";
+import type * as PushEnrollSheetNS from "$lib/components/settings/PushEnrollSheet.svelte";
+import type * as SmsEnrollSheetNS from "$lib/components/settings/SmsEnrollSheet.svelte";
+import type * as EmailEnrollSheetNS from "$lib/components/settings/EmailEnrollSheet.svelte";
+import type * as PasskeyEnrollSheetNS from "$lib/components/settings/PasskeyEnrollSheet.svelte";
+import type * as TotpEnrollSheetNS from "$lib/components/settings/TotpEnrollSheet.svelte";
 
 const mockInvalidateQueries = vi.fn();
 let queryEnabled = true;
@@ -18,7 +30,8 @@ let mockStatusData: {
   backupCodesRemaining: number;
 } = { enrolled: false, methods: [], backupCodesRemaining: 0 };
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     twoFactor: {
       status: { query: vi.fn(() => Promise.resolve(mockStatusData)) },
@@ -26,7 +39,8 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
@@ -42,40 +56,79 @@ vi.mock("@tanstack/svelte-query", () => ({
   },
 }));
 
-vi.mock("$lib/query/keys.js", () => ({
+vi.mock("$lib/query/keys.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof KeysNS>()),
   twoFactorKeys: { status: () => ["twoFactor", "status"] },
 }));
 
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: vi.fn() }));
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: vi.fn() },
-}));
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
 // vi.mock required: the real enroll sheets drive platform APIs (WebAuthn,
 // QR rendering, SMS verification) that jsdom cannot provide; they are
 // covered by E2E. The stub exposes opened state and callback triggers so
 // this component's orchestration can be exercised.
-vi.mock("$lib/components/settings/TotpEnrollSheet.svelte", async () => ({
-  default: (await import("./test-helpers/StubEnrollSheet.svelte")).default,
-}));
-vi.mock("$lib/components/settings/PasskeyEnrollSheet.svelte", async () => ({
-  default: (await import("./test-helpers/StubEnrollSheet.svelte")).default,
-}));
-vi.mock("$lib/components/settings/EmailEnrollSheet.svelte", async () => ({
-  default: (await import("./test-helpers/StubEnrollSheet.svelte")).default,
-}));
-vi.mock("$lib/components/settings/SmsEnrollSheet.svelte", async () => ({
-  default: (await import("./test-helpers/StubEnrollSheet.svelte")).default,
-}));
-vi.mock("$lib/components/settings/PushEnrollSheet.svelte", async () => ({
-  default: (await import("./test-helpers/StubEnrollSheet.svelte")).default,
-}));
-vi.mock("$lib/components/settings/BackupCodesSheet.svelte", async () => ({
-  default: (await import("./test-helpers/StubEnrollSheet.svelte")).default,
-}));
+vi.mock(
+  "$lib/components/settings/TotpEnrollSheet.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubEnrollSheet.svelte"))
+        .default as unknown as (typeof TotpEnrollSheetNS)["default"],
+    }) satisfies typeof TotpEnrollSheetNS,
+);
+vi.mock(
+  "$lib/components/settings/PasskeyEnrollSheet.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubEnrollSheet.svelte"))
+        .default as unknown as (typeof PasskeyEnrollSheetNS)["default"],
+    }) satisfies typeof PasskeyEnrollSheetNS,
+);
+vi.mock(
+  "$lib/components/settings/EmailEnrollSheet.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubEnrollSheet.svelte"))
+        .default as unknown as (typeof EmailEnrollSheetNS)["default"],
+    }) satisfies typeof EmailEnrollSheetNS,
+);
+vi.mock(
+  "$lib/components/settings/SmsEnrollSheet.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubEnrollSheet.svelte"))
+        .default as unknown as (typeof SmsEnrollSheetNS)["default"],
+    }) satisfies typeof SmsEnrollSheetNS,
+);
+vi.mock(
+  "$lib/components/settings/PushEnrollSheet.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubEnrollSheet.svelte"))
+        .default as unknown as (typeof PushEnrollSheetNS)["default"],
+    }) satisfies typeof PushEnrollSheetNS,
+);
+vi.mock(
+  "$lib/components/settings/BackupCodesSheet.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubEnrollSheet.svelte"))
+        .default as unknown as (typeof BackupCodesSheetNS)["default"],
+    }) satisfies typeof BackupCodesSheetNS,
+);
 
 const { default: TwoFactorEnrollment } =
   await import("./TwoFactorEnrollment.svelte");

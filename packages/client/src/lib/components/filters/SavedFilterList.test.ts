@@ -24,7 +24,8 @@ vi.stubGlobal(
 );
 
 // --- Mock i18n ---
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   saved_filter_apply: () => "Apply saved filter",
   saved_filter_decrypting: () => "...",
   saved_filter_shared_label: () => "Shared",
@@ -37,7 +38,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
 }));
 
 // --- Mock crypto context ---
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgDecryptCache: () => ({
     decrypt: vi.fn((_id: string, _data: Uint8Array) => "My Housing Filter"),
     has: vi.fn().mockReturnValue(false),
@@ -48,18 +50,27 @@ vi.mock("$lib/crypto/context.js", () => ({
 }));
 
 // --- Mock buffer encoding ---
-vi.mock("$lib/utils/buffer-encoding.js", () => ({
+vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BufferEncodingNS>()),
   base64ToUint8Array: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3, 4])),
 }));
 
 // --- Mock shell action sheet: pass-through renders children ---
-vi.mock("$lib/shell/ShellActionSheet.svelte", async () => ({
-  default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
-    .default,
-}));
+vi.mock(
+  "$lib/shell/ShellActionSheet.svelte",
+  async () =>
+    ({
+      default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
+        .default as unknown as (typeof ShellActionSheetNS)["default"],
+    }) satisfies typeof ShellActionSheetNS,
+);
 
 import SavedFilterList from "./SavedFilterList.svelte";
 import type { SavedFilterRecord } from "@care-y/shared";
+import type * as BufferEncodingNS from "$lib/utils/buffer-encoding.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as ShellActionSheetNS from "$lib/shell/ShellActionSheet.svelte";
 
 const mockFilters: SavedFilterRecord[] = [
   {

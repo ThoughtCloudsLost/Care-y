@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type * as PathsNS from "$app/paths";
+import type * as NavigationNS from "$app/navigation";
 
 // vi.mock required: $app/navigation and $app/paths are SvelteKit virtual
 // modules with no on-disk source.
-vi.mock("$app/navigation", () => ({
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof NavigationNS>()),
   goto: vi.fn(() => Promise.resolve()),
 }));
-vi.mock("$app/paths", () => ({
+vi.mock("$app/paths", async (importOriginal) => ({
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: vi.fn((path: string) => path),
 }));
 

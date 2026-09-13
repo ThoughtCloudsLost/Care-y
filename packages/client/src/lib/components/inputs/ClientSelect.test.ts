@@ -12,12 +12,13 @@
 
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 // vi.mock required: $lib/paraglide/messages.js is a Paraglide-generated module
 // that may not resolve correctly in the vitest Vite alias chain. Spread
 // importOriginal so unstubbed message functions track the real module surface.
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   ticket_new_success: () => "New client created",
   ticket_new_error_submit_failed: () => "Lookup failed",
   ticket_new_create_client: () => "Create new client",

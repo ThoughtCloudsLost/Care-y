@@ -59,8 +59,16 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   error_generic: () => "Something went wrong",
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- SvelteKit virtual module with no on-disk source
-vi.mock("$app/environment", () => ({ dev: false }));
+vi.mock(
+  "$app/environment",
+  () =>
+    ({
+      dev: false,
+      browser: true,
+      building: false,
+      version: "test",
+    }) satisfies typeof AppEnvironmentNS,
+);
 
 // vi.mock required: tRPC client starts a live HTTP connection on import.
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
@@ -149,21 +157,30 @@ vi.mock("$lib/errors.js", async (importOriginal) => ({
   requireRouter: (_r: unknown, _n: string) => _r,
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/shell/ShellSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ShellSheetNS)["default"],
+    }) satisfies typeof ShellSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/QueryError.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/QueryError.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof QueryErrorNS)["default"],
+    }) satisfies typeof QueryErrorNS,
+);
 
 import OrgGeneralSection from "./OrgGeneralSection.svelte";
+import type * as QueryErrorNS from "$lib/components/QueryError.svelte";
+import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
+import type * as AppEnvironmentNS from "$app/environment";
 
 async function openSheetAndRename(newName: string): Promise<void> {
   await fireEvent.click(screen.getByRole("button", { name: /edit general/i }));

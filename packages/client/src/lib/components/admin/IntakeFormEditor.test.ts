@@ -6,14 +6,12 @@ const {
   mockSaveForm,
   mockBindQueue,
   mockDeleteForm,
-  mockToastShow,
   mockEncryptFieldContent,
   mockUploadFormAsset,
 } = vi.hoisted(() => ({
   mockSaveForm: vi.fn().mockResolvedValue({ formId: "new-form-id" }),
   mockBindQueue: vi.fn().mockResolvedValue({ ok: true }),
   mockDeleteForm: vi.fn().mockResolvedValue({ deleted: true }),
-  mockToastShow: vi.fn(),
   mockEncryptFieldContent: vi.fn().mockReturnValue({
     encryptedLabel: "enc-label",
     encryptedConfig: "enc-config",
@@ -22,7 +20,7 @@ const {
 }));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   intake_forms_name_label: () => "Form name",
   intake_forms_name_placeholder: () => "e.g. Main Intake",
   intake_forms_fields_heading: ({ count }: { count: string }) =>
@@ -185,13 +183,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "Image upload requires the organization key to be loaded",
 }));
 
-vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  withTerms: () => ({}),
-}));
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
 
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     intakeForms: {
       save: { mutate: mockSaveForm },
@@ -209,13 +208,14 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   },
 }));
 
-vi.mock("$lib/errors.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  requireRouter: (router: unknown) => router,
-}));
+vi.mock("$lib/errors.js", async (importOriginal) =>
+  (await import("$mocks/errors.js")).errorsMock(
+    await importOriginal<typeof ErrorsNS>(),
+  ),
+);
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgKeyManager: () => ({
     getPublicKey: () => new Uint8Array(32),
     isLoaded: true,
@@ -226,28 +226,31 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof IntakeFormCryptoNS>()),
   encryptFieldContent: mockEncryptFieldContent,
   encryptFormMeta: vi.fn().mockReturnValue("enc-form-meta"),
 }));
 
-vi.mock("$lib/utils/haptic.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  haptic: vi.fn(),
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
-vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
-vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
 vi.mock("$lib/stores/layout-mode.svelte", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof LayoutModeNS>()),
   layoutMode: {
     get isDesktop() {
       return false;
@@ -259,18 +262,18 @@ vi.mock("$lib/stores/layout-mode.svelte", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/components/shared/konsta-classes.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof KonstaClassesNS>()),
   DIALOG_DESTRUCTIVE_CLASS: "destructive-class",
 }));
 
 vi.mock("$lib/utils/org-slug.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof OrgSlugNS>()),
   getOrgSlug: () => "test-org",
 }));
 
 // Mock renderFormRichText to return simple text for testing
 vi.mock("$lib/utils/render-form-content.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof RenderFormContentNS>()),
   renderFormRichText: (value: unknown) => {
     if (value === undefined || value === null) return "";
     if (typeof value === "string") return `<p>${value}</p>`;
@@ -283,13 +286,13 @@ vi.mock("./FormContentEditor.svelte", async (importOriginal) => {
   const { default: Passthrough } =
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte");
   return {
-    ...(await importOriginal<Record<string, unknown>>()),
+    ...(await importOriginal<typeof FormContentEditorNS>()),
     default: Passthrough,
   };
 });
 
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: () => ({
     isLoading: false,
     isError: false,
@@ -319,6 +322,21 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
 }));
 
 import IntakeFormEditor from "./IntakeFormEditor.svelte";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as FormContentEditorNS from "./FormContentEditor.svelte";
+import type * as RenderFormContentNS from "$lib/utils/render-form-content.js";
+import type * as OrgSlugNS from "$lib/utils/org-slug.js";
+import type * as KonstaClassesNS from "$lib/components/shared/konsta-classes.js";
+import type * as LayoutModeNS from "$lib/stores/layout-mode.svelte";
+import type * as IntakeFormCryptoNS from "$lib/portal/intake-form-crypto.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 /** Minimal field defaults for the new role fields. */
 const NO_ROLE = {

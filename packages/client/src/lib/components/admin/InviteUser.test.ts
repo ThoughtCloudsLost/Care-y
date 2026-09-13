@@ -3,22 +3,19 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
 // --- Hoisted mock fns ---
-const {
-  mockRegister,
-  mockInvalidateQueries,
-  mockToastShow,
-  mockBootstrapCrypto,
-} = vi.hoisted(() => ({
-  mockRegister: vi.fn().mockResolvedValue({ user: { id: "u1" } }),
-  mockInvalidateQueries: vi.fn(),
-  mockToastShow: vi.fn(),
-  mockBootstrapCrypto: vi.fn().mockResolvedValue(undefined),
-}));
+const { mockRegister, mockInvalidateQueries, mockBootstrapCrypto } = vi.hoisted(
+  () => ({
+    mockRegister: vi.fn().mockResolvedValue({ user: { id: "u1" } }),
+    mockInvalidateQueries: vi.fn(),
+    mockBootstrapCrypto: vi.fn().mockResolvedValue(undefined),
+  }),
+);
 
 let mockOrgKeyLoaded = true;
 
 // --- Mock i18n ---
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   register_note: () => "Note",
   register_careful: () => "Careful",
   register_warning: () => "Warning",
@@ -70,7 +67,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
 }));
 
 // --- Mock crypto context ---
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS2>()),
   getOrgKeyManager: () => ({
     get isLoaded() {
       return mockOrgKeyLoaded;
@@ -84,12 +82,14 @@ vi.mock("$lib/crypto/context.js", () => ({
 }));
 
 // --- Mock admin bootstrap crypto ---
-vi.mock("$lib/auth/admin-bootstrap-crypto.js", () => ({
+vi.mock("$lib/auth/admin-bootstrap-crypto.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof AdminBootstrapCryptoNS>()),
   adminBootstrapUserCrypto: mockBootstrapCrypto,
 }));
 
 // --- Mock TanStack Query ---
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
     getQueriesData: vi.fn().mockReturnValue([]),
@@ -97,7 +97,8 @@ vi.mock("@tanstack/svelte-query", () => ({
 }));
 
 // --- Mock tRPC ---
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     auth: {
       register: { mutate: mockRegister },
@@ -106,37 +107,57 @@ vi.mock("$lib/trpc/index.js", () => ({
 }));
 
 // --- Mock toast store ---
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
 // --- Mock haptic ---
-vi.mock("$lib/utils/haptic.js", () => ({
-  haptic: vi.fn(),
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
 // --- Mock announce ---
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
 // --- Mock ShellPopup: pass-through ---
-vi.mock("$lib/shell/ShellPopup.svelte", async () => ({
-  default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
-    .default,
-}));
+vi.mock(
+  "$lib/shell/ShellPopup.svelte",
+  async () =>
+    ({
+      default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
+        .default as unknown as (typeof ShellPopupNS)["default"],
+    }) satisfies typeof ShellPopupNS,
+);
 
 // --- Mock shell context ---
-vi.mock("$lib/shell/context.js", () => ({
-  getSectionRailCtx: () => ({ current: undefined }),
-  getScrollContainer: () => () => undefined,
-  getTabbarOverrideCtx: () => ({ current: undefined }),
-  getTabbarHiddenCtx: () => ({ current: false }),
-  getNavbarOverrideCtx: () => ({ current: undefined }),
-}));
+vi.mock(
+  "$lib/shell/context.js",
+  async () =>
+    (
+      await import("$mocks/shell-context.js")
+    ).shellContextMock() satisfies typeof ContextNS,
+);
 
 import { RoleId } from "@care-y/shared";
 import InviteUser from "./InviteUser.svelte";
+import type * as ContextNS from "$lib/shell/context.js";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as ContextNS2 from "$lib/crypto/context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as ShellPopupNS from "$lib/shell/ShellPopup.svelte";
+import type * as AdminBootstrapCryptoNS from "$lib/auth/admin-bootstrap-crypto.js";
 
 function getInputs(): {
   identifier: HTMLInputElement;

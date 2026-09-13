@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 // vi.mock required: @care-y/crypto barrel triggers libsodium WASM init.
 // Provide encode/decode stubs that use standard base64url (no padding).
 vi.mock("@care-y/crypto", async (importOriginal) => {
-  const original = await importOriginal<Record<string, unknown>>();
+  const original = await importOriginal<typeof CryptoNS>();
 
   function toBase64Url(buf: Uint8Array): string {
     const binary = String.fromCharCode(...buf);
@@ -36,6 +36,7 @@ import {
   parseContactJson,
 } from "./portal-page-shared.js";
 import { encode, decode } from "@care-y/crypto";
+import type * as CryptoNS from "@care-y/crypto";
 
 // ---------------------------------------------------------------------------
 // isPortalChannelDisabledError

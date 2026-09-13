@@ -2,16 +2,24 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import NewTicketForm from "./NewTicketForm.svelte";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as ContextNS from "$lib/shell/context.js";
+import type * as OrgSlugNS from "$lib/utils/org-slug.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as ContextNS2 from "$lib/crypto/context.js";
 
 // --- Mocks ---
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS2>()),
   getCryptoBridge: () => ({
     createTicketEncryption: vi.fn(),
   }),
 }));
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   ticket_new_field_title: () => "Title",
   ticket_new_field_title_placeholder: () => "Brief description",
   ticket_new_field_description: () => "Description",
@@ -44,15 +52,16 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   error_generic: () => "Something went wrong",
 }));
 
-vi.mock("$lib/shell/context.js", () => ({
-  getSectionRailCtx: () => ({ current: undefined }),
-  getScrollContainer: () => () => undefined,
-  getTabbarOverrideCtx: () => ({ current: undefined }),
-  getTabbarHiddenCtx: () => ({ current: false }),
-  getNavbarOverrideCtx: () => ({ current: undefined }),
-}));
+vi.mock(
+  "$lib/shell/context.js",
+  async () =>
+    (
+      await import("$mocks/shell-context.js")
+    ).shellContextMock() satisfies typeof ContextNS,
+);
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     tickets: {
       resolveCreateTarget: vi
@@ -70,12 +79,14 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("$lib/errors.js", () => ({
-  RouterNotAvailableError: class extends Error {},
-  requireRouter: <T>(r: T) => r,
-}));
+vi.mock("$lib/errors.js", async (importOriginal) =>
+  (await import("$mocks/errors.js")).errorsMock(
+    await importOriginal<typeof ErrorsNS>(),
+  ),
+);
 
-vi.mock("$lib/utils/org-slug.js", () => ({
+vi.mock("$lib/utils/org-slug.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof OrgSlugNS>()),
   DEV_ORG_SLUG: "test-org",
 }));
 

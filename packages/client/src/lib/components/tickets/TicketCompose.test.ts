@@ -25,6 +25,11 @@ import {
   clearDraftForMode,
 } from "$lib/tickets/draft-store.svelte.js";
 import { _resetEmailExpectedDismissals } from "$lib/tickets/email-expected.svelte.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
 
 // jsdom has no ResizeObserver; ShellMessagebar observes its anchor in
 // fixed mode and Konsta may observe internally.
@@ -43,7 +48,8 @@ vi.stubGlobal(
 
 // vi.mock required: $lib/trpc/index.js creates a live tRPC HTTP client at
 // import time. MentionAutocomplete resolves the tickets router from it.
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     tickets: {
       listVolunteers: { query: vi.fn().mockResolvedValue([]) },
@@ -53,7 +59,8 @@ vi.mock("$lib/trpc/index.js", () => ({
 
 // vi.mock required: the crypto context getters throw outside the (app)
 // layout's createContext provider. MentionAutocomplete reads the org cache.
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgDecryptCache: () => ({
     decrypt: vi.fn().mockReturnValue(null),
   }),
@@ -62,19 +69,22 @@ vi.mock("$lib/crypto/context.js", () => ({
 // vi.mock required: createQuery expects a QueryClient in Svelte context,
 // which a bare component render does not provide (volunteers query inside
 // MentionAutocomplete).
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: () => ({ isLoading: false, isError: false, data: [] }),
 }));
 
 // vi.mock required: withTerms resolves terminology from Svelte context,
 // which a bare component render does not provide.
-vi.mock("$lib/terminology/with-terms.js", () => ({
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof WithTermsNS>()),
   withTerms: (extra?: Record<string, unknown>) => ({ ...extra }),
 }));
 
 // vi.mock required: pins the rendered strings so assertions stay stable
 // against copy edits (same approach as MentionAutocomplete.test.ts).
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   ticket_mode_indicator_reply: () => "Replying securely",
   ticket_mode_indicator_sms: () => "Texting via SMS",
   ticket_sms_char_count: (p: { count: string }) => `${p.count} / 1600`,

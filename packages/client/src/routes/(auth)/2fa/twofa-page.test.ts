@@ -9,21 +9,33 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
+import type * as PathsNS from "$app/paths";
+import type * as NavigationNS from "$app/navigation";
+import type * as AppEnvironmentNS from "$app/environment";
 
 const gotoMock = vi.fn();
-vi.mock("$app/navigation", () => ({
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof NavigationNS>()),
   goto: gotoMock,
 }));
 
-vi.mock("$app/paths", () => ({
+vi.mock("$app/paths", async (importOriginal) => ({
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
   base: "",
   assets: "",
 }));
 
-vi.mock("$app/environment", () => ({
-  browser: true,
-}));
+vi.mock(
+  "$app/environment",
+  () =>
+    ({
+      browser: true,
+      dev: false,
+      building: false,
+      version: "test",
+    }) satisfies typeof AppEnvironmentNS,
+);
 
 describe("2FA page redirect", () => {
   afterEach(() => {

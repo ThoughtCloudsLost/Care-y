@@ -23,7 +23,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     `${p.current} / ${p.total}`,
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     telephonyContent: {
       getGreetingAudio: { query: mockGetGreetingAudio },
@@ -31,7 +32,8 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("$lib/errors.js", () => ({
+vi.mock("$lib/errors.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ErrorsNS>()),
   requireRouter: (router: unknown) => router,
   ClientError: class extends Error {
     override name = "ClientError" as const;
@@ -72,12 +74,15 @@ vi.stubGlobal(
 
 // vi.mock required: AudioPlayer imports Konsta Button which requires
 // the full Konsta provider context that jsdom cannot provide.
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/components/AudioPlayer.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/AudioPlayer.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof AudioPlayerNS)["default"],
+    }) satisfies typeof AudioPlayerNS,
+);
 
 // jsdom lacks Web Animations API
 if (typeof Element.prototype.animate !== "function") {
@@ -89,6 +94,9 @@ if (typeof Element.prototype.animate !== "function") {
 }
 
 import GreetingAudioPreview from "./GreetingAudioPreview.svelte";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as AudioPlayerNS from "$lib/components/AudioPlayer.svelte";
 
 const GREETING_ID = "00000000-0000-4000-8000-000000000010";
 

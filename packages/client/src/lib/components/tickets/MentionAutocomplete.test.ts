@@ -9,14 +9,21 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import MentionAutocomplete from "./MentionAutocomplete.svelte";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 // --- Mock i18n ---
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   ticket_mention_volunteers: () => "Mention a volunteer",
 }));
 
 // --- Mock crypto context ---
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgDecryptCache: () => ({
     decrypt: vi.fn((_id: string, _data: unknown) => {
       // Return display names based on the cache key pattern
@@ -29,7 +36,8 @@ vi.mock("$lib/crypto/context.js", () => ({
 }));
 
 // --- Mock TanStack Query ---
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: () => ({
     isLoading: false,
     isError: false,
@@ -42,7 +50,8 @@ vi.mock("@tanstack/svelte-query", () => ({
 }));
 
 // --- Mock tRPC ---
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     tickets: {
       listVolunteers: {
@@ -53,10 +62,11 @@ vi.mock("$lib/trpc/index.js", () => ({
 }));
 
 // --- Mock errors ---
-vi.mock("$lib/errors.js", () => ({
-  RouterNotAvailableError: class extends Error {},
-  requireRouter: <T>(r: T) => r,
-}));
+vi.mock("$lib/errors.js", async (importOriginal) =>
+  (await import("$mocks/errors.js")).errorsMock(
+    await importOriginal<typeof ErrorsNS>(),
+  ),
+);
 
 afterEach(() => {
   cleanup();

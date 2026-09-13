@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import type * as CryptoPkg from "@care-y/crypto";
 
 vi.mock("$lib/auth/crypto-helpers.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof CryptoHelpersNS>()),
   evaluateWithPowRetry: vi.fn(),
 }));
 
@@ -40,6 +40,7 @@ import {
 } from "./account-crypto.js";
 import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
+import type * as CryptoHelpersNS from "$lib/auth/crypto-helpers.js";
 
 /** Deterministic stand-in for the Argon2id stretch; fresh per call because
  * production zeroes it in a finally block. */

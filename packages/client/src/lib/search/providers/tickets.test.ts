@@ -5,6 +5,7 @@ import type { CoverageState, FullSearchState } from "../types.js";
 import type * as Messages from "$lib/paraglide/messages.js";
 import type * as WithTermsModule from "$lib/terminology/with-terms.js";
 import type * as AsyncDecryptCacheModule from "$lib/crypto/async-decrypt-cache.js";
+import type * as TicketSearchResultNS from "$lib/components/search/TicketSearchResult.svelte";
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof Messages>()),
@@ -36,16 +37,13 @@ vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
   }),
 }));
 
-// mock-factory-unguarded: intentional. Svelte component modules compile
-// to runtime-dependent code; importOriginal fails because Vite's
-// svelte plugin transform is not applied inside vi.mock factory resolution.
-vi.mock("$lib/components/search/TicketSearchResult.svelte", () => {
-  const _usedExports = null! as { default: unknown };
-  void _usedExports;
-  return {
-    default: {} as never,
-  };
-});
+vi.mock(
+  "$lib/components/search/TicketSearchResult.svelte",
+  () =>
+    ({
+      default: {} as unknown as (typeof TicketSearchResultNS)["default"],
+    }) satisfies typeof TicketSearchResultNS,
+);
 
 vi.mock("$lib/crypto/async-decrypt-cache.js", async (importOriginal) => ({
   ...(await importOriginal<typeof AsyncDecryptCacheModule>()),

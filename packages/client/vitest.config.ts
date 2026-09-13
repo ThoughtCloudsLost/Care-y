@@ -18,6 +18,9 @@ export default defineConfig({
     // tests override behavior via vi.mock() as before.
     alias: {
       $lib: new URL("./src/lib", import.meta.url).pathname,
+      // Shared test mock factories; mirrors the $mocks kit.alias in
+      // svelte.config.js (vitest does not run the SvelteKit plugin).
+      $mocks: new URL("./src/test-mocks", import.meta.url).pathname,
       "$app/navigation": new URL(
         "./src/test-mocks/app-navigation.ts",
         import.meta.url,

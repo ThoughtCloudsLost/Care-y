@@ -57,12 +57,15 @@ vi.mock("$lib/shell/context.js", async (importOriginal) => ({
   getNavbarOverrideCtx: () => ({ current: undefined }),
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/components/EmptyState.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/EmptyState.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof EmptyStateNS)["default"],
+    }) satisfies typeof EmptyStateNS,
+);
 
 // DecryptPlaceholder observes the viewport via IntersectionObserver.
 vi.stubGlobal(
@@ -114,6 +117,7 @@ function makeRow(id: string, overrides: Partial<CallLogRow> = {}): CallLogRow {
 }
 
 import CallLogSection from "./CallLogSection.svelte";
+import type * as EmptyStateNS from "$lib/components/EmptyState.svelte";
 
 describe("CallLogSection", () => {
   beforeEach(() => {

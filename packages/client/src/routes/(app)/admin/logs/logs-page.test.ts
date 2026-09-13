@@ -27,6 +27,10 @@ import type * as FilterDispatch from "$lib/composables/create-filter-dispatch.sv
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as FilterTypes from "$lib/components/filters/filter-types.js";
 import type * as TicketQueries from "$lib/tickets/queries.js";
+import type * as IconTabToggleNS from "$lib/components/shared/IconTabToggle.svelte";
+import type * as SubNavbarFilterLayoutNS from "$lib/shell/SubNavbarFilterLayout.svelte";
+import type * as AuditLogSectionNS from "$lib/components/admin/AuditLogSection.svelte";
+import type * as CallLogSectionNS from "$lib/components/admin/CallLogSection.svelte";
 
 // --- Controllable mock state ---
 
@@ -275,29 +279,43 @@ vi.mock("$lib/tickets/queries.js", async (importOriginal) => ({
 
 // vi.mock required: Svelte component with Konsta/Lucide dependencies that
 // cannot render in jsdom without the full Konsta context.
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/admin/CallLogSection.svelte", async () => ({
-  default: (await import("./test-helpers/StubCallLogSection.svelte")).default,
-}));
+vi.mock(
+  "$lib/components/admin/CallLogSection.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubCallLogSection.svelte"))
+        .default as unknown as (typeof CallLogSectionNS)["default"],
+    }) satisfies typeof CallLogSectionNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/admin/AuditLogSection.svelte", async () => ({
-  default: (await import("./test-helpers/StubAuditLogSection.svelte")).default,
-}));
+vi.mock(
+  "$lib/components/admin/AuditLogSection.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubAuditLogSection.svelte"))
+        .default as unknown as (typeof AuditLogSectionNS)["default"],
+    }) satisfies typeof AuditLogSectionNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/shell/SubNavbarFilterLayout.svelte", async () => ({
-  default: (
-    await import("../people/test-helpers/StubSubNavbarFilterLayout.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/shell/SubNavbarFilterLayout.svelte",
+  async () =>
+    ({
+      default: (
+        await import("../people/test-helpers/StubSubNavbarFilterLayout.svelte")
+      ).default as unknown as (typeof SubNavbarFilterLayoutNS)["default"],
+    }) satisfies typeof SubNavbarFilterLayoutNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/shared/IconTabToggle.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/shared/IconTabToggle.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof IconTabToggleNS)["default"],
+    }) satisfies typeof IconTabToggleNS,
+);
 
 vi.mock("$lib/components/filters/filter-types.js", async (importOriginal) => ({
   ...(await importOriginal<typeof FilterTypes>()),

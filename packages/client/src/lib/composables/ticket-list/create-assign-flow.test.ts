@@ -1,19 +1,33 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { QueryClient } from "@tanstack/svelte-query";
 import { createAssignFlow } from "./create-assign-flow.svelte.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as OptimisticMutationNS from "$lib/utils/optimistic-mutation.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: vi.fn() },
-}));
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: vi.fn() }));
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   ticket_toast_assigned: ({ name }: { name: string }) => `Assigned to ${name}`,
   ticket_toast_unassigned: () => "Unassigned",
   error_generic: () => "Error",
 }));
-vi.mock("$lib/terminology/with-terms.js", () => ({
-  withTerms: (o?: Record<string, string>) => o ?? {},
-}));
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
 
 let lastOptimisticOpts: {
   mutate: () => Promise<unknown>;
@@ -23,7 +37,8 @@ let lastOptimisticOpts: {
   queryKey: unknown[];
 } | null = null;
 
-vi.mock("$lib/utils/optimistic-mutation.js", () => ({
+vi.mock("$lib/utils/optimistic-mutation.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof OptimisticMutationNS>()),
   optimisticMutation: vi.fn(
     async (opts: {
       mutate: () => Promise<unknown>;

@@ -8,8 +8,7 @@ import {
   cleanup,
 } from "@testing-library/svelte";
 
-const { mockToastShow, mockUploadFormAsset } = vi.hoisted(() => ({
-  mockToastShow: vi.fn(),
+const { mockUploadFormAsset } = vi.hoisted(() => ({
   mockUploadFormAsset: vi.fn().mockResolvedValue({
     blobKey: "bk-123",
     blobId: "blob-456",
@@ -17,7 +16,7 @@ const { mockToastShow, mockUploadFormAsset } = vi.hoisted(() => ({
 }));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   library_editor_toolbar: () => "Editor toolbar",
   library_editor_bold: () => "Bold",
   library_editor_italic: () => "Italic",
@@ -59,7 +58,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     intakeForms: {
       uploadFormAsset: { mutate: mockUploadFormAsset },
@@ -67,39 +66,52 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   },
 }));
 
-vi.mock("$lib/errors.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  requireRouter: (router: unknown) => router,
-}));
+vi.mock("$lib/errors.js", async (importOriginal) =>
+  (await import("$mocks/errors.js")).errorsMock(
+    await importOriginal<typeof ErrorsNS>(),
+  ),
+);
 
 vi.mock("$lib/utils/org-slug.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof OrgSlugNS>()),
   getOrgSlug: () => "test-org",
 }));
 
-vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
-vi.mock("$lib/utils/haptic.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  haptic: vi.fn(),
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
-vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
 vi.mock("@care-y/crypto", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof CryptoNS>()),
   encryptClientBranding: (data: Uint8Array, _key: Uint8Array) => data,
   encode: (data: Uint8Array) => Buffer.from(data).toString("base64"),
 }));
 
 import type { LocalizedRichText, ProseMirrorDocJSON } from "@care-y/shared";
 import FormContentEditor from "./FormContentEditor.svelte";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as ErrorsNS from "$lib/errors.js";
+import { mockToastShow } from "$mocks/toast.js";
+import type * as CryptoNS from "@care-y/crypto";
+import type * as OrgSlugNS from "$lib/utils/org-slug.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 // Helper: minimal ProseMirror doc JSON with text content
 function makeDocJson(text: string): ProseMirrorDocJSON {

@@ -151,8 +151,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 
 // vi.mock required: tRPC client creates a live HTTP connection on import
 // via httpBatchLink. Cannot import in test environment.
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal would open the live tRPC HTTP client; a hand stub cannot satisfy the generated router proxy type
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     auth: {
       listUsers: { query: vi.fn() },
@@ -335,66 +335,94 @@ vi.mock("$lib/search/normalize.js", async (importOriginal) => ({
 
 // vi.mock required: Svelte component with Konsta dependencies that cannot
 // render in jsdom without the full Konsta context.
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: module surface is a single default export and a passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/QueryError.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/QueryError.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof QueryErrorNS)["default"],
+    }) satisfies typeof QueryErrorNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("./UserCard.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "./UserCard.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof UserCardNS)["default"],
+    }) satisfies typeof UserCardNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("./RolePopover.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "./RolePopover.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof RolePopoverNS)["default"],
+    }) satisfies typeof RolePopoverNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("./InviteUser.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "./InviteUser.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof InviteUserNS)["default"],
+    }) satisfies typeof InviteUserNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("./InviteLinkSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "./InviteLinkSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof InviteLinkSheetNS)["default"],
+    }) satisfies typeof InviteLinkSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("./InvitePendingCard.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "./InvitePendingCard.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof InvitePendingCardNS)["default"],
+    }) satisfies typeof InvitePendingCardNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, dialog stub cannot satisfy the component prop types
-vi.mock("$lib/shell/ShellDialog.svelte", async () => ({
-  default: (await import("./test-helpers/StubShellDialog.svelte")).default,
-}));
+vi.mock(
+  "$lib/shell/ShellDialog.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubShellDialog.svelte"))
+        .default as unknown as (typeof ShellDialogNS)["default"],
+    }) satisfies typeof ShellDialogNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/shell/ShellActionSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/shell/ShellActionSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ShellActionSheetNS)["default"],
+    }) satisfies typeof ShellActionSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/shell/ShellSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ShellSheetNS)["default"],
+    }) satisfies typeof ShellSheetNS,
+);
 
 if (typeof Element.prototype.animate !== "function") {
   Element.prototype.animate = vi.fn().mockReturnValue({
@@ -420,6 +448,16 @@ function makeUser(id: string, overrides: Partial<UserData> = {}): UserData {
 }
 
 import UsersSection from "./UsersSection.svelte";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
+import type * as ShellActionSheetNS from "$lib/shell/ShellActionSheet.svelte";
+import type * as ShellDialogNS from "$lib/shell/ShellDialog.svelte";
+import type * as InvitePendingCardNS from "./InvitePendingCard.svelte";
+import type * as InviteLinkSheetNS from "./InviteLinkSheet.svelte";
+import type * as InviteUserNS from "./InviteUser.svelte";
+import type * as RolePopoverNS from "./RolePopover.svelte";
+import type * as UserCardNS from "./UserCard.svelte";
+import type * as QueryErrorNS from "$lib/components/QueryError.svelte";
 
 /**
  * The edit sheet renders through the PassthroughShell stub, which carries

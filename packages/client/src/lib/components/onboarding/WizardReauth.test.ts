@@ -9,6 +9,12 @@ import {
 } from "@testing-library/svelte";
 import * as m from "$lib/paraglide/messages.js";
 import type * as ParaglideRuntime from "$lib/paraglide/runtime.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as CleanupNS from "$lib/auth/cleanup.js";
+import type * as CryptoHelpersNS from "$lib/auth/crypto-helpers.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as LoginCryptoNS from "$lib/auth/login-crypto.js";
 
 // jsdom doesn't implement scrollIntoView
 Element.prototype.scrollIntoView = vi.fn();
@@ -35,7 +41,8 @@ const {
 
 // vi.mock required: $lib/trpc/index.js creates a live tRPC HTTP client at
 // import time (testing-reference Section 4, question 2).
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     onboarding: {
       reauthenticate: { mutate: mockReauthenticate },
@@ -53,7 +60,8 @@ vi.mock("$lib/trpc/index.js", () => ({
 // tree. This per-file override of the test-setup stub exposes the bridge
 // methods WizardReauth actually calls (zeroAll, orgDecrypt) plus the org
 // key manager's load().
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getCryptoBridge: () => ({
     zeroAll: mockZeroAll,
     orgDecrypt: mockOrgDecrypt,
@@ -67,7 +75,8 @@ vi.mock("$lib/crypto/context.js", () => ({
 // triggers libsodium WASM initialization at import time (testing-reference
 // Section 4, question 2). The Argon2id/OPRF pipeline also needs a real
 // crypto Worker, which jsdom does not provide.
-vi.mock("$lib/auth/login-crypto.js", () => ({
+vi.mock("$lib/auth/login-crypto.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof LoginCryptoNS>()),
   loginCrypto: mockLoginCrypto,
 }));
 
@@ -75,7 +84,8 @@ vi.mock("$lib/auth/login-crypto.js", () => ({
 // fetchAndUnwrapOrgKey as a destructured named ESM export, so vi.spyOn on
 // the test's namespace object does not intercept the component's binding
 // (testing-reference Section 4, question 3).
-vi.mock("$lib/auth/crypto-helpers.js", () => ({
+vi.mock("$lib/auth/crypto-helpers.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoHelpersNS>()),
   fetchAndUnwrapOrgKey: mockFetchAndUnwrapOrgKey,
 }));
 
@@ -83,15 +93,18 @@ vi.mock("$lib/auth/crypto-helpers.js", () => ({
 // beforeunload/pagehide listeners guarded by module-global state, which
 // would leak across tests in this file (testing-reference Section 4,
 // question 2).
-vi.mock("$lib/auth/cleanup.js", () => ({
+vi.mock("$lib/auth/cleanup.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof CleanupNS>()),
   installCleanupHandler: vi.fn(),
 }));
 
 // vi.mock required: haptic calls navigator.vibrate, which jsdom does not
 // implement. Same stub as the sibling onboarding tests.
-vi.mock("$lib/utils/haptic.js", () => ({
-  haptic: vi.fn(),
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
 // vi.mock required (partial): setLocale with { reload: true } calls
 // window.location.reload(), which jsdom does not implement (testing-

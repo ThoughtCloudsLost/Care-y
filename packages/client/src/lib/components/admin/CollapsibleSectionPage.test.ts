@@ -3,6 +3,13 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import { Permission } from "@care-y/shared";
+import type * as ContextNS from "$lib/shell/context.js";
+import { mockNavbarCtx } from "$mocks/shell-context.js";
+import type * as ContextNS2 from "$lib/crypto/context.js";
+import type * as CollapsibleSectionNS from "$lib/components/dashboard/CollapsibleSection.svelte";
+import type * as SectionScrollNavNS from "$lib/components/SectionScrollNav.svelte";
+import type * as NavigationNS from "$app/navigation";
+import type * as UseSectionScrollNS from "$lib/components/useSectionScroll.svelte.js";
 
 // --- Controllable mock state ---
 
@@ -10,38 +17,53 @@ let mockPermissions = new Set<string>();
 
 // --- Mocks ---
 
-vi.mock("$app/navigation", () => ({
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof NavigationNS>()),
   afterNavigate: vi.fn(),
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS2>()),
   getCurrentPermissions: () => () => mockPermissions,
 }));
+vi.mock(
+  "$lib/shell/context.js",
+  async () =>
+    (
+      await import("$mocks/shell-context.js")
+    ).shellContextMock() satisfies typeof ContextNS,
+);
 
-const mockNavbarCtx = { current: undefined as unknown };
+vi.mock(
+  "$lib/components/SectionScrollNav.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof SectionScrollNavNS)["default"],
+    }) satisfies typeof SectionScrollNavNS,
+);
 
-vi.mock("$lib/shell/context.js", () => ({
-  getSectionRailCtx: () => ({ current: undefined }),
-  getNavbarOverrideCtx: () => mockNavbarCtx,
-  getScrollContainer: () => () => null,
-  getTabbarOverrideCtx: () => ({ current: undefined }),
-}));
+vi.mock(
+  "$lib/components/useSectionScroll.svelte.js",
+  () =>
+    ({
+      createSectionScroll: (() => ({
+        active: "alpha",
+        scrollTo: vi.fn(),
+      })) as unknown as typeof UseSectionScrollNS.createSectionScroll,
+    }) satisfies typeof UseSectionScrollNS,
+);
 
-vi.mock("$lib/components/SectionScrollNav.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
-
-vi.mock("$lib/components/useSectionScroll.svelte.js", () => ({
-  createSectionScroll: () => ({ active: "alpha", scrollTo: vi.fn() }),
-}));
-
-vi.mock("$lib/components/dashboard/CollapsibleSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/dashboard/CollapsibleSection.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof CollapsibleSectionNS)["default"],
+    }) satisfies typeof CollapsibleSectionNS,
+);
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
 if (typeof Element.prototype.animate !== "function") {

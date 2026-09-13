@@ -10,6 +10,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as TrpcNS from "$lib/trpc/index.js";
 
 // CollapsibleSection uses a slide transition; jsdom lacks the Web
 // Animations API.
@@ -41,7 +43,8 @@ const mockMutate = vi.fn();
 
 // --- Mocks ---
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     dashboard: {
       getSetupChecklist: { query: vi.fn() },
@@ -50,7 +53,8 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   useQueryClient: () => ({
     getQueryData: vi.fn(),
     setQueryData: vi.fn(),

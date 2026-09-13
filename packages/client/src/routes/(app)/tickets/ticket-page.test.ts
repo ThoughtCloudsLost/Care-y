@@ -19,15 +19,27 @@
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
+import type * as ContextNS from "$lib/shell/context.js";
+import type * as ContextNS2 from "$lib/crypto/context.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as TicketsLayoutCtxNS from "./tickets-layout-ctx.js";
+import type * as PathsNS from "$app/paths";
+import type * as NavigationNS from "$app/navigation";
+import type * as PreviewLoaderNS from "$lib/tickets/preview-loader.svelte.js";
+import type * as ViewModeNS from "$lib/stores/view-mode.svelte.js";
+import type * as FiltersNS from "$lib/stores/filters.svelte.js";
 
 // --- Mocks ---
 
-vi.mock("$app/navigation", () => ({
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof NavigationNS>()),
   goto: vi.fn(),
   onNavigate: vi.fn(),
 }));
 
-vi.mock("$app/paths", () => ({
+vi.mock("$app/paths", async (importOriginal) => ({
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
   base: "",
   assets: "",
@@ -40,7 +52,8 @@ let infiniteQueryState: Record<string, unknown> = {};
 // default for tests that don't care); [] = settled with zero unread.
 let sweepQueryData: unknown = undefined;
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   useQueryClient: () => ({
     getQueryData: vi.fn(),
     setQueryData: vi.fn(),
@@ -72,7 +85,8 @@ vi.mock("@tanstack/svelte-query", () => ({
   }),
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     tickets: {
       list: { query: vi.fn() },
@@ -126,11 +140,17 @@ const mockPreviewLoader = {
   get: vi.fn().mockReturnValue(undefined),
 };
 
-vi.mock("$lib/tickets/preview-loader.svelte.js", () => ({
-  createPreviewLoader: () => mockPreviewLoader,
-}));
+vi.mock(
+  "$lib/tickets/preview-loader.svelte.js",
+  () =>
+    ({
+      createPreviewLoader: (() =>
+        mockPreviewLoader) as unknown as typeof PreviewLoaderNS.createPreviewLoader,
+    }) satisfies typeof PreviewLoaderNS,
+);
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS2>()),
   getTicketDecryptCache: () => ({
     decryptTitle: vi.fn().mockReturnValue("Decrypted Title"),
     has: vi.fn().mockReturnValue(false),
@@ -172,14 +192,16 @@ vi.mock("$lib/crypto/context.js", () => ({
 
 const mockNavbarCtx = { current: undefined as unknown };
 
-vi.mock("$lib/shell/context.js", () => ({
+vi.mock("$lib/shell/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getSectionRailCtx: () => ({ current: undefined }),
   getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
   getNavbarOverrideCtx: () => mockNavbarCtx,
 }));
 
-vi.mock("./tickets-layout-ctx.js", () => ({
+vi.mock("./tickets-layout-ctx.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TicketsLayoutCtxNS>()),
   getTicketsLayoutCtx: () => ({
     openTicket: vi.fn(),
     selectedTicketId: () => undefined,
@@ -188,46 +210,60 @@ vi.mock("./tickets-layout-ctx.js", () => ({
 
 let currentViewMode = "list";
 
-vi.mock("$lib/stores/view-mode.svelte.js", () => ({
-  viewModeStore: {
-    get mode() {
-      return currentViewMode;
-    },
-    set: vi.fn((v: string) => {
-      currentViewMode = v;
-    }),
-  },
-}));
+vi.mock(
+  "$lib/stores/view-mode.svelte.js",
+  () =>
+    ({
+      viewModeStore: {
+        get mode() {
+          return currentViewMode;
+        },
+        set: vi.fn((v: string) => {
+          currentViewMode = v;
+        }),
+      } as unknown as typeof ViewModeNS.viewModeStore,
+      dashboardViewModeStore: {
+        get mode() {
+          return "list";
+        },
+        set: vi.fn(),
+      } as unknown as typeof ViewModeNS.dashboardViewModeStore,
+    }) satisfies typeof ViewModeNS,
+);
 
 // Controlled active-filter count (0 = truly empty, >0 = filtered view).
 let currentActiveCount = 0;
 
-vi.mock("$lib/stores/filters.svelte.js", () => ({
-  filterStore: {
-    serverParams: {
-      sortBy: "date",
-      sortDirection: "desc",
-      limit: 50,
-    },
-    sort: { field: "date", direction: "desc" },
-    needsDisplayStatusPostFilter: false,
-    statuses: new Set(),
-    queueIds: new Set(),
-    priorities: new Set(),
-    assigneeId: null,
-    dateFrom: null,
-    dateTo: null,
-    get activeCount() {
-      return currentActiveCount;
-    },
-    toggleStatus: vi.fn(),
-    toggleQueue: vi.fn(),
-    togglePriority: vi.fn(),
-    setAssignee: vi.fn(),
-    setDateRange: vi.fn(),
-    clearAll: vi.fn(),
-  },
-}));
+vi.mock(
+  "$lib/stores/filters.svelte.js",
+  () =>
+    ({
+      filterStore: {
+        serverParams: {
+          sortBy: "date",
+          sortDirection: "desc",
+          limit: 50,
+        },
+        sort: { field: "date", direction: "desc" },
+        needsDisplayStatusPostFilter: false,
+        statuses: new Set(),
+        queueIds: new Set(),
+        priorities: new Set(),
+        assigneeId: null,
+        dateFrom: null,
+        dateTo: null,
+        get activeCount() {
+          return currentActiveCount;
+        },
+        toggleStatus: vi.fn(),
+        toggleQueue: vi.fn(),
+        togglePriority: vi.fn(),
+        setAssignee: vi.fn(),
+        setDateRange: vi.fn(),
+        clearAll: vi.fn(),
+      } as unknown as typeof FiltersNS.filterStore,
+    }) satisfies typeof FiltersNS,
+);
 
 // --- Helpers ---
 

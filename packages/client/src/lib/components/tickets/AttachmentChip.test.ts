@@ -2,16 +2,20 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import AttachmentChip from "./AttachmentChip.svelte";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as ContextNS from "$lib/crypto/context.js";
 
 // Mock crypto context
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getCryptoBridge: () => ({
     decryptBlob: vi.fn().mockResolvedValue(new ArrayBuffer(100)),
   }),
 }));
 
 // Mock trpc client
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     tickets: {
       downloadAttachmentBlob: {

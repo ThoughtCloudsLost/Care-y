@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { reshapeWire, createCallerAdapter } from "./caller-adapter.js";
 import type { CallerAdapterDeps } from "./caller-adapter.js";
+import type * as FlowEventsNS from "../flow-events.js";
 
 describe("reshapeWire", () => {
   it("returns the same reference for a buffer-free object", () => {
@@ -83,7 +84,8 @@ describe("reshapeWire", () => {
 });
 
 // Mock traceFlowSpan so the adapter test doesn't depend on flow-events.
-vi.mock("../flow-events.js", () => ({
+vi.mock("../flow-events.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof FlowEventsNS>()),
   traceFlowSpan: (_opts: unknown, fn: () => unknown) => fn(),
 }));
 

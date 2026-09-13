@@ -86,19 +86,25 @@ vi.mock("$lib/shell/context.js", async (importOriginal) => ({
   getNavbarOverrideCtx: () => ({ current: undefined }),
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/components/QueryError.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/QueryError.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof QueryErrorNS)["default"],
+    }) satisfies typeof QueryErrorNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/components/EmptyState.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/EmptyState.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof EmptyStateNS)["default"],
+    }) satisfies typeof EmptyStateNS,
+);
 
 // DecryptPlaceholder observes the viewport via IntersectionObserver.
 vi.stubGlobal(
@@ -148,6 +154,8 @@ import {
   summarizeAuditMetadata,
   auditEventLabel,
 } from "$lib/admin/audit-log-labels.js";
+import type * as EmptyStateNS from "$lib/components/EmptyState.svelte";
+import type * as QueryErrorNS from "$lib/components/QueryError.svelte";
 
 describe("AuditLogSection", () => {
   beforeEach(() => {

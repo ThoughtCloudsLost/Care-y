@@ -7,6 +7,9 @@ import type {
   FieldConfigInitial,
 } from "./intake-field-config-types.js";
 import { queueIdSchema } from "@care-y/shared";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as FormContentEditorNS from "./FormContentEditor.svelte";
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ParaglideMessages>()),
@@ -111,24 +114,25 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "Static formatted content between fields",
 }));
 
-vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  withTerms: () => ({}),
-}));
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
 
 // FormContentEditor has deep ProseMirror/crypto dependencies; stub it out.
 vi.mock("./FormContentEditor.svelte", async (importOriginal) => {
   const { default: Passthrough } =
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte");
   return {
-    ...(await importOriginal<Record<string, unknown>>()),
+    ...(await importOriginal<typeof FormContentEditorNS>()),
     default: Passthrough,
   };
 });
 
 // getOrgKeyManager requires Svelte context; stub with a minimal shape.
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgKeyManager: () => ({
     getPublicKey: (): null => null,
   }),

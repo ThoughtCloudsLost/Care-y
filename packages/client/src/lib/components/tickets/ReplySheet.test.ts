@@ -145,8 +145,8 @@ vi.mock("$lib/errors.js", async (importOriginal) => ({
 const { passthrough } = vi.hoisted(() => ({
   passthrough: <T>(v: T): T => v,
 }));
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal triggers createContext() outside component tree; return type `: typeof CryptoCtxModule` guards against drift
-vi.mock("$lib/crypto/context.js", (): typeof CryptoCtxModule => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoCtxModule>()),
   getCryptoBridge: () =>
     ({
       encrypt: mockEncrypt,
@@ -159,8 +159,6 @@ vi.mock("$lib/crypto/context.js", (): typeof CryptoCtxModule => ({
     ({ decrypt: vi.fn().mockReturnValue(null) }) as never,
   getTicketDecryptCache: () =>
     ({ decrypt: vi.fn().mockReturnValue(null) }) as never,
-  // A real UUID: the pending-entry builder runs this through
-  // userIdSchema (z.uuid()), which rejects non-UUID sentinels.
   getCurrentUserId: () => () => "8b7bd6a0-59f2-4f4b-9d6a-3f1c2e4a5b6c",
   getCurrentUserRoleId: () => () => undefined,
   getCurrentPermissions: () => () => new Set(),

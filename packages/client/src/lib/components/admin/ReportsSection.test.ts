@@ -61,7 +61,8 @@ function pendingState(): MockQueryState {
 
 // ── Mocks ──
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   admin_reports_open_tickets: () => "Open tickets",
   admin_reports_this_month: () => "This month",
   admin_reports_avg_resolution: () => "Avg. resolution",
@@ -88,7 +89,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   decrypt_denied: () => "Denied",
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     reports: {
       activeCount: { query: vi.fn().mockResolvedValue(12) },
@@ -100,7 +102,8 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
     const key = (opts.queryKey as string[])[2] as string | undefined;
@@ -116,7 +119,8 @@ vi.mock("@tanstack/svelte-query", () => ({
   }),
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgDecryptCache: () => ({
     decrypt: (_id: string, _data: unknown) => "General Intake",
     get: vi.fn().mockReturnValue(undefined),
@@ -124,11 +128,13 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-vi.mock("$lib/utils/buffer-encoding.js", () => ({
+vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BufferEncodingNS>()),
   base64ToUint8Array: (s: string) => new TextEncoder().encode(s),
 }));
 
-vi.mock("$lib/errors.js", () => ({
+vi.mock("$lib/errors.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ErrorsNS>()),
   RouterNotAvailableError: class extends Error {
     constructor(name: string) {
       super(`${name} router unavailable`);
@@ -137,21 +143,37 @@ vi.mock("$lib/errors.js", () => ({
   requireRouter: <T>(r: T) => r,
 }));
 
-vi.mock("$lib/components/QueryError.svelte", () => ({
-  default: {
-    $$: {},
-    render: () => ({ html: "<div>Query error</div>" }),
-  },
-}));
+vi.mock(
+  "$lib/components/QueryError.svelte",
+  () =>
+    ({
+      default: {
+        $$: {},
+        render: () => ({ html: "<div>Query error</div>" }),
+      } as unknown as (typeof QueryErrorNS)["default"],
+    }) satisfies typeof QueryErrorNS,
+);
 
-vi.mock("$lib/components/DecryptPlaceholder.svelte", () => ({
-  default: {
-    $$: {},
-    render: () => ({ html: "<span>...</span>" }),
-  },
-}));
+vi.mock(
+  "$lib/components/DecryptPlaceholder.svelte",
+  () =>
+    ({
+      default: {
+        $$: {},
+        render: () => ({ html: "<span>...</span>" }),
+      } as unknown as (typeof DecryptPlaceholderNS)["default"],
+    }) satisfies typeof DecryptPlaceholderNS,
+);
 
 import ReportsSection from "./ReportsSection.svelte";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as BufferEncodingNS from "$lib/utils/buffer-encoding.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as DecryptPlaceholderNS from "$lib/components/DecryptPlaceholder.svelte";
+import type * as QueryErrorNS from "$lib/components/QueryError.svelte";
 
 describe("ReportsSection", () => {
   beforeEach(() => {

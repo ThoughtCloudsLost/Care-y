@@ -11,6 +11,8 @@
  */
 
 import { vi } from "vitest";
+import type * as OrgKeyReadyNS from "$lib/crypto/org-key-ready.svelte";
+import type * as CryptoKeyedNS from "$lib/crypto/crypto-keyed.svelte";
 
 // Under the jsdom environment the global TextEncoder produces Uint8Arrays
 // from a different realm than the global Uint8Array, so `instanceof` checks
@@ -182,21 +184,32 @@ vi.mock("$lib/portal/context", () => {
 // $lib/crypto/org-key-ready.svelte
 // ---------------------------------------------------------------------------
 // vi.mock required: uses $state rune which needs Svelte compiler pipeline.
-vi.mock("$lib/crypto/org-key-ready.svelte", () => ({
-  // eslint-disable-next-line @typescript-eslint/no-empty-function -- test mock stub
-  setOrgKeyReady: () => {},
-  getOrgKeyReady: () => false,
-}));
+// The satisfies guard is load-bearing: this mock once exported a
+// getOrgKeyReady that the real module had renamed to isOrgKeyReady, and
+// nothing caught it because test-setup is exempt from the sweep rule.
+vi.mock(
+  "$lib/crypto/org-key-ready.svelte",
+  () =>
+    ({
+      // eslint-disable-next-line @typescript-eslint/no-empty-function -- test mock stub
+      setOrgKeyReady: () => {},
+      isOrgKeyReady: () => false,
+    }) satisfies typeof OrgKeyReadyNS,
+);
 
 // ---------------------------------------------------------------------------
 // $lib/crypto/crypto-keyed.svelte
 // ---------------------------------------------------------------------------
 // vi.mock required: uses $state rune which needs Svelte compiler pipeline.
-vi.mock("$lib/crypto/crypto-keyed.svelte", () => ({
-  // eslint-disable-next-line @typescript-eslint/no-empty-function -- test mock stub
-  setCryptoKeyed: () => {},
-  isCryptoKeyed: () => true,
-}));
+vi.mock(
+  "$lib/crypto/crypto-keyed.svelte",
+  () =>
+    ({
+      // eslint-disable-next-line @typescript-eslint/no-empty-function -- test mock stub
+      setCryptoKeyed: () => {},
+      isCryptoKeyed: () => true,
+    }) satisfies typeof CryptoKeyedNS,
+);
 
 // ---------------------------------------------------------------------------
 // @sveltejs/kit/hooks

@@ -19,6 +19,13 @@ import { followupSlot } from "@care-y/crypto";
 import * as m from "$lib/paraglide/messages.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
 import InternalNoteSheet from "./InternalNoteSheet.svelte";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as QueriesNS from "$lib/tickets/queries.js";
+import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
 
 let noteTypesState: Record<string, unknown> = { data: undefined };
 
@@ -57,11 +64,13 @@ const toastShowSpy = vi
   .spyOn(toastStore, "show")
   .mockImplementation(() => undefined);
 
-vi.mock("$lib/tickets/queries.js", () => ({
+vi.mock("$lib/tickets/queries.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof QueriesNS>()),
   createNoteTypesQuery: () => noteTypesState,
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     tickets: {
       noteTypes: {},
@@ -71,12 +80,14 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("$lib/errors.js", () => ({
-  RouterNotAvailableError: class extends Error {},
-  requireRouter: <T>(r: T) => r,
-}));
+vi.mock("$lib/errors.js", async (importOriginal) =>
+  (await import("$mocks/errors.js")).errorsMock(
+    await importOriginal<typeof ErrorsNS>(),
+  ),
+);
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getCryptoBridge: () => ({
     encrypt: mockEncrypt,
   }),
@@ -89,17 +100,24 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
-vi.mock("$lib/terminology/with-terms.js", () => ({
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof WithTermsNS>()),
   withTerms: (o?: Record<string, string>) => ({ ...o }),
 }));
 
-vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
-  default: (await import("./test-helpers/PassthroughShell.svelte")).default,
-}));
+vi.mock(
+  "$lib/shell/ShellSheet.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/PassthroughShell.svelte"))
+        .default as unknown as (typeof ShellSheetNS)["default"],
+    }) satisfies typeof ShellSheetNS,
+);
 
 const baseProps = {
   opened: true,

@@ -2,15 +2,14 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const { mockSetPiiRetention, mockToastShow, mockHaptic } = vi.hoisted(() => ({
+const { mockSetPiiRetention } = vi.hoisted(() => ({
   mockSetPiiRetention: vi.fn().mockResolvedValue({ success: true }),
-  mockToastShow: vi.fn(),
-  mockHaptic: vi.fn(),
 }));
 
 let mockHubStatusData: { retentionDays: number | null } | undefined;
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   admin_retention_toggle_label: () => "Auto-delete PII",
   admin_retention_active_description: ({ days }: { days: number }) =>
     `Deleting after ${days} days`,
@@ -34,7 +33,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   error_generic: () => "Something went wrong",
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     auth: {
       hubStatus: { query: vi.fn() },
@@ -43,7 +43,8 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     optsFn();
     return {
@@ -80,27 +81,52 @@ vi.mock("@tanstack/svelte-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: mockHaptic }));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
-vi.mock("$lib/shell/ShellDialog.svelte", async () => ({
-  default: (await import("./test-helpers/StubShellDialog.svelte")).default,
-}));
+vi.mock(
+  "$lib/shell/ShellDialog.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubShellDialog.svelte"))
+        .default as unknown as (typeof ShellDialogNS)["default"],
+    }) satisfies typeof ShellDialogNS,
+);
 
-vi.mock("$lib/components/QueryError.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/QueryError.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof QueryErrorNS)["default"],
+    }) satisfies typeof QueryErrorNS,
+);
 
 import RetentionSection from "./RetentionSection.svelte";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as QueryErrorNS from "$lib/components/QueryError.svelte";
+import type * as ShellDialogNS from "$lib/shell/ShellDialog.svelte";
 
 describe("RetentionSection", () => {
   beforeEach(() => {

@@ -185,7 +185,10 @@ vi.mock("$lib/branding/color-utils.js", async (importOriginal) => ({
 // dynamic-imports a library), but the proximity check keeps its real
 // OKLCH math so the nudge tests exercise actual behavior.
 vi.mock("$lib/branding/konsta-palette.js", async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
+  const actual = (await importOriginal<typeof KonstaPaletteNS>()) as Record<
+    string,
+    unknown
+  >;
   return {
     ...actual,
     applyKonstaPalette: vi.fn().mockResolvedValue(undefined),
@@ -194,8 +197,8 @@ vi.mock("$lib/branding/konsta-palette.js", async (importOriginal) => {
 
 // vi.mock required: icon-upload imports generateIconVariants which uses
 // OffscreenCanvas/createImageBitmap platform APIs unavailable in jsdom.
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal would trigger platform API imports
-vi.mock("$lib/branding/icon-upload.js", () => ({
+vi.mock("$lib/branding/icon-upload.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof IconUploadNS>()),
   uploadPwaIcons: mockUploadPwaIcons,
 }));
 
@@ -205,19 +208,25 @@ vi.mock("$lib/utils/org-slug.js", async (importOriginal) => ({
   DEV_ORG_SLUG: "test-org",
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/shell/ShellSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ShellSheetNS)["default"],
+    }) satisfies typeof ShellSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/QueryError.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/QueryError.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof QueryErrorNS)["default"],
+    }) satisfies typeof QueryErrorNS,
+);
 
 // vi.mock required: $state rune needs Svelte compiler pipeline.
 vi.mock("$lib/branding/title.svelte.js", async (importOriginal) => ({
@@ -273,6 +282,10 @@ vi.stubGlobal("caches", {
 
 import BrandingSection from "./BrandingSection.svelte";
 import { DEFAULT_PRIMARY, DEFAULT_ACCENT } from "$lib/branding/index.js";
+import type * as KonstaPaletteNS from "$lib/branding/konsta-palette.js";
+import type * as QueryErrorNS from "$lib/components/QueryError.svelte";
+import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
+import type * as IconUploadNS from "$lib/branding/icon-upload.js";
 
 const LOADED_DATA: BrandingData = {
   name: "Safe Harbor Hotline",

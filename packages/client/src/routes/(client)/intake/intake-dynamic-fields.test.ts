@@ -155,12 +155,12 @@ function makeServerFields(
 // $app/environment: covered by test-setup.ts (global setupFile)
 
 vi.mock("$app/paths", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
 }));
 
 vi.mock("@tanstack/svelte-query", async (importOriginal) => {
-  const original = await importOriginal<Record<string, unknown>>();
+  const original = await importOriginal<typeof SvelteQueryNS>();
   return {
     ...original,
     createQuery: (optsFn: () => Record<string, unknown>) => {
@@ -317,7 +317,7 @@ vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
 
 // vi.mock required: trpc/index.js creates a live HTTP client on import.
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     branding: {
       getPublicBranding: {
@@ -431,14 +431,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/shell/PageShell.svelte", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PageShellNS>()),
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
 }));
 
 vi.mock("$lib/shell/ShellToast.svelte", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof ShellToastNS>()),
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
@@ -448,7 +448,7 @@ vi.mock("$lib/shell/ShellToast.svelte", async (importOriginal) => ({
 // consumer renders without its provider, and this spec renders the page on
 // its own rather than inside the (client) layout that sets the container.
 vi.mock("$lib/client-shell/context.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ContextNS>()),
   getClientShellCtx: () => ({ current: undefined }),
 }));
 
@@ -463,6 +463,12 @@ if (typeof Element.prototype.animate !== "function") {
 
 import IntakePage from "./+page.svelte";
 import type { IntakeAnswer } from "./intake-crypto.js";
+import type * as ContextNS from "$lib/client-shell/context.js";
+import type * as ShellToastNS from "$lib/shell/ShellToast.svelte";
+import type * as PageShellNS from "$lib/shell/PageShell.svelte";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as PathsNS from "$app/paths";
 
 // --- Helpers ---
 

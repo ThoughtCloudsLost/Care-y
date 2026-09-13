@@ -19,13 +19,11 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import { tick } from "svelte";
 import type { NavbarOverride } from "$lib/shell/types.js";
 import type * as ShellContext from "$lib/shell/context.js";
-
-// care-y-ignore mock-factory-unguarded -- the five remaining factories mock
-// modules importOriginal cannot load here: $app/navigation and $app/paths are
-// SvelteKit virtual modules with no on-disk source, $lib/trpc/index.js opens a
-// live HTTP connection at import, @tanstack/svelte-query and
-// $lib/crypto/context.js are stubbed wholesale to control query state and
-// decrypt caches. See the module docblock above.
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as PathsNS from "$app/paths";
+import type * as NavigationNS from "$app/navigation";
 
 // IntersectionObserver stub for DecryptPlaceholder; ResizeObserver stub for
 // TicketPreview's fit-mode clipping (both absent in jsdom).
@@ -69,12 +67,14 @@ const mockGoto = vi.fn();
 
 // --- Mocks ---
 
-vi.mock("$app/navigation", () => ({
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof NavigationNS>()),
   goto: mockGoto,
   onNavigate: vi.fn(),
 }));
 
-vi.mock("$app/paths", () => ({
+vi.mock("$app/paths", async (importOriginal) => ({
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
   base: "",
   assets: "",
@@ -100,7 +100,8 @@ const emptyDataQuery = {
   data: [],
 };
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   useQueryClient: () => ({
     getQueryData: vi.fn(),
     setQueryData: vi.fn(),
@@ -127,7 +128,8 @@ vi.mock("@tanstack/svelte-query", () => ({
   }),
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     auth: { me: { query: vi.fn() } },
     tickets: {
@@ -184,7 +186,8 @@ const mockPreviewLoader = {
   get: vi.fn().mockReturnValue(undefined),
 };
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getTicketDecryptCache: () => ({
     decryptTitle: vi.fn().mockReturnValue("Decrypted Title"),
     has: vi.fn().mockReturnValue(false),
@@ -199,8 +202,6 @@ vi.mock("$lib/crypto/context.js", () => ({
     clear: vi.fn(),
     size: 0,
   }),
-  // Kept for the reply/call/assign overlays: their scripts resolve the bridge
-  // and key manager at setup, which now happens the moment one is opened.
   getCryptoBridge: () => ({
     encrypt: vi.fn().mockResolvedValue("base64-ciphertext"),
     encryptText: vi.fn().mockResolvedValue("encrypted-text"),

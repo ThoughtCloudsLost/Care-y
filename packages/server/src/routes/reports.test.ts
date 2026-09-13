@@ -25,6 +25,7 @@ import type {
   OrgSlug,
   OrgSchema,
 } from "@care-y/shared";
+import type * as ReportsServiceNS from "../tickets/reports-service.js";
 
 // --- Mock reports service ---
 
@@ -36,7 +37,8 @@ const mockActiveCount = vi.fn();
 
 // Constraint: must expose the same surface as createReportsService (ticket-service.ts).
 // If a new method is added to the real service, add it here or the mock silently diverges.
-vi.mock("../tickets/reports-service.js", () => ({
+vi.mock("../tickets/reports-service.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ReportsServiceNS>()),
   createReportsService: () => ({
     queueStats: mockQueueStats,
     volumeTrends: mockVolumeTrends,

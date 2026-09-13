@@ -66,7 +66,7 @@ vi.mock("$app/paths", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     branding: {
       getPublicBranding: {
@@ -91,7 +91,7 @@ const { mockDecryptShare } = vi.hoisted(() => ({
 }));
 
 vi.mock("$lib/portal/share-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof ShareCryptoNS>()),
   decryptShare: mockDecryptShare,
 }));
 
@@ -100,7 +100,7 @@ const { mockAnnounce } = vi.hoisted(() => ({
 }));
 
 vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof AnnounceNS>()),
   announceToLiveRegion: mockAnnounce,
 }));
 
@@ -128,14 +128,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/shell/PageShell.svelte", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PageShellNS>()),
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
 }));
 
 vi.mock("$lib/shell/ShellToast.svelte", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof ShellToastNS>()),
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
@@ -145,7 +145,7 @@ vi.mock("$lib/shell/ShellToast.svelte", async (importOriginal) => ({
 // consumer renders without its provider, and this spec renders the page on
 // its own rather than inside the (client) layout that sets the container.
 vi.mock("$lib/client-shell/context.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ContextNS>()),
   getClientShellCtx: () => ({ current: undefined }),
 }));
 
@@ -159,6 +159,12 @@ if (typeof Element.prototype.animate !== "function") {
 }
 
 import SharePage from "./+page.svelte";
+import type * as ContextNS from "$lib/client-shell/context.js";
+import type * as ShellToastNS from "$lib/shell/ShellToast.svelte";
+import type * as PageShellNS from "$lib/shell/PageShell.svelte";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as ShareCryptoNS from "$lib/portal/share-crypto.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
 
 // --- Helpers ---
 

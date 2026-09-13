@@ -2,12 +2,17 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 import type { WizardNavContainer } from "./wizard-nav-context.js";
-
-const mockHaptic = vi.fn();
-const mockToastShow = vi.fn();
-const mockAnnounce = vi.fn();
-
-vi.mock("$lib/paraglide/messages.js", () => ({
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import { mockHaptic } from "$mocks/haptic.js";
+import type * as WizardNavContextNS from "./wizard-nav-context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as QueuesSectionNS from "$lib/components/admin/QueuesSection.svelte";
+import type * as OnboardingCryptoBridgeNS from "$lib/providers/OnboardingCryptoBridge.svelte";
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   onboarding_queue_heading: () => "Create Your First Queue",
   onboarding_queue_subtext: () => "Queues organize incoming requests.",
   admin_queues_create_button: () => "Create queue",
@@ -15,30 +20,51 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   common_next: () => "Next",
 }));
 
-vi.mock("$lib/terminology/with-terms.js", () => ({
-  withTerms: () => ({}),
-}));
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
 
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: mockHaptic }));
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: mockAnnounce,
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
-vi.mock("$lib/providers/OnboardingCryptoBridge.svelte", async () => ({
-  default: (await import("./test-helpers/StubOnboardingCryptoBridge.svelte"))
-    .default,
-}));
+vi.mock(
+  "$lib/providers/OnboardingCryptoBridge.svelte",
+  async () =>
+    ({
+      default: (
+        await import("./test-helpers/StubOnboardingCryptoBridge.svelte")
+      ).default as unknown as (typeof OnboardingCryptoBridgeNS)["default"],
+    }) satisfies typeof OnboardingCryptoBridgeNS,
+);
 
-vi.mock("$lib/components/admin/QueuesSection.svelte", async () => ({
-  default: (await import("./test-helpers/StubQueuesSection.svelte")).default,
-}));
+vi.mock(
+  "$lib/components/admin/QueuesSection.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubQueuesSection.svelte"))
+        .default as unknown as (typeof QueuesSectionNS)["default"],
+    }) satisfies typeof QueuesSectionNS,
+);
 
 const wizardNavContainer: WizardNavContainer = { current: undefined };
 
-vi.mock("./wizard-nav-context.js", () => ({
+vi.mock("./wizard-nav-context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof WizardNavContextNS>()),
   getWizardNavCtx: () => wizardNavContainer,
 }));
 

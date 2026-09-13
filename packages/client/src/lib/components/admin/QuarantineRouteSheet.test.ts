@@ -123,21 +123,27 @@ vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
 
 // vi.mock required: ShellSheet uses Konsta Sheet which requires
 // the full Konsta provider context that jsdom cannot provide.
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/shell/ShellSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ShellSheetNS)["default"],
+    }) satisfies typeof ShellSheetNS,
+);
 
 // vi.mock required: ClientSelect uses Bits UI Combobox which requires
 // browser APIs for positioning that jsdom cannot provide.
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/inputs/ClientSelect.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/inputs/ClientSelect.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ClientSelectNS)["default"],
+    }) satisfies typeof ClientSelectNS,
+);
 
 // jsdom lacks Web Animations API
 if (typeof Element.prototype.animate !== "function") {
@@ -149,6 +155,8 @@ if (typeof Element.prototype.animate !== "function") {
 }
 
 import QuarantineRouteSheet from "./QuarantineRouteSheet.svelte";
+import type * as ClientSelectNS from "$lib/components/inputs/ClientSelect.svelte";
+import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
 
 describe("QuarantineRouteSheet", () => {
   const baseProps = {

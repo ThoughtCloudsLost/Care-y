@@ -38,31 +38,35 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 // vi.mock required: createContext from Svelte 5 throws "missing_context"
 // outside a live component tree. Crypto contexts are set by CryptoProvider
 // in the (app) layout, but component tests don't mount the full layout.
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal triggers createContext() outside component tree; return type `: typeof CryptoContext` guards against drift
-vi.mock("$lib/crypto/context.js", (): typeof CryptoContext => ({
-  getOrgKeyManager: () =>
+vi.mock(
+  "$lib/crypto/context.js",
+  async (importOriginal) =>
     ({
-      decrypt: mockOrgDecrypt,
-      isLoaded: true,
-    }) as never,
-  getCryptoBridge: () => ({ encrypt: vi.fn(), decrypt: vi.fn() }) as never,
-  getOrgDecryptCache: () => ({ decrypt: vi.fn() }) as never,
-  getTicketDecryptCache: () => ({ decrypt: vi.fn() }) as never,
-  getCurrentUserId: () => () => undefined,
-  getCurrentUserRoleId: () => () => undefined,
-  getCurrentPermissions: () => () => new Set(),
-  getFollowUpDecryptCache: () => ({ decryptContent: vi.fn() }) as never,
-  getPreviewLoader: () => ({ load: vi.fn() }) as never,
-  setCryptoBridge: (v) => v,
-  setOrgKeyManager: (v) => v,
-  setOrgDecryptCache: (v) => v,
-  setTicketDecryptCache: (v) => v,
-  setCurrentUserId: (v) => v,
-  setCurrentUserRoleId: (v) => v,
-  setCurrentPermissions: (v) => v,
-  setFollowUpDecryptCache: (v) => v,
-  setPreviewLoader: (v) => v,
-}));
+      ...(await importOriginal<typeof CryptoContext>()),
+      getOrgKeyManager: () =>
+        ({
+          decrypt: mockOrgDecrypt,
+          isLoaded: true,
+        }) as never,
+      getCryptoBridge: () => ({ encrypt: vi.fn(), decrypt: vi.fn() }) as never,
+      getOrgDecryptCache: () => ({ decrypt: vi.fn() }) as never,
+      getTicketDecryptCache: () => ({ decrypt: vi.fn() }) as never,
+      getCurrentUserId: () => () => undefined,
+      getCurrentUserRoleId: () => () => undefined,
+      getCurrentPermissions: () => () => new Set(),
+      getFollowUpDecryptCache: () => ({ decryptContent: vi.fn() }) as never,
+      getPreviewLoader: () => ({ load: vi.fn() }) as never,
+      setCryptoBridge: (v) => v,
+      setOrgKeyManager: (v) => v,
+      setOrgDecryptCache: (v) => v,
+      setTicketDecryptCache: (v) => v,
+      setCurrentUserId: (v) => v,
+      setCurrentUserRoleId: (v) => v,
+      setCurrentPermissions: (v) => v,
+      setFollowUpDecryptCache: (v) => v,
+      setPreviewLoader: (v) => v,
+    }) satisfies typeof CryptoContext,
+);
 
 vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
   ...(await importOriginal<typeof BufferEncoding>()),
@@ -129,12 +133,15 @@ vi.stubGlobal(
 
 // vi.mock required: AudioPlayer imports Konsta Button which requires
 // the full Konsta provider context that jsdom cannot provide.
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/AudioPlayer.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/AudioPlayer.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof AudioPlayerNS)["default"],
+    }) satisfies typeof AudioPlayerNS,
+);
 
 // jsdom lacks Web Animations API
 if (typeof Element.prototype.animate !== "function") {
@@ -146,6 +153,7 @@ if (typeof Element.prototype.animate !== "function") {
 }
 
 import QuarantinePlayer from "./QuarantinePlayer.svelte";
+import type * as AudioPlayerNS from "$lib/components/AudioPlayer.svelte";
 
 describe("QuarantinePlayer", () => {
   beforeEach(() => {

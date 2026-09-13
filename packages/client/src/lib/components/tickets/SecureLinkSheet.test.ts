@@ -32,6 +32,9 @@ import type * as EFFWordlistMod from "$lib/portal/eff-wordlist.js";
 import type * as CryptoContextMod from "$lib/crypto/context.js";
 import * as m from "$lib/paraglide/messages.js";
 import { ErrorCode } from "@care-y/shared";
+import type * as CreatePortalReseedNS from "$lib/composables/tickets/create-portal-reseed.svelte.js";
+import type * as PowSolverNS from "$lib/auth/pow-solver.js";
+import type * as PortalCryptoNS from "$lib/portal/portal-crypto.js";
 
 // ---- Hoisted spy fns ----
 
@@ -145,7 +148,7 @@ vi.mock("@care-y/crypto", async (importOriginal) => ({
 
 // Mock performChannelOprf (async OPRF round replaces derivePortalKeypair)
 vi.mock("$lib/portal/portal-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PortalCryptoNS>()),
   performChannelOprf: vi.fn().mockResolvedValue({
     clientPublic: mockKeypair.clientPublic,
     clientPrivate: mockKeypair.clientPrivate,
@@ -154,7 +157,7 @@ vi.mock("$lib/portal/portal-crypto.js", async (importOriginal) => ({
 
 // Mock solveProofOfWork (imported by SecureLinkSheet for the PoW callback)
 vi.mock("$lib/auth/pow-solver.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PowSolverNS>()),
   solveProofOfWork: vi.fn().mockResolvedValue("test-solution"),
 }));
 
@@ -183,7 +186,7 @@ vi.mock(
     // placeholder to satisfy the mock-factory-unguarded lint rule.
     let real = {};
     try {
-      real = await importOriginal();
+      real = await importOriginal<typeof CreatePortalReseedNS>();
     } catch {
       // Module not yet authored; full replacement is intentional.
     }

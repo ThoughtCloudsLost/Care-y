@@ -17,48 +17,34 @@ import type * as ToastModule from "$lib/stores/toast.svelte.js";
 import type * as SendMessageModule from "$lib/composables/ticket-detail/create-send-message.svelte.js";
 import type * as SmsSendModule from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
 import type * as CallDispatchModule from "$lib/composables/ticket-detail/create-call-dispatch.svelte.js";
+import type * as AppStateNS from "$app/state";
+import type * as AppNavigationNS from "$app/navigation";
+import type * as AppPathsNS from "$app/paths";
+import type * as InternalNoteSheetNS from "$lib/components/tickets/InternalNoteSheet.svelte";
+import type * as ComposeActionsNS from "$lib/components/tickets/ComposeActions.svelte";
 
 // --- Mocks ---
 
-// mock-factory-unguarded: intentional. $app/state is a SvelteKit virtual
-// module with no real backing file; importOriginal cannot resolve it.
-vi.mock("$app/state", () => {
-  const _usedExports = null! as { page: unknown };
-  void _usedExports;
-  return {
-    page: {
-      params: { id: "ticket-001" },
-      url: new URL("http://localhost/tickets/ticket-001"),
-    },
-  };
-});
+vi.mock("$app/state", async (importOriginal) => ({
+  ...(await importOriginal<typeof AppStateNS>()),
+  page: {
+    params: { id: "ticket-001" },
+    url: new URL("http://localhost/tickets/ticket-001"),
+  },
+}));
 
-// mock-factory-unguarded: intentional. $app/navigation is a SvelteKit
-// virtual module with no real backing file; importOriginal cannot resolve it.
-vi.mock("$app/navigation", () => {
-  const _usedExports = null! as { goto: unknown; onNavigate: unknown };
-  void _usedExports;
-  return {
-    goto: vi.fn(),
-    onNavigate: vi.fn(),
-  };
-});
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof AppNavigationNS>()),
+  goto: vi.fn(),
+  onNavigate: vi.fn(),
+}));
 
-// mock-factory-unguarded: intentional. $app/paths is a SvelteKit virtual
-// module with no real backing file; importOriginal cannot resolve it.
-vi.mock("$app/paths", () => {
-  const _usedExports = null! as {
-    resolve: unknown;
-    base: unknown;
-    assets: unknown;
-  };
-  void _usedExports;
-  return {
-    resolve: (path: string) => path,
-    base: "",
-    assets: "",
-  };
-});
+vi.mock("$app/paths", async (importOriginal) => ({
+  ...(await importOriginal<typeof AppPathsNS>()),
+  resolve: (path: string) => path,
+  base: "",
+  assets: "",
+}));
 
 let ticketQueryState: Record<string, unknown> = {};
 
@@ -292,31 +278,25 @@ vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
   toastStore: { show: vi.fn() },
 }));
 
-// mock-factory-unguarded: intentional. Svelte component modules compile
-// to runtime-dependent code; importOriginal fails because Vite's
-// svelte plugin transform is not applied inside vi.mock factory resolution.
-vi.mock("$lib/components/tickets/InternalNoteSheet.svelte", async () => {
-  const _usedExports = null! as { default: unknown };
-  void _usedExports;
-  return {
-    default: (
-      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-    ).default,
-  };
-});
+vi.mock(
+  "$lib/components/tickets/InternalNoteSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof InternalNoteSheetNS)["default"],
+    }) satisfies typeof InternalNoteSheetNS,
+);
 
-// mock-factory-unguarded: intentional. Svelte component modules compile
-// to runtime-dependent code; importOriginal fails because Vite's
-// svelte plugin transform is not applied inside vi.mock factory resolution.
-vi.mock("$lib/components/tickets/ComposeActions.svelte", async () => {
-  const _usedExports = null! as { default: unknown };
-  void _usedExports;
-  return {
-    default: (
-      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-    ).default,
-  };
-});
+vi.mock(
+  "$lib/components/tickets/ComposeActions.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ComposeActionsNS)["default"],
+    }) satisfies typeof ComposeActionsNS,
+);
 
 vi.mock(
   "$lib/composables/ticket-detail/create-send-message.svelte.js",

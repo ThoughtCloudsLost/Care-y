@@ -3,11 +3,17 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import HowProtected from "./HowProtected.svelte";
 import PrivacyPage from "../../../routes/(client)/intake/privacy/+page.svelte";
+import type * as ContextNS from "$lib/client-shell/context.js";
+import type * as ContextNS2 from "$lib/shell/context.js";
+import type * as InjectedBrandingNS from "$lib/branding/injected-branding.js";
+import type * as PublicBrandingNS from "$lib/branding/public-branding.js";
+import type * as TitleNS from "$lib/branding/title.svelte.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 // --- i18n mock ---
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof MessagesNS>()),
   intake_protected_title: () => "How you're protected",
   intake_protected_summary: () =>
     "What you write here is encrypted before it leaves your device.",
@@ -59,7 +65,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 // --- Branding title mock ---
 
 vi.mock("$lib/branding/title.svelte.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof TitleNS>()),
   getBrandingTitle: () => "Test Org",
 }));
 
@@ -67,7 +73,7 @@ vi.mock("$lib/branding/title.svelte.js", async (importOriginal) => ({
 // the injected-attribute fallback; the mock resolves immediately so the
 // who-collects section renders the name instead of the pending skeleton.
 vi.mock("$lib/branding/public-branding.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PublicBrandingNS>()),
   createPublicBrandingQuery: () => ({
     data: { orgName: "Test Org" },
     isLoading: false,
@@ -78,14 +84,14 @@ vi.mock("$lib/branding/public-branding.js", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/branding/injected-branding.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof InjectedBrandingNS>()),
   readInjectedOrgName: () => null,
 }));
 
 // --- Shell mock (jsdom cannot render Konsta internals) ---
 
 vi.mock("$lib/shell/context.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof ContextNS2>()),
   getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
   getTabbarHiddenCtx: () => ({ current: false }),
@@ -96,7 +102,7 @@ vi.mock("$lib/shell/context.js", async (importOriginal) => ({
 // consumer renders without its provider; this spec renders the privacy page
 // in isolation rather than inside the (client) layout that sets the container.
 vi.mock("$lib/client-shell/context.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof ContextNS>()),
   getClientShellCtx: () => ({ current: undefined }),
 }));
 

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/svelte";
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   library_editor_link_url: () => "URL",
   library_editor_link_text: () => "Link text",
   library_editor_link_apply: () => "Apply",
@@ -16,6 +16,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 }));
 
 import EditorLinkSheet from "./EditorLinkSheet.svelte";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 afterEach(() => {
   cleanup();

@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type * as BufferEncodingNS from "$lib/utils/buffer-encoding.js";
+import type * as CryptoNS from "@care-y/crypto";
 
 const mockEscrowBlob = {
   salt: new Uint8Array(16).fill(0x11),
@@ -7,7 +9,8 @@ const mockEscrowBlob = {
   ciphertext: new Uint8Array(48).fill(0x33),
 };
 
-vi.mock("@care-y/crypto", () => ({
+vi.mock("@care-y/crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoNS>()),
   encryptWithPassphrase: vi.fn(() => mockEscrowBlob),
   ARGON2_ESCROW_PARAMS: {
     memoryKiB: 262144,
@@ -15,7 +18,8 @@ vi.mock("@care-y/crypto", () => ({
   },
 }));
 
-vi.mock("$lib/utils/buffer-encoding.js", () => ({
+vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BufferEncodingNS>()),
   uint8ArrayToBase64: (bytes: Uint8Array) => {
     let binary = "";
     for (const byte of bytes) {

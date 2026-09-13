@@ -41,7 +41,7 @@ function respondFromWorker(data: PortalWorkerResponse): void {
 
 // Mock @care-y/crypto to avoid loading sodium
 vi.mock("@care-y/crypto", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof CryptoNS>()),
   encode: (buf: Uint8Array): string => Buffer.from(buf).toString("base64url"),
   requireSodium: () => ({
     memzero: vi.fn(),
@@ -52,6 +52,7 @@ import { createPortalSessionState } from "./create-portal-session.svelte.js";
 import { PortalBridge } from "$lib/workers/portal-bridge.js";
 import type { FragmentData } from "./create-portal-fragment.svelte.js";
 import type { ChannelEvaluateCallback } from "./create-portal-session.svelte.js";
+import type * as CryptoNS from "@care-y/crypto";
 
 function buildFragmentData(): FragmentData {
   return {

@@ -13,7 +13,7 @@ let mockBrandingData: {
 // vi.mock required: createPublicBrandingQuery builds a TanStack Query, which
 // needs a QueryClient from component context this render never provides.
 vi.mock("$lib/branding/public-branding.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PublicBrandingNS>()),
   createPublicBrandingQuery: () => ({
     get data() {
       return mockBrandingData;
@@ -25,12 +25,14 @@ vi.mock("$lib/branding/public-branding.js", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/branding/title.svelte.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof TitleNS>()),
   getBrandingTitle: () => "CARE-Y",
 }));
 
 import * as m from "$lib/paraglide/messages.js";
 import AccountLoginForm from "./AccountLoginForm.svelte";
+import type * as TitleNS from "$lib/branding/title.svelte.js";
+import type * as PublicBrandingNS from "$lib/branding/public-branding.js";
 
 if (typeof Element.prototype.animate !== "function") {
   Element.prototype.animate = vi.fn().mockReturnValue({

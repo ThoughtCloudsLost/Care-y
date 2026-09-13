@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   intake_privacy_encrypted: () => "Your answer is encrypted.",
   intake_privacy_metadata: () =>
     "Your answer is encrypted, but your selection shares routing metadata.",

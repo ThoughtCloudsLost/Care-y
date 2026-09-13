@@ -8,6 +8,7 @@ import type {
 } from "@care-y/shared";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as AvailFieldMod from "./AvailabilityField.svelte";
+import type * as RenderFormContentNS from "$lib/utils/render-form-content.js";
 
 // vi.mock required: pin deterministic message strings for assertions.
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
@@ -32,7 +33,7 @@ vi.mock("./AvailabilityField.svelte", async (importOriginal) => {
 
 // vi.mock required: renderFormRichText has deep ProseMirror/DOMPurify dependencies.
 vi.mock("$lib/utils/render-form-content.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof RenderFormContentNS>()),
   renderFormRichText: (value: unknown): string => {
     if (value === undefined) return "";
     if (typeof value === "string") return `<p>${value}</p>`;

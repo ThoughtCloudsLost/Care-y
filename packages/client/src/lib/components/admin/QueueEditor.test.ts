@@ -3,17 +3,18 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import type * as CareYShared from "@care-y/shared";
 
-const { mockCreateQueue, mockUpdateQueue, mockToastShow, mockOrgCacheDelete } =
-  vi.hoisted(() => ({
+const { mockCreateQueue, mockUpdateQueue, mockOrgCacheDelete } = vi.hoisted(
+  () => ({
     mockCreateQueue: vi.fn().mockResolvedValue({}),
     mockUpdateQueue: vi.fn().mockResolvedValue({}),
-    mockToastShow: vi.fn(),
     mockOrgCacheDelete: vi.fn(),
-  }));
+  }),
+);
 
 let mockOrgKeyLoaded = true;
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   register_note: () => "Note",
   register_careful: () => "Careful",
   register_warning: () => "Warning",
@@ -41,13 +42,14 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   onboarding_queue_submit: () => "Create Queue",
 }));
 
-vi.mock("$lib/terminology/with-terms.js", () => ({
-  withTerms: () => ({}),
-}));
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
 
-vi.mock("$lib/crypto/context.js", () => ({
-  // Empty permission set: the admin-only escalation group stays unmounted,
-  // so these tests exercise the queue form in isolation.
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS2>()),
   getCurrentPermissions: () => () => new Set(),
   getOrgKeyManager: () => ({
     get isLoaded() {
@@ -64,11 +66,17 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
-  isOrgKeyReady: () => mockOrgKeyLoaded,
-}));
+vi.mock(
+  "$lib/crypto/org-key-ready.svelte.js",
+  () =>
+    ({
+      isOrgKeyReady: () => mockOrgKeyLoaded,
+      setOrgKeyReady: vi.fn(),
+    }) satisfies typeof OrgKeyReadyNS,
+);
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     tickets: {
       createQueue: { mutate: mockCreateQueue },
@@ -77,7 +85,8 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createMutation: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
     const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
@@ -106,46 +115,75 @@ vi.mock("@care-y/shared", async (importOriginal) => ({
   MAX_ESCALATION_DAYS: 365,
 }));
 
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: vi.fn() }));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
-vi.mock("$lib/utils/buffer-encoding.js", () => ({
+vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BufferEncodingNS>()),
   uint8ArrayToBase64: () => "AQID",
   base64ToUint8Array: (s: string) =>
     new Uint8Array([...s].map((c) => c.charCodeAt(0))),
 }));
 
-vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/shell/ShellSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ShellSheetNS)["default"],
+    }) satisfies typeof ShellSheetNS,
+);
 
-vi.mock("$lib/shell/context.js", () => ({
-  getSectionRailCtx: () => ({ current: undefined }),
-  getScrollContainer: () => () => undefined,
-  getTabbarOverrideCtx: () => ({ current: undefined }),
-  getTabbarHiddenCtx: () => ({ current: false }),
-  getNavbarOverrideCtx: () => ({ current: undefined }),
-}));
+vi.mock(
+  "$lib/shell/context.js",
+  async () =>
+    (
+      await import("$mocks/shell-context.js")
+    ).shellContextMock() satisfies typeof ContextNS,
+);
 
-vi.mock("$lib/query/keys.js", () => ({
+vi.mock("$lib/query/keys.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof KeysNS>()),
   queueKeys: { all: ["queues"] },
 }));
 
-vi.mock("$lib/errors.js", () => ({
-  RouterNotAvailableError: class extends Error {},
-  requireRouter: <T>(r: T) => r,
-}));
+vi.mock("$lib/errors.js", async (importOriginal) =>
+  (await import("$mocks/errors.js")).errorsMock(
+    await importOriginal<typeof ErrorsNS>(),
+  ),
+);
 
 import QueueEditor from "./QueueEditor.svelte";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as ContextNS from "$lib/shell/context.js";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as KeysNS from "$lib/query/keys.js";
+import type * as BufferEncodingNS from "$lib/utils/buffer-encoding.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as ContextNS2 from "$lib/crypto/context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
+import type * as OrgKeyReadyNS from "$lib/crypto/org-key-ready.svelte.js";
 
 function renderEditor(
   overrides: Partial<{

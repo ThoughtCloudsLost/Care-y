@@ -8,7 +8,8 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 
 // Mock paraglide messages so we can test the logic without i18n compilation.
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   dashboard_time_just_now: () => "Just now",
   dashboard_time_minutes_ago: ({ count }: { count: number }) => `${count}m ago`,
   dashboard_time_hours_ago: ({ count }: { count: number }) => `${count}h ago`,
@@ -16,6 +17,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
 }));
 
 import { formatRelativeTime } from "./format-time.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 const NOW = new Date("2026-04-01T12:00:00Z");
 

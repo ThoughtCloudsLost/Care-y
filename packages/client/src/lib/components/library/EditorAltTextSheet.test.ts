@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/svelte";
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   library_editor_alt_text_title: () => "Describe this image",
   library_editor_alt_text_placeholder: () => "Description for screen readers",
   library_editor_decorative: () => "Decorative (no description needed)",
@@ -12,6 +12,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 }));
 
 import EditorAltTextSheet from "./EditorAltTextSheet.svelte";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 afterEach(() => {
   cleanup();

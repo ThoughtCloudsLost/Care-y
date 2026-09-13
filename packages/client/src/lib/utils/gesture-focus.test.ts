@@ -4,7 +4,8 @@ import { describe, it, expect, vi } from "vitest";
 // vi.mock required: flushSync is a Svelte compiler-integrated function
 // that requires the Svelte runtime. In jsdom unit tests the runtime is
 // not initialized, so we mock it to verify the call contract.
-vi.mock("svelte", () => ({
+vi.mock("svelte", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteNS>()),
   flushSync: vi.fn((fn?: () => void) => {
     fn?.();
   }),
@@ -12,6 +13,7 @@ vi.mock("svelte", () => ({
 
 import { gestureMount } from "./gesture-focus.js";
 import { flushSync } from "svelte";
+import type * as SvelteNS from "svelte";
 
 describe("gestureMount", () => {
   it("calls mount inside flushSync", () => {

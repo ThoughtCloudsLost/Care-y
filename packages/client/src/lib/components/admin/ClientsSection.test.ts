@@ -123,8 +123,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 }));
 
 // vi.mock required: tRPC client creates a live HTTP connection on import.
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal would open the live tRPC HTTP client; a hand stub cannot satisfy the generated router proxy type
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     clients: {
       list: { query: vi.fn().mockResolvedValue([]) },
@@ -262,26 +262,35 @@ vi.mock("$lib/shell/context.js", async (importOriginal) => ({
   getNavbarOverrideCtx: () => ({ current: undefined }),
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/components/QueryError.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/QueryError.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof QueryErrorNS)["default"],
+    }) satisfies typeof QueryErrorNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/shell/ShellSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ShellSheetNS)["default"],
+    }) satisfies typeof ShellSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/components/EmptyState.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/EmptyState.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof EmptyStateNS)["default"],
+    }) satisfies typeof EmptyStateNS,
+);
 
 // DecryptPlaceholder observes the viewport before it decrypts, and jsdom has
 // no IntersectionObserver. Without this stub every render that reaches the
@@ -358,6 +367,10 @@ function makeDetail(
 }
 
 import ClientsSection from "./ClientsSection.svelte";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as EmptyStateNS from "$lib/components/EmptyState.svelte";
+import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
+import type * as QueryErrorNS from "$lib/components/QueryError.svelte";
 
 async function findDetailSheet(): Promise<HTMLElement> {
   return waitFor(() => {

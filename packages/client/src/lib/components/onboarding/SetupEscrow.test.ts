@@ -3,8 +3,20 @@ import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import type { WizardNavContainer } from "./wizard-nav-context.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as WizardNavContextNS from "./wizard-nav-context.js";
+import type * as PassphraseStrengthNS from "$lib/utils/passphrase-strength.js";
+import type * as BufferEncodingNS from "$lib/utils/buffer-encoding.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as ShellDialogNS from "$lib/shell/ShellDialog.svelte";
+import type * as CryptoNS from "@care-y/crypto";
+import type * as OrgKeyReadyNS from "$lib/crypto/org-key-ready.svelte.js";
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgKeyManager: vi.fn(() => ({
     isLoaded: true,
     getSecretKey: vi.fn(() => Promise.resolve(new Uint8Array(32).fill(0xaa))),
@@ -12,13 +24,19 @@ vi.mock("$lib/crypto/context.js", () => ({
   })),
 }));
 
-vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
-  isOrgKeyReady: () => true,
-}));
+vi.mock(
+  "$lib/crypto/org-key-ready.svelte.js",
+  () =>
+    ({
+      isOrgKeyReady: () => true,
+      setOrgKeyReady: vi.fn(),
+    }) satisfies typeof OrgKeyReadyNS,
+);
 
 const mockMemzero = vi.fn();
 
-vi.mock("@care-y/crypto", () => ({
+vi.mock("@care-y/crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoNS>()),
   encryptWithPassphrase: vi.fn(() => ({
     salt: new Uint8Array(16),
     nonce: new Uint8Array(24),
@@ -31,7 +49,8 @@ vi.mock("@care-y/crypto", () => ({
   requireSodium: () => ({ memzero: mockMemzero }),
 }));
 
-vi.mock("$lib/utils/buffer-encoding.js", () => ({
+vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BufferEncodingNS>()),
   uint8ArrayToBase64: (bytes: Uint8Array) => {
     let binary = "";
     for (const byte of bytes) {
@@ -41,7 +60,8 @@ vi.mock("$lib/utils/buffer-encoding.js", () => ({
   },
 }));
 
-vi.mock("$lib/utils/passphrase-strength.js", () => ({
+vi.mock("$lib/utils/passphrase-strength.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof PassphraseStrengthNS>()),
   assessPassphraseStrength: (p: string) => {
     if (p.length < 20) return "too-short";
     if (p.length < 30) return "acceptable";
@@ -55,24 +75,39 @@ vi.mock("$lib/utils/passphrase-strength.js", () => ({
   },
 }));
 
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: vi.fn() }));
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: vi.fn() },
-}));
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
-}));
-vi.mock("$lib/terminology/with-terms.js", () => ({
-  withTerms: () => ({}),
-}));
-vi.mock("$lib/shell/ShellDialog.svelte", async () => ({
-  default: (await import("../admin/test-helpers/StubShellDialog.svelte"))
-    .default,
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
+vi.mock(
+  "$lib/shell/ShellDialog.svelte",
+  async () =>
+    ({
+      default: (await import("../admin/test-helpers/StubShellDialog.svelte"))
+        .default as unknown as (typeof ShellDialogNS)["default"],
+    }) satisfies typeof ShellDialogNS,
+);
 
 const wizardNavContainer: WizardNavContainer = { current: undefined };
 
-vi.mock("./wizard-nav-context.js", () => ({
+vi.mock("./wizard-nav-context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof WizardNavContextNS>()),
   getWizardNavCtx: () => wizardNavContainer,
 }));
 

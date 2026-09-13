@@ -4,6 +4,8 @@ import { render, fireEvent, cleanup } from "@testing-library/svelte";
 import { LogOut } from "@lucide/svelte";
 import ClientDrawer from "./ClientDrawer.svelte";
 import type { ClientDrawerAction } from "./context.js";
+import type * as PathsNS from "$app/paths";
+import type * as NavigationNS from "$app/navigation";
 
 const { mockGoto } = vi.hoisted(() => ({ mockGoto: vi.fn() }));
 
@@ -11,12 +13,12 @@ const { mockGoto } = vi.hoisted(() => ({ mockGoto: vi.fn() }));
 // on-disk source. The Vite alias resolves it to a stub; this overrides goto
 // so the privacy entry's navigation is observable.
 vi.mock("$app/navigation", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof NavigationNS>()),
   goto: mockGoto,
 }));
 
 vi.mock("$app/paths", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
 }));
 

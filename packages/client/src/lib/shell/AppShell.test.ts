@@ -33,6 +33,7 @@ import type * as LogoUrlModule from "$lib/branding/logo-url.svelte.js";
 import type * as LayoutModeModule from "$lib/stores/layout-mode.svelte.js";
 import type * as SvelteQuery from "@tanstack/svelte-query";
 import type { NavbarOverride } from "./types.js";
+import type * as PathsNS from "$app/paths";
 
 // --- Controllable mock state ---
 
@@ -43,7 +44,7 @@ let mockDisplayName: string | null = null;
 // --- Mocks ---
 
 vi.mock("$app/paths", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
 }));
 

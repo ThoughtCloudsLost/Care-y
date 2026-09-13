@@ -10,6 +10,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import PresetReplyContent from "./PresetReplyContent.svelte";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 // IntersectionObserver stub for DecryptPlaceholder
 vi.stubGlobal(
@@ -26,14 +31,16 @@ vi.stubGlobal(
 );
 
 // --- Mock i18n ---
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   ticket_preset_replies: () => "Preset replies",
   common_loading: () => "Loading",
   empty_no_data: () => "Nothing here yet.",
 }));
 
 // --- Mock crypto context ---
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgDecryptCache: () => ({
     decrypt: vi.fn((_id: string, _data: unknown) => {
       if (_id === "preset:p-1:title") return "Greeting";
@@ -47,7 +54,8 @@ vi.mock("$lib/crypto/context.js", () => ({
 }));
 
 // --- Mock TanStack Query (presets loaded) ---
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: () => ({
     isLoading: false,
     isError: false,
@@ -73,7 +81,8 @@ vi.mock("@tanstack/svelte-query", () => ({
 }));
 
 // --- Mock tRPC ---
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     tickets: {
       listPresets: {
@@ -84,10 +93,11 @@ vi.mock("$lib/trpc/index.js", () => ({
 }));
 
 // --- Mock errors ---
-vi.mock("$lib/errors.js", () => ({
-  RouterNotAvailableError: class extends Error {},
-  requireRouter: <T>(r: T) => r,
-}));
+vi.mock("$lib/errors.js", async (importOriginal) =>
+  (await import("$mocks/errors.js")).errorsMock(
+    await importOriginal<typeof ErrorsNS>(),
+  ),
+);
 
 afterEach(() => {
   cleanup();
