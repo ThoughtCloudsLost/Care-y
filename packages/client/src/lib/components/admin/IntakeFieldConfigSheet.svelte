@@ -25,6 +25,8 @@
   } from "konsta/svelte";
   import {
     ROLE_WIDGET_COMPATIBILITY,
+    isRoleOfferable,
+    isRoleValidForWidget,
     intakeFieldRoleSchema,
     intakeFieldTypeSchema,
     ticketPrioritySchema,
@@ -50,6 +52,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import FieldError from "$lib/components/FieldError.svelte";
+  import Register from "$lib/components/Register.svelte";
   import FormContentEditor from "./FormContentEditor.svelte";
   import { getFieldTypeLabel, getRoleLabel } from "./intake-field-labels.js";
   import {
@@ -110,6 +113,7 @@
   let label = $state<LocalizedText>({});
   let labelError = $state("");
   let optionsError = $state("");
+  let roleConflictError = $state("");
   let isRequired = $state(false);
   let helpText = $state<LocalizedText>({});
 
@@ -179,17 +183,33 @@
     }
   }
 
-  // Compute compatible roles for the current (local) field type
-  const compatibleRoles = $derived.by((): IntakeFieldRole[] => {
+  // Roles the picker lists for the current (local) field type. Wider than the
+  // valid set: a pair the builder shows so it can explain the conflict counts
+  // as offerable but not compatible (see isRoleOfferable).
+  const offerableRoles = $derived.by((): IntakeFieldRole[] => {
     const roles: IntakeFieldRole[] = [];
     for (const role of intakeFieldRoleSchema.options) {
-      // eslint-disable-next-line security/detect-object-injection -- role is from the intakeFieldRoleSchema enum values
-      const allowed = ROLE_WIDGET_COMPATIBILITY[role];
-      if (allowed.includes(currentFieldType)) {
+      if (isRoleOfferable(role, currentFieldType)) {
         roles.push(role);
       }
     }
     return roles;
+  });
+
+  // Set when the chosen role cannot work with the chosen widget. Drives the
+  // conflict notice and blocks Done.
+  const roleConflict = $derived(
+    selectedRole != null &&
+      !isRoleValidForWidget(selectedRole, currentFieldType)
+      ? selectedRole
+      : null,
+  );
+
+  // The widget this role does work with, offered as the one-click fix.
+  const roleConflictTargetType = $derived.by((): IntakeFieldType | null => {
+    if (roleConflict == null) return null;
+    // eslint-disable-next-line security/detect-object-injection -- roleConflict is from the intakeFieldRoleSchema enum values
+    return ROLE_WIDGET_COMPATIBILITY[roleConflict][0] ?? null;
   });
 
   // Reset state when sheet opens
@@ -359,14 +379,13 @@
     };
 
     currentFieldType = newType;
+    roleConflictError = "";
 
-    // Clear role if it is not compatible with the new type
-    if (selectedRole != null) {
-      // eslint-disable-next-line security/detect-object-injection -- selectedRole is from IntakeFieldRole enum
-      const allowed = ROLE_WIDGET_COMPATIBILITY[selectedRole];
-      if (!allowed.includes(newType)) {
-        selectedRole = null;
-      }
+    // Clear a role the new type cannot carry at all. A role that stays
+    // offerable is kept so the conflict notice can explain it, rather than
+    // dropping the routing setup out from under the admin.
+    if (selectedRole != null && !isRoleOfferable(selectedRole, newType)) {
+      selectedRole = null;
     }
 
     // Restore preserved config or seed defaults
@@ -377,6 +396,31 @@
     } else {
       restoreConfigState(getTypeDefaults(newType));
     }
+  }
+
+  /**
+   * Move the field to the widget its role actually works with, keeping the
+   * options and the queue mapping the admin already built.
+   *
+   * switchFieldType routes through restoreConfigState, which clears every
+   * mapping before reapplying from the preserved or default config, so the
+   * mapping has to be carried across by hand. Option keys are stable, so it
+   * stays valid against the same options.
+   */
+  function resolveRoleConflict(): void {
+    const target = roleConflictTargetType;
+    if (target === null) return;
+
+    const carriedOptions = options.map((o) => ({
+      key: o.key,
+      label: { ...o.label },
+    }));
+    const carriedQueueRouting = { ...queueRoutingMapping };
+
+    switchFieldType(target);
+
+    options = carriedOptions;
+    queueRoutingMapping = carriedQueueRouting;
   }
 
   function handleLabelInput(e: Event): void {
@@ -490,6 +534,7 @@
       const val = target.value;
       const parsed = intakeFieldRoleSchema.safeParse(val);
       selectedRole = parsed.success ? parsed.data : null;
+      roleConflictError = "";
       // Clear irrelevant mapping state on role change
       if (val !== "queue-routing") {
         queueRoutingMapping = {};
@@ -944,6 +989,12 @@
       optionsError = m.intake_forms_config_options_required();
       return;
     }
+    // The server rejects an incompatible role/widget pair for the whole form
+    // without naming the field, so catch it here while it can be pointed at.
+    if (roleConflict !== null) {
+      roleConflictError = m.intake_forms_config_role_conflict_blocked();
+      return;
+    }
     const result: FieldConfigState = {
       fieldType: currentFieldType,
       label: trimLocalized(label),
@@ -1056,7 +1107,7 @@
     </div>
   {:else}
     <!-- Role picker (ADR-068), positioned after type per F-004 -->
-    {#if compatibleRoles.length > 0}
+    {#if offerableRoles.length > 0}
       <List strong inset>
         <ListInput
           label={m.intake_forms_config_role_label()}
@@ -1067,11 +1118,29 @@
           onChange={handleRoleChange}
         >
           <option value="">{m.intake_forms_config_role_none()}</option>
-          {#each compatibleRoles as role (role)}
+          {#each offerableRoles as role (role)}
             <option value={role}>{getRoleLabel(role)}</option>
           {/each}
         </ListInput>
       </List>
+    {/if}
+
+    {#if roleConflict !== null && roleConflictTargetType !== null}
+      <div class="role-conflict">
+        <Register kind="careful" role="alert">
+          <p class="role-conflict-text">
+            {m.intake_forms_config_role_conflict_body()}
+          </p>
+          <button
+            type="button"
+            class="role-conflict-action"
+            onclick={resolveRoleConflict}
+          >
+            {m.intake_forms_config_role_conflict_action()}
+          </button>
+        </Register>
+        <FieldError message={roleConflictError} />
+      </div>
     {/if}
 
     <List strong inset>
@@ -1487,6 +1556,34 @@
   .config-action {
     padding: 0 var(--space-lg);
     margin-top: var(--space-sm);
+  }
+
+  .role-conflict {
+    padding: 0 var(--space-lg);
+    margin: var(--space-xs) 0 var(--space-md);
+  }
+
+  .role-conflict-text {
+    margin: 0;
+  }
+
+  .role-conflict-action {
+    display: inline-flex;
+    align-items: center;
+    /* 44px hit area; the sheet is a touch surface. */
+    min-height: 44px;
+    margin-top: var(--space-xs);
+    padding: 0 var(--space-md);
+    border: 1px solid var(--care);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--care);
+    font: inherit;
+    font-weight: 600;
+    /* Wrap rather than overflow the sheet at narrow widths. */
+    white-space: normal;
+    text-align: left;
+    cursor: pointer;
   }
 
   .mapping-hint {

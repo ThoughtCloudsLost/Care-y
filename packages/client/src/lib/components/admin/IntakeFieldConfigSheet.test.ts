@@ -2,7 +2,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
-import type { FieldConfigState } from "./intake-field-config-types.js";
+import type {
+  FieldConfigState,
+  FieldConfigInitial,
+} from "./intake-field-config-types.js";
+import { queueIdSchema } from "@care-y/shared";
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ParaglideMessages>()),
@@ -24,6 +28,11 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_config_role_label: () => "Field role",
   intake_forms_config_role_none: () => "None",
   intake_forms_config_role_queue_routing: () => "Queue routing",
+  intake_forms_config_role_conflict_body: () =>
+    "Queue routing needs a question with one answer.",
+  intake_forms_config_role_conflict_action: () => "Change to Dropdown",
+  intake_forms_config_role_conflict_blocked: () =>
+    "Change this question to Dropdown, or set the role to None, before you finish.",
   intake_forms_config_role_urgency: () => "Urgency",
   intake_forms_config_role_escalation: () => "Escalation",
   intake_forms_config_role_phone_contact: () => "Phone contact",
@@ -804,6 +813,152 @@ describe("IntakeFieldConfigSheet", () => {
 
       expect(screen.getByText("Add AND condition")).toBeTruthy();
       expect(screen.getByText("Add OR condition")).toBeTruthy();
+    });
+  });
+
+  describe("queue routing on a multi-pick widget", () => {
+    // Routing mappings are keyed to real queue ids, which the schema brands,
+    // so these tests carry their own queues rather than the file's "q-1" stubs.
+    const ROUTED_QUEUE_A = queueIdSchema.parse(crypto.randomUUID());
+    const ROUTED_QUEUE_B = queueIdSchema.parse(crypto.randomUUID());
+    const ROUTED_QUEUES = [
+      { id: ROUTED_QUEUE_A, name: "Housing team" },
+      { id: ROUTED_QUEUE_B, name: "Legal team" },
+    ];
+
+    function multiselectInitial(): FieldConfigInitial {
+      return {
+        fieldType: "multiselect",
+        label: { en: "What do you need help with?" },
+        helpText: {},
+        isRequired: false,
+        config: {
+          type: "multiselect",
+          options: [
+            { key: "opt-a", label: { en: "Housing" } },
+            { key: "opt-b", label: { en: "Legal" } },
+          ],
+          queueRoutingMapping: {
+            "opt-a": ROUTED_QUEUE_A,
+            "opt-b": ROUTED_QUEUE_B,
+          },
+        },
+        role: "queue-routing",
+        escalationRecipientIds: null,
+        visibleWhen: undefined,
+      };
+    }
+
+    function renderConflicted(): void {
+      render(IntakeFieldConfigSheet, {
+        props: {
+          opened: true,
+          fieldType: "multiselect",
+          initial: multiselectInitial(),
+          queues: ROUTED_QUEUES,
+          volunteers: TEST_VOLUNTEERS,
+          editingLocale: "en",
+          earlierFields: [],
+          ondone,
+          ondismiss: vi.fn(),
+        },
+      });
+    }
+
+    it("still offers queue routing in the role picker for a multi-pick field", () => {
+      renderConflicted();
+      const roleSelect = Array.from(document.querySelectorAll("select")).find(
+        (sel) =>
+          Array.from(sel.querySelectorAll("option")).some(
+            (o) => o.textContent === "Queue routing",
+          ),
+      );
+      expect(roleSelect).toBeTruthy();
+    });
+
+    it("explains the conflict when queue routing is set on a multi-pick field", () => {
+      renderConflicted();
+      expect(
+        screen.getByText("Queue routing needs a question with one answer."),
+      ).toBeTruthy();
+      expect(screen.getByText("Change to Dropdown")).toBeTruthy();
+    });
+
+    it("blocks done while the conflict stands and leaves the field unchanged", async () => {
+      renderConflicted();
+      await fireEvent.click(screen.getByText("Done"));
+
+      expect(capturedResult).toBeNull();
+      expect(
+        screen.getByText(
+          "Change this question to Dropdown, or set the role to None, before you finish.",
+        ),
+      ).toBeTruthy();
+    });
+
+    it("converting to a dropdown keeps the options and the queue mapping", async () => {
+      renderConflicted();
+      await fireEvent.click(screen.getByText("Change to Dropdown"));
+      await fireEvent.click(screen.getByText("Done"));
+
+      expect(capturedResult).not.toBeNull();
+      const result = capturedResult!;
+      expect(result.fieldType).toBe("select");
+      expect(result.role).toBe("queue-routing");
+
+      const config = result.config;
+      if (config.type !== "select") {
+        expect.fail(`expected a select config, got ${config.type}`);
+      }
+      expect(config.options.map((o) => o.key)).toEqual(["opt-a", "opt-b"]);
+      // The mapping is the part a plain type switch drops, since the sheet
+      // clears every mapping before reapplying the new type's config.
+      expect(config.queueRoutingMapping).toEqual({
+        "opt-a": ROUTED_QUEUE_A,
+        "opt-b": ROUTED_QUEUE_B,
+      });
+    });
+
+    it("clears the conflict notice once the field is converted", async () => {
+      renderConflicted();
+      await fireEvent.click(screen.getByText("Change to Dropdown"));
+
+      expect(
+        screen.queryByText("Queue routing needs a question with one answer."),
+      ).toBeNull();
+    });
+
+    it("keeps the role when a dropdown is switched to multi-pick so the conflict surfaces", async () => {
+      const routedSelect: FieldConfigInitial = {
+        ...baseInitial(),
+        role: "queue-routing",
+      };
+      render(IntakeFieldConfigSheet, {
+        props: {
+          opened: true,
+          fieldType: "select",
+          initial: routedSelect,
+          queues: TEST_QUEUES,
+          volunteers: TEST_VOLUNTEERS,
+          editingLocale: "en",
+          earlierFields: [],
+          ondone,
+          ondismiss: vi.fn(),
+        },
+      });
+
+      const typeSelect = Array.from(document.querySelectorAll("select")).find(
+        (sel) =>
+          Array.from(sel.querySelectorAll("option")).some(
+            (o) => o.textContent === "Checkboxes",
+          ),
+      );
+      expect(typeSelect).toBeTruthy();
+      await fireEvent.change(typeSelect!, { target: { value: "multiselect" } });
+
+      expect(
+        screen.getByText("Queue routing needs a question with one answer."),
+      ).toBeTruthy();
     });
   });
 });

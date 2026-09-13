@@ -707,6 +707,8 @@ export {
   intakeFieldRoleSchema,
   UNIQUE_ROLES_PER_FORM,
   ROLE_WIDGET_COMPATIBILITY,
+  isRoleOfferable,
+  isRoleValidForWidget,
   intakeOptionSchema,
   queueRoutingMappingSchema,
   urgencyMappingSchema,
