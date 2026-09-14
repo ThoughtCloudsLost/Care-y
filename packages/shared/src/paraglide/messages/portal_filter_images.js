@@ -24,6 +24,6 @@ const es_portal_filter_images = /** @type {(inputs: Portal_Filter_ImagesInputs) 
 */
 export const portal_filter_images = /** @type {((inputs?: Portal_Filter_ImagesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Filter_ImagesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_filter_images(inputs)
-	return es_portal_filter_images(inputs)
+	if (locale === "es") return es_portal_filter_images(inputs)
+	return en_portal_filter_images(inputs)
 });

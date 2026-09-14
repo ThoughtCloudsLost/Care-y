@@ -24,6 +24,6 @@ const es_search_hint = /** @type {(inputs: Search_HintInputs) => LocalizedString
 */
 export const search_hint = /** @type {((inputs: Search_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_hint(inputs)
-	return es_search_hint(inputs)
+	if (locale === "es") return es_search_hint(inputs)
+	return en_search_hint(inputs)
 });

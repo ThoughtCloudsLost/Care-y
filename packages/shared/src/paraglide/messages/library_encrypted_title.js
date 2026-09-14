@@ -24,6 +24,6 @@ const es_library_encrypted_title = /** @type {(inputs: Library_Encrypted_TitleIn
 */
 export const library_encrypted_title = /** @type {((inputs?: Library_Encrypted_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Encrypted_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_encrypted_title(inputs)
-	return es_library_encrypted_title(inputs)
+	if (locale === "es") return es_library_encrypted_title(inputs)
+	return en_library_encrypted_title(inputs)
 });

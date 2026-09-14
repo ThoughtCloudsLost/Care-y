@@ -24,6 +24,6 @@ const es_demo_theme_toggle = /** @type {(inputs: Demo_Theme_ToggleInputs) => Loc
 */
 export const demo_theme_toggle = /** @type {((inputs?: Demo_Theme_ToggleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Theme_ToggleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_theme_toggle(inputs)
-	return es_demo_theme_toggle(inputs)
+	if (locale === "es") return es_demo_theme_toggle(inputs)
+	return en_demo_theme_toggle(inputs)
 });

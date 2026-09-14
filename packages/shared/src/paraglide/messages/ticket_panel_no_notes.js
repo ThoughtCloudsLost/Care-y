@@ -24,6 +24,6 @@ const es_ticket_panel_no_notes = /** @type {(inputs: Ticket_Panel_No_NotesInputs
 */
 export const ticket_panel_no_notes = /** @type {((inputs?: Ticket_Panel_No_NotesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Panel_No_NotesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_panel_no_notes(inputs)
-	return es_ticket_panel_no_notes(inputs)
+	if (locale === "es") return es_ticket_panel_no_notes(inputs)
+	return en_ticket_panel_no_notes(inputs)
 });

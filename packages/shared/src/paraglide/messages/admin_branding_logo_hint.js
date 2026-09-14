@@ -24,6 +24,6 @@ const es_admin_branding_logo_hint = /** @type {(inputs: Admin_Branding_Logo_Hint
 */
 export const admin_branding_logo_hint = /** @type {((inputs: Admin_Branding_Logo_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Logo_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_logo_hint(inputs)
-	return es_admin_branding_logo_hint(inputs)
+	if (locale === "es") return es_admin_branding_logo_hint(inputs)
+	return en_admin_branding_logo_hint(inputs)
 });

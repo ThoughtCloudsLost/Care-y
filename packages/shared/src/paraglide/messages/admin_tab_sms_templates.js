@@ -24,6 +24,6 @@ const es_admin_tab_sms_templates = /** @type {(inputs: Admin_Tab_Sms_TemplatesIn
 */
 export const admin_tab_sms_templates = /** @type {((inputs?: Admin_Tab_Sms_TemplatesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Tab_Sms_TemplatesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_tab_sms_templates(inputs)
-	return es_admin_tab_sms_templates(inputs)
+	if (locale === "es") return es_admin_tab_sms_templates(inputs)
+	return en_admin_tab_sms_templates(inputs)
 });

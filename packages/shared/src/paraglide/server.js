@@ -92,11 +92,19 @@ import * as runtime from "./runtime.js";
  * ```
  */
 export async function paraglideMiddleware(request, resolve, options) {
-    if (!runtime.disableAsyncLocalStorage && !runtime.serverAsyncLocalStorage) {
+    let requestAsyncLocalStorage = runtime.serverAsyncLocalStorage;
+    requestAsyncLocalStorage = runtime.getServerAsyncLocalStorage();
+    if (!runtime.disableAsyncLocalStorage && !requestAsyncLocalStorage) {
       const { AsyncLocalStorage } = await import("async_hooks");
-      runtime.overwriteServerAsyncLocalStorage(new AsyncLocalStorage());
-    } else if (!runtime.serverAsyncLocalStorage) {
-      runtime.overwriteServerAsyncLocalStorage(createMockAsyncLocalStorage());
+      requestAsyncLocalStorage = runtime.getServerAsyncLocalStorage();
+      if (!requestAsyncLocalStorage) {
+        requestAsyncLocalStorage = new AsyncLocalStorage();
+        runtime.overwriteServerAsyncLocalStorage(requestAsyncLocalStorage);
+      }
+    }
+    if (!requestAsyncLocalStorage) {
+      requestAsyncLocalStorage = createMockAsyncLocalStorage();
+      runtime.overwriteServerAsyncLocalStorage(requestAsyncLocalStorage);
     }
     const url = resolveMiddlewareUrl(request, options?.effectiveRequestUrl);
     const origin = url.origin;
@@ -105,10 +113,13 @@ export async function paraglideMiddleware(request, resolve, options) {
         const newRequest = cloneRequestWithFallback(request, url);
         /** @type {Set<string>} */
         const messageCalls = new Set();
-        return /** @type {Response} */ (await runtime.serverAsyncLocalStorage?.run({ locale, origin, messageCalls }, () => resolve({ locale, request: newRequest })));
+        return /** @type {Response} */ (await requestAsyncLocalStorage?.run({ locale, origin, messageCalls }, () => resolve({ locale, request: newRequest })));
     }
     const strategy = runtime.getStrategyForUrl(url.href);
-    const decision = await runtime.shouldRedirect({ request, effectiveRequestUrl: url });
+    const decision = await runtime.shouldRedirect({
+        request,
+        effectiveRequestUrl: url,
+    });
     const locale = decision.locale;
     // if the client makes a request to a URL that doesn't match
     // the localizedUrl, redirect the client to the localized URL
@@ -147,7 +158,7 @@ export async function paraglideMiddleware(request, resolve, options) {
     // the message functions that have been called in this request
     /** @type {Set<string>} */
     const messageCalls = new Set();
-    const response = await runtime.serverAsyncLocalStorage?.run({ locale, origin, messageCalls }, () => resolve({ locale, request: newRequest }));
+    const response = await requestAsyncLocalStorage?.run({ locale, origin, messageCalls }, () => resolve({ locale, request: newRequest }));
     // Only modify HTML responses
     if (runtime.experimentalMiddlewareLocaleSplitting &&
         response.headers.get("Content-Type")?.includes("html")) {
@@ -193,7 +204,8 @@ function resolveMiddlewareUrl(request, effectiveRequestUrl) {
     if (typeof effectiveRequestUrl === "function") {
         return new URL(effectiveRequestUrl(request), request.url);
     }
-    if (typeof effectiveRequestUrl === "string" || effectiveRequestUrl instanceof URL) {
+    if (typeof effectiveRequestUrl === "string" ||
+        effectiveRequestUrl instanceof URL) {
         return new URL(effectiveRequestUrl, request.url);
     }
     return new URL(request.url);

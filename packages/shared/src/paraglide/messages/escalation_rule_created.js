@@ -24,6 +24,6 @@ const es_escalation_rule_created = /** @type {(inputs: Escalation_Rule_CreatedIn
 */
 export const escalation_rule_created = /** @type {((inputs?: Escalation_Rule_CreatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Rule_CreatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_rule_created(inputs)
-	return es_escalation_rule_created(inputs)
+	if (locale === "es") return es_escalation_rule_created(inputs)
+	return en_escalation_rule_created(inputs)
 });

@@ -24,6 +24,6 @@ const es_dashboard_shift_ends_in = /** @type {(inputs: Dashboard_Shift_Ends_InIn
 */
 export const dashboard_shift_ends_in = /** @type {((inputs: Dashboard_Shift_Ends_InInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Shift_Ends_InInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_shift_ends_in(inputs)
-	return es_dashboard_shift_ends_in(inputs)
+	if (locale === "es") return es_dashboard_shift_ends_in(inputs)
+	return en_dashboard_shift_ends_in(inputs)
 });

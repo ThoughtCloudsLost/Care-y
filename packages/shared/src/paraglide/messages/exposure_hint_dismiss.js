@@ -24,6 +24,6 @@ const es_exposure_hint_dismiss = /** @type {(inputs: Exposure_Hint_DismissInputs
 */
 export const exposure_hint_dismiss = /** @type {((inputs?: Exposure_Hint_DismissInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Exposure_Hint_DismissInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_exposure_hint_dismiss(inputs)
-	return es_exposure_hint_dismiss(inputs)
+	if (locale === "es") return es_exposure_hint_dismiss(inputs)
+	return en_exposure_hint_dismiss(inputs)
 });

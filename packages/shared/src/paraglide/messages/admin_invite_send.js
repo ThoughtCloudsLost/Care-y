@@ -24,6 +24,6 @@ const es_admin_invite_send = /** @type {(inputs: Admin_Invite_SendInputs) => Loc
 */
 export const admin_invite_send = /** @type {((inputs?: Admin_Invite_SendInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_SendInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_send(inputs)
-	return es_admin_invite_send(inputs)
+	if (locale === "es") return es_admin_invite_send(inputs)
+	return en_admin_invite_send(inputs)
 });

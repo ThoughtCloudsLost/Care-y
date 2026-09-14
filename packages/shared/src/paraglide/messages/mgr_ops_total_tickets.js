@@ -24,6 +24,6 @@ const es_mgr_ops_total_tickets = /** @type {(inputs: Mgr_Ops_Total_TicketsInputs
 */
 export const mgr_ops_total_tickets = /** @type {((inputs: Mgr_Ops_Total_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Ops_Total_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_mgr_ops_total_tickets(inputs)
-	return es_mgr_ops_total_tickets(inputs)
+	if (locale === "es") return es_mgr_ops_total_tickets(inputs)
+	return en_mgr_ops_total_tickets(inputs)
 });

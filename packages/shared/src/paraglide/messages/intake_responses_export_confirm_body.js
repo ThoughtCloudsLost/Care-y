@@ -24,6 +24,6 @@ const es_intake_responses_export_confirm_body = /** @type {(inputs: Intake_Respo
 */
 export const intake_responses_export_confirm_body = /** @type {((inputs: Intake_Responses_Export_Confirm_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Responses_Export_Confirm_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_responses_export_confirm_body(inputs)
-	return es_intake_responses_export_confirm_body(inputs)
+	if (locale === "es") return es_intake_responses_export_confirm_body(inputs)
+	return en_intake_responses_export_confirm_body(inputs)
 });

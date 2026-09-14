@@ -24,6 +24,6 @@ const es_admin_user_queue_assignments = /** @type {(inputs: Admin_User_Queue_Ass
 */
 export const admin_user_queue_assignments = /** @type {((inputs: Admin_User_Queue_AssignmentsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_User_Queue_AssignmentsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_user_queue_assignments(inputs)
-	return es_admin_user_queue_assignments(inputs)
+	if (locale === "es") return es_admin_user_queue_assignments(inputs)
+	return en_admin_user_queue_assignments(inputs)
 });

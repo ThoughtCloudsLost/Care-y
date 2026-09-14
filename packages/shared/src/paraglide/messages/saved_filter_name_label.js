@@ -24,6 +24,6 @@ const es_saved_filter_name_label = /** @type {(inputs: Saved_Filter_Name_LabelIn
 */
 export const saved_filter_name_label = /** @type {((inputs?: Saved_Filter_Name_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Saved_Filter_Name_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_saved_filter_name_label(inputs)
-	return es_saved_filter_name_label(inputs)
+	if (locale === "es") return es_saved_filter_name_label(inputs)
+	return en_saved_filter_name_label(inputs)
 });

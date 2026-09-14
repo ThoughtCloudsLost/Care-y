@@ -24,6 +24,6 @@ const es_demo_compose_sample = /** @type {(inputs: Demo_Compose_SampleInputs) =>
 */
 export const demo_compose_sample = /** @type {((inputs?: Demo_Compose_SampleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Compose_SampleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_compose_sample(inputs)
-	return es_demo_compose_sample(inputs)
+	if (locale === "es") return es_demo_compose_sample(inputs)
+	return en_demo_compose_sample(inputs)
 });

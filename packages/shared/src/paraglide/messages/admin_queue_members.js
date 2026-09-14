@@ -24,6 +24,6 @@ const es_admin_queue_members = /** @type {(inputs: Admin_Queue_MembersInputs) =>
 */
 export const admin_queue_members = /** @type {((inputs: Admin_Queue_MembersInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_MembersInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_queue_members(inputs)
-	return es_admin_queue_members(inputs)
+	if (locale === "es") return es_admin_queue_members(inputs)
+	return en_admin_queue_members(inputs)
 });

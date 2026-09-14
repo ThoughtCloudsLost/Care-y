@@ -24,6 +24,6 @@ const es_twofa_backup_codes_confirm_back = /** @type {(inputs: Twofa_Backup_Code
 */
 export const twofa_backup_codes_confirm_back = /** @type {((inputs?: Twofa_Backup_Codes_Confirm_BackInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Backup_Codes_Confirm_BackInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_backup_codes_confirm_back(inputs)
-	return es_twofa_backup_codes_confirm_back(inputs)
+	if (locale === "es") return es_twofa_backup_codes_confirm_back(inputs)
+	return en_twofa_backup_codes_confirm_back(inputs)
 });

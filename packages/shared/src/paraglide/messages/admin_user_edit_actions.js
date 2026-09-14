@@ -24,6 +24,6 @@ const es_admin_user_edit_actions = /** @type {(inputs: Admin_User_Edit_ActionsIn
 */
 export const admin_user_edit_actions = /** @type {((inputs?: Admin_User_Edit_ActionsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_User_Edit_ActionsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_user_edit_actions(inputs)
-	return es_admin_user_edit_actions(inputs)
+	if (locale === "es") return es_admin_user_edit_actions(inputs)
+	return en_admin_user_edit_actions(inputs)
 });

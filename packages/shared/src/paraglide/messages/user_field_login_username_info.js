@@ -24,6 +24,6 @@ const es_user_field_login_username_info = /** @type {(inputs: User_Field_Login_U
 */
 export const user_field_login_username_info = /** @type {((inputs?: User_Field_Login_Username_InfoInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<User_Field_Login_Username_InfoInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_user_field_login_username_info(inputs)
-	return es_user_field_login_username_info(inputs)
+	if (locale === "es") return es_user_field_login_username_info(inputs)
+	return en_user_field_login_username_info(inputs)
 });

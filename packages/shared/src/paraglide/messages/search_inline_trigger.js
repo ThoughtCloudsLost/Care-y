@@ -24,6 +24,6 @@ const es_search_inline_trigger = /** @type {(inputs: Search_Inline_TriggerInputs
 */
 export const search_inline_trigger = /** @type {((inputs?: Search_Inline_TriggerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Inline_TriggerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_inline_trigger(inputs)
-	return es_search_inline_trigger(inputs)
+	if (locale === "es") return es_search_inline_trigger(inputs)
+	return en_search_inline_trigger(inputs)
 });

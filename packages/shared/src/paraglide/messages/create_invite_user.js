@@ -24,6 +24,6 @@ const es_create_invite_user = /** @type {(inputs: Create_Invite_UserInputs) => L
 */
 export const create_invite_user = /** @type {((inputs?: Create_Invite_UserInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Create_Invite_UserInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_create_invite_user(inputs)
-	return es_create_invite_user(inputs)
+	if (locale === "es") return es_create_invite_user(inputs)
+	return en_create_invite_user(inputs)
 });

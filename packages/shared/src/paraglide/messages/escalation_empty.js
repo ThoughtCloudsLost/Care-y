@@ -24,6 +24,6 @@ const es_escalation_empty = /** @type {(inputs: Escalation_EmptyInputs) => Local
 */
 export const escalation_empty = /** @type {((inputs?: Escalation_EmptyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_EmptyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_empty(inputs)
-	return es_escalation_empty(inputs)
+	if (locale === "es") return es_escalation_empty(inputs)
+	return en_escalation_empty(inputs)
 });

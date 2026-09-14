@@ -24,6 +24,6 @@ const es_admin_terminology_save = /** @type {(inputs: Admin_Terminology_SaveInpu
 */
 export const admin_terminology_save = /** @type {((inputs?: Admin_Terminology_SaveInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Terminology_SaveInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_terminology_save(inputs)
-	return es_admin_terminology_save(inputs)
+	if (locale === "es") return es_admin_terminology_save(inputs)
+	return en_admin_terminology_save(inputs)
 });

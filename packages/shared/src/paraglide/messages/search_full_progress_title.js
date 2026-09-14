@@ -24,6 +24,6 @@ const es_search_full_progress_title = /** @type {(inputs: Search_Full_Progress_T
 */
 export const search_full_progress_title = /** @type {((inputs?: Search_Full_Progress_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Full_Progress_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_full_progress_title(inputs)
-	return es_search_full_progress_title(inputs)
+	if (locale === "es") return es_search_full_progress_title(inputs)
+	return en_search_full_progress_title(inputs)
 });

@@ -24,6 +24,6 @@ const es_share_sheet_content_label = /** @type {(inputs: Share_Sheet_Content_Lab
 */
 export const share_sheet_content_label = /** @type {((inputs?: Share_Sheet_Content_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Sheet_Content_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_sheet_content_label(inputs)
-	return es_share_sheet_content_label(inputs)
+	if (locale === "es") return es_share_sheet_content_label(inputs)
+	return en_share_sheet_content_label(inputs)
 });

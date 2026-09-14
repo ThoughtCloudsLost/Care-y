@@ -24,6 +24,6 @@ const es_portal_passphrase_cancel = /** @type {(inputs: Portal_Passphrase_Cancel
 */
 export const portal_passphrase_cancel = /** @type {((inputs?: Portal_Passphrase_CancelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_CancelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_passphrase_cancel(inputs)
-	return es_portal_passphrase_cancel(inputs)
+	if (locale === "es") return es_portal_passphrase_cancel(inputs)
+	return en_portal_passphrase_cancel(inputs)
 });

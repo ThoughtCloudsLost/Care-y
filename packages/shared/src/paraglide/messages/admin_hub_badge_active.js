@@ -24,6 +24,6 @@ const es_admin_hub_badge_active = /** @type {(inputs: Admin_Hub_Badge_ActiveInpu
 */
 export const admin_hub_badge_active = /** @type {((inputs: Admin_Hub_Badge_ActiveInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Hub_Badge_ActiveInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_hub_badge_active(inputs)
-	return es_admin_hub_badge_active(inputs)
+	if (locale === "es") return es_admin_hub_badge_active(inputs)
+	return en_admin_hub_badge_active(inputs)
 });

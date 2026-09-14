@@ -24,6 +24,6 @@ const es_admin_invite_credential_show = /** @type {(inputs: Admin_Invite_Credent
 */
 export const admin_invite_credential_show = /** @type {((inputs?: Admin_Invite_Credential_ShowInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Credential_ShowInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_credential_show(inputs)
-	return es_admin_invite_credential_show(inputs)
+	if (locale === "es") return es_admin_invite_credential_show(inputs)
+	return en_admin_invite_credential_show(inputs)
 });

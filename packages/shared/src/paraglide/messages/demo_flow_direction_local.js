@@ -24,6 +24,6 @@ const es_demo_flow_direction_local = /** @type {(inputs: Demo_Flow_Direction_Loc
 */
 export const demo_flow_direction_local = /** @type {((inputs?: Demo_Flow_Direction_LocalInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Direction_LocalInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_direction_local(inputs)
-	return es_demo_flow_direction_local(inputs)
+	if (locale === "es") return es_demo_flow_direction_local(inputs)
+	return en_demo_flow_direction_local(inputs)
 });

@@ -24,6 +24,6 @@ const es_library_file_type_not_allowed = /** @type {(inputs: Library_File_Type_N
 */
 export const library_file_type_not_allowed = /** @type {((inputs?: Library_File_Type_Not_AllowedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_File_Type_Not_AllowedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_file_type_not_allowed(inputs)
-	return es_library_file_type_not_allowed(inputs)
+	if (locale === "es") return es_library_file_type_not_allowed(inputs)
+	return en_library_file_type_not_allowed(inputs)
 });

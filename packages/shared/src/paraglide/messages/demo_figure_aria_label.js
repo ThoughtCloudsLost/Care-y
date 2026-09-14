@@ -24,6 +24,6 @@ const es_demo_figure_aria_label = /** @type {(inputs: Demo_Figure_Aria_LabelInpu
 */
 export const demo_figure_aria_label = /** @type {((inputs: Demo_Figure_Aria_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Figure_Aria_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_figure_aria_label(inputs)
-	return es_demo_figure_aria_label(inputs)
+	if (locale === "es") return es_demo_figure_aria_label(inputs)
+	return en_demo_figure_aria_label(inputs)
 });

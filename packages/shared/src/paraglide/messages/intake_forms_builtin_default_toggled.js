@@ -24,6 +24,6 @@ const es_intake_forms_builtin_default_toggled = /** @type {(inputs: Intake_Forms
 */
 export const intake_forms_builtin_default_toggled = /** @type {((inputs?: Intake_Forms_Builtin_Default_ToggledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Builtin_Default_ToggledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_builtin_default_toggled(inputs)
-	return es_intake_forms_builtin_default_toggled(inputs)
+	if (locale === "es") return es_intake_forms_builtin_default_toggled(inputs)
+	return en_intake_forms_builtin_default_toggled(inputs)
 });

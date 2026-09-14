@@ -24,6 +24,6 @@ const es_library_exit_multiselect = /** @type {(inputs: Library_Exit_Multiselect
 */
 export const library_exit_multiselect = /** @type {((inputs?: Library_Exit_MultiselectInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Exit_MultiselectInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_exit_multiselect(inputs)
-	return es_library_exit_multiselect(inputs)
+	if (locale === "es") return es_library_exit_multiselect(inputs)
+	return en_library_exit_multiselect(inputs)
 });

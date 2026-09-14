@@ -24,6 +24,6 @@ const es_dashboard_activity_summary = /** @type {(inputs: Dashboard_Activity_Sum
 */
 export const dashboard_activity_summary = /** @type {((inputs: Dashboard_Activity_SummaryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Activity_SummaryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_activity_summary(inputs)
-	return es_dashboard_activity_summary(inputs)
+	if (locale === "es") return es_dashboard_activity_summary(inputs)
+	return en_dashboard_activity_summary(inputs)
 });

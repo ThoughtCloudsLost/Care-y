@@ -24,6 +24,6 @@ const es_admin_greetings_audio_hint = /** @type {(inputs: Admin_Greetings_Audio_
 */
 export const admin_greetings_audio_hint = /** @type {((inputs?: Admin_Greetings_Audio_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Audio_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_greetings_audio_hint(inputs)
-	return es_admin_greetings_audio_hint(inputs)
+	if (locale === "es") return es_admin_greetings_audio_hint(inputs)
+	return en_admin_greetings_audio_hint(inputs)
 });

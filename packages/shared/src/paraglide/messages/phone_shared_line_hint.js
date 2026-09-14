@@ -24,6 +24,6 @@ const es_phone_shared_line_hint = /** @type {(inputs: Phone_Shared_Line_HintInpu
 */
 export const phone_shared_line_hint = /** @type {((inputs?: Phone_Shared_Line_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Phone_Shared_Line_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_phone_shared_line_hint(inputs)
-	return es_phone_shared_line_hint(inputs)
+	if (locale === "es") return es_phone_shared_line_hint(inputs)
+	return en_phone_shared_line_hint(inputs)
 });

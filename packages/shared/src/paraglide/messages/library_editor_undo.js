@@ -24,6 +24,6 @@ const es_library_editor_undo = /** @type {(inputs: Library_Editor_UndoInputs) =>
 */
 export const library_editor_undo = /** @type {((inputs?: Library_Editor_UndoInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_UndoInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_undo(inputs)
-	return es_library_editor_undo(inputs)
+	if (locale === "es") return es_library_editor_undo(inputs)
+	return en_library_editor_undo(inputs)
 });

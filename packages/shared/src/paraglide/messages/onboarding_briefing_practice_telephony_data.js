@@ -24,6 +24,6 @@ const es_onboarding_briefing_practice_telephony_data = /** @type {(inputs: Onboa
 */
 export const onboarding_briefing_practice_telephony_data = /** @type {((inputs?: Onboarding_Briefing_Practice_Telephony_DataInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Practice_Telephony_DataInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_briefing_practice_telephony_data(inputs)
-	return es_onboarding_briefing_practice_telephony_data(inputs)
+	if (locale === "es") return es_onboarding_briefing_practice_telephony_data(inputs)
+	return en_onboarding_briefing_practice_telephony_data(inputs)
 });

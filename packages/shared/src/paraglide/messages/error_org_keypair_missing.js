@@ -24,6 +24,6 @@ const es_error_org_keypair_missing = /** @type {(inputs: Error_Org_Keypair_Missi
 */
 export const error_org_keypair_missing = /** @type {((inputs?: Error_Org_Keypair_MissingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Org_Keypair_MissingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_org_keypair_missing(inputs)
-	return es_error_org_keypair_missing(inputs)
+	if (locale === "es") return es_error_org_keypair_missing(inputs)
+	return en_error_org_keypair_missing(inputs)
 });

@@ -24,6 +24,6 @@ const es_consultant_phone_status_unverified = /** @type {(inputs: Consultant_Pho
 */
 export const consultant_phone_status_unverified = /** @type {((inputs?: Consultant_Phone_Status_UnverifiedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Status_UnverifiedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_consultant_phone_status_unverified(inputs)
-	return es_consultant_phone_status_unverified(inputs)
+	if (locale === "es") return es_consultant_phone_status_unverified(inputs)
+	return en_consultant_phone_status_unverified(inputs)
 });

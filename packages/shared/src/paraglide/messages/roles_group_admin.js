@@ -24,6 +24,6 @@ const es_roles_group_admin = /** @type {(inputs: Roles_Group_AdminInputs) => Loc
 */
 export const roles_group_admin = /** @type {((inputs?: Roles_Group_AdminInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_Group_AdminInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_roles_group_admin(inputs)
-	return es_roles_group_admin(inputs)
+	if (locale === "es") return es_roles_group_admin(inputs)
+	return en_roles_group_admin(inputs)
 });

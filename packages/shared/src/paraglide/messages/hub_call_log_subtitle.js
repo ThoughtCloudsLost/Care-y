@@ -24,6 +24,6 @@ const es_hub_call_log_subtitle = /** @type {(inputs: Hub_Call_Log_SubtitleInputs
 */
 export const hub_call_log_subtitle = /** @type {((inputs: Hub_Call_Log_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Call_Log_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_hub_call_log_subtitle(inputs)
-	return es_hub_call_log_subtitle(inputs)
+	if (locale === "es") return es_hub_call_log_subtitle(inputs)
+	return en_hub_call_log_subtitle(inputs)
 });

@@ -24,6 +24,6 @@ const es_permission_manage_org_config = /** @type {(inputs: Permission_Manage_Or
 */
 export const permission_manage_org_config = /** @type {((inputs?: Permission_Manage_Org_ConfigInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_Manage_Org_ConfigInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_permission_manage_org_config(inputs)
-	return es_permission_manage_org_config(inputs)
+	if (locale === "es") return es_permission_manage_org_config(inputs)
+	return en_permission_manage_org_config(inputs)
 });

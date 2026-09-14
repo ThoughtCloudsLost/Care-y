@@ -24,6 +24,6 @@ const es_notif_reset_all_title = /** @type {(inputs: Notif_Reset_All_TitleInputs
 */
 export const notif_reset_all_title = /** @type {((inputs?: Notif_Reset_All_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Reset_All_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_reset_all_title(inputs)
-	return es_notif_reset_all_title(inputs)
+	if (locale === "es") return es_notif_reset_all_title(inputs)
+	return en_notif_reset_all_title(inputs)
 });

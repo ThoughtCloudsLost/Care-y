@@ -24,6 +24,6 @@ const es_admin_user_save_changes = /** @type {(inputs: Admin_User_Save_ChangesIn
 */
 export const admin_user_save_changes = /** @type {((inputs?: Admin_User_Save_ChangesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_User_Save_ChangesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_user_save_changes(inputs)
-	return es_admin_user_save_changes(inputs)
+	if (locale === "es") return es_admin_user_save_changes(inputs)
+	return en_admin_user_save_changes(inputs)
 });

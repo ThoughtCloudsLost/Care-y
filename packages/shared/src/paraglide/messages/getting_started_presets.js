@@ -24,6 +24,6 @@ const es_getting_started_presets = /** @type {(inputs: Getting_Started_PresetsIn
 */
 export const getting_started_presets = /** @type {((inputs?: Getting_Started_PresetsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Getting_Started_PresetsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_getting_started_presets(inputs)
-	return es_getting_started_presets(inputs)
+	if (locale === "es") return es_getting_started_presets(inputs)
+	return en_getting_started_presets(inputs)
 });

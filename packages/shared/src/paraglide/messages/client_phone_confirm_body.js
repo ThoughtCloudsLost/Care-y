@@ -24,6 +24,6 @@ const es_client_phone_confirm_body = /** @type {(inputs: Client_Phone_Confirm_Bo
 */
 export const client_phone_confirm_body = /** @type {((inputs: Client_Phone_Confirm_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Phone_Confirm_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_phone_confirm_body(inputs)
-	return es_client_phone_confirm_body(inputs)
+	if (locale === "es") return es_client_phone_confirm_body(inputs)
+	return en_client_phone_confirm_body(inputs)
 });

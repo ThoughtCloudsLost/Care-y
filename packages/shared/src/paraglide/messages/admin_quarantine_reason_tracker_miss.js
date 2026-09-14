@@ -24,6 +24,6 @@ const es_admin_quarantine_reason_tracker_miss = /** @type {(inputs: Admin_Quaran
 */
 export const admin_quarantine_reason_tracker_miss = /** @type {((inputs?: Admin_Quarantine_Reason_Tracker_MissInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Quarantine_Reason_Tracker_MissInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_quarantine_reason_tracker_miss(inputs)
-	return es_admin_quarantine_reason_tracker_miss(inputs)
+	if (locale === "es") return es_admin_quarantine_reason_tracker_miss(inputs)
+	return en_admin_quarantine_reason_tracker_miss(inputs)
 });

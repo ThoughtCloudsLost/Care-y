@@ -24,6 +24,6 @@ const es_admin_invite_role_label = /** @type {(inputs: Admin_Invite_Role_LabelIn
 */
 export const admin_invite_role_label = /** @type {((inputs?: Admin_Invite_Role_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Role_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_role_label(inputs)
-	return es_admin_invite_role_label(inputs)
+	if (locale === "es") return es_admin_invite_role_label(inputs)
+	return en_admin_invite_role_label(inputs)
 });

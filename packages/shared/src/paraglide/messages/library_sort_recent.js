@@ -24,6 +24,6 @@ const es_library_sort_recent = /** @type {(inputs: Library_Sort_RecentInputs) =>
 */
 export const library_sort_recent = /** @type {((inputs?: Library_Sort_RecentInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Sort_RecentInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_sort_recent(inputs)
-	return es_library_sort_recent(inputs)
+	if (locale === "es") return es_library_sort_recent(inputs)
+	return en_library_sort_recent(inputs)
 });

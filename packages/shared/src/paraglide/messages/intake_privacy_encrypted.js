@@ -24,6 +24,6 @@ const es_intake_privacy_encrypted = /** @type {(inputs: Intake_Privacy_Encrypted
 */
 export const intake_privacy_encrypted = /** @type {((inputs?: Intake_Privacy_EncryptedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Privacy_EncryptedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_privacy_encrypted(inputs)
-	return es_intake_privacy_encrypted(inputs)
+	if (locale === "es") return es_intake_privacy_encrypted(inputs)
+	return en_intake_privacy_encrypted(inputs)
 });

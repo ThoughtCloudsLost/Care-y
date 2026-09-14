@@ -24,6 +24,6 @@ const es_search_section_conversation = /** @type {(inputs: Search_Section_Conver
 */
 export const search_section_conversation = /** @type {((inputs?: Search_Section_ConversationInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Section_ConversationInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_section_conversation(inputs)
-	return es_search_section_conversation(inputs)
+	if (locale === "es") return es_search_section_conversation(inputs)
+	return en_search_section_conversation(inputs)
 });

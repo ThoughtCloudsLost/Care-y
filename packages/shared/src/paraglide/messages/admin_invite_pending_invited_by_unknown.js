@@ -24,6 +24,6 @@ const es_admin_invite_pending_invited_by_unknown = /** @type {(inputs: Admin_Inv
 */
 export const admin_invite_pending_invited_by_unknown = /** @type {((inputs?: Admin_Invite_Pending_Invited_By_UnknownInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Pending_Invited_By_UnknownInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_pending_invited_by_unknown(inputs)
-	return es_admin_invite_pending_invited_by_unknown(inputs)
+	if (locale === "es") return es_admin_invite_pending_invited_by_unknown(inputs)
+	return en_admin_invite_pending_invited_by_unknown(inputs)
 });

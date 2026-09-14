@@ -24,6 +24,6 @@ const es_demo_preparing = /** @type {(inputs: Demo_PreparingInputs) => Localized
 */
 export const demo_preparing = /** @type {((inputs?: Demo_PreparingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_PreparingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_preparing(inputs)
-	return es_demo_preparing(inputs)
+	if (locale === "es") return es_demo_preparing(inputs)
+	return en_demo_preparing(inputs)
 });

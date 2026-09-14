@@ -24,6 +24,6 @@ const es_admin_telephony_outbound_calls_helper = /** @type {(inputs: Admin_Telep
 */
 export const admin_telephony_outbound_calls_helper = /** @type {((inputs: Admin_Telephony_Outbound_Calls_HelperInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Outbound_Calls_HelperInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_outbound_calls_helper(inputs)
-	return es_admin_telephony_outbound_calls_helper(inputs)
+	if (locale === "es") return es_admin_telephony_outbound_calls_helper(inputs)
+	return en_admin_telephony_outbound_calls_helper(inputs)
 });

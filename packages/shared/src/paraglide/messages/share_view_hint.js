@@ -24,6 +24,6 @@ const es_share_view_hint = /** @type {(inputs: Share_View_HintInputs) => Localiz
 */
 export const share_view_hint = /** @type {((inputs?: Share_View_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_View_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_view_hint(inputs)
-	return es_share_view_hint(inputs)
+	if (locale === "es") return es_share_view_hint(inputs)
+	return en_share_view_hint(inputs)
 });

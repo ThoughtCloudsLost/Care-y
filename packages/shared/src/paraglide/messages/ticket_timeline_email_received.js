@@ -24,6 +24,6 @@ const es_ticket_timeline_email_received = /** @type {(inputs: Ticket_Timeline_Em
 */
 export const ticket_timeline_email_received = /** @type {((inputs: Ticket_Timeline_Email_ReceivedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Timeline_Email_ReceivedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_timeline_email_received(inputs)
-	return es_ticket_timeline_email_received(inputs)
+	if (locale === "es") return es_ticket_timeline_email_received(inputs)
+	return en_ticket_timeline_email_received(inputs)
 });

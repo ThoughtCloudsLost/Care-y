@@ -24,6 +24,6 @@ const es_tickets_action_unhold = /** @type {(inputs: Tickets_Action_UnholdInputs
 */
 export const tickets_action_unhold = /** @type {((inputs?: Tickets_Action_UnholdInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Action_UnholdInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_tickets_action_unhold(inputs)
-	return es_tickets_action_unhold(inputs)
+	if (locale === "es") return es_tickets_action_unhold(inputs)
+	return en_tickets_action_unhold(inputs)
 });

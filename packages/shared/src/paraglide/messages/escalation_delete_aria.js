@@ -24,6 +24,6 @@ const es_escalation_delete_aria = /** @type {(inputs: Escalation_Delete_AriaInpu
 */
 export const escalation_delete_aria = /** @type {((inputs: Escalation_Delete_AriaInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Delete_AriaInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_delete_aria(inputs)
-	return es_escalation_delete_aria(inputs)
+	if (locale === "es") return es_escalation_delete_aria(inputs)
+	return en_escalation_delete_aria(inputs)
 });

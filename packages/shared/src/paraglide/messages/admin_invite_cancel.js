@@ -24,6 +24,6 @@ const es_admin_invite_cancel = /** @type {(inputs: Admin_Invite_CancelInputs) =>
 */
 export const admin_invite_cancel = /** @type {((inputs?: Admin_Invite_CancelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_CancelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_cancel(inputs)
-	return es_admin_invite_cancel(inputs)
+	if (locale === "es") return es_admin_invite_cancel(inputs)
+	return en_admin_invite_cancel(inputs)
 });

@@ -24,6 +24,6 @@ const es_library_category_delete_blocked = /** @type {(inputs: Library_Category_
 */
 export const library_category_delete_blocked = /** @type {((inputs?: Library_Category_Delete_BlockedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Category_Delete_BlockedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_category_delete_blocked(inputs)
-	return es_library_category_delete_blocked(inputs)
+	if (locale === "es") return es_library_category_delete_blocked(inputs)
+	return en_library_category_delete_blocked(inputs)
 });

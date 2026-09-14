@@ -24,6 +24,6 @@ const es_escalation_section_title = /** @type {(inputs: Escalation_Section_Title
 */
 export const escalation_section_title = /** @type {((inputs?: Escalation_Section_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Section_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_section_title(inputs)
-	return es_escalation_section_title(inputs)
+	if (locale === "es") return es_escalation_section_title(inputs)
+	return en_escalation_section_title(inputs)
 });

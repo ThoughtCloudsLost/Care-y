@@ -24,6 +24,6 @@ const es_demo_conversation_error = /** @type {(inputs: Demo_Conversation_ErrorIn
 */
 export const demo_conversation_error = /** @type {((inputs?: Demo_Conversation_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Conversation_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_conversation_error(inputs)
-	return es_demo_conversation_error(inputs)
+	if (locale === "es") return es_demo_conversation_error(inputs)
+	return en_demo_conversation_error(inputs)
 });

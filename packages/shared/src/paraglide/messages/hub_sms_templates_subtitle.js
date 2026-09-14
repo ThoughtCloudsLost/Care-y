@@ -24,6 +24,6 @@ const es_hub_sms_templates_subtitle = /** @type {(inputs: Hub_Sms_Templates_Subt
 */
 export const hub_sms_templates_subtitle = /** @type {((inputs?: Hub_Sms_Templates_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Sms_Templates_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_hub_sms_templates_subtitle(inputs)
-	return es_hub_sms_templates_subtitle(inputs)
+	if (locale === "es") return es_hub_sms_templates_subtitle(inputs)
+	return en_hub_sms_templates_subtitle(inputs)
 });

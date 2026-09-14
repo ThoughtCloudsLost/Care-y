@@ -24,6 +24,6 @@ const es_intake_error_contact_required = /** @type {(inputs: Intake_Error_Contac
 */
 export const intake_error_contact_required = /** @type {((inputs?: Intake_Error_Contact_RequiredInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Error_Contact_RequiredInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_error_contact_required(inputs)
-	return es_intake_error_contact_required(inputs)
+	if (locale === "es") return es_intake_error_contact_required(inputs)
+	return en_intake_error_contact_required(inputs)
 });

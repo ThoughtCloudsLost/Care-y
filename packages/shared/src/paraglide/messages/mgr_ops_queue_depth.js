@@ -24,6 +24,6 @@ const es_mgr_ops_queue_depth = /** @type {(inputs: Mgr_Ops_Queue_DepthInputs) =>
 */
 export const mgr_ops_queue_depth = /** @type {((inputs: Mgr_Ops_Queue_DepthInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Ops_Queue_DepthInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_mgr_ops_queue_depth(inputs)
-	return es_mgr_ops_queue_depth(inputs)
+	if (locale === "es") return es_mgr_ops_queue_depth(inputs)
+	return en_mgr_ops_queue_depth(inputs)
 });

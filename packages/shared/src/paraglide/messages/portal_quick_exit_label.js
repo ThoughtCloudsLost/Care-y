@@ -24,6 +24,6 @@ const es_portal_quick_exit_label = /** @type {(inputs: Portal_Quick_Exit_LabelIn
 */
 export const portal_quick_exit_label = /** @type {((inputs?: Portal_Quick_Exit_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Quick_Exit_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_quick_exit_label(inputs)
-	return es_portal_quick_exit_label(inputs)
+	if (locale === "es") return es_portal_quick_exit_label(inputs)
+	return en_portal_quick_exit_label(inputs)
 });

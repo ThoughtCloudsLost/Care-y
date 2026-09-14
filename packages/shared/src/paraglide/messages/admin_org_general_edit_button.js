@@ -24,6 +24,6 @@ const es_admin_org_general_edit_button = /** @type {(inputs: Admin_Org_General_E
 */
 export const admin_org_general_edit_button = /** @type {((inputs?: Admin_Org_General_Edit_ButtonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Org_General_Edit_ButtonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_org_general_edit_button(inputs)
-	return es_admin_org_general_edit_button(inputs)
+	if (locale === "es") return es_admin_org_general_edit_button(inputs)
+	return en_admin_org_general_edit_button(inputs)
 });

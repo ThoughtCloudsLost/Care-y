@@ -24,6 +24,6 @@ const es_admin_terminology_singular = /** @type {(inputs: Admin_Terminology_Sing
 */
 export const admin_terminology_singular = /** @type {((inputs?: Admin_Terminology_SingularInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Terminology_SingularInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_terminology_singular(inputs)
-	return es_admin_terminology_singular(inputs)
+	if (locale === "es") return es_admin_terminology_singular(inputs)
+	return en_admin_terminology_singular(inputs)
 });

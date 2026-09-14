@@ -24,6 +24,6 @@ const es_mgr_link_security_status = /** @type {(inputs: Mgr_Link_Security_Status
 */
 export const mgr_link_security_status = /** @type {((inputs?: Mgr_Link_Security_StatusInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Link_Security_StatusInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_mgr_link_security_status(inputs)
-	return es_mgr_link_security_status(inputs)
+	if (locale === "es") return es_mgr_link_security_status(inputs)
+	return en_mgr_link_security_status(inputs)
 });

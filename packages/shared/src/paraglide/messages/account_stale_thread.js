@@ -24,6 +24,6 @@ const es_account_stale_thread = /** @type {(inputs: Account_Stale_ThreadInputs) 
 */
 export const account_stale_thread = /** @type {((inputs?: Account_Stale_ThreadInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Stale_ThreadInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_account_stale_thread(inputs)
-	return es_account_stale_thread(inputs)
+	if (locale === "es") return es_account_stale_thread(inputs)
+	return en_account_stale_thread(inputs)
 });

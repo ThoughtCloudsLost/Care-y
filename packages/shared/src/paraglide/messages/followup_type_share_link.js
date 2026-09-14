@@ -24,6 +24,6 @@ const es_followup_type_share_link = /** @type {(inputs: Followup_Type_Share_Link
 */
 export const followup_type_share_link = /** @type {((inputs?: Followup_Type_Share_LinkInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Share_LinkInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_followup_type_share_link(inputs)
-	return es_followup_type_share_link(inputs)
+	if (locale === "es") return es_followup_type_share_link(inputs)
+	return en_followup_type_share_link(inputs)
 });

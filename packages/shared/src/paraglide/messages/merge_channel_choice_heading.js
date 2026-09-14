@@ -24,6 +24,6 @@ const es_merge_channel_choice_heading = /** @type {(inputs: Merge_Channel_Choice
 */
 export const merge_channel_choice_heading = /** @type {((inputs?: Merge_Channel_Choice_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Merge_Channel_Choice_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_merge_channel_choice_heading(inputs)
-	return es_merge_channel_choice_heading(inputs)
+	if (locale === "es") return es_merge_channel_choice_heading(inputs)
+	return en_merge_channel_choice_heading(inputs)
 });

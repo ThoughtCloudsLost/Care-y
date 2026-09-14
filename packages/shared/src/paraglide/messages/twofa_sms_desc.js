@@ -24,6 +24,6 @@ const es_twofa_sms_desc = /** @type {(inputs: Twofa_Sms_DescInputs) => Localized
 */
 export const twofa_sms_desc = /** @type {((inputs?: Twofa_Sms_DescInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Sms_DescInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_sms_desc(inputs)
-	return es_twofa_sms_desc(inputs)
+	if (locale === "es") return es_twofa_sms_desc(inputs)
+	return en_twofa_sms_desc(inputs)
 });

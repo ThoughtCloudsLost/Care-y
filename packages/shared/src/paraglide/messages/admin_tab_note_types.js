@@ -24,6 +24,6 @@ const es_admin_tab_note_types = /** @type {(inputs: Admin_Tab_Note_TypesInputs) 
 */
 export const admin_tab_note_types = /** @type {((inputs?: Admin_Tab_Note_TypesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Tab_Note_TypesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_tab_note_types(inputs)
-	return es_admin_tab_note_types(inputs)
+	if (locale === "es") return es_admin_tab_note_types(inputs)
+	return en_admin_tab_note_types(inputs)
 });

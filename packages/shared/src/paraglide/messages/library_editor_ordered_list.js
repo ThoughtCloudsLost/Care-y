@@ -24,6 +24,6 @@ const es_library_editor_ordered_list = /** @type {(inputs: Library_Editor_Ordere
 */
 export const library_editor_ordered_list = /** @type {((inputs?: Library_Editor_Ordered_ListInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_Ordered_ListInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_ordered_list(inputs)
-	return es_library_editor_ordered_list(inputs)
+	if (locale === "es") return es_library_editor_ordered_list(inputs)
+	return en_library_editor_ordered_list(inputs)
 });

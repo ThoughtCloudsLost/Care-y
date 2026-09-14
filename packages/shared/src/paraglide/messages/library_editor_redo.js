@@ -24,6 +24,6 @@ const es_library_editor_redo = /** @type {(inputs: Library_Editor_RedoInputs) =>
 */
 export const library_editor_redo = /** @type {((inputs?: Library_Editor_RedoInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_RedoInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_redo(inputs)
-	return es_library_editor_redo(inputs)
+	if (locale === "es") return es_library_editor_redo(inputs)
+	return en_library_editor_redo(inputs)
 });

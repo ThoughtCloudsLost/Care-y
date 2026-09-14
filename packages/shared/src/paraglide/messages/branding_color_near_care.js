@@ -24,6 +24,6 @@ const es_branding_color_near_care = /** @type {(inputs: Branding_Color_Near_Care
 */
 export const branding_color_near_care = /** @type {((inputs: Branding_Color_Near_CareInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Branding_Color_Near_CareInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_branding_color_near_care(inputs)
-	return es_branding_color_near_care(inputs)
+	if (locale === "es") return es_branding_color_near_care(inputs)
+	return en_branding_color_near_care(inputs)
 });

@@ -24,6 +24,6 @@ const es_library_table_col_author = /** @type {(inputs: Library_Table_Col_Author
 */
 export const library_table_col_author = /** @type {((inputs?: Library_Table_Col_AuthorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Table_Col_AuthorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_table_col_author(inputs)
-	return es_library_table_col_author(inputs)
+	if (locale === "es") return es_library_table_col_author(inputs)
+	return en_library_table_col_author(inputs)
 });

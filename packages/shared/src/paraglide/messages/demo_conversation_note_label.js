@@ -24,6 +24,6 @@ const es_demo_conversation_note_label = /** @type {(inputs: Demo_Conversation_No
 */
 export const demo_conversation_note_label = /** @type {((inputs?: Demo_Conversation_Note_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Conversation_Note_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_conversation_note_label(inputs)
-	return es_demo_conversation_note_label(inputs)
+	if (locale === "es") return es_demo_conversation_note_label(inputs)
+	return en_demo_conversation_note_label(inputs)
 });

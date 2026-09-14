@@ -24,6 +24,6 @@ const es_reaction_acknowledge = /** @type {(inputs: Reaction_AcknowledgeInputs) 
 */
 export const reaction_acknowledge = /** @type {((inputs?: Reaction_AcknowledgeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Reaction_AcknowledgeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_reaction_acknowledge(inputs)
-	return es_reaction_acknowledge(inputs)
+	if (locale === "es") return es_reaction_acknowledge(inputs)
+	return en_reaction_acknowledge(inputs)
 });

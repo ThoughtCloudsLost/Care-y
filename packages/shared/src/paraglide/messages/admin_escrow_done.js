@@ -24,6 +24,6 @@ const es_admin_escrow_done = /** @type {(inputs: Admin_Escrow_DoneInputs) => Loc
 */
 export const admin_escrow_done = /** @type {((inputs?: Admin_Escrow_DoneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Escrow_DoneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_escrow_done(inputs)
-	return es_admin_escrow_done(inputs)
+	if (locale === "es") return es_admin_escrow_done(inputs)
+	return en_admin_escrow_done(inputs)
 });

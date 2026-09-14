@@ -24,6 +24,6 @@ const es_client_no_tickets = /** @type {(inputs: Client_No_TicketsInputs) => Loc
 */
 export const client_no_tickets = /** @type {((inputs: Client_No_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_No_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_no_tickets(inputs)
-	return es_client_no_tickets(inputs)
+	if (locale === "es") return es_client_no_tickets(inputs)
+	return en_client_no_tickets(inputs)
 });

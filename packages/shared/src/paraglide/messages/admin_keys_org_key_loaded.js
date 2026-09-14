@@ -24,6 +24,6 @@ const es_admin_keys_org_key_loaded = /** @type {(inputs: Admin_Keys_Org_Key_Load
 */
 export const admin_keys_org_key_loaded = /** @type {((inputs?: Admin_Keys_Org_Key_LoadedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Keys_Org_Key_LoadedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_keys_org_key_loaded(inputs)
-	return es_admin_keys_org_key_loaded(inputs)
+	if (locale === "es") return es_admin_keys_org_key_loaded(inputs)
+	return en_admin_keys_org_key_loaded(inputs)
 });

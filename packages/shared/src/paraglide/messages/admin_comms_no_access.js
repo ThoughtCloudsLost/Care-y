@@ -24,6 +24,6 @@ const es_admin_comms_no_access = /** @type {(inputs: Admin_Comms_No_AccessInputs
 */
 export const admin_comms_no_access = /** @type {((inputs?: Admin_Comms_No_AccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Comms_No_AccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_comms_no_access(inputs)
-	return es_admin_comms_no_access(inputs)
+	if (locale === "es") return es_admin_comms_no_access(inputs)
+	return en_admin_comms_no_access(inputs)
 });

@@ -24,6 +24,6 @@ const es_settings_change = /** @type {(inputs: Settings_ChangeInputs) => Localiz
 */
 export const settings_change = /** @type {((inputs?: Settings_ChangeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_ChangeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_change(inputs)
-	return es_settings_change(inputs)
+	if (locale === "es") return es_settings_change(inputs)
+	return en_settings_change(inputs)
 });

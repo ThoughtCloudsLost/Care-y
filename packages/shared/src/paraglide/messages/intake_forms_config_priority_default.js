@@ -24,6 +24,6 @@ const es_intake_forms_config_priority_default = /** @type {(inputs: Intake_Forms
 */
 export const intake_forms_config_priority_default = /** @type {((inputs?: Intake_Forms_Config_Priority_DefaultInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Priority_DefaultInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_priority_default(inputs)
-	return es_intake_forms_config_priority_default(inputs)
+	if (locale === "es") return es_intake_forms_config_priority_default(inputs)
+	return en_intake_forms_config_priority_default(inputs)
 });

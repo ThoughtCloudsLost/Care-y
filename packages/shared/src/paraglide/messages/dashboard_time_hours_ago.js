@@ -24,6 +24,6 @@ const es_dashboard_time_hours_ago = /** @type {(inputs: Dashboard_Time_Hours_Ago
 */
 export const dashboard_time_hours_ago = /** @type {((inputs: Dashboard_Time_Hours_AgoInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Time_Hours_AgoInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_time_hours_ago(inputs)
-	return es_dashboard_time_hours_ago(inputs)
+	if (locale === "es") return es_dashboard_time_hours_ago(inputs)
+	return en_dashboard_time_hours_ago(inputs)
 });

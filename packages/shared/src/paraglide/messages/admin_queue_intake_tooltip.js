@@ -24,6 +24,6 @@ const es_admin_queue_intake_tooltip = /** @type {(inputs: Admin_Queue_Intake_Too
 */
 export const admin_queue_intake_tooltip = /** @type {((inputs?: Admin_Queue_Intake_TooltipInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_Intake_TooltipInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_queue_intake_tooltip(inputs)
-	return es_admin_queue_intake_tooltip(inputs)
+	if (locale === "es") return es_admin_queue_intake_tooltip(inputs)
+	return en_admin_queue_intake_tooltip(inputs)
 });

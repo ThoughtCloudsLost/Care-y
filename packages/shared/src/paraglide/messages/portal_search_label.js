@@ -24,6 +24,6 @@ const es_portal_search_label = /** @type {(inputs: Portal_Search_LabelInputs) =>
 */
 export const portal_search_label = /** @type {((inputs?: Portal_Search_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Search_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_search_label(inputs)
-	return es_portal_search_label(inputs)
+	if (locale === "es") return es_portal_search_label(inputs)
+	return en_portal_search_label(inputs)
 });

@@ -24,6 +24,6 @@ const es_intake_avail_time_to = /** @type {(inputs: Intake_Avail_Time_ToInputs) 
 */
 export const intake_avail_time_to = /** @type {((inputs?: Intake_Avail_Time_ToInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Time_ToInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_avail_time_to(inputs)
-	return es_intake_avail_time_to(inputs)
+	if (locale === "es") return es_intake_avail_time_to(inputs)
+	return en_intake_avail_time_to(inputs)
 });

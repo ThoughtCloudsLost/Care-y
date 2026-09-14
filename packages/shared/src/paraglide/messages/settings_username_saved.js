@@ -24,6 +24,6 @@ const es_settings_username_saved = /** @type {(inputs: Settings_Username_SavedIn
 */
 export const settings_username_saved = /** @type {((inputs?: Settings_Username_SavedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Username_SavedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_username_saved(inputs)
-	return es_settings_username_saved(inputs)
+	if (locale === "es") return es_settings_username_saved(inputs)
+	return en_settings_username_saved(inputs)
 });

@@ -24,6 +24,6 @@ const es_thread_jump_to_latest = /** @type {(inputs: Thread_Jump_To_LatestInputs
 */
 export const thread_jump_to_latest = /** @type {((inputs?: Thread_Jump_To_LatestInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Thread_Jump_To_LatestInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_thread_jump_to_latest(inputs)
-	return es_thread_jump_to_latest(inputs)
+	if (locale === "es") return es_thread_jump_to_latest(inputs)
+	return en_thread_jump_to_latest(inputs)
 });

@@ -24,6 +24,6 @@ const es_ticket_select_cancel = /** @type {(inputs: Ticket_Select_CancelInputs) 
 */
 export const ticket_select_cancel = /** @type {((inputs?: Ticket_Select_CancelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Select_CancelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_select_cancel(inputs)
-	return es_ticket_select_cancel(inputs)
+	if (locale === "es") return es_ticket_select_cancel(inputs)
+	return en_ticket_select_cancel(inputs)
 });

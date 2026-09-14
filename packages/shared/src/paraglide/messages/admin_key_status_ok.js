@@ -24,6 +24,6 @@ const es_admin_key_status_ok = /** @type {(inputs: Admin_Key_Status_OkInputs) =>
 */
 export const admin_key_status_ok = /** @type {((inputs?: Admin_Key_Status_OkInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Key_Status_OkInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_key_status_ok(inputs)
-	return es_admin_key_status_ok(inputs)
+	if (locale === "es") return es_admin_key_status_ok(inputs)
+	return en_admin_key_status_ok(inputs)
 });

@@ -24,6 +24,6 @@ const es_notif_ticket_pref_saved = /** @type {(inputs: Notif_Ticket_Pref_SavedIn
 */
 export const notif_ticket_pref_saved = /** @type {((inputs?: Notif_Ticket_Pref_SavedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Ticket_Pref_SavedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_ticket_pref_saved(inputs)
-	return es_notif_ticket_pref_saved(inputs)
+	if (locale === "es") return es_notif_ticket_pref_saved(inputs)
+	return en_notif_ticket_pref_saved(inputs)
 });

@@ -24,6 +24,6 @@ const es_ticket_tier_account = /** @type {(inputs: Ticket_Tier_AccountInputs) =>
 */
 export const ticket_tier_account = /** @type {((inputs?: Ticket_Tier_AccountInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Tier_AccountInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_tier_account(inputs)
-	return es_ticket_tier_account(inputs)
+	if (locale === "es") return es_ticket_tier_account(inputs)
+	return en_ticket_tier_account(inputs)
 });

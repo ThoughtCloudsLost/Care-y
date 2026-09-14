@@ -24,6 +24,6 @@ const es_ticket_filter_type_assignment = /** @type {(inputs: Ticket_Filter_Type_
 */
 export const ticket_filter_type_assignment = /** @type {((inputs?: Ticket_Filter_Type_AssignmentInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Filter_Type_AssignmentInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_filter_type_assignment(inputs)
-	return es_ticket_filter_type_assignment(inputs)
+	if (locale === "es") return es_ticket_filter_type_assignment(inputs)
+	return en_ticket_filter_type_assignment(inputs)
 });

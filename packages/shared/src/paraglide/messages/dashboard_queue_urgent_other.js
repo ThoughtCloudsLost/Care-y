@@ -24,6 +24,6 @@ const es_dashboard_queue_urgent_other = /** @type {(inputs: Dashboard_Queue_Urge
 */
 export const dashboard_queue_urgent_other = /** @type {((inputs: Dashboard_Queue_Urgent_OtherInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Queue_Urgent_OtherInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_queue_urgent_other(inputs)
-	return es_dashboard_queue_urgent_other(inputs)
+	if (locale === "es") return es_dashboard_queue_urgent_other(inputs)
+	return en_dashboard_queue_urgent_other(inputs)
 });

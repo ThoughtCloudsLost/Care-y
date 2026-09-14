@@ -24,6 +24,6 @@ const es_admin_telephony_account_id = /** @type {(inputs: Admin_Telephony_Accoun
 */
 export const admin_telephony_account_id = /** @type {((inputs?: Admin_Telephony_Account_IdInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Account_IdInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_account_id(inputs)
-	return es_admin_telephony_account_id(inputs)
+	if (locale === "es") return es_admin_telephony_account_id(inputs)
+	return en_admin_telephony_account_id(inputs)
 });

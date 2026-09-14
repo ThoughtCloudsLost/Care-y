@@ -24,6 +24,6 @@ const es_admin_telephony_mode_changed = /** @type {(inputs: Admin_Telephony_Mode
 */
 export const admin_telephony_mode_changed = /** @type {((inputs?: Admin_Telephony_Mode_ChangedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Mode_ChangedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_mode_changed(inputs)
-	return es_admin_telephony_mode_changed(inputs)
+	if (locale === "es") return es_admin_telephony_mode_changed(inputs)
+	return en_admin_telephony_mode_changed(inputs)
 });

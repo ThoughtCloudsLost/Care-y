@@ -24,6 +24,6 @@ const es_client_merge_unlock = /** @type {(inputs: Client_Merge_UnlockInputs) =>
 */
 export const client_merge_unlock = /** @type {((inputs?: Client_Merge_UnlockInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Merge_UnlockInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_merge_unlock(inputs)
-	return es_client_merge_unlock(inputs)
+	if (locale === "es") return es_client_merge_unlock(inputs)
+	return en_client_merge_unlock(inputs)
 });

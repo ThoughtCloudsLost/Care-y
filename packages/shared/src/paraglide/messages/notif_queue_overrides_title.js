@@ -24,6 +24,6 @@ const es_notif_queue_overrides_title = /** @type {(inputs: Notif_Queue_Overrides
 */
 export const notif_queue_overrides_title = /** @type {((inputs?: Notif_Queue_Overrides_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Queue_Overrides_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_queue_overrides_title(inputs)
-	return es_notif_queue_overrides_title(inputs)
+	if (locale === "es") return es_notif_queue_overrides_title(inputs)
+	return en_notif_queue_overrides_title(inputs)
 });

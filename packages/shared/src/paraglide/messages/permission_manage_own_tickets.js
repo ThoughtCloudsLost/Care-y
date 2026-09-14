@@ -24,6 +24,6 @@ const es_permission_manage_own_tickets = /** @type {(inputs: Permission_Manage_O
 */
 export const permission_manage_own_tickets = /** @type {((inputs?: Permission_Manage_Own_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_Manage_Own_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_permission_manage_own_tickets(inputs)
-	return es_permission_manage_own_tickets(inputs)
+	if (locale === "es") return es_permission_manage_own_tickets(inputs)
+	return en_permission_manage_own_tickets(inputs)
 });

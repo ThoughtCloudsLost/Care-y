@@ -24,6 +24,6 @@ const es_intake_forms_closes_at_hint_with_message = /** @type {(inputs: Intake_F
 */
 export const intake_forms_closes_at_hint_with_message = /** @type {((inputs?: Intake_Forms_Closes_At_Hint_With_MessageInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Closes_At_Hint_With_MessageInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_closes_at_hint_with_message(inputs)
-	return es_intake_forms_closes_at_hint_with_message(inputs)
+	if (locale === "es") return es_intake_forms_closes_at_hint_with_message(inputs)
+	return en_intake_forms_closes_at_hint_with_message(inputs)
 });

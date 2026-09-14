@@ -24,6 +24,6 @@ const es_intake_forms_destination_default_named = /** @type {(inputs: Intake_For
 */
 export const intake_forms_destination_default_named = /** @type {((inputs: Intake_Forms_Destination_Default_NamedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Destination_Default_NamedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_destination_default_named(inputs)
-	return es_intake_forms_destination_default_named(inputs)
+	if (locale === "es") return es_intake_forms_destination_default_named(inputs)
+	return en_intake_forms_destination_default_named(inputs)
 });

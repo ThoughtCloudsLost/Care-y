@@ -24,6 +24,6 @@ const es_tickets_sort_followups = /** @type {(inputs: Tickets_Sort_FollowupsInpu
 */
 export const tickets_sort_followups = /** @type {((inputs?: Tickets_Sort_FollowupsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Sort_FollowupsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_tickets_sort_followups(inputs)
-	return es_tickets_sort_followups(inputs)
+	if (locale === "es") return es_tickets_sort_followups(inputs)
+	return en_tickets_sort_followups(inputs)
 });

@@ -24,6 +24,6 @@ const es_portal_passphrase_error_already_set = /** @type {(inputs: Portal_Passph
 */
 export const portal_passphrase_error_already_set = /** @type {((inputs?: Portal_Passphrase_Error_Already_SetInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_Error_Already_SetInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_passphrase_error_already_set(inputs)
-	return es_portal_passphrase_error_already_set(inputs)
+	if (locale === "es") return es_portal_passphrase_error_already_set(inputs)
+	return en_portal_passphrase_error_already_set(inputs)
 });

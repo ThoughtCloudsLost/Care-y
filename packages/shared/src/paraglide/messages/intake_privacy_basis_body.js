@@ -24,6 +24,6 @@ const es_intake_privacy_basis_body = /** @type {(inputs: Intake_Privacy_Basis_Bo
 */
 export const intake_privacy_basis_body = /** @type {((inputs?: Intake_Privacy_Basis_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Privacy_Basis_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_privacy_basis_body(inputs)
-	return es_intake_privacy_basis_body(inputs)
+	if (locale === "es") return es_intake_privacy_basis_body(inputs)
+	return en_intake_privacy_basis_body(inputs)
 });

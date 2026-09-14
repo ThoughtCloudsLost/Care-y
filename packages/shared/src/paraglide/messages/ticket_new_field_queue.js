@@ -24,6 +24,6 @@ const es_ticket_new_field_queue = /** @type {(inputs: Ticket_New_Field_QueueInpu
 */
 export const ticket_new_field_queue = /** @type {((inputs: Ticket_New_Field_QueueInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_Field_QueueInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_new_field_queue(inputs)
-	return es_ticket_new_field_queue(inputs)
+	if (locale === "es") return es_ticket_new_field_queue(inputs)
+	return en_ticket_new_field_queue(inputs)
 });

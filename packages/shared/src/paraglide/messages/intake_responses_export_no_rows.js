@@ -24,6 +24,6 @@ const es_intake_responses_export_no_rows = /** @type {(inputs: Intake_Responses_
 */
 export const intake_responses_export_no_rows = /** @type {((inputs?: Intake_Responses_Export_No_RowsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Responses_Export_No_RowsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_responses_export_no_rows(inputs)
-	return es_intake_responses_export_no_rows(inputs)
+	if (locale === "es") return es_intake_responses_export_no_rows(inputs)
+	return en_intake_responses_export_no_rows(inputs)
 });

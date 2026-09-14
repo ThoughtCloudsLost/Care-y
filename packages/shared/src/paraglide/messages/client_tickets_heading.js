@@ -24,6 +24,6 @@ const es_client_tickets_heading = /** @type {(inputs: Client_Tickets_HeadingInpu
 */
 export const client_tickets_heading = /** @type {((inputs: Client_Tickets_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Tickets_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_tickets_heading(inputs)
-	return es_client_tickets_heading(inputs)
+	if (locale === "es") return es_client_tickets_heading(inputs)
+	return en_client_tickets_heading(inputs)
 });

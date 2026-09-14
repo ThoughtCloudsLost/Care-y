@@ -24,6 +24,6 @@ const es_admin_branding_card_color_label = /** @type {(inputs: Admin_Branding_Ca
 */
 export const admin_branding_card_color_label = /** @type {((inputs?: Admin_Branding_Card_Color_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Card_Color_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_card_color_label(inputs)
-	return es_admin_branding_card_color_label(inputs)
+	if (locale === "es") return es_admin_branding_card_color_label(inputs)
+	return en_admin_branding_card_color_label(inputs)
 });

@@ -24,6 +24,6 @@ const es_onboarding_branding_accent_label = /** @type {(inputs: Onboarding_Brand
 */
 export const onboarding_branding_accent_label = /** @type {((inputs?: Onboarding_Branding_Accent_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Branding_Accent_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_branding_accent_label(inputs)
-	return es_onboarding_branding_accent_label(inputs)
+	if (locale === "es") return es_onboarding_branding_accent_label(inputs)
+	return en_onboarding_branding_accent_label(inputs)
 });

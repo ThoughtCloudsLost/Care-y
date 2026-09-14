@@ -24,6 +24,6 @@ const es_admin_telephony_update_credentials = /** @type {(inputs: Admin_Telephon
 */
 export const admin_telephony_update_credentials = /** @type {((inputs?: Admin_Telephony_Update_CredentialsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Update_CredentialsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_update_credentials(inputs)
-	return es_admin_telephony_update_credentials(inputs)
+	if (locale === "es") return es_admin_telephony_update_credentials(inputs)
+	return en_admin_telephony_update_credentials(inputs)
 });

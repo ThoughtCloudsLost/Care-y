@@ -24,6 +24,6 @@ const es_consultant_phone_verify = /** @type {(inputs: Consultant_Phone_VerifyIn
 */
 export const consultant_phone_verify = /** @type {((inputs?: Consultant_Phone_VerifyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_VerifyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_consultant_phone_verify(inputs)
-	return es_consultant_phone_verify(inputs)
+	if (locale === "es") return es_consultant_phone_verify(inputs)
+	return en_consultant_phone_verify(inputs)
 });

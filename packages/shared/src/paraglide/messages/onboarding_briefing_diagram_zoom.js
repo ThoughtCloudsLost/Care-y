@@ -24,6 +24,6 @@ const es_onboarding_briefing_diagram_zoom = /** @type {(inputs: Onboarding_Brief
 */
 export const onboarding_briefing_diagram_zoom = /** @type {((inputs?: Onboarding_Briefing_Diagram_ZoomInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Diagram_ZoomInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_briefing_diagram_zoom(inputs)
-	return es_onboarding_briefing_diagram_zoom(inputs)
+	if (locale === "es") return es_onboarding_briefing_diagram_zoom(inputs)
+	return en_onboarding_briefing_diagram_zoom(inputs)
 });

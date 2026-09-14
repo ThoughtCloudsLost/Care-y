@@ -24,6 +24,6 @@ const es_demo_tickets_view_grid = /** @type {(inputs: Demo_Tickets_View_GridInpu
 */
 export const demo_tickets_view_grid = /** @type {((inputs?: Demo_Tickets_View_GridInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Tickets_View_GridInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_tickets_view_grid(inputs)
-	return es_demo_tickets_view_grid(inputs)
+	if (locale === "es") return es_demo_tickets_view_grid(inputs)
+	return en_demo_tickets_view_grid(inputs)
 });

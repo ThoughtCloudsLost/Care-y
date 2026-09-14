@@ -24,6 +24,6 @@ const es_onboarding_org_error_country_required = /** @type {(inputs: Onboarding_
 */
 export const onboarding_org_error_country_required = /** @type {((inputs?: Onboarding_Org_Error_Country_RequiredInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Org_Error_Country_RequiredInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_org_error_country_required(inputs)
-	return es_onboarding_org_error_country_required(inputs)
+	if (locale === "es") return es_onboarding_org_error_country_required(inputs)
+	return en_onboarding_org_error_country_required(inputs)
 });

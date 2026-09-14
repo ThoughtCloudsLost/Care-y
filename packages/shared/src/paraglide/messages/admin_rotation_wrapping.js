@@ -24,6 +24,6 @@ const es_admin_rotation_wrapping = /** @type {(inputs: Admin_Rotation_WrappingIn
 */
 export const admin_rotation_wrapping = /** @type {((inputs: Admin_Rotation_WrappingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Rotation_WrappingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_rotation_wrapping(inputs)
-	return es_admin_rotation_wrapping(inputs)
+	if (locale === "es") return es_admin_rotation_wrapping(inputs)
+	return en_admin_rotation_wrapping(inputs)
 });

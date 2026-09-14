@@ -24,6 +24,6 @@ const es_intake_error_email_format = /** @type {(inputs: Intake_Error_Email_Form
 */
 export const intake_error_email_format = /** @type {((inputs?: Intake_Error_Email_FormatInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Error_Email_FormatInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_error_email_format(inputs)
-	return es_intake_error_email_format(inputs)
+	if (locale === "es") return es_intake_error_email_format(inputs)
+	return en_intake_error_email_format(inputs)
 });

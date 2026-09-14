@@ -24,6 +24,6 @@ const es_admin_users_filter_keys = /** @type {(inputs: Admin_Users_Filter_KeysIn
 */
 export const admin_users_filter_keys = /** @type {((inputs?: Admin_Users_Filter_KeysInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Users_Filter_KeysInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_users_filter_keys(inputs)
-	return es_admin_users_filter_keys(inputs)
+	if (locale === "es") return es_admin_users_filter_keys(inputs)
+	return en_admin_users_filter_keys(inputs)
 });

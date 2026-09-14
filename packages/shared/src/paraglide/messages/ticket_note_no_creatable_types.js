@@ -24,6 +24,6 @@ const es_ticket_note_no_creatable_types = /** @type {(inputs: Ticket_Note_No_Cre
 */
 export const ticket_note_no_creatable_types = /** @type {((inputs?: Ticket_Note_No_Creatable_TypesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Note_No_Creatable_TypesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_note_no_creatable_types(inputs)
-	return es_ticket_note_no_creatable_types(inputs)
+	if (locale === "es") return es_ticket_note_no_creatable_types(inputs)
+	return en_ticket_note_no_creatable_types(inputs)
 });

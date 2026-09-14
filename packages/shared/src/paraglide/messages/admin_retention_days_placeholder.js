@@ -24,6 +24,6 @@ const es_admin_retention_days_placeholder = /** @type {(inputs: Admin_Retention_
 */
 export const admin_retention_days_placeholder = /** @type {((inputs?: Admin_Retention_Days_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Retention_Days_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_retention_days_placeholder(inputs)
-	return es_admin_retention_days_placeholder(inputs)
+	if (locale === "es") return es_admin_retention_days_placeholder(inputs)
+	return en_admin_retention_days_placeholder(inputs)
 });

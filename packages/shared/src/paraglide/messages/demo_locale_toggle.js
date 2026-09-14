@@ -24,6 +24,6 @@ const es_demo_locale_toggle = /** @type {(inputs: Demo_Locale_ToggleInputs) => L
 */
 export const demo_locale_toggle = /** @type {((inputs?: Demo_Locale_ToggleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Locale_ToggleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_locale_toggle(inputs)
-	return es_demo_locale_toggle(inputs)
+	if (locale === "es") return es_demo_locale_toggle(inputs)
+	return en_demo_locale_toggle(inputs)
 });

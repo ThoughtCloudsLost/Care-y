@@ -24,6 +24,6 @@ const es_demo_section_prev = /** @type {(inputs: Demo_Section_PrevInputs) => Loc
 */
 export const demo_section_prev = /** @type {((inputs: Demo_Section_PrevInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Section_PrevInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_section_prev(inputs)
-	return es_demo_section_prev(inputs)
+	if (locale === "es") return es_demo_section_prev(inputs)
+	return en_demo_section_prev(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_escrow_storage_test = /** @type {(inputs: Admin_Escrow_Storage_Te
 */
 export const admin_escrow_storage_test = /** @type {((inputs?: Admin_Escrow_Storage_TestInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Escrow_Storage_TestInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_escrow_storage_test(inputs)
-	return es_admin_escrow_storage_test(inputs)
+	if (locale === "es") return es_admin_escrow_storage_test(inputs)
+	return en_admin_escrow_storage_test(inputs)
 });

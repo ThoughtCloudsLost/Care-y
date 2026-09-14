@@ -24,6 +24,6 @@ const es_nav_sidebar_label = /** @type {(inputs: Nav_Sidebar_LabelInputs) => Loc
 */
 export const nav_sidebar_label = /** @type {((inputs?: Nav_Sidebar_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Nav_Sidebar_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_nav_sidebar_label(inputs)
-	return es_nav_sidebar_label(inputs)
+	if (locale === "es") return es_nav_sidebar_label(inputs)
+	return en_nav_sidebar_label(inputs)
 });

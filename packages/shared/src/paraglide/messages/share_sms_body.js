@@ -24,6 +24,6 @@ const es_share_sms_body = /** @type {(inputs: Share_Sms_BodyInputs) => Localized
 */
 export const share_sms_body = /** @type {((inputs: Share_Sms_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Sms_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_sms_body(inputs)
-	return es_share_sms_body(inputs)
+	if (locale === "es") return es_share_sms_body(inputs)
+	return en_share_sms_body(inputs)
 });

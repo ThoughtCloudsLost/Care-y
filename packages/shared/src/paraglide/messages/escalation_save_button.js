@@ -24,6 +24,6 @@ const es_escalation_save_button = /** @type {(inputs: Escalation_Save_ButtonInpu
 */
 export const escalation_save_button = /** @type {((inputs?: Escalation_Save_ButtonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Save_ButtonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_save_button(inputs)
-	return es_escalation_save_button(inputs)
+	if (locale === "es") return es_escalation_save_button(inputs)
+	return en_escalation_save_button(inputs)
 });

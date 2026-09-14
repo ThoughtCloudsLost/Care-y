@@ -24,6 +24,6 @@ const es_new_pill_count_one = /** @type {(inputs: New_Pill_Count_OneInputs) => L
 */
 export const new_pill_count_one = /** @type {((inputs: New_Pill_Count_OneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<New_Pill_Count_OneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_new_pill_count_one(inputs)
-	return es_new_pill_count_one(inputs)
+	if (locale === "es") return es_new_pill_count_one(inputs)
+	return en_new_pill_count_one(inputs)
 });

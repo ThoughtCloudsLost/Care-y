@@ -24,6 +24,6 @@ const es_onboarding_escrow_download_again_title = /** @type {(inputs: Onboarding
 */
 export const onboarding_escrow_download_again_title = /** @type {((inputs?: Onboarding_Escrow_Download_Again_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Escrow_Download_Again_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_escrow_download_again_title(inputs)
-	return es_onboarding_escrow_download_again_title(inputs)
+	if (locale === "es") return es_onboarding_escrow_download_again_title(inputs)
+	return en_onboarding_escrow_download_again_title(inputs)
 });

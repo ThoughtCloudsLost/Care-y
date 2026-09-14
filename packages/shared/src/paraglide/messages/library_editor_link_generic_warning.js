@@ -24,6 +24,6 @@ const es_library_editor_link_generic_warning = /** @type {(inputs: Library_Edito
 */
 export const library_editor_link_generic_warning = /** @type {((inputs: Library_Editor_Link_Generic_WarningInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_Link_Generic_WarningInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_link_generic_warning(inputs)
-	return es_library_editor_link_generic_warning(inputs)
+	if (locale === "es") return es_library_editor_link_generic_warning(inputs)
+	return en_library_editor_link_generic_warning(inputs)
 });

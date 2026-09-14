@@ -24,6 +24,6 @@ const es_error_token_expired = /** @type {(inputs: Error_Token_ExpiredInputs) =>
 */
 export const error_token_expired = /** @type {((inputs?: Error_Token_ExpiredInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Token_ExpiredInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_token_expired(inputs)
-	return es_error_token_expired(inputs)
+	if (locale === "es") return es_error_token_expired(inputs)
+	return en_error_token_expired(inputs)
 });

@@ -24,6 +24,6 @@ const es_ticket_mms_loading = /** @type {(inputs: Ticket_Mms_LoadingInputs) => L
 */
 export const ticket_mms_loading = /** @type {((inputs?: Ticket_Mms_LoadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Mms_LoadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_mms_loading(inputs)
-	return es_ticket_mms_loading(inputs)
+	if (locale === "es") return es_ticket_mms_loading(inputs)
+	return en_ticket_mms_loading(inputs)
 });

@@ -24,6 +24,6 @@ const es_notif_channel_push = /** @type {(inputs: Notif_Channel_PushInputs) => L
 */
 export const notif_channel_push = /** @type {((inputs?: Notif_Channel_PushInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Channel_PushInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_channel_push(inputs)
-	return es_notif_channel_push(inputs)
+	if (locale === "es") return es_notif_channel_push(inputs)
+	return en_notif_channel_push(inputs)
 });

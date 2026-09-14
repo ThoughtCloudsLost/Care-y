@@ -24,6 +24,6 @@ const es_onboarding_branding_skip = /** @type {(inputs: Onboarding_Branding_Skip
 */
 export const onboarding_branding_skip = /** @type {((inputs?: Onboarding_Branding_SkipInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Branding_SkipInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_branding_skip(inputs)
-	return es_onboarding_branding_skip(inputs)
+	if (locale === "es") return es_onboarding_branding_skip(inputs)
+	return en_onboarding_branding_skip(inputs)
 });

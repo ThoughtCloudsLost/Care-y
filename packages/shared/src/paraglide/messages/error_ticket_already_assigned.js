@@ -24,6 +24,6 @@ const es_error_ticket_already_assigned = /** @type {(inputs: Error_Ticket_Alread
 */
 export const error_ticket_already_assigned = /** @type {((inputs: Error_Ticket_Already_AssignedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Ticket_Already_AssignedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_ticket_already_assigned(inputs)
-	return es_error_ticket_already_assigned(inputs)
+	if (locale === "es") return es_error_ticket_already_assigned(inputs)
+	return en_error_ticket_already_assigned(inputs)
 });

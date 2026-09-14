@@ -24,6 +24,6 @@ const es_panel_telephony = /** @type {(inputs: Panel_TelephonyInputs) => Localiz
 */
 export const panel_telephony = /** @type {((inputs?: Panel_TelephonyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_TelephonyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_telephony(inputs)
-	return es_panel_telephony(inputs)
+	if (locale === "es") return es_panel_telephony(inputs)
+	return en_panel_telephony(inputs)
 });

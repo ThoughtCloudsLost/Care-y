@@ -24,6 +24,6 @@ const es_user_field_display_name_e2e_hint = /** @type {(inputs: User_Field_Displ
 */
 export const user_field_display_name_e2e_hint = /** @type {((inputs?: User_Field_Display_Name_E2e_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<User_Field_Display_Name_E2e_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_user_field_display_name_e2e_hint(inputs)
-	return es_user_field_display_name_e2e_hint(inputs)
+	if (locale === "es") return es_user_field_display_name_e2e_hint(inputs)
+	return en_user_field_display_name_e2e_hint(inputs)
 });

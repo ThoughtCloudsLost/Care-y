@@ -24,6 +24,6 @@ const es_library_delete_success = /** @type {(inputs: Library_Delete_SuccessInpu
 */
 export const library_delete_success = /** @type {((inputs: Library_Delete_SuccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Delete_SuccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_delete_success(inputs)
-	return es_library_delete_success(inputs)
+	if (locale === "es") return es_library_delete_success(inputs)
+	return en_library_delete_success(inputs)
 });

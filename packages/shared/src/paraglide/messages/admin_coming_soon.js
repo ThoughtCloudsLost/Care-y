@@ -24,6 +24,6 @@ const es_admin_coming_soon = /** @type {(inputs: Admin_Coming_SoonInputs) => Loc
 */
 export const admin_coming_soon = /** @type {((inputs?: Admin_Coming_SoonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Coming_SoonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_coming_soon(inputs)
-	return es_admin_coming_soon(inputs)
+	if (locale === "es") return es_admin_coming_soon(inputs)
+	return en_admin_coming_soon(inputs)
 });

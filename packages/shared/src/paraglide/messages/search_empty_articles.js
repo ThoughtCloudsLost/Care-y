@@ -24,6 +24,6 @@ const es_search_empty_articles = /** @type {(inputs: Search_Empty_ArticlesInputs
 */
 export const search_empty_articles = /** @type {((inputs: Search_Empty_ArticlesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Empty_ArticlesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_empty_articles(inputs)
-	return es_search_empty_articles(inputs)
+	if (locale === "es") return es_search_empty_articles(inputs)
+	return en_search_empty_articles(inputs)
 });

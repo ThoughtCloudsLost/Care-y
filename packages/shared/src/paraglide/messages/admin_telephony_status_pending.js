@@ -24,6 +24,6 @@ const es_admin_telephony_status_pending = /** @type {(inputs: Admin_Telephony_St
 */
 export const admin_telephony_status_pending = /** @type {((inputs?: Admin_Telephony_Status_PendingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Status_PendingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_status_pending(inputs)
-	return es_admin_telephony_status_pending(inputs)
+	if (locale === "es") return es_admin_telephony_status_pending(inputs)
+	return en_admin_telephony_status_pending(inputs)
 });

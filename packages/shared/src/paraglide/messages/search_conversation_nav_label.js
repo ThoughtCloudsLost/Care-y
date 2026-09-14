@@ -24,6 +24,6 @@ const es_search_conversation_nav_label = /** @type {(inputs: Search_Conversation
 */
 export const search_conversation_nav_label = /** @type {((inputs?: Search_Conversation_Nav_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Conversation_Nav_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_conversation_nav_label(inputs)
-	return es_search_conversation_nav_label(inputs)
+	if (locale === "es") return es_search_conversation_nav_label(inputs)
+	return en_search_conversation_nav_label(inputs)
 });

@@ -24,6 +24,6 @@ const es_followup_type_merge_note_desc = /** @type {(inputs: Followup_Type_Merge
 */
 export const followup_type_merge_note_desc = /** @type {((inputs?: Followup_Type_Merge_Note_DescInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Merge_Note_DescInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_followup_type_merge_note_desc(inputs)
-	return es_followup_type_merge_note_desc(inputs)
+	if (locale === "es") return es_followup_type_merge_note_desc(inputs)
+	return en_followup_type_merge_note_desc(inputs)
 });

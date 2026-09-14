@@ -24,6 +24,6 @@ const es_account_upgrade_setup = /** @type {(inputs: Account_Upgrade_SetupInputs
 */
 export const account_upgrade_setup = /** @type {((inputs?: Account_Upgrade_SetupInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Upgrade_SetupInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_account_upgrade_setup(inputs)
-	return es_account_upgrade_setup(inputs)
+	if (locale === "es") return es_account_upgrade_setup(inputs)
+	return en_account_upgrade_setup(inputs)
 });

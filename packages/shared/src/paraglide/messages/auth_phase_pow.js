@@ -24,6 +24,6 @@ const es_auth_phase_pow = /** @type {(inputs: Auth_Phase_PowInputs) => Localized
 */
 export const auth_phase_pow = /** @type {((inputs?: Auth_Phase_PowInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Auth_Phase_PowInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_auth_phase_pow(inputs)
-	return es_auth_phase_pow(inputs)
+	if (locale === "es") return es_auth_phase_pow(inputs)
+	return en_auth_phase_pow(inputs)
 });

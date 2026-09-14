@@ -24,6 +24,6 @@ const es_admin_branding_color_contrast_note = /** @type {(inputs: Admin_Branding
 */
 export const admin_branding_color_contrast_note = /** @type {((inputs?: Admin_Branding_Color_Contrast_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Color_Contrast_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_color_contrast_note(inputs)
-	return es_admin_branding_color_contrast_note(inputs)
+	if (locale === "es") return es_admin_branding_color_contrast_note(inputs)
+	return en_admin_branding_color_contrast_note(inputs)
 });

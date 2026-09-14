@@ -24,6 +24,6 @@ const es_intake_page_progress = /** @type {(inputs: Intake_Page_ProgressInputs) 
 */
 export const intake_page_progress = /** @type {((inputs: Intake_Page_ProgressInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Page_ProgressInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_page_progress(inputs)
-	return es_intake_page_progress(inputs)
+	if (locale === "es") return es_intake_page_progress(inputs)
+	return en_intake_page_progress(inputs)
 });

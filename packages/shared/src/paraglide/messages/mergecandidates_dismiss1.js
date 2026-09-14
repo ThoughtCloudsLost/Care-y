@@ -24,7 +24,7 @@ const es_mergecandidates_dismiss1 = /** @type {(inputs: Mergecandidates_Dismiss1
 */
 const mergecandidates_dismiss1 = /** @type {((inputs?: Mergecandidates_Dismiss1Inputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mergecandidates_Dismiss1Inputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_mergecandidates_dismiss1(inputs)
-	return es_mergecandidates_dismiss1(inputs)
+	if (locale === "es") return es_mergecandidates_dismiss1(inputs)
+	return en_mergecandidates_dismiss1(inputs)
 });
 export { mergecandidates_dismiss1 as "mergeCandidates_dismiss" }

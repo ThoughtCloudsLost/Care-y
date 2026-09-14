@@ -24,6 +24,6 @@ const es_vol_access_security = /** @type {(inputs: Vol_Access_SecurityInputs) =>
 */
 export const vol_access_security = /** @type {((inputs?: Vol_Access_SecurityInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Access_SecurityInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_vol_access_security(inputs)
-	return es_vol_access_security(inputs)
+	if (locale === "es") return es_vol_access_security(inputs)
+	return en_vol_access_security(inputs)
 });

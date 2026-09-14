@@ -24,6 +24,6 @@ const es_library_sort_date = /** @type {(inputs: Library_Sort_DateInputs) => Loc
 */
 export const library_sort_date = /** @type {((inputs?: Library_Sort_DateInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Sort_DateInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_sort_date(inputs)
-	return es_library_sort_date(inputs)
+	if (locale === "es") return es_library_sort_date(inputs)
+	return en_library_sort_date(inputs)
 });

@@ -24,6 +24,6 @@ const es_settings_password_confirm = /** @type {(inputs: Settings_Password_Confi
 */
 export const settings_password_confirm = /** @type {((inputs?: Settings_Password_ConfirmInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Password_ConfirmInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_password_confirm(inputs)
-	return es_settings_password_confirm(inputs)
+	if (locale === "es") return es_settings_password_confirm(inputs)
+	return en_settings_password_confirm(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_rotation_done = /** @type {(inputs: Admin_Rotation_DoneInputs) =>
 */
 export const admin_rotation_done = /** @type {((inputs?: Admin_Rotation_DoneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Rotation_DoneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_rotation_done(inputs)
-	return es_admin_rotation_done(inputs)
+	if (locale === "es") return es_admin_rotation_done(inputs)
+	return en_admin_rotation_done(inputs)
 });

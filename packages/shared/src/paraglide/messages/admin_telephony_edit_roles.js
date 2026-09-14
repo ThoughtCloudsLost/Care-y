@@ -24,6 +24,6 @@ const es_admin_telephony_edit_roles = /** @type {(inputs: Admin_Telephony_Edit_R
 */
 export const admin_telephony_edit_roles = /** @type {((inputs?: Admin_Telephony_Edit_RolesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Edit_RolesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_edit_roles(inputs)
-	return es_admin_telephony_edit_roles(inputs)
+	if (locale === "es") return es_admin_telephony_edit_roles(inputs)
+	return en_admin_telephony_edit_roles(inputs)
 });

@@ -24,6 +24,6 @@ const es_ticket_reply_encrypting = /** @type {(inputs: Ticket_Reply_EncryptingIn
 */
 export const ticket_reply_encrypting = /** @type {((inputs?: Ticket_Reply_EncryptingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Reply_EncryptingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_reply_encrypting(inputs)
-	return es_ticket_reply_encrypting(inputs)
+	if (locale === "es") return es_ticket_reply_encrypting(inputs)
+	return en_ticket_reply_encrypting(inputs)
 });

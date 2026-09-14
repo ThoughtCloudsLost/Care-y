@@ -24,6 +24,6 @@ const es_demo_search_coverage = /** @type {(inputs: Demo_Search_CoverageInputs) 
 */
 export const demo_search_coverage = /** @type {((inputs?: Demo_Search_CoverageInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Search_CoverageInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_search_coverage(inputs)
-	return es_demo_search_coverage(inputs)
+	if (locale === "es") return es_demo_search_coverage(inputs)
+	return en_demo_search_coverage(inputs)
 });

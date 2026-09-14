@@ -24,6 +24,6 @@ const es_onboarding_briefing_practice_username_access = /** @type {(inputs: Onbo
 */
 export const onboarding_briefing_practice_username_access = /** @type {((inputs?: Onboarding_Briefing_Practice_Username_AccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Practice_Username_AccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_briefing_practice_username_access(inputs)
-	return es_onboarding_briefing_practice_username_access(inputs)
+	if (locale === "es") return es_onboarding_briefing_practice_username_access(inputs)
+	return en_onboarding_briefing_practice_username_access(inputs)
 });

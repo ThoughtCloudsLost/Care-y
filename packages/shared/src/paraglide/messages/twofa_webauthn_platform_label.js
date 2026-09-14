@@ -24,6 +24,6 @@ const es_twofa_webauthn_platform_label = /** @type {(inputs: Twofa_Webauthn_Plat
 */
 export const twofa_webauthn_platform_label = /** @type {((inputs?: Twofa_Webauthn_Platform_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Webauthn_Platform_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_webauthn_platform_label(inputs)
-	return es_twofa_webauthn_platform_label(inputs)
+	if (locale === "es") return es_twofa_webauthn_platform_label(inputs)
+	return en_twofa_webauthn_platform_label(inputs)
 });

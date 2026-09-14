@@ -24,6 +24,6 @@ const es_ticket_new_submit = /** @type {(inputs: Ticket_New_SubmitInputs) => Loc
 */
 export const ticket_new_submit = /** @type {((inputs: Ticket_New_SubmitInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_SubmitInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_new_submit(inputs)
-	return es_ticket_new_submit(inputs)
+	if (locale === "es") return es_ticket_new_submit(inputs)
+	return en_ticket_new_submit(inputs)
 });

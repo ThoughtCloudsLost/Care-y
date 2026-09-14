@@ -24,6 +24,6 @@ const es_kanban_coming_soon_body = /** @type {(inputs: Kanban_Coming_Soon_BodyIn
 */
 export const kanban_coming_soon_body = /** @type {((inputs?: Kanban_Coming_Soon_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Kanban_Coming_Soon_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_kanban_coming_soon_body(inputs)
-	return es_kanban_coming_soon_body(inputs)
+	if (locale === "es") return es_kanban_coming_soon_body(inputs)
+	return en_kanban_coming_soon_body(inputs)
 });

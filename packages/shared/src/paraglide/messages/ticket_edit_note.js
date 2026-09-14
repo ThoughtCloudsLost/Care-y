@@ -24,6 +24,6 @@ const es_ticket_edit_note = /** @type {(inputs: Ticket_Edit_NoteInputs) => Local
 */
 export const ticket_edit_note = /** @type {((inputs?: Ticket_Edit_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Edit_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_edit_note(inputs)
-	return es_ticket_edit_note(inputs)
+	if (locale === "es") return es_ticket_edit_note(inputs)
+	return en_ticket_edit_note(inputs)
 });

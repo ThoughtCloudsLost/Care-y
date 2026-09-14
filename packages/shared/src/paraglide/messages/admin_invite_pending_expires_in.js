@@ -24,6 +24,6 @@ const es_admin_invite_pending_expires_in = /** @type {(inputs: Admin_Invite_Pend
 */
 export const admin_invite_pending_expires_in = /** @type {((inputs: Admin_Invite_Pending_Expires_InInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Pending_Expires_InInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_pending_expires_in(inputs)
-	return es_admin_invite_pending_expires_in(inputs)
+	if (locale === "es") return es_admin_invite_pending_expires_in(inputs)
+	return en_admin_invite_pending_expires_in(inputs)
 });

@@ -24,6 +24,6 @@ const es_demo_topic_view_modes = /** @type {(inputs: Demo_Topic_View_ModesInputs
 */
 export const demo_topic_view_modes = /** @type {((inputs?: Demo_Topic_View_ModesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Topic_View_ModesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_topic_view_modes(inputs)
-	return es_demo_topic_view_modes(inputs)
+	if (locale === "es") return es_demo_topic_view_modes(inputs)
+	return en_demo_topic_view_modes(inputs)
 });

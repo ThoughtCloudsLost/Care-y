@@ -24,6 +24,6 @@ const es_consultant_phone_pings_disabled = /** @type {(inputs: Consultant_Phone_
 */
 export const consultant_phone_pings_disabled = /** @type {((inputs?: Consultant_Phone_Pings_DisabledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Pings_DisabledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_consultant_phone_pings_disabled(inputs)
-	return es_consultant_phone_pings_disabled(inputs)
+	if (locale === "es") return es_consultant_phone_pings_disabled(inputs)
+	return en_consultant_phone_pings_disabled(inputs)
 });

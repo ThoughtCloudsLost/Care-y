@@ -24,6 +24,6 @@ const es_intake_forms_config_queue_mapping_hint = /** @type {(inputs: Intake_For
 */
 export const intake_forms_config_queue_mapping_hint = /** @type {((inputs?: Intake_Forms_Config_Queue_Mapping_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Queue_Mapping_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_queue_mapping_hint(inputs)
-	return es_intake_forms_config_queue_mapping_hint(inputs)
+	if (locale === "es") return es_intake_forms_config_queue_mapping_hint(inputs)
+	return en_intake_forms_config_queue_mapping_hint(inputs)
 });

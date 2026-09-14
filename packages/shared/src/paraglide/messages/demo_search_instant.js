@@ -24,6 +24,6 @@ const es_demo_search_instant = /** @type {(inputs: Demo_Search_InstantInputs) =>
 */
 export const demo_search_instant = /** @type {((inputs?: Demo_Search_InstantInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Search_InstantInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_search_instant(inputs)
-	return es_demo_search_instant(inputs)
+	if (locale === "es") return es_demo_search_instant(inputs)
+	return en_demo_search_instant(inputs)
 });

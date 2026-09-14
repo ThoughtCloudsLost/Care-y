@@ -24,6 +24,6 @@ const es_account_change_current = /** @type {(inputs: Account_Change_CurrentInpu
 */
 export const account_change_current = /** @type {((inputs?: Account_Change_CurrentInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Change_CurrentInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_account_change_current(inputs)
-	return es_account_change_current(inputs)
+	if (locale === "es") return es_account_change_current(inputs)
+	return en_account_change_current(inputs)
 });

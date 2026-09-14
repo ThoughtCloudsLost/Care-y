@@ -24,6 +24,6 @@ const es_settings_replay_walkthrough = /** @type {(inputs: Settings_Replay_Walkt
 */
 export const settings_replay_walkthrough = /** @type {((inputs?: Settings_Replay_WalkthroughInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Replay_WalkthroughInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_replay_walkthrough(inputs)
-	return es_settings_replay_walkthrough(inputs)
+	if (locale === "es") return es_settings_replay_walkthrough(inputs)
+	return en_settings_replay_walkthrough(inputs)
 });

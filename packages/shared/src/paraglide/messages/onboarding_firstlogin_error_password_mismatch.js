@@ -24,6 +24,6 @@ const es_onboarding_firstlogin_error_password_mismatch = /** @type {(inputs: Onb
 */
 export const onboarding_firstlogin_error_password_mismatch = /** @type {((inputs?: Onboarding_Firstlogin_Error_Password_MismatchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Firstlogin_Error_Password_MismatchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_firstlogin_error_password_mismatch(inputs)
-	return es_onboarding_firstlogin_error_password_mismatch(inputs)
+	if (locale === "es") return es_onboarding_firstlogin_error_password_mismatch(inputs)
+	return en_onboarding_firstlogin_error_password_mismatch(inputs)
 });

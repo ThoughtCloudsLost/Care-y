@@ -24,6 +24,6 @@ const es_escalation_condition_unassigned = /** @type {(inputs: Escalation_Condit
 */
 export const escalation_condition_unassigned = /** @type {((inputs?: Escalation_Condition_UnassignedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Condition_UnassignedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_condition_unassigned(inputs)
-	return es_escalation_condition_unassigned(inputs)
+	if (locale === "es") return es_escalation_condition_unassigned(inputs)
+	return en_escalation_condition_unassigned(inputs)
 });

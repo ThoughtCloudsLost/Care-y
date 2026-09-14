@@ -24,6 +24,6 @@ const es_notif_channel_sms = /** @type {(inputs: Notif_Channel_SmsInputs) => Loc
 */
 export const notif_channel_sms = /** @type {((inputs?: Notif_Channel_SmsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Channel_SmsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_channel_sms(inputs)
-	return es_notif_channel_sms(inputs)
+	if (locale === "es") return es_notif_channel_sms(inputs)
+	return en_notif_channel_sms(inputs)
 });

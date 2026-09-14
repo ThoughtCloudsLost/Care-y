@@ -24,6 +24,6 @@ const es_panel_terminology = /** @type {(inputs: Panel_TerminologyInputs) => Loc
 */
 export const panel_terminology = /** @type {((inputs?: Panel_TerminologyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_TerminologyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_terminology(inputs)
-	return es_panel_terminology(inputs)
+	if (locale === "es") return es_panel_terminology(inputs)
+	return en_panel_terminology(inputs)
 });

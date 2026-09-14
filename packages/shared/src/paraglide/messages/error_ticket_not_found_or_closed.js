@@ -24,6 +24,6 @@ const es_error_ticket_not_found_or_closed = /** @type {(inputs: Error_Ticket_Not
 */
 export const error_ticket_not_found_or_closed = /** @type {((inputs: Error_Ticket_Not_Found_Or_ClosedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Ticket_Not_Found_Or_ClosedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_ticket_not_found_or_closed(inputs)
-	return es_error_ticket_not_found_or_closed(inputs)
+	if (locale === "es") return es_error_ticket_not_found_or_closed(inputs)
+	return en_error_ticket_not_found_or_closed(inputs)
 });

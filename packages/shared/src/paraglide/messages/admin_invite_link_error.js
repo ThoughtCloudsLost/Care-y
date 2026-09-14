@@ -24,6 +24,6 @@ const es_admin_invite_link_error = /** @type {(inputs: Admin_Invite_Link_ErrorIn
 */
 export const admin_invite_link_error = /** @type {((inputs?: Admin_Invite_Link_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Link_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_link_error(inputs)
-	return es_admin_invite_link_error(inputs)
+	if (locale === "es") return es_admin_invite_link_error(inputs)
+	return en_admin_invite_link_error(inputs)
 });

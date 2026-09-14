@@ -24,6 +24,6 @@ const es_share_view_opened = /** @type {(inputs: Share_View_OpenedInputs) => Loc
 */
 export const share_view_opened = /** @type {((inputs?: Share_View_OpenedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_View_OpenedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_view_opened(inputs)
-	return es_share_view_opened(inputs)
+	if (locale === "es") return es_share_view_opened(inputs)
+	return en_share_view_opened(inputs)
 });

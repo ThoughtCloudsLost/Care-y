@@ -24,6 +24,6 @@ const es_settings_username_new = /** @type {(inputs: Settings_Username_NewInputs
 */
 export const settings_username_new = /** @type {((inputs?: Settings_Username_NewInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Username_NewInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_username_new(inputs)
-	return es_settings_username_new(inputs)
+	if (locale === "es") return es_settings_username_new(inputs)
+	return en_settings_username_new(inputs)
 });

@@ -24,6 +24,6 @@ const es_phone_copy_clipboard = /** @type {(inputs: Phone_Copy_ClipboardInputs) 
 */
 export const phone_copy_clipboard = /** @type {((inputs?: Phone_Copy_ClipboardInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Phone_Copy_ClipboardInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_phone_copy_clipboard(inputs)
-	return es_phone_copy_clipboard(inputs)
+	if (locale === "es") return es_phone_copy_clipboard(inputs)
+	return en_phone_copy_clipboard(inputs)
 });

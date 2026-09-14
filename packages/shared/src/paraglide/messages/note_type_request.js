@@ -24,6 +24,6 @@ const es_note_type_request = /** @type {(inputs: Note_Type_RequestInputs) => Loc
 */
 export const note_type_request = /** @type {((inputs?: Note_Type_RequestInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Note_Type_RequestInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_note_type_request(inputs)
-	return es_note_type_request(inputs)
+	if (locale === "es") return es_note_type_request(inputs)
+	return en_note_type_request(inputs)
 });

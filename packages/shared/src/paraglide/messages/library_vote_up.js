@@ -24,6 +24,6 @@ const es_library_vote_up = /** @type {(inputs: Library_Vote_UpInputs) => Localiz
 */
 export const library_vote_up = /** @type {((inputs?: Library_Vote_UpInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Vote_UpInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_vote_up(inputs)
-	return es_library_vote_up(inputs)
+	if (locale === "es") return es_library_vote_up(inputs)
+	return en_library_vote_up(inputs)
 });

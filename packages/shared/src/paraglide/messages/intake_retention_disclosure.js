@@ -24,6 +24,6 @@ const es_intake_retention_disclosure = /** @type {(inputs: Intake_Retention_Disc
 */
 export const intake_retention_disclosure = /** @type {((inputs?: Intake_Retention_DisclosureInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Retention_DisclosureInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_retention_disclosure(inputs)
-	return es_intake_retention_disclosure(inputs)
+	if (locale === "es") return es_intake_retention_disclosure(inputs)
+	return en_intake_retention_disclosure(inputs)
 });

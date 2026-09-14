@@ -24,6 +24,6 @@ const es_permission_moderate_content = /** @type {(inputs: Permission_Moderate_C
 */
 export const permission_moderate_content = /** @type {((inputs?: Permission_Moderate_ContentInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_Moderate_ContentInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_permission_moderate_content(inputs)
-	return es_permission_moderate_content(inputs)
+	if (locale === "es") return es_permission_moderate_content(inputs)
+	return en_permission_moderate_content(inputs)
 });

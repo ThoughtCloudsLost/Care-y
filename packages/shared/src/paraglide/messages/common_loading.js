@@ -24,6 +24,6 @@ const es_common_loading = /** @type {(inputs: Common_LoadingInputs) => Localized
 */
 export const common_loading = /** @type {((inputs?: Common_LoadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Common_LoadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_common_loading(inputs)
-	return es_common_loading(inputs)
+	if (locale === "es") return es_common_loading(inputs)
+	return en_common_loading(inputs)
 });

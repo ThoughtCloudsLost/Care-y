@@ -24,6 +24,6 @@ const es_error_rate_limit_hourly = /** @type {(inputs: Error_Rate_Limit_HourlyIn
 */
 export const error_rate_limit_hourly = /** @type {((inputs?: Error_Rate_Limit_HourlyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Rate_Limit_HourlyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_rate_limit_hourly(inputs)
-	return es_error_rate_limit_hourly(inputs)
+	if (locale === "es") return es_error_rate_limit_hourly(inputs)
+	return en_error_rate_limit_hourly(inputs)
 });

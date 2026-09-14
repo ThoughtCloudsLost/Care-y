@@ -24,6 +24,6 @@ const es_onboarding_firstlogin_confirm_password_placeholder = /** @type {(inputs
 */
 export const onboarding_firstlogin_confirm_password_placeholder = /** @type {((inputs?: Onboarding_Firstlogin_Confirm_Password_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Firstlogin_Confirm_Password_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_firstlogin_confirm_password_placeholder(inputs)
-	return es_onboarding_firstlogin_confirm_password_placeholder(inputs)
+	if (locale === "es") return es_onboarding_firstlogin_confirm_password_placeholder(inputs)
+	return en_onboarding_firstlogin_confirm_password_placeholder(inputs)
 });

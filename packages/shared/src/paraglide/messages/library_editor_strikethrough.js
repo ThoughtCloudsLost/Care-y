@@ -24,6 +24,6 @@ const es_library_editor_strikethrough = /** @type {(inputs: Library_Editor_Strik
 */
 export const library_editor_strikethrough = /** @type {((inputs?: Library_Editor_StrikethroughInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_StrikethroughInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_strikethrough(inputs)
-	return es_library_editor_strikethrough(inputs)
+	if (locale === "es") return es_library_editor_strikethrough(inputs)
+	return en_library_editor_strikethrough(inputs)
 });

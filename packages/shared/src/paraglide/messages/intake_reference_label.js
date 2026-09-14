@@ -24,6 +24,6 @@ const es_intake_reference_label = /** @type {(inputs: Intake_Reference_LabelInpu
 */
 export const intake_reference_label = /** @type {((inputs?: Intake_Reference_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Reference_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_reference_label(inputs)
-	return es_intake_reference_label(inputs)
+	if (locale === "es") return es_intake_reference_label(inputs)
+	return en_intake_reference_label(inputs)
 });

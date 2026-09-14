@@ -24,6 +24,6 @@ const es_ticket_panel_voicemails = /** @type {(inputs: Ticket_Panel_VoicemailsIn
 */
 export const ticket_panel_voicemails = /** @type {((inputs?: Ticket_Panel_VoicemailsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Panel_VoicemailsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_panel_voicemails(inputs)
-	return es_ticket_panel_voicemails(inputs)
+	if (locale === "es") return es_ticket_panel_voicemails(inputs)
+	return en_ticket_panel_voicemails(inputs)
 });

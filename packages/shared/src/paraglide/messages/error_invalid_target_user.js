@@ -24,6 +24,6 @@ const es_error_invalid_target_user = /** @type {(inputs: Error_Invalid_Target_Us
 */
 export const error_invalid_target_user = /** @type {((inputs?: Error_Invalid_Target_UserInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Invalid_Target_UserInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_invalid_target_user(inputs)
-	return es_error_invalid_target_user(inputs)
+	if (locale === "es") return es_error_invalid_target_user(inputs)
+	return en_error_invalid_target_user(inputs)
 });

@@ -24,6 +24,6 @@ const es_panel_sms_templates = /** @type {(inputs: Panel_Sms_TemplatesInputs) =>
 */
 export const panel_sms_templates = /** @type {((inputs?: Panel_Sms_TemplatesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_Sms_TemplatesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_sms_templates(inputs)
-	return es_panel_sms_templates(inputs)
+	if (locale === "es") return es_panel_sms_templates(inputs)
+	return en_panel_sms_templates(inputs)
 });

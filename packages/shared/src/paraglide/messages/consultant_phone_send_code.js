@@ -24,6 +24,6 @@ const es_consultant_phone_send_code = /** @type {(inputs: Consultant_Phone_Send_
 */
 export const consultant_phone_send_code = /** @type {((inputs?: Consultant_Phone_Send_CodeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Send_CodeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_consultant_phone_send_code(inputs)
-	return es_consultant_phone_send_code(inputs)
+	if (locale === "es") return es_consultant_phone_send_code(inputs)
+	return en_consultant_phone_send_code(inputs)
 });

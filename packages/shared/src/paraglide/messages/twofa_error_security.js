@@ -24,6 +24,6 @@ const es_twofa_error_security = /** @type {(inputs: Twofa_Error_SecurityInputs) 
 */
 export const twofa_error_security = /** @type {((inputs?: Twofa_Error_SecurityInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Error_SecurityInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_error_security(inputs)
-	return es_twofa_error_security(inputs)
+	if (locale === "es") return es_twofa_error_security(inputs)
+	return en_twofa_error_security(inputs)
 });

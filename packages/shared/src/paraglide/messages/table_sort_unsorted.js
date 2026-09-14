@@ -24,6 +24,6 @@ const es_table_sort_unsorted = /** @type {(inputs: Table_Sort_UnsortedInputs) =>
 */
 export const table_sort_unsorted = /** @type {((inputs?: Table_Sort_UnsortedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Table_Sort_UnsortedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_table_sort_unsorted(inputs)
-	return es_table_sort_unsorted(inputs)
+	if (locale === "es") return es_table_sort_unsorted(inputs)
+	return en_table_sort_unsorted(inputs)
 });

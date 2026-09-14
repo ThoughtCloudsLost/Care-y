@@ -24,6 +24,6 @@ const es_tickets_unassigned = /** @type {(inputs: Tickets_UnassignedInputs) => L
 */
 export const tickets_unassigned = /** @type {((inputs?: Tickets_UnassignedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_UnassignedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_tickets_unassigned(inputs)
-	return es_tickets_unassigned(inputs)
+	if (locale === "es") return es_tickets_unassigned(inputs)
+	return en_tickets_unassigned(inputs)
 });

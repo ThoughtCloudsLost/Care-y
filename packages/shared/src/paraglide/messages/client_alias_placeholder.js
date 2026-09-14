@@ -24,6 +24,6 @@ const es_client_alias_placeholder = /** @type {(inputs: Client_Alias_Placeholder
 */
 export const client_alias_placeholder = /** @type {((inputs?: Client_Alias_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Alias_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_alias_placeholder(inputs)
-	return es_client_alias_placeholder(inputs)
+	if (locale === "es") return es_client_alias_placeholder(inputs)
+	return en_client_alias_placeholder(inputs)
 });

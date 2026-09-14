@@ -24,6 +24,6 @@ const es_admin_reachability_phone_unverified = /** @type {(inputs: Admin_Reachab
 */
 export const admin_reachability_phone_unverified = /** @type {((inputs?: Admin_Reachability_Phone_UnverifiedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Reachability_Phone_UnverifiedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_reachability_phone_unverified(inputs)
-	return es_admin_reachability_phone_unverified(inputs)
+	if (locale === "es") return es_admin_reachability_phone_unverified(inputs)
+	return en_admin_reachability_phone_unverified(inputs)
 });

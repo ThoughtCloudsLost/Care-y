@@ -24,6 +24,6 @@ const es_admin_templates_type_error = /** @type {(inputs: Admin_Templates_Type_E
 */
 export const admin_templates_type_error = /** @type {((inputs?: Admin_Templates_Type_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Templates_Type_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_templates_type_error(inputs)
-	return es_admin_templates_type_error(inputs)
+	if (locale === "es") return es_admin_templates_type_error(inputs)
+	return en_admin_templates_type_error(inputs)
 });

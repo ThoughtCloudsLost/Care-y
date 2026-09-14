@@ -24,6 +24,6 @@ const es_clients_ticket_count_one = /** @type {(inputs: Clients_Ticket_Count_One
 */
 export const clients_ticket_count_one = /** @type {((inputs: Clients_Ticket_Count_OneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Clients_Ticket_Count_OneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_clients_ticket_count_one(inputs)
-	return es_clients_ticket_count_one(inputs)
+	if (locale === "es") return es_clients_ticket_count_one(inputs)
+	return en_clients_ticket_count_one(inputs)
 });

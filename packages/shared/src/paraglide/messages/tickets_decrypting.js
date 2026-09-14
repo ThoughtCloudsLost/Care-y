@@ -24,6 +24,6 @@ const es_tickets_decrypting = /** @type {(inputs: Tickets_DecryptingInputs) => L
 */
 export const tickets_decrypting = /** @type {((inputs?: Tickets_DecryptingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_DecryptingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_tickets_decrypting(inputs)
-	return es_tickets_decrypting(inputs)
+	if (locale === "es") return es_tickets_decrypting(inputs)
+	return en_tickets_decrypting(inputs)
 });

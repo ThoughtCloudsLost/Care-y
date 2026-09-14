@@ -24,6 +24,6 @@ const es_admin_tab_quarantine = /** @type {(inputs: Admin_Tab_QuarantineInputs) 
 */
 export const admin_tab_quarantine = /** @type {((inputs?: Admin_Tab_QuarantineInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Tab_QuarantineInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_tab_quarantine(inputs)
-	return es_admin_tab_quarantine(inputs)
+	if (locale === "es") return es_admin_tab_quarantine(inputs)
+	return en_admin_tab_quarantine(inputs)
 });

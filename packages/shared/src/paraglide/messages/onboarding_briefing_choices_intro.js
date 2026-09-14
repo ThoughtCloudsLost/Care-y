@@ -24,6 +24,6 @@ const es_onboarding_briefing_choices_intro = /** @type {(inputs: Onboarding_Brie
 */
 export const onboarding_briefing_choices_intro = /** @type {((inputs?: Onboarding_Briefing_Choices_IntroInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Choices_IntroInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_briefing_choices_intro(inputs)
-	return es_onboarding_briefing_choices_intro(inputs)
+	if (locale === "es") return es_onboarding_briefing_choices_intro(inputs)
+	return en_onboarding_briefing_choices_intro(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_users_empty_filter = /** @type {(inputs: Admin_Users_Empty_Filter
 */
 export const admin_users_empty_filter = /** @type {((inputs?: Admin_Users_Empty_FilterInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Users_Empty_FilterInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_users_empty_filter(inputs)
-	return es_admin_users_empty_filter(inputs)
+	if (locale === "es") return es_admin_users_empty_filter(inputs)
+	return en_admin_users_empty_filter(inputs)
 });

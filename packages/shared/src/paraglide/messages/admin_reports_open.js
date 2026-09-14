@@ -24,6 +24,6 @@ const es_admin_reports_open = /** @type {(inputs: Admin_Reports_OpenInputs) => L
 */
 export const admin_reports_open = /** @type {((inputs?: Admin_Reports_OpenInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Reports_OpenInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_reports_open(inputs)
-	return es_admin_reports_open(inputs)
+	if (locale === "es") return es_admin_reports_open(inputs)
+	return en_admin_reports_open(inputs)
 });

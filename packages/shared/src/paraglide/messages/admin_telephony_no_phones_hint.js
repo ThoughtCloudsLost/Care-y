@@ -24,6 +24,6 @@ const es_admin_telephony_no_phones_hint = /** @type {(inputs: Admin_Telephony_No
 */
 export const admin_telephony_no_phones_hint = /** @type {((inputs: Admin_Telephony_No_Phones_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_No_Phones_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_no_phones_hint(inputs)
-	return es_admin_telephony_no_phones_hint(inputs)
+	if (locale === "es") return es_admin_telephony_no_phones_hint(inputs)
+	return en_admin_telephony_no_phones_hint(inputs)
 });

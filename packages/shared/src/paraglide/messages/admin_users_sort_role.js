@@ -24,6 +24,6 @@ const es_admin_users_sort_role = /** @type {(inputs: Admin_Users_Sort_RoleInputs
 */
 export const admin_users_sort_role = /** @type {((inputs?: Admin_Users_Sort_RoleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Users_Sort_RoleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_users_sort_role(inputs)
-	return es_admin_users_sort_role(inputs)
+	if (locale === "es") return es_admin_users_sort_role(inputs)
+	return en_admin_users_sort_role(inputs)
 });

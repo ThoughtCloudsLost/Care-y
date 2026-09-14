@@ -24,6 +24,6 @@ const es_common_save = /** @type {(inputs: Common_SaveInputs) => LocalizedString
 */
 export const common_save = /** @type {((inputs?: Common_SaveInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Common_SaveInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_common_save(inputs)
-	return es_common_save(inputs)
+	if (locale === "es") return es_common_save(inputs)
+	return en_common_save(inputs)
 });

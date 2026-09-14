@@ -24,6 +24,6 @@ const es_demo_toolbar_fullscreen_tooltip = /** @type {(inputs: Demo_Toolbar_Full
 */
 export const demo_toolbar_fullscreen_tooltip = /** @type {((inputs?: Demo_Toolbar_Fullscreen_TooltipInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Toolbar_Fullscreen_TooltipInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_toolbar_fullscreen_tooltip(inputs)
-	return es_demo_toolbar_fullscreen_tooltip(inputs)
+	if (locale === "es") return es_demo_toolbar_fullscreen_tooltip(inputs)
+	return en_demo_toolbar_fullscreen_tooltip(inputs)
 });

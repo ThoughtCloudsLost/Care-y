@@ -24,6 +24,6 @@ const es_library_article_by = /** @type {(inputs: Library_Article_ByInputs) => L
 */
 export const library_article_by = /** @type {((inputs: Library_Article_ByInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Article_ByInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_article_by(inputs)
-	return es_library_article_by(inputs)
+	if (locale === "es") return es_library_article_by(inputs)
+	return en_library_article_by(inputs)
 });

@@ -24,6 +24,6 @@ const es_permission_edit_knowledge_base = /** @type {(inputs: Permission_Edit_Kn
 */
 export const permission_edit_knowledge_base = /** @type {((inputs?: Permission_Edit_Knowledge_BaseInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_Edit_Knowledge_BaseInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_permission_edit_knowledge_base(inputs)
-	return es_permission_edit_knowledge_base(inputs)
+	if (locale === "es") return es_permission_edit_knowledge_base(inputs)
+	return en_permission_edit_knowledge_base(inputs)
 });

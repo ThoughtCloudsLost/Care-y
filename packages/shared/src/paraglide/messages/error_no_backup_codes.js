@@ -24,6 +24,6 @@ const es_error_no_backup_codes = /** @type {(inputs: Error_No_Backup_CodesInputs
 */
 export const error_no_backup_codes = /** @type {((inputs?: Error_No_Backup_CodesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_No_Backup_CodesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_no_backup_codes(inputs)
-	return es_error_no_backup_codes(inputs)
+	if (locale === "es") return es_error_no_backup_codes(inputs)
+	return en_error_no_backup_codes(inputs)
 });

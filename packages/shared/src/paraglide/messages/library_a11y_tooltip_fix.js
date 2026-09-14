@@ -24,6 +24,6 @@ const es_library_a11y_tooltip_fix = /** @type {(inputs: Library_A11y_Tooltip_Fix
 */
 export const library_a11y_tooltip_fix = /** @type {((inputs?: Library_A11y_Tooltip_FixInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_A11y_Tooltip_FixInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_a11y_tooltip_fix(inputs)
-	return es_library_a11y_tooltip_fix(inputs)
+	if (locale === "es") return es_library_a11y_tooltip_fix(inputs)
+	return en_library_a11y_tooltip_fix(inputs)
 });

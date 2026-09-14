@@ -24,6 +24,6 @@ const es_ticket_content_description_label = /** @type {(inputs: Ticket_Content_D
 */
 export const ticket_content_description_label = /** @type {((inputs?: Ticket_Content_Description_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Content_Description_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_content_description_label(inputs)
-	return es_ticket_content_description_label(inputs)
+	if (locale === "es") return es_ticket_content_description_label(inputs)
+	return en_ticket_content_description_label(inputs)
 });

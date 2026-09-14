@@ -24,6 +24,6 @@ const es_onboarding_telephony_error_sid_required = /** @type {(inputs: Onboardin
 */
 export const onboarding_telephony_error_sid_required = /** @type {((inputs?: Onboarding_Telephony_Error_Sid_RequiredInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Telephony_Error_Sid_RequiredInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_telephony_error_sid_required(inputs)
-	return es_onboarding_telephony_error_sid_required(inputs)
+	if (locale === "es") return es_onboarding_telephony_error_sid_required(inputs)
+	return en_onboarding_telephony_error_sid_required(inputs)
 });

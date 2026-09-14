@@ -24,6 +24,6 @@ const es_tickets_sort = /** @type {(inputs: Tickets_SortInputs) => LocalizedStri
 */
 export const tickets_sort = /** @type {((inputs?: Tickets_SortInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_SortInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_tickets_sort(inputs)
-	return es_tickets_sort(inputs)
+	if (locale === "es") return es_tickets_sort(inputs)
+	return en_tickets_sort(inputs)
 });

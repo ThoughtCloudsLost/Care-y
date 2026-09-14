@@ -24,6 +24,6 @@ const es_nav_sidebar_expand = /** @type {(inputs: Nav_Sidebar_ExpandInputs) => L
 */
 export const nav_sidebar_expand = /** @type {((inputs?: Nav_Sidebar_ExpandInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Nav_Sidebar_ExpandInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_nav_sidebar_expand(inputs)
-	return es_nav_sidebar_expand(inputs)
+	if (locale === "es") return es_nav_sidebar_expand(inputs)
+	return en_nav_sidebar_expand(inputs)
 });

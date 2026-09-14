@@ -24,6 +24,6 @@ const es_portal_unlocking = /** @type {(inputs: Portal_UnlockingInputs) => Local
 */
 export const portal_unlocking = /** @type {((inputs?: Portal_UnlockingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_UnlockingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_unlocking(inputs)
-	return es_portal_unlocking(inputs)
+	if (locale === "es") return es_portal_unlocking(inputs)
+	return en_portal_unlocking(inputs)
 });

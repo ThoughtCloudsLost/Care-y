@@ -24,6 +24,6 @@ const es_auth_signing_in = /** @type {(inputs: Auth_Signing_InInputs) => Localiz
 */
 export const auth_signing_in = /** @type {((inputs?: Auth_Signing_InInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Auth_Signing_InInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_auth_signing_in(inputs)
-	return es_auth_signing_in(inputs)
+	if (locale === "es") return es_auth_signing_in(inputs)
+	return en_auth_signing_in(inputs)
 });

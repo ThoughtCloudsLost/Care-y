@@ -24,6 +24,6 @@ const es_portal_send = /** @type {(inputs: Portal_SendInputs) => LocalizedString
 */
 export const portal_send = /** @type {((inputs?: Portal_SendInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_SendInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_send(inputs)
-	return es_portal_send(inputs)
+	if (locale === "es") return es_portal_send(inputs)
+	return en_portal_send(inputs)
 });

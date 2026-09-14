@@ -24,6 +24,6 @@ const es_admin_retention_unsaved_hint = /** @type {(inputs: Admin_Retention_Unsa
 */
 export const admin_retention_unsaved_hint = /** @type {((inputs?: Admin_Retention_Unsaved_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Retention_Unsaved_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_retention_unsaved_hint(inputs)
-	return es_admin_retention_unsaved_hint(inputs)
+	if (locale === "es") return es_admin_retention_unsaved_hint(inputs)
+	return en_admin_retention_unsaved_hint(inputs)
 });

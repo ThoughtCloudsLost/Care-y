@@ -24,6 +24,6 @@ const es_library_editor_decorative = /** @type {(inputs: Library_Editor_Decorati
 */
 export const library_editor_decorative = /** @type {((inputs?: Library_Editor_DecorativeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_DecorativeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_decorative(inputs)
-	return es_library_editor_decorative(inputs)
+	if (locale === "es") return es_library_editor_decorative(inputs)
+	return en_library_editor_decorative(inputs)
 });

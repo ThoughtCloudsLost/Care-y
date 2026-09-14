@@ -24,6 +24,6 @@ const es_notif_event_mention = /** @type {(inputs: Notif_Event_MentionInputs) =>
 */
 export const notif_event_mention = /** @type {((inputs?: Notif_Event_MentionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Event_MentionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_event_mention(inputs)
-	return es_notif_event_mention(inputs)
+	if (locale === "es") return es_notif_event_mention(inputs)
+	return en_notif_event_mention(inputs)
 });

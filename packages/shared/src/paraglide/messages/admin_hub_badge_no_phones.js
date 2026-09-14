@@ -24,6 +24,6 @@ const es_admin_hub_badge_no_phones = /** @type {(inputs: Admin_Hub_Badge_No_Phon
 */
 export const admin_hub_badge_no_phones = /** @type {((inputs?: Admin_Hub_Badge_No_PhonesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Hub_Badge_No_PhonesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_hub_badge_no_phones(inputs)
-	return es_admin_hub_badge_no_phones(inputs)
+	if (locale === "es") return es_admin_hub_badge_no_phones(inputs)
+	return en_admin_hub_badge_no_phones(inputs)
 });

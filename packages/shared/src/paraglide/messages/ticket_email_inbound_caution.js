@@ -24,6 +24,6 @@ const es_ticket_email_inbound_caution = /** @type {(inputs: Ticket_Email_Inbound
 */
 export const ticket_email_inbound_caution = /** @type {((inputs?: Ticket_Email_Inbound_CautionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Email_Inbound_CautionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_email_inbound_caution(inputs)
-	return es_ticket_email_inbound_caution(inputs)
+	if (locale === "es") return es_ticket_email_inbound_caution(inputs)
+	return en_ticket_email_inbound_caution(inputs)
 });

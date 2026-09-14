@@ -24,6 +24,6 @@ const es_vol_access_tickets = /** @type {(inputs: Vol_Access_TicketsInputs) => L
 */
 export const vol_access_tickets = /** @type {((inputs?: Vol_Access_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Access_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_vol_access_tickets(inputs)
-	return es_vol_access_tickets(inputs)
+	if (locale === "es") return es_vol_access_tickets(inputs)
+	return en_vol_access_tickets(inputs)
 });

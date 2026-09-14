@@ -24,6 +24,6 @@ const es_ticket_add_internal_note = /** @type {(inputs: Ticket_Add_Internal_Note
 */
 export const ticket_add_internal_note = /** @type {((inputs?: Ticket_Add_Internal_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Add_Internal_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_add_internal_note(inputs)
-	return es_ticket_add_internal_note(inputs)
+	if (locale === "es") return es_ticket_add_internal_note(inputs)
+	return en_ticket_add_internal_note(inputs)
 });

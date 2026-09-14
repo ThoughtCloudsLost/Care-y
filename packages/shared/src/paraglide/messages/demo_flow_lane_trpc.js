@@ -24,6 +24,6 @@ const es_demo_flow_lane_trpc = /** @type {(inputs: Demo_Flow_Lane_TrpcInputs) =>
 */
 export const demo_flow_lane_trpc = /** @type {((inputs?: Demo_Flow_Lane_TrpcInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Lane_TrpcInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_lane_trpc(inputs)
-	return es_demo_flow_lane_trpc(inputs)
+	if (locale === "es") return es_demo_flow_lane_trpc(inputs)
+	return en_demo_flow_lane_trpc(inputs)
 });

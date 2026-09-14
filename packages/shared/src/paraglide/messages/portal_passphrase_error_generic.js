@@ -24,6 +24,6 @@ const es_portal_passphrase_error_generic = /** @type {(inputs: Portal_Passphrase
 */
 export const portal_passphrase_error_generic = /** @type {((inputs?: Portal_Passphrase_Error_GenericInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_Error_GenericInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_passphrase_error_generic(inputs)
-	return es_portal_passphrase_error_generic(inputs)
+	if (locale === "es") return es_portal_passphrase_error_generic(inputs)
+	return en_portal_passphrase_error_generic(inputs)
 });

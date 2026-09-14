@@ -24,6 +24,6 @@ const es_hub_queues_subtitle = /** @type {(inputs: Hub_Queues_SubtitleInputs) =>
 */
 export const hub_queues_subtitle = /** @type {((inputs: Hub_Queues_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Queues_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_hub_queues_subtitle(inputs)
-	return es_hub_queues_subtitle(inputs)
+	if (locale === "es") return es_hub_queues_subtitle(inputs)
+	return en_hub_queues_subtitle(inputs)
 });

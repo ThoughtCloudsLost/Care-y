@@ -24,6 +24,6 @@ const es_demo_narrative_library_browse_heading = /** @type {(inputs: Demo_Narrat
 */
 export const demo_narrative_library_browse_heading = /** @type {((inputs?: Demo_Narrative_Library_Browse_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Library_Browse_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_narrative_library_browse_heading(inputs)
-	return es_demo_narrative_library_browse_heading(inputs)
+	if (locale === "es") return es_demo_narrative_library_browse_heading(inputs)
+	return en_demo_narrative_library_browse_heading(inputs)
 });

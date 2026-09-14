@@ -24,6 +24,6 @@ const es_ticket_system_volunteer_unassigned = /** @type {(inputs: Ticket_System_
 */
 export const ticket_system_volunteer_unassigned = /** @type {((inputs: Ticket_System_Volunteer_UnassignedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_System_Volunteer_UnassignedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_system_volunteer_unassigned(inputs)
-	return es_ticket_system_volunteer_unassigned(inputs)
+	if (locale === "es") return es_ticket_system_volunteer_unassigned(inputs)
+	return en_ticket_system_volunteer_unassigned(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_blocklist_remove_title = /** @type {(inputs: Admin_Blocklist_Remo
 */
 export const admin_blocklist_remove_title = /** @type {((inputs?: Admin_Blocklist_Remove_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Blocklist_Remove_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_blocklist_remove_title(inputs)
-	return es_admin_blocklist_remove_title(inputs)
+	if (locale === "es") return es_admin_blocklist_remove_title(inputs)
+	return en_admin_blocklist_remove_title(inputs)
 });

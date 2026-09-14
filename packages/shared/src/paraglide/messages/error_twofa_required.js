@@ -24,6 +24,6 @@ const es_error_twofa_required = /** @type {(inputs: Error_Twofa_RequiredInputs) 
 */
 export const error_twofa_required = /** @type {((inputs?: Error_Twofa_RequiredInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Twofa_RequiredInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_twofa_required(inputs)
-	return es_error_twofa_required(inputs)
+	if (locale === "es") return es_error_twofa_required(inputs)
+	return en_error_twofa_required(inputs)
 });

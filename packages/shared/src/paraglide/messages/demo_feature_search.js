@@ -24,6 +24,6 @@ const es_demo_feature_search = /** @type {(inputs: Demo_Feature_SearchInputs) =>
 */
 export const demo_feature_search = /** @type {((inputs?: Demo_Feature_SearchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Feature_SearchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_feature_search(inputs)
-	return es_demo_feature_search(inputs)
+	if (locale === "es") return es_demo_feature_search(inputs)
+	return en_demo_feature_search(inputs)
 });

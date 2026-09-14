@@ -24,6 +24,6 @@ const es_admin_branding_color_hover = /** @type {(inputs: Admin_Branding_Color_H
 */
 export const admin_branding_color_hover = /** @type {((inputs?: Admin_Branding_Color_HoverInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Color_HoverInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_color_hover(inputs)
-	return es_admin_branding_color_hover(inputs)
+	if (locale === "es") return es_admin_branding_color_hover(inputs)
+	return en_admin_branding_color_hover(inputs)
 });

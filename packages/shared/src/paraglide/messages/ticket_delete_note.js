@@ -24,6 +24,6 @@ const es_ticket_delete_note = /** @type {(inputs: Ticket_Delete_NoteInputs) => L
 */
 export const ticket_delete_note = /** @type {((inputs?: Ticket_Delete_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Delete_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_delete_note(inputs)
-	return es_ticket_delete_note(inputs)
+	if (locale === "es") return es_ticket_delete_note(inputs)
+	return en_ticket_delete_note(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_quarantine_dismiss_success = /** @type {(inputs: Admin_Quarantine
 */
 export const admin_quarantine_dismiss_success = /** @type {((inputs?: Admin_Quarantine_Dismiss_SuccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Quarantine_Dismiss_SuccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_quarantine_dismiss_success(inputs)
-	return es_admin_quarantine_dismiss_success(inputs)
+	if (locale === "es") return es_admin_quarantine_dismiss_success(inputs)
+	return en_admin_quarantine_dismiss_success(inputs)
 });

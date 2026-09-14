@@ -24,6 +24,6 @@ const es_consultant_phone_sms_pings_explainer = /** @type {(inputs: Consultant_P
 */
 export const consultant_phone_sms_pings_explainer = /** @type {((inputs?: Consultant_Phone_Sms_Pings_ExplainerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Sms_Pings_ExplainerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_consultant_phone_sms_pings_explainer(inputs)
-	return es_consultant_phone_sms_pings_explainer(inputs)
+	if (locale === "es") return es_consultant_phone_sms_pings_explainer(inputs)
+	return en_consultant_phone_sms_pings_explainer(inputs)
 });

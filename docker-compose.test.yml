@@ -58,6 +58,10 @@ services:
       - OPRF_SOCKET_A=/run/oprf/oprf-a.sock
       - OPRF_SOCKET_B=/run/oprf/oprf-b.sock
       - TOTP_REPLAY_BYPASS=1
+      # Vitest 5 persists an API auth token under XDG_DATA_HOME (falling back
+      # to node_modules/.vitest). Neither default is writable for user 1001,
+      # so point it at the tmpfs.
+      - XDG_DATA_HOME=/tmp/xdg
 
   db:
     image: postgres:16-alpine

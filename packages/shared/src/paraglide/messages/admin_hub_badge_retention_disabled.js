@@ -24,6 +24,6 @@ const es_admin_hub_badge_retention_disabled = /** @type {(inputs: Admin_Hub_Badg
 */
 export const admin_hub_badge_retention_disabled = /** @type {((inputs?: Admin_Hub_Badge_Retention_DisabledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Hub_Badge_Retention_DisabledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_hub_badge_retention_disabled(inputs)
-	return es_admin_hub_badge_retention_disabled(inputs)
+	if (locale === "es") return es_admin_hub_badge_retention_disabled(inputs)
+	return en_admin_hub_badge_retention_disabled(inputs)
 });

@@ -24,6 +24,6 @@ const es_status_mark_hold = /** @type {(inputs: Status_Mark_HoldInputs) => Local
 */
 export const status_mark_hold = /** @type {((inputs?: Status_Mark_HoldInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Status_Mark_HoldInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_status_mark_hold(inputs)
-	return es_status_mark_hold(inputs)
+	if (locale === "es") return es_status_mark_hold(inputs)
+	return en_status_mark_hold(inputs)
 });

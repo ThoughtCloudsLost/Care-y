@@ -24,6 +24,6 @@ const es_error_ticket_key_generation_stale = /** @type {(inputs: Error_Ticket_Ke
 */
 export const error_ticket_key_generation_stale = /** @type {((inputs: Error_Ticket_Key_Generation_StaleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Ticket_Key_Generation_StaleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_ticket_key_generation_stale(inputs)
-	return es_error_ticket_key_generation_stale(inputs)
+	if (locale === "es") return es_error_ticket_key_generation_stale(inputs)
+	return en_error_ticket_key_generation_stale(inputs)
 });

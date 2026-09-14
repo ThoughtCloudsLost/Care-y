@@ -24,6 +24,6 @@ const es_admin_tab_queues = /** @type {(inputs: Admin_Tab_QueuesInputs) => Local
 */
 export const admin_tab_queues = /** @type {((inputs: Admin_Tab_QueuesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Tab_QueuesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_tab_queues(inputs)
-	return es_admin_tab_queues(inputs)
+	if (locale === "es") return es_admin_tab_queues(inputs)
+	return en_admin_tab_queues(inputs)
 });

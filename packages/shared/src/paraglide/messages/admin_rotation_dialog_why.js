@@ -24,6 +24,6 @@ const es_admin_rotation_dialog_why = /** @type {(inputs: Admin_Rotation_Dialog_W
 */
 export const admin_rotation_dialog_why = /** @type {((inputs?: Admin_Rotation_Dialog_WhyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Rotation_Dialog_WhyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_rotation_dialog_why(inputs)
-	return es_admin_rotation_dialog_why(inputs)
+	if (locale === "es") return es_admin_rotation_dialog_why(inputs)
+	return en_admin_rotation_dialog_why(inputs)
 });

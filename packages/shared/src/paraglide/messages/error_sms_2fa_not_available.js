@@ -24,6 +24,6 @@ const es_error_sms_2fa_not_available = /** @type {(inputs: Error_Sms_2fa_Not_Ava
 */
 export const error_sms_2fa_not_available = /** @type {((inputs?: Error_Sms_2fa_Not_AvailableInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Sms_2fa_Not_AvailableInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_sms_2fa_not_available(inputs)
-	return es_error_sms_2fa_not_available(inputs)
+	if (locale === "es") return es_error_sms_2fa_not_available(inputs)
+	return en_error_sms_2fa_not_available(inputs)
 });

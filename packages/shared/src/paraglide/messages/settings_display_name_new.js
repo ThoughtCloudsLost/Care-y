@@ -24,6 +24,6 @@ const es_settings_display_name_new = /** @type {(inputs: Settings_Display_Name_N
 */
 export const settings_display_name_new = /** @type {((inputs?: Settings_Display_Name_NewInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Display_Name_NewInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_display_name_new(inputs)
-	return es_settings_display_name_new(inputs)
+	if (locale === "es") return es_settings_display_name_new(inputs)
+	return en_settings_display_name_new(inputs)
 });

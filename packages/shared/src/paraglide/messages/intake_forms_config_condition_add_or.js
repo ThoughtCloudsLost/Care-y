@@ -24,6 +24,6 @@ const es_intake_forms_config_condition_add_or = /** @type {(inputs: Intake_Forms
 */
 export const intake_forms_config_condition_add_or = /** @type {((inputs?: Intake_Forms_Config_Condition_Add_OrInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Condition_Add_OrInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_condition_add_or(inputs)
-	return es_intake_forms_config_condition_add_or(inputs)
+	if (locale === "es") return es_intake_forms_config_condition_add_or(inputs)
+	return en_intake_forms_config_condition_add_or(inputs)
 });

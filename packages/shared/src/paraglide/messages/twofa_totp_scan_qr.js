@@ -24,6 +24,6 @@ const es_twofa_totp_scan_qr = /** @type {(inputs: Twofa_Totp_Scan_QrInputs) => L
 */
 export const twofa_totp_scan_qr = /** @type {((inputs?: Twofa_Totp_Scan_QrInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Totp_Scan_QrInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_totp_scan_qr(inputs)
-	return es_twofa_totp_scan_qr(inputs)
+	if (locale === "es") return es_twofa_totp_scan_qr(inputs)
+	return en_twofa_totp_scan_qr(inputs)
 });

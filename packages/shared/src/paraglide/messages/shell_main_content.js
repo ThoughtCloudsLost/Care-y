@@ -24,6 +24,6 @@ const es_shell_main_content = /** @type {(inputs: Shell_Main_ContentInputs) => L
 */
 export const shell_main_content = /** @type {((inputs?: Shell_Main_ContentInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Shell_Main_ContentInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_shell_main_content(inputs)
-	return es_shell_main_content(inputs)
+	if (locale === "es") return es_shell_main_content(inputs)
+	return en_shell_main_content(inputs)
 });

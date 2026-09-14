@@ -24,6 +24,6 @@ const es_admin_users_placeholder = /** @type {(inputs: Admin_Users_PlaceholderIn
 */
 export const admin_users_placeholder = /** @type {((inputs?: Admin_Users_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Users_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_users_placeholder(inputs)
-	return es_admin_users_placeholder(inputs)
+	if (locale === "es") return es_admin_users_placeholder(inputs)
+	return en_admin_users_placeholder(inputs)
 });

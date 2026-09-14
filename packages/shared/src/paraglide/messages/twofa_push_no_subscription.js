@@ -24,6 +24,6 @@ const es_twofa_push_no_subscription = /** @type {(inputs: Twofa_Push_No_Subscrip
 */
 export const twofa_push_no_subscription = /** @type {((inputs?: Twofa_Push_No_SubscriptionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Push_No_SubscriptionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_push_no_subscription(inputs)
-	return es_twofa_push_no_subscription(inputs)
+	if (locale === "es") return es_twofa_push_no_subscription(inputs)
+	return en_twofa_push_no_subscription(inputs)
 });

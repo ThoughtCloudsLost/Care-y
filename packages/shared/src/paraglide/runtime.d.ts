@@ -1,20 +1,12 @@
 /**
- * Returns the strategy to use for a specific URL.
+ * Returns the current server-side async local storage instance.
  *
- * If no route strategy matches (or the matching rule is `exclude: true`),
- * the global strategy is returned.
+ * Accessing the mutable value through a function keeps it observable when
+ * module interceptors wrap exported bindings and snapshot their initial value.
  *
- * @param {string | URL} url
- * @returns {typeof strategy}
+ * @returns {ParaglideAsyncLocalStorage | undefined}
  */
-export function getStrategyForUrl(url: string | URL): typeof strategy;
-/**
- * Returns whether the given URL is excluded from middleware i18n processing.
- *
- * @param {string | URL} url
- * @returns {boolean}
- */
-export function isExcludedByRouteStrategy(url: string | URL): boolean;
+export function getServerAsyncLocalStorage(): ParaglideAsyncLocalStorage | undefined;
 /**
  * Sets the server side async local storage.
  *
@@ -219,6 +211,37 @@ export function deLocalizeUrl(url: string | URL): URL;
  * @returns {Record<string, string | null | undefined>} An object containing all named groups from the match.
  */
 export function aggregateGroups(match: any): Record<string, string | null | undefined>;
+/**
+ * Match route policy against both the public URL and its canonical URL.
+ *
+ * The function is deliberately separate from variables.js: configuration is
+ * inert data, while canonicalization and route selection form a routing layer.
+ *
+ * @param {string | URL} url
+ * @returns {{ match: string; strategy?: typeof strategy; exclude?: boolean } | undefined}
+ */
+export function findMatchingRouteStrategy(url: string | URL): {
+    match: string;
+    strategy?: typeof strategy;
+    exclude?: boolean;
+} | undefined;
+/**
+ * Returns the strategy to use for a specific URL.
+ *
+ * If no route strategy matches (or the matching rule is `exclude: true`),
+ * the global strategy is returned.
+ *
+ * @param {string | URL} url
+ * @returns {typeof strategy}
+ */
+export function getStrategyForUrl(url: string | URL): typeof strategy;
+/**
+ * Returns whether the given URL is excluded from middleware i18n processing.
+ *
+ * @param {string | URL} url
+ * @returns {boolean}
+ */
+export function isExcludedByRouteStrategy(url: string | URL): boolean;
 /**
  * @typedef {object} ShouldRedirectServerInput
  * @property {Request} request
@@ -510,6 +533,12 @@ export const urlPatterns: Array<{
     localized: Array<[Locale, string]>;
 }>;
 /**
+ * Controls trailing slash canonicalization for localized URLs.
+ *
+ * @type {"always" | "never" | undefined}
+ */
+export const trailingSlash: "always" | "never" | undefined;
+/**
  * @typedef {{
  * 		getStore(): {
  *   		locale?: Locale,
@@ -543,9 +572,12 @@ export function overwriteGetLocale(fn: () => Locale): void;
  * Set the locale.
  *
  * Updates the locale using your configured strategies (cookie, localStorage, URL, etc.).
- * By default, this reloads the page on the client to reflect the new locale. Reloading
- * can be disabled by passing `reload: false` as an option, but you'll need to ensure
- * the UI updates to reflect the new locale.
+ * By default, this navigates the client to the localized URL or reloads the current
+ * document to reflect the new locale. `reload: false` is a narrow browser-only escape
+ * hatch for a fully client-rendered, non-URL-routed surface that owns its reactive
+ * updates and document state. It does not re-render the UI or update the document.
+ * Do not use it for normal locale pickers, URL-routed pages, or switching an SSR,
+ * SSG, or hydrated document. It is incompatible with per-locale builds.
  *
  * If any custom strategy's `setLocale` function is async, then this function
  * will become async as well.
@@ -565,7 +597,7 @@ export function overwriteSetLocale(fn: SetLocaleFn): void;
 /**
  * The origin of the current URL.
  *
- * Defaults to "http://y.com" in non-browser environments. If this
+ * Defaults to "http://example.com" in non-browser environments. If this
  * behavior is not desired, the implementation can be overwritten
  * by `overwriteGetUrlOrigin()`.
  *
@@ -648,6 +680,38 @@ export type ExtractLocaleFromRequestOptions = {
      * - Effective request URL to use for route matching and locale detection with the URL strategy.
      */
     effectiveRequestUrl?: string | URL;
+};
+/**
+ * A small, deliberately conservative subset of URLPattern routing.
+ *
+ * The compiler emits routes such as `/:path(.*)?`, `/de/:path*`, or
+ * `https://example.com/:path*`. For those routes matching is equivalent to a
+ * pathname prefix check and (optionally) an origin check. Everything that has
+ * a dynamic host, a custom path regexp, or another URLPattern modifier keeps
+ * using the generic implementation above.
+ */
+export type FastPathPattern = {
+    protocol: string | undefined;
+    hostname: string | undefined;
+    port: string | undefined;
+    pathnamePrefix: string;
+    pathMode: "segments" | "catch-all-optional" | "catch-all-required";
+};
+/**
+ * A small, deliberately conservative subset of URLPattern routing.
+ *
+ * The compiler emits routes such as `/:path(.*)?`, `/de/:path*`, or
+ * `https://example.com/:path*`. For those routes matching is equivalent to a
+ * pathname prefix check and (optionally) an origin check. Everything that has
+ * a dynamic host, a custom path regexp, or another URLPattern modifier keeps
+ * using the generic implementation above.
+ */
+export type FastPathRoute = {
+    base: FastPathPattern;
+    localized: Array<{
+        locale: string;
+        pattern: FastPathPattern;
+    }>;
 };
 export type BuiltInStrategy = "cookie" | "baseLocale" | "globalVariable" | "url" | "preferredLanguage" | "localStorage";
 export type CustomStrategy = `custom_${string}`;

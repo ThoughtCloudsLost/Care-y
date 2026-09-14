@@ -24,6 +24,6 @@ const es_library_empty_articles = /** @type {(inputs: Library_Empty_ArticlesInpu
 */
 export const library_empty_articles = /** @type {((inputs?: Library_Empty_ArticlesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Empty_ArticlesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_empty_articles(inputs)
-	return es_library_empty_articles(inputs)
+	if (locale === "es") return es_library_empty_articles(inputs)
+	return en_library_empty_articles(inputs)
 });

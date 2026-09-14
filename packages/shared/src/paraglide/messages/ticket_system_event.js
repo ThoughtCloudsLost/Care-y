@@ -24,6 +24,6 @@ const es_ticket_system_event = /** @type {(inputs: Ticket_System_EventInputs) =>
 */
 export const ticket_system_event = /** @type {((inputs?: Ticket_System_EventInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_System_EventInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_system_event(inputs)
-	return es_ticket_system_event(inputs)
+	if (locale === "es") return es_ticket_system_event(inputs)
+	return en_ticket_system_event(inputs)
 });

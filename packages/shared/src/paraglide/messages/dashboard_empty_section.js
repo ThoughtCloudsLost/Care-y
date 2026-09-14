@@ -24,6 +24,6 @@ const es_dashboard_empty_section = /** @type {(inputs: Dashboard_Empty_SectionIn
 */
 export const dashboard_empty_section = /** @type {((inputs?: Dashboard_Empty_SectionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Empty_SectionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_empty_section(inputs)
-	return es_dashboard_empty_section(inputs)
+	if (locale === "es") return es_dashboard_empty_section(inputs)
+	return en_dashboard_empty_section(inputs)
 });

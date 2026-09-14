@@ -24,6 +24,6 @@ const es_library_publish = /** @type {(inputs: Library_PublishInputs) => Localiz
 */
 export const library_publish = /** @type {((inputs?: Library_PublishInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_PublishInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_publish(inputs)
-	return es_library_publish(inputs)
+	if (locale === "es") return es_library_publish(inputs)
+	return en_library_publish(inputs)
 });
