@@ -34,7 +34,7 @@
   import type { NavbarAction } from "$lib/shell/types";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { Button } from "konsta/svelte";
-  import { UserPlus, Pause, ArrowUpDown, FolderInput } from "@lucide/svelte";
+  import { UserPlus, Pause, ChevronsUp, FolderInput } from "@lucide/svelte";
   import TicketPlus from "$lib/components/icons/TicketPlus.svelte";
   import BulkActionBar from "$lib/components/BulkActionBar.svelte";
   import {
@@ -1324,7 +1324,7 @@
         class="bulk-action-btn"
         onclick={handleBulkPriority}
       >
-        <ArrowUpDown size={16} aria-hidden="true" />
+        <ChevronsUp size={16} aria-hidden="true" />
         {m.ticket_bulk_priority()}
       </Button>
       <Button
@@ -1336,7 +1336,7 @@
         onclick={handleBulkQueue}
       >
         <FolderInput size={16} aria-hidden="true" />
-        {m.ticket_bulk_queue()}
+        {m.ticket_bulk_queue(withTerms())}
       </Button>
     {/snippet}
   </BulkActionBar>

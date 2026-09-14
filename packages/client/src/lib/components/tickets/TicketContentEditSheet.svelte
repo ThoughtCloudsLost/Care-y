@@ -13,6 +13,10 @@
   import { ticketKeys, ticketsKeys, queueKeys } from "$lib/query/keys";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
+  import { decryptQueueAppearance } from "$lib/utils/queue-appearance.js";
+  import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
+  import RichSelect from "$lib/components/inputs/RichSelect.svelte";
+  import type { RichSelectOption } from "$lib/components/inputs/rich-select.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getCryptoBridge,
@@ -72,7 +76,12 @@
   const decryptedQueues = $derived(
     (queuesQuery.data ?? []).map((q) => ({
       id: q.id,
-      name: orgCache.decrypt(`queue:${q.id}`, q.encryptedName) ?? "...",
+      // Same fallback the timeline and the picker sheet use, so an
+      // undecryptable queue reads the same wherever it appears.
+      name:
+        orgCache.decrypt(`queue:${q.id}`, q.encryptedName) ??
+        m.ticket_system_queue_fallback(withTerms()),
+      appearance: decryptQueueAppearance(orgCache, q),
     })),
   );
 
@@ -364,28 +373,24 @@
         </ListInput>
       </List>
 
-      <List nested class="edit-input-list">
-        <ListInput
-          dropdown
-          label={m.ticket_new_field_queue(withTerms())}
-          type="select"
-          value={queueId}
-          onChange={(e: Event) => {
-            const target = e.target;
-            if (target instanceof HTMLSelectElement) {
-              queueId = target.value;
-            }
-          }}
-          disabled={saving || !prefilled}
-        >
-          <option value="" disabled
-            >{m.ticket_new_field_queue_placeholder(withTerms())}</option
-          >
-          {#each decryptedQueues as q (q.id)}
-            <option value={q.id}>{q.name}</option>
-          {/each}
-        </ListInput>
-      </List>
+      <RichSelect
+        label={m.ticket_new_field_queue(withTerms())}
+        value={queueId}
+        options={decryptedQueues.map((q) => ({ value: q.id, label: q.name }))}
+        onchange={(v: string) => {
+          queueId = v;
+        }}
+        placeholder={m.ticket_new_field_queue_placeholder(withTerms())}
+        disabled={saving || !prefilled}
+        listClass="edit-input-list"
+      >
+        {#snippet leading(option: RichSelectOption)}
+          {@const q = decryptedQueues.find((x) => x.id === option.value)}
+          {#if q}
+            <QueueGlyph appearance={q.appearance} />
+          {/if}
+        {/snippet}
+      </RichSelect>
     {/if}
   </div>
 </ShellSheet>

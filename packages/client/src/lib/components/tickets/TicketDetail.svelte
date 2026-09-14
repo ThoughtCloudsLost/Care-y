@@ -31,6 +31,11 @@
     resolveVolunteerName as resolveVolName,
   } from "$lib/tickets/resolve-volunteer.js";
   import {
+    buildQueueMap,
+    resolveQueueName as resolveQueueNameFor,
+  } from "$lib/tickets/resolve-queue.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
+  import {
     getFollowUpDecryptCache,
     getTicketDecryptCache,
     getOrgDecryptCache,
@@ -384,12 +389,11 @@
     queryFn: async () => ticketRouter.listQueues.query(),
   }));
 
+  const queueMap = $derived(buildQueueMap(queuesQuery.data));
   function resolveQueueName(queueId: string): string {
-    const q = (queuesQuery.data ?? []).find((x) => x.id === queueId);
-    if (q == null) return m.ticket_system_queue_fallback();
     return (
-      orgCache.decrypt(`queue:${q.id}`, q.encryptedName) ??
-      m.ticket_system_queue_fallback()
+      resolveQueueNameFor(queueId, queueMap, orgCache) ??
+      m.ticket_system_queue_fallback(withTerms())
     );
   }
 

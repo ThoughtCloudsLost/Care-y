@@ -487,7 +487,7 @@
       typeStatus: m.ticket_filter_type_status(),
       typePriority: m.ticket_filter_type_priority(),
       typeHold: m.ticket_filter_type_hold(),
-      typeQueue: m.ticket_filter_type_queue(),
+      typeQueue: m.ticket_filter_type_queue(withTerms()),
       typeMerge: m.ticket_filter_type_merge(),
       typeCalls: m.ticket_filter_type_calls(),
     },

@@ -352,7 +352,7 @@
     <ListItem
       link
       chevron
-      title={m.ticket_action_change_queue()}
+      title={m.ticket_action_change_queue(withTerms())}
       onclick={() => onaction("changeQueue")}
     />
     {#if shareLinkEnabled}

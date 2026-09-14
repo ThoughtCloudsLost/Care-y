@@ -19,7 +19,10 @@
   } from "$lib/utils/queue-appearance.js";
   import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import QueryError from "$lib/components/QueryError.svelte";
+  import EmptyState from "$lib/components/EmptyState.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import { withTerms } from "$lib/terminology/with-terms.js";
 
   interface QueueSelectSheetProps {
     opened: boolean;
@@ -51,8 +54,11 @@
 
     const results: DecryptedQueue[] = [];
     for (const q of data) {
-      const name = orgCache.decrypt(`queue:${q.id}`, q.encryptedName);
-      if (name === null) continue;
+      // A queue whose name will not decrypt still has to be selectable,
+      // otherwise a case cannot be moved somewhere that plainly exists.
+      const name =
+        orgCache.decrypt(`queue:${q.id}`, q.encryptedName) ??
+        m.ticket_system_queue_fallback(withTerms());
       const appearance = decryptQueueAppearance(orgCache, q);
       results.push({ id: q.id, name, appearance });
     }
@@ -68,8 +74,8 @@
 <ShellSheet
   {opened}
   {ondismiss}
-  ariaLabel={m.ticket_queue_sheet_title()}
-  title={m.ticket_queue_sheet_title()}
+  ariaLabel={m.ticket_queue_sheet_title(withTerms())}
+  title={m.ticket_queue_sheet_title(withTerms())}
 >
   {#if queuesQuery.isLoading}
     <List nested>
@@ -80,14 +86,12 @@
       {/each}
     </List>
   {:else if queuesQuery.isError}
-    <div class="queue-error" role="alert">
-      <p>{m.error_generic()}</p>
-      <button class="retry-btn" onclick={() => void queuesQuery.refetch()}>
-        {m.app_retry()}
-      </button>
-    </div>
+    <QueryError
+      error={queuesQuery.error}
+      onretry={() => void queuesQuery.refetch()}
+    />
   {:else}
-    <List nested aria-label={m.ticket_queue_sheet_title()}>
+    <List nested aria-label={m.ticket_queue_sheet_title(withTerms())}>
       {#each decryptedQueues as queue (queue.id)}
         <ListItem
           title={queue.name}
@@ -104,27 +108,9 @@
           {/snippet}
         </ListItem>
       {/each}
-      {#if decryptedQueues.length === 0}
-        <ListItem title={m.empty_no_results()} />
-      {/if}
     </List>
+    {#if decryptedQueues.length === 0}
+      <EmptyState message={m.empty_no_results()} />
+    {/if}
   {/if}
 </ShellSheet>
-
-<style>
-  .queue-error {
-    text-align: center;
-    padding: 2rem 1rem;
-    color: var(--muted);
-  }
-
-  .retry-btn {
-    margin-top: 0.5rem;
-    color: var(--brand-text);
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: var(--text-sm);
-    text-decoration: underline;
-  }
-</style>

@@ -1,4 +1,5 @@
 import * as m from "$lib/paraglide/messages.js";
+import { withTerms } from "$lib/terminology/with-terms.js";
 
 function priorityLabel(value: string): string {
   switch (value) {
@@ -37,8 +38,8 @@ const labelMap: Record<string, LabelResolver> = {
     const name =
       to !== null && resolveQueue !== undefined
         ? resolveQueue(to)
-        : m.ticket_system_queue_fallback();
-    return m.ticket_system_queue_changed({ queue: name });
+        : m.ticket_system_queue_fallback(withTerms());
+    return m.ticket_system_queue_changed(withTerms({ queueName: name }));
   },
   volunteer_assigned: (p, resolve) => {
     const userId = typeof p?.userId === "string" ? p.userId : null;
