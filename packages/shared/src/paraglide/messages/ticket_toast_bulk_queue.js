@@ -3,20 +3,20 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{ count: NonNullable<unknown>, tickets: NonNullable<unknown> }} Ticket_Toast_Bulk_QueueInputs */
+/** @typedef {{ Queue: NonNullable<unknown>, count: NonNullable<unknown>, tickets: NonNullable<unknown> }} Ticket_Toast_Bulk_QueueInputs */
 
 const en_ticket_toast_bulk_queue = /** @type {(inputs: Ticket_Toast_Bulk_QueueInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Queue updated on ${i?.count} ${i?.tickets}`)
+	return /** @type {LocalizedString} */ (`${i?.Queue} updated on ${i?.count} ${i?.tickets}`)
 };
 
 const es_ticket_toast_bulk_queue = /** @type {(inputs: Ticket_Toast_Bulk_QueueInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Cola actualizada en ${i?.count} ${i?.tickets}`)
+	return /** @type {LocalizedString} */ (`${i?.Queue} actualizada en ${i?.count} ${i?.tickets}`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Queue updated on {count} {tickets}" |
+* | "{Queue} updated on {count} {tickets}" |
 *
 * @param {Ticket_Toast_Bulk_QueueInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Queue updated on {count} {tickets}" |
+* | "{Queue} updated on {count} {tickets}" |
 *
 * @param {Ticket_Toast_Bulk_QueueInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
@@ -14,6 +14,7 @@ export const ticket_toast_bulk_queue: ((inputs: Ticket_Toast_Bulk_QueueInputs, o
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Ticket_Toast_Bulk_QueueInputs = {
+    Queue: NonNullable<unknown>;
     count: NonNullable<unknown>;
     tickets: NonNullable<unknown>;
 };

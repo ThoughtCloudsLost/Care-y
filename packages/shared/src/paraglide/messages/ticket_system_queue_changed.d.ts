@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Moved to {queue}" |
+* | "Moved to {queueName}" |
 *
 * @param {Ticket_System_Queue_ChangedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
@@ -14,5 +14,5 @@ export const ticket_system_queue_changed: ((inputs: Ticket_System_Queue_ChangedI
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Ticket_System_Queue_ChangedInputs = {
-    queue: NonNullable<unknown>;
+    queueName: NonNullable<unknown>;
 };
