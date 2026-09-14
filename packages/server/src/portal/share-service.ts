@@ -96,18 +96,23 @@ export async function createShare(
     throw new ShareTicketNotFoundError();
   }
 
-  const expiresAt = new Date(Date.now() + SHARE_EXPIRY_MS);
-
-  await db.transaction().execute(async (trx) => {
-    await trx
+  // Expiry is computed and returned by the database, not by this process.
+  // Both readers of this column compare it against now() in SQL: the
+  // one-time consume gate below and the cleanup sweep. Writing it from
+  // Date.now() would put the write on a different clock from the checks
+  // that enforce it, so a link could outlive or fall short of its window
+  // by whatever the two hosts disagree by.
+  const expiresAt = await db.transaction().execute(async (trx) => {
+    const link = await trx
       .insertInto("share_links")
       .values({
         id: input.shareId,
         ticket_id: input.ticketId,
         ciphertext: input.ciphertext,
-        expires_at: expiresAt,
+        expires_at: sql<Date>`now() + make_interval(secs => ${SHARE_EXPIRY_MS / 1000})`,
       })
-      .execute();
+      .returning("expires_at")
+      .executeTakeFirstOrThrow();
 
     await trx
       .insertInto("followups")
@@ -122,6 +127,8 @@ export async function createShare(
         event_params: { shareId: input.shareId },
       })
       .execute();
+
+    return link.expires_at;
   });
 
   return { expiresAt };

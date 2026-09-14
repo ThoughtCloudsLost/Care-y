@@ -170,11 +170,19 @@ if (!failures.some((f) => f.startsWith("[B]"))) {
 
 // -------------------------------------------------------------------------
 // Check C: devDeps wiring in demo source.
-// The demo engine module pins devDeps to undefined so that the dev router
-// construction is dead code. If a source file sets devDeps to anything else
-// (or imports it dynamically), the guard breaks. This check scans the demo
-// source directory, not dist, because the dead-code removal makes a dist
-// grep unreliable.
+// The demo engine module pins devDeps to an inert value so that the dev
+// router construction is dead code. If a source file sets devDeps to
+// anything else (or imports it dynamically), the guard breaks. This check
+// scans the demo source directory, not dist, because the dead-code removal
+// makes a dist grep unreliable.
+//
+// Both null and undefined are accepted. The router's dep groups became
+// required-and-nullable so that omitting one is a compile error rather
+// than a silently missing feature, which means the demo now passes null
+// alongside its sibling dep groups. Elimination does not depend on which
+// of the two is used: it happens because NODE_ENV is inlined as
+// production, and check B independently confirms the dev procedure keys
+// are absent from the built output.
 // -------------------------------------------------------------------------
 
 const demoSrc = resolve(import.meta.dirname, "..", "src");
@@ -187,8 +195,8 @@ for (const file of srcFiles) {
     const line = lines[lineNum];
     if (!line.includes("devDeps")) continue;
 
-    // Allowed: the literal assignment that pins devDeps to undefined.
-    if (/devDeps\s*:\s*undefined/.test(line)) continue;
+    // Allowed: the literal assignment that pins devDeps to an inert value.
+    if (/devDeps\s*:\s*(undefined|null)/.test(line)) continue;
 
     // Allowed: comment lines (single-line // comments).
     if (/^\s*\/\//.test(line)) continue;
@@ -197,7 +205,8 @@ for (const file of srcFiles) {
     fail(
       "C",
       `Unexpected devDeps reference at ${relPath}:${lineNum + 1}. ` +
-        "Every occurrence must be either 'devDeps: undefined' or a comment.",
+        "Every occurrence must be either 'devDeps: undefined', " +
+        "'devDeps: null', or a comment.",
     );
   }
 }

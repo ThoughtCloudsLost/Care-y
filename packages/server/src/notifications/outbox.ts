@@ -29,6 +29,7 @@
  */
 
 import type { Kysely, Transaction } from "kysely";
+import { sql } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { NotificationService } from "./service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
@@ -247,7 +248,15 @@ export async function drainOutbox(
         .selectFrom("notification_outbox")
         .select("id")
         .where("status", "=", "pending")
-        .where("next_attempt_at", "<=", new Date())
+        // Compared in SQL rather than against the application clock.
+        // next_attempt_at is written by the database (it defaults to
+        // now(), and retries schedule off it), so comparing it to a
+        // Date built in this process measures two different clocks on
+        // two different hosts. When the database clock runs ahead, a
+        // row is not yet eligible the moment after it is enqueued and
+        // the drain skips it, leaving attempt_count at 0 until some
+        // later pass picks it up.
+        .where("next_attempt_at", "<=", sql<Date>`now()`)
         .orderBy("next_attempt_at", "asc")
         .limit(DRAIN_BATCH_SIZE)
         .forUpdate()
@@ -305,20 +314,25 @@ export async function drainOutbox(
           .where("id", "=", row.id)
           .execute();
       } else {
-        // Schedule retry with exponential backoff
+        // Schedule retry with exponential backoff. The delay is added to
+        // the database clock rather than this process's, because the claim
+        // above compares next_attempt_at against now() in SQL. Building the
+        // value from Date.now() would put the write and the read on
+        // different clocks, which is the same defect the claim was fixed
+        // for, and the backoff base is short enough (30s) for ordinary
+        // skew to matter.
         const delayMs = computeBackoffMs(
           "exponential",
           nextAttempt,
           BACKOFF_BASE_MS,
         );
-        const nextAttemptAt = new Date(Date.now() + delayMs);
 
         await db
           .updateTable("notification_outbox")
           .set({
             status: "pending",
             attempt_count: nextAttempt,
-            next_attempt_at: nextAttemptAt,
+            next_attempt_at: sql<Date>`now() + make_interval(secs => ${delayMs / 1000})`,
             last_error: errorMsg,
           })
           .where("id", "=", row.id)
