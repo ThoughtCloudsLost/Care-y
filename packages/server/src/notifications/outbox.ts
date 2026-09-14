@@ -29,6 +29,7 @@
  */
 
 import type { Kysely, Transaction } from "kysely";
+import { sql } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { NotificationService } from "./service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
@@ -247,7 +248,15 @@ export async function drainOutbox(
         .selectFrom("notification_outbox")
         .select("id")
         .where("status", "=", "pending")
-        .where("next_attempt_at", "<=", new Date())
+        // Compared in SQL rather than against the application clock.
+        // next_attempt_at is written by the database (it defaults to
+        // now(), and retries schedule off it), so comparing it to a
+        // Date built in this process measures two different clocks on
+        // two different hosts. When the database clock runs ahead, a
+        // row is not yet eligible the moment after it is enqueued and
+        // the drain skips it, leaving attempt_count at 0 until some
+        // later pass picks it up.
+        .where("next_attempt_at", "<=", sql<Date>`now()`)
         .orderBy("next_attempt_at", "asc")
         .limit(DRAIN_BATCH_SIZE)
         .forUpdate()
