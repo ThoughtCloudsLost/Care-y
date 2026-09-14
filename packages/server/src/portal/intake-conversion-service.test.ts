@@ -274,6 +274,50 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(interimRow).toBeDefined();
     });
 
+    it("excludes deactivated queue members from conversion targets", async () => {
+      // Create a deactivated user, assign to queue, give them vol_public
+      const inactiveUser = await createTestUser(testDb.db, {
+        overrides: { is_active: false },
+      });
+      await testDb.db
+        .insertInto("queue_assignments")
+        .values({ queue_id: queueId, user_id: inactiveUser.id })
+        .execute();
+      await testDb.db
+        .insertInto("user_keys")
+        .values({
+          user_id: inactiveUser.id,
+          salt: Buffer.alloc(16, 0xcc),
+          vol_public: Buffer.alloc(32, 0xdd),
+        })
+        .onConflict((oc) =>
+          oc
+            .column("user_id")
+            .doUpdateSet({ vol_public: Buffer.alloc(32, 0xdd) }),
+        )
+        .execute();
+
+      const { ticketId } = await seedTicketWithIntakeWrap(
+        testDb.db,
+        queueId,
+        clientId,
+      );
+      const access = createTicketAccessChecker(testDb.db);
+
+      const targets = await getConversionTargets(
+        testDb.db,
+        access,
+        userId,
+        ticketId,
+        orgSchema,
+      );
+
+      // The active user should be present, the inactive one should not
+      const targetIds = targets.map((t) => t.volunteerId);
+      expect(targetIds).toContain(userId);
+      expect(targetIds).not.toContain(inactiveUser.id);
+    });
+
     it("caller without ticket access is rejected", async () => {
       const { ticketId } = await seedTicketWithIntakeWrap(
         testDb.db,
