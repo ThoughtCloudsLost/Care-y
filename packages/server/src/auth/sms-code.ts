@@ -20,7 +20,7 @@ import type {
   OrgIdentifiers,
 } from "../telephony/phone-resolver.js";
 import { RateLimitError, ValidationError } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
+import { ErrorCode, RESEND_COOLDOWN_SMS_SECONDS } from "@care-y/shared";
 import type { UserId, SmsCodeId } from "@care-y/shared";
 import { toCount } from "../db/query-utils.js";
 import { createCodeHasher } from "./password.js";
@@ -29,7 +29,7 @@ const CODE_DIGITS = 6;
 const CODE_MAX = 10 ** CODE_DIGITS; // 1,000,000
 const EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_ATTEMPTS = 3;
-const COOLDOWN_MS = 90 * 1000; // 90 seconds between codes (stricter than email)
+const COOLDOWN_MS = RESEND_COOLDOWN_SMS_SECONDS * 1000;
 const HOURLY_LIMIT = 3; // 3 per hour (stricter than email's 5)
 const HOURLY_WINDOW_MS = 60 * 60 * 1000;
 
