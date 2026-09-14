@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { FollowUpSource, FollowUpType } from "./tickets.js";
 import { ticketPrioritySchema } from "./tickets.js";
-import { userIdSchema } from "../ids.js";
+import { userIdSchema, queueIdSchema } from "../ids.js";
 
 export type ContentCategory =
   "message" | "system" | "note" | "article" | "correction";
@@ -29,6 +29,12 @@ export const priorityEventParamsSchema = z.object({
   from: ticketPrioritySchema.optional(),
 });
 export type PriorityEventParams = z.infer<typeof priorityEventParamsSchema>;
+
+export const queueEventParamsSchema = z.object({
+  to: queueIdSchema,
+  from: queueIdSchema.optional(),
+});
+export type QueueEventParams = z.infer<typeof queueEventParamsSchema>;
 
 export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
   message: {
@@ -129,6 +135,14 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     groupable: true,
   },
   priority_changed: {
+    category: "system",
+    allowedSources: ["system"],
+    encryption: "none",
+    hasEncryptedContent: false,
+    hasEventParams: true,
+    groupable: false,
+  },
+  queue_changed: {
     category: "system",
     allowedSources: ["system"],
     encryption: "none",

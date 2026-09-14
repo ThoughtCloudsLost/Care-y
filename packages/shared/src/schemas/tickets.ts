@@ -59,6 +59,7 @@ export const followUpTypeSchema = z.enum([
   "status_opened",
   "status_closed",
   "priority_changed",
+  "queue_changed",
   "merge_note",
   "share_link",
   "contact_correction",
