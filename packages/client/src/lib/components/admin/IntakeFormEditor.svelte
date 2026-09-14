@@ -33,7 +33,7 @@
     Copy,
     Eye,
     ImagePlus,
-    Trash2,
+    Trash,
   } from "@lucide/svelte";
   import {
     createMutation,
@@ -1323,7 +1323,7 @@
             }}
           />
           <Button outline small onclick={removeBanner}>
-            <Trash2 size={16} />
+            <Trash size={16} />
             {m.intake_forms_banner_remove()}
           </Button>
         </div>

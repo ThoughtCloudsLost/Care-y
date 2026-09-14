@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, List, ListItem, ListInput } from "konsta/svelte";
-  import { Pencil, Save, Trash2 } from "@lucide/svelte";
+  import { Pencil, Save, Trash } from "@lucide/svelte";
   import { useQueryClient } from "@tanstack/svelte-query";
   import { kbKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -173,7 +173,7 @@
         onclick={() => void handleDelete(categoryId)}
         aria-label={m.library_category_delete()}
       >
-        <Trash2 size={16} aria-hidden="true" />
+        <Trash size={16} aria-hidden="true" />
       </button>
     {/if}
   </div>

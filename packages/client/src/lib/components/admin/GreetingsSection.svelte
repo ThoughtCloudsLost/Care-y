@@ -13,7 +13,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { Plus, Pencil, Trash2, Save } from "@lucide/svelte";
+  import { Plus, Pencil, Trash, Save } from "@lucide/svelte";
   import type { GreetingType, GreetingAudioContentType } from "@care-y/shared";
   import { GREETING_AUDIO_MAX_BYTES } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
@@ -710,7 +710,7 @@
             if (editingGreeting) startDelete(editingGreeting);
           }}
         >
-          <Trash2 size={14} />
+          <Trash size={14} />
           {m.admin_greetings_delete()}
         </button>
       </div>

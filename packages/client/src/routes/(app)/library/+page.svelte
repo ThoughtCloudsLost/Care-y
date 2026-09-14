@@ -14,7 +14,7 @@
   import {
     FolderInput,
     FolderPen,
-    Trash2,
+    Trash,
     Download,
     FilePlus,
   } from "@lucide/svelte";
@@ -780,7 +780,7 @@
           class="bulk-action-btn"
           onclick={handleBulkDelete}
         >
-          <Trash2 size={16} aria-hidden="true" />
+          <Trash size={16} aria-hidden="true" />
           {m.library_action_delete()}
         </Button>
       {/if}

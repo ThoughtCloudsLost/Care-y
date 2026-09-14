@@ -161,7 +161,7 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => {
       };
     },
     useQueryClient: () => ({
-      fetchQuery: vi.fn().mockResolvedValue([]),
+      query: vi.fn().mockResolvedValue([]),
       invalidateQueries: vi.fn(),
       getQueryData: vi.fn(),
       setQueryData: vi.fn(),

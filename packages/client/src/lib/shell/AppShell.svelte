@@ -537,9 +537,10 @@
               return orgCache.decryptAsync(cacheKey, ciphertext);
             },
             ensureCategoriesLoaded: async () => {
-              await queryClient.ensureQueryData({
+              await queryClient.query({
                 queryKey: kbKeys.categories(),
                 queryFn: async () => kbRouter.listCategories.query(),
+                staleTime: "static",
               });
             },
             resolveCategoryName: (categoryId) => {
@@ -584,9 +585,10 @@
       ? registerSearchProvider(
           createVolunteerSearchProvider({
             fetchUsers: async () =>
-              queryClient.ensureQueryData({
+              queryClient.query({
                 queryKey: adminKeys.users(),
                 queryFn: async () => trpc.auth.listUsers.query(),
+                staleTime: "static",
               }),
             decryptDisplayName: (userId, ciphertext) => {
               return orgCache.decrypt(`user:${userId}`, ciphertext);

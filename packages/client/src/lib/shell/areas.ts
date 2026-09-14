@@ -1,6 +1,6 @@
 import type { Component } from "svelte";
 import {
-  Building2,
+  BuildingComplex,
   Settings,
   CalendarDays,
   Users,
@@ -18,7 +18,7 @@ export interface AreaDef {
 }
 
 export const allAreas: readonly AreaDef[] = [
-  { id: "admin", label: () => m.admin_hub_title(), icon: Building2 },
+  { id: "admin", label: () => m.admin_hub_title(), icon: BuildingComplex },
   { id: "admin-people", label: () => m.panel_group_people(), icon: Users },
   {
     id: "admin-communications",
@@ -28,7 +28,7 @@ export const allAreas: readonly AreaDef[] = [
   {
     id: "admin-organization",
     label: () => m.panel_group_organization(),
-    icon: Building2,
+    icon: BuildingComplex,
   },
   { id: "admin-manager", label: () => m.admin_hub_title(), icon: ShieldCheck },
   {

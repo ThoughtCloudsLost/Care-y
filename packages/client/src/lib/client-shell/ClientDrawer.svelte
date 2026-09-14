@@ -22,7 +22,7 @@
 -->
 <script lang="ts">
   import { List, ListItem } from "konsta/svelte";
-  import { Building2, FileText, Moon, Sun } from "@lucide/svelte";
+  import { BuildingComplex, FileText, Moon, Sun } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { resolve } from "$app/paths";
   import { goto } from "$app/navigation";
@@ -112,7 +112,7 @@
           {:else if initials}
             {initials}
           {:else}
-            <Building2 size={22} />
+            <BuildingComplex size={22} />
           {/if}
         </span>
         <span class="panel-name">
