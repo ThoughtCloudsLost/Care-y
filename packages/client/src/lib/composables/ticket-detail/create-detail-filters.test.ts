@@ -17,6 +17,7 @@ const defaultLabels: DetailFiltersConfig["labels"] = {
   typeStatus: "Status",
   typePriority: "Priority",
   typeHold: "Hold",
+  typeQueue: "Queue",
   typeMerge: "Merge",
   typeCalls: "Calls",
 };

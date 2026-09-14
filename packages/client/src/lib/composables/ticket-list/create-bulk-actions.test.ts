@@ -30,6 +30,10 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     name: string;
   }) => `Assigned ${count} to ${name}`,
   ticket_toast_bulk_held: ({ count }: { count: string }) => `Held ${count}`,
+  ticket_toast_bulk_priority: ({ count }: { count: string }) =>
+    `Priority set for ${count}`,
+  ticket_toast_bulk_queue: ({ count }: { count: string }) =>
+    `Queue set for ${count}`,
   error_generic: () => "Error",
 }));
 
@@ -46,6 +50,13 @@ describe("createBulkActions", () => {
     (ticketId: string, targetUserId: string) => Promise<unknown>
   >;
   let holdTicket: Mock<(ticketId: string) => Promise<unknown>>;
+  let updateTicket: Mock<
+    (args: {
+      ticketId: string;
+      priority?: string;
+      queueId?: string;
+    }) => Promise<unknown>
+  >;
   let resolveVolunteerName: Mock<(userId: string) => string>;
   let qc: QueryClient;
 
@@ -57,6 +68,15 @@ describe("createBulkActions", () => {
       .mockResolvedValue(undefined);
     holdTicket = vi
       .fn<(id: string) => Promise<unknown>>()
+      .mockResolvedValue(undefined);
+    updateTicket = vi
+      .fn<
+        (args: {
+          ticketId: string;
+          priority?: string;
+          queueId?: string;
+        }) => Promise<unknown>
+      >()
       .mockResolvedValue(undefined);
     resolveVolunteerName = vi
       .fn<(uid: string) => string>()
@@ -76,6 +96,7 @@ describe("createBulkActions", () => {
       queryClient: qc,
       assignTo,
       holdTicket,
+      updateTicket,
       resolveVolunteerName,
     });
   }
@@ -258,6 +279,175 @@ describe("createBulkActions", () => {
       const showCall = vi.mocked(toastStore.show).mock.calls[0]!;
       const message = showCall[0] as string;
       expect(message).toContain("3 failed");
+    });
+  });
+
+  describe("handleBulkPriority", () => {
+    it("calls updateTicket with priority for each selected ticket", async () => {
+      const bulk = make();
+      await bulk.handleBulkPriority("urgent");
+      expect(updateTicket).toHaveBeenCalledTimes(3);
+      expect(updateTicket).toHaveBeenCalledWith({
+        ticketId: "t1",
+        priority: "urgent",
+      });
+      expect(updateTicket).toHaveBeenCalledWith({
+        ticketId: "t2",
+        priority: "urgent",
+      });
+      expect(updateTicket).toHaveBeenCalledWith({
+        ticketId: "t3",
+        priority: "urgent",
+      });
+    });
+
+    it("does nothing with empty selection", async () => {
+      selectedIds.clear();
+      const bulk = make();
+      await bulk.handleBulkPriority("high");
+      expect(updateTicket).not.toHaveBeenCalled();
+      expect(exitMultiSelect).not.toHaveBeenCalled();
+    });
+
+    it("exits multi-select after completion", async () => {
+      const bulk = make();
+      await bulk.handleBulkPriority("low");
+      expect(exitMultiSelect).toHaveBeenCalledOnce();
+    });
+
+    it("shows success toast with haptic on full success", async () => {
+      const { toastStore } = await import("$lib/stores/toast.svelte.js");
+      const { haptic } = await import("$lib/utils/haptic.js");
+
+      const bulk = make();
+      await bulk.handleBulkPriority("normal");
+
+      expect(haptic).toHaveBeenCalledOnce();
+      expect(toastStore.show).toHaveBeenCalledWith("Priority set for 3");
+    });
+
+    it("reports partial success on failure", async () => {
+      updateTicket
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("net"));
+      const { toastStore } = await import("$lib/stores/toast.svelte.js");
+
+      const bulk = make();
+      await bulk.handleBulkPriority("high");
+
+      expect(updateTicket).toHaveBeenCalledTimes(2);
+      expect(exitMultiSelect).toHaveBeenCalledOnce();
+      expect(toastStore.show).toHaveBeenCalledWith(
+        expect.stringContaining("2 failed"),
+        3000,
+      );
+    });
+
+    it("invalidates ticket list queries after priority change", async () => {
+      const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+
+      const bulk = make();
+      await bulk.handleBulkPriority("urgent");
+
+      expect(invalidateSpy).toHaveBeenCalled();
+      invalidateSpy.mockRestore();
+    });
+
+    it("does not fire haptic on partial failure", async () => {
+      updateTicket
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("fail"));
+      const { haptic } = await import("$lib/utils/haptic.js");
+
+      const bulk = make();
+      await bulk.handleBulkPriority("high");
+
+      expect(haptic).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("handleBulkQueue", () => {
+    it("calls updateTicket with queueId for each selected ticket", async () => {
+      const bulk = make();
+      await bulk.handleBulkQueue("queue-1");
+      expect(updateTicket).toHaveBeenCalledTimes(3);
+      expect(updateTicket).toHaveBeenCalledWith({
+        ticketId: "t1",
+        queueId: "queue-1",
+      });
+      expect(updateTicket).toHaveBeenCalledWith({
+        ticketId: "t2",
+        queueId: "queue-1",
+      });
+      expect(updateTicket).toHaveBeenCalledWith({
+        ticketId: "t3",
+        queueId: "queue-1",
+      });
+    });
+
+    it("does nothing with empty selection", async () => {
+      selectedIds.clear();
+      const bulk = make();
+      await bulk.handleBulkQueue("queue-1");
+      expect(updateTicket).not.toHaveBeenCalled();
+      expect(exitMultiSelect).not.toHaveBeenCalled();
+    });
+
+    it("exits multi-select after completion", async () => {
+      const bulk = make();
+      await bulk.handleBulkQueue("queue-1");
+      expect(exitMultiSelect).toHaveBeenCalledOnce();
+    });
+
+    it("shows success toast with haptic on full success", async () => {
+      const { toastStore } = await import("$lib/stores/toast.svelte.js");
+      const { haptic } = await import("$lib/utils/haptic.js");
+
+      const bulk = make();
+      await bulk.handleBulkQueue("queue-2");
+
+      expect(haptic).toHaveBeenCalledOnce();
+      expect(toastStore.show).toHaveBeenCalledWith("Queue set for 3");
+    });
+
+    it("reports partial success on failure", async () => {
+      updateTicket
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("net"));
+      const { toastStore } = await import("$lib/stores/toast.svelte.js");
+
+      const bulk = make();
+      await bulk.handleBulkQueue("queue-1");
+
+      expect(updateTicket).toHaveBeenCalledTimes(3);
+      expect(exitMultiSelect).toHaveBeenCalledOnce();
+      expect(toastStore.show).toHaveBeenCalledWith(
+        expect.stringContaining("1 failed"),
+        3000,
+      );
+    });
+
+    it("invalidates ticket list queries after queue change", async () => {
+      const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+
+      const bulk = make();
+      await bulk.handleBulkQueue("queue-1");
+
+      expect(invalidateSpy).toHaveBeenCalled();
+      invalidateSpy.mockRestore();
+    });
+
+    it("does not fire haptic on partial queue failure", async () => {
+      updateTicket
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("fail"));
+      const { haptic } = await import("$lib/utils/haptic.js");
+
+      const bulk = make();
+      await bulk.handleBulkQueue("queue-1");
+
+      expect(haptic).not.toHaveBeenCalled();
     });
   });
 });

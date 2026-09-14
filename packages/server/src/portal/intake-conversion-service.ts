@@ -89,12 +89,14 @@ export async function getConversionTargets(
 
   if (!ticket) return [];
 
-  // Queue members with vol_public
+  // Queue members with vol_public (active users only, mirrors getUsersWithPermission)
   const queueVolunteers = await db
     .selectFrom("queue_assignments")
+    .innerJoin("users", "users.id", "queue_assignments.user_id")
     .innerJoin("user_keys", "user_keys.user_id", "queue_assignments.user_id")
     .select(["queue_assignments.user_id", "user_keys.vol_public"])
     .where("queue_assignments.queue_id", "=", ticket.queue_id)
+    .where("users.is_active", "=", true)
     .where("user_keys.vol_public", "is not", null)
     .execute();
 

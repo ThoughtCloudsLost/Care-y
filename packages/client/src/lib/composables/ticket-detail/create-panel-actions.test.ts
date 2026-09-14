@@ -17,7 +17,12 @@ describe("createPanelActions", () => {
   let takeMutate: Mock<(id: string) => Promise<unknown>>;
   let releaseMutate: Mock<(id: string) => Promise<unknown>>;
   let updateMutate: Mock<
-    (args: { ticketId: string; onHold: boolean }) => Promise<unknown>
+    (args: {
+      ticketId: string;
+      onHold?: boolean;
+      priority?: string;
+      queueId?: string;
+    }) => Promise<unknown>
   >;
   let reopenMutate: Mock<
     (args: { ticketId: string; newKeyGeneration: string }) => Promise<unknown>
@@ -27,6 +32,8 @@ describe("createPanelActions", () => {
   let onclose: Mock;
   let oncall: Mock;
   let onassign: Mock;
+  let onchangepriority: Mock;
+  let onchangequeue: Mock;
   let onphone: Mock;
   let onemail: Mock;
   let oneditcontent: Mock;
@@ -45,6 +52,8 @@ describe("createPanelActions", () => {
     onclose = vi.fn();
     oncall = vi.fn();
     onassign = vi.fn();
+    onchangepriority = vi.fn();
+    onchangequeue = vi.fn();
     onphone = vi.fn();
     onemail = vi.fn();
     oneditcontent = vi.fn();
@@ -67,6 +76,8 @@ describe("createPanelActions", () => {
       onclose,
       oncall,
       onassign,
+      onchangepriority,
+      onchangequeue,
       onphone,
       onemail,
       oneditcontent,
@@ -119,6 +130,16 @@ describe("createPanelActions", () => {
   it("dispatches assign to onassign callback", () => {
     make().dispatch("assign");
     expect(onassign).toHaveBeenCalledOnce();
+  });
+
+  it("dispatches changePriority to onchangepriority callback", () => {
+    make().dispatch("changePriority");
+    expect(onchangepriority).toHaveBeenCalledOnce();
+  });
+
+  it("dispatches changeQueue to onchangequeue callback", () => {
+    make().dispatch("changeQueue");
+    expect(onchangequeue).toHaveBeenCalledOnce();
   });
 
   it("dispatches hold mutation with onHold true", () => {

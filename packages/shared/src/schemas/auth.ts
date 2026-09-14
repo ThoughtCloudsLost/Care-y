@@ -3,6 +3,11 @@ import { Permission } from "../roles.js";
 import { ROLE_ID_VALUES_TUPLE } from "../roles.js";
 import { userIdSchema } from "../ids.js";
 
+// Per-method 2FA resend cooldowns in seconds. Both the client countdown and
+// the server enforcement read from these so the two cannot drift.
+export const RESEND_COOLDOWN_SMS_SECONDS = 90;
+export const RESEND_COOLDOWN_EMAIL_SECONDS = 60;
+
 export const emailSchema = z
   .string()
   .transform((e) => e.trim().toLowerCase())

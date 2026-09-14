@@ -21,12 +21,17 @@
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { kbKeys } from "$lib/query/keys.js";
-  import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
+  import {
+    getOrgDecryptCache,
+    getOrgKeyManager,
+    getCurrentPermissions,
+  } from "$lib/crypto/context.js";
   import {
     resolveOrgDecrypt,
     type DecryptResult,
   } from "$lib/crypto/decrypt-result.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
+  import { Permission } from "@care-y/shared";
   import { requireRouter } from "$lib/errors.js";
   import { renderArticleBody } from "$lib/utils/render-article.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
@@ -57,6 +62,9 @@
 
   const kbRouter = requireRouter(trpc.kb, "kb");
   const orgCache = getOrgDecryptCache();
+  const permissionsGetter = getCurrentPermissions();
+  const permissions = $derived(permissionsGetter());
+  const canEdit = $derived(permissions.has(Permission.EDIT_KNOWLEDGE_BASE));
 
   // Recently-viewed history: an article open counts as a view. Covers the
   // full-page route and the split pane (both mount this component).
@@ -429,14 +437,16 @@
 {/snippet}
 
 {#snippet navRight()}
-  <Link
-    iconOnly
-    onclick={onedit}
-    role="button"
-    aria-label={m.library_edit_article()}
-  >
-    <Pencil size={20} aria-hidden="true" />
-  </Link>
+  {#if canEdit}
+    <Link
+      iconOnly
+      onclick={onedit}
+      role="button"
+      aria-label={m.library_edit_article()}
+    >
+      <Pencil size={20} aria-hidden="true" />
+    </Link>
+  {/if}
 {/snippet}
 
 <div class="article-detail">

@@ -26,6 +26,7 @@ import {
   Paperclip,
   Phone,
   UserPen,
+  FolderInput,
   type LucideIcon,
 } from "@lucide/svelte";
 import type { Component } from "svelte";
@@ -70,6 +71,7 @@ const followUpTypeIcons = new Map<string, LucideIcon>([
   ["volunteer_assigned", UserCheck],
   ["volunteer_unassigned", UserCheck],
   ["priority_changed", ChevronsUp],
+  ["queue_changed", FolderInput],
   ["hold_placed", CirclePause],
   ["hold_removed", CirclePause],
   ["merge_note", Replace],

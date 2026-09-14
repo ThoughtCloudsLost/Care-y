@@ -7,6 +7,8 @@
   import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import TicketPanelContent from "$lib/components/tickets/TicketPanelContent.svelte";
   import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
+  import PrioritySelectSheet from "$lib/components/tickets/PrioritySelectSheet.svelte";
+  import QueueSelectSheet from "$lib/components/tickets/QueueSelectSheet.svelte";
   import ComposeActions from "$lib/components/tickets/ComposeActions.svelte";
   import CallOptionsContent, {
     type CallAction,
@@ -24,6 +26,7 @@
   import EmailActionContent from "$lib/components/clients/EmailActionContent.svelte";
   import MergeSheet from "$lib/components/clients/MergeSheet.svelte";
   import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
+  import type { TicketPriority } from "@care-y/shared";
   import type { TicketAction } from "$lib/tickets/types.js";
   import type {
     DeleteConfirmState,
@@ -43,6 +46,10 @@
     clientAlias: string;
     panelOpen: boolean;
     assignSheetOpen: boolean;
+    prioritySheetOpen: boolean;
+    currentPriority?: TicketPriority | undefined;
+    queueSheetOpen: boolean;
+    currentQueueId?: string | undefined;
     callSheetOpen: boolean;
     composeActionsOpen: boolean;
     composeActionsAnchor: HTMLElement | undefined;
@@ -96,6 +103,10 @@
     onpanellightbox: (imageUrl: string) => void;
     onassigndismiss: () => void;
     onassign: (ticketId: string, targetUserId: string | null) => void;
+    onprioritydismiss: () => void;
+    onpriorityselect: (priority: TicketPriority) => void;
+    onqueuedismiss: () => void;
+    onqueueselect: (queueId: string) => void;
     oncallaction: (action: CallAction) => void;
     oncalldismiss: () => void;
     oncomposedismiss: () => void;
@@ -116,6 +127,10 @@
     clientAlias,
     panelOpen,
     assignSheetOpen,
+    prioritySheetOpen,
+    currentPriority,
+    queueSheetOpen,
+    currentQueueId,
     callSheetOpen,
     composeActionsOpen,
     composeActionsAnchor,
@@ -163,6 +178,10 @@
     onpanellightbox,
     onassigndismiss,
     onassign,
+    onprioritydismiss,
+    onpriorityselect,
+    onqueuedismiss,
+    onqueueselect,
     oncallaction,
     oncalldismiss,
     oncomposedismiss,
@@ -197,6 +216,20 @@
   {currentAssigneeId}
   ondismiss={onassigndismiss}
   {onassign}
+/>
+
+<PrioritySelectSheet
+  opened={prioritySheetOpen}
+  {currentPriority}
+  ondismiss={onprioritydismiss}
+  onselect={onpriorityselect}
+/>
+
+<QueueSelectSheet
+  opened={queueSheetOpen}
+  {currentQueueId}
+  ondismiss={onqueuedismiss}
+  onselect={onqueueselect}
 />
 
 <ShellActionSheet

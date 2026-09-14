@@ -15,7 +15,7 @@
   import { followupSlot } from "@care-y/crypto";
   import { tick } from "svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
-  import { ticketKeys } from "$lib/query/keys";
+  import { ticketKeys, queueKeys } from "$lib/query/keys";
   import { hasUnacknowledgedCorrection as computeUnackedCorrection } from "$lib/tickets/correction-status.js";
   import { latestClientFollowUpIsEmail } from "$lib/tickets/email-expected.svelte.js";
   import { Checkbox, Button } from "konsta/svelte";
@@ -30,6 +30,11 @@
     buildVolunteerMap,
     resolveVolunteerName as resolveVolName,
   } from "$lib/tickets/resolve-volunteer.js";
+  import {
+    buildQueueMap,
+    resolveQueueName as resolveQueueNameFor,
+  } from "$lib/tickets/resolve-queue.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
   import {
     getFollowUpDecryptCache,
     getTicketDecryptCache,
@@ -378,6 +383,20 @@
     return resolveVolName(userId, volunteerMap, orgCache);
   }
 
+  // Queue list for resolving queue IDs to decrypted names (system events).
+  const queuesQuery = createQuery(() => ({
+    queryKey: queueKeys.all,
+    queryFn: async () => ticketRouter.listQueues.query(),
+  }));
+
+  const queueMap = $derived(buildQueueMap(queuesQuery.data));
+  function resolveQueueName(queueId: string): string {
+    return (
+      resolveQueueNameFor(queueId, queueMap, orgCache) ??
+      m.ticket_system_queue_fallback(withTerms())
+    );
+  }
+
   // Pre-bound decrypt scope for the current ticket.
   const decrypt = $derived(
     ticket != null
@@ -448,6 +467,7 @@
     __assignment__: ["volunteer_assigned", "volunteer_unassigned"],
     __status__: ["status_opened", "status_closed"],
     __priority__: ["priority_changed"],
+    __queue__: ["queue_changed"],
     __hold__: ["hold_placed", "hold_removed"],
   };
 
@@ -1370,6 +1390,7 @@
         resolveNoteIcon={resolveNoteIconForTimeline}
         resolveUserName={(uid: string) =>
           resolveVolunteerName(uid) ?? m.ticket_system_volunteer_fallback()}
+        {resolveQueueName}
       >
         {#snippet renderExpanded({
           record: rec,
@@ -1405,6 +1426,7 @@
                 resolveUserName={(uid: string) =>
                   resolveVolunteerName(uid) ??
                   m.ticket_system_volunteer_fallback()}
+                {resolveQueueName}
               />
             {:else if kind === "note"}
               <PrivateNote
@@ -1511,6 +1533,7 @@
                     resolveUserName={(uid: string) =>
                       resolveVolunteerName(uid) ??
                       m.ticket_system_volunteer_fallback()}
+                    {resolveQueueName}
                   />
                 </div>
                 <!-- eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/strict-boolean-expressions, @typescript-eslint/prefer-nullish-coalescing -- svelte-eslint cannot narrow GroupedFollowUp in {:else} blocks; the isFollowUpGroup guard above guarantees item is a FollowUpRecord here -->
@@ -1612,6 +1635,7 @@
                       resolveUserName={(uid: string) =>
                         resolveVolunteerName(uid) ??
                         m.ticket_system_volunteer_fallback()}
+                      {resolveQueueName}
                     />
                   {:else if kind === "note"}
                     <PrivateNote

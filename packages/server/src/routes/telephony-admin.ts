@@ -2,12 +2,16 @@
  * Telephony admin router: config management for org telephony providers,
  * phone blocklist, and phone purpose assignment.
  *
- * All endpoints require admin-level permissions (MANAGE_ROLES).
+ * All endpoints require MANAGE_INFRASTRUCTURE permission.
  * Business logic is delegated to TelephonyConfigService and BlocklistRepository.
  */
 
 import { getEnv } from "../env.js";
-import { router, adminProcedure, withErrorWrapping } from "../trpc/trpc.js";
+import {
+  router,
+  infrastructureProcedure,
+  withErrorWrapping,
+} from "../trpc/trpc.js";
 import type { TelephonyConfigService } from "../telephony/config-service.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import { createBlocklistRepository } from "../telephony/models/blocklist-repo.js";
@@ -32,64 +36,70 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
   const { configService, webhookBaseUrl, indexer } = deps;
 
   return router({
-    saveConfig: adminProcedure.input(saveTelephonyConfigInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        return configService.saveConfig({
-          orgId: ctx.org.orgId,
-          provider: input.provider,
-          accountId: input.accountId,
-          authToken: input.authToken,
-        });
-      }),
-    ),
-
-    getConfig: adminProcedure.query(
-      withErrorWrapping(async ({ ctx }) => {
-        return configService.getMaskedConfig(ctx.org.orgId);
-      }),
-    ),
-
-    provisionWebhooks: adminProcedure.mutation(
-      withErrorWrapping(async ({ ctx }) => {
-        return configService.provisionWebhooks(ctx.org.orgId, webhookBaseUrl);
-      }),
-    ),
-
-    changeMode: adminProcedure.input(changeTelephonyModeInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        if (input.mode === "byot") {
-          await configService.saveConfig({
+    saveConfig: infrastructureProcedure
+      .input(saveTelephonyConfigInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          return configService.saveConfig({
             orgId: ctx.org.orgId,
             provider: input.provider,
             accountId: input.accountId,
             authToken: input.authToken,
           });
-        } else {
-          await configService.clearConfig(ctx.org.orgId);
-        }
-        return { success: true as const, mode: input.mode };
+        }),
+      ),
+
+    getConfig: infrastructureProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        return configService.getMaskedConfig(ctx.org.orgId);
       }),
     ),
 
-    addToBlocklist: adminProcedure.input(addToBlocklistInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const repo = createBlocklistRepository(ctx.org.tenantDb);
-        const phoneHash = indexer.hashPhone(input.phoneNumber, ctx.org.orgId);
-
-        if (await repo.exists(phoneHash)) {
-          throw new ConflictError("This number is already blocked");
-        }
-
-        const encryptedNumber = ctx.org.sealedBox.seal(input.phoneNumber);
-        const entry = await repo.add(phoneHash, encryptedNumber, ctx.user.id);
-        return {
-          ...entry,
-          encryptedNumber: entry.encryptedNumber.toString("base64url"),
-        };
+    provisionWebhooks: infrastructureProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => {
+        return configService.provisionWebhooks(ctx.org.orgId, webhookBaseUrl);
       }),
     ),
 
-    removeFromBlocklist: adminProcedure
+    changeMode: infrastructureProcedure
+      .input(changeTelephonyModeInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (input.mode === "byot") {
+            await configService.saveConfig({
+              orgId: ctx.org.orgId,
+              provider: input.provider,
+              accountId: input.accountId,
+              authToken: input.authToken,
+            });
+          } else {
+            await configService.clearConfig(ctx.org.orgId);
+          }
+          return { success: true as const, mode: input.mode };
+        }),
+      ),
+
+    addToBlocklist: infrastructureProcedure
+      .input(addToBlocklistInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const repo = createBlocklistRepository(ctx.org.tenantDb);
+          const phoneHash = indexer.hashPhone(input.phoneNumber, ctx.org.orgId);
+
+          if (await repo.exists(phoneHash)) {
+            throw new ConflictError("This number is already blocked");
+          }
+
+          const encryptedNumber = ctx.org.sealedBox.seal(input.phoneNumber);
+          const entry = await repo.add(phoneHash, encryptedNumber, ctx.user.id);
+          return {
+            ...entry,
+            encryptedNumber: entry.encryptedNumber.toString("base64url"),
+          };
+        }),
+      ),
+
+    removeFromBlocklist: infrastructureProcedure
       .input(removeFromBlocklistInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -98,7 +108,7 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
         }),
       ),
 
-    listBlocklist: adminProcedure.query(
+    listBlocklist: infrastructureProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const repo = createBlocklistRepository(ctx.org.tenantDb);
         const entries = await repo.list();
@@ -109,30 +119,32 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
       }),
     ),
 
-    getProvisionedPhones: adminProcedure.query(
+    getProvisionedPhones: infrastructureProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         return configService.lookupProvisionedPhones(ctx.org.orgId);
       }),
     ),
 
-    getPhonePurpose: adminProcedure.query(
+    getPhonePurpose: infrastructureProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         return configService.getPhonePurpose(ctx.org.tenantDb);
       }),
     ),
 
-    setPhonePurpose: adminProcedure.input(setPhonePurposeInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        await configService.setPhonePurpose(ctx.org.tenantDb, {
-          outboundSid: input.outboundSid,
-          systemSid: input.systemSid,
-        });
-      }),
-    ),
+    setPhonePurpose: infrastructureProcedure
+      .input(setPhonePurposeInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          await configService.setPhonePurpose(ctx.org.tenantDb, {
+            outboundSid: input.outboundSid,
+            systemSid: input.systemSid,
+          });
+        }),
+      ),
 
     ...(getEnv().NODE_ENV === "development"
       ? {
-          devSeedTelephony: adminProcedure.mutation(
+          devSeedTelephony: infrastructureProcedure.mutation(
             withErrorWrapping(async ({ ctx }) => {
               const existing = await configService.getMaskedConfig(
                 ctx.org.orgId,

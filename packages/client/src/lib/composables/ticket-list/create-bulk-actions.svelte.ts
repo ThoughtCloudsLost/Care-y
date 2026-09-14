@@ -5,6 +5,7 @@ import { toastStore } from "$lib/stores/toast.svelte.js";
 import { haptic } from "$lib/utils/haptic.js";
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
+import type { TicketPriority } from "@care-y/shared";
 
 interface BulkActionsDeps {
   readonly selectedIds: SvelteSet<string>;
@@ -15,6 +16,11 @@ interface BulkActionsDeps {
     targetUserId: string,
   ) => Promise<unknown>;
   readonly holdTicket: (ticketId: string) => Promise<unknown>;
+  readonly updateTicket: (args: {
+    ticketId: string;
+    priority?: TicketPriority;
+    queueId?: string;
+  }) => Promise<unknown>;
   readonly resolveVolunteerName: (userId: string) => string;
 }
 
@@ -46,6 +52,8 @@ export interface BulkActions {
     targetUserId: string | null,
   ) => Promise<void>;
   handleBulkHold: () => Promise<void>;
+  handleBulkPriority: (priority: TicketPriority) => Promise<void>;
+  handleBulkQueue: (queueId: string) => Promise<void>;
 }
 
 export function createBulkActions(deps: BulkActionsDeps): BulkActions {
@@ -55,6 +63,7 @@ export function createBulkActions(deps: BulkActionsDeps): BulkActions {
     queryClient,
     assignTo,
     holdTicket,
+    updateTicket,
     resolveVolunteerName,
   } = deps;
 
@@ -114,5 +123,60 @@ export function createBulkActions(deps: BulkActionsDeps): BulkActions {
     void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
   }
 
-  return { handleBulkAssignTo, handleBulkHold };
+  async function handleBulkPriority(priority: TicketPriority): Promise<void> {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    const { succeeded, total, failed } = await batchMutate(ids, async (tid) =>
+      updateTicket({ ticketId: tid, priority }),
+    );
+
+    if (failed) {
+      toastStore.show(
+        m.ticket_toast_bulk_priority(withTerms({ count: String(succeeded) })) +
+          ` (${String(total - succeeded)} failed)`,
+        3000,
+      );
+    } else {
+      haptic();
+      toastStore.show(
+        m.ticket_toast_bulk_priority(withTerms({ count: String(succeeded) })),
+      );
+    }
+
+    exitMultiSelect();
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
+  }
+
+  async function handleBulkQueue(queueId: string): Promise<void> {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    const { succeeded, total, failed } = await batchMutate(ids, async (tid) =>
+      updateTicket({ ticketId: tid, queueId }),
+    );
+
+    if (failed) {
+      toastStore.show(
+        m.ticket_toast_bulk_queue(withTerms({ count: String(succeeded) })) +
+          ` (${String(total - succeeded)} failed)`,
+        3000,
+      );
+    } else {
+      haptic();
+      toastStore.show(
+        m.ticket_toast_bulk_queue(withTerms({ count: String(succeeded) })),
+      );
+    }
+
+    exitMultiSelect();
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
+  }
+
+  return {
+    handleBulkAssignTo,
+    handleBulkHold,
+    handleBulkPriority,
+    handleBulkQueue,
+  };
 }

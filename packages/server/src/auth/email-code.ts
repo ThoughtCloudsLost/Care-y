@@ -12,7 +12,7 @@
 
 import { randomInt } from "node:crypto";
 import type { Kysely, Selectable } from "kysely";
-import { ErrorCode } from "@care-y/shared";
+import { ErrorCode, RESEND_COOLDOWN_EMAIL_SECONDS } from "@care-y/shared";
 import {
   email_verification_subject,
   email_verification_body,
@@ -30,7 +30,7 @@ const CODE_DIGITS = 6;
 const CODE_MAX = 10 ** CODE_DIGITS; // 1,000,000
 const EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_ATTEMPTS = 3;
-const COOLDOWN_MS = 60 * 1000; // 1 minute between codes
+const COOLDOWN_MS = RESEND_COOLDOWN_EMAIL_SECONDS * 1000;
 const HOURLY_LIMIT = 5;
 const HOURLY_WINDOW_MS = 60 * 60 * 1000;
 

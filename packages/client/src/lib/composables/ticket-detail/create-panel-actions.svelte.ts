@@ -1,6 +1,7 @@
 import type { TicketAction } from "$lib/tickets/types.js";
 import type { toastStore as ToastStoreType } from "$lib/stores/toast.svelte.js";
 import { newKeyGeneration } from "@care-y/shared";
+import type { TicketPriority } from "@care-y/shared";
 import * as m from "$lib/paraglide/messages.js";
 
 type ToastStore = typeof ToastStoreType;
@@ -12,7 +13,9 @@ export interface PanelActionsDeps {
   readonly releaseMutate: (ticketId: string) => Promise<unknown>;
   readonly updateMutate: (args: {
     ticketId: string;
-    onHold: boolean;
+    onHold?: boolean;
+    priority?: TicketPriority;
+    queueId?: string;
   }) => Promise<unknown>;
   readonly reopenMutate: (args: {
     ticketId: string;
@@ -23,6 +26,8 @@ export interface PanelActionsDeps {
   readonly onclose: () => void;
   readonly oncall: () => void;
   readonly onassign: () => void;
+  readonly onchangepriority: () => void;
+  readonly onchangequeue: () => void;
   readonly onphone: () => void;
   readonly onemail: () => void;
   readonly oneditcontent: () => void;
@@ -62,6 +67,12 @@ export function createPanelActions(deps: PanelActionsDeps): PanelActions {
         break;
       case "assign":
         deps.onassign();
+        break;
+      case "changePriority":
+        deps.onchangepriority();
+        break;
+      case "changeQueue":
+        deps.onchangequeue();
         break;
       case "hold":
         mutateWithToast(deps.updateMutate({ ticketId, onHold: true }));

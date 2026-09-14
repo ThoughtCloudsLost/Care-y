@@ -64,4 +64,71 @@ describe("QuickExit", () => {
     window.dispatchEvent(new Event("pagehide"));
     expect(mockDestroy).toHaveBeenCalledOnce();
   });
+
+  describe("onrevoke", () => {
+    it("calls onrevoke before ondestroy on click exit", async () => {
+      const callOrder: string[] = [];
+      const revoke = vi.fn(() => callOrder.push("revoke"));
+      const destroy = vi.fn(() => callOrder.push("destroy"));
+
+      const { getByTestId } = render(QuickExit, {
+        props: {
+          ondestroy: destroy,
+          onrevoke: revoke,
+          safeUrl: "https://weather.gov",
+        },
+      });
+      await fireEvent.click(getByTestId("quick-exit"));
+
+      expect(revoke).toHaveBeenCalledOnce();
+      expect(destroy).toHaveBeenCalledOnce();
+      expect(callOrder).toEqual(["revoke", "destroy"]);
+    });
+
+    it("calls onrevoke before ondestroy on Escape exit", async () => {
+      const callOrder: string[] = [];
+      const revoke = vi.fn(() => callOrder.push("revoke"));
+      const destroy = vi.fn(() => callOrder.push("destroy"));
+
+      render(QuickExit, {
+        props: {
+          ondestroy: destroy,
+          onrevoke: revoke,
+          safeUrl: "https://weather.gov",
+        },
+      });
+      await fireEvent.keyDown(window, { key: "Escape" });
+
+      expect(revoke).toHaveBeenCalledOnce();
+      expect(destroy).toHaveBeenCalledOnce();
+      expect(callOrder).toEqual(["revoke", "destroy"]);
+    });
+
+    it("does NOT call onrevoke on pagehide", () => {
+      const revoke = vi.fn();
+      render(QuickExit, {
+        props: {
+          ondestroy: mockDestroy,
+          onrevoke: revoke,
+          safeUrl: "https://weather.gov",
+        },
+      });
+      window.dispatchEvent(new Event("pagehide"));
+
+      expect(mockDestroy).toHaveBeenCalledOnce();
+      expect(revoke).not.toHaveBeenCalled();
+    });
+
+    it("works when onrevoke is not supplied", async () => {
+      const { getByTestId } = render(QuickExit, {
+        props: { ondestroy: mockDestroy, safeUrl: "https://weather.gov" },
+      });
+      await fireEvent.click(getByTestId("quick-exit"));
+
+      expect(mockDestroy).toHaveBeenCalledOnce();
+      expect(window.location.replace).toHaveBeenCalledWith(
+        "https://weather.gov",
+      );
+    });
+  });
 });

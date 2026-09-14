@@ -218,6 +218,31 @@ export const adminProcedure = authed2faProcedure.use(
   requireRole(Permission.MANAGE_ROLES),
 );
 
+/** Procedure that requires org + auth + 2FA + knowledge base read access. */
+export const kbReadProcedure = authed2faProcedure.use(
+  requireRole(Permission.VIEW_KNOWLEDGE_BASE),
+);
+
+/** Procedure that requires org + auth + 2FA + knowledge base edit access. */
+export const kbEditProcedure = authed2faProcedure.use(
+  requireRole(Permission.EDIT_KNOWLEDGE_BASE),
+);
+
+/** Procedure that requires org + auth + 2FA + knowledge base category management. */
+export const kbCategoryProcedure = authed2faProcedure.use(
+  requireRole(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES),
+);
+
+/** Procedure that requires org + auth + 2FA + content moderation access. */
+export const moderationProcedure = authed2faProcedure.use(
+  requireRole(Permission.MODERATE_CONTENT),
+);
+
+/** Procedure that requires org + auth + 2FA + infrastructure management access. */
+export const infrastructureProcedure = authed2faProcedure.use(
+  requireRole(Permission.MANAGE_INFRASTRUCTURE),
+);
+
 /**
  * Wraps a resolver function so that AppErrors thrown by the resolver are
  * caught and re-thrown as TRPCError with the correct code. Non-AppErrors

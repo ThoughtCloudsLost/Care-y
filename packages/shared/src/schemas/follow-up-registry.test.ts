@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { CONTENT_TYPE_REGISTRY } from "./follow-up-registry.js";
+import {
+  CONTENT_TYPE_REGISTRY,
+  queueEventParamsSchema,
+} from "./follow-up-registry.js";
 import type { RenderVariant } from "./follow-up-registry.js";
+import type { QueueId } from "../ids.js";
 
 describe("CONTENT_TYPE_REGISTRY", () => {
   it("has an entry for contact_correction", () => {
@@ -98,6 +102,71 @@ describe("CONTENT_TYPE_REGISTRY", () => {
 
     it("has the email renderVariant (timeline landmark)", () => {
       expect(CONTENT_TYPE_REGISTRY.email_inbound.renderVariant).toBe("email");
+    });
+  });
+
+  describe("queue_changed entry", () => {
+    it("has an entry for queue_changed", () => {
+      expect(CONTENT_TYPE_REGISTRY.queue_changed).toBeDefined();
+    });
+
+    it("has category 'system'", () => {
+      expect(CONTENT_TYPE_REGISTRY.queue_changed.category).toBe("system");
+    });
+
+    it("allows only system source", () => {
+      expect(CONTENT_TYPE_REGISTRY.queue_changed.allowedSources).toEqual([
+        "system",
+      ]);
+    });
+
+    it("uses no encryption", () => {
+      expect(CONTENT_TYPE_REGISTRY.queue_changed.encryption).toBe("none");
+    });
+
+    it("has no encrypted content and has event params", () => {
+      expect(CONTENT_TYPE_REGISTRY.queue_changed.hasEncryptedContent).toBe(
+        false,
+      );
+      expect(CONTENT_TYPE_REGISTRY.queue_changed.hasEventParams).toBe(true);
+    });
+
+    it("is not groupable", () => {
+      expect(CONTENT_TYPE_REGISTRY.queue_changed.groupable).toBe(false);
+    });
+
+    it("has no renderVariant", () => {
+      expect(CONTENT_TYPE_REGISTRY.queue_changed.renderVariant).toBeUndefined();
+    });
+  });
+
+  describe("queueEventParamsSchema", () => {
+    const validTo = crypto.randomUUID() as QueueId;
+    const validFrom = crypto.randomUUID() as QueueId;
+
+    it("accepts params with both to and from", () => {
+      const result = queueEventParamsSchema.safeParse({
+        to: validTo,
+        from: validFrom,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("accepts params with only to (from is optional)", () => {
+      const result = queueEventParamsSchema.safeParse({ to: validTo });
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects params without to", () => {
+      const result = queueEventParamsSchema.safeParse({ from: validFrom });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects non-uuid values", () => {
+      const result = queueEventParamsSchema.safeParse({
+        to: "not-a-uuid",
+      });
+      expect(result.success).toBe(false);
     });
   });
 });

@@ -239,14 +239,18 @@ vi.mock("$lib/portal/context.js", () => {
   } satisfies typeof _usedExports;
 });
 
+// Captures the most recently published shell state so tests can invoke
+// callbacks (e.g. onrevoke) the page registers through the context.
+let capturedShellState: ContextNS.ClientShellState | undefined;
+
 vi.mock("$lib/client-shell/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ContextNS>()),
   getClientShellCtx: () => ({
-    get current(): unknown {
-      return undefined;
+    get current(): ContextNS.ClientShellState | undefined {
+      return capturedShellState;
     },
-    set current(_v: unknown) {
-      /* noop */
+    set current(v: ContextNS.ClientShellState | undefined) {
+      capturedShellState = v;
     },
   }),
   DEFAULT_SAFE_URL: "https://weather.gov",
@@ -548,6 +552,7 @@ describe("account page", () => {
     mockWorkerInstances = [];
     bootstrapEnabled = false;
     messagesEnabled = false;
+    capturedShellState = undefined;
     vi.clearAllMocks();
     installBridgeFactory();
   });
@@ -616,6 +621,70 @@ describe("account page", () => {
       // Wait for the error path to terminate the worker
       await vi.waitFor(() => {
         expect(worker.terminate).toHaveBeenCalled();
+      });
+    });
+  });
+
+  /**
+   * Swap navigator.sendBeacon for the duration of `body`, then restore it.
+   *
+   * Deliberately narrow: this file installs a module-level Worker stub via
+   * vi.stubGlobal, so vi.unstubAllGlobals() here would tear that down and
+   * break every later test that constructs a PortalBridge.
+   */
+  function withSendBeacon(
+    impl: ((url: string, data?: BodyInit | null) => boolean) | undefined,
+    body: () => void,
+  ): void {
+    const original = Object.getOwnPropertyDescriptor(navigator, "sendBeacon");
+    Object.defineProperty(navigator, "sendBeacon", {
+      value: impl,
+      configurable: true,
+      writable: true,
+    });
+    try {
+      body();
+    } finally {
+      if (original) {
+        Object.defineProperty(navigator, "sendBeacon", original);
+      } else {
+        delete (navigator as { sendBeacon?: unknown }).sendBeacon;
+      }
+    }
+  }
+
+  describe("session revocation via sendBeacon", () => {
+    it("publishes onrevoke in the shell context", () => {
+      render(AccountPage);
+
+      // The page registers shell state on mount, even before login
+      expect(capturedShellState).toBeDefined();
+      expect(typeof capturedShellState?.onrevoke).toBe("function");
+    });
+
+    it("calls navigator.sendBeacon with the logout endpoint and a JSON Blob", () => {
+      const sendBeaconSpy = vi.fn().mockReturnValue(true);
+
+      withSendBeacon(sendBeaconSpy, () => {
+        render(AccountPage);
+
+        // Invoke the revoke callback the page published
+        capturedShellState?.onrevoke?.();
+
+        expect(sendBeaconSpy).toHaveBeenCalledOnce();
+        const [url, body] = sendBeaconSpy.mock.calls[0] as [string, Blob];
+        expect(url).toBe("/trpc/clientPortal.accountLogout");
+        expect(body).toBeInstanceOf(Blob);
+        expect(body.type).toBe("application/json");
+      });
+    });
+
+    it("does not throw when navigator.sendBeacon is absent", () => {
+      withSendBeacon(undefined, () => {
+        render(AccountPage);
+
+        // Must not throw even when sendBeacon is unavailable
+        expect(() => capturedShellState?.onrevoke?.()).not.toThrow();
       });
     });
   });

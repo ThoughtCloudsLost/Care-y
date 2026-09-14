@@ -68,6 +68,13 @@ export interface ClientShellState {
    * The shell forwards it to ShellNavbar.
    */
   readonly subnavbarHidden?: () => boolean;
+  /**
+   * Revoke the server-side session on quick exit. Only the account page
+   * sets this, because it is the only client surface that holds a cookie
+   * session. Channel, share, intake, and intake-privacy pages leave it
+   * unset and the shell never calls it.
+   */
+  readonly onrevoke?: () => void;
 }
 
 export interface ClientShellContainer {

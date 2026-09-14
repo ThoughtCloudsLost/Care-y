@@ -1,9 +1,12 @@
 /**
  * Knowledge Base tRPC router.
  *
- * Permission mapping:
- * - managerProcedure: category CRUD (create, update, delete) + article deletion
- * - volunteerProcedure: category listing, article CRUD (create, get, list, update), voting
+ * Each operation is gated by the permission its name describes.
+ * Category create, update and delete run on kbCategoryProcedure.
+ * Article create, article update and attachment upload run on
+ * kbEditProcedure. Reads of categories, articles and attachments run on
+ * kbReadProcedure, as does voting. Article deletion runs on
+ * moderationProcedure.
  *
  * All encrypted fields arrive as base64 strings from the client (org key encryption).
  * The router converts to Buffer before passing to the service layer.
@@ -14,8 +17,10 @@ import { getEnv } from "../env.js";
 import {
   router,
   authedProcedure,
-  volunteerProcedure,
-  managerProcedure,
+  kbReadProcedure,
+  kbEditProcedure,
+  kbCategoryProcedure,
+  moderationProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import type { OrgContext } from "../trpc/context.js";
@@ -36,6 +41,8 @@ const KB_ALLOWED_CONTENT_TYPES: ReadonlySet<string> = new Set([
   "image/gif",
   "image/webp",
   "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 import {
   createKbCategoryInputSchema,
@@ -70,7 +77,7 @@ export interface KBRouterDeps {
 export function createKbRouter(deps: KBRouterDeps) {
   return router({
     // --- Categories ---
-    createCategory: managerProcedure
+    createCategory: kbCategoryProcedure
       .input(createKbCategoryInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -90,7 +97,7 @@ export function createKbRouter(deps: KBRouterDeps) {
         }),
       ),
 
-    listCategories: volunteerProcedure.query(
+    listCategories: kbReadProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = deps.createCategorySvc(ctx.org.tenantDb);
         const cats = await svc.list();
@@ -102,7 +109,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       }),
     ),
 
-    updateCategory: managerProcedure
+    updateCategory: kbCategoryProcedure
       .input(updateKbCategoryInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -126,7 +133,7 @@ export function createKbRouter(deps: KBRouterDeps) {
         }),
       ),
 
-    deleteCategory: managerProcedure
+    deleteCategory: kbCategoryProcedure
       .input(z.object({ categoryId: kbCategoryIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -137,7 +144,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       ),
 
     // --- Articles ---
-    createItem: volunteerProcedure.input(createKbItemInputSchema).mutation(
+    createItem: kbEditProcedure.input(createKbItemInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
         const item = await svc.create(ctx.user.id, {
@@ -158,22 +165,20 @@ export function createKbRouter(deps: KBRouterDeps) {
       }),
     ),
 
-    getItem: volunteerProcedure
-      .input(z.object({ itemId: kbItemIdSchema }))
-      .query(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const svc = deps.createItemSvc(ctx.org.tenantDb);
-          const item = await svc.findById(input.itemId);
-          return {
-            ...item,
-            encryptedTitle: b64(item.encryptedTitle),
-            encryptedBody: b64(item.encryptedBody),
-            encryptedExcerpt: b64n(item.encryptedExcerpt),
-          };
-        }),
-      ),
+    getItem: kbReadProcedure.input(z.object({ itemId: kbItemIdSchema })).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = deps.createItemSvc(ctx.org.tenantDb);
+        const item = await svc.findById(input.itemId);
+        return {
+          ...item,
+          encryptedTitle: b64(item.encryptedTitle),
+          encryptedBody: b64(item.encryptedBody),
+          encryptedExcerpt: b64n(item.encryptedExcerpt),
+        };
+      }),
+    ),
 
-    listItems: volunteerProcedure.input(kbItemListInputSchema).query(
+    listItems: kbReadProcedure.input(kbItemListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
         const page = await svc.list({
@@ -198,7 +203,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       }),
     ),
 
-    updateItem: volunteerProcedure.input(updateKbItemInputSchema).mutation(
+    updateItem: kbEditProcedure.input(updateKbItemInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
         // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; Buffer.from is wire-format (base64 to Buffer) conversion, not business logic
@@ -226,7 +231,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       }),
     ),
 
-    deleteItem: managerProcedure
+    deleteItem: moderationProcedure
       .input(z.object({ itemId: kbItemIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -244,7 +249,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       ),
 
     // --- Authors (for client-side filter dropdown) ---
-    listAuthors: volunteerProcedure.query(
+    listAuthors: kbReadProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
         const authors = await svc.listAuthors();
@@ -256,7 +261,7 @@ export function createKbRouter(deps: KBRouterDeps) {
     ),
 
     // --- Dashboard: recently updated ---
-    recentItems: volunteerProcedure
+    recentItems: kbReadProcedure
       .input(z.object({ limit: z.number().int().min(1).max(5).default(2) }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -271,7 +276,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       ),
 
     // --- Bulk body fetch (for full search) ---
-    listBodies: volunteerProcedure.input(listKbBodiesInputSchema).query(
+    listBodies: kbReadProcedure.input(listKbBodiesInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
         const bodies = await svc.listBodies(input.itemIds);
@@ -283,7 +288,7 @@ export function createKbRouter(deps: KBRouterDeps) {
     ),
 
     // --- Voting ---
-    castVote: volunteerProcedure.input(castVoteInputSchema).mutation(
+    castVote: kbReadProcedure.input(castVoteInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createVoteSvc(ctx.org.tenantDb);
         await svc.castVote(ctx.user.id, {
@@ -293,14 +298,14 @@ export function createKbRouter(deps: KBRouterDeps) {
       }),
     ),
 
-    removeVote: volunteerProcedure.input(removeVoteInputSchema).mutation(
+    removeVote: kbReadProcedure.input(removeVoteInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createVoteSvc(ctx.org.tenantDb);
         await svc.removeVote(ctx.user.id, input.itemId);
       }),
     ),
 
-    getUserVote: volunteerProcedure
+    getUserVote: kbReadProcedure
       .input(z.object({ itemId: kbItemIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -310,7 +315,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       ),
 
     // --- Attachments ---
-    uploadAttachment: volunteerProcedure
+    uploadAttachment: kbEditProcedure
       .input(uploadKbAttachmentInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -394,18 +399,16 @@ export function createKbRouter(deps: KBRouterDeps) {
         }),
       ),
 
-    listAttachments: volunteerProcedure
-      .input(listKbAttachmentsInputSchema)
-      .query(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const mediaSvc = deps.createMediaSvc(ctx.org.tenantDb);
-          const atts = await mediaSvc.listAttachments(input.itemId);
-          return atts.map((a) => ({
-            ...a,
-            encryptedFilename: b64n(a.encryptedFilename),
-          }));
-        }),
-      ),
+    listAttachments: kbReadProcedure.input(listKbAttachmentsInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const mediaSvc = deps.createMediaSvc(ctx.org.tenantDb);
+        const atts = await mediaSvc.listAttachments(input.itemId);
+        return atts.map((a) => ({
+          ...a,
+          encryptedFilename: b64n(a.encryptedFilename),
+        }));
+      }),
+    ),
 
     // --- Dev-only: seed KB articles with sealed box encryption ---
     ...(getEnv().NODE_ENV === "development"

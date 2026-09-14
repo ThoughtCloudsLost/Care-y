@@ -4,7 +4,8 @@
  * Service layer is mocked via deps. These verify:
  * - Router delegates correctly to services
  * - Base64-to-Buffer conversion works
- * - Permission enforcement (volunteer vs manager)
+ * - Permission enforcement via dedicated KB procedures
+ *   (kbReadProcedure, kbEditProcedure, kbCategoryProcedure, moderationProcedure)
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -730,26 +731,37 @@ describe("KB Attachment routes", () => {
     expect(mockBlobStore.put).not.toHaveBeenCalled();
   });
 
-  it("upload rejects content type accepted by Zod but not in route allowlist", async () => {
-    // "application/msword" passes the Zod enum (shared KB_ALLOWED_CONTENT_TYPES)
-    // but is absent from the route's stricter local set.
+  it("upload accepts application/msword attachments", async () => {
     const smallBuf = Buffer.from("fake-doc-bytes");
     const caller = buildVolunteerCaller();
 
-    // AttachmentValidationError is not a subclass of ValidationError,
-    // so appErrorToTrpcCode maps it to INTERNAL_SERVER_ERROR.
-    await expectTrpcError(
-      caller.uploadAttachment({
-        itemId: VALID_UUID,
-        blob: smallBuf.toString("base64"),
-        sizeBytes: smallBuf.byteLength,
-        contentType: "application/msword",
-      }),
-      "INTERNAL_SERVER_ERROR",
-      "not allowed",
-    );
+    const result = await caller.uploadAttachment({
+      itemId: VALID_UUID,
+      blob: smallBuf.toString("base64"),
+      sizeBytes: smallBuf.byteLength,
+      contentType: "application/msword",
+    });
 
-    expect(mockBlobStore.put).not.toHaveBeenCalled();
+    expect(result.id).toBe("att-1");
+    expect(mockBlobStore.put).toHaveBeenCalledOnce();
+    expect(mockMediaSvc.createAttachment).toHaveBeenCalledOnce();
+  });
+
+  it("upload accepts DOCX attachments", async () => {
+    const smallBuf = Buffer.from("fake-docx-bytes");
+    const caller = buildVolunteerCaller();
+
+    const result = await caller.uploadAttachment({
+      itemId: VALID_UUID,
+      blob: smallBuf.toString("base64"),
+      sizeBytes: smallBuf.byteLength,
+      contentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+
+    expect(result.id).toBe("att-1");
+    expect(mockBlobStore.put).toHaveBeenCalledOnce();
+    expect(mockMediaSvc.createAttachment).toHaveBeenCalledOnce();
   });
 
   it("upload cleans up orphaned blob when createAttachment throws", async () => {

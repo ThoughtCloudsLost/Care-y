@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  RESEND_COOLDOWN_SMS_SECONDS,
+  RESEND_COOLDOWN_EMAIL_SECONDS,
   emailSchema,
   notificationEmailSchema,
   passwordSchema,
@@ -13,6 +15,22 @@ import {
   rolePermissionsOutputSchema,
 } from "./auth.js";
 import { RoleId, Permission } from "../roles.js";
+
+describe("resend cooldown constants", () => {
+  it("SMS cooldown is 90 seconds", () => {
+    expect(RESEND_COOLDOWN_SMS_SECONDS).toBe(90);
+  });
+
+  it("email cooldown is 60 seconds", () => {
+    expect(RESEND_COOLDOWN_EMAIL_SECONDS).toBe(60);
+  });
+
+  it("SMS cooldown is strictly greater than email cooldown", () => {
+    expect(RESEND_COOLDOWN_SMS_SECONDS).toBeGreaterThan(
+      RESEND_COOLDOWN_EMAIL_SECONDS,
+    );
+  });
+});
 
 describe("emailSchema", () => {
   it("accepts a valid email", () => {

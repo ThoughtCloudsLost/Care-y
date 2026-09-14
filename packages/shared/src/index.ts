@@ -29,6 +29,8 @@ export {
 export { formatPhoneDisplay } from "./utils/format-phone.js";
 
 export {
+  RESEND_COOLDOWN_SMS_SECONDS,
+  RESEND_COOLDOWN_EMAIL_SECONDS,
   emailSchema,
   notificationEmailSchema,
   PASSWORD_MIN_LENGTH,
@@ -395,11 +397,13 @@ export {
   CONTENT_TYPE_REGISTRY,
   assignmentEventParamsSchema,
   priorityEventParamsSchema,
+  queueEventParamsSchema,
   type ContentCategory,
   type ContentTypeMeta,
   type RenderVariant,
   type AssignmentEventParams,
   type PriorityEventParams,
+  type QueueEventParams,
 } from "./schemas/follow-up-registry.js";
 
 // --- Contact correction payload ---

@@ -1236,6 +1236,15 @@ export function createTicketService(
         return toRecord(existing);
       }
 
+      // Load prior values for fields that need before/after comparison.
+      // The access check does not return the row, so one select is needed.
+      const prior = await db
+        .selectFrom("tickets")
+        .select(["priority", "queue_id"])
+        .where("id", "=", input.ticketId)
+        .executeTakeFirst();
+      if (!prior) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+
       const row = await db
         .updateTable("tickets")
         .set(updates)
@@ -1253,9 +1262,16 @@ export function createTicketService(
           input.onHold ? "hold_placed" : "hold_removed",
         );
       }
-      if (input.priority !== undefined) {
+      if (input.priority !== undefined && input.priority !== prior.priority) {
         await createSystemFollowUp(db, input.ticketId, "priority_changed", {
+          from: prior.priority,
           to: input.priority,
+        });
+      }
+      if (input.queueId !== undefined && input.queueId !== prior.queue_id) {
+        await createSystemFollowUp(db, input.ticketId, "queue_changed", {
+          from: prior.queue_id,
+          to: input.queueId,
         });
       }
       if (input.status !== undefined) {

@@ -18,7 +18,11 @@
   import { trpc } from "$lib/trpc/index.js";
   import { base64urlToBuffer, bufferToBase64url } from "$lib/utils/webauthn.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { TwoFactorMethod } from "@care-y/shared";
+  import {
+    TwoFactorMethod,
+    RESEND_COOLDOWN_SMS_SECONDS,
+    RESEND_COOLDOWN_EMAIL_SECONDS,
+  } from "@care-y/shared";
 
   let {
     methods,
@@ -259,7 +263,7 @@
     submitting = true;
     try {
       await trpc.twoFactor.verify.emailSend.mutate();
-      startResendCooldown();
+      startResendCooldown(RESEND_COOLDOWN_EMAIL_SECONDS);
     } catch {
       error = m.twofa_error_invalid_code();
       announceToLiveRegion("assertive", error);
@@ -268,8 +272,8 @@
     }
   }
 
-  function startResendCooldown(): void {
-    resendCooldown = 60;
+  function startResendCooldown(seconds: number): void {
+    resendCooldown = seconds;
     if (cooldownTimer !== null) clearInterval(cooldownTimer);
     cooldownTimer = setInterval(() => {
       resendCooldown -= 1;
@@ -310,7 +314,7 @@
     submitting = true;
     try {
       await trpc.twoFactor.verify.smsSend.mutate();
-      startResendCooldown();
+      startResendCooldown(RESEND_COOLDOWN_SMS_SECONDS);
     } catch {
       error = m.twofa_error_invalid_code();
       announceToLiveRegion("assertive", error);
