@@ -6,6 +6,8 @@ export type TicketAction =
   | "take"
   | "release"
   | "assign"
+  | "changePriority"
+  | "changeQueue"
   | "hold"
   | "unhold"
   | "close"

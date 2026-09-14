@@ -3,7 +3,10 @@
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import type { SavedFilterColor } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import type { TicketPriority } from "@care-y/shared";
   import AssignSheet from "$lib/components/tickets/AssignSheet.svelte";
+  import PrioritySelectSheet from "$lib/components/tickets/PrioritySelectSheet.svelte";
+  import QueueSelectSheet from "$lib/components/tickets/QueueSelectSheet.svelte";
   import ReplySheet from "$lib/components/tickets/ReplySheet.svelte";
   import NewTicketController from "$lib/components/tickets/NewTicketController.svelte";
   import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
@@ -20,6 +23,14 @@
     bulkAssignSheetOpen: boolean;
     onbulkassigndismiss: () => void;
     onbulkassign: (ticketId: string, targetUserId: string | null) => void;
+
+    bulkPrioritySheetOpen: boolean;
+    onbulkprioritydismiss: () => void;
+    onbulkpriorityselect: (priority: TicketPriority) => void;
+
+    bulkQueueSheetOpen: boolean;
+    onbulkqueuedismiss: () => void;
+    onbulkqueueselect: (queueId: string) => void;
 
     replySheetOpen: boolean;
     replyTargetTicketId: string;
@@ -59,6 +70,12 @@
     bulkAssignSheetOpen,
     onbulkassigndismiss,
     onbulkassign,
+    bulkPrioritySheetOpen,
+    onbulkprioritydismiss,
+    onbulkpriorityselect,
+    bulkQueueSheetOpen,
+    onbulkqueuedismiss,
+    onbulkqueueselect,
     replySheetOpen,
     replyTargetTicketId,
     replyClientAlias,
@@ -103,6 +120,18 @@
   currentAssigneeId={null}
   ondismiss={onbulkassigndismiss}
   onassign={(tid: string, uid: string | null) => onbulkassign(tid, uid)}
+/>
+
+<PrioritySelectSheet
+  opened={bulkPrioritySheetOpen}
+  ondismiss={onbulkprioritydismiss}
+  onselect={onbulkpriorityselect}
+/>
+
+<QueueSelectSheet
+  opened={bulkQueueSheetOpen}
+  ondismiss={onbulkqueuedismiss}
+  onselect={onbulkqueueselect}
 />
 
 <ReplySheet

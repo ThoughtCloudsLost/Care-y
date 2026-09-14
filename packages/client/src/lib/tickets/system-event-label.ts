@@ -18,6 +18,7 @@ function priorityLabel(value: string): string {
 type LabelResolver = (
   eventParams?: Record<string, unknown> | null,
   resolveUserName?: (userId: string) => string,
+  resolveQueueName?: (queueId: string) => string,
 ) => string;
 
 const labelMap: Record<string, LabelResolver> = {
@@ -30,6 +31,14 @@ const labelMap: Record<string, LabelResolver> = {
     return m.ticket_system_priority_changed({
       priority: to !== null ? priorityLabel(to) : "?",
     });
+  },
+  queue_changed: (p, _resolveUser, resolveQueue) => {
+    const to = typeof p?.to === "string" ? p.to : null;
+    const name =
+      to !== null && resolveQueue !== undefined
+        ? resolveQueue(to)
+        : m.ticket_system_queue_fallback();
+    return m.ticket_system_queue_changed({ queue: name });
   },
   volunteer_assigned: (p, resolve) => {
     const userId = typeof p?.userId === "string" ? p.userId : null;
@@ -54,10 +63,11 @@ export function systemEventLabel(
   type: string,
   eventParams?: Record<string, unknown> | null,
   resolveUserName?: (userId: string) => string,
+  resolveQueueName?: (queueId: string) => string,
 ): string {
   // eslint-disable-next-line security/detect-object-injection -- constant map with string keys, no user input reaches the key set
   const resolver = labelMap[type];
   return resolver !== undefined
-    ? resolver(eventParams, resolveUserName)
+    ? resolver(eventParams, resolveUserName, resolveQueueName)
     : m.ticket_system_event();
 }

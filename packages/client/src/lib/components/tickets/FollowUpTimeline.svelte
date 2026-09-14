@@ -78,6 +78,7 @@
     /** Resolve a note type's icon by noteTypeId (null = use default). Returns the LucideIcon component or undefined. */
     resolveNoteIcon?: (noteTypeId: string | null) => LucideIcon | undefined;
     resolveUserName?: (userId: string) => string;
+    resolveQueueName?: (queueId: string) => string;
     children: Snippet;
   }
 
@@ -94,6 +95,7 @@
     onsearchscrollcomplete,
     resolveNoteIcon,
     resolveUserName,
+    resolveQueueName,
     children,
   }: FollowUpTimelineProps = $props();
 
@@ -131,7 +133,12 @@
 
   function landmarkLabel(item: TimelineItem): string {
     if (item.source === "system") {
-      return systemEventLabel(item.type, item.eventParams, resolveUserName);
+      return systemEventLabel(
+        item.type,
+        item.eventParams,
+        resolveUserName,
+        resolveQueueName,
+      );
     }
 
     const variant = followUpRenderVariant(item);

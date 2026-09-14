@@ -71,7 +71,11 @@
   import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
   import type { TicketComposeHandle } from "$lib/components/tickets/ticket-compose-types.js";
   import type { TicketAction } from "$lib/tickets/types.js";
-  import type { ProseMirrorDocJSON, AttachmentId } from "@care-y/shared";
+  import type {
+    ProseMirrorDocJSON,
+    AttachmentId,
+    TicketPriority,
+  } from "@care-y/shared";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import TicketDetailOverlays from "$lib/components/tickets/TicketDetailOverlays.svelte";
   import EmailComposeSheet from "$lib/components/tickets/EmailComposeSheet.svelte";
@@ -382,6 +386,8 @@
 
   let panelOpen = $state(false);
   let assignSheetOpen = $state(false);
+  let prioritySheetOpen = $state(false);
+  let queueSheetOpen = $state(false);
   let callSheetOpen = $state(false);
   let composeActionsOpen = $state(false);
   let composeActionsAnchor = $state<HTMLElement | undefined>();
@@ -481,6 +487,7 @@
       typeStatus: m.ticket_filter_type_status(),
       typePriority: m.ticket_filter_type_priority(),
       typeHold: m.ticket_filter_type_hold(),
+      typeQueue: m.ticket_filter_type_queue(),
       typeMerge: m.ticket_filter_type_merge(),
       typeCalls: m.ticket_filter_type_calls(),
     },
@@ -763,6 +770,14 @@
     onassign: () => {
       closePanel();
       assignSheetOpen = true;
+    },
+    onchangepriority: () => {
+      closePanel();
+      prioritySheetOpen = true;
+    },
+    onchangequeue: () => {
+      closePanel();
+      queueSheetOpen = true;
     },
     onphone: () => {
       // Same reasoning as email: nothing on file, nothing to copy.
@@ -1244,6 +1259,10 @@
   {clientAlias}
   {panelOpen}
   {assignSheetOpen}
+  {prioritySheetOpen}
+  currentPriority={ticket?.priority}
+  {queueSheetOpen}
+  currentQueueId={ticket?.queueId}
   {callSheetOpen}
   {composeActionsOpen}
   {composeActionsAnchor}
@@ -1341,6 +1360,46 @@
     assignSheetOpen = false;
     void ticketRouter.assignTo
       .mutate({ ticketId: tid, targetUserId })
+      .then(() => {
+        haptic();
+        void queryClient.invalidateQueries({
+          queryKey: ticketKeys.detail(ticketId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ticketsKeys.lists(),
+        });
+      })
+      .catch(() => {
+        toastStore.show(m.error_generic(), 3000);
+      });
+  }}
+  onprioritydismiss={() => {
+    prioritySheetOpen = false;
+  }}
+  onpriorityselect={(priority: TicketPriority) => {
+    prioritySheetOpen = false;
+    void ticketRouter.update
+      .mutate({ ticketId, priority })
+      .then(() => {
+        haptic();
+        void queryClient.invalidateQueries({
+          queryKey: ticketKeys.detail(ticketId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ticketsKeys.lists(),
+        });
+      })
+      .catch(() => {
+        toastStore.show(m.error_generic(), 3000);
+      });
+  }}
+  onqueuedismiss={() => {
+    queueSheetOpen = false;
+  }}
+  onqueueselect={(queueId: string) => {
+    queueSheetOpen = false;
+    void ticketRouter.update
+      .mutate({ ticketId, queueId })
       .then(() => {
         haptic();
         void queryClient.invalidateQueries({

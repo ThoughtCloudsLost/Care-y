@@ -36,6 +36,7 @@ export interface DetailFiltersConfig {
     readonly typeStatus: string;
     readonly typePriority: string;
     readonly typeHold: string;
+    readonly typeQueue: string;
     readonly typeMerge: string;
     readonly typeCalls: string;
   };
@@ -130,6 +131,7 @@ export function createDetailFilters(
     { value: "__status__", label: config.labels.typeStatus },
     { value: "__priority__", label: config.labels.typePriority },
     { value: "__hold__", label: config.labels.typeHold },
+    { value: "__queue__", label: config.labels.typeQueue },
     { value: "merge_note", label: config.labels.typeMerge },
     { value: "phone_call", label: config.labels.typeCalls },
   ]);

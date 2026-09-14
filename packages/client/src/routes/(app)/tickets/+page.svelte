@@ -34,7 +34,7 @@
   import type { NavbarAction } from "$lib/shell/types";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { Button } from "konsta/svelte";
-  import { UserPlus, Pause } from "@lucide/svelte";
+  import { UserPlus, Pause, ArrowUpDown, FolderInput } from "@lucide/svelte";
   import TicketPlus from "$lib/components/icons/TicketPlus.svelte";
   import BulkActionBar from "$lib/components/BulkActionBar.svelte";
   import {
@@ -75,6 +75,7 @@
     savedFilterStateSchema,
     ticketPrioritySchema,
     type SavedFilterColor,
+    type TicketPriority,
   } from "@care-y/shared";
   import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
   import StatusMark from "$lib/components/StatusMark.svelte";
@@ -188,6 +189,8 @@
   let callSheetOpen = $state(false);
   let newTicketOpen = $state(false);
   let bulkAssignSheetOpen = $state(false);
+  let bulkPrioritySheetOpen = $state(false);
+  let bulkQueueSheetOpen = $state(false);
   let savedFilterModalOpen = $state(false);
 
   // --- Queries ---
@@ -849,6 +852,16 @@
     bulkAssignSheetOpen = true;
   }
 
+  function handleBulkPriority(): void {
+    if (multiSelect.selectedIds.size === 0) return;
+    bulkPrioritySheetOpen = true;
+  }
+
+  function handleBulkQueue(): void {
+    if (multiSelect.selectedIds.size === 0) return;
+    bulkQueueSheetOpen = true;
+  }
+
   function handleCreateSavedFilter(meta: {
     encryptedName: string;
     color: SavedFilterColor;
@@ -950,6 +963,7 @@
       ticketRouter.assignTo.mutate({ ticketId, targetUserId }),
     holdTicket: async (ticketId) =>
       ticketRouter.update.mutate({ ticketId, onHold: true }),
+    updateTicket: async (args) => ticketRouter.update.mutate(args),
     resolveVolunteerName,
   });
 
@@ -1302,6 +1316,28 @@
         <Pause size={16} aria-hidden="true" />
         {m.tickets_action_hold()}
       </Button>
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn"
+        onclick={handleBulkPriority}
+      >
+        <ArrowUpDown size={16} aria-hidden="true" />
+        {m.ticket_bulk_priority()}
+      </Button>
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn"
+        onclick={handleBulkQueue}
+      >
+        <FolderInput size={16} aria-hidden="true" />
+        {m.ticket_bulk_queue()}
+      </Button>
     {/snippet}
   </BulkActionBar>
 {/snippet}
@@ -1555,6 +1591,22 @@
   onbulkassign={(tid: string, uid: string | null) => {
     bulkAssignSheetOpen = false;
     void bulkActions.handleBulkAssignTo(tid, uid);
+  }}
+  {bulkPrioritySheetOpen}
+  onbulkprioritydismiss={() => {
+    bulkPrioritySheetOpen = false;
+  }}
+  onbulkpriorityselect={(priority: TicketPriority) => {
+    bulkPrioritySheetOpen = false;
+    void bulkActions.handleBulkPriority(priority);
+  }}
+  {bulkQueueSheetOpen}
+  onbulkqueuedismiss={() => {
+    bulkQueueSheetOpen = false;
+  }}
+  onbulkqueueselect={(queueId: string) => {
+    bulkQueueSheetOpen = false;
+    void bulkActions.handleBulkQueue(queueId);
   }}
   replySheetOpen={replyFlow.sheetOpen}
   replyTargetTicketId={replyFlow.targetTicketId}

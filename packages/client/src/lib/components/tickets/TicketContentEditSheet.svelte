@@ -10,7 +10,7 @@
 <script lang="ts">
   import { List, ListInput } from "konsta/svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
-  import { ticketKeys, ticketsKeys } from "$lib/query/keys";
+  import { ticketKeys, ticketsKeys, queueKeys } from "$lib/query/keys";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -28,7 +28,11 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { ErrorCode } from "@care-y/shared";
+  import {
+    ErrorCode,
+    ticketPrioritySchema,
+    type TicketPriority,
+  } from "@care-y/shared";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -57,6 +61,27 @@
   }));
 
   const ticket = $derived(ticketQuery.data);
+
+  // ---- Queue list (org-cache decrypt, same key as CaseHeader) ----
+
+  const queuesQuery = createQuery(() => ({
+    queryKey: queueKeys.all,
+    queryFn: async () => ticketRouter.listQueues.query(),
+  }));
+
+  const decryptedQueues = $derived(
+    (queuesQuery.data ?? []).map((q) => ({
+      id: q.id,
+      name: orgCache.decrypt(`queue:${q.id}`, q.encryptedName) ?? "...",
+    })),
+  );
+
+  const priorities: readonly { value: TicketPriority; label: string }[] = [
+    { value: "low", label: m.ticket_new_priority_low() },
+    { value: "normal", label: m.ticket_new_priority_normal() },
+    { value: "high", label: m.ticket_new_priority_high() },
+    { value: "urgent", label: m.ticket_new_priority_urgent() },
+  ];
 
   // ---- Decrypt scope ----
 
@@ -89,11 +114,22 @@
 
   let titleText = $state("");
   let descriptionText = $state("");
+  let priority = $state<TicketPriority>("normal");
+  let queueId = $state("");
   let originalTitle = $state("");
   let originalDescription = $state("");
+  let originalPriority = $state<TicketPriority>("normal");
+  let originalQueueId = $state("");
   let saving = $state(false);
   let wasOpen = $state(false);
   let prefilled = $state(false);
+
+  // The detail query types priority as a plain string, so validate rather
+  // than assert. Falls back to the same default the create form uses.
+  function toPriority(value: unknown): TicketPriority {
+    const parsed = ticketPrioritySchema.safeParse(value);
+    return parsed.success ? parsed.data : "normal";
+  }
 
   // Determine whether both decrypts have resolved to usable values.
   const titleReady = $derived(
@@ -119,8 +155,12 @@
       prefilled = false;
       titleText = "";
       descriptionText = "";
+      priority = toPriority(ticket?.priority);
+      queueId = ticket?.queueId ?? "";
       originalTitle = "";
       originalDescription = "";
+      originalPriority = toPriority(ticket?.priority);
+      originalQueueId = ticket?.queueId ?? "";
     }
     wasOpen = opened;
   });
@@ -137,16 +177,24 @@
     ) {
       titleText = titleResult.value;
       descriptionText = descriptionResult.value;
+      priority = toPriority(ticket?.priority);
+      queueId = ticket?.queueId ?? "";
       originalTitle = titleResult.value;
       originalDescription = descriptionResult.value;
+      originalPriority = toPriority(ticket?.priority);
+      originalQueueId = ticket?.queueId ?? "";
       prefilled = true;
     }
   });
 
-  const isDirty = $derived(
+  const contentDirty = $derived(
     titleText.trim() !== originalTitle ||
       descriptionText.trim() !== originalDescription,
   );
+  const fieldsDirty = $derived(
+    priority !== originalPriority || queueId !== originalQueueId,
+  );
+  const isDirty = $derived(contentDirty || fieldsDirty);
   const canSave = $derived(
     isDirty && titleText.trim().length > 0 && !saving && prefilled,
   );
@@ -158,51 +206,65 @@
     if (ticket == null || kw == null) return;
     saving = true;
     try {
-      // Re-derive the ticket key before encrypting. The Worker tkCache is
-      // keyed by ticketId alone and nothing evicts it when another session
-      // reopens the ticket. Evict the stale tk, then decrypt through this
-      // snapshot's keyWrap to cache the matching tk.
-      await cryptoBridge.evictTk(ticketId);
-      await cryptoBridge.decrypt(
-        ticketId,
-        "title",
-        ticketId,
-        kw.ephemeralPoint,
-        kw.nonce,
-        kw.wrappedKey,
-        ticket.encryptedTitle,
-      );
+      const needsContentSave = contentDirty;
+      const needsFieldsSave = fieldsDirty;
 
-      const titleChanged = titleText.trim() !== originalTitle;
-      const descriptionChanged = descriptionText.trim() !== originalDescription;
+      // Content mutation: encrypt changed fields and call updateContent.
+      if (needsContentSave) {
+        // Re-derive the ticket key before encrypting. The Worker tkCache is
+        // keyed by ticketId alone and nothing evicts it when another session
+        // reopens the ticket. Evict the stale tk, then decrypt through this
+        // snapshot's keyWrap to cache the matching tk.
+        await cryptoBridge.evictTk(ticketId);
+        await cryptoBridge.decrypt(
+          ticketId,
+          "title",
+          ticketId,
+          kw.ephemeralPoint,
+          kw.nonce,
+          kw.wrappedKey,
+          ticket.encryptedTitle,
+        );
 
-      // Send only changed fields so the audit trail records no-op snapshots
-      // for unchanged fields.
-      const encryptedTitle = titleChanged
-        ? await cryptoBridge.encrypt(ticketId, "title", titleText.trim())
-        : undefined;
-      const encryptedDescription = descriptionChanged
-        ? await cryptoBridge.encrypt(
-            ticketId,
-            "description",
-            descriptionText.trim(),
-          )
-        : undefined;
+        const titleChanged = titleText.trim() !== originalTitle;
+        const descriptionChanged =
+          descriptionText.trim() !== originalDescription;
 
-      await ticketRouter.updateContent.mutate({
-        ticketId,
-        encryptedTitle,
-        encryptedDescription,
-        keyGeneration: ticket.keyGeneration,
-      });
+        const encryptedTitle = titleChanged
+          ? await cryptoBridge.encrypt(ticketId, "title", titleText.trim())
+          : undefined;
+        const encryptedDescription = descriptionChanged
+          ? await cryptoBridge.encrypt(
+              ticketId,
+              "description",
+              descriptionText.trim(),
+            )
+          : undefined;
 
-      // Seed the decrypt cache with the new plaintext. The cache keys have
-      // no ciphertext component, so invalidation alone would serve the stale
-      // plaintext forever (the same ciphertext-free key would hit the old
-      // cache entry). Seeding is targeted and instant.
-      if (titleChanged) ticketCache.seed(ticketId, titleText.trim());
-      if (descriptionChanged)
-        ticketCache.seed(`desc:${ticketId}`, descriptionText.trim());
+        await ticketRouter.updateContent.mutate({
+          ticketId,
+          encryptedTitle,
+          encryptedDescription,
+          keyGeneration: ticket.keyGeneration,
+        });
+
+        // Seed the decrypt cache with the new plaintext.
+        if (titleChanged) ticketCache.seed(ticketId, titleText.trim());
+        if (descriptionChanged)
+          ticketCache.seed(`desc:${ticketId}`, descriptionText.trim());
+      }
+
+      // Fields mutation: send only changed priority/queue via tickets.update.
+      if (needsFieldsSave) {
+        const updatePayload: {
+          ticketId: string;
+          priority?: TicketPriority;
+          queueId?: string;
+        } = { ticketId };
+        if (priority !== originalPriority) updatePayload.priority = priority;
+        if (queueId !== originalQueueId) updatePayload.queueId = queueId;
+        await ticketRouter.update.mutate(updatePayload);
+      }
 
       ondismiss();
       haptic();
@@ -279,6 +341,50 @@
           disabled={saving || !prefilled}
           inputClass="edit-description-input"
         />
+      </List>
+
+      <List nested class="edit-input-list">
+        <ListInput
+          dropdown
+          label={m.ticket_new_field_priority()}
+          type="select"
+          value={priority}
+          onChange={(e: Event) => {
+            const target = e.target;
+            if (target instanceof HTMLSelectElement) {
+              const parsed = ticketPrioritySchema.safeParse(target.value);
+              if (parsed.success) priority = parsed.data;
+            }
+          }}
+          disabled={saving || !prefilled}
+        >
+          {#each priorities as p (p.value)}
+            <option value={p.value}>{p.label}</option>
+          {/each}
+        </ListInput>
+      </List>
+
+      <List nested class="edit-input-list">
+        <ListInput
+          dropdown
+          label={m.ticket_new_field_queue(withTerms())}
+          type="select"
+          value={queueId}
+          onChange={(e: Event) => {
+            const target = e.target;
+            if (target instanceof HTMLSelectElement) {
+              queueId = target.value;
+            }
+          }}
+          disabled={saving || !prefilled}
+        >
+          <option value="" disabled
+            >{m.ticket_new_field_queue_placeholder(withTerms())}</option
+          >
+          {#each decryptedQueues as q (q.id)}
+            <option value={q.id}>{q.name}</option>
+          {/each}
+        </ListInput>
       </List>
     {/if}
   </div>

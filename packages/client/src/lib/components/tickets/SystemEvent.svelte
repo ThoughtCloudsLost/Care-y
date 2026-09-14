@@ -22,14 +22,21 @@
     timestamp: string;
     eventParams?: Record<string, unknown> | null;
     resolveUserName?: (userId: string) => string;
+    resolveQueueName?: (queueId: string) => string;
     count?: number;
   }
 
-  let { type, timestamp, eventParams, resolveUserName, count }: Props =
-    $props();
+  let {
+    type,
+    timestamp,
+    eventParams,
+    resolveUserName,
+    resolveQueueName,
+    count,
+  }: Props = $props();
 
   const baseLabel = $derived(
-    systemEventLabel(type, eventParams, resolveUserName),
+    systemEventLabel(type, eventParams, resolveUserName, resolveQueueName),
   );
   const label = $derived(
     count !== undefined && count > 1

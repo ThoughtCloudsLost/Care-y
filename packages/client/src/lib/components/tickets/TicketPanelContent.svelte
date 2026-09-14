@@ -343,6 +343,18 @@
       title={m.ticket_action_assign()}
       onclick={() => onaction("assign")}
     />
+    <ListItem
+      link
+      chevron
+      title={m.ticket_action_change_priority()}
+      onclick={() => onaction("changePriority")}
+    />
+    <ListItem
+      link
+      chevron
+      title={m.ticket_action_change_queue()}
+      onclick={() => onaction("changeQueue")}
+    />
     {#if shareLinkEnabled}
       <ListItem
         link

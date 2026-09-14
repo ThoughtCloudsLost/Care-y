@@ -555,6 +555,78 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(followups.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("update with priority emits priority_changed with from and to", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await svc.update(userId, { ticketId, priority: "urgent" });
+
+    const followups = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .where("source", "=", "system")
+      .where("type", "=", "priority_changed")
+      .execute();
+    expect(followups).toHaveLength(1);
+    const params = followups[0]!.event_params as { from: string; to: string };
+    expect(params.from).toBe("normal");
+    expect(params.to).toBe("urgent");
+  });
+
+  it("update with same priority emits no priority_changed follow-up", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // Fixture tickets default to "normal"
+    await svc.update(userId, { ticketId, priority: "normal" });
+
+    const followups = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .where("type", "=", "priority_changed")
+      .execute();
+    expect(followups).toHaveLength(0);
+  });
+
+  it("update with queueId emits queue_changed with from and to", async () => {
+    const {
+      userId,
+      ticketId,
+      queueId: originalQueueId,
+    } = await createTicketFixture();
+    const newQueue = await createTestQueue(testDb.db, {
+      label: "Target-Q-" + crypto.randomUUID().slice(0, 8),
+    });
+
+    await svc.update(userId, { ticketId, queueId: newQueue.id });
+
+    const followups = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .where("source", "=", "system")
+      .where("type", "=", "queue_changed")
+      .execute();
+    expect(followups).toHaveLength(1);
+    const params = followups[0]!.event_params as { from: string; to: string };
+    expect(params.from).toBe(originalQueueId);
+    expect(params.to).toBe(newQueue.id);
+  });
+
+  it("update with same queueId emits no queue_changed follow-up", async () => {
+    const { userId, ticketId, queueId } = await createTicketFixture();
+
+    await svc.update(userId, { ticketId, queueId });
+
+    const followups = await testDb.db
+      .selectFrom("followups")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .where("type", "=", "queue_changed")
+      .execute();
+    expect(followups).toHaveLength(0);
+  });
+
   // --- Key wrap read path ---
 
   async function insertKeyWrap(

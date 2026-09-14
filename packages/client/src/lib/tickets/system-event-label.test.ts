@@ -52,4 +52,37 @@ describe("systemEventLabel", () => {
     const label = systemEventLabel("volunteer_unassigned", null);
     expect(label).toBe("A volunteer unassigned");
   });
+
+  it("interpolates queue name via resolveQueueName callback", () => {
+    const resolveQueue = (id: string): string =>
+      id === "q-1" ? "Support" : "Unknown";
+    const label = systemEventLabel(
+      "queue_changed",
+      { to: "q-1" },
+      undefined,
+      resolveQueue,
+    );
+    expect(label).toBe("Moved to Support");
+  });
+
+  it("falls back to 'another queue' when no resolveQueueName callback", () => {
+    const label = systemEventLabel("queue_changed", { to: "q-1" });
+    expect(label).toBe("Moved to another queue");
+  });
+
+  it("falls back to 'another queue' when queue id is missing from params", () => {
+    const resolveQueue = (): string => "Support";
+    const label = systemEventLabel(
+      "queue_changed",
+      {},
+      undefined,
+      resolveQueue,
+    );
+    expect(label).toBe("Moved to another queue");
+  });
+
+  it("falls back to 'another queue' when event_params is null for queue_changed", () => {
+    const label = systemEventLabel("queue_changed", null);
+    expect(label).toBe("Moved to another queue");
+  });
 });

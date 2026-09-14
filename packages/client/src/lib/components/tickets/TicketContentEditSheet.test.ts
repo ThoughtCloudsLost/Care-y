@@ -38,13 +38,21 @@ interface UpdateContentPayload {
   keyGeneration: string;
 }
 
+interface UpdatePayload {
+  ticketId: string;
+  priority?: string;
+  queueId?: string;
+}
+
 const {
   mockEvictTk,
   mockDecrypt,
   mockEncrypt,
   mockUpdateContent,
+  mockUpdate,
   mockSeed,
   mockInvalidateQueries,
+  mockListQueues,
 } = vi.hoisted(() => ({
   mockEvictTk: vi
     .fn<(ticketId: string) => Promise<void>>()
@@ -68,10 +76,14 @@ const {
   mockUpdateContent: vi
     .fn<(input: UpdateContentPayload) => Promise<unknown>>()
     .mockResolvedValue({}),
+  mockUpdate: vi
+    .fn<(input: UpdatePayload) => Promise<unknown>>()
+    .mockResolvedValue({}),
   mockSeed: vi.fn<(key: string, value: string) => void>(),
   mockInvalidateQueries: vi
     .fn<(opts: { queryKey: readonly unknown[] }) => Promise<void>>()
     .mockResolvedValue(undefined),
+  mockListQueues: vi.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
 }));
 
 const toastShowSpy = vi
@@ -90,6 +102,7 @@ const baseTicket = {
   },
   status: "open",
   priority: "normal",
+  queueId: "queue-001",
   onHold: false,
   assignedTo: null,
   clientPhone: null,
@@ -99,9 +112,22 @@ const baseTicket = {
 
 let ticketQueryState: Record<string, unknown> = {};
 
+const queuesQueryState: Record<string, unknown> = {
+  isLoading: false,
+  isError: false,
+  error: null,
+  data: [],
+};
+
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
   ...(await importOriginal<typeof SvelteQuery>()),
-  createQuery: () => ticketQueryState,
+  createQuery: (optsFn: () => { queryKey: readonly unknown[] }) => {
+    const opts = optsFn();
+    if (Array.isArray(opts.queryKey) && opts.queryKey[0] === "queues") {
+      return queuesQueryState;
+    }
+    return ticketQueryState;
+  },
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
     getQueryData: vi.fn(),
@@ -116,6 +142,8 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     tickets: {
       get: { query: vi.fn() },
       updateContent: { mutate: mockUpdateContent },
+      update: { mutate: mockUpdate },
+      listQueues: { query: mockListQueues },
     },
   },
 }));
@@ -200,8 +228,10 @@ beforeEach(() => {
   mockDecrypt.mockClear();
   mockEncrypt.mockClear();
   mockUpdateContent.mockClear();
+  mockUpdate.mockClear();
   mockSeed.mockClear();
   mockInvalidateQueries.mockClear();
+  mockListQueues.mockClear();
   toastShowSpy.mockClear();
   baseProps.ondismiss = vi.fn();
 });
@@ -410,5 +440,88 @@ describe("TicketContentEditSheet", () => {
 
     // After reopen, should prefill from decrypt again (not keep draft).
     expect(await screen.findByDisplayValue("Original Title")).toBeTruthy();
+  });
+
+  it("changing only priority fires tickets.update and not updateContent", async () => {
+    render(TicketContentEditSheet, { props: baseProps });
+
+    // Wait for prefill so the select is populated.
+    await screen.findByDisplayValue("Original Title");
+
+    // Change priority from "normal" to "high" via the select.
+    // Konsta's ListInput renders its label text in a div rather than a
+    // <label for>, so the selects are addressed by role. Priority is
+    // rendered before queue.
+    const prioritySelect = screen.getAllByRole("combobox")[0];
+    if (prioritySelect === undefined)
+      throw new Error("priority select missing");
+    await fireEvent.change(prioritySelect, { target: { value: "high" } });
+
+    const saveButton = screen.getByRole("button", { name: m.common_save() });
+    expect(saveButton.hasAttribute("disabled")).toBe(false);
+    await fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    // Only tickets.update was called with the priority field.
+    expect(mockUpdate).toHaveBeenCalledWith({
+      ticketId: "ticket-001",
+      priority: "high",
+    });
+
+    // updateContent was not called (no content changed).
+    expect(mockUpdateContent).not.toHaveBeenCalled();
+    expect(mockEncrypt).not.toHaveBeenCalled();
+  });
+
+  it("changing only title fires updateContent and not tickets.update", async () => {
+    render(TicketContentEditSheet, { props: baseProps });
+
+    const titleInput = await screen.findByDisplayValue("Original Title");
+    await fireEvent.input(titleInput, { target: { value: "New Title" } });
+
+    const saveButton = screen.getByRole("button", { name: m.common_save() });
+    await fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockUpdateContent).toHaveBeenCalledTimes(1);
+    });
+
+    // tickets.update was not called (no field changes).
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("changing both title and priority fires both mutations", async () => {
+    render(TicketContentEditSheet, { props: baseProps });
+
+    await screen.findByDisplayValue("Original Title");
+
+    // Change title.
+    const titleInput = screen.getByDisplayValue("Original Title");
+    await fireEvent.input(titleInput, { target: { value: "New Title" } });
+
+    // Change priority.
+    // Konsta's ListInput renders its label text in a div rather than a
+    // <label for>, so the selects are addressed by role. Priority is
+    // rendered before queue.
+    const prioritySelect = screen.getAllByRole("combobox")[0];
+    if (prioritySelect === undefined)
+      throw new Error("priority select missing");
+    await fireEvent.change(prioritySelect, { target: { value: "urgent" } });
+
+    const saveButton = screen.getByRole("button", { name: m.common_save() });
+    await fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockUpdateContent).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).toHaveBeenCalledWith({
+      ticketId: "ticket-001",
+      priority: "urgent",
+    });
   });
 });
