@@ -374,12 +374,12 @@ describe("createTelephonyAdminRouter", () => {
   });
 
   describe("auth enforcement", () => {
-    // Every procedure in this router is built on adminProcedure (verified in
-    // telephony-admin.ts): org -> session -> 2FA -> MANAGE_ROLES. The table
-    // exercises each procedure against the two failure modes that matter per
-    // procedure; the shared inner guards (2FA, volunteer role, missing org)
-    // are exercised once each below since the identical middleware chain
-    // runs for every procedure.
+    // Every procedure in this router is built on infrastructureProcedure:
+    // org -> session -> 2FA -> MANAGE_INFRASTRUCTURE. The table exercises
+    // each procedure against the two failure modes that matter per procedure;
+    // the shared inner guards (2FA, volunteer role, missing org) are
+    // exercised once each below since the identical middleware chain runs
+    // for every procedure.
     // The asserted messages are ErrorCode constants the client branches on,
     // which makes them part of the API contract rather than display copy.
     type AdminCaller = ReturnType<typeof createCaller>;
