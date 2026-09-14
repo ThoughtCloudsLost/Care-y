@@ -24,6 +24,6 @@ const es_auth_phase_argon2id = /** @type {(inputs: Auth_Phase_Argon2idInputs) =>
 */
 export const auth_phase_argon2id = /** @type {((inputs?: Auth_Phase_Argon2idInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Auth_Phase_Argon2idInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_auth_phase_argon2id(inputs)
-	return es_auth_phase_argon2id(inputs)
+	if (locale === "es") return es_auth_phase_argon2id(inputs)
+	return en_auth_phase_argon2id(inputs)
 });

@@ -24,6 +24,6 @@ const es_settings_2fa = /** @type {(inputs: Settings_2faInputs) => LocalizedStri
 */
 export const settings_2fa = /** @type {((inputs?: Settings_2faInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_2faInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_2fa(inputs)
-	return es_settings_2fa(inputs)
+	if (locale === "es") return es_settings_2fa(inputs)
+	return en_settings_2fa(inputs)
 });

@@ -24,6 +24,6 @@ const es_error_circular_dependency = /** @type {(inputs: Error_Circular_Dependen
 */
 export const error_circular_dependency = /** @type {((inputs?: Error_Circular_DependencyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Circular_DependencyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_circular_dependency(inputs)
-	return es_error_circular_dependency(inputs)
+	if (locale === "es") return es_error_circular_dependency(inputs)
+	return en_error_circular_dependency(inputs)
 });

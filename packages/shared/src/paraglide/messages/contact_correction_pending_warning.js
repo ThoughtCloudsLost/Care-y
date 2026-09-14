@@ -24,6 +24,6 @@ const es_contact_correction_pending_warning = /** @type {(inputs: Contact_Correc
 */
 export const contact_correction_pending_warning = /** @type {((inputs?: Contact_Correction_Pending_WarningInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Contact_Correction_Pending_WarningInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_contact_correction_pending_warning(inputs)
-	return es_contact_correction_pending_warning(inputs)
+	if (locale === "es") return es_contact_correction_pending_warning(inputs)
+	return en_contact_correction_pending_warning(inputs)
 });

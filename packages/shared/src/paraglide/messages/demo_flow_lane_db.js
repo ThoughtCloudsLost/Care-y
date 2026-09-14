@@ -24,6 +24,6 @@ const es_demo_flow_lane_db = /** @type {(inputs: Demo_Flow_Lane_DbInputs) => Loc
 */
 export const demo_flow_lane_db = /** @type {((inputs?: Demo_Flow_Lane_DbInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Lane_DbInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_lane_db(inputs)
-	return es_demo_flow_lane_db(inputs)
+	if (locale === "es") return es_demo_flow_lane_db(inputs)
+	return en_demo_flow_lane_db(inputs)
 });

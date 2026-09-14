@@ -24,6 +24,6 @@ const es_settings_password_recovery_label = /** @type {(inputs: Settings_Passwor
 */
 export const settings_password_recovery_label = /** @type {((inputs?: Settings_Password_Recovery_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Password_Recovery_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_password_recovery_label(inputs)
-	return es_settings_password_recovery_label(inputs)
+	if (locale === "es") return es_settings_password_recovery_label(inputs)
+	return en_settings_password_recovery_label(inputs)
 });

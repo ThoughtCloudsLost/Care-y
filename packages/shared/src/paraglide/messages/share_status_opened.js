@@ -24,6 +24,6 @@ const es_share_status_opened = /** @type {(inputs: Share_Status_OpenedInputs) =>
 */
 export const share_status_opened = /** @type {((inputs?: Share_Status_OpenedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Status_OpenedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_status_opened(inputs)
-	return es_share_status_opened(inputs)
+	if (locale === "es") return es_share_status_opened(inputs)
+	return en_share_status_opened(inputs)
 });

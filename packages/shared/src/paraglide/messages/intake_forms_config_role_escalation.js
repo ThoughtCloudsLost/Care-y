@@ -24,6 +24,6 @@ const es_intake_forms_config_role_escalation = /** @type {(inputs: Intake_Forms_
 */
 export const intake_forms_config_role_escalation = /** @type {((inputs?: Intake_Forms_Config_Role_EscalationInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Role_EscalationInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_role_escalation(inputs)
-	return es_intake_forms_config_role_escalation(inputs)
+	if (locale === "es") return es_intake_forms_config_role_escalation(inputs)
+	return en_intake_forms_config_role_escalation(inputs)
 });

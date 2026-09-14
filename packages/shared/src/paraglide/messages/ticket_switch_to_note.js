@@ -24,6 +24,6 @@ const es_ticket_switch_to_note = /** @type {(inputs: Ticket_Switch_To_NoteInputs
 */
 export const ticket_switch_to_note = /** @type {((inputs?: Ticket_Switch_To_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Switch_To_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_switch_to_note(inputs)
-	return es_ticket_switch_to_note(inputs)
+	if (locale === "es") return es_ticket_switch_to_note(inputs)
+	return en_ticket_switch_to_note(inputs)
 });

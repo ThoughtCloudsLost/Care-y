@@ -24,6 +24,6 @@ const es_library_editor_insert = /** @type {(inputs: Library_Editor_InsertInputs
 */
 export const library_editor_insert = /** @type {((inputs?: Library_Editor_InsertInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_InsertInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_insert(inputs)
-	return es_library_editor_insert(inputs)
+	if (locale === "es") return es_library_editor_insert(inputs)
+	return en_library_editor_insert(inputs)
 });

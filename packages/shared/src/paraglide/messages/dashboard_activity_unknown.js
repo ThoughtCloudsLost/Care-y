@@ -24,6 +24,6 @@ const es_dashboard_activity_unknown = /** @type {(inputs: Dashboard_Activity_Unk
 */
 export const dashboard_activity_unknown = /** @type {((inputs?: Dashboard_Activity_UnknownInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Activity_UnknownInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_activity_unknown(inputs)
-	return es_dashboard_activity_unknown(inputs)
+	if (locale === "es") return es_dashboard_activity_unknown(inputs)
+	return en_dashboard_activity_unknown(inputs)
 });

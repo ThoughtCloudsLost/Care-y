@@ -24,6 +24,6 @@ const es_permission_manage_roles = /** @type {(inputs: Permission_Manage_RolesIn
 */
 export const permission_manage_roles = /** @type {((inputs?: Permission_Manage_RolesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_Manage_RolesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_permission_manage_roles(inputs)
-	return es_permission_manage_roles(inputs)
+	if (locale === "es") return es_permission_manage_roles(inputs)
+	return en_permission_manage_roles(inputs)
 });

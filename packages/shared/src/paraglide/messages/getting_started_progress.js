@@ -24,6 +24,6 @@ const es_getting_started_progress = /** @type {(inputs: Getting_Started_Progress
 */
 export const getting_started_progress = /** @type {((inputs: Getting_Started_ProgressInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Getting_Started_ProgressInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_getting_started_progress(inputs)
-	return es_getting_started_progress(inputs)
+	if (locale === "es") return es_getting_started_progress(inputs)
+	return en_getting_started_progress(inputs)
 });

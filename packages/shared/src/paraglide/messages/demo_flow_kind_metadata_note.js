@@ -24,6 +24,6 @@ const es_demo_flow_kind_metadata_note = /** @type {(inputs: Demo_Flow_Kind_Metad
 */
 export const demo_flow_kind_metadata_note = /** @type {((inputs?: Demo_Flow_Kind_Metadata_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Kind_Metadata_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_kind_metadata_note(inputs)
-	return es_demo_flow_kind_metadata_note(inputs)
+	if (locale === "es") return es_demo_flow_kind_metadata_note(inputs)
+	return en_demo_flow_kind_metadata_note(inputs)
 });

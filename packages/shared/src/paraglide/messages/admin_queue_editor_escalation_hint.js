@@ -24,6 +24,6 @@ const es_admin_queue_editor_escalation_hint = /** @type {(inputs: Admin_Queue_Ed
 */
 export const admin_queue_editor_escalation_hint = /** @type {((inputs: Admin_Queue_Editor_Escalation_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_Editor_Escalation_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_queue_editor_escalation_hint(inputs)
-	return es_admin_queue_editor_escalation_hint(inputs)
+	if (locale === "es") return es_admin_queue_editor_escalation_hint(inputs)
+	return en_admin_queue_editor_escalation_hint(inputs)
 });

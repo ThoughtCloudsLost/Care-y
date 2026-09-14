@@ -24,6 +24,6 @@ const es_library_image_uploading = /** @type {(inputs: Library_Image_UploadingIn
 */
 export const library_image_uploading = /** @type {((inputs?: Library_Image_UploadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Image_UploadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_image_uploading(inputs)
-	return es_library_image_uploading(inputs)
+	if (locale === "es") return es_library_image_uploading(inputs)
+	return en_library_image_uploading(inputs)
 });

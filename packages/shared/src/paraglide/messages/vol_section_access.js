@@ -24,6 +24,6 @@ const es_vol_section_access = /** @type {(inputs: Vol_Section_AccessInputs) => L
 */
 export const vol_section_access = /** @type {((inputs?: Vol_Section_AccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Section_AccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_vol_section_access(inputs)
-	return es_vol_section_access(inputs)
+	if (locale === "es") return es_vol_section_access(inputs)
+	return en_vol_section_access(inputs)
 });

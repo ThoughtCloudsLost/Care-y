@@ -24,6 +24,6 @@ const es_client_alias_changed_toast = /** @type {(inputs: Client_Alias_Changed_T
 */
 export const client_alias_changed_toast = /** @type {((inputs?: Client_Alias_Changed_ToastInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Alias_Changed_ToastInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_alias_changed_toast(inputs)
-	return es_client_alias_changed_toast(inputs)
+	if (locale === "es") return es_client_alias_changed_toast(inputs)
+	return en_client_alias_changed_toast(inputs)
 });

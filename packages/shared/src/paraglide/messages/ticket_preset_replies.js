@@ -24,6 +24,6 @@ const es_ticket_preset_replies = /** @type {(inputs: Ticket_Preset_RepliesInputs
 */
 export const ticket_preset_replies = /** @type {((inputs?: Ticket_Preset_RepliesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Preset_RepliesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_preset_replies(inputs)
-	return es_ticket_preset_replies(inputs)
+	if (locale === "es") return es_ticket_preset_replies(inputs)
+	return en_ticket_preset_replies(inputs)
 });

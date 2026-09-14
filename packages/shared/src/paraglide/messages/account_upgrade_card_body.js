@@ -24,6 +24,6 @@ const es_account_upgrade_card_body = /** @type {(inputs: Account_Upgrade_Card_Bo
 */
 export const account_upgrade_card_body = /** @type {((inputs?: Account_Upgrade_Card_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Upgrade_Card_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_account_upgrade_card_body(inputs)
-	return es_account_upgrade_card_body(inputs)
+	if (locale === "es") return es_account_upgrade_card_body(inputs)
+	return en_account_upgrade_card_body(inputs)
 });

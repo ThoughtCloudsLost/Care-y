@@ -24,6 +24,6 @@ const es_panel_group_analytics = /** @type {(inputs: Panel_Group_AnalyticsInputs
 */
 export const panel_group_analytics = /** @type {((inputs?: Panel_Group_AnalyticsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_Group_AnalyticsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_group_analytics(inputs)
-	return es_panel_group_analytics(inputs)
+	if (locale === "es") return es_panel_group_analytics(inputs)
+	return en_panel_group_analytics(inputs)
 });

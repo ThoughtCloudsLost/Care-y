@@ -24,6 +24,6 @@ const es_attachment_type_not_allowed = /** @type {(inputs: Attachment_Type_Not_A
 */
 export const attachment_type_not_allowed = /** @type {((inputs?: Attachment_Type_Not_AllowedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Attachment_Type_Not_AllowedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_attachment_type_not_allowed(inputs)
-	return es_attachment_type_not_allowed(inputs)
+	if (locale === "es") return es_attachment_type_not_allowed(inputs)
+	return en_attachment_type_not_allowed(inputs)
 });

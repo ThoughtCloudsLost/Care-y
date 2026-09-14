@@ -24,6 +24,6 @@ const es_intake_responses_key_not_held = /** @type {(inputs: Intake_Responses_Ke
 */
 export const intake_responses_key_not_held = /** @type {((inputs?: Intake_Responses_Key_Not_HeldInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Responses_Key_Not_HeldInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_responses_key_not_held(inputs)
-	return es_intake_responses_key_not_held(inputs)
+	if (locale === "es") return es_intake_responses_key_not_held(inputs)
+	return en_intake_responses_key_not_held(inputs)
 });

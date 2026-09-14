@@ -24,6 +24,6 @@ const es_demo_more_link_unlinked = /** @type {(inputs: Demo_More_Link_UnlinkedIn
 */
 export const demo_more_link_unlinked = /** @type {((inputs?: Demo_More_Link_UnlinkedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_More_Link_UnlinkedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_more_link_unlinked(inputs)
-	return es_demo_more_link_unlinked(inputs)
+	if (locale === "es") return es_demo_more_link_unlinked(inputs)
+	return en_demo_more_link_unlinked(inputs)
 });

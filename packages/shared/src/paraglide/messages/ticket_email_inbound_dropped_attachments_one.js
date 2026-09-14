@@ -24,6 +24,6 @@ const es_ticket_email_inbound_dropped_attachments_one = /** @type {(inputs: Tick
 */
 export const ticket_email_inbound_dropped_attachments_one = /** @type {((inputs: Ticket_Email_Inbound_Dropped_Attachments_OneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Email_Inbound_Dropped_Attachments_OneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_email_inbound_dropped_attachments_one(inputs)
-	return es_ticket_email_inbound_dropped_attachments_one(inputs)
+	if (locale === "es") return es_ticket_email_inbound_dropped_attachments_one(inputs)
+	return en_ticket_email_inbound_dropped_attachments_one(inputs)
 });

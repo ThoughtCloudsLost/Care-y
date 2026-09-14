@@ -24,6 +24,6 @@ const es_admin_org_general_safe_exit_url_hint = /** @type {(inputs: Admin_Org_Ge
 */
 export const admin_org_general_safe_exit_url_hint = /** @type {((inputs?: Admin_Org_General_Safe_Exit_Url_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Org_General_Safe_Exit_Url_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_org_general_safe_exit_url_hint(inputs)
-	return es_admin_org_general_safe_exit_url_hint(inputs)
+	if (locale === "es") return es_admin_org_general_safe_exit_url_hint(inputs)
+	return en_admin_org_general_safe_exit_url_hint(inputs)
 });

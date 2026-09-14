@@ -24,6 +24,6 @@ const es_error_cannot_deactivate_default_note_type = /** @type {(inputs: Error_C
 */
 export const error_cannot_deactivate_default_note_type = /** @type {((inputs?: Error_Cannot_Deactivate_Default_Note_TypeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Cannot_Deactivate_Default_Note_TypeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_cannot_deactivate_default_note_type(inputs)
-	return es_error_cannot_deactivate_default_note_type(inputs)
+	if (locale === "es") return es_error_cannot_deactivate_default_note_type(inputs)
+	return en_error_cannot_deactivate_default_note_type(inputs)
 });

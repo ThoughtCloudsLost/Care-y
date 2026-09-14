@@ -24,6 +24,6 @@ const es_app_retry = /** @type {(inputs: App_RetryInputs) => LocalizedString} */
 */
 export const app_retry = /** @type {((inputs?: App_RetryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<App_RetryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_app_retry(inputs)
-	return es_app_retry(inputs)
+	if (locale === "es") return es_app_retry(inputs)
+	return en_app_retry(inputs)
 });

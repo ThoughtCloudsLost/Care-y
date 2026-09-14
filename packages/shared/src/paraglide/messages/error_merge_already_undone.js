@@ -24,6 +24,6 @@ const es_error_merge_already_undone = /** @type {(inputs: Error_Merge_Already_Un
 */
 export const error_merge_already_undone = /** @type {((inputs?: Error_Merge_Already_UndoneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Merge_Already_UndoneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_merge_already_undone(inputs)
-	return es_error_merge_already_undone(inputs)
+	if (locale === "es") return es_error_merge_already_undone(inputs)
+	return en_error_merge_already_undone(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_users_batch_deactivated = /** @type {(inputs: Admin_Users_Batch_D
 */
 export const admin_users_batch_deactivated = /** @type {((inputs: Admin_Users_Batch_DeactivatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Users_Batch_DeactivatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_users_batch_deactivated(inputs)
-	return es_admin_users_batch_deactivated(inputs)
+	if (locale === "es") return es_admin_users_batch_deactivated(inputs)
+	return en_admin_users_batch_deactivated(inputs)
 });

@@ -24,6 +24,6 @@ const es_library_attachment_uploaded = /** @type {(inputs: Library_Attachment_Up
 */
 export const library_attachment_uploaded = /** @type {((inputs?: Library_Attachment_UploadedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Attachment_UploadedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_attachment_uploaded(inputs)
-	return es_library_attachment_uploaded(inputs)
+	if (locale === "es") return es_library_attachment_uploaded(inputs)
+	return en_library_attachment_uploaded(inputs)
 });

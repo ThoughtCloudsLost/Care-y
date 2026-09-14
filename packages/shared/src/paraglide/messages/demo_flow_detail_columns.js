@@ -24,6 +24,6 @@ const es_demo_flow_detail_columns = /** @type {(inputs: Demo_Flow_Detail_Columns
 */
 export const demo_flow_detail_columns = /** @type {((inputs: Demo_Flow_Detail_ColumnsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Detail_ColumnsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_detail_columns(inputs)
-	return es_demo_flow_detail_columns(inputs)
+	if (locale === "es") return es_demo_flow_detail_columns(inputs)
+	return en_demo_flow_detail_columns(inputs)
 });

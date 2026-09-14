@@ -24,6 +24,6 @@ const es_admin_terminology_desc_kb = /** @type {(inputs: Admin_Terminology_Desc_
 */
 export const admin_terminology_desc_kb = /** @type {((inputs?: Admin_Terminology_Desc_KbInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Terminology_Desc_KbInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_terminology_desc_kb(inputs)
-	return es_admin_terminology_desc_kb(inputs)
+	if (locale === "es") return es_admin_terminology_desc_kb(inputs)
+	return en_admin_terminology_desc_kb(inputs)
 });

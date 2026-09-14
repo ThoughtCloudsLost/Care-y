@@ -24,6 +24,6 @@ const es_status_mark_new = /** @type {(inputs: Status_Mark_NewInputs) => Localiz
 */
 export const status_mark_new = /** @type {((inputs?: Status_Mark_NewInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Status_Mark_NewInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_status_mark_new(inputs)
-	return es_status_mark_new(inputs)
+	if (locale === "es") return es_status_mark_new(inputs)
+	return en_status_mark_new(inputs)
 });

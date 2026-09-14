@@ -24,6 +24,6 @@ const es_reaction_count = /** @type {(inputs: Reaction_CountInputs) => Localized
 */
 export const reaction_count = /** @type {((inputs: Reaction_CountInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Reaction_CountInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_reaction_count(inputs)
-	return es_reaction_count(inputs)
+	if (locale === "es") return es_reaction_count(inputs)
+	return en_reaction_count(inputs)
 });

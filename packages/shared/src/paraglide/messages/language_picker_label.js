@@ -24,6 +24,6 @@ const es_language_picker_label = /** @type {(inputs: Language_Picker_LabelInputs
 */
 export const language_picker_label = /** @type {((inputs?: Language_Picker_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Language_Picker_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_language_picker_label(inputs)
-	return es_language_picker_label(inputs)
+	if (locale === "es") return es_language_picker_label(inputs)
+	return en_language_picker_label(inputs)
 });

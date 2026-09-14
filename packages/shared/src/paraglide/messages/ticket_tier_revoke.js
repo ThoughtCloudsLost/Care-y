@@ -24,6 +24,6 @@ const es_ticket_tier_revoke = /** @type {(inputs: Ticket_Tier_RevokeInputs) => L
 */
 export const ticket_tier_revoke = /** @type {((inputs?: Ticket_Tier_RevokeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Tier_RevokeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_tier_revoke(inputs)
-	return es_ticket_tier_revoke(inputs)
+	if (locale === "es") return es_ticket_tier_revoke(inputs)
+	return en_ticket_tier_revoke(inputs)
 });

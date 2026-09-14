@@ -24,6 +24,6 @@ const es_admin_terminology_suggestions_label = /** @type {(inputs: Admin_Termino
 */
 export const admin_terminology_suggestions_label = /** @type {((inputs?: Admin_Terminology_Suggestions_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Terminology_Suggestions_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_terminology_suggestions_label(inputs)
-	return es_admin_terminology_suggestions_label(inputs)
+	if (locale === "es") return es_admin_terminology_suggestions_label(inputs)
+	return en_admin_terminology_suggestions_label(inputs)
 });

@@ -24,6 +24,6 @@ const es_client_merge_primary_label = /** @type {(inputs: Client_Merge_Primary_L
 */
 export const client_merge_primary_label = /** @type {((inputs?: Client_Merge_Primary_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Merge_Primary_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_merge_primary_label(inputs)
-	return es_client_merge_primary_label(inputs)
+	if (locale === "es") return es_client_merge_primary_label(inputs)
+	return en_client_merge_primary_label(inputs)
 });

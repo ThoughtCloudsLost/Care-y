@@ -24,6 +24,6 @@ const es_intake_footer_privacy = /** @type {(inputs: Intake_Footer_PrivacyInputs
 */
 export const intake_footer_privacy = /** @type {((inputs?: Intake_Footer_PrivacyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Footer_PrivacyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_footer_privacy(inputs)
-	return es_intake_footer_privacy(inputs)
+	if (locale === "es") return es_intake_footer_privacy(inputs)
+	return en_intake_footer_privacy(inputs)
 });

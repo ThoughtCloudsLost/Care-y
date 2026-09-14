@@ -24,6 +24,6 @@ const es_clients_merged_label = /** @type {(inputs: Clients_Merged_LabelInputs) 
 */
 export const clients_merged_label = /** @type {((inputs?: Clients_Merged_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Clients_Merged_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_clients_merged_label(inputs)
-	return es_clients_merged_label(inputs)
+	if (locale === "es") return es_clients_merged_label(inputs)
+	return en_clients_merged_label(inputs)
 });

@@ -24,6 +24,6 @@ const es_portal_thread_load_error = /** @type {(inputs: Portal_Thread_Load_Error
 */
 export const portal_thread_load_error = /** @type {((inputs?: Portal_Thread_Load_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Thread_Load_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_thread_load_error(inputs)
-	return es_portal_thread_load_error(inputs)
+	if (locale === "es") return es_portal_thread_load_error(inputs)
+	return en_portal_thread_load_error(inputs)
 });

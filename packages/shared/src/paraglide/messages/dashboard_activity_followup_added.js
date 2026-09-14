@@ -24,6 +24,6 @@ const es_dashboard_activity_followup_added = /** @type {(inputs: Dashboard_Activ
 */
 export const dashboard_activity_followup_added = /** @type {((inputs?: Dashboard_Activity_Followup_AddedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Activity_Followup_AddedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_activity_followup_added(inputs)
-	return es_dashboard_activity_followup_added(inputs)
+	if (locale === "es") return es_dashboard_activity_followup_added(inputs)
+	return en_dashboard_activity_followup_added(inputs)
 });

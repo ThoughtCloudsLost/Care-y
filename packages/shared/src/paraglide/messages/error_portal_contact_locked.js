@@ -24,6 +24,6 @@ const es_error_portal_contact_locked = /** @type {(inputs: Error_Portal_Contact_
 */
 export const error_portal_contact_locked = /** @type {((inputs?: Error_Portal_Contact_LockedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Portal_Contact_LockedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_portal_contact_locked(inputs)
-	return es_error_portal_contact_locked(inputs)
+	if (locale === "es") return es_error_portal_contact_locked(inputs)
+	return en_error_portal_contact_locked(inputs)
 });

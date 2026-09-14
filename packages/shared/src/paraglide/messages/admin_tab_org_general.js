@@ -24,6 +24,6 @@ const es_admin_tab_org_general = /** @type {(inputs: Admin_Tab_Org_GeneralInputs
 */
 export const admin_tab_org_general = /** @type {((inputs?: Admin_Tab_Org_GeneralInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Tab_Org_GeneralInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_tab_org_general(inputs)
-	return es_admin_tab_org_general(inputs)
+	if (locale === "es") return es_admin_tab_org_general(inputs)
+	return en_admin_tab_org_general(inputs)
 });

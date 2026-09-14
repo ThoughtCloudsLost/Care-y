@@ -24,6 +24,6 @@ const es_intake_forms_banner_file_type = /** @type {(inputs: Intake_Forms_Banner
 */
 export const intake_forms_banner_file_type = /** @type {((inputs?: Intake_Forms_Banner_File_TypeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Banner_File_TypeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_banner_file_type(inputs)
-	return es_intake_forms_banner_file_type(inputs)
+	if (locale === "es") return es_intake_forms_banner_file_type(inputs)
+	return en_intake_forms_banner_file_type(inputs)
 });

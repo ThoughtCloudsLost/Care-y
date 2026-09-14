@@ -24,6 +24,6 @@ const es_library_filter_rating_positive = /** @type {(inputs: Library_Filter_Rat
 */
 export const library_filter_rating_positive = /** @type {((inputs?: Library_Filter_Rating_PositiveInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Filter_Rating_PositiveInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_filter_rating_positive(inputs)
-	return es_library_filter_rating_positive(inputs)
+	if (locale === "es") return es_library_filter_rating_positive(inputs)
+	return en_library_filter_rating_positive(inputs)
 });

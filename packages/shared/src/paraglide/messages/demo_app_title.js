@@ -24,6 +24,6 @@ const es_demo_app_title = /** @type {(inputs: Demo_App_TitleInputs) => Localized
 */
 export const demo_app_title = /** @type {((inputs?: Demo_App_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_App_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_app_title(inputs)
-	return es_demo_app_title(inputs)
+	if (locale === "es") return es_demo_app_title(inputs)
+	return en_demo_app_title(inputs)
 });

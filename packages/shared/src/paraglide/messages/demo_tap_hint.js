@@ -24,6 +24,6 @@ const es_demo_tap_hint = /** @type {(inputs: Demo_Tap_HintInputs) => LocalizedSt
 */
 export const demo_tap_hint = /** @type {((inputs?: Demo_Tap_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Tap_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_tap_hint(inputs)
-	return es_demo_tap_hint(inputs)
+	if (locale === "es") return es_demo_tap_hint(inputs)
+	return en_demo_tap_hint(inputs)
 });

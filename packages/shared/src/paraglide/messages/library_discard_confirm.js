@@ -24,6 +24,6 @@ const es_library_discard_confirm = /** @type {(inputs: Library_Discard_ConfirmIn
 */
 export const library_discard_confirm = /** @type {((inputs?: Library_Discard_ConfirmInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Discard_ConfirmInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_discard_confirm(inputs)
-	return es_library_discard_confirm(inputs)
+	if (locale === "es") return es_library_discard_confirm(inputs)
+	return en_library_discard_confirm(inputs)
 });

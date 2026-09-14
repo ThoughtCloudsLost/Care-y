@@ -24,6 +24,6 @@ const es_account_create_confirm = /** @type {(inputs: Account_Create_ConfirmInpu
 */
 export const account_create_confirm = /** @type {((inputs?: Account_Create_ConfirmInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Create_ConfirmInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_account_create_confirm(inputs)
-	return es_account_create_confirm(inputs)
+	if (locale === "es") return es_account_create_confirm(inputs)
+	return en_account_create_confirm(inputs)
 });

@@ -24,6 +24,6 @@ const es_onboarding_briefing_diagram_tap = /** @type {(inputs: Onboarding_Briefi
 */
 export const onboarding_briefing_diagram_tap = /** @type {((inputs?: Onboarding_Briefing_Diagram_TapInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Diagram_TapInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_briefing_diagram_tap(inputs)
-	return es_onboarding_briefing_diagram_tap(inputs)
+	if (locale === "es") return es_onboarding_briefing_diagram_tap(inputs)
+	return en_onboarding_briefing_diagram_tap(inputs)
 });

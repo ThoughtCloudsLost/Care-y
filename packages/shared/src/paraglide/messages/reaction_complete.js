@@ -24,6 +24,6 @@ const es_reaction_complete = /** @type {(inputs: Reaction_CompleteInputs) => Loc
 */
 export const reaction_complete = /** @type {((inputs?: Reaction_CompleteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Reaction_CompleteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_reaction_complete(inputs)
-	return es_reaction_complete(inputs)
+	if (locale === "es") return es_reaction_complete(inputs)
+	return en_reaction_complete(inputs)
 });

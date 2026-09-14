@@ -24,6 +24,6 @@ const es_demo_flow_seam_outbox_delivery = /** @type {(inputs: Demo_Flow_Seam_Out
 */
 export const demo_flow_seam_outbox_delivery = /** @type {((inputs?: Demo_Flow_Seam_Outbox_DeliveryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Seam_Outbox_DeliveryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_seam_outbox_delivery(inputs)
-	return es_demo_flow_seam_outbox_delivery(inputs)
+	if (locale === "es") return es_demo_flow_seam_outbox_delivery(inputs)
+	return en_demo_flow_seam_outbox_delivery(inputs)
 });

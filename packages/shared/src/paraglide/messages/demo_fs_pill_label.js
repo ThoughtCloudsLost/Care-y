@@ -24,6 +24,6 @@ const es_demo_fs_pill_label = /** @type {(inputs: Demo_Fs_Pill_LabelInputs) => L
 */
 export const demo_fs_pill_label = /** @type {((inputs?: Demo_Fs_Pill_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Fs_Pill_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_fs_pill_label(inputs)
-	return es_demo_fs_pill_label(inputs)
+	if (locale === "es") return es_demo_fs_pill_label(inputs)
+	return en_demo_fs_pill_label(inputs)
 });

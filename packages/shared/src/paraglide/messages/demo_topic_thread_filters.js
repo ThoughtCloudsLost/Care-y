@@ -24,6 +24,6 @@ const es_demo_topic_thread_filters = /** @type {(inputs: Demo_Topic_Thread_Filte
 */
 export const demo_topic_thread_filters = /** @type {((inputs?: Demo_Topic_Thread_FiltersInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Topic_Thread_FiltersInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_topic_thread_filters(inputs)
-	return es_demo_topic_thread_filters(inputs)
+	if (locale === "es") return es_demo_topic_thread_filters(inputs)
+	return en_demo_topic_thread_filters(inputs)
 });

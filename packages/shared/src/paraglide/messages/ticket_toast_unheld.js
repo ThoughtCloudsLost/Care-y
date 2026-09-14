@@ -24,6 +24,6 @@ const es_ticket_toast_unheld = /** @type {(inputs: Ticket_Toast_UnheldInputs) =>
 */
 export const ticket_toast_unheld = /** @type {((inputs: Ticket_Toast_UnheldInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Toast_UnheldInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_toast_unheld(inputs)
-	return es_ticket_toast_unheld(inputs)
+	if (locale === "es") return es_ticket_toast_unheld(inputs)
+	return en_ticket_toast_unheld(inputs)
 });

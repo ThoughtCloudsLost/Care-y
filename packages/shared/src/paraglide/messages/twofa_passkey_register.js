@@ -24,6 +24,6 @@ const es_twofa_passkey_register = /** @type {(inputs: Twofa_Passkey_RegisterInpu
 */
 export const twofa_passkey_register = /** @type {((inputs?: Twofa_Passkey_RegisterInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Passkey_RegisterInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_passkey_register(inputs)
-	return es_twofa_passkey_register(inputs)
+	if (locale === "es") return es_twofa_passkey_register(inputs)
+	return en_twofa_passkey_register(inputs)
 });

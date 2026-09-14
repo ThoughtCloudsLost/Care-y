@@ -24,6 +24,6 @@ const es_twofa_push_waiting = /** @type {(inputs: Twofa_Push_WaitingInputs) => L
 */
 export const twofa_push_waiting = /** @type {((inputs?: Twofa_Push_WaitingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Push_WaitingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_push_waiting(inputs)
-	return es_twofa_push_waiting(inputs)
+	if (locale === "es") return es_twofa_push_waiting(inputs)
+	return en_twofa_push_waiting(inputs)
 });

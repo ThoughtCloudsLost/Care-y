@@ -24,6 +24,6 @@ const es_demo_narrative_tip = /** @type {(inputs: Demo_Narrative_TipInputs) => L
 */
 export const demo_narrative_tip = /** @type {((inputs?: Demo_Narrative_TipInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_TipInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_narrative_tip(inputs)
-	return es_demo_narrative_tip(inputs)
+	if (locale === "es") return es_demo_narrative_tip(inputs)
+	return en_demo_narrative_tip(inputs)
 });

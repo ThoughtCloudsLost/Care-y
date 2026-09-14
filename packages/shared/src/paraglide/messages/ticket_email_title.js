@@ -24,6 +24,6 @@ const es_ticket_email_title = /** @type {(inputs: Ticket_Email_TitleInputs) => L
 */
 export const ticket_email_title = /** @type {((inputs: Ticket_Email_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Email_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_email_title(inputs)
-	return es_ticket_email_title(inputs)
+	if (locale === "es") return es_ticket_email_title(inputs)
+	return en_ticket_email_title(inputs)
 });

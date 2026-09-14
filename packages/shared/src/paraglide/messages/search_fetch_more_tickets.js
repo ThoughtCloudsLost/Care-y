@@ -24,6 +24,6 @@ const es_search_fetch_more_tickets = /** @type {(inputs: Search_Fetch_More_Ticke
 */
 export const search_fetch_more_tickets = /** @type {((inputs: Search_Fetch_More_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Fetch_More_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_fetch_more_tickets(inputs)
-	return es_search_fetch_more_tickets(inputs)
+	if (locale === "es") return es_search_fetch_more_tickets(inputs)
+	return en_search_fetch_more_tickets(inputs)
 });

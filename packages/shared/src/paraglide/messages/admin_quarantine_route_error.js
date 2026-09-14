@@ -24,6 +24,6 @@ const es_admin_quarantine_route_error = /** @type {(inputs: Admin_Quarantine_Rou
 */
 export const admin_quarantine_route_error = /** @type {((inputs?: Admin_Quarantine_Route_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Quarantine_Route_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_quarantine_route_error(inputs)
-	return es_admin_quarantine_route_error(inputs)
+	if (locale === "es") return es_admin_quarantine_route_error(inputs)
+	return en_admin_quarantine_route_error(inputs)
 });

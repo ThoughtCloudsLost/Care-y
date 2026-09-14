@@ -24,6 +24,6 @@ const es_twofa_push_desc = /** @type {(inputs: Twofa_Push_DescInputs) => Localiz
 */
 export const twofa_push_desc = /** @type {((inputs?: Twofa_Push_DescInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Push_DescInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_push_desc(inputs)
-	return es_twofa_push_desc(inputs)
+	if (locale === "es") return es_twofa_push_desc(inputs)
+	return en_twofa_push_desc(inputs)
 });

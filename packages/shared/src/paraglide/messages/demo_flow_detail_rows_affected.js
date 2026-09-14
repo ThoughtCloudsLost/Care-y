@@ -24,6 +24,6 @@ const es_demo_flow_detail_rows_affected = /** @type {(inputs: Demo_Flow_Detail_R
 */
 export const demo_flow_detail_rows_affected = /** @type {((inputs: Demo_Flow_Detail_Rows_AffectedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Detail_Rows_AffectedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_detail_rows_affected(inputs)
-	return es_demo_flow_detail_rows_affected(inputs)
+	if (locale === "es") return es_demo_flow_detail_rows_affected(inputs)
+	return en_demo_flow_detail_rows_affected(inputs)
 });

@@ -24,6 +24,6 @@ const es_error_cannot_merge_into_self = /** @type {(inputs: Error_Cannot_Merge_I
 */
 export const error_cannot_merge_into_self = /** @type {((inputs: Error_Cannot_Merge_Into_SelfInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Cannot_Merge_Into_SelfInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_cannot_merge_into_self(inputs)
-	return es_error_cannot_merge_into_self(inputs)
+	if (locale === "es") return es_error_cannot_merge_into_self(inputs)
+	return en_error_cannot_merge_into_self(inputs)
 });

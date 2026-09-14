@@ -24,6 +24,6 @@ const es_intake_char_count = /** @type {(inputs: Intake_Char_CountInputs) => Loc
 */
 export const intake_char_count = /** @type {((inputs: Intake_Char_CountInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Char_CountInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_char_count(inputs)
-	return es_intake_char_count(inputs)
+	if (locale === "es") return es_intake_char_count(inputs)
+	return en_intake_char_count(inputs)
 });

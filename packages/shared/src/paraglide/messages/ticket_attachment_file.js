@@ -24,6 +24,6 @@ const es_ticket_attachment_file = /** @type {(inputs: Ticket_Attachment_FileInpu
 */
 export const ticket_attachment_file = /** @type {((inputs: Ticket_Attachment_FileInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Attachment_FileInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_attachment_file(inputs)
-	return es_ticket_attachment_file(inputs)
+	if (locale === "es") return es_ticket_attachment_file(inputs)
+	return en_ticket_attachment_file(inputs)
 });

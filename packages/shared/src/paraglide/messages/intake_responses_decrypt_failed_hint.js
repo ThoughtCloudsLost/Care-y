@@ -24,6 +24,6 @@ const es_intake_responses_decrypt_failed_hint = /** @type {(inputs: Intake_Respo
 */
 export const intake_responses_decrypt_failed_hint = /** @type {((inputs?: Intake_Responses_Decrypt_Failed_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Responses_Decrypt_Failed_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_responses_decrypt_failed_hint(inputs)
-	return es_intake_responses_decrypt_failed_hint(inputs)
+	if (locale === "es") return es_intake_responses_decrypt_failed_hint(inputs)
+	return en_intake_responses_decrypt_failed_hint(inputs)
 });

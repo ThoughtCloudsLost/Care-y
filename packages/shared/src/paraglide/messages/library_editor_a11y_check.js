@@ -24,6 +24,6 @@ const es_library_editor_a11y_check = /** @type {(inputs: Library_Editor_A11y_Che
 */
 export const library_editor_a11y_check = /** @type {((inputs?: Library_Editor_A11y_CheckInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_A11y_CheckInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_a11y_check(inputs)
-	return es_library_editor_a11y_check(inputs)
+	if (locale === "es") return es_library_editor_a11y_check(inputs)
+	return en_library_editor_a11y_check(inputs)
 });

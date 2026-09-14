@@ -24,6 +24,6 @@ const es_reseed_progress = /** @type {(inputs: Reseed_ProgressInputs) => Localiz
 */
 export const reseed_progress = /** @type {((inputs: Reseed_ProgressInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Reseed_ProgressInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_reseed_progress(inputs)
-	return es_reseed_progress(inputs)
+	if (locale === "es") return es_reseed_progress(inputs)
+	return en_reseed_progress(inputs)
 });

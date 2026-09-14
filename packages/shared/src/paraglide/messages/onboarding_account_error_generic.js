@@ -24,6 +24,6 @@ const es_onboarding_account_error_generic = /** @type {(inputs: Onboarding_Accou
 */
 export const onboarding_account_error_generic = /** @type {((inputs?: Onboarding_Account_Error_GenericInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Account_Error_GenericInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_account_error_generic(inputs)
-	return es_onboarding_account_error_generic(inputs)
+	if (locale === "es") return es_onboarding_account_error_generic(inputs)
+	return en_onboarding_account_error_generic(inputs)
 });

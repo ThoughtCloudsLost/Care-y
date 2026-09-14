@@ -24,6 +24,6 @@ const es_intake_forms_config_escalation_alert_label = /** @type {(inputs: Intake
 */
 export const intake_forms_config_escalation_alert_label = /** @type {((inputs?: Intake_Forms_Config_Escalation_Alert_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Escalation_Alert_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_escalation_alert_label(inputs)
-	return es_intake_forms_config_escalation_alert_label(inputs)
+	if (locale === "es") return es_intake_forms_config_escalation_alert_label(inputs)
+	return en_intake_forms_config_escalation_alert_label(inputs)
 });

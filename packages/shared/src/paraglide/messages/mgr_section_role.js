@@ -24,6 +24,6 @@ const es_mgr_section_role = /** @type {(inputs: Mgr_Section_RoleInputs) => Local
 */
 export const mgr_section_role = /** @type {((inputs?: Mgr_Section_RoleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Section_RoleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_mgr_section_role(inputs)
-	return es_mgr_section_role(inputs)
+	if (locale === "es") return es_mgr_section_role(inputs)
+	return en_mgr_section_role(inputs)
 });

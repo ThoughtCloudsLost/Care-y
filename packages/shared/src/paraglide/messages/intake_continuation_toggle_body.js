@@ -24,6 +24,6 @@ const es_intake_continuation_toggle_body = /** @type {(inputs: Intake_Continuati
 */
 export const intake_continuation_toggle_body = /** @type {((inputs?: Intake_Continuation_Toggle_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Continuation_Toggle_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_continuation_toggle_body(inputs)
-	return es_intake_continuation_toggle_body(inputs)
+	if (locale === "es") return es_intake_continuation_toggle_body(inputs)
+	return en_intake_continuation_toggle_body(inputs)
 });

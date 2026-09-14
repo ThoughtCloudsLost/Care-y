@@ -24,6 +24,6 @@ const es_audit_event_intake_form_deleted = /** @type {(inputs: Audit_Event_Intak
 */
 export const audit_event_intake_form_deleted = /** @type {((inputs?: Audit_Event_Intake_Form_DeletedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Audit_Event_Intake_Form_DeletedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_audit_event_intake_form_deleted(inputs)
-	return es_audit_event_intake_form_deleted(inputs)
+	if (locale === "es") return es_audit_event_intake_form_deleted(inputs)
+	return en_audit_event_intake_form_deleted(inputs)
 });

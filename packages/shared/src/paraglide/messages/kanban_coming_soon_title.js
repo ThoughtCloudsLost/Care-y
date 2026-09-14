@@ -24,6 +24,6 @@ const es_kanban_coming_soon_title = /** @type {(inputs: Kanban_Coming_Soon_Title
 */
 export const kanban_coming_soon_title = /** @type {((inputs?: Kanban_Coming_Soon_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Kanban_Coming_Soon_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_kanban_coming_soon_title(inputs)
-	return es_kanban_coming_soon_title(inputs)
+	if (locale === "es") return es_kanban_coming_soon_title(inputs)
+	return en_kanban_coming_soon_title(inputs)
 });

@@ -24,6 +24,6 @@ const es_phone_shared_line_label = /** @type {(inputs: Phone_Shared_Line_LabelIn
 */
 export const phone_shared_line_label = /** @type {((inputs?: Phone_Shared_Line_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Phone_Shared_Line_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_phone_shared_line_label(inputs)
-	return es_phone_shared_line_label(inputs)
+	if (locale === "es") return es_phone_shared_line_label(inputs)
+	return en_phone_shared_line_label(inputs)
 });

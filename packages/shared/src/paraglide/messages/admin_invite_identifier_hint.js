@@ -24,6 +24,6 @@ const es_admin_invite_identifier_hint = /** @type {(inputs: Admin_Invite_Identif
 */
 export const admin_invite_identifier_hint = /** @type {((inputs?: Admin_Invite_Identifier_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Identifier_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_identifier_hint(inputs)
-	return es_admin_invite_identifier_hint(inputs)
+	if (locale === "es") return es_admin_invite_identifier_hint(inputs)
+	return en_admin_invite_identifier_hint(inputs)
 });

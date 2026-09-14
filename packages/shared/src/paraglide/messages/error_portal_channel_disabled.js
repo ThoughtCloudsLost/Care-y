@@ -24,6 +24,6 @@ const es_error_portal_channel_disabled = /** @type {(inputs: Error_Portal_Channe
 */
 export const error_portal_channel_disabled = /** @type {((inputs?: Error_Portal_Channel_DisabledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Portal_Channel_DisabledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_portal_channel_disabled(inputs)
-	return es_error_portal_channel_disabled(inputs)
+	if (locale === "es") return es_error_portal_channel_disabled(inputs)
+	return en_error_portal_channel_disabled(inputs)
 });

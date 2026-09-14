@@ -24,6 +24,6 @@ const es_common_delete = /** @type {(inputs: Common_DeleteInputs) => LocalizedSt
 */
 export const common_delete = /** @type {((inputs?: Common_DeleteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Common_DeleteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_common_delete(inputs)
-	return es_common_delete(inputs)
+	if (locale === "es") return es_common_delete(inputs)
+	return en_common_delete(inputs)
 });

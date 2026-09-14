@@ -24,6 +24,6 @@ const es_attachment_downloading = /** @type {(inputs: Attachment_DownloadingInpu
 */
 export const attachment_downloading = /** @type {((inputs: Attachment_DownloadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Attachment_DownloadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_attachment_downloading(inputs)
-	return es_attachment_downloading(inputs)
+	if (locale === "es") return es_attachment_downloading(inputs)
+	return en_attachment_downloading(inputs)
 });

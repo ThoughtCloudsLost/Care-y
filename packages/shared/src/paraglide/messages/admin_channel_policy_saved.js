@@ -24,6 +24,6 @@ const es_admin_channel_policy_saved = /** @type {(inputs: Admin_Channel_Policy_S
 */
 export const admin_channel_policy_saved = /** @type {((inputs?: Admin_Channel_Policy_SavedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Channel_Policy_SavedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_channel_policy_saved(inputs)
-	return es_admin_channel_policy_saved(inputs)
+	if (locale === "es") return es_admin_channel_policy_saved(inputs)
+	return en_admin_channel_policy_saved(inputs)
 });

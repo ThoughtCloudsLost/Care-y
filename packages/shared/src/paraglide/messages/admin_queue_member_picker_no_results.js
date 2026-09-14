@@ -24,6 +24,6 @@ const es_admin_queue_member_picker_no_results = /** @type {(inputs: Admin_Queue_
 */
 export const admin_queue_member_picker_no_results = /** @type {((inputs?: Admin_Queue_Member_Picker_No_ResultsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_Member_Picker_No_ResultsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_queue_member_picker_no_results(inputs)
-	return es_admin_queue_member_picker_no_results(inputs)
+	if (locale === "es") return es_admin_queue_member_picker_no_results(inputs)
+	return en_admin_queue_member_picker_no_results(inputs)
 });

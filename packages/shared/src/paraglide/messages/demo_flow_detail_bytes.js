@@ -24,6 +24,6 @@ const es_demo_flow_detail_bytes = /** @type {(inputs: Demo_Flow_Detail_BytesInpu
 */
 export const demo_flow_detail_bytes = /** @type {((inputs: Demo_Flow_Detail_BytesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Detail_BytesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_detail_bytes(inputs)
-	return es_demo_flow_detail_bytes(inputs)
+	if (locale === "es") return es_demo_flow_detail_bytes(inputs)
+	return en_demo_flow_detail_bytes(inputs)
 });

@@ -24,6 +24,6 @@ const es_shell_dismiss_overlay = /** @type {(inputs: Shell_Dismiss_OverlayInputs
 */
 export const shell_dismiss_overlay = /** @type {((inputs?: Shell_Dismiss_OverlayInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Shell_Dismiss_OverlayInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_shell_dismiss_overlay(inputs)
-	return es_shell_dismiss_overlay(inputs)
+	if (locale === "es") return es_shell_dismiss_overlay(inputs)
+	return en_shell_dismiss_overlay(inputs)
 });

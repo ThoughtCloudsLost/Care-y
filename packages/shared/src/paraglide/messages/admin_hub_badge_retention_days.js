@@ -24,6 +24,6 @@ const es_admin_hub_badge_retention_days = /** @type {(inputs: Admin_Hub_Badge_Re
 */
 export const admin_hub_badge_retention_days = /** @type {((inputs: Admin_Hub_Badge_Retention_DaysInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Hub_Badge_Retention_DaysInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_hub_badge_retention_days(inputs)
-	return es_admin_hub_badge_retention_days(inputs)
+	if (locale === "es") return es_admin_hub_badge_retention_days(inputs)
+	return en_admin_hub_badge_retention_days(inputs)
 });

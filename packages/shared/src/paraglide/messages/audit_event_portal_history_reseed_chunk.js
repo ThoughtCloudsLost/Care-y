@@ -24,6 +24,6 @@ const es_audit_event_portal_history_reseed_chunk = /** @type {(inputs: Audit_Eve
 */
 export const audit_event_portal_history_reseed_chunk = /** @type {((inputs?: Audit_Event_Portal_History_Reseed_ChunkInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Audit_Event_Portal_History_Reseed_ChunkInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_audit_event_portal_history_reseed_chunk(inputs)
-	return es_audit_event_portal_history_reseed_chunk(inputs)
+	if (locale === "es") return es_audit_event_portal_history_reseed_chunk(inputs)
+	return en_audit_event_portal_history_reseed_chunk(inputs)
 });

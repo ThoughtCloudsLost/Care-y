@@ -24,6 +24,6 @@ const es_dashboard_assigned_unassigned = /** @type {(inputs: Dashboard_Assigned_
 */
 export const dashboard_assigned_unassigned = /** @type {((inputs?: Dashboard_Assigned_UnassignedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Assigned_UnassignedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_assigned_unassigned(inputs)
-	return es_dashboard_assigned_unassigned(inputs)
+	if (locale === "es") return es_dashboard_assigned_unassigned(inputs)
+	return en_dashboard_assigned_unassigned(inputs)
 });

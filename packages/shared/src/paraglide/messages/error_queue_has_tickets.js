@@ -24,6 +24,6 @@ const es_error_queue_has_tickets = /** @type {(inputs: Error_Queue_Has_TicketsIn
 */
 export const error_queue_has_tickets = /** @type {((inputs: Error_Queue_Has_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Queue_Has_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_queue_has_tickets(inputs)
-	return es_error_queue_has_tickets(inputs)
+	if (locale === "es") return es_error_queue_has_tickets(inputs)
+	return en_error_queue_has_tickets(inputs)
 });

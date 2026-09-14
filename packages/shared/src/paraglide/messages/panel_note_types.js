@@ -24,6 +24,6 @@ const es_panel_note_types = /** @type {(inputs: Panel_Note_TypesInputs) => Local
 */
 export const panel_note_types = /** @type {((inputs?: Panel_Note_TypesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_Note_TypesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_note_types(inputs)
-	return es_panel_note_types(inputs)
+	if (locale === "es") return es_panel_note_types(inputs)
+	return en_panel_note_types(inputs)
 });

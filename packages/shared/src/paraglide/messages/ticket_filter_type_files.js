@@ -24,6 +24,6 @@ const es_ticket_filter_type_files = /** @type {(inputs: Ticket_Filter_Type_Files
 */
 export const ticket_filter_type_files = /** @type {((inputs?: Ticket_Filter_Type_FilesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Filter_Type_FilesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_filter_type_files(inputs)
-	return es_ticket_filter_type_files(inputs)
+	if (locale === "es") return es_ticket_filter_type_files(inputs)
+	return en_ticket_filter_type_files(inputs)
 });

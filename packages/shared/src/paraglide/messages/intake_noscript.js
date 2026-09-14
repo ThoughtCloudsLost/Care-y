@@ -24,6 +24,6 @@ const es_intake_noscript = /** @type {(inputs: Intake_NoscriptInputs) => Localiz
 */
 export const intake_noscript = /** @type {((inputs?: Intake_NoscriptInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_NoscriptInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_noscript(inputs)
-	return es_intake_noscript(inputs)
+	if (locale === "es") return es_intake_noscript(inputs)
+	return en_intake_noscript(inputs)
 });

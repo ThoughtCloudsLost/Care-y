@@ -24,6 +24,6 @@ const es_portal_composer_placeholder = /** @type {(inputs: Portal_Composer_Place
 */
 export const portal_composer_placeholder = /** @type {((inputs?: Portal_Composer_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Composer_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_composer_placeholder(inputs)
-	return es_portal_composer_placeholder(inputs)
+	if (locale === "es") return es_portal_composer_placeholder(inputs)
+	return en_portal_composer_placeholder(inputs)
 });

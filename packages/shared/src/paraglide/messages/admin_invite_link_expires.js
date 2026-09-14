@@ -24,6 +24,6 @@ const es_admin_invite_link_expires = /** @type {(inputs: Admin_Invite_Link_Expir
 */
 export const admin_invite_link_expires = /** @type {((inputs: Admin_Invite_Link_ExpiresInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Link_ExpiresInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_link_expires(inputs)
-	return es_admin_invite_link_expires(inputs)
+	if (locale === "es") return es_admin_invite_link_expires(inputs)
+	return en_admin_invite_link_expires(inputs)
 });

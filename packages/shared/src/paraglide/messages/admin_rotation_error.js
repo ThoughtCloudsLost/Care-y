@@ -24,6 +24,6 @@ const es_admin_rotation_error = /** @type {(inputs: Admin_Rotation_ErrorInputs) 
 */
 export const admin_rotation_error = /** @type {((inputs?: Admin_Rotation_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Rotation_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_rotation_error(inputs)
-	return es_admin_rotation_error(inputs)
+	if (locale === "es") return es_admin_rotation_error(inputs)
+	return en_admin_rotation_error(inputs)
 });

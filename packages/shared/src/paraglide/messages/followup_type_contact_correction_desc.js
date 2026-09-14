@@ -24,6 +24,6 @@ const es_followup_type_contact_correction_desc = /** @type {(inputs: Followup_Ty
 */
 export const followup_type_contact_correction_desc = /** @type {((inputs?: Followup_Type_Contact_Correction_DescInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Contact_Correction_DescInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_followup_type_contact_correction_desc(inputs)
-	return es_followup_type_contact_correction_desc(inputs)
+	if (locale === "es") return es_followup_type_contact_correction_desc(inputs)
+	return en_followup_type_contact_correction_desc(inputs)
 });

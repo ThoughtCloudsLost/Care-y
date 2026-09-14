@@ -24,6 +24,6 @@ const es_onboarding_org_term_tickets_label = /** @type {(inputs: Onboarding_Org_
 */
 export const onboarding_org_term_tickets_label = /** @type {((inputs?: Onboarding_Org_Term_Tickets_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Org_Term_Tickets_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_org_term_tickets_label(inputs)
-	return es_onboarding_org_term_tickets_label(inputs)
+	if (locale === "es") return es_onboarding_org_term_tickets_label(inputs)
+	return en_onboarding_org_term_tickets_label(inputs)
 });

@@ -24,6 +24,6 @@ const es_error_no_pending_totp = /** @type {(inputs: Error_No_Pending_TotpInputs
 */
 export const error_no_pending_totp = /** @type {((inputs?: Error_No_Pending_TotpInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_No_Pending_TotpInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_no_pending_totp(inputs)
-	return es_error_no_pending_totp(inputs)
+	if (locale === "es") return es_error_no_pending_totp(inputs)
+	return en_error_no_pending_totp(inputs)
 });

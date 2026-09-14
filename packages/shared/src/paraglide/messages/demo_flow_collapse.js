@@ -24,6 +24,6 @@ const es_demo_flow_collapse = /** @type {(inputs: Demo_Flow_CollapseInputs) => L
 */
 export const demo_flow_collapse = /** @type {((inputs?: Demo_Flow_CollapseInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_CollapseInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_collapse(inputs)
-	return es_demo_flow_collapse(inputs)
+	if (locale === "es") return es_demo_flow_collapse(inputs)
+	return en_demo_flow_collapse(inputs)
 });

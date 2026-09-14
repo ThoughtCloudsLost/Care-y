@@ -24,6 +24,6 @@ const es_escalation_condition_inactive = /** @type {(inputs: Escalation_Conditio
 */
 export const escalation_condition_inactive = /** @type {((inputs?: Escalation_Condition_InactiveInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Condition_InactiveInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_condition_inactive(inputs)
-	return es_escalation_condition_inactive(inputs)
+	if (locale === "es") return es_escalation_condition_inactive(inputs)
+	return en_escalation_condition_inactive(inputs)
 });

@@ -24,6 +24,6 @@ const es_ticket_new_field_priority = /** @type {(inputs: Ticket_New_Field_Priori
 */
 export const ticket_new_field_priority = /** @type {((inputs?: Ticket_New_Field_PriorityInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_Field_PriorityInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_new_field_priority(inputs)
-	return es_ticket_new_field_priority(inputs)
+	if (locale === "es") return es_ticket_new_field_priority(inputs)
+	return en_ticket_new_field_priority(inputs)
 });

@@ -24,6 +24,6 @@ const es_notif_ticket_reset = /** @type {(inputs: Notif_Ticket_ResetInputs) => L
 */
 export const notif_ticket_reset = /** @type {((inputs?: Notif_Ticket_ResetInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Ticket_ResetInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_ticket_reset(inputs)
-	return es_notif_ticket_reset(inputs)
+	if (locale === "es") return es_notif_ticket_reset(inputs)
+	return en_notif_ticket_reset(inputs)
 });

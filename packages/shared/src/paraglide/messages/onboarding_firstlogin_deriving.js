@@ -24,6 +24,6 @@ const es_onboarding_firstlogin_deriving = /** @type {(inputs: Onboarding_Firstlo
 */
 export const onboarding_firstlogin_deriving = /** @type {((inputs?: Onboarding_Firstlogin_DerivingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Firstlogin_DerivingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_firstlogin_deriving(inputs)
-	return es_onboarding_firstlogin_deriving(inputs)
+	if (locale === "es") return es_onboarding_firstlogin_deriving(inputs)
+	return en_onboarding_firstlogin_deriving(inputs)
 });

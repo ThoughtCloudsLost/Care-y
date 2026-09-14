@@ -24,6 +24,6 @@ const es_intake_forms_move_down = /** @type {(inputs: Intake_Forms_Move_DownInpu
 */
 export const intake_forms_move_down = /** @type {((inputs?: Intake_Forms_Move_DownInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Move_DownInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_move_down(inputs)
-	return es_intake_forms_move_down(inputs)
+	if (locale === "es") return es_intake_forms_move_down(inputs)
+	return en_intake_forms_move_down(inputs)
 });

@@ -24,6 +24,6 @@ const es_ticket_filter_type_images = /** @type {(inputs: Ticket_Filter_Type_Imag
 */
 export const ticket_filter_type_images = /** @type {((inputs?: Ticket_Filter_Type_ImagesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Filter_Type_ImagesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_filter_type_images(inputs)
-	return es_ticket_filter_type_images(inputs)
+	if (locale === "es") return es_ticket_filter_type_images(inputs)
+	return en_ticket_filter_type_images(inputs)
 });

@@ -24,6 +24,6 @@ const es_contact_correction_flag_label = /** @type {(inputs: Contact_Correction_
 */
 export const contact_correction_flag_label = /** @type {((inputs?: Contact_Correction_Flag_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Contact_Correction_Flag_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_contact_correction_flag_label(inputs)
-	return es_contact_correction_flag_label(inputs)
+	if (locale === "es") return es_contact_correction_flag_label(inputs)
+	return en_contact_correction_flag_label(inputs)
 });

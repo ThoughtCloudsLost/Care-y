@@ -24,6 +24,6 @@ const es_twofa_totp_manual_entry = /** @type {(inputs: Twofa_Totp_Manual_EntryIn
 */
 export const twofa_totp_manual_entry = /** @type {((inputs?: Twofa_Totp_Manual_EntryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Totp_Manual_EntryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_totp_manual_entry(inputs)
-	return es_twofa_totp_manual_entry(inputs)
+	if (locale === "es") return es_twofa_totp_manual_entry(inputs)
+	return en_twofa_totp_manual_entry(inputs)
 });

@@ -24,6 +24,6 @@ const es_account_upgrade_link_note = /** @type {(inputs: Account_Upgrade_Link_No
 */
 export const account_upgrade_link_note = /** @type {((inputs?: Account_Upgrade_Link_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Upgrade_Link_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_account_upgrade_link_note(inputs)
-	return es_account_upgrade_link_note(inputs)
+	if (locale === "es") return es_account_upgrade_link_note(inputs)
+	return en_account_upgrade_link_note(inputs)
 });

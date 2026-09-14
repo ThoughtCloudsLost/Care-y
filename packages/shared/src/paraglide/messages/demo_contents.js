@@ -24,6 +24,6 @@ const es_demo_contents = /** @type {(inputs: Demo_ContentsInputs) => LocalizedSt
 */
 export const demo_contents = /** @type {((inputs?: Demo_ContentsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_ContentsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_contents(inputs)
-	return es_demo_contents(inputs)
+	if (locale === "es") return es_demo_contents(inputs)
+	return en_demo_contents(inputs)
 });

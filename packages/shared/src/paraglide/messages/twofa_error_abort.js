@@ -24,6 +24,6 @@ const es_twofa_error_abort = /** @type {(inputs: Twofa_Error_AbortInputs) => Loc
 */
 export const twofa_error_abort = /** @type {((inputs?: Twofa_Error_AbortInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Error_AbortInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_error_abort(inputs)
-	return es_twofa_error_abort(inputs)
+	if (locale === "es") return es_twofa_error_abort(inputs)
+	return en_twofa_error_abort(inputs)
 });

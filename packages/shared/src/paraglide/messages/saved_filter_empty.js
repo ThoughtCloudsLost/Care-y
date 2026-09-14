@@ -24,6 +24,6 @@ const es_saved_filter_empty = /** @type {(inputs: Saved_Filter_EmptyInputs) => L
 */
 export const saved_filter_empty = /** @type {((inputs?: Saved_Filter_EmptyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Saved_Filter_EmptyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_saved_filter_empty(inputs)
-	return es_saved_filter_empty(inputs)
+	if (locale === "es") return es_saved_filter_empty(inputs)
+	return en_saved_filter_empty(inputs)
 });

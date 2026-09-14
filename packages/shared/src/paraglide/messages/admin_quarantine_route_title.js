@@ -24,6 +24,6 @@ const es_admin_quarantine_route_title = /** @type {(inputs: Admin_Quarantine_Rou
 */
 export const admin_quarantine_route_title = /** @type {((inputs?: Admin_Quarantine_Route_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Quarantine_Route_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_quarantine_route_title(inputs)
-	return es_admin_quarantine_route_title(inputs)
+	if (locale === "es") return es_admin_quarantine_route_title(inputs)
+	return en_admin_quarantine_route_title(inputs)
 });

@@ -24,6 +24,6 @@ const es_vol_link_replay_tour = /** @type {(inputs: Vol_Link_Replay_TourInputs) 
 */
 export const vol_link_replay_tour = /** @type {((inputs?: Vol_Link_Replay_TourInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Link_Replay_TourInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_vol_link_replay_tour(inputs)
-	return es_vol_link_replay_tour(inputs)
+	if (locale === "es") return es_vol_link_replay_tour(inputs)
+	return en_vol_link_replay_tour(inputs)
 });

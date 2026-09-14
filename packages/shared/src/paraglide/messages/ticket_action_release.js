@@ -24,6 +24,6 @@ const es_ticket_action_release = /** @type {(inputs: Ticket_Action_ReleaseInputs
 */
 export const ticket_action_release = /** @type {((inputs?: Ticket_Action_ReleaseInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Action_ReleaseInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_action_release(inputs)
-	return es_ticket_action_release(inputs)
+	if (locale === "es") return es_ticket_action_release(inputs)
+	return en_ticket_action_release(inputs)
 });

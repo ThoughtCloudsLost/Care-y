@@ -24,6 +24,6 @@ const es_preview_retry = /** @type {(inputs: Preview_RetryInputs) => LocalizedSt
 */
 export const preview_retry = /** @type {((inputs?: Preview_RetryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Preview_RetryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_preview_retry(inputs)
-	return es_preview_retry(inputs)
+	if (locale === "es") return es_preview_retry(inputs)
+	return en_preview_retry(inputs)
 });

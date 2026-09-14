@@ -24,6 +24,6 @@ const es_demo_toolbar_link_linked = /** @type {(inputs: Demo_Toolbar_Link_Linked
 */
 export const demo_toolbar_link_linked = /** @type {((inputs?: Demo_Toolbar_Link_LinkedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Toolbar_Link_LinkedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_toolbar_link_linked(inputs)
-	return es_demo_toolbar_link_linked(inputs)
+	if (locale === "es") return es_demo_toolbar_link_linked(inputs)
+	return en_demo_toolbar_link_linked(inputs)
 });

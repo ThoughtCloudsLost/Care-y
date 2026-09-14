@@ -24,6 +24,6 @@ const es_client_merge_search_placeholder = /** @type {(inputs: Client_Merge_Sear
 */
 export const client_merge_search_placeholder = /** @type {((inputs: Client_Merge_Search_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Merge_Search_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_merge_search_placeholder(inputs)
-	return es_client_merge_search_placeholder(inputs)
+	if (locale === "es") return es_client_merge_search_placeholder(inputs)
+	return en_client_merge_search_placeholder(inputs)
 });

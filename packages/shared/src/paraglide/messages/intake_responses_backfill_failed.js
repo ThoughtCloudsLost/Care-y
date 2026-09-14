@@ -24,6 +24,6 @@ const es_intake_responses_backfill_failed = /** @type {(inputs: Intake_Responses
 */
 export const intake_responses_backfill_failed = /** @type {((inputs?: Intake_Responses_Backfill_FailedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Responses_Backfill_FailedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_responses_backfill_failed(inputs)
-	return es_intake_responses_backfill_failed(inputs)
+	if (locale === "es") return es_intake_responses_backfill_failed(inputs)
+	return en_intake_responses_backfill_failed(inputs)
 });

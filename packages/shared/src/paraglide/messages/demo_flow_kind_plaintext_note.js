@@ -24,6 +24,6 @@ const es_demo_flow_kind_plaintext_note = /** @type {(inputs: Demo_Flow_Kind_Plai
 */
 export const demo_flow_kind_plaintext_note = /** @type {((inputs?: Demo_Flow_Kind_Plaintext_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Kind_Plaintext_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_kind_plaintext_note(inputs)
-	return es_demo_flow_kind_plaintext_note(inputs)
+	if (locale === "es") return es_demo_flow_kind_plaintext_note(inputs)
+	return en_demo_flow_kind_plaintext_note(inputs)
 });

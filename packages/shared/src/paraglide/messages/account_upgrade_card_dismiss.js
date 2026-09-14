@@ -24,6 +24,6 @@ const es_account_upgrade_card_dismiss = /** @type {(inputs: Account_Upgrade_Card
 */
 export const account_upgrade_card_dismiss = /** @type {((inputs?: Account_Upgrade_Card_DismissInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Upgrade_Card_DismissInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_account_upgrade_card_dismiss(inputs)
-	return es_account_upgrade_card_dismiss(inputs)
+	if (locale === "es") return es_account_upgrade_card_dismiss(inputs)
+	return en_account_upgrade_card_dismiss(inputs)
 });

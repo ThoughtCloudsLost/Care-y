@@ -24,6 +24,6 @@ const es_dashboard_section_my_tickets = /** @type {(inputs: Dashboard_Section_My
 */
 export const dashboard_section_my_tickets = /** @type {((inputs: Dashboard_Section_My_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Section_My_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_section_my_tickets(inputs)
-	return es_dashboard_section_my_tickets(inputs)
+	if (locale === "es") return es_dashboard_section_my_tickets(inputs)
+	return en_dashboard_section_my_tickets(inputs)
 });

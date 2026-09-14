@@ -24,6 +24,6 @@ const es_demo_entry_roles_body = /** @type {(inputs: Demo_Entry_Roles_BodyInputs
 */
 export const demo_entry_roles_body = /** @type {((inputs?: Demo_Entry_Roles_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Entry_Roles_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_entry_roles_body(inputs)
-	return es_demo_entry_roles_body(inputs)
+	if (locale === "es") return es_demo_entry_roles_body(inputs)
+	return en_demo_entry_roles_body(inputs)
 });

@@ -24,6 +24,6 @@ const es_portal_upgrade_create_account = /** @type {(inputs: Portal_Upgrade_Crea
 */
 export const portal_upgrade_create_account = /** @type {((inputs?: Portal_Upgrade_Create_AccountInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Upgrade_Create_AccountInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_upgrade_create_account(inputs)
-	return es_portal_upgrade_create_account(inputs)
+	if (locale === "es") return es_portal_upgrade_create_account(inputs)
+	return en_portal_upgrade_create_account(inputs)
 });

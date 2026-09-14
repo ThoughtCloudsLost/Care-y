@@ -24,6 +24,6 @@ const es_client_alias_label = /** @type {(inputs: Client_Alias_LabelInputs) => L
 */
 export const client_alias_label = /** @type {((inputs?: Client_Alias_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Alias_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_alias_label(inputs)
-	return es_client_alias_label(inputs)
+	if (locale === "es") return es_client_alias_label(inputs)
+	return en_client_alias_label(inputs)
 });

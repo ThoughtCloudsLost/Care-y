@@ -24,6 +24,6 @@ const es_onboarding_escrow_hash_hint = /** @type {(inputs: Onboarding_Escrow_Has
 */
 export const onboarding_escrow_hash_hint = /** @type {((inputs?: Onboarding_Escrow_Hash_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Escrow_Hash_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_escrow_hash_hint(inputs)
-	return es_onboarding_escrow_hash_hint(inputs)
+	if (locale === "es") return es_onboarding_escrow_hash_hint(inputs)
+	return en_onboarding_escrow_hash_hint(inputs)
 });

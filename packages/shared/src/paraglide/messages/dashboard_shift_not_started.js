@@ -24,6 +24,6 @@ const es_dashboard_shift_not_started = /** @type {(inputs: Dashboard_Shift_Not_S
 */
 export const dashboard_shift_not_started = /** @type {((inputs: Dashboard_Shift_Not_StartedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Shift_Not_StartedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_shift_not_started(inputs)
-	return es_dashboard_shift_not_started(inputs)
+	if (locale === "es") return es_dashboard_shift_not_started(inputs)
+	return en_dashboard_shift_not_started(inputs)
 });

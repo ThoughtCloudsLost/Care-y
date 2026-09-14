@@ -24,6 +24,6 @@ const es_admin_retention_clear_title = /** @type {(inputs: Admin_Retention_Clear
 */
 export const admin_retention_clear_title = /** @type {((inputs?: Admin_Retention_Clear_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Retention_Clear_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_retention_clear_title(inputs)
-	return es_admin_retention_clear_title(inputs)
+	if (locale === "es") return es_admin_retention_clear_title(inputs)
+	return en_admin_retention_clear_title(inputs)
 });

@@ -24,6 +24,6 @@ const es_ticket_contact_method = /** @type {(inputs: Ticket_Contact_MethodInputs
 */
 export const ticket_contact_method = /** @type {((inputs?: Ticket_Contact_MethodInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Contact_MethodInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_contact_method(inputs)
-	return es_ticket_contact_method(inputs)
+	if (locale === "es") return es_ticket_contact_method(inputs)
+	return en_ticket_contact_method(inputs)
 });

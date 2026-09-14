@@ -24,6 +24,6 @@ const es_demo_subtitle = /** @type {(inputs: Demo_SubtitleInputs) => LocalizedSt
 */
 export const demo_subtitle = /** @type {((inputs?: Demo_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_subtitle(inputs)
-	return es_demo_subtitle(inputs)
+	if (locale === "es") return es_demo_subtitle(inputs)
+	return en_demo_subtitle(inputs)
 });

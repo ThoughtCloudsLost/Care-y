@@ -24,6 +24,6 @@ const es_intake_responses_csv_submitted_header = /** @type {(inputs: Intake_Resp
 */
 export const intake_responses_csv_submitted_header = /** @type {((inputs?: Intake_Responses_Csv_Submitted_HeaderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Responses_Csv_Submitted_HeaderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_responses_csv_submitted_header(inputs)
-	return es_intake_responses_csv_submitted_header(inputs)
+	if (locale === "es") return es_intake_responses_csv_submitted_header(inputs)
+	return en_intake_responses_csv_submitted_header(inputs)
 });

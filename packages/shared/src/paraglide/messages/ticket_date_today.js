@@ -24,6 +24,6 @@ const es_ticket_date_today = /** @type {(inputs: Ticket_Date_TodayInputs) => Loc
 */
 export const ticket_date_today = /** @type {((inputs?: Ticket_Date_TodayInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Date_TodayInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_date_today(inputs)
-	return es_ticket_date_today(inputs)
+	if (locale === "es") return es_ticket_date_today(inputs)
+	return en_ticket_date_today(inputs)
 });

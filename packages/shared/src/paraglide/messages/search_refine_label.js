@@ -24,6 +24,6 @@ const es_search_refine_label = /** @type {(inputs: Search_Refine_LabelInputs) =>
 */
 export const search_refine_label = /** @type {((inputs?: Search_Refine_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Refine_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_refine_label(inputs)
-	return es_search_refine_label(inputs)
+	if (locale === "es") return es_search_refine_label(inputs)
+	return en_search_refine_label(inputs)
 });

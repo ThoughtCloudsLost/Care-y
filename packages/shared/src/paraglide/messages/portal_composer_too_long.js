@@ -24,6 +24,6 @@ const es_portal_composer_too_long = /** @type {(inputs: Portal_Composer_Too_Long
 */
 export const portal_composer_too_long = /** @type {((inputs?: Portal_Composer_Too_LongInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Composer_Too_LongInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_composer_too_long(inputs)
-	return es_portal_composer_too_long(inputs)
+	if (locale === "es") return es_portal_composer_too_long(inputs)
+	return en_portal_composer_too_long(inputs)
 });

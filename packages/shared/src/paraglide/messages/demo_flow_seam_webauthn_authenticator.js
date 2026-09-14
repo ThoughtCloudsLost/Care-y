@@ -24,6 +24,6 @@ const es_demo_flow_seam_webauthn_authenticator = /** @type {(inputs: Demo_Flow_S
 */
 export const demo_flow_seam_webauthn_authenticator = /** @type {((inputs?: Demo_Flow_Seam_Webauthn_AuthenticatorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Seam_Webauthn_AuthenticatorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_seam_webauthn_authenticator(inputs)
-	return es_demo_flow_seam_webauthn_authenticator(inputs)
+	if (locale === "es") return es_demo_flow_seam_webauthn_authenticator(inputs)
+	return en_demo_flow_seam_webauthn_authenticator(inputs)
 });

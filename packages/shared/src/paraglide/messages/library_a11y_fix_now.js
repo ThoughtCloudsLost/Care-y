@@ -24,6 +24,6 @@ const es_library_a11y_fix_now = /** @type {(inputs: Library_A11y_Fix_NowInputs) 
 */
 export const library_a11y_fix_now = /** @type {((inputs?: Library_A11y_Fix_NowInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_A11y_Fix_NowInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_a11y_fix_now(inputs)
-	return es_library_a11y_fix_now(inputs)
+	if (locale === "es") return es_library_a11y_fix_now(inputs)
+	return en_library_a11y_fix_now(inputs)
 });

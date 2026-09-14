@@ -24,6 +24,6 @@ const es_mgr_role_reports = /** @type {(inputs: Mgr_Role_ReportsInputs) => Local
 */
 export const mgr_role_reports = /** @type {((inputs?: Mgr_Role_ReportsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Role_ReportsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_mgr_role_reports(inputs)
-	return es_mgr_role_reports(inputs)
+	if (locale === "es") return es_mgr_role_reports(inputs)
+	return en_mgr_role_reports(inputs)
 });

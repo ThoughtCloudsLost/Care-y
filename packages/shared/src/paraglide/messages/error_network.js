@@ -24,6 +24,6 @@ const es_error_network = /** @type {(inputs: Error_NetworkInputs) => LocalizedSt
 */
 export const error_network = /** @type {((inputs?: Error_NetworkInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_NetworkInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_network(inputs)
-	return es_error_network(inputs)
+	if (locale === "es") return es_error_network(inputs)
+	return en_error_network(inputs)
 });

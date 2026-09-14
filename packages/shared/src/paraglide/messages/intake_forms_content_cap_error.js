@@ -24,6 +24,6 @@ const es_intake_forms_content_cap_error = /** @type {(inputs: Intake_Forms_Conte
 */
 export const intake_forms_content_cap_error = /** @type {((inputs: Intake_Forms_Content_Cap_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Content_Cap_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_content_cap_error(inputs)
-	return es_intake_forms_content_cap_error(inputs)
+	if (locale === "es") return es_intake_forms_content_cap_error(inputs)
+	return en_intake_forms_content_cap_error(inputs)
 });

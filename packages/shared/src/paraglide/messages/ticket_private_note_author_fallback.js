@@ -24,6 +24,6 @@ const es_ticket_private_note_author_fallback = /** @type {(inputs: Ticket_Privat
 */
 export const ticket_private_note_author_fallback = /** @type {((inputs?: Ticket_Private_Note_Author_FallbackInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Private_Note_Author_FallbackInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_private_note_author_fallback(inputs)
-	return es_ticket_private_note_author_fallback(inputs)
+	if (locale === "es") return es_ticket_private_note_author_fallback(inputs)
+	return en_ticket_private_note_author_fallback(inputs)
 });

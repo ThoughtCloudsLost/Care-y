@@ -24,6 +24,6 @@ const es_notif_event_merge_completed = /** @type {(inputs: Notif_Event_Merge_Com
 */
 export const notif_event_merge_completed = /** @type {((inputs?: Notif_Event_Merge_CompletedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Event_Merge_CompletedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_event_merge_completed(inputs)
-	return es_notif_event_merge_completed(inputs)
+	if (locale === "es") return es_notif_event_merge_completed(inputs)
+	return en_notif_event_merge_completed(inputs)
 });

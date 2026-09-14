@@ -24,6 +24,6 @@ const es_intake_forms_config_role_phone_contact = /** @type {(inputs: Intake_For
 */
 export const intake_forms_config_role_phone_contact = /** @type {((inputs?: Intake_Forms_Config_Role_Phone_ContactInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Role_Phone_ContactInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_role_phone_contact(inputs)
-	return es_intake_forms_config_role_phone_contact(inputs)
+	if (locale === "es") return es_intake_forms_config_role_phone_contact(inputs)
+	return en_intake_forms_config_role_phone_contact(inputs)
 });

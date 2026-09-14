@@ -24,6 +24,6 @@ const es_share_view_not_found = /** @type {(inputs: Share_View_Not_FoundInputs) 
 */
 export const share_view_not_found = /** @type {((inputs?: Share_View_Not_FoundInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_View_Not_FoundInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_view_not_found(inputs)
-	return es_share_view_not_found(inputs)
+	if (locale === "es") return es_share_view_not_found(inputs)
+	return en_share_view_not_found(inputs)
 });

@@ -24,6 +24,6 @@ const es_onboarding_briefing_practice_col_access = /** @type {(inputs: Onboardin
 */
 export const onboarding_briefing_practice_col_access = /** @type {((inputs?: Onboarding_Briefing_Practice_Col_AccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Practice_Col_AccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_briefing_practice_col_access(inputs)
-	return es_onboarding_briefing_practice_col_access(inputs)
+	if (locale === "es") return es_onboarding_briefing_practice_col_access(inputs)
+	return en_onboarding_briefing_practice_col_access(inputs)
 });

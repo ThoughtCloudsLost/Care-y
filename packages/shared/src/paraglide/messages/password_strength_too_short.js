@@ -24,6 +24,6 @@ const es_password_strength_too_short = /** @type {(inputs: Password_Strength_Too
 */
 export const password_strength_too_short = /** @type {((inputs: Password_Strength_Too_ShortInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Password_Strength_Too_ShortInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_password_strength_too_short(inputs)
-	return es_password_strength_too_short(inputs)
+	if (locale === "es") return es_password_strength_too_short(inputs)
+	return en_password_strength_too_short(inputs)
 });

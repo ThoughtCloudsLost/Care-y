@@ -24,6 +24,6 @@ const es_section_rail_label = /** @type {(inputs: Section_Rail_LabelInputs) => L
 */
 export const section_rail_label = /** @type {((inputs?: Section_Rail_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Section_Rail_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_section_rail_label(inputs)
-	return es_section_rail_label(inputs)
+	if (locale === "es") return es_section_rail_label(inputs)
+	return en_section_rail_label(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_branding_card_no_text = /** @type {(inputs: Admin_Branding_Card_N
 */
 export const admin_branding_card_no_text = /** @type {((inputs?: Admin_Branding_Card_No_TextInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Card_No_TextInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_card_no_text(inputs)
-	return es_admin_branding_card_no_text(inputs)
+	if (locale === "es") return es_admin_branding_card_no_text(inputs)
+	return en_admin_branding_card_no_text(inputs)
 });

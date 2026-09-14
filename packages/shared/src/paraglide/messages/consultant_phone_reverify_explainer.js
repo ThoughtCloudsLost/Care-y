@@ -24,6 +24,6 @@ const es_consultant_phone_reverify_explainer = /** @type {(inputs: Consultant_Ph
 */
 export const consultant_phone_reverify_explainer = /** @type {((inputs?: Consultant_Phone_Reverify_ExplainerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Reverify_ExplainerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_consultant_phone_reverify_explainer(inputs)
-	return es_consultant_phone_reverify_explainer(inputs)
+	if (locale === "es") return es_consultant_phone_reverify_explainer(inputs)
+	return en_consultant_phone_reverify_explainer(inputs)
 });

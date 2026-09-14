@@ -24,6 +24,6 @@ const es_error_too_many_attempts = /** @type {(inputs: Error_Too_Many_AttemptsIn
 */
 export const error_too_many_attempts = /** @type {((inputs?: Error_Too_Many_AttemptsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Too_Many_AttemptsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_too_many_attempts(inputs)
-	return es_error_too_many_attempts(inputs)
+	if (locale === "es") return es_error_too_many_attempts(inputs)
+	return en_error_too_many_attempts(inputs)
 });

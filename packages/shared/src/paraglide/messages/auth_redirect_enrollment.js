@@ -24,6 +24,6 @@ const es_auth_redirect_enrollment = /** @type {(inputs: Auth_Redirect_Enrollment
 */
 export const auth_redirect_enrollment = /** @type {((inputs?: Auth_Redirect_EnrollmentInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Auth_Redirect_EnrollmentInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_auth_redirect_enrollment(inputs)
-	return es_auth_redirect_enrollment(inputs)
+	if (locale === "es") return es_auth_redirect_enrollment(inputs)
+	return en_auth_redirect_enrollment(inputs)
 });

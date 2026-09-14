@@ -24,6 +24,6 @@ const es_portal_composer_counter = /** @type {(inputs: Portal_Composer_CounterIn
 */
 export const portal_composer_counter = /** @type {((inputs: Portal_Composer_CounterInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Composer_CounterInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_composer_counter(inputs)
-	return es_portal_composer_counter(inputs)
+	if (locale === "es") return es_portal_composer_counter(inputs)
+	return en_portal_composer_counter(inputs)
 });

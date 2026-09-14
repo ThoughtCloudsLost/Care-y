@@ -24,6 +24,6 @@ const es_ticket_compose_enter_hint = /** @type {(inputs: Ticket_Compose_Enter_Hi
 */
 export const ticket_compose_enter_hint = /** @type {((inputs?: Ticket_Compose_Enter_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Compose_Enter_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_compose_enter_hint(inputs)
-	return es_ticket_compose_enter_hint(inputs)
+	if (locale === "es") return es_ticket_compose_enter_hint(inputs)
+	return en_ticket_compose_enter_hint(inputs)
 });

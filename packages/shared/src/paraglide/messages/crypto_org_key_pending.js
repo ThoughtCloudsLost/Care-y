@@ -24,6 +24,6 @@ const es_crypto_org_key_pending = /** @type {(inputs: Crypto_Org_Key_PendingInpu
 */
 export const crypto_org_key_pending = /** @type {((inputs?: Crypto_Org_Key_PendingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Crypto_Org_Key_PendingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_crypto_org_key_pending(inputs)
-	return es_crypto_org_key_pending(inputs)
+	if (locale === "es") return es_crypto_org_key_pending(inputs)
+	return en_crypto_org_key_pending(inputs)
 });

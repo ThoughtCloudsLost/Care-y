@@ -24,6 +24,6 @@ const es_twofa_error_invalid_state = /** @type {(inputs: Twofa_Error_Invalid_Sta
 */
 export const twofa_error_invalid_state = /** @type {((inputs?: Twofa_Error_Invalid_StateInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Error_Invalid_StateInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_error_invalid_state(inputs)
-	return es_twofa_error_invalid_state(inputs)
+	if (locale === "es") return es_twofa_error_invalid_state(inputs)
+	return en_twofa_error_invalid_state(inputs)
 });

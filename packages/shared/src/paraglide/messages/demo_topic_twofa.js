@@ -24,6 +24,6 @@ const es_demo_topic_twofa = /** @type {(inputs: Demo_Topic_TwofaInputs) => Local
 */
 export const demo_topic_twofa = /** @type {((inputs?: Demo_Topic_TwofaInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Topic_TwofaInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_topic_twofa(inputs)
-	return es_demo_topic_twofa(inputs)
+	if (locale === "es") return es_demo_topic_twofa(inputs)
+	return en_demo_topic_twofa(inputs)
 });

@@ -24,6 +24,6 @@ const es_search_coverage_tickets_all = /** @type {(inputs: Search_Coverage_Ticke
 */
 export const search_coverage_tickets_all = /** @type {((inputs: Search_Coverage_Tickets_AllInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Coverage_Tickets_AllInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_coverage_tickets_all(inputs)
-	return es_search_coverage_tickets_all(inputs)
+	if (locale === "es") return es_search_coverage_tickets_all(inputs)
+	return en_search_coverage_tickets_all(inputs)
 });

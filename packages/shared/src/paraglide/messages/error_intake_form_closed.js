@@ -24,6 +24,6 @@ const es_error_intake_form_closed = /** @type {(inputs: Error_Intake_Form_Closed
 */
 export const error_intake_form_closed = /** @type {((inputs?: Error_Intake_Form_ClosedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Intake_Form_ClosedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_intake_form_closed(inputs)
-	return es_error_intake_form_closed(inputs)
+	if (locale === "es") return es_error_intake_form_closed(inputs)
+	return en_error_intake_form_closed(inputs)
 });

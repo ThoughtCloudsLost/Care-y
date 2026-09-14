@@ -24,6 +24,6 @@ const es_dashboard_shift_volunteers = /** @type {(inputs: Dashboard_Shift_Volunt
 */
 export const dashboard_shift_volunteers = /** @type {((inputs: Dashboard_Shift_VolunteersInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Shift_VolunteersInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_shift_volunteers(inputs)
-	return es_dashboard_shift_volunteers(inputs)
+	if (locale === "es") return es_dashboard_shift_volunteers(inputs)
+	return en_dashboard_shift_volunteers(inputs)
 });

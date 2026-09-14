@@ -24,6 +24,6 @@ const es_onboarding_briefing_choice_telephony_title = /** @type {(inputs: Onboar
 */
 export const onboarding_briefing_choice_telephony_title = /** @type {((inputs?: Onboarding_Briefing_Choice_Telephony_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Choice_Telephony_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_briefing_choice_telephony_title(inputs)
-	return es_onboarding_briefing_choice_telephony_title(inputs)
+	if (locale === "es") return es_onboarding_briefing_choice_telephony_title(inputs)
+	return en_onboarding_briefing_choice_telephony_title(inputs)
 });

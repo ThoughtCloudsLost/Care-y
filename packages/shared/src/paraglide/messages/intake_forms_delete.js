@@ -24,6 +24,6 @@ const es_intake_forms_delete = /** @type {(inputs: Intake_Forms_DeleteInputs) =>
 */
 export const intake_forms_delete = /** @type {((inputs?: Intake_Forms_DeleteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_DeleteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_delete(inputs)
-	return es_intake_forms_delete(inputs)
+	if (locale === "es") return es_intake_forms_delete(inputs)
+	return en_intake_forms_delete(inputs)
 });

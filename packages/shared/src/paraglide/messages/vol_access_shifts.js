@@ -24,6 +24,6 @@ const es_vol_access_shifts = /** @type {(inputs: Vol_Access_ShiftsInputs) => Loc
 */
 export const vol_access_shifts = /** @type {((inputs?: Vol_Access_ShiftsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Access_ShiftsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_vol_access_shifts(inputs)
-	return es_vol_access_shifts(inputs)
+	if (locale === "es") return es_vol_access_shifts(inputs)
+	return en_vol_access_shifts(inputs)
 });

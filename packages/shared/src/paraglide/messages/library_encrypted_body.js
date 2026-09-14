@@ -24,6 +24,6 @@ const es_library_encrypted_body = /** @type {(inputs: Library_Encrypted_BodyInpu
 */
 export const library_encrypted_body = /** @type {((inputs?: Library_Encrypted_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Encrypted_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_encrypted_body(inputs)
-	return es_library_encrypted_body(inputs)
+	if (locale === "es") return es_library_encrypted_body(inputs)
+	return en_library_encrypted_body(inputs)
 });

@@ -24,6 +24,6 @@ const es_panel_quarantine = /** @type {(inputs: Panel_QuarantineInputs) => Local
 */
 export const panel_quarantine = /** @type {((inputs?: Panel_QuarantineInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_QuarantineInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_quarantine(inputs)
-	return es_panel_quarantine(inputs)
+	if (locale === "es") return es_panel_quarantine(inputs)
+	return en_panel_quarantine(inputs)
 });

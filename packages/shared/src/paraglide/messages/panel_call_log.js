@@ -24,6 +24,6 @@ const es_panel_call_log = /** @type {(inputs: Panel_Call_LogInputs) => Localized
 */
 export const panel_call_log = /** @type {((inputs?: Panel_Call_LogInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_Call_LogInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_call_log(inputs)
-	return es_panel_call_log(inputs)
+	if (locale === "es") return es_panel_call_log(inputs)
+	return en_panel_call_log(inputs)
 });

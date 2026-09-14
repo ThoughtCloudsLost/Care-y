@@ -24,6 +24,6 @@ const es_panel_keys = /** @type {(inputs: Panel_KeysInputs) => LocalizedString} 
 */
 export const panel_keys = /** @type {((inputs?: Panel_KeysInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_KeysInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_keys(inputs)
-	return es_panel_keys(inputs)
+	if (locale === "es") return es_panel_keys(inputs)
+	return en_panel_keys(inputs)
 });

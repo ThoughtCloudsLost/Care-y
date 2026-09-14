@@ -24,6 +24,6 @@ const es_session_idle_warning = /** @type {(inputs: Session_Idle_WarningInputs) 
 */
 export const session_idle_warning = /** @type {((inputs?: Session_Idle_WarningInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Session_Idle_WarningInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_session_idle_warning(inputs)
-	return es_session_idle_warning(inputs)
+	if (locale === "es") return es_session_idle_warning(inputs)
+	return en_session_idle_warning(inputs)
 });

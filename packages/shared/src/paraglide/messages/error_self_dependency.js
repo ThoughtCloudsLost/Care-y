@@ -24,6 +24,6 @@ const es_error_self_dependency = /** @type {(inputs: Error_Self_DependencyInputs
 */
 export const error_self_dependency = /** @type {((inputs: Error_Self_DependencyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Self_DependencyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_self_dependency(inputs)
-	return es_error_self_dependency(inputs)
+	if (locale === "es") return es_error_self_dependency(inputs)
+	return en_error_self_dependency(inputs)
 });

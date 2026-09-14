@@ -24,6 +24,6 @@ const es_search_result_count = /** @type {(inputs: Search_Result_CountInputs) =>
 */
 export const search_result_count = /** @type {((inputs: Search_Result_CountInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Result_CountInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_result_count(inputs)
-	return es_search_result_count(inputs)
+	if (locale === "es") return es_search_result_count(inputs)
+	return en_search_result_count(inputs)
 });

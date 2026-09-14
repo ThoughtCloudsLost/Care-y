@@ -24,6 +24,6 @@ const es_onboarding_setup_invalid_link = /** @type {(inputs: Onboarding_Setup_In
 */
 export const onboarding_setup_invalid_link = /** @type {((inputs?: Onboarding_Setup_Invalid_LinkInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Setup_Invalid_LinkInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_setup_invalid_link(inputs)
-	return es_onboarding_setup_invalid_link(inputs)
+	if (locale === "es") return es_onboarding_setup_invalid_link(inputs)
+	return en_onboarding_setup_invalid_link(inputs)
 });

@@ -24,6 +24,6 @@ const es_library_stats_count = /** @type {(inputs: Library_Stats_CountInputs) =>
 */
 export const library_stats_count = /** @type {((inputs: Library_Stats_CountInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Stats_CountInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_stats_count(inputs)
-	return es_library_stats_count(inputs)
+	if (locale === "es") return es_library_stats_count(inputs)
+	return en_library_stats_count(inputs)
 });

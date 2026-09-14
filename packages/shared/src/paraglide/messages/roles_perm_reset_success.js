@@ -24,6 +24,6 @@ const es_roles_perm_reset_success = /** @type {(inputs: Roles_Perm_Reset_Success
 */
 export const roles_perm_reset_success = /** @type {((inputs?: Roles_Perm_Reset_SuccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_Perm_Reset_SuccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_roles_perm_reset_success(inputs)
-	return es_roles_perm_reset_success(inputs)
+	if (locale === "es") return es_roles_perm_reset_success(inputs)
+	return en_roles_perm_reset_success(inputs)
 });

@@ -24,6 +24,6 @@ const es_onboarding_reauth_message = /** @type {(inputs: Onboarding_Reauth_Messa
 */
 export const onboarding_reauth_message = /** @type {((inputs?: Onboarding_Reauth_MessageInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Reauth_MessageInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_reauth_message(inputs)
-	return es_onboarding_reauth_message(inputs)
+	if (locale === "es") return es_onboarding_reauth_message(inputs)
+	return en_onboarding_reauth_message(inputs)
 });

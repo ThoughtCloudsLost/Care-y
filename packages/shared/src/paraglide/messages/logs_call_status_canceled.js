@@ -24,6 +24,6 @@ const es_logs_call_status_canceled = /** @type {(inputs: Logs_Call_Status_Cancel
 */
 export const logs_call_status_canceled = /** @type {((inputs?: Logs_Call_Status_CanceledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Logs_Call_Status_CanceledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_logs_call_status_canceled(inputs)
-	return es_logs_call_status_canceled(inputs)
+	if (locale === "es") return es_logs_call_status_canceled(inputs)
+	return en_logs_call_status_canceled(inputs)
 });

@@ -24,6 +24,6 @@ const es_clients_filter_include_merged_yes = /** @type {(inputs: Clients_Filter_
 */
 export const clients_filter_include_merged_yes = /** @type {((inputs?: Clients_Filter_Include_Merged_YesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Clients_Filter_Include_Merged_YesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_clients_filter_include_merged_yes(inputs)
-	return es_clients_filter_include_merged_yes(inputs)
+	if (locale === "es") return es_clients_filter_include_merged_yes(inputs)
+	return en_clients_filter_include_merged_yes(inputs)
 });

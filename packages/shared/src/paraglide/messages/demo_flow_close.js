@@ -24,6 +24,6 @@ const es_demo_flow_close = /** @type {(inputs: Demo_Flow_CloseInputs) => Localiz
 */
 export const demo_flow_close = /** @type {((inputs?: Demo_Flow_CloseInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_CloseInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_close(inputs)
-	return es_demo_flow_close(inputs)
+	if (locale === "es") return es_demo_flow_close(inputs)
+	return en_demo_flow_close(inputs)
 });

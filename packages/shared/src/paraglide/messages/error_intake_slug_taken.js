@@ -24,6 +24,6 @@ const es_error_intake_slug_taken = /** @type {(inputs: Error_Intake_Slug_TakenIn
 */
 export const error_intake_slug_taken = /** @type {((inputs?: Error_Intake_Slug_TakenInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Intake_Slug_TakenInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_intake_slug_taken(inputs)
-	return es_error_intake_slug_taken(inputs)
+	if (locale === "es") return es_error_intake_slug_taken(inputs)
+	return en_error_intake_slug_taken(inputs)
 });

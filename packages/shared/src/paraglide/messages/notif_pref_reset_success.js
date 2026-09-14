@@ -24,6 +24,6 @@ const es_notif_pref_reset_success = /** @type {(inputs: Notif_Pref_Reset_Success
 */
 export const notif_pref_reset_success = /** @type {((inputs?: Notif_Pref_Reset_SuccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Pref_Reset_SuccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_pref_reset_success(inputs)
-	return es_notif_pref_reset_success(inputs)
+	if (locale === "es") return es_notif_pref_reset_success(inputs)
+	return en_notif_pref_reset_success(inputs)
 });

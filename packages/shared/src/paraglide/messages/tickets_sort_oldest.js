@@ -24,6 +24,6 @@ const es_tickets_sort_oldest = /** @type {(inputs: Tickets_Sort_OldestInputs) =>
 */
 export const tickets_sort_oldest = /** @type {((inputs?: Tickets_Sort_OldestInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Sort_OldestInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_tickets_sort_oldest(inputs)
-	return es_tickets_sort_oldest(inputs)
+	if (locale === "es") return es_tickets_sort_oldest(inputs)
+	return en_tickets_sort_oldest(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_channel_sms_off_hint = /** @type {(inputs: Admin_Channel_Sms_Off_
 */
 export const admin_channel_sms_off_hint = /** @type {((inputs?: Admin_Channel_Sms_Off_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Channel_Sms_Off_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_channel_sms_off_hint(inputs)
-	return es_admin_channel_sms_off_hint(inputs)
+	if (locale === "es") return es_admin_channel_sms_off_hint(inputs)
+	return en_admin_channel_sms_off_hint(inputs)
 });

@@ -24,6 +24,6 @@ const es_twofa_error_not_allowed = /** @type {(inputs: Twofa_Error_Not_AllowedIn
 */
 export const twofa_error_not_allowed = /** @type {((inputs?: Twofa_Error_Not_AllowedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Error_Not_AllowedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_error_not_allowed(inputs)
-	return es_twofa_error_not_allowed(inputs)
+	if (locale === "es") return es_twofa_error_not_allowed(inputs)
+	return en_twofa_error_not_allowed(inputs)
 });

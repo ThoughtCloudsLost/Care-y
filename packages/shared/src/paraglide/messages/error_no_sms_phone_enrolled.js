@@ -24,6 +24,6 @@ const es_error_no_sms_phone_enrolled = /** @type {(inputs: Error_No_Sms_Phone_En
 */
 export const error_no_sms_phone_enrolled = /** @type {((inputs?: Error_No_Sms_Phone_EnrolledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_No_Sms_Phone_EnrolledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_no_sms_phone_enrolled(inputs)
-	return es_error_no_sms_phone_enrolled(inputs)
+	if (locale === "es") return es_error_no_sms_phone_enrolled(inputs)
+	return en_error_no_sms_phone_enrolled(inputs)
 });

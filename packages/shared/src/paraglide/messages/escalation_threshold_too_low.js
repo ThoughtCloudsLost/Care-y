@@ -24,6 +24,6 @@ const es_escalation_threshold_too_low = /** @type {(inputs: Escalation_Threshold
 */
 export const escalation_threshold_too_low = /** @type {((inputs?: Escalation_Threshold_Too_LowInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Threshold_Too_LowInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_threshold_too_low(inputs)
-	return es_escalation_threshold_too_low(inputs)
+	if (locale === "es") return es_escalation_threshold_too_low(inputs)
+	return en_escalation_threshold_too_low(inputs)
 });

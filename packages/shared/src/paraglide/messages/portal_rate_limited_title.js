@@ -24,6 +24,6 @@ const es_portal_rate_limited_title = /** @type {(inputs: Portal_Rate_Limited_Tit
 */
 export const portal_rate_limited_title = /** @type {((inputs?: Portal_Rate_Limited_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Rate_Limited_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_rate_limited_title(inputs)
-	return es_portal_rate_limited_title(inputs)
+	if (locale === "es") return es_portal_rate_limited_title(inputs)
+	return en_portal_rate_limited_title(inputs)
 });

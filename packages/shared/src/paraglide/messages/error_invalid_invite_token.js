@@ -24,6 +24,6 @@ const es_error_invalid_invite_token = /** @type {(inputs: Error_Invalid_Invite_T
 */
 export const error_invalid_invite_token = /** @type {((inputs?: Error_Invalid_Invite_TokenInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Invalid_Invite_TokenInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_invalid_invite_token(inputs)
-	return es_error_invalid_invite_token(inputs)
+	if (locale === "es") return es_error_invalid_invite_token(inputs)
+	return en_error_invalid_invite_token(inputs)
 });

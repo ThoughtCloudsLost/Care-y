@@ -24,6 +24,6 @@ const es_notif_ticket_sheet_title = /** @type {(inputs: Notif_Ticket_Sheet_Title
 */
 export const notif_ticket_sheet_title = /** @type {((inputs: Notif_Ticket_Sheet_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Ticket_Sheet_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_ticket_sheet_title(inputs)
-	return es_notif_ticket_sheet_title(inputs)
+	if (locale === "es") return es_notif_ticket_sheet_title(inputs)
+	return en_notif_ticket_sheet_title(inputs)
 });

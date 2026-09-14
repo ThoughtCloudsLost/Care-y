@@ -24,6 +24,6 @@ const es_auth_username_placeholder = /** @type {(inputs: Auth_Username_Placehold
 */
 export const auth_username_placeholder = /** @type {((inputs?: Auth_Username_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Auth_Username_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_auth_username_placeholder(inputs)
-	return es_auth_username_placeholder(inputs)
+	if (locale === "es") return es_auth_username_placeholder(inputs)
+	return en_auth_username_placeholder(inputs)
 });

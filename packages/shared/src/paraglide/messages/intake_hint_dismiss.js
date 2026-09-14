@@ -24,6 +24,6 @@ const es_intake_hint_dismiss = /** @type {(inputs: Intake_Hint_DismissInputs) =>
 */
 export const intake_hint_dismiss = /** @type {((inputs?: Intake_Hint_DismissInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Hint_DismissInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_hint_dismiss(inputs)
-	return es_intake_hint_dismiss(inputs)
+	if (locale === "es") return es_intake_hint_dismiss(inputs)
+	return en_intake_hint_dismiss(inputs)
 });

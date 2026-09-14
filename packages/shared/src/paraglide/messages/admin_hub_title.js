@@ -24,6 +24,6 @@ const es_admin_hub_title = /** @type {(inputs: Admin_Hub_TitleInputs) => Localiz
 */
 export const admin_hub_title = /** @type {((inputs?: Admin_Hub_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Hub_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_hub_title(inputs)
-	return es_admin_hub_title(inputs)
+	if (locale === "es") return es_admin_hub_title(inputs)
+	return en_admin_hub_title(inputs)
 });

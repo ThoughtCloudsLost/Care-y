@@ -24,6 +24,6 @@ const es_settings_username_password_hint = /** @type {(inputs: Settings_Username
 */
 export const settings_username_password_hint = /** @type {((inputs?: Settings_Username_Password_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Username_Password_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_username_password_hint(inputs)
-	return es_settings_username_password_hint(inputs)
+	if (locale === "es") return es_settings_username_password_hint(inputs)
+	return en_settings_username_password_hint(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_templates_text_label = /** @type {(inputs: Admin_Templates_Text_L
 */
 export const admin_templates_text_label = /** @type {((inputs?: Admin_Templates_Text_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Templates_Text_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_templates_text_label(inputs)
-	return es_admin_templates_text_label(inputs)
+	if (locale === "es") return es_admin_templates_text_label(inputs)
+	return en_admin_templates_text_label(inputs)
 });

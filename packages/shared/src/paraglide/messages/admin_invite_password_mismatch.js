@@ -24,6 +24,6 @@ const es_admin_invite_password_mismatch = /** @type {(inputs: Admin_Invite_Passw
 */
 export const admin_invite_password_mismatch = /** @type {((inputs?: Admin_Invite_Password_MismatchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Password_MismatchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_password_mismatch(inputs)
-	return es_admin_invite_password_mismatch(inputs)
+	if (locale === "es") return es_admin_invite_password_mismatch(inputs)
+	return en_admin_invite_password_mismatch(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_retention_active_description = /** @type {(inputs: Admin_Retentio
 */
 export const admin_retention_active_description = /** @type {((inputs: Admin_Retention_Active_DescriptionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Retention_Active_DescriptionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_retention_active_description(inputs)
-	return es_admin_retention_active_description(inputs)
+	if (locale === "es") return es_admin_retention_active_description(inputs)
+	return en_admin_retention_active_description(inputs)
 });

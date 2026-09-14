@@ -24,6 +24,6 @@ const es_onboarding_briefing_scenario_network_title = /** @type {(inputs: Onboar
 */
 export const onboarding_briefing_scenario_network_title = /** @type {((inputs?: Onboarding_Briefing_Scenario_Network_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Scenario_Network_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_briefing_scenario_network_title(inputs)
-	return es_onboarding_briefing_scenario_network_title(inputs)
+	if (locale === "es") return es_onboarding_briefing_scenario_network_title(inputs)
+	return en_onboarding_briefing_scenario_network_title(inputs)
 });

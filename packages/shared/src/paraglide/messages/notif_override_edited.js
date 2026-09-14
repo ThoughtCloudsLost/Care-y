@@ -24,6 +24,6 @@ const es_notif_override_edited = /** @type {(inputs: Notif_Override_EditedInputs
 */
 export const notif_override_edited = /** @type {((inputs?: Notif_Override_EditedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Override_EditedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_override_edited(inputs)
-	return es_notif_override_edited(inputs)
+	if (locale === "es") return es_notif_override_edited(inputs)
+	return en_notif_override_edited(inputs)
 });

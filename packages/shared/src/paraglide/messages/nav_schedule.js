@@ -24,6 +24,6 @@ const es_nav_schedule = /** @type {(inputs: Nav_ScheduleInputs) => LocalizedStri
 */
 export const nav_schedule = /** @type {((inputs?: Nav_ScheduleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Nav_ScheduleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_nav_schedule(inputs)
-	return es_nav_schedule(inputs)
+	if (locale === "es") return es_nav_schedule(inputs)
+	return en_nav_schedule(inputs)
 });

@@ -24,6 +24,6 @@ const es_call_status_busy = /** @type {(inputs: Call_Status_BusyInputs) => Local
 */
 export const call_status_busy = /** @type {((inputs?: Call_Status_BusyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Call_Status_BusyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_call_status_busy(inputs)
-	return es_call_status_busy(inputs)
+	if (locale === "es") return es_call_status_busy(inputs)
+	return en_call_status_busy(inputs)
 });

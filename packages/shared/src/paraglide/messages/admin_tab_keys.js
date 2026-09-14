@@ -24,6 +24,6 @@ const es_admin_tab_keys = /** @type {(inputs: Admin_Tab_KeysInputs) => Localized
 */
 export const admin_tab_keys = /** @type {((inputs?: Admin_Tab_KeysInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Tab_KeysInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_tab_keys(inputs)
-	return es_admin_tab_keys(inputs)
+	if (locale === "es") return es_admin_tab_keys(inputs)
+	return en_admin_tab_keys(inputs)
 });

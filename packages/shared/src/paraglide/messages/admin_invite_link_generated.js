@@ -24,6 +24,6 @@ const es_admin_invite_link_generated = /** @type {(inputs: Admin_Invite_Link_Gen
 */
 export const admin_invite_link_generated = /** @type {((inputs?: Admin_Invite_Link_GeneratedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Link_GeneratedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_link_generated(inputs)
-	return es_admin_invite_link_generated(inputs)
+	if (locale === "es") return es_admin_invite_link_generated(inputs)
+	return en_admin_invite_link_generated(inputs)
 });

@@ -24,6 +24,6 @@ const es_audit_event_queue_created = /** @type {(inputs: Audit_Event_Queue_Creat
 */
 export const audit_event_queue_created = /** @type {((inputs?: Audit_Event_Queue_CreatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Audit_Event_Queue_CreatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_audit_event_queue_created(inputs)
-	return es_audit_event_queue_created(inputs)
+	if (locale === "es") return es_audit_event_queue_created(inputs)
+	return en_audit_event_queue_created(inputs)
 });

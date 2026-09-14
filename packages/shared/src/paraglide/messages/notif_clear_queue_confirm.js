@@ -24,6 +24,6 @@ const es_notif_clear_queue_confirm = /** @type {(inputs: Notif_Clear_Queue_Confi
 */
 export const notif_clear_queue_confirm = /** @type {((inputs: Notif_Clear_Queue_ConfirmInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Clear_Queue_ConfirmInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_clear_queue_confirm(inputs)
-	return es_notif_clear_queue_confirm(inputs)
+	if (locale === "es") return es_notif_clear_queue_confirm(inputs)
+	return en_notif_clear_queue_confirm(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_telephony_change_mode_confirm_body = /** @type {(inputs: Admin_Te
 */
 export const admin_telephony_change_mode_confirm_body = /** @type {((inputs?: Admin_Telephony_Change_Mode_Confirm_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Change_Mode_Confirm_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_change_mode_confirm_body(inputs)
-	return es_admin_telephony_change_mode_confirm_body(inputs)
+	if (locale === "es") return es_admin_telephony_change_mode_confirm_body(inputs)
+	return en_admin_telephony_change_mode_confirm_body(inputs)
 });

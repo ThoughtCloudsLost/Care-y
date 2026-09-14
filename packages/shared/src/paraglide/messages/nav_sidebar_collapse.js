@@ -24,6 +24,6 @@ const es_nav_sidebar_collapse = /** @type {(inputs: Nav_Sidebar_CollapseInputs) 
 */
 export const nav_sidebar_collapse = /** @type {((inputs?: Nav_Sidebar_CollapseInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Nav_Sidebar_CollapseInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_nav_sidebar_collapse(inputs)
-	return es_nav_sidebar_collapse(inputs)
+	if (locale === "es") return es_nav_sidebar_collapse(inputs)
+	return en_nav_sidebar_collapse(inputs)
 });

@@ -24,6 +24,6 @@ const es_getting_started_greetings_desc = /** @type {(inputs: Getting_Started_Gr
 */
 export const getting_started_greetings_desc = /** @type {((inputs?: Getting_Started_Greetings_DescInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Getting_Started_Greetings_DescInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_getting_started_greetings_desc(inputs)
-	return es_getting_started_greetings_desc(inputs)
+	if (locale === "es") return es_getting_started_greetings_desc(inputs)
+	return en_getting_started_greetings_desc(inputs)
 });

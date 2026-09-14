@@ -24,6 +24,6 @@ const es_notif_sse_always_on = /** @type {(inputs: Notif_Sse_Always_OnInputs) =>
 */
 export const notif_sse_always_on = /** @type {((inputs?: Notif_Sse_Always_OnInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Sse_Always_OnInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_sse_always_on(inputs)
-	return es_notif_sse_always_on(inputs)
+	if (locale === "es") return es_notif_sse_always_on(inputs)
+	return en_notif_sse_always_on(inputs)
 });

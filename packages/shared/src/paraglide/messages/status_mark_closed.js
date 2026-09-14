@@ -24,6 +24,6 @@ const es_status_mark_closed = /** @type {(inputs: Status_Mark_ClosedInputs) => L
 */
 export const status_mark_closed = /** @type {((inputs?: Status_Mark_ClosedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Status_Mark_ClosedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_status_mark_closed(inputs)
-	return es_status_mark_closed(inputs)
+	if (locale === "es") return es_status_mark_closed(inputs)
+	return en_status_mark_closed(inputs)
 });

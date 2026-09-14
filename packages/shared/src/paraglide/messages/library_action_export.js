@@ -24,6 +24,6 @@ const es_library_action_export = /** @type {(inputs: Library_Action_ExportInputs
 */
 export const library_action_export = /** @type {((inputs?: Library_Action_ExportInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Action_ExportInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_action_export(inputs)
-	return es_library_action_export(inputs)
+	if (locale === "es") return es_library_action_export(inputs)
+	return en_library_action_export(inputs)
 });

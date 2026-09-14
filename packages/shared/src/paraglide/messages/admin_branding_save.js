@@ -24,6 +24,6 @@ const es_admin_branding_save = /** @type {(inputs: Admin_Branding_SaveInputs) =>
 */
 export const admin_branding_save = /** @type {((inputs?: Admin_Branding_SaveInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_SaveInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_save(inputs)
-	return es_admin_branding_save(inputs)
+	if (locale === "es") return es_admin_branding_save(inputs)
+	return en_admin_branding_save(inputs)
 });

@@ -24,6 +24,6 @@ const es_share_sheet_too_long = /** @type {(inputs: Share_Sheet_Too_LongInputs) 
 */
 export const share_sheet_too_long = /** @type {((inputs?: Share_Sheet_Too_LongInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Sheet_Too_LongInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_sheet_too_long(inputs)
-	return es_share_sheet_too_long(inputs)
+	if (locale === "es") return es_share_sheet_too_long(inputs)
+	return en_share_sheet_too_long(inputs)
 });

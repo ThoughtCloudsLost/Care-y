@@ -24,6 +24,6 @@ const es_demo_topic_language = /** @type {(inputs: Demo_Topic_LanguageInputs) =>
 */
 export const demo_topic_language = /** @type {((inputs?: Demo_Topic_LanguageInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Topic_LanguageInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_topic_language(inputs)
-	return es_demo_topic_language(inputs)
+	if (locale === "es") return es_demo_topic_language(inputs)
+	return en_demo_topic_language(inputs)
 });

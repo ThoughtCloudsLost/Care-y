@@ -24,6 +24,6 @@ const es_admin_queues_stat_total = /** @type {(inputs: Admin_Queues_Stat_TotalIn
 */
 export const admin_queues_stat_total = /** @type {((inputs: Admin_Queues_Stat_TotalInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queues_Stat_TotalInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_queues_stat_total(inputs)
-	return es_admin_queues_stat_total(inputs)
+	if (locale === "es") return es_admin_queues_stat_total(inputs)
+	return en_admin_queues_stat_total(inputs)
 });

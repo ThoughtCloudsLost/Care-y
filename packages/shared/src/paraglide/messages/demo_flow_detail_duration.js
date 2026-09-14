@@ -24,6 +24,6 @@ const es_demo_flow_detail_duration = /** @type {(inputs: Demo_Flow_Detail_Durati
 */
 export const demo_flow_detail_duration = /** @type {((inputs?: Demo_Flow_Detail_DurationInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Detail_DurationInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_detail_duration(inputs)
-	return es_demo_flow_detail_duration(inputs)
+	if (locale === "es") return es_demo_flow_detail_duration(inputs)
+	return en_demo_flow_detail_duration(inputs)
 });

@@ -24,6 +24,6 @@ const es_portal_correction_mode_button = /** @type {(inputs: Portal_Correction_M
 */
 export const portal_correction_mode_button = /** @type {((inputs?: Portal_Correction_Mode_ButtonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Correction_Mode_ButtonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_correction_mode_button(inputs)
-	return es_portal_correction_mode_button(inputs)
+	if (locale === "es") return es_portal_correction_mode_button(inputs)
+	return en_portal_correction_mode_button(inputs)
 });

@@ -24,6 +24,6 @@ const es_intake_continuation_expanded_warning = /** @type {(inputs: Intake_Conti
 */
 export const intake_continuation_expanded_warning = /** @type {((inputs?: Intake_Continuation_Expanded_WarningInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Continuation_Expanded_WarningInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_continuation_expanded_warning(inputs)
-	return es_intake_continuation_expanded_warning(inputs)
+	if (locale === "es") return es_intake_continuation_expanded_warning(inputs)
+	return en_intake_continuation_expanded_warning(inputs)
 });

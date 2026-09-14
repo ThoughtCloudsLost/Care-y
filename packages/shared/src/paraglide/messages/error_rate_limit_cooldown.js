@@ -24,6 +24,6 @@ const es_error_rate_limit_cooldown = /** @type {(inputs: Error_Rate_Limit_Cooldo
 */
 export const error_rate_limit_cooldown = /** @type {((inputs?: Error_Rate_Limit_CooldownInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Rate_Limit_CooldownInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_rate_limit_cooldown(inputs)
-	return es_error_rate_limit_cooldown(inputs)
+	if (locale === "es") return es_error_rate_limit_cooldown(inputs)
+	return en_error_rate_limit_cooldown(inputs)
 });

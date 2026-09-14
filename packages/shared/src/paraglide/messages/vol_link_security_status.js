@@ -24,6 +24,6 @@ const es_vol_link_security_status = /** @type {(inputs: Vol_Link_Security_Status
 */
 export const vol_link_security_status = /** @type {((inputs?: Vol_Link_Security_StatusInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Link_Security_StatusInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_vol_link_security_status(inputs)
-	return es_vol_link_security_status(inputs)
+	if (locale === "es") return es_vol_link_security_status(inputs)
+	return en_vol_link_security_status(inputs)
 });

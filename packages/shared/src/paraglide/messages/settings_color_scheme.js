@@ -24,6 +24,6 @@ const es_settings_color_scheme = /** @type {(inputs: Settings_Color_SchemeInputs
 */
 export const settings_color_scheme = /** @type {((inputs?: Settings_Color_SchemeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Color_SchemeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_color_scheme(inputs)
-	return es_settings_color_scheme(inputs)
+	if (locale === "es") return es_settings_color_scheme(inputs)
+	return en_settings_color_scheme(inputs)
 });

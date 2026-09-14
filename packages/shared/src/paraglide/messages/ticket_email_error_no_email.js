@@ -24,6 +24,6 @@ const es_ticket_email_error_no_email = /** @type {(inputs: Ticket_Email_Error_No
 */
 export const ticket_email_error_no_email = /** @type {((inputs: Ticket_Email_Error_No_EmailInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Email_Error_No_EmailInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_email_error_no_email(inputs)
-	return es_ticket_email_error_no_email(inputs)
+	if (locale === "es") return es_ticket_email_error_no_email(inputs)
+	return en_ticket_email_error_no_email(inputs)
 });

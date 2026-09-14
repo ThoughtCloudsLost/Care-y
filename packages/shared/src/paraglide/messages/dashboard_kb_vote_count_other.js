@@ -24,6 +24,6 @@ const es_dashboard_kb_vote_count_other = /** @type {(inputs: Dashboard_Kb_Vote_C
 */
 export const dashboard_kb_vote_count_other = /** @type {((inputs: Dashboard_Kb_Vote_Count_OtherInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Kb_Vote_Count_OtherInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_kb_vote_count_other(inputs)
-	return es_dashboard_kb_vote_count_other(inputs)
+	if (locale === "es") return es_dashboard_kb_vote_count_other(inputs)
+	return en_dashboard_kb_vote_count_other(inputs)
 });

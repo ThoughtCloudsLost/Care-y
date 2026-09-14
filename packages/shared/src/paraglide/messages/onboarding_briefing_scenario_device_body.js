@@ -24,6 +24,6 @@ const es_onboarding_briefing_scenario_device_body = /** @type {(inputs: Onboardi
 */
 export const onboarding_briefing_scenario_device_body = /** @type {((inputs?: Onboarding_Briefing_Scenario_Device_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Scenario_Device_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_briefing_scenario_device_body(inputs)
-	return es_onboarding_briefing_scenario_device_body(inputs)
+	if (locale === "es") return es_onboarding_briefing_scenario_device_body(inputs)
+	return en_onboarding_briefing_scenario_device_body(inputs)
 });

@@ -24,6 +24,6 @@ const es_share_view_expired = /** @type {(inputs: Share_View_ExpiredInputs) => L
 */
 export const share_view_expired = /** @type {((inputs?: Share_View_ExpiredInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_View_ExpiredInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_view_expired(inputs)
-	return es_share_view_expired(inputs)
+	if (locale === "es") return es_share_view_expired(inputs)
+	return en_share_view_expired(inputs)
 });

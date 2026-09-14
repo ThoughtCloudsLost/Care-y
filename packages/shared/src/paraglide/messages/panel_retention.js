@@ -24,6 +24,6 @@ const es_panel_retention = /** @type {(inputs: Panel_RetentionInputs) => Localiz
 */
 export const panel_retention = /** @type {((inputs?: Panel_RetentionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_RetentionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_retention(inputs)
-	return es_panel_retention(inputs)
+	if (locale === "es") return es_panel_retention(inputs)
+	return en_panel_retention(inputs)
 });

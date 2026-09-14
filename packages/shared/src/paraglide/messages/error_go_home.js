@@ -24,6 +24,6 @@ const es_error_go_home = /** @type {(inputs: Error_Go_HomeInputs) => LocalizedSt
 */
 export const error_go_home = /** @type {((inputs?: Error_Go_HomeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Go_HomeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_go_home(inputs)
-	return es_error_go_home(inputs)
+	if (locale === "es") return es_error_go_home(inputs)
+	return en_error_go_home(inputs)
 });

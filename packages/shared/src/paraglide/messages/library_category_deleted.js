@@ -24,6 +24,6 @@ const es_library_category_deleted = /** @type {(inputs: Library_Category_Deleted
 */
 export const library_category_deleted = /** @type {((inputs?: Library_Category_DeletedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Category_DeletedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_category_deleted(inputs)
-	return es_library_category_deleted(inputs)
+	if (locale === "es") return es_library_category_deleted(inputs)
+	return en_library_category_deleted(inputs)
 });

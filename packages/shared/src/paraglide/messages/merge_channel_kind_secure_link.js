@@ -24,6 +24,6 @@ const es_merge_channel_kind_secure_link = /** @type {(inputs: Merge_Channel_Kind
 */
 export const merge_channel_kind_secure_link = /** @type {((inputs?: Merge_Channel_Kind_Secure_LinkInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Merge_Channel_Kind_Secure_LinkInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_merge_channel_kind_secure_link(inputs)
-	return es_merge_channel_kind_secure_link(inputs)
+	if (locale === "es") return es_merge_channel_kind_secure_link(inputs)
+	return en_merge_channel_kind_secure_link(inputs)
 });

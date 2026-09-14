@@ -24,6 +24,6 @@ const es_demo_feature_list_heading = /** @type {(inputs: Demo_Feature_List_Headi
 */
 export const demo_feature_list_heading = /** @type {((inputs?: Demo_Feature_List_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Feature_List_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_feature_list_heading(inputs)
-	return es_demo_feature_list_heading(inputs)
+	if (locale === "es") return es_demo_feature_list_heading(inputs)
+	return en_demo_feature_list_heading(inputs)
 });

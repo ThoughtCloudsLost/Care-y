@@ -24,6 +24,6 @@ const es_vol_clients_encrypted = /** @type {(inputs: Vol_Clients_EncryptedInputs
 */
 export const vol_clients_encrypted = /** @type {((inputs?: Vol_Clients_EncryptedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Clients_EncryptedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_vol_clients_encrypted(inputs)
-	return es_vol_clients_encrypted(inputs)
+	if (locale === "es") return es_vol_clients_encrypted(inputs)
+	return en_vol_clients_encrypted(inputs)
 });

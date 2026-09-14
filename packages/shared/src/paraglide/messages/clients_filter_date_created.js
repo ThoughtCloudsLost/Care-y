@@ -24,6 +24,6 @@ const es_clients_filter_date_created = /** @type {(inputs: Clients_Filter_Date_C
 */
 export const clients_filter_date_created = /** @type {((inputs?: Clients_Filter_Date_CreatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Clients_Filter_Date_CreatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_clients_filter_date_created(inputs)
-	return es_clients_filter_date_created(inputs)
+	if (locale === "es") return es_clients_filter_date_created(inputs)
+	return en_clients_filter_date_created(inputs)
 });

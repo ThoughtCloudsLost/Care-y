@@ -24,6 +24,6 @@ const es_empty_no_data = /** @type {(inputs: Empty_No_DataInputs) => LocalizedSt
 */
 export const empty_no_data = /** @type {((inputs?: Empty_No_DataInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Empty_No_DataInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_empty_no_data(inputs)
-	return es_empty_no_data(inputs)
+	if (locale === "es") return es_empty_no_data(inputs)
+	return en_empty_no_data(inputs)
 });

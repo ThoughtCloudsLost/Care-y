@@ -24,6 +24,6 @@ const es_onboarding_account_password = /** @type {(inputs: Onboarding_Account_Pa
 */
 export const onboarding_account_password = /** @type {((inputs?: Onboarding_Account_PasswordInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Account_PasswordInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_account_password(inputs)
-	return es_onboarding_account_password(inputs)
+	if (locale === "es") return es_onboarding_account_password(inputs)
+	return en_onboarding_account_password(inputs)
 });

@@ -24,6 +24,6 @@ const es_demo_tickets_tap_card = /** @type {(inputs: Demo_Tickets_Tap_CardInputs
 */
 export const demo_tickets_tap_card = /** @type {((inputs?: Demo_Tickets_Tap_CardInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Tickets_Tap_CardInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_tickets_tap_card(inputs)
-	return es_demo_tickets_tap_card(inputs)
+	if (locale === "es") return es_demo_tickets_tap_card(inputs)
+	return en_demo_tickets_tap_card(inputs)
 });

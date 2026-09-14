@@ -24,6 +24,6 @@ const es_hub_intake_forms_subtitle = /** @type {(inputs: Hub_Intake_Forms_Subtit
 */
 export const hub_intake_forms_subtitle = /** @type {((inputs?: Hub_Intake_Forms_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Intake_Forms_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_hub_intake_forms_subtitle(inputs)
-	return es_hub_intake_forms_subtitle(inputs)
+	if (locale === "es") return es_hub_intake_forms_subtitle(inputs)
+	return en_hub_intake_forms_subtitle(inputs)
 });

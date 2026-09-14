@@ -24,6 +24,6 @@ const es_saved_filter_share = /** @type {(inputs: Saved_Filter_ShareInputs) => L
 */
 export const saved_filter_share = /** @type {((inputs?: Saved_Filter_ShareInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Saved_Filter_ShareInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_saved_filter_share(inputs)
-	return es_saved_filter_share(inputs)
+	if (locale === "es") return es_saved_filter_share(inputs)
+	return en_saved_filter_share(inputs)
 });

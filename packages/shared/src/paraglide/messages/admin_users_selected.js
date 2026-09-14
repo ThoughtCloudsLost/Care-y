@@ -24,6 +24,6 @@ const es_admin_users_selected = /** @type {(inputs: Admin_Users_SelectedInputs) 
 */
 export const admin_users_selected = /** @type {((inputs: Admin_Users_SelectedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Users_SelectedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_users_selected(inputs)
-	return es_admin_users_selected(inputs)
+	if (locale === "es") return es_admin_users_selected(inputs)
+	return en_admin_users_selected(inputs)
 });

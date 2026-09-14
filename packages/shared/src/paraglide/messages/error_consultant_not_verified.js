@@ -24,6 +24,6 @@ const es_error_consultant_not_verified = /** @type {(inputs: Error_Consultant_No
 */
 export const error_consultant_not_verified = /** @type {((inputs?: Error_Consultant_Not_VerifiedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Consultant_Not_VerifiedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_consultant_not_verified(inputs)
-	return es_error_consultant_not_verified(inputs)
+	if (locale === "es") return es_error_consultant_not_verified(inputs)
+	return en_error_consultant_not_verified(inputs)
 });

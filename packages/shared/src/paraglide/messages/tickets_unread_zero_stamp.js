@@ -24,6 +24,6 @@ const es_tickets_unread_zero_stamp = /** @type {(inputs: Tickets_Unread_Zero_Sta
 */
 export const tickets_unread_zero_stamp = /** @type {((inputs?: Tickets_Unread_Zero_StampInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Unread_Zero_StampInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_tickets_unread_zero_stamp(inputs)
-	return es_tickets_unread_zero_stamp(inputs)
+	if (locale === "es") return es_tickets_unread_zero_stamp(inputs)
+	return en_tickets_unread_zero_stamp(inputs)
 });

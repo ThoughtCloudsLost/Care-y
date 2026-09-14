@@ -24,6 +24,6 @@ const es_demo_flow_seam_login_pacing = /** @type {(inputs: Demo_Flow_Seam_Login_
 */
 export const demo_flow_seam_login_pacing = /** @type {((inputs?: Demo_Flow_Seam_Login_PacingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Seam_Login_PacingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_seam_login_pacing(inputs)
-	return es_demo_flow_seam_login_pacing(inputs)
+	if (locale === "es") return es_demo_flow_seam_login_pacing(inputs)
+	return en_demo_flow_seam_login_pacing(inputs)
 });

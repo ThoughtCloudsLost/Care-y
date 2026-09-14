@@ -24,6 +24,6 @@ const es_portal_link_sms_body = /** @type {(inputs: Portal_Link_Sms_BodyInputs) 
 */
 export const portal_link_sms_body = /** @type {((inputs: Portal_Link_Sms_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Link_Sms_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_link_sms_body(inputs)
-	return es_portal_link_sms_body(inputs)
+	if (locale === "es") return es_portal_link_sms_body(inputs)
+	return en_portal_link_sms_body(inputs)
 });

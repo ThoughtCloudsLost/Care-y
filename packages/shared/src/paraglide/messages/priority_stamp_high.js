@@ -24,6 +24,6 @@ const es_priority_stamp_high = /** @type {(inputs: Priority_Stamp_HighInputs) =>
 */
 export const priority_stamp_high = /** @type {((inputs?: Priority_Stamp_HighInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Priority_Stamp_HighInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_priority_stamp_high(inputs)
-	return es_priority_stamp_high(inputs)
+	if (locale === "es") return es_priority_stamp_high(inputs)
+	return en_priority_stamp_high(inputs)
 });

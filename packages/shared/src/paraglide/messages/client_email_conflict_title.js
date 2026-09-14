@@ -24,6 +24,6 @@ const es_client_email_conflict_title = /** @type {(inputs: Client_Email_Conflict
 */
 export const client_email_conflict_title = /** @type {((inputs?: Client_Email_Conflict_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Email_Conflict_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_email_conflict_title(inputs)
-	return es_client_email_conflict_title(inputs)
+	if (locale === "es") return es_client_email_conflict_title(inputs)
+	return en_client_email_conflict_title(inputs)
 });

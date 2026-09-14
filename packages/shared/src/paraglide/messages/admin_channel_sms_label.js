@@ -24,6 +24,6 @@ const es_admin_channel_sms_label = /** @type {(inputs: Admin_Channel_Sms_LabelIn
 */
 export const admin_channel_sms_label = /** @type {((inputs?: Admin_Channel_Sms_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Channel_Sms_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_channel_sms_label(inputs)
-	return es_admin_channel_sms_label(inputs)
+	if (locale === "es") return es_admin_channel_sms_label(inputs)
+	return en_admin_channel_sms_label(inputs)
 });

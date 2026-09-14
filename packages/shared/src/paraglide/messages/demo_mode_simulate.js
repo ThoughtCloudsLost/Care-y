@@ -24,6 +24,6 @@ const es_demo_mode_simulate = /** @type {(inputs: Demo_Mode_SimulateInputs) => L
 */
 export const demo_mode_simulate = /** @type {((inputs?: Demo_Mode_SimulateInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Mode_SimulateInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_mode_simulate(inputs)
-	return es_demo_mode_simulate(inputs)
+	if (locale === "es") return es_demo_mode_simulate(inputs)
+	return en_demo_mode_simulate(inputs)
 });

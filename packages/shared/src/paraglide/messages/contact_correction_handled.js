@@ -24,6 +24,6 @@ const es_contact_correction_handled = /** @type {(inputs: Contact_Correction_Han
 */
 export const contact_correction_handled = /** @type {((inputs?: Contact_Correction_HandledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Contact_Correction_HandledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_contact_correction_handled(inputs)
-	return es_contact_correction_handled(inputs)
+	if (locale === "es") return es_contact_correction_handled(inputs)
+	return en_contact_correction_handled(inputs)
 });

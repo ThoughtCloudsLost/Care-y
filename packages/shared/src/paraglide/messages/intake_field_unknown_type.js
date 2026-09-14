@@ -24,6 +24,6 @@ const es_intake_field_unknown_type = /** @type {(inputs: Intake_Field_Unknown_Ty
 */
 export const intake_field_unknown_type = /** @type {((inputs?: Intake_Field_Unknown_TypeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Field_Unknown_TypeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_field_unknown_type(inputs)
-	return es_intake_field_unknown_type(inputs)
+	if (locale === "es") return es_intake_field_unknown_type(inputs)
+	return en_intake_field_unknown_type(inputs)
 });

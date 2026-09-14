@@ -24,6 +24,6 @@ const es_intake_solving_challenge = /** @type {(inputs: Intake_Solving_Challenge
 */
 export const intake_solving_challenge = /** @type {((inputs?: Intake_Solving_ChallengeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Solving_ChallengeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_solving_challenge(inputs)
-	return es_intake_solving_challenge(inputs)
+	if (locale === "es") return es_intake_solving_challenge(inputs)
+	return en_intake_solving_challenge(inputs)
 });

@@ -24,6 +24,6 @@ const es_settings_security = /** @type {(inputs: Settings_SecurityInputs) => Loc
 */
 export const settings_security = /** @type {((inputs?: Settings_SecurityInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_SecurityInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_security(inputs)
-	return es_settings_security(inputs)
+	if (locale === "es") return es_settings_security(inputs)
+	return en_settings_security(inputs)
 });

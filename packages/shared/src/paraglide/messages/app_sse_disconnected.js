@@ -24,6 +24,6 @@ const es_app_sse_disconnected = /** @type {(inputs: App_Sse_DisconnectedInputs) 
 */
 export const app_sse_disconnected = /** @type {((inputs?: App_Sse_DisconnectedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<App_Sse_DisconnectedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_app_sse_disconnected(inputs)
-	return es_app_sse_disconnected(inputs)
+	if (locale === "es") return es_app_sse_disconnected(inputs)
+	return en_app_sse_disconnected(inputs)
 });

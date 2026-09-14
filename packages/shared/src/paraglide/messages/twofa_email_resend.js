@@ -24,6 +24,6 @@ const es_twofa_email_resend = /** @type {(inputs: Twofa_Email_ResendInputs) => L
 */
 export const twofa_email_resend = /** @type {((inputs?: Twofa_Email_ResendInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Email_ResendInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_email_resend(inputs)
-	return es_twofa_email_resend(inputs)
+	if (locale === "es") return es_twofa_email_resend(inputs)
+	return en_twofa_email_resend(inputs)
 });

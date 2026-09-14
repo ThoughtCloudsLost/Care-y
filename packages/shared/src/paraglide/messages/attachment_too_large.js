@@ -24,6 +24,6 @@ const es_attachment_too_large = /** @type {(inputs: Attachment_Too_LargeInputs) 
 */
 export const attachment_too_large = /** @type {((inputs: Attachment_Too_LargeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Attachment_Too_LargeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_attachment_too_large(inputs)
-	return es_attachment_too_large(inputs)
+	if (locale === "es") return es_attachment_too_large(inputs)
+	return en_attachment_too_large(inputs)
 });

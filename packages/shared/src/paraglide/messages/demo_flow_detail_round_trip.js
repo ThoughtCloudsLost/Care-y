@@ -24,6 +24,6 @@ const es_demo_flow_detail_round_trip = /** @type {(inputs: Demo_Flow_Detail_Roun
 */
 export const demo_flow_detail_round_trip = /** @type {((inputs?: Demo_Flow_Detail_Round_TripInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Detail_Round_TripInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_detail_round_trip(inputs)
-	return es_demo_flow_detail_round_trip(inputs)
+	if (locale === "es") return es_demo_flow_detail_round_trip(inputs)
+	return en_demo_flow_detail_round_trip(inputs)
 });

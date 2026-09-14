@@ -24,6 +24,6 @@ const es_password_show = /** @type {(inputs: Password_ShowInputs) => LocalizedSt
 */
 export const password_show = /** @type {((inputs?: Password_ShowInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Password_ShowInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_password_show(inputs)
-	return es_password_show(inputs)
+	if (locale === "es") return es_password_show(inputs)
+	return en_password_show(inputs)
 });

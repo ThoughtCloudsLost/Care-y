@@ -24,6 +24,6 @@ const es_twofa_verify_submit = /** @type {(inputs: Twofa_Verify_SubmitInputs) =>
 */
 export const twofa_verify_submit = /** @type {((inputs?: Twofa_Verify_SubmitInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Verify_SubmitInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_verify_submit(inputs)
-	return es_twofa_verify_submit(inputs)
+	if (locale === "es") return es_twofa_verify_submit(inputs)
+	return en_twofa_verify_submit(inputs)
 });

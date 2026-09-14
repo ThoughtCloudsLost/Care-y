@@ -24,6 +24,6 @@ const es_admin_queues_empty = /** @type {(inputs: Admin_Queues_EmptyInputs) => L
 */
 export const admin_queues_empty = /** @type {((inputs: Admin_Queues_EmptyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queues_EmptyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_queues_empty(inputs)
-	return es_admin_queues_empty(inputs)
+	if (locale === "es") return es_admin_queues_empty(inputs)
+	return en_admin_queues_empty(inputs)
 });

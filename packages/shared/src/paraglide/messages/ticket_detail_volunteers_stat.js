@@ -24,6 +24,6 @@ const es_ticket_detail_volunteers_stat = /** @type {(inputs: Ticket_Detail_Volun
 */
 export const ticket_detail_volunteers_stat = /** @type {((inputs: Ticket_Detail_Volunteers_StatInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Detail_Volunteers_StatInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_detail_volunteers_stat(inputs)
-	return es_ticket_detail_volunteers_stat(inputs)
+	if (locale === "es") return es_ticket_detail_volunteers_stat(inputs)
+	return en_ticket_detail_volunteers_stat(inputs)
 });

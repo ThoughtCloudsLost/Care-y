@@ -24,6 +24,6 @@ const es_portal_messaging_disabled_aria = /** @type {(inputs: Portal_Messaging_D
 */
 export const portal_messaging_disabled_aria = /** @type {((inputs?: Portal_Messaging_Disabled_AriaInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Messaging_Disabled_AriaInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_messaging_disabled_aria(inputs)
-	return es_portal_messaging_disabled_aria(inputs)
+	if (locale === "es") return es_portal_messaging_disabled_aria(inputs)
+	return en_portal_messaging_disabled_aria(inputs)
 });

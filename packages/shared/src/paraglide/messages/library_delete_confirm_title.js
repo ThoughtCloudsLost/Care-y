@@ -24,6 +24,6 @@ const es_library_delete_confirm_title = /** @type {(inputs: Library_Delete_Confi
 */
 export const library_delete_confirm_title = /** @type {((inputs?: Library_Delete_Confirm_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Delete_Confirm_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_delete_confirm_title(inputs)
-	return es_library_delete_confirm_title(inputs)
+	if (locale === "es") return es_library_delete_confirm_title(inputs)
+	return en_library_delete_confirm_title(inputs)
 });

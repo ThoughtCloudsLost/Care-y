@@ -24,6 +24,6 @@ const es_library_image_missing_alt = /** @type {(inputs: Library_Image_Missing_A
 */
 export const library_image_missing_alt = /** @type {((inputs?: Library_Image_Missing_AltInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Image_Missing_AltInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_image_missing_alt(inputs)
-	return es_library_image_missing_alt(inputs)
+	if (locale === "es") return es_library_image_missing_alt(inputs)
+	return en_library_image_missing_alt(inputs)
 });

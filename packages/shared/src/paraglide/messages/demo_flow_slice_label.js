@@ -24,6 +24,6 @@ const es_demo_flow_slice_label = /** @type {(inputs: Demo_Flow_Slice_LabelInputs
 */
 export const demo_flow_slice_label = /** @type {((inputs: Demo_Flow_Slice_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Slice_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_slice_label(inputs)
-	return es_demo_flow_slice_label(inputs)
+	if (locale === "es") return es_demo_flow_slice_label(inputs)
+	return en_demo_flow_slice_label(inputs)
 });

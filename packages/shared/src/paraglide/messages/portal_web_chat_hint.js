@@ -24,6 +24,6 @@ const es_portal_web_chat_hint = /** @type {(inputs: Portal_Web_Chat_HintInputs) 
 */
 export const portal_web_chat_hint = /** @type {((inputs?: Portal_Web_Chat_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Web_Chat_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_web_chat_hint(inputs)
-	return es_portal_web_chat_hint(inputs)
+	if (locale === "es") return es_portal_web_chat_hint(inputs)
+	return en_portal_web_chat_hint(inputs)
 });

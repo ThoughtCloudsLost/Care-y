@@ -24,6 +24,6 @@ const es_escalation_threshold_days = /** @type {(inputs: Escalation_Threshold_Da
 */
 export const escalation_threshold_days = /** @type {((inputs: Escalation_Threshold_DaysInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Threshold_DaysInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_threshold_days(inputs)
-	return es_escalation_threshold_days(inputs)
+	if (locale === "es") return es_escalation_threshold_days(inputs)
+	return en_escalation_threshold_days(inputs)
 });

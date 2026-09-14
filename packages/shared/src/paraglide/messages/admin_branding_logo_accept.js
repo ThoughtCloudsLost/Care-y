@@ -24,6 +24,6 @@ const es_admin_branding_logo_accept = /** @type {(inputs: Admin_Branding_Logo_Ac
 */
 export const admin_branding_logo_accept = /** @type {((inputs?: Admin_Branding_Logo_AcceptInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Logo_AcceptInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_logo_accept(inputs)
-	return es_admin_branding_logo_accept(inputs)
+	if (locale === "es") return es_admin_branding_logo_accept(inputs)
+	return en_admin_branding_logo_accept(inputs)
 });

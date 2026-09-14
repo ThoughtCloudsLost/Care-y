@@ -24,6 +24,6 @@ const es_error_no_push_subscriptions = /** @type {(inputs: Error_No_Push_Subscri
 */
 export const error_no_push_subscriptions = /** @type {((inputs?: Error_No_Push_SubscriptionsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_No_Push_SubscriptionsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_no_push_subscriptions(inputs)
-	return es_error_no_push_subscriptions(inputs)
+	if (locale === "es") return es_error_no_push_subscriptions(inputs)
+	return en_error_no_push_subscriptions(inputs)
 });

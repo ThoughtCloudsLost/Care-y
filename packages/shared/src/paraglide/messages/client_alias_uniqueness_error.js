@@ -24,6 +24,6 @@ const es_client_alias_uniqueness_error = /** @type {(inputs: Client_Alias_Unique
 */
 export const client_alias_uniqueness_error = /** @type {((inputs?: Client_Alias_Uniqueness_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Alias_Uniqueness_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_alias_uniqueness_error(inputs)
-	return es_client_alias_uniqueness_error(inputs)
+	if (locale === "es") return es_client_alias_uniqueness_error(inputs)
+	return en_client_alias_uniqueness_error(inputs)
 });

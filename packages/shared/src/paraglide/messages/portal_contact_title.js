@@ -24,6 +24,6 @@ const es_portal_contact_title = /** @type {(inputs: Portal_Contact_TitleInputs) 
 */
 export const portal_contact_title = /** @type {((inputs?: Portal_Contact_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Contact_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_contact_title(inputs)
-	return es_portal_contact_title(inputs)
+	if (locale === "es") return es_portal_contact_title(inputs)
+	return en_portal_contact_title(inputs)
 });

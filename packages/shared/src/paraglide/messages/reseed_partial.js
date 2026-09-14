@@ -24,6 +24,6 @@ const es_reseed_partial = /** @type {(inputs: Reseed_PartialInputs) => Localized
 */
 export const reseed_partial = /** @type {((inputs: Reseed_PartialInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Reseed_PartialInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_reseed_partial(inputs)
-	return es_reseed_partial(inputs)
+	if (locale === "es") return es_reseed_partial(inputs)
+	return en_reseed_partial(inputs)
 });

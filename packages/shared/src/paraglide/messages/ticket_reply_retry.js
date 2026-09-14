@@ -24,6 +24,6 @@ const es_ticket_reply_retry = /** @type {(inputs: Ticket_Reply_RetryInputs) => L
 */
 export const ticket_reply_retry = /** @type {((inputs?: Ticket_Reply_RetryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Reply_RetryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_reply_retry(inputs)
-	return es_ticket_reply_retry(inputs)
+	if (locale === "es") return es_ticket_reply_retry(inputs)
+	return en_ticket_reply_retry(inputs)
 });

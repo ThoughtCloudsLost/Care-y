@@ -24,6 +24,6 @@ const es_intake_forms_config_role_language_preference = /** @type {(inputs: Inta
 */
 export const intake_forms_config_role_language_preference = /** @type {((inputs?: Intake_Forms_Config_Role_Language_PreferenceInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Role_Language_PreferenceInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_role_language_preference(inputs)
-	return es_intake_forms_config_role_language_preference(inputs)
+	if (locale === "es") return es_intake_forms_config_role_language_preference(inputs)
+	return en_intake_forms_config_role_language_preference(inputs)
 });

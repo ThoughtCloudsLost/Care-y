@@ -24,6 +24,6 @@ const es_common_back = /** @type {(inputs: Common_BackInputs) => LocalizedString
 */
 export const common_back = /** @type {((inputs?: Common_BackInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Common_BackInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_common_back(inputs)
-	return es_common_back(inputs)
+	if (locale === "es") return es_common_back(inputs)
+	return en_common_back(inputs)
 });

@@ -24,6 +24,6 @@ const es_ticket_tier_reseed_toggle = /** @type {(inputs: Ticket_Tier_Reseed_Togg
 */
 export const ticket_tier_reseed_toggle = /** @type {((inputs?: Ticket_Tier_Reseed_ToggleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Tier_Reseed_ToggleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_tier_reseed_toggle(inputs)
-	return es_ticket_tier_reseed_toggle(inputs)
+	if (locale === "es") return es_ticket_tier_reseed_toggle(inputs)
+	return en_ticket_tier_reseed_toggle(inputs)
 });

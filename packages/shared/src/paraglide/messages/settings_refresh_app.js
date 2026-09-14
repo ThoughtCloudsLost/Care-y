@@ -24,6 +24,6 @@ const es_settings_refresh_app = /** @type {(inputs: Settings_Refresh_AppInputs) 
 */
 export const settings_refresh_app = /** @type {((inputs?: Settings_Refresh_AppInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Refresh_AppInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_refresh_app(inputs)
-	return es_settings_refresh_app(inputs)
+	if (locale === "es") return es_settings_refresh_app(inputs)
+	return en_settings_refresh_app(inputs)
 });

@@ -24,6 +24,6 @@ const es_onboarding_setup_token_placeholder = /** @type {(inputs: Onboarding_Set
 */
 export const onboarding_setup_token_placeholder = /** @type {((inputs?: Onboarding_Setup_Token_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Setup_Token_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_setup_token_placeholder(inputs)
-	return es_onboarding_setup_token_placeholder(inputs)
+	if (locale === "es") return es_onboarding_setup_token_placeholder(inputs)
+	return en_onboarding_setup_token_placeholder(inputs)
 });

@@ -24,6 +24,6 @@ const es_onboarding_telephony_managed_description = /** @type {(inputs: Onboardi
 */
 export const onboarding_telephony_managed_description = /** @type {((inputs?: Onboarding_Telephony_Managed_DescriptionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Telephony_Managed_DescriptionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_telephony_managed_description(inputs)
-	return es_onboarding_telephony_managed_description(inputs)
+	if (locale === "es") return es_onboarding_telephony_managed_description(inputs)
+	return en_onboarding_telephony_managed_description(inputs)
 });

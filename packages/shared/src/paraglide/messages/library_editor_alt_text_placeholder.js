@@ -24,6 +24,6 @@ const es_library_editor_alt_text_placeholder = /** @type {(inputs: Library_Edito
 */
 export const library_editor_alt_text_placeholder = /** @type {((inputs?: Library_Editor_Alt_Text_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_Alt_Text_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_alt_text_placeholder(inputs)
-	return es_library_editor_alt_text_placeholder(inputs)
+	if (locale === "es") return es_library_editor_alt_text_placeholder(inputs)
+	return en_library_editor_alt_text_placeholder(inputs)
 });

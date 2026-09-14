@@ -24,6 +24,6 @@ const es_onboarding_stepper_progress = /** @type {(inputs: Onboarding_Stepper_Pr
 */
 export const onboarding_stepper_progress = /** @type {((inputs: Onboarding_Stepper_ProgressInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Stepper_ProgressInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_stepper_progress(inputs)
-	return es_onboarding_stepper_progress(inputs)
+	if (locale === "es") return es_onboarding_stepper_progress(inputs)
+	return en_onboarding_stepper_progress(inputs)
 });

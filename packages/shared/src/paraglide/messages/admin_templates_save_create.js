@@ -24,6 +24,6 @@ const es_admin_templates_save_create = /** @type {(inputs: Admin_Templates_Save_
 */
 export const admin_templates_save_create = /** @type {((inputs?: Admin_Templates_Save_CreateInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Templates_Save_CreateInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_templates_save_create(inputs)
-	return es_admin_templates_save_create(inputs)
+	if (locale === "es") return es_admin_templates_save_create(inputs)
+	return en_admin_templates_save_create(inputs)
 });

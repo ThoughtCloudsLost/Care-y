@@ -24,6 +24,6 @@ const es_demo_section_nav_label = /** @type {(inputs: Demo_Section_Nav_LabelInpu
 */
 export const demo_section_nav_label = /** @type {((inputs?: Demo_Section_Nav_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Section_Nav_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_section_nav_label(inputs)
-	return es_demo_section_nav_label(inputs)
+	if (locale === "es") return es_demo_section_nav_label(inputs)
+	return en_demo_section_nav_label(inputs)
 });

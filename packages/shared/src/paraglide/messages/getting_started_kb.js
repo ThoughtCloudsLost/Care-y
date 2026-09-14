@@ -24,6 +24,6 @@ const es_getting_started_kb = /** @type {(inputs: Getting_Started_KbInputs) => L
 */
 export const getting_started_kb = /** @type {((inputs: Getting_Started_KbInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Getting_Started_KbInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_getting_started_kb(inputs)
-	return es_getting_started_kb(inputs)
+	if (locale === "es") return es_getting_started_kb(inputs)
+	return en_getting_started_kb(inputs)
 });

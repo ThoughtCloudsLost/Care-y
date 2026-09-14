@@ -24,6 +24,6 @@ const es_common_retry = /** @type {(inputs: Common_RetryInputs) => LocalizedStri
 */
 export const common_retry = /** @type {((inputs?: Common_RetryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Common_RetryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_common_retry(inputs)
-	return es_common_retry(inputs)
+	if (locale === "es") return es_common_retry(inputs)
+	return en_common_retry(inputs)
 });

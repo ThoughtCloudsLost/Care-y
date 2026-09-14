@@ -24,6 +24,6 @@ const es_library_a11y_issues_found = /** @type {(inputs: Library_A11y_Issues_Fou
 */
 export const library_a11y_issues_found = /** @type {((inputs: Library_A11y_Issues_FoundInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_A11y_Issues_FoundInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_a11y_issues_found(inputs)
-	return es_library_a11y_issues_found(inputs)
+	if (locale === "es") return es_library_a11y_issues_found(inputs)
+	return en_library_a11y_issues_found(inputs)
 });

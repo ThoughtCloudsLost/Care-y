@@ -24,6 +24,6 @@ const es_panel_branding = /** @type {(inputs: Panel_BrandingInputs) => Localized
 */
 export const panel_branding = /** @type {((inputs?: Panel_BrandingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_BrandingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_branding(inputs)
-	return es_panel_branding(inputs)
+	if (locale === "es") return es_panel_branding(inputs)
+	return en_panel_branding(inputs)
 });

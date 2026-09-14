@@ -24,6 +24,6 @@ const es_onboarding_escrow_download_again = /** @type {(inputs: Onboarding_Escro
 */
 export const onboarding_escrow_download_again = /** @type {((inputs?: Onboarding_Escrow_Download_AgainInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Escrow_Download_AgainInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_escrow_download_again(inputs)
-	return es_onboarding_escrow_download_again(inputs)
+	if (locale === "es") return es_onboarding_escrow_download_again(inputs)
+	return en_onboarding_escrow_download_again(inputs)
 });

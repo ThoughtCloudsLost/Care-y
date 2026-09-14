@@ -24,6 +24,6 @@ const es_onboarding_org_error = /** @type {(inputs: Onboarding_Org_ErrorInputs) 
 */
 export const onboarding_org_error = /** @type {((inputs?: Onboarding_Org_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Org_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_org_error(inputs)
-	return es_onboarding_org_error(inputs)
+	if (locale === "es") return es_onboarding_org_error(inputs)
+	return en_onboarding_org_error(inputs)
 });
