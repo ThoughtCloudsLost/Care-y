@@ -14,7 +14,7 @@ function makeRecord(id: string, date: string): TestRecord {
 }
 
 function makeMockQueryClient() {
-  return { fetchQuery: vi.fn() } as unknown as Parameters<
+  return { query: vi.fn() } as unknown as Parameters<
     typeof createChatPaginator
   >[0]["queryClient"];
 }
@@ -134,9 +134,9 @@ describe("createChatPaginator", () => {
         makeRecord("1", "2026-01-01T12:00:00Z"),
         makeRecord("2", "2026-01-02T12:00:00Z"),
       ];
-      (
-        queryClient.fetchQuery as ReturnType<typeof vi.fn>
-      ).mockResolvedValueOnce(older);
+      (queryClient.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        older,
+      );
       await p.loadOlderPage();
 
       expect(p.items).toHaveLength(4);
@@ -164,9 +164,9 @@ describe("createChatPaginator", () => {
         makeRecord("1", "2026-01-01T12:00:00Z"),
         makeRecord("2", "2026-01-02T12:00:00Z"),
       ];
-      (
-        queryClient.fetchQuery as ReturnType<typeof vi.fn>
-      ).mockResolvedValueOnce(older);
+      (queryClient.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        older,
+      );
       await p.loadOlderPage();
 
       // Simulate optimistic add via syncInitialPage with a pending entry.
@@ -204,9 +204,9 @@ describe("createChatPaginator", () => {
         makeRecord("2", "2026-01-02T12:00:00Z"),
         makeRecord("3", "2026-01-03T12:00:00Z"),
       ];
-      (
-        queryClient.fetchQuery as ReturnType<typeof vi.fn>
-      ).mockResolvedValueOnce(older);
+      (queryClient.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        older,
+      );
       await p.loadOlderPage();
 
       expect(p.items).toHaveLength(6);
@@ -243,9 +243,9 @@ describe("createChatPaginator", () => {
         makeRecord("1", "2026-01-01T12:00:00Z"),
         makeRecord("2", "2026-01-02T12:00:00Z"),
       ];
-      (
-        queryClient.fetchQuery as ReturnType<typeof vi.fn>
-      ).mockResolvedValueOnce(older);
+      (queryClient.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        older,
+      );
       await p.loadOlderPage();
 
       const before = p.items;
@@ -270,9 +270,9 @@ describe("createChatPaginator", () => {
         makeRecord("1", "2026-01-01T12:00:00Z"),
         makeRecord("2", "2026-01-02T12:00:00Z"),
       ];
-      (
-        queryClient.fetchQuery as ReturnType<typeof vi.fn>
-      ).mockResolvedValueOnce(older);
+      (queryClient.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        older,
+      );
 
       await p.loadOlderPage();
       expect(p.items).toHaveLength(4);
@@ -285,13 +285,11 @@ describe("createChatPaginator", () => {
         makeRecord("3", "2026-01-03T12:00:00Z"),
         makeRecord("4", "2026-01-04T12:00:00Z"),
       ]);
-      (
-        queryClient.fetchQuery as ReturnType<typeof vi.fn>
-      ).mockResolvedValueOnce([]);
+      (queryClient.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
 
       await p.loadOlderPage();
 
-      expect(queryClient.fetchQuery).toHaveBeenCalledWith(
+      expect(queryClient.query).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ["test", "page", "3"] }),
       );
     });
@@ -304,9 +302,7 @@ describe("createChatPaginator", () => {
         makeRecord("3", "2026-01-03T12:00:00Z"),
         makeRecord("4", "2026-01-04T12:00:00Z"),
       ]);
-      (
-        queryClient.fetchQuery as ReturnType<typeof vi.fn>
-      ).mockResolvedValueOnce([
+      (queryClient.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
         makeRecord("1", "2026-01-01T12:00:00Z"),
         makeRecord("2", "2026-01-02T12:00:00Z"),
       ]);
@@ -321,9 +317,7 @@ describe("createChatPaginator", () => {
         makeRecord("3", "2026-01-03T12:00:00Z"),
         makeRecord("4", "2026-01-04T12:00:00Z"),
       ]);
-      (
-        queryClient.fetchQuery as ReturnType<typeof vi.fn>
-      ).mockResolvedValueOnce([
+      (queryClient.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
         makeRecord("1", "2026-01-01T12:00:00Z"),
         makeRecord("2", "2026-01-02T12:00:00Z"),
       ]);
@@ -340,9 +334,9 @@ describe("createChatPaginator", () => {
         makeRecord("7", "2026-01-07T12:00:00Z"),
       ]);
 
-      (
-        queryClient.fetchQuery as ReturnType<typeof vi.fn>
-      ).mockResolvedValueOnce([makeRecord("4", "2026-01-04T12:00:00Z")]);
+      (queryClient.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+      ]);
       await p.loadOlderPage();
       expect(p.hasMore).toBe(false);
     });
@@ -355,7 +349,7 @@ describe("createChatPaginator", () => {
       ]);
 
       let resolveFirst!: (v: TestRecord[]) => void;
-      (queryClient.fetchQuery as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      (queryClient.query as ReturnType<typeof vi.fn>).mockReturnValueOnce(
         new Promise<TestRecord[]>((r) => {
           resolveFirst = r;
         }),
@@ -364,7 +358,7 @@ describe("createChatPaginator", () => {
       const first = p.loadOlderPage();
       void p.loadOlderPage(); // should be a no-op
       expect(
-        (queryClient.fetchQuery as ReturnType<typeof vi.fn>).mock.calls,
+        (queryClient.query as ReturnType<typeof vi.fn>).mock.calls,
       ).toHaveLength(1);
       resolveFirst([]);
       await first;
@@ -373,14 +367,14 @@ describe("createChatPaginator", () => {
     it("does nothing when items are empty", async () => {
       const p = makePaginator();
       await p.loadOlderPage();
-      expect(queryClient.fetchQuery).not.toHaveBeenCalled();
+      expect(queryClient.query).not.toHaveBeenCalled();
     });
 
     it("does nothing when hasMore is false", async () => {
       const p = makePaginator({ pageSize: 5 });
       p.seed([makeRecord("1", "2026-01-01T12:00:00Z")]);
       await p.loadOlderPage();
-      expect(queryClient.fetchQuery).not.toHaveBeenCalled();
+      expect(queryClient.query).not.toHaveBeenCalled();
     });
 
     it("resets loadingOlder on error", async () => {
@@ -389,9 +383,9 @@ describe("createChatPaginator", () => {
         makeRecord("1", "2026-01-01T12:00:00Z"),
         makeRecord("2", "2026-01-02T12:00:00Z"),
       ]);
-      (
-        queryClient.fetchQuery as ReturnType<typeof vi.fn>
-      ).mockRejectedValueOnce(new Error("network"));
+      (queryClient.query as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error("network"),
+      );
       await expect(p.loadOlderPage()).rejects.toThrow("network");
       expect(p.loadingOlder).toBe(false);
     });
@@ -405,7 +399,7 @@ describe("createChatPaginator", () => {
         makeRecord("6", "2026-01-06T12:00:00Z"),
       ]);
 
-      (queryClient.fetchQuery as ReturnType<typeof vi.fn>)
+      (queryClient.query as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce([
           makeRecord("3", "2026-01-03T12:00:00Z"),
           makeRecord("4", "2026-01-04T12:00:00Z"),
@@ -428,13 +422,13 @@ describe("createChatPaginator", () => {
         makeRecord("5", "2026-01-05T12:00:00Z"),
       ]);
 
-      (
-        queryClient.fetchQuery as ReturnType<typeof vi.fn>
-      ).mockResolvedValueOnce([makeRecord("2", "2026-01-02T12:00:00Z")]);
+      (queryClient.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        makeRecord("2", "2026-01-02T12:00:00Z"),
+      ]);
 
       await p.loadUntilReadBoundary(Date.parse("2020-01-01T12:00:00Z"));
       expect(p.hasMore).toBe(false);
-      expect(queryClient.fetchQuery).toHaveBeenCalledTimes(1);
+      expect(queryClient.query).toHaveBeenCalledTimes(1);
     });
   });
 });

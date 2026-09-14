@@ -5,7 +5,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { Building2, Save } from "@lucide/svelte";
+  import { BuildingComplex, Save } from "@lucide/svelte";
   import { E164_COUNTRY_CODE_OPTIONS } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -215,7 +215,7 @@
 
         <div class="edit-action">
           <SoftButton onclick={openSheet} full>
-            <Building2 size={18} aria-hidden="true" />
+            <BuildingComplex size={18} aria-hidden="true" />
             {m.admin_org_general_edit_button()}
           </SoftButton>
         </div>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { List, ListItem, BlockTitle, Preloader, Button } from "konsta/svelte";
-  import { Plus, Trash2 } from "@lucide/svelte";
+  import { Plus, Trash } from "@lucide/svelte";
   import { useQueryClient, createQuery } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -193,7 +193,7 @@
                     }}
                     aria-label={m.twofa_remove_confirm()}
                   >
-                    <Trash2 size={16} />
+                    <Trash size={16} />
                   </button>
                 {/if}
               {/snippet}

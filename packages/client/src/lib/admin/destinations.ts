@@ -12,7 +12,7 @@ import {
   Ban,
   Mic,
   MessageSquare,
-  Building2,
+  BuildingComplex,
   Palette,
   Languages,
   Key,
@@ -133,7 +133,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
   {
     id: "general",
     group: "organization",
-    icon: Building2,
+    icon: BuildingComplex,
     label: m.panel_general,
     subtitle: m.hub_general_subtitle,
     path: "/admin/organization?tab=general",
@@ -288,7 +288,7 @@ export function groupIcon(group: AdminGroup): Component {
     case "communications":
       return RadioTower;
     case "organization":
-      return Building2;
+      return BuildingComplex;
     case "analytics":
       return ChartColumn;
   }

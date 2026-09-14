@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { Settings, LogOut, ChevronDown, Building2 } from "@lucide/svelte";
+  import {
+    Settings,
+    LogOut,
+    ChevronDown,
+    BuildingComplex,
+  } from "@lucide/svelte";
   import { SvelteSet } from "svelte/reactivity";
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
@@ -403,7 +408,7 @@
           data-sidebar-id="admin"
         >
           <span class="sidebar-icon">
-            <Building2 size={24} aria-hidden="true" />
+            <BuildingComplex size={24} aria-hidden="true" />
           </span>
           {#if isExpanded}
             <span class="sidebar-label">{m.admin_hub_title()}</span>

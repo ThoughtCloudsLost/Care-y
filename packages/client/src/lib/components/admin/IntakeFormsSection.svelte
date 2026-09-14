@@ -27,7 +27,7 @@
     Plus,
     Copy,
     ChartColumn,
-    Trash2,
+    Trash,
   } from "@lucide/svelte";
   import {
     Permission,
@@ -484,7 +484,7 @@
               onclick={() => openDeleteDialog(form.id)}
               aria-label={m.intake_forms_delete()}
             >
-              <Trash2 size={14} />
+              <Trash size={14} />
             </button>
             <Toggle
               checked={form.isActive}

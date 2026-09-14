@@ -11,7 +11,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { Play, Route, Trash2 } from "@lucide/svelte";
+  import { Play, Route, Trash } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { decode } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
@@ -286,7 +286,7 @@
                 aria-label={m.admin_quarantine_dismiss()}
                 onclick={() => startDismiss(row)}
               >
-                <Trash2 size={16} />
+                <Trash size={16} />
               </button>
             </div>
           </div>

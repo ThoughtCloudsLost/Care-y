@@ -7,7 +7,7 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
-  import { Plus, Pencil, Trash2, Save } from "@lucide/svelte";
+  import { Plus, Pencil, Trash, Save } from "@lucide/svelte";
   import type { SmsResponseType } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -417,7 +417,7 @@
             if (editingTemplate) startDelete(editingTemplate);
           }}
         >
-          <Trash2 size={14} />
+          <Trash size={14} />
           {m.admin_templates_delete()}
         </button>
       </div>

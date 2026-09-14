@@ -145,7 +145,7 @@ export function createChatPaginator<T extends PaginatedRecord>(
     }
 
     try {
-      const older = await queryClient.fetchQuery({
+      const older = await queryClient.query({
         queryKey: options.getPageQueryKey(oldestId),
         queryFn: async () => fetchPage(oldestId),
       });
@@ -179,7 +179,7 @@ export function createChatPaginator<T extends PaginatedRecord>(
         const oldestId = items[0]?.id;
         if (oldestId === undefined) break;
 
-        const older = await queryClient.fetchQuery({
+        const older = await queryClient.query({
           queryKey: options.getPageQueryKey(oldestId),
           queryFn: async () => fetchPage(oldestId),
         });

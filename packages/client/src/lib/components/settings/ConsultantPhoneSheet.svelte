@@ -8,7 +8,7 @@
     Toggle,
     DialogButton,
   } from "konsta/svelte";
-  import { Save, Trash2 } from "@lucide/svelte";
+  import { Save, Trash } from "@lucide/svelte";
   import {
     createQuery,
     createMutation,
@@ -561,7 +561,7 @@
             deleteDialogOpen = true;
           }}
         >
-          <Trash2 size={16} aria-hidden="true" />
+          <Trash size={16} aria-hidden="true" />
           {m.consultant_phone_remove()}
         </button>
       </div>

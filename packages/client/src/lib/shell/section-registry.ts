@@ -41,7 +41,7 @@ import {
   Mic,
   MessageSquare,
   PhoneMissed,
-  Building2 as Building2Org,
+  BuildingComplex as BuildingOrg,
   Palette,
   Languages,
   Key,
@@ -58,7 +58,7 @@ import {
 // ── Static section arrays ──────────────────────────────────────────
 
 export const ORGANIZATION_SECTIONS: readonly ScrollSection[] = [
-  { id: "general", label: m.admin_tab_org_general, icon: Building2Org },
+  { id: "general", label: m.admin_tab_org_general, icon: BuildingOrg },
   { id: "branding", label: m.admin_tab_branding, icon: Palette },
   { id: "terminology", label: m.admin_tab_terminology, icon: Languages },
   { id: "keys", label: m.admin_tab_keys, icon: Key },

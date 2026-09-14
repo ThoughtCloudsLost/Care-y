@@ -11,18 +11,18 @@
     "@care-y/crypto": "workspace:*",
     "@care-y/shared": "workspace:*",
     "@trpc/server": "11.10.0",
-    "kysely": "0.29.2",
-    "nodemailer": "9.1.1",
-    "pg": "8.21.0",
+    "kysely": "0.29.5",
+    "nodemailer": "10.0.4",
+    "pg": "8.23.0",
     "postal-mime": "^3.0.0",
-    "smtp-server": "^3.19.5",
+    "smtp-server": "^3.19.10",
     "sodium-native": "^5.1.0",
-    "zod": "4.4.3"
+    "zod": "4.6.2"
   },
   "devDependencies": {
     "@types/node": "26.5.1",
     "@types/nodemailer": "8.0.0",
-    "@types/pg": "8.20.0",
+    "@types/pg": "8.23.1",
     "@types/smtp-server": "^3.5.11",
     "tsx": "4.23.13"
   }

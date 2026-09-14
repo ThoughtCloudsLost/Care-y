@@ -870,7 +870,7 @@
     expandedClusters.set(key, initial);
 
     // Fetch full records from the server for the missing IDs.
-    const fullRecords = await queryClient.fetchQuery({
+    const fullRecords = await queryClient.query({
       queryKey: ticketKeys.followUpsByIds(ticketId, key),
       queryFn: async () =>
         ticketRouter.listFollowUpsByIds.query({ ticketId, followUpIds }),

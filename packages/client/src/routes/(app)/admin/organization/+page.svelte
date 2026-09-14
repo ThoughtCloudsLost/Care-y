@@ -3,7 +3,7 @@
   import { resolve } from "$app/paths";
   import { Permission } from "@care-y/shared";
   import {
-    Building2,
+    BuildingComplex,
     Key,
     Palette,
     Shredder,
@@ -30,7 +30,7 @@
     {
       id: "general",
       label: m.admin_tab_org_general,
-      icon: Building2,
+      icon: BuildingComplex,
       permission: Permission.MANAGE_ORG_CONFIG,
       component: OrgGeneralSection,
     },
