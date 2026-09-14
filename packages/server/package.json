@@ -12,7 +12,7 @@
     "@care-y/shared": "workspace:*",
     "@trpc/server": "11.10.0",
     "kysely": "0.29.2",
-    "nodemailer": "9.0.1",
+    "nodemailer": "9.1.1",
     "pg": "8.21.0",
     "postal-mime": "^3.0.0",
     "smtp-server": "^3.19.5",
