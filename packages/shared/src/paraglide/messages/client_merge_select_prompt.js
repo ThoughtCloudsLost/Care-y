@@ -24,6 +24,6 @@ const es_client_merge_select_prompt = /** @type {(inputs: Client_Merge_Select_Pr
 */
 export const client_merge_select_prompt = /** @type {((inputs: Client_Merge_Select_PromptInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Merge_Select_PromptInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_merge_select_prompt(inputs)
-	return es_client_merge_select_prompt(inputs)
+	if (locale === "es") return es_client_merge_select_prompt(inputs)
+	return en_client_merge_select_prompt(inputs)
 });

@@ -24,6 +24,6 @@ const es_ticket_new_back_to_search = /** @type {(inputs: Ticket_New_Back_To_Sear
 */
 export const ticket_new_back_to_search = /** @type {((inputs?: Ticket_New_Back_To_SearchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_Back_To_SearchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_new_back_to_search(inputs)
-	return es_ticket_new_back_to_search(inputs)
+	if (locale === "es") return es_ticket_new_back_to_search(inputs)
+	return en_ticket_new_back_to_search(inputs)
 });

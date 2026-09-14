@@ -24,6 +24,6 @@ const es_client_merge_event = /** @type {(inputs: Client_Merge_EventInputs) => L
 */
 export const client_merge_event = /** @type {((inputs: Client_Merge_EventInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Merge_EventInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_merge_event(inputs)
-	return es_client_merge_event(inputs)
+	if (locale === "es") return es_client_merge_event(inputs)
+	return en_client_merge_event(inputs)
 });

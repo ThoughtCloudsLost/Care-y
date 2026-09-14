@@ -24,6 +24,6 @@ const es_search_recents_clear = /** @type {(inputs: Search_Recents_ClearInputs) 
 */
 export const search_recents_clear = /** @type {((inputs?: Search_Recents_ClearInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Recents_ClearInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_recents_clear(inputs)
-	return es_search_recents_clear(inputs)
+	if (locale === "es") return es_search_recents_clear(inputs)
+	return en_search_recents_clear(inputs)
 });

@@ -24,6 +24,6 @@ const es_exposure_hint_remove_volunteer = /** @type {(inputs: Exposure_Hint_Remo
 */
 export const exposure_hint_remove_volunteer = /** @type {((inputs?: Exposure_Hint_Remove_VolunteerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Exposure_Hint_Remove_VolunteerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_exposure_hint_remove_volunteer(inputs)
-	return es_exposure_hint_remove_volunteer(inputs)
+	if (locale === "es") return es_exposure_hint_remove_volunteer(inputs)
+	return en_exposure_hint_remove_volunteer(inputs)
 });

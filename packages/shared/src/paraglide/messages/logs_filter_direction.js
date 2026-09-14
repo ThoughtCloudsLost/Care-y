@@ -24,6 +24,6 @@ const es_logs_filter_direction = /** @type {(inputs: Logs_Filter_DirectionInputs
 */
 export const logs_filter_direction = /** @type {((inputs?: Logs_Filter_DirectionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Logs_Filter_DirectionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_logs_filter_direction(inputs)
-	return es_logs_filter_direction(inputs)
+	if (locale === "es") return es_logs_filter_direction(inputs)
+	return en_logs_filter_direction(inputs)
 });

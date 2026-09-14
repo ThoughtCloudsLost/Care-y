@@ -24,6 +24,6 @@ const es_intake_avail_add_specific = /** @type {(inputs: Intake_Avail_Add_Specif
 */
 export const intake_avail_add_specific = /** @type {((inputs?: Intake_Avail_Add_SpecificInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Add_SpecificInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_avail_add_specific(inputs)
-	return es_intake_avail_add_specific(inputs)
+	if (locale === "es") return es_intake_avail_add_specific(inputs)
+	return en_intake_avail_add_specific(inputs)
 });

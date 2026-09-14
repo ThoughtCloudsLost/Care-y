@@ -24,6 +24,6 @@ const es_escalation_action_label = /** @type {(inputs: Escalation_Action_LabelIn
 */
 export const escalation_action_label = /** @type {((inputs?: Escalation_Action_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Action_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_action_label(inputs)
-	return es_escalation_action_label(inputs)
+	if (locale === "es") return es_escalation_action_label(inputs)
+	return en_escalation_action_label(inputs)
 });

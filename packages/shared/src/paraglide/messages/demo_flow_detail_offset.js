@@ -24,6 +24,6 @@ const es_demo_flow_detail_offset = /** @type {(inputs: Demo_Flow_Detail_OffsetIn
 */
 export const demo_flow_detail_offset = /** @type {((inputs: Demo_Flow_Detail_OffsetInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Detail_OffsetInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_detail_offset(inputs)
-	return es_demo_flow_detail_offset(inputs)
+	if (locale === "es") return es_demo_flow_detail_offset(inputs)
+	return en_demo_flow_detail_offset(inputs)
 });

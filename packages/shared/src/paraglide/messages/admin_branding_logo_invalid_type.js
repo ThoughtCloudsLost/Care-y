@@ -24,6 +24,6 @@ const es_admin_branding_logo_invalid_type = /** @type {(inputs: Admin_Branding_L
 */
 export const admin_branding_logo_invalid_type = /** @type {((inputs?: Admin_Branding_Logo_Invalid_TypeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Logo_Invalid_TypeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_logo_invalid_type(inputs)
-	return es_admin_branding_logo_invalid_type(inputs)
+	if (locale === "es") return es_admin_branding_logo_invalid_type(inputs)
+	return en_admin_branding_logo_invalid_type(inputs)
 });

@@ -24,6 +24,6 @@ const es_reseed_cancel = /** @type {(inputs: Reseed_CancelInputs) => LocalizedSt
 */
 export const reseed_cancel = /** @type {((inputs?: Reseed_CancelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Reseed_CancelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_reseed_cancel(inputs)
-	return es_reseed_cancel(inputs)
+	if (locale === "es") return es_reseed_cancel(inputs)
+	return en_reseed_cancel(inputs)
 });

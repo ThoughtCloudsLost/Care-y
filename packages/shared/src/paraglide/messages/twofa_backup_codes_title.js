@@ -24,6 +24,6 @@ const es_twofa_backup_codes_title = /** @type {(inputs: Twofa_Backup_Codes_Title
 */
 export const twofa_backup_codes_title = /** @type {((inputs?: Twofa_Backup_Codes_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Backup_Codes_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_backup_codes_title(inputs)
-	return es_twofa_backup_codes_title(inputs)
+	if (locale === "es") return es_twofa_backup_codes_title(inputs)
+	return en_twofa_backup_codes_title(inputs)
 });

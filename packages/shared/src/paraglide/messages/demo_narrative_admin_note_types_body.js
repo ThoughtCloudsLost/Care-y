@@ -30,6 +30,6 @@ const es_demo_narrative_admin_note_types_body = /** @type {(inputs: Demo_Narrati
 */
 export const demo_narrative_admin_note_types_body = /** @type {((inputs?: Demo_Narrative_Admin_Note_Types_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Note_Types_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_narrative_admin_note_types_body(inputs)
-	return es_demo_narrative_admin_note_types_body(inputs)
+	if (locale === "es") return es_demo_narrative_admin_note_types_body(inputs)
+	return en_demo_narrative_admin_note_types_body(inputs)
 });

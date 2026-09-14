@@ -24,6 +24,6 @@ const es_admin_queue_stat_closed = /** @type {(inputs: Admin_Queue_Stat_ClosedIn
 */
 export const admin_queue_stat_closed = /** @type {((inputs: Admin_Queue_Stat_ClosedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_Stat_ClosedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_queue_stat_closed(inputs)
-	return es_admin_queue_stat_closed(inputs)
+	if (locale === "es") return es_admin_queue_stat_closed(inputs)
+	return en_admin_queue_stat_closed(inputs)
 });

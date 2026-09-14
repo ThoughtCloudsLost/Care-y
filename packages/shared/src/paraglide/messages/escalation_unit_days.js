@@ -24,6 +24,6 @@ const es_escalation_unit_days = /** @type {(inputs: Escalation_Unit_DaysInputs) 
 */
 export const escalation_unit_days = /** @type {((inputs?: Escalation_Unit_DaysInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Unit_DaysInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_unit_days(inputs)
-	return es_escalation_unit_days(inputs)
+	if (locale === "es") return es_escalation_unit_days(inputs)
+	return en_escalation_unit_days(inputs)
 });

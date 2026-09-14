@@ -24,6 +24,6 @@ const es_audit_event_merge_lock_changed = /** @type {(inputs: Audit_Event_Merge_
 */
 export const audit_event_merge_lock_changed = /** @type {((inputs?: Audit_Event_Merge_Lock_ChangedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Audit_Event_Merge_Lock_ChangedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_audit_event_merge_lock_changed(inputs)
-	return es_audit_event_merge_lock_changed(inputs)
+	if (locale === "es") return es_audit_event_merge_lock_changed(inputs)
+	return en_audit_event_merge_lock_changed(inputs)
 });

@@ -24,6 +24,6 @@ const es_intake_forms_field_count = /** @type {(inputs: Intake_Forms_Field_Count
 */
 export const intake_forms_field_count = /** @type {((inputs: Intake_Forms_Field_CountInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Field_CountInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_field_count(inputs)
-	return es_intake_forms_field_count(inputs)
+	if (locale === "es") return es_intake_forms_field_count(inputs)
+	return en_intake_forms_field_count(inputs)
 });

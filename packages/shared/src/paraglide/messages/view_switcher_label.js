@@ -24,6 +24,6 @@ const es_view_switcher_label = /** @type {(inputs: View_Switcher_LabelInputs) =>
 */
 export const view_switcher_label = /** @type {((inputs?: View_Switcher_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<View_Switcher_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_view_switcher_label(inputs)
-	return es_view_switcher_label(inputs)
+	if (locale === "es") return es_view_switcher_label(inputs)
+	return en_view_switcher_label(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_role_volunteer = /** @type {(inputs: Admin_Role_VolunteerInputs) 
 */
 export const admin_role_volunteer = /** @type {((inputs: Admin_Role_VolunteerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Role_VolunteerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_role_volunteer(inputs)
-	return es_admin_role_volunteer(inputs)
+	if (locale === "es") return es_admin_role_volunteer(inputs)
+	return en_admin_role_volunteer(inputs)
 });

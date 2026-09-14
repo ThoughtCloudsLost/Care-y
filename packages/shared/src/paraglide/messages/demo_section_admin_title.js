@@ -24,6 +24,6 @@ const es_demo_section_admin_title = /** @type {(inputs: Demo_Section_Admin_Title
 */
 export const demo_section_admin_title = /** @type {((inputs?: Demo_Section_Admin_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Section_Admin_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_section_admin_title(inputs)
-	return es_demo_section_admin_title(inputs)
+	if (locale === "es") return es_demo_section_admin_title(inputs)
+	return en_demo_section_admin_title(inputs)
 });

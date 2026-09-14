@@ -24,6 +24,6 @@ const es_account_create_warning_reset = /** @type {(inputs: Account_Create_Warni
 */
 export const account_create_warning_reset = /** @type {((inputs?: Account_Create_Warning_ResetInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Create_Warning_ResetInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_account_create_warning_reset(inputs)
-	return es_account_create_warning_reset(inputs)
+	if (locale === "es") return es_account_create_warning_reset(inputs)
+	return en_account_create_warning_reset(inputs)
 });

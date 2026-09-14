@@ -24,6 +24,6 @@ const es_admin_queue_editor_name_placeholder = /** @type {(inputs: Admin_Queue_E
 */
 export const admin_queue_editor_name_placeholder = /** @type {((inputs?: Admin_Queue_Editor_Name_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_Editor_Name_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_queue_editor_name_placeholder(inputs)
-	return es_admin_queue_editor_name_placeholder(inputs)
+	if (locale === "es") return es_admin_queue_editor_name_placeholder(inputs)
+	return en_admin_queue_editor_name_placeholder(inputs)
 });

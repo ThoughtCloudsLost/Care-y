@@ -24,6 +24,6 @@ const es_tickets_sort_queue = /** @type {(inputs: Tickets_Sort_QueueInputs) => L
 */
 export const tickets_sort_queue = /** @type {((inputs: Tickets_Sort_QueueInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Sort_QueueInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_tickets_sort_queue(inputs)
-	return es_tickets_sort_queue(inputs)
+	if (locale === "es") return es_tickets_sort_queue(inputs)
+	return en_tickets_sort_queue(inputs)
 });

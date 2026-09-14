@@ -24,6 +24,6 @@ const es_password_strength_strong = /** @type {(inputs: Password_Strength_Strong
 */
 export const password_strength_strong = /** @type {((inputs?: Password_Strength_StrongInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Password_Strength_StrongInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_password_strength_strong(inputs)
-	return es_password_strength_strong(inputs)
+	if (locale === "es") return es_password_strength_strong(inputs)
+	return en_password_strength_strong(inputs)
 });

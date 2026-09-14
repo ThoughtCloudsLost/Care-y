@@ -24,6 +24,6 @@ const es_client_merge_no_results = /** @type {(inputs: Client_Merge_No_ResultsIn
 */
 export const client_merge_no_results = /** @type {((inputs: Client_Merge_No_ResultsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Merge_No_ResultsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_merge_no_results(inputs)
-	return es_client_merge_no_results(inputs)
+	if (locale === "es") return es_client_merge_no_results(inputs)
+	return en_client_merge_no_results(inputs)
 });

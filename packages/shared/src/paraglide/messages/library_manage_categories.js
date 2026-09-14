@@ -24,6 +24,6 @@ const es_library_manage_categories = /** @type {(inputs: Library_Manage_Categori
 */
 export const library_manage_categories = /** @type {((inputs?: Library_Manage_CategoriesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Manage_CategoriesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_manage_categories(inputs)
-	return es_library_manage_categories(inputs)
+	if (locale === "es") return es_library_manage_categories(inputs)
+	return en_library_manage_categories(inputs)
 });

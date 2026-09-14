@@ -24,6 +24,6 @@ const es_client_email_confirm_body = /** @type {(inputs: Client_Email_Confirm_Bo
 */
 export const client_email_confirm_body = /** @type {((inputs: Client_Email_Confirm_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Email_Confirm_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_email_confirm_body(inputs)
-	return es_client_email_confirm_body(inputs)
+	if (locale === "es") return es_client_email_confirm_body(inputs)
+	return en_client_email_confirm_body(inputs)
 });

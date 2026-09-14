@@ -24,6 +24,6 @@ const es_onboarding_escrow_continue = /** @type {(inputs: Onboarding_Escrow_Cont
 */
 export const onboarding_escrow_continue = /** @type {((inputs?: Onboarding_Escrow_ContinueInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Escrow_ContinueInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_escrow_continue(inputs)
-	return es_onboarding_escrow_continue(inputs)
+	if (locale === "es") return es_onboarding_escrow_continue(inputs)
+	return en_onboarding_escrow_continue(inputs)
 });

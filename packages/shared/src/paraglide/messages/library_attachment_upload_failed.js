@@ -24,6 +24,6 @@ const es_library_attachment_upload_failed = /** @type {(inputs: Library_Attachme
 */
 export const library_attachment_upload_failed = /** @type {((inputs?: Library_Attachment_Upload_FailedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Attachment_Upload_FailedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_attachment_upload_failed(inputs)
-	return es_library_attachment_upload_failed(inputs)
+	if (locale === "es") return es_library_attachment_upload_failed(inputs)
+	return en_library_attachment_upload_failed(inputs)
 });

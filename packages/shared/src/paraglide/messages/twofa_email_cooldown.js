@@ -24,6 +24,6 @@ const es_twofa_email_cooldown = /** @type {(inputs: Twofa_Email_CooldownInputs) 
 */
 export const twofa_email_cooldown = /** @type {((inputs: Twofa_Email_CooldownInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Email_CooldownInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_email_cooldown(inputs)
-	return es_twofa_email_cooldown(inputs)
+	if (locale === "es") return es_twofa_email_cooldown(inputs)
+	return en_twofa_email_cooldown(inputs)
 });

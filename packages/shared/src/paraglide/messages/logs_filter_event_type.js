@@ -24,6 +24,6 @@ const es_logs_filter_event_type = /** @type {(inputs: Logs_Filter_Event_TypeInpu
 */
 export const logs_filter_event_type = /** @type {((inputs?: Logs_Filter_Event_TypeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Logs_Filter_Event_TypeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_logs_filter_event_type(inputs)
-	return es_logs_filter_event_type(inputs)
+	if (locale === "es") return es_logs_filter_event_type(inputs)
+	return en_logs_filter_event_type(inputs)
 });

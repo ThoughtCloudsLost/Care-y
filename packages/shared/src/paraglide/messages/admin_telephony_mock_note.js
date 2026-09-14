@@ -24,6 +24,6 @@ const es_admin_telephony_mock_note = /** @type {(inputs: Admin_Telephony_Mock_No
 */
 export const admin_telephony_mock_note = /** @type {((inputs?: Admin_Telephony_Mock_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Mock_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_mock_note(inputs)
-	return es_admin_telephony_mock_note(inputs)
+	if (locale === "es") return es_admin_telephony_mock_note(inputs)
+	return en_admin_telephony_mock_note(inputs)
 });

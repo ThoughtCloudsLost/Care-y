@@ -24,6 +24,6 @@ const es_attachment_failed = /** @type {(inputs: Attachment_FailedInputs) => Loc
 */
 export const attachment_failed = /** @type {((inputs?: Attachment_FailedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Attachment_FailedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_attachment_failed(inputs)
-	return es_attachment_failed(inputs)
+	if (locale === "es") return es_attachment_failed(inputs)
+	return en_attachment_failed(inputs)
 });

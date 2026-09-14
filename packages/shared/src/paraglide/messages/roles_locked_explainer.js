@@ -24,6 +24,6 @@ const es_roles_locked_explainer = /** @type {(inputs: Roles_Locked_ExplainerInpu
 */
 export const roles_locked_explainer = /** @type {((inputs?: Roles_Locked_ExplainerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_Locked_ExplainerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_roles_locked_explainer(inputs)
-	return es_roles_locked_explainer(inputs)
+	if (locale === "es") return es_roles_locked_explainer(inputs)
+	return en_roles_locked_explainer(inputs)
 });

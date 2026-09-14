@@ -24,6 +24,6 @@ const es_intake_contact_none_note = /** @type {(inputs: Intake_Contact_None_Note
 */
 export const intake_contact_none_note = /** @type {((inputs?: Intake_Contact_None_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Contact_None_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_contact_none_note(inputs)
-	return es_intake_contact_none_note(inputs)
+	if (locale === "es") return es_intake_contact_none_note(inputs)
+	return en_intake_contact_none_note(inputs)
 });

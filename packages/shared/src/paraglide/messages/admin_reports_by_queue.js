@@ -24,6 +24,6 @@ const es_admin_reports_by_queue = /** @type {(inputs: Admin_Reports_By_QueueInpu
 */
 export const admin_reports_by_queue = /** @type {((inputs: Admin_Reports_By_QueueInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Reports_By_QueueInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_reports_by_queue(inputs)
-	return es_admin_reports_by_queue(inputs)
+	if (locale === "es") return es_admin_reports_by_queue(inputs)
+	return en_admin_reports_by_queue(inputs)
 });

@@ -24,6 +24,6 @@ const es_vol_section_protected = /** @type {(inputs: Vol_Section_ProtectedInputs
 */
 export const vol_section_protected = /** @type {((inputs?: Vol_Section_ProtectedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Section_ProtectedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_vol_section_protected(inputs)
-	return es_vol_section_protected(inputs)
+	if (locale === "es") return es_vol_section_protected(inputs)
+	return en_vol_section_protected(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_branding_color_primary = /** @type {(inputs: Admin_Branding_Color
 */
 export const admin_branding_color_primary = /** @type {((inputs?: Admin_Branding_Color_PrimaryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Color_PrimaryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_color_primary(inputs)
-	return es_admin_branding_color_primary(inputs)
+	if (locale === "es") return es_admin_branding_color_primary(inputs)
+	return en_admin_branding_color_primary(inputs)
 });

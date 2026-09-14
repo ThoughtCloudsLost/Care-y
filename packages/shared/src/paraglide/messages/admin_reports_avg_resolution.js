@@ -24,6 +24,6 @@ const es_admin_reports_avg_resolution = /** @type {(inputs: Admin_Reports_Avg_Re
 */
 export const admin_reports_avg_resolution = /** @type {((inputs?: Admin_Reports_Avg_ResolutionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Reports_Avg_ResolutionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_reports_avg_resolution(inputs)
-	return es_admin_reports_avg_resolution(inputs)
+	if (locale === "es") return es_admin_reports_avg_resolution(inputs)
+	return en_admin_reports_avg_resolution(inputs)
 });

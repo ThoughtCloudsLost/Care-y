@@ -24,6 +24,6 @@ const es_vol_access_call = /** @type {(inputs: Vol_Access_CallInputs) => Localiz
 */
 export const vol_access_call = /** @type {((inputs?: Vol_Access_CallInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Access_CallInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_vol_access_call(inputs)
-	return es_vol_access_call(inputs)
+	if (locale === "es") return es_vol_access_call(inputs)
+	return en_vol_access_call(inputs)
 });

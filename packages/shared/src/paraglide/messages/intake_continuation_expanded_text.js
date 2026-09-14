@@ -24,6 +24,6 @@ const es_intake_continuation_expanded_text = /** @type {(inputs: Intake_Continua
 */
 export const intake_continuation_expanded_text = /** @type {((inputs?: Intake_Continuation_Expanded_TextInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Continuation_Expanded_TextInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_continuation_expanded_text(inputs)
-	return es_intake_continuation_expanded_text(inputs)
+	if (locale === "es") return es_intake_continuation_expanded_text(inputs)
+	return en_intake_continuation_expanded_text(inputs)
 });

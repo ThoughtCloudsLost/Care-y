@@ -24,6 +24,6 @@ const es_dashboard_kb_summary = /** @type {(inputs: Dashboard_Kb_SummaryInputs) 
 */
 export const dashboard_kb_summary = /** @type {((inputs: Dashboard_Kb_SummaryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Kb_SummaryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_kb_summary(inputs)
-	return es_dashboard_kb_summary(inputs)
+	if (locale === "es") return es_dashboard_kb_summary(inputs)
+	return en_dashboard_kb_summary(inputs)
 });

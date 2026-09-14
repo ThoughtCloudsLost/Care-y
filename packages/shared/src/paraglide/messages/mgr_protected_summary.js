@@ -24,6 +24,6 @@ const es_mgr_protected_summary = /** @type {(inputs: Mgr_Protected_SummaryInputs
 */
 export const mgr_protected_summary = /** @type {((inputs?: Mgr_Protected_SummaryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Protected_SummaryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_mgr_protected_summary(inputs)
-	return es_mgr_protected_summary(inputs)
+	if (locale === "es") return es_mgr_protected_summary(inputs)
+	return en_mgr_protected_summary(inputs)
 });

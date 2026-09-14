@@ -24,6 +24,6 @@ const es_error_username_already_taken = /** @type {(inputs: Error_Username_Alrea
 */
 export const error_username_already_taken = /** @type {((inputs?: Error_Username_Already_TakenInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Username_Already_TakenInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_username_already_taken(inputs)
-	return es_error_username_already_taken(inputs)
+	if (locale === "es") return es_error_username_already_taken(inputs)
+	return en_error_username_already_taken(inputs)
 });

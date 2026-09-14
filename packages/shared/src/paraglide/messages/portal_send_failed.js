@@ -24,6 +24,6 @@ const es_portal_send_failed = /** @type {(inputs: Portal_Send_FailedInputs) => L
 */
 export const portal_send_failed = /** @type {((inputs?: Portal_Send_FailedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Send_FailedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_send_failed(inputs)
-	return es_portal_send_failed(inputs)
+	if (locale === "es") return es_portal_send_failed(inputs)
+	return en_portal_send_failed(inputs)
 });

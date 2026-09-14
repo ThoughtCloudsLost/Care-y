@@ -24,6 +24,6 @@ const es_sort_button_label = /** @type {(inputs: Sort_Button_LabelInputs) => Loc
 */
 export const sort_button_label = /** @type {((inputs: Sort_Button_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Sort_Button_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_sort_button_label(inputs)
-	return es_sort_button_label(inputs)
+	if (locale === "es") return es_sort_button_label(inputs)
+	return en_sort_button_label(inputs)
 });

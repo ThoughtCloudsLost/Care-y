@@ -24,6 +24,6 @@ const es_intake_forms_banner_file_too_large = /** @type {(inputs: Intake_Forms_B
 */
 export const intake_forms_banner_file_too_large = /** @type {((inputs?: Intake_Forms_Banner_File_Too_LargeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Banner_File_Too_LargeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_banner_file_too_large(inputs)
-	return es_intake_forms_banner_file_too_large(inputs)
+	if (locale === "es") return es_intake_forms_banner_file_too_large(inputs)
+	return en_intake_forms_banner_file_too_large(inputs)
 });

@@ -24,6 +24,6 @@ const es_correction_body_new_phone = /** @type {(inputs: Correction_Body_New_Pho
 */
 export const correction_body_new_phone = /** @type {((inputs?: Correction_Body_New_PhoneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Correction_Body_New_PhoneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_correction_body_new_phone(inputs)
-	return es_correction_body_new_phone(inputs)
+	if (locale === "es") return es_correction_body_new_phone(inputs)
+	return en_correction_body_new_phone(inputs)
 });

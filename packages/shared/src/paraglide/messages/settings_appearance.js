@@ -24,6 +24,6 @@ const es_settings_appearance = /** @type {(inputs: Settings_AppearanceInputs) =>
 */
 export const settings_appearance = /** @type {((inputs?: Settings_AppearanceInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_AppearanceInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_appearance(inputs)
-	return es_settings_appearance(inputs)
+	if (locale === "es") return es_settings_appearance(inputs)
+	return en_settings_appearance(inputs)
 });

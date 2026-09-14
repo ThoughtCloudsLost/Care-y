@@ -24,6 +24,6 @@ const es_search_nav_shortcuts = /** @type {(inputs: Search_Nav_ShortcutsInputs) 
 */
 export const search_nav_shortcuts = /** @type {((inputs?: Search_Nav_ShortcutsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Nav_ShortcutsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_nav_shortcuts(inputs)
-	return es_search_nav_shortcuts(inputs)
+	if (locale === "es") return es_search_nav_shortcuts(inputs)
+	return en_search_nav_shortcuts(inputs)
 });

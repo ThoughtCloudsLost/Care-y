@@ -24,6 +24,6 @@ const es_getting_started_queues = /** @type {(inputs: Getting_Started_QueuesInpu
 */
 export const getting_started_queues = /** @type {((inputs: Getting_Started_QueuesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Getting_Started_QueuesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_getting_started_queues(inputs)
-	return es_getting_started_queues(inputs)
+	if (locale === "es") return es_getting_started_queues(inputs)
+	return en_getting_started_queues(inputs)
 });

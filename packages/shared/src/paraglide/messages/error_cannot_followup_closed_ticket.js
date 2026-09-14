@@ -24,6 +24,6 @@ const es_error_cannot_followup_closed_ticket = /** @type {(inputs: Error_Cannot_
 */
 export const error_cannot_followup_closed_ticket = /** @type {((inputs: Error_Cannot_Followup_Closed_TicketInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Cannot_Followup_Closed_TicketInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_cannot_followup_closed_ticket(inputs)
-	return es_error_cannot_followup_closed_ticket(inputs)
+	if (locale === "es") return es_error_cannot_followup_closed_ticket(inputs)
+	return en_error_cannot_followup_closed_ticket(inputs)
 });

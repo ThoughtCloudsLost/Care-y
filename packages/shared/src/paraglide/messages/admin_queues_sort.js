@@ -24,6 +24,6 @@ const es_admin_queues_sort = /** @type {(inputs: Admin_Queues_SortInputs) => Loc
 */
 export const admin_queues_sort = /** @type {((inputs?: Admin_Queues_SortInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queues_SortInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_queues_sort(inputs)
-	return es_admin_queues_sort(inputs)
+	if (locale === "es") return es_admin_queues_sort(inputs)
+	return en_admin_queues_sort(inputs)
 });

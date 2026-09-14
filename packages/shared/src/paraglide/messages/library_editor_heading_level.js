@@ -24,6 +24,6 @@ const es_library_editor_heading_level = /** @type {(inputs: Library_Editor_Headi
 */
 export const library_editor_heading_level = /** @type {((inputs: Library_Editor_Heading_LevelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_Heading_LevelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_heading_level(inputs)
-	return es_library_editor_heading_level(inputs)
+	if (locale === "es") return es_library_editor_heading_level(inputs)
+	return en_library_editor_heading_level(inputs)
 });

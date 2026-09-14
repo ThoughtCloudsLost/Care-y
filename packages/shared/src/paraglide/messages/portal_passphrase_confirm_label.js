@@ -24,6 +24,6 @@ const es_portal_passphrase_confirm_label = /** @type {(inputs: Portal_Passphrase
 */
 export const portal_passphrase_confirm_label = /** @type {((inputs?: Portal_Passphrase_Confirm_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_Confirm_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_passphrase_confirm_label(inputs)
-	return es_portal_passphrase_confirm_label(inputs)
+	if (locale === "es") return es_portal_passphrase_confirm_label(inputs)
+	return en_portal_passphrase_confirm_label(inputs)
 });

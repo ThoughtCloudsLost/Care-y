@@ -24,6 +24,6 @@ const es_admin_blocklist_already_blocked = /** @type {(inputs: Admin_Blocklist_A
 */
 export const admin_blocklist_already_blocked = /** @type {((inputs?: Admin_Blocklist_Already_BlockedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Blocklist_Already_BlockedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_blocklist_already_blocked(inputs)
-	return es_admin_blocklist_already_blocked(inputs)
+	if (locale === "es") return es_admin_blocklist_already_blocked(inputs)
+	return en_admin_blocklist_already_blocked(inputs)
 });

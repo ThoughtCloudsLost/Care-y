@@ -24,6 +24,6 @@ const es_account_signed_out = /** @type {(inputs: Account_Signed_OutInputs) => L
 */
 export const account_signed_out = /** @type {((inputs?: Account_Signed_OutInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Signed_OutInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_account_signed_out(inputs)
-	return es_account_signed_out(inputs)
+	if (locale === "es") return es_account_signed_out(inputs)
+	return en_account_signed_out(inputs)
 });

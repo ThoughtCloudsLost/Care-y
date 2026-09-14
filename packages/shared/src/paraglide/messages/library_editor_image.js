@@ -24,6 +24,6 @@ const es_library_editor_image = /** @type {(inputs: Library_Editor_ImageInputs) 
 */
 export const library_editor_image = /** @type {((inputs?: Library_Editor_ImageInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_ImageInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_image(inputs)
-	return es_library_editor_image(inputs)
+	if (locale === "es") return es_library_editor_image(inputs)
+	return en_library_editor_image(inputs)
 });

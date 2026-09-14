@@ -24,6 +24,6 @@ const es_demo_mode_read = /** @type {(inputs: Demo_Mode_ReadInputs) => Localized
 */
 export const demo_mode_read = /** @type {((inputs?: Demo_Mode_ReadInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Mode_ReadInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_mode_read(inputs)
-	return es_demo_mode_read(inputs)
+	if (locale === "es") return es_demo_mode_read(inputs)
+	return en_demo_mode_read(inputs)
 });

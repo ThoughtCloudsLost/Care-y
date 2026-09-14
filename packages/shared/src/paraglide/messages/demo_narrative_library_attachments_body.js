@@ -28,6 +28,6 @@ const es_demo_narrative_library_attachments_body = /** @type {(inputs: Demo_Narr
 */
 export const demo_narrative_library_attachments_body = /** @type {((inputs?: Demo_Narrative_Library_Attachments_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Library_Attachments_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_narrative_library_attachments_body(inputs)
-	return es_demo_narrative_library_attachments_body(inputs)
+	if (locale === "es") return es_demo_narrative_library_attachments_body(inputs)
+	return en_demo_narrative_library_attachments_body(inputs)
 });

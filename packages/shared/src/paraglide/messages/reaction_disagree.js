@@ -24,6 +24,6 @@ const es_reaction_disagree = /** @type {(inputs: Reaction_DisagreeInputs) => Loc
 */
 export const reaction_disagree = /** @type {((inputs?: Reaction_DisagreeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Reaction_DisagreeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_reaction_disagree(inputs)
-	return es_reaction_disagree(inputs)
+	if (locale === "es") return es_reaction_disagree(inputs)
+	return en_reaction_disagree(inputs)
 });

@@ -24,6 +24,6 @@ const es_audit_event_portal_reseed_blob_converted = /** @type {(inputs: Audit_Ev
 */
 export const audit_event_portal_reseed_blob_converted = /** @type {((inputs?: Audit_Event_Portal_Reseed_Blob_ConvertedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Audit_Event_Portal_Reseed_Blob_ConvertedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_audit_event_portal_reseed_blob_converted(inputs)
-	return es_audit_event_portal_reseed_blob_converted(inputs)
+	if (locale === "es") return es_audit_event_portal_reseed_blob_converted(inputs)
+	return en_audit_event_portal_reseed_blob_converted(inputs)
 });

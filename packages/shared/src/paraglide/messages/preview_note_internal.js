@@ -24,6 +24,6 @@ const es_preview_note_internal = /** @type {(inputs: Preview_Note_InternalInputs
 */
 export const preview_note_internal = /** @type {((inputs: Preview_Note_InternalInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Preview_Note_InternalInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_preview_note_internal(inputs)
-	return es_preview_note_internal(inputs)
+	if (locale === "es") return es_preview_note_internal(inputs)
+	return en_preview_note_internal(inputs)
 });

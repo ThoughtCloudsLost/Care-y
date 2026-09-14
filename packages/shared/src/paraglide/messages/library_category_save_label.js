@@ -24,6 +24,6 @@ const es_library_category_save_label = /** @type {(inputs: Library_Category_Save
 */
 export const library_category_save_label = /** @type {((inputs?: Library_Category_Save_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Category_Save_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_category_save_label(inputs)
-	return es_library_category_save_label(inputs)
+	if (locale === "es") return es_library_category_save_label(inputs)
+	return en_library_category_save_label(inputs)
 });

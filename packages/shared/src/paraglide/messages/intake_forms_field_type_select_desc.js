@@ -24,6 +24,6 @@ const es_intake_forms_field_type_select_desc = /** @type {(inputs: Intake_Forms_
 */
 export const intake_forms_field_type_select_desc = /** @type {((inputs?: Intake_Forms_Field_Type_Select_DescInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Field_Type_Select_DescInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_field_type_select_desc(inputs)
-	return es_intake_forms_field_type_select_desc(inputs)
+	if (locale === "es") return es_intake_forms_field_type_select_desc(inputs)
+	return en_intake_forms_field_type_select_desc(inputs)
 });

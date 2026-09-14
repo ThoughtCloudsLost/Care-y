@@ -24,6 +24,6 @@ const es_client_merge_history_heading = /** @type {(inputs: Client_Merge_History
 */
 export const client_merge_history_heading = /** @type {((inputs?: Client_Merge_History_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Merge_History_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_merge_history_heading(inputs)
-	return es_client_merge_history_heading(inputs)
+	if (locale === "es") return es_client_merge_history_heading(inputs)
+	return en_client_merge_history_heading(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_invite_link_copied = /** @type {(inputs: Admin_Invite_Link_Copied
 */
 export const admin_invite_link_copied = /** @type {((inputs?: Admin_Invite_Link_CopiedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Link_CopiedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_link_copied(inputs)
-	return es_admin_invite_link_copied(inputs)
+	if (locale === "es") return es_admin_invite_link_copied(inputs)
+	return en_admin_invite_link_copied(inputs)
 });

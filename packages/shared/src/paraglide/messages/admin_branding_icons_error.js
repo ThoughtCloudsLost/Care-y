@@ -24,6 +24,6 @@ const es_admin_branding_icons_error = /** @type {(inputs: Admin_Branding_Icons_E
 */
 export const admin_branding_icons_error = /** @type {((inputs?: Admin_Branding_Icons_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Icons_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_icons_error(inputs)
-	return es_admin_branding_icons_error(inputs)
+	if (locale === "es") return es_admin_branding_icons_error(inputs)
+	return en_admin_branding_icons_error(inputs)
 });

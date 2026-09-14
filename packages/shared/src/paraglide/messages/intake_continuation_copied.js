@@ -24,6 +24,6 @@ const es_intake_continuation_copied = /** @type {(inputs: Intake_Continuation_Co
 */
 export const intake_continuation_copied = /** @type {((inputs?: Intake_Continuation_CopiedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Continuation_CopiedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_continuation_copied(inputs)
-	return es_intake_continuation_copied(inputs)
+	if (locale === "es") return es_intake_continuation_copied(inputs)
+	return en_intake_continuation_copied(inputs)
 });

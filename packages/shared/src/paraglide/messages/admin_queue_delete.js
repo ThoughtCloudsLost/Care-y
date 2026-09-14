@@ -24,6 +24,6 @@ const es_admin_queue_delete = /** @type {(inputs: Admin_Queue_DeleteInputs) => L
 */
 export const admin_queue_delete = /** @type {((inputs: Admin_Queue_DeleteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_DeleteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_queue_delete(inputs)
-	return es_admin_queue_delete(inputs)
+	if (locale === "es") return es_admin_queue_delete(inputs)
+	return en_admin_queue_delete(inputs)
 });

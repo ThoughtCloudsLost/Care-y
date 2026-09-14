@@ -24,6 +24,6 @@ const es_panel_blocklist = /** @type {(inputs: Panel_BlocklistInputs) => Localiz
 */
 export const panel_blocklist = /** @type {((inputs?: Panel_BlocklistInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_BlocklistInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_blocklist(inputs)
-	return es_panel_blocklist(inputs)
+	if (locale === "es") return es_panel_blocklist(inputs)
+	return en_panel_blocklist(inputs)
 });

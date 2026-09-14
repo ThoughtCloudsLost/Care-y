@@ -24,6 +24,6 @@ const es_panel_logout = /** @type {(inputs: Panel_LogoutInputs) => LocalizedStri
 */
 export const panel_logout = /** @type {((inputs?: Panel_LogoutInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_LogoutInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_logout(inputs)
-	return es_panel_logout(inputs)
+	if (locale === "es") return es_panel_logout(inputs)
+	return en_panel_logout(inputs)
 });

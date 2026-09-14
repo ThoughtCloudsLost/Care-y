@@ -24,6 +24,6 @@ const es_admin_branding_preview_icons = /** @type {(inputs: Admin_Branding_Previ
 */
 export const admin_branding_preview_icons = /** @type {((inputs?: Admin_Branding_Preview_IconsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Preview_IconsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_preview_icons(inputs)
-	return es_admin_branding_preview_icons(inputs)
+	if (locale === "es") return es_admin_branding_preview_icons(inputs)
+	return en_admin_branding_preview_icons(inputs)
 });

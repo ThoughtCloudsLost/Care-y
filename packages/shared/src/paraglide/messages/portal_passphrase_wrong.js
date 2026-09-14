@@ -24,6 +24,6 @@ const es_portal_passphrase_wrong = /** @type {(inputs: Portal_Passphrase_WrongIn
 */
 export const portal_passphrase_wrong = /** @type {((inputs?: Portal_Passphrase_WrongInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_WrongInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_passphrase_wrong(inputs)
-	return es_portal_passphrase_wrong(inputs)
+	if (locale === "es") return es_portal_passphrase_wrong(inputs)
+	return en_portal_passphrase_wrong(inputs)
 });

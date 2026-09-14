@@ -24,6 +24,6 @@ const es_intake_forms_config_remove_option = /** @type {(inputs: Intake_Forms_Co
 */
 export const intake_forms_config_remove_option = /** @type {((inputs?: Intake_Forms_Config_Remove_OptionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Remove_OptionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_remove_option(inputs)
-	return es_intake_forms_config_remove_option(inputs)
+	if (locale === "es") return es_intake_forms_config_remove_option(inputs)
+	return en_intake_forms_config_remove_option(inputs)
 });

@@ -24,6 +24,6 @@ const es_create_new_shift = /** @type {(inputs: Create_New_ShiftInputs) => Local
 */
 export const create_new_shift = /** @type {((inputs?: Create_New_ShiftInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Create_New_ShiftInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_create_new_shift(inputs)
-	return es_create_new_shift(inputs)
+	if (locale === "es") return es_create_new_shift(inputs)
+	return en_create_new_shift(inputs)
 });

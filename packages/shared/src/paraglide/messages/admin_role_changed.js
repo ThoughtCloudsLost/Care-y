@@ -24,6 +24,6 @@ const es_admin_role_changed = /** @type {(inputs: Admin_Role_ChangedInputs) => L
 */
 export const admin_role_changed = /** @type {((inputs?: Admin_Role_ChangedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Role_ChangedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_role_changed(inputs)
-	return es_admin_role_changed(inputs)
+	if (locale === "es") return es_admin_role_changed(inputs)
+	return en_admin_role_changed(inputs)
 });

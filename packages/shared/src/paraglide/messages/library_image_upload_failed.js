@@ -24,6 +24,6 @@ const es_library_image_upload_failed = /** @type {(inputs: Library_Image_Upload_
 */
 export const library_image_upload_failed = /** @type {((inputs?: Library_Image_Upload_FailedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Image_Upload_FailedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_image_upload_failed(inputs)
-	return es_library_image_upload_failed(inputs)
+	if (locale === "es") return es_library_image_upload_failed(inputs)
+	return en_library_image_upload_failed(inputs)
 });

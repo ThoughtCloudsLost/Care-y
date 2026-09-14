@@ -24,6 +24,6 @@ const es_reseed_error = /** @type {(inputs: Reseed_ErrorInputs) => LocalizedStri
 */
 export const reseed_error = /** @type {((inputs?: Reseed_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Reseed_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_reseed_error(inputs)
-	return es_reseed_error(inputs)
+	if (locale === "es") return es_reseed_error(inputs)
+	return en_reseed_error(inputs)
 });

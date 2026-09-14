@@ -24,6 +24,6 @@ const es_share_status_waiting = /** @type {(inputs: Share_Status_WaitingInputs) 
 */
 export const share_status_waiting = /** @type {((inputs?: Share_Status_WaitingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Status_WaitingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_status_waiting(inputs)
-	return es_share_status_waiting(inputs)
+	if (locale === "es") return es_share_status_waiting(inputs)
+	return en_share_status_waiting(inputs)
 });

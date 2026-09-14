@@ -24,6 +24,6 @@ const es_logs_call_status_completed = /** @type {(inputs: Logs_Call_Status_Compl
 */
 export const logs_call_status_completed = /** @type {((inputs?: Logs_Call_Status_CompletedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Logs_Call_Status_CompletedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_logs_call_status_completed(inputs)
-	return es_logs_call_status_completed(inputs)
+	if (locale === "es") return es_logs_call_status_completed(inputs)
+	return en_logs_call_status_completed(inputs)
 });

@@ -24,6 +24,6 @@ const es_library_schedule_coming_soon = /** @type {(inputs: Library_Schedule_Com
 */
 export const library_schedule_coming_soon = /** @type {((inputs?: Library_Schedule_Coming_SoonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Schedule_Coming_SoonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_schedule_coming_soon(inputs)
-	return es_library_schedule_coming_soon(inputs)
+	if (locale === "es") return es_library_schedule_coming_soon(inputs)
+	return en_library_schedule_coming_soon(inputs)
 });

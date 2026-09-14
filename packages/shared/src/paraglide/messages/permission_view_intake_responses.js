@@ -24,6 +24,6 @@ const es_permission_view_intake_responses = /** @type {(inputs: Permission_View_
 */
 export const permission_view_intake_responses = /** @type {((inputs?: Permission_View_Intake_ResponsesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_View_Intake_ResponsesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_permission_view_intake_responses(inputs)
-	return es_permission_view_intake_responses(inputs)
+	if (locale === "es") return es_permission_view_intake_responses(inputs)
+	return en_permission_view_intake_responses(inputs)
 });

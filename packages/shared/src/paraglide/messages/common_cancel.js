@@ -24,6 +24,6 @@ const es_common_cancel = /** @type {(inputs: Common_CancelInputs) => LocalizedSt
 */
 export const common_cancel = /** @type {((inputs?: Common_CancelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Common_CancelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_common_cancel(inputs)
-	return es_common_cancel(inputs)
+	if (locale === "es") return es_common_cancel(inputs)
+	return en_common_cancel(inputs)
 });

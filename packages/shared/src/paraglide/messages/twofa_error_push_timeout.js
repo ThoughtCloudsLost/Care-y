@@ -24,6 +24,6 @@ const es_twofa_error_push_timeout = /** @type {(inputs: Twofa_Error_Push_Timeout
 */
 export const twofa_error_push_timeout = /** @type {((inputs?: Twofa_Error_Push_TimeoutInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Error_Push_TimeoutInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_error_push_timeout(inputs)
-	return es_twofa_error_push_timeout(inputs)
+	if (locale === "es") return es_twofa_error_push_timeout(inputs)
+	return en_twofa_error_push_timeout(inputs)
 });

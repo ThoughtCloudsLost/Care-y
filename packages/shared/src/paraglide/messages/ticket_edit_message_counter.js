@@ -24,6 +24,6 @@ const es_ticket_edit_message_counter = /** @type {(inputs: Ticket_Edit_Message_C
 */
 export const ticket_edit_message_counter = /** @type {((inputs: Ticket_Edit_Message_CounterInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Edit_Message_CounterInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_edit_message_counter(inputs)
-	return es_ticket_edit_message_counter(inputs)
+	if (locale === "es") return es_ticket_edit_message_counter(inputs)
+	return en_ticket_edit_message_counter(inputs)
 });

@@ -24,6 +24,6 @@ const es_search_deep_nav_searching = /** @type {(inputs: Search_Deep_Nav_Searchi
 */
 export const search_deep_nav_searching = /** @type {((inputs: Search_Deep_Nav_SearchingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Deep_Nav_SearchingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_deep_nav_searching(inputs)
-	return es_search_deep_nav_searching(inputs)
+	if (locale === "es") return es_search_deep_nav_searching(inputs)
+	return en_search_deep_nav_searching(inputs)
 });

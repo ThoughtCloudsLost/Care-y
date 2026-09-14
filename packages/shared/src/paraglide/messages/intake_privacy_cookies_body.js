@@ -24,6 +24,6 @@ const es_intake_privacy_cookies_body = /** @type {(inputs: Intake_Privacy_Cookie
 */
 export const intake_privacy_cookies_body = /** @type {((inputs?: Intake_Privacy_Cookies_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Privacy_Cookies_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_privacy_cookies_body(inputs)
-	return es_intake_privacy_cookies_body(inputs)
+	if (locale === "es") return es_intake_privacy_cookies_body(inputs)
+	return en_intake_privacy_cookies_body(inputs)
 });

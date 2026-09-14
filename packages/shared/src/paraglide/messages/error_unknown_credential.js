@@ -24,6 +24,6 @@ const es_error_unknown_credential = /** @type {(inputs: Error_Unknown_Credential
 */
 export const error_unknown_credential = /** @type {((inputs?: Error_Unknown_CredentialInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Unknown_CredentialInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_unknown_credential(inputs)
-	return es_error_unknown_credential(inputs)
+	if (locale === "es") return es_error_unknown_credential(inputs)
+	return en_error_unknown_credential(inputs)
 });

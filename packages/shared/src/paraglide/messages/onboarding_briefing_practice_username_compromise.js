@@ -24,6 +24,6 @@ const es_onboarding_briefing_practice_username_compromise = /** @type {(inputs: 
 */
 export const onboarding_briefing_practice_username_compromise = /** @type {((inputs?: Onboarding_Briefing_Practice_Username_CompromiseInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Practice_Username_CompromiseInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_briefing_practice_username_compromise(inputs)
-	return es_onboarding_briefing_practice_username_compromise(inputs)
+	if (locale === "es") return es_onboarding_briefing_practice_username_compromise(inputs)
+	return en_onboarding_briefing_practice_username_compromise(inputs)
 });

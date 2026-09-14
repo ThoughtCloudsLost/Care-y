@@ -24,6 +24,6 @@ const es_library_no_categories = /** @type {(inputs: Library_No_CategoriesInputs
 */
 export const library_no_categories = /** @type {((inputs?: Library_No_CategoriesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_No_CategoriesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_no_categories(inputs)
-	return es_library_no_categories(inputs)
+	if (locale === "es") return es_library_no_categories(inputs)
+	return en_library_no_categories(inputs)
 });

@@ -24,6 +24,6 @@ const es_client_phone_conflict_merge = /** @type {(inputs: Client_Phone_Conflict
 */
 export const client_phone_conflict_merge = /** @type {((inputs: Client_Phone_Conflict_MergeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Phone_Conflict_MergeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_phone_conflict_merge(inputs)
-	return es_client_phone_conflict_merge(inputs)
+	if (locale === "es") return es_client_phone_conflict_merge(inputs)
+	return en_client_phone_conflict_merge(inputs)
 });

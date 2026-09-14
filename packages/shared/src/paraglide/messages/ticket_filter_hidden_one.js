@@ -24,6 +24,6 @@ const es_ticket_filter_hidden_one = /** @type {(inputs: Ticket_Filter_Hidden_One
 */
 export const ticket_filter_hidden_one = /** @type {((inputs?: Ticket_Filter_Hidden_OneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Filter_Hidden_OneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_filter_hidden_one(inputs)
-	return es_ticket_filter_hidden_one(inputs)
+	if (locale === "es") return es_ticket_filter_hidden_one(inputs)
+	return en_ticket_filter_hidden_one(inputs)
 });

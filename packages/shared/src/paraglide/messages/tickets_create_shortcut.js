@@ -24,6 +24,6 @@ const es_tickets_create_shortcut = /** @type {(inputs: Tickets_Create_ShortcutIn
 */
 export const tickets_create_shortcut = /** @type {((inputs?: Tickets_Create_ShortcutInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Create_ShortcutInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_tickets_create_shortcut(inputs)
-	return es_tickets_create_shortcut(inputs)
+	if (locale === "es") return es_tickets_create_shortcut(inputs)
+	return en_tickets_create_shortcut(inputs)
 });

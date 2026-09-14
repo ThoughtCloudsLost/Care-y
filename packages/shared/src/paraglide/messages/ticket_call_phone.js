@@ -24,6 +24,6 @@ const es_ticket_call_phone = /** @type {(inputs: Ticket_Call_PhoneInputs) => Loc
 */
 export const ticket_call_phone = /** @type {((inputs?: Ticket_Call_PhoneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Call_PhoneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_call_phone(inputs)
-	return es_ticket_call_phone(inputs)
+	if (locale === "es") return es_ticket_call_phone(inputs)
+	return en_ticket_call_phone(inputs)
 });

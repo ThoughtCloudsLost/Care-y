@@ -24,6 +24,6 @@ const es_account_unlocking = /** @type {(inputs: Account_UnlockingInputs) => Loc
 */
 export const account_unlocking = /** @type {((inputs?: Account_UnlockingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_UnlockingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_account_unlocking(inputs)
-	return es_account_unlocking(inputs)
+	if (locale === "es") return es_account_unlocking(inputs)
+	return en_account_unlocking(inputs)
 });

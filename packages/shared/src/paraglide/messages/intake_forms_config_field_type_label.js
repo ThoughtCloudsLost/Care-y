@@ -24,6 +24,6 @@ const es_intake_forms_config_field_type_label = /** @type {(inputs: Intake_Forms
 */
 export const intake_forms_config_field_type_label = /** @type {((inputs?: Intake_Forms_Config_Field_Type_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Field_Type_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_field_type_label(inputs)
-	return es_intake_forms_config_field_type_label(inputs)
+	if (locale === "es") return es_intake_forms_config_field_type_label(inputs)
+	return en_intake_forms_config_field_type_label(inputs)
 });

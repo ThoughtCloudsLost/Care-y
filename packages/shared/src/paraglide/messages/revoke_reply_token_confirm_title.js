@@ -24,6 +24,6 @@ const es_revoke_reply_token_confirm_title = /** @type {(inputs: Revoke_Reply_Tok
 */
 export const revoke_reply_token_confirm_title = /** @type {((inputs?: Revoke_Reply_Token_Confirm_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Revoke_Reply_Token_Confirm_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_revoke_reply_token_confirm_title(inputs)
-	return es_revoke_reply_token_confirm_title(inputs)
+	if (locale === "es") return es_revoke_reply_token_confirm_title(inputs)
+	return en_revoke_reply_token_confirm_title(inputs)
 });

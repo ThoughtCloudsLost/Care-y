@@ -24,6 +24,6 @@ const es_note_compose_type_label = /** @type {(inputs: Note_Compose_Type_LabelIn
 */
 export const note_compose_type_label = /** @type {((inputs?: Note_Compose_Type_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Note_Compose_Type_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_note_compose_type_label(inputs)
-	return es_note_compose_type_label(inputs)
+	if (locale === "es") return es_note_compose_type_label(inputs)
+	return en_note_compose_type_label(inputs)
 });

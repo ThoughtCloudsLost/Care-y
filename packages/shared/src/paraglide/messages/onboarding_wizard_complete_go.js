@@ -24,6 +24,6 @@ const es_onboarding_wizard_complete_go = /** @type {(inputs: Onboarding_Wizard_C
 */
 export const onboarding_wizard_complete_go = /** @type {((inputs?: Onboarding_Wizard_Complete_GoInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Wizard_Complete_GoInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_wizard_complete_go(inputs)
-	return es_onboarding_wizard_complete_go(inputs)
+	if (locale === "es") return es_onboarding_wizard_complete_go(inputs)
+	return en_onboarding_wizard_complete_go(inputs)
 });

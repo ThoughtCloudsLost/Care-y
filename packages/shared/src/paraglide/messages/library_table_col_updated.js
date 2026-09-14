@@ -24,6 +24,6 @@ const es_library_table_col_updated = /** @type {(inputs: Library_Table_Col_Updat
 */
 export const library_table_col_updated = /** @type {((inputs?: Library_Table_Col_UpdatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Table_Col_UpdatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_table_col_updated(inputs)
-	return es_library_table_col_updated(inputs)
+	if (locale === "es") return es_library_table_col_updated(inputs)
+	return en_library_table_col_updated(inputs)
 });

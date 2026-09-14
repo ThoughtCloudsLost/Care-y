@@ -24,6 +24,6 @@ const es_onboarding_telephony_sid_placeholder = /** @type {(inputs: Onboarding_T
 */
 export const onboarding_telephony_sid_placeholder = /** @type {((inputs?: Onboarding_Telephony_Sid_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Telephony_Sid_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_telephony_sid_placeholder(inputs)
-	return es_onboarding_telephony_sid_placeholder(inputs)
+	if (locale === "es") return es_onboarding_telephony_sid_placeholder(inputs)
+	return en_onboarding_telephony_sid_placeholder(inputs)
 });

@@ -24,6 +24,6 @@ const es_panel_queues = /** @type {(inputs: Panel_QueuesInputs) => LocalizedStri
 */
 export const panel_queues = /** @type {((inputs: Panel_QueuesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_QueuesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_panel_queues(inputs)
-	return es_panel_queues(inputs)
+	if (locale === "es") return es_panel_queues(inputs)
+	return en_panel_queues(inputs)
 });

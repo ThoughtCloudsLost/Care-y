@@ -24,6 +24,6 @@ const es_intake_continuation_link_label = /** @type {(inputs: Intake_Continuatio
 */
 export const intake_continuation_link_label = /** @type {((inputs?: Intake_Continuation_Link_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Continuation_Link_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_continuation_link_label(inputs)
-	return es_intake_continuation_link_label(inputs)
+	if (locale === "es") return es_intake_continuation_link_label(inputs)
+	return en_intake_continuation_link_label(inputs)
 });

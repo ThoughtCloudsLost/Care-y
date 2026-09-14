@@ -24,6 +24,6 @@ const es_twofa_back_to_login = /** @type {(inputs: Twofa_Back_To_LoginInputs) =>
 */
 export const twofa_back_to_login = /** @type {((inputs?: Twofa_Back_To_LoginInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Back_To_LoginInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_back_to_login(inputs)
-	return es_twofa_back_to_login(inputs)
+	if (locale === "es") return es_twofa_back_to_login(inputs)
+	return en_twofa_back_to_login(inputs)
 });

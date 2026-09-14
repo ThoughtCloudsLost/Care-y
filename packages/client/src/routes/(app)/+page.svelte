@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Component } from "svelte";
   import { SvelteSet, SvelteMap } from "svelte/reactivity";
   import {
     createQuery,
@@ -102,7 +103,7 @@
   interface CreateOption {
     readonly id: string;
     readonly label: string;
-    readonly icon: typeof TicketPlus;
+    readonly icon: Component;
   }
 
   const createOptions = $derived.by((): CreateOption[] => {

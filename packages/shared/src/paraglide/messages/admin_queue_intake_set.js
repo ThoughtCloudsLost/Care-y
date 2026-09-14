@@ -24,6 +24,6 @@ const es_admin_queue_intake_set = /** @type {(inputs: Admin_Queue_Intake_SetInpu
 */
 export const admin_queue_intake_set = /** @type {((inputs: Admin_Queue_Intake_SetInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_Intake_SetInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_queue_intake_set(inputs)
-	return es_admin_queue_intake_set(inputs)
+	if (locale === "es") return es_admin_queue_intake_set(inputs)
+	return en_admin_queue_intake_set(inputs)
 });

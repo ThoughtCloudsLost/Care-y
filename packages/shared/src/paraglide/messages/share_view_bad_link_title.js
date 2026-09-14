@@ -24,6 +24,6 @@ const es_share_view_bad_link_title = /** @type {(inputs: Share_View_Bad_Link_Tit
 */
 export const share_view_bad_link_title = /** @type {((inputs?: Share_View_Bad_Link_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_View_Bad_Link_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_view_bad_link_title(inputs)
-	return es_share_view_bad_link_title(inputs)
+	if (locale === "es") return es_share_view_bad_link_title(inputs)
+	return en_share_view_bad_link_title(inputs)
 });

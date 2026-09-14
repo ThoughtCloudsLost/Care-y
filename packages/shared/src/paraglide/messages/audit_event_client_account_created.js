@@ -24,6 +24,6 @@ const es_audit_event_client_account_created = /** @type {(inputs: Audit_Event_Cl
 */
 export const audit_event_client_account_created = /** @type {((inputs: Audit_Event_Client_Account_CreatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Audit_Event_Client_Account_CreatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_audit_event_client_account_created(inputs)
-	return es_audit_event_client_account_created(inputs)
+	if (locale === "es") return es_audit_event_client_account_created(inputs)
+	return en_audit_event_client_account_created(inputs)
 });

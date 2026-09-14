@@ -24,6 +24,6 @@ const es_admin_greetings_filter_all = /** @type {(inputs: Admin_Greetings_Filter
 */
 export const admin_greetings_filter_all = /** @type {((inputs?: Admin_Greetings_Filter_AllInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Filter_AllInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_greetings_filter_all(inputs)
-	return es_admin_greetings_filter_all(inputs)
+	if (locale === "es") return es_admin_greetings_filter_all(inputs)
+	return en_admin_greetings_filter_all(inputs)
 });

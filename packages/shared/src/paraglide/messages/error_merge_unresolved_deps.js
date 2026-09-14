@@ -24,6 +24,6 @@ const es_error_merge_unresolved_deps = /** @type {(inputs: Error_Merge_Unresolve
 */
 export const error_merge_unresolved_deps = /** @type {((inputs: Error_Merge_Unresolved_DepsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Merge_Unresolved_DepsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_merge_unresolved_deps(inputs)
-	return es_error_merge_unresolved_deps(inputs)
+	if (locale === "es") return es_error_merge_unresolved_deps(inputs)
+	return en_error_merge_unresolved_deps(inputs)
 });

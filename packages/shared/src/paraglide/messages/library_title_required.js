@@ -24,6 +24,6 @@ const es_library_title_required = /** @type {(inputs: Library_Title_RequiredInpu
 */
 export const library_title_required = /** @type {((inputs?: Library_Title_RequiredInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Title_RequiredInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_title_required(inputs)
-	return es_library_title_required(inputs)
+	if (locale === "es") return es_library_title_required(inputs)
+	return en_library_title_required(inputs)
 });

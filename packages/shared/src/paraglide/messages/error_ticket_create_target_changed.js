@@ -24,6 +24,6 @@ const es_error_ticket_create_target_changed = /** @type {(inputs: Error_Ticket_C
 */
 export const error_ticket_create_target_changed = /** @type {((inputs: Error_Ticket_Create_Target_ChangedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Ticket_Create_Target_ChangedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_ticket_create_target_changed(inputs)
-	return es_error_ticket_create_target_changed(inputs)
+	if (locale === "es") return es_error_ticket_create_target_changed(inputs)
+	return en_error_ticket_create_target_changed(inputs)
 });

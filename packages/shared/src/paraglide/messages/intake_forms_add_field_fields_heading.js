@@ -24,6 +24,6 @@ const es_intake_forms_add_field_fields_heading = /** @type {(inputs: Intake_Form
 */
 export const intake_forms_add_field_fields_heading = /** @type {((inputs?: Intake_Forms_Add_Field_Fields_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Add_Field_Fields_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_add_field_fields_heading(inputs)
-	return es_intake_forms_add_field_fields_heading(inputs)
+	if (locale === "es") return es_intake_forms_add_field_fields_heading(inputs)
+	return en_intake_forms_add_field_fields_heading(inputs)
 });

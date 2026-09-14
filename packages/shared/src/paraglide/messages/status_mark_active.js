@@ -24,6 +24,6 @@ const es_status_mark_active = /** @type {(inputs: Status_Mark_ActiveInputs) => L
 */
 export const status_mark_active = /** @type {((inputs?: Status_Mark_ActiveInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Status_Mark_ActiveInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_status_mark_active(inputs)
-	return es_status_mark_active(inputs)
+	if (locale === "es") return es_status_mark_active(inputs)
+	return en_status_mark_active(inputs)
 });

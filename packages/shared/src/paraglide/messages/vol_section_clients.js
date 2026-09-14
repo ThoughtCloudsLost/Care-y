@@ -24,6 +24,6 @@ const es_vol_section_clients = /** @type {(inputs: Vol_Section_ClientsInputs) =>
 */
 export const vol_section_clients = /** @type {((inputs?: Vol_Section_ClientsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Section_ClientsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_vol_section_clients(inputs)
-	return es_vol_section_clients(inputs)
+	if (locale === "es") return es_vol_section_clients(inputs)
+	return en_vol_section_clients(inputs)
 });

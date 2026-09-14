@@ -24,6 +24,6 @@ const es_ticket_tier_secure_link_intro = /** @type {(inputs: Ticket_Tier_Secure_
 */
 export const ticket_tier_secure_link_intro = /** @type {((inputs?: Ticket_Tier_Secure_Link_IntroInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Tier_Secure_Link_IntroInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_tier_secure_link_intro(inputs)
-	return es_ticket_tier_secure_link_intro(inputs)
+	if (locale === "es") return es_ticket_tier_secure_link_intro(inputs)
+	return en_ticket_tier_secure_link_intro(inputs)
 });

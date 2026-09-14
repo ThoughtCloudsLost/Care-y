@@ -38,6 +38,6 @@ Los voluntarios no necesitan entender la criptografía para usar CARE-Y, pero la
 */
 export const demo_narrative_topic_key_derivation_body = /** @type {((inputs?: Demo_Narrative_Topic_Key_Derivation_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Key_Derivation_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_narrative_topic_key_derivation_body(inputs)
-	return es_demo_narrative_topic_key_derivation_body(inputs)
+	if (locale === "es") return es_demo_narrative_topic_key_derivation_body(inputs)
+	return en_demo_narrative_topic_key_derivation_body(inputs)
 });

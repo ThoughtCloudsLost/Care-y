@@ -24,6 +24,6 @@ const es_portal_passphrase_submitting = /** @type {(inputs: Portal_Passphrase_Su
 */
 export const portal_passphrase_submitting = /** @type {((inputs?: Portal_Passphrase_SubmittingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_SubmittingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_passphrase_submitting(inputs)
-	return es_portal_passphrase_submitting(inputs)
+	if (locale === "es") return es_portal_passphrase_submitting(inputs)
+	return en_portal_passphrase_submitting(inputs)
 });

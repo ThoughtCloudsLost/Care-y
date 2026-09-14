@@ -24,6 +24,6 @@ const es_admin_telephony_auth_token = /** @type {(inputs: Admin_Telephony_Auth_T
 */
 export const admin_telephony_auth_token = /** @type {((inputs?: Admin_Telephony_Auth_TokenInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Auth_TokenInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_auth_token(inputs)
-	return es_admin_telephony_auth_token(inputs)
+	if (locale === "es") return es_admin_telephony_auth_token(inputs)
+	return en_admin_telephony_auth_token(inputs)
 });

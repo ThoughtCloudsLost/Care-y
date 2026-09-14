@@ -24,6 +24,6 @@ const es_portal_expiry_note = /** @type {(inputs: Portal_Expiry_NoteInputs) => L
 */
 export const portal_expiry_note = /** @type {((inputs?: Portal_Expiry_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Expiry_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_expiry_note(inputs)
-	return es_portal_expiry_note(inputs)
+	if (locale === "es") return es_portal_expiry_note(inputs)
+	return en_portal_expiry_note(inputs)
 });

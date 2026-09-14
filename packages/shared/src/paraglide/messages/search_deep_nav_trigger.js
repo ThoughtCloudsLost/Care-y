@@ -24,6 +24,6 @@ const es_search_deep_nav_trigger = /** @type {(inputs: Search_Deep_Nav_TriggerIn
 */
 export const search_deep_nav_trigger = /** @type {((inputs?: Search_Deep_Nav_TriggerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Deep_Nav_TriggerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_deep_nav_trigger(inputs)
-	return es_search_deep_nav_trigger(inputs)
+	if (locale === "es") return es_search_deep_nav_trigger(inputs)
+	return en_search_deep_nav_trigger(inputs)
 });

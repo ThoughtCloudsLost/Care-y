@@ -24,6 +24,6 @@ const es_demo_narrative_schedule_body = /** @type {(inputs: Demo_Narrative_Sched
 */
 export const demo_narrative_schedule_body = /** @type {((inputs?: Demo_Narrative_Schedule_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Schedule_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_narrative_schedule_body(inputs)
-	return es_demo_narrative_schedule_body(inputs)
+	if (locale === "es") return es_demo_narrative_schedule_body(inputs)
+	return en_demo_narrative_schedule_body(inputs)
 });

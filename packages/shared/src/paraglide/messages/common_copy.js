@@ -24,6 +24,6 @@ const es_common_copy = /** @type {(inputs: Common_CopyInputs) => LocalizedString
 */
 export const common_copy = /** @type {((inputs?: Common_CopyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Common_CopyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_common_copy(inputs)
-	return es_common_copy(inputs)
+	if (locale === "es") return es_common_copy(inputs)
+	return en_common_copy(inputs)
 });

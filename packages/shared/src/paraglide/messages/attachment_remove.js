@@ -24,6 +24,6 @@ const es_attachment_remove = /** @type {(inputs: Attachment_RemoveInputs) => Loc
 */
 export const attachment_remove = /** @type {((inputs: Attachment_RemoveInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Attachment_RemoveInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_attachment_remove(inputs)
-	return es_attachment_remove(inputs)
+	if (locale === "es") return es_attachment_remove(inputs)
+	return en_attachment_remove(inputs)
 });

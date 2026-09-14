@@ -24,6 +24,6 @@ const es_password_hide = /** @type {(inputs: Password_HideInputs) => LocalizedSt
 */
 export const password_hide = /** @type {((inputs?: Password_HideInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Password_HideInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_password_hide(inputs)
-	return es_password_hide(inputs)
+	if (locale === "es") return es_password_hide(inputs)
+	return en_password_hide(inputs)
 });

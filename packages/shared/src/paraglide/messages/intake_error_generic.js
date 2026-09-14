@@ -24,6 +24,6 @@ const es_intake_error_generic = /** @type {(inputs: Intake_Error_GenericInputs) 
 */
 export const intake_error_generic = /** @type {((inputs?: Intake_Error_GenericInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Error_GenericInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_error_generic(inputs)
-	return es_intake_error_generic(inputs)
+	if (locale === "es") return es_intake_error_generic(inputs)
+	return en_intake_error_generic(inputs)
 });

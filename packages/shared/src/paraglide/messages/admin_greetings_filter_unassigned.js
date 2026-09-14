@@ -24,6 +24,6 @@ const es_admin_greetings_filter_unassigned = /** @type {(inputs: Admin_Greetings
 */
 export const admin_greetings_filter_unassigned = /** @type {((inputs?: Admin_Greetings_Filter_UnassignedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Filter_UnassignedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_greetings_filter_unassigned(inputs)
-	return es_admin_greetings_filter_unassigned(inputs)
+	if (locale === "es") return es_admin_greetings_filter_unassigned(inputs)
+	return en_admin_greetings_filter_unassigned(inputs)
 });

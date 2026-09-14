@@ -24,6 +24,6 @@ const es_settings_dark_mode = /** @type {(inputs: Settings_Dark_ModeInputs) => L
 */
 export const settings_dark_mode = /** @type {((inputs?: Settings_Dark_ModeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Dark_ModeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_dark_mode(inputs)
-	return es_settings_dark_mode(inputs)
+	if (locale === "es") return es_settings_dark_mode(inputs)
+	return en_settings_dark_mode(inputs)
 });

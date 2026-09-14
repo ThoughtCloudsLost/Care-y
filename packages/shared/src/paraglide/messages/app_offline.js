@@ -24,6 +24,6 @@ const es_app_offline = /** @type {(inputs: App_OfflineInputs) => LocalizedString
 */
 export const app_offline = /** @type {((inputs?: App_OfflineInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<App_OfflineInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_app_offline(inputs)
-	return es_app_offline(inputs)
+	if (locale === "es") return es_app_offline(inputs)
+	return en_app_offline(inputs)
 });

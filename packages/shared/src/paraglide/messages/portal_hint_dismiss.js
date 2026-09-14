@@ -24,6 +24,6 @@ const es_portal_hint_dismiss = /** @type {(inputs: Portal_Hint_DismissInputs) =>
 */
 export const portal_hint_dismiss = /** @type {((inputs?: Portal_Hint_DismissInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Hint_DismissInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_hint_dismiss(inputs)
-	return es_portal_hint_dismiss(inputs)
+	if (locale === "es") return es_portal_hint_dismiss(inputs)
+	return en_portal_hint_dismiss(inputs)
 });

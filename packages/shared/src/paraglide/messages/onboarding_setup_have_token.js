@@ -24,6 +24,6 @@ const es_onboarding_setup_have_token = /** @type {(inputs: Onboarding_Setup_Have
 */
 export const onboarding_setup_have_token = /** @type {((inputs?: Onboarding_Setup_Have_TokenInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Setup_Have_TokenInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_setup_have_token(inputs)
-	return es_onboarding_setup_have_token(inputs)
+	if (locale === "es") return es_onboarding_setup_have_token(inputs)
+	return en_onboarding_setup_have_token(inputs)
 });

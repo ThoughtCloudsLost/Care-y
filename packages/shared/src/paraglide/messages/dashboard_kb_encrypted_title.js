@@ -24,6 +24,6 @@ const es_dashboard_kb_encrypted_title = /** @type {(inputs: Dashboard_Kb_Encrypt
 */
 export const dashboard_kb_encrypted_title = /** @type {((inputs?: Dashboard_Kb_Encrypted_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Kb_Encrypted_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_kb_encrypted_title(inputs)
-	return es_dashboard_kb_encrypted_title(inputs)
+	if (locale === "es") return es_dashboard_kb_encrypted_title(inputs)
+	return en_dashboard_kb_encrypted_title(inputs)
 });

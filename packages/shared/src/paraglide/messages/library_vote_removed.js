@@ -24,6 +24,6 @@ const es_library_vote_removed = /** @type {(inputs: Library_Vote_RemovedInputs) 
 */
 export const library_vote_removed = /** @type {((inputs?: Library_Vote_RemovedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Vote_RemovedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_vote_removed(inputs)
-	return es_library_vote_removed(inputs)
+	if (locale === "es") return es_library_vote_removed(inputs)
+	return en_library_vote_removed(inputs)
 });

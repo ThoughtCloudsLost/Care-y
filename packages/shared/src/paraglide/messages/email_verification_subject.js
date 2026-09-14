@@ -24,6 +24,6 @@ const es_email_verification_subject = /** @type {(inputs: Email_Verification_Sub
 */
 export const email_verification_subject = /** @type {((inputs?: Email_Verification_SubjectInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Email_Verification_SubjectInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_email_verification_subject(inputs)
-	return es_email_verification_subject(inputs)
+	if (locale === "es") return es_email_verification_subject(inputs)
+	return en_email_verification_subject(inputs)
 });

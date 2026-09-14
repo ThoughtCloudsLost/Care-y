@@ -24,6 +24,6 @@ const es_intake_forms_config_condition_op_checked = /** @type {(inputs: Intake_F
 */
 export const intake_forms_config_condition_op_checked = /** @type {((inputs?: Intake_Forms_Config_Condition_Op_CheckedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Condition_Op_CheckedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_condition_op_checked(inputs)
-	return es_intake_forms_config_condition_op_checked(inputs)
+	if (locale === "es") return es_intake_forms_config_condition_op_checked(inputs)
+	return en_intake_forms_config_condition_op_checked(inputs)
 });

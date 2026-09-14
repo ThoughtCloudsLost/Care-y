@@ -24,6 +24,6 @@ const es_intake_forms_config_condition_heading = /** @type {(inputs: Intake_Form
 */
 export const intake_forms_config_condition_heading = /** @type {((inputs?: Intake_Forms_Config_Condition_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Condition_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_condition_heading(inputs)
-	return es_intake_forms_config_condition_heading(inputs)
+	if (locale === "es") return es_intake_forms_config_condition_heading(inputs)
+	return en_intake_forms_config_condition_heading(inputs)
 });

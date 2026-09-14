@@ -24,6 +24,6 @@ const es_account_intake_optin_title = /** @type {(inputs: Account_Intake_Optin_T
 */
 export const account_intake_optin_title = /** @type {((inputs?: Account_Intake_Optin_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Intake_Optin_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_account_intake_optin_title(inputs)
-	return es_account_intake_optin_title(inputs)
+	if (locale === "es") return es_account_intake_optin_title(inputs)
+	return en_account_intake_optin_title(inputs)
 });

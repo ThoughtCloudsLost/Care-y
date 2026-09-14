@@ -24,6 +24,6 @@ const es_portal_reseal_skipped_note = /** @type {(inputs: Portal_Reseal_Skipped_
 */
 export const portal_reseal_skipped_note = /** @type {((inputs?: Portal_Reseal_Skipped_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Reseal_Skipped_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_reseal_skipped_note(inputs)
-	return es_portal_reseal_skipped_note(inputs)
+	if (locale === "es") return es_portal_reseal_skipped_note(inputs)
+	return en_portal_reseal_skipped_note(inputs)
 });

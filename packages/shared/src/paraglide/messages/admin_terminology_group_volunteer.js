@@ -24,6 +24,6 @@ const es_admin_terminology_group_volunteer = /** @type {(inputs: Admin_Terminolo
 */
 export const admin_terminology_group_volunteer = /** @type {((inputs?: Admin_Terminology_Group_VolunteerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Terminology_Group_VolunteerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_terminology_group_volunteer(inputs)
-	return es_admin_terminology_group_volunteer(inputs)
+	if (locale === "es") return es_admin_terminology_group_volunteer(inputs)
+	return en_admin_terminology_group_volunteer(inputs)
 });

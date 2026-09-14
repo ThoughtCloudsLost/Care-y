@@ -24,6 +24,6 @@ const es_intake_forms_default_toggle = /** @type {(inputs: Intake_Forms_Default_
 */
 export const intake_forms_default_toggle = /** @type {((inputs?: Intake_Forms_Default_ToggleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Default_ToggleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_default_toggle(inputs)
-	return es_intake_forms_default_toggle(inputs)
+	if (locale === "es") return es_intake_forms_default_toggle(inputs)
+	return en_intake_forms_default_toggle(inputs)
 });

@@ -24,6 +24,6 @@ const es_create_new_category = /** @type {(inputs: Create_New_CategoryInputs) =>
 */
 export const create_new_category = /** @type {((inputs?: Create_New_CategoryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Create_New_CategoryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_create_new_category(inputs)
-	return es_create_new_category(inputs)
+	if (locale === "es") return es_create_new_category(inputs)
+	return en_create_new_category(inputs)
 });

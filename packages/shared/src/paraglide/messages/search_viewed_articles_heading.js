@@ -24,6 +24,6 @@ const es_search_viewed_articles_heading = /** @type {(inputs: Search_Viewed_Arti
 */
 export const search_viewed_articles_heading = /** @type {((inputs?: Search_Viewed_Articles_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Viewed_Articles_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_search_viewed_articles_heading(inputs)
-	return es_search_viewed_articles_heading(inputs)
+	if (locale === "es") return es_search_viewed_articles_heading(inputs)
+	return en_search_viewed_articles_heading(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_telephony_save_purpose = /** @type {(inputs: Admin_Telephony_Save
 */
 export const admin_telephony_save_purpose = /** @type {((inputs?: Admin_Telephony_Save_PurposeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Save_PurposeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_save_purpose(inputs)
-	return es_admin_telephony_save_purpose(inputs)
+	if (locale === "es") return es_admin_telephony_save_purpose(inputs)
+	return en_admin_telephony_save_purpose(inputs)
 });

@@ -24,6 +24,6 @@ const es_dashboard_followup_count = /** @type {(inputs: Dashboard_Followup_Count
 */
 export const dashboard_followup_count = /** @type {((inputs: Dashboard_Followup_CountInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Followup_CountInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_followup_count(inputs)
-	return es_dashboard_followup_count(inputs)
+	if (locale === "es") return es_dashboard_followup_count(inputs)
+	return en_dashboard_followup_count(inputs)
 });

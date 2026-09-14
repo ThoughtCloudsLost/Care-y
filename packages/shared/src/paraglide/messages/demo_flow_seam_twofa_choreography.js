@@ -24,6 +24,6 @@ const es_demo_flow_seam_twofa_choreography = /** @type {(inputs: Demo_Flow_Seam_
 */
 export const demo_flow_seam_twofa_choreography = /** @type {((inputs?: Demo_Flow_Seam_Twofa_ChoreographyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Seam_Twofa_ChoreographyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_seam_twofa_choreography(inputs)
-	return es_demo_flow_seam_twofa_choreography(inputs)
+	if (locale === "es") return es_demo_flow_seam_twofa_choreography(inputs)
+	return en_demo_flow_seam_twofa_choreography(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_reports_open_tickets = /** @type {(inputs: Admin_Reports_Open_Tic
 */
 export const admin_reports_open_tickets = /** @type {((inputs: Admin_Reports_Open_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Reports_Open_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_reports_open_tickets(inputs)
-	return es_admin_reports_open_tickets(inputs)
+	if (locale === "es") return es_admin_reports_open_tickets(inputs)
+	return en_admin_reports_open_tickets(inputs)
 });

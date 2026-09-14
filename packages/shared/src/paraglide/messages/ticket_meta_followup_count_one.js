@@ -24,6 +24,6 @@ const es_ticket_meta_followup_count_one = /** @type {(inputs: Ticket_Meta_Follow
 */
 export const ticket_meta_followup_count_one = /** @type {((inputs: Ticket_Meta_Followup_Count_OneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Meta_Followup_Count_OneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_meta_followup_count_one(inputs)
-	return es_ticket_meta_followup_count_one(inputs)
+	if (locale === "es") return es_ticket_meta_followup_count_one(inputs)
+	return en_ticket_meta_followup_count_one(inputs)
 });

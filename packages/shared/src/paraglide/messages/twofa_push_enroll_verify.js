@@ -24,6 +24,6 @@ const es_twofa_push_enroll_verify = /** @type {(inputs: Twofa_Push_Enroll_Verify
 */
 export const twofa_push_enroll_verify = /** @type {((inputs?: Twofa_Push_Enroll_VerifyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Push_Enroll_VerifyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_push_enroll_verify(inputs)
-	return es_twofa_push_enroll_verify(inputs)
+	if (locale === "es") return es_twofa_push_enroll_verify(inputs)
+	return en_twofa_push_enroll_verify(inputs)
 });

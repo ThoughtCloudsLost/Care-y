@@ -24,6 +24,6 @@ const es_portal_filter_clear = /** @type {(inputs: Portal_Filter_ClearInputs) =>
 */
 export const portal_filter_clear = /** @type {((inputs?: Portal_Filter_ClearInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Filter_ClearInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_filter_clear(inputs)
-	return es_portal_filter_clear(inputs)
+	if (locale === "es") return es_portal_filter_clear(inputs)
+	return en_portal_filter_clear(inputs)
 });

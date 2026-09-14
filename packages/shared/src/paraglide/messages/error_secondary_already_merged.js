@@ -24,6 +24,6 @@ const es_error_secondary_already_merged = /** @type {(inputs: Error_Secondary_Al
 */
 export const error_secondary_already_merged = /** @type {((inputs: Error_Secondary_Already_MergedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Secondary_Already_MergedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_secondary_already_merged(inputs)
-	return es_error_secondary_already_merged(inputs)
+	if (locale === "es") return es_error_secondary_already_merged(inputs)
+	return en_error_secondary_already_merged(inputs)
 });

@@ -24,6 +24,6 @@ const es_escalation_threshold_label = /** @type {(inputs: Escalation_Threshold_L
 */
 export const escalation_threshold_label = /** @type {((inputs?: Escalation_Threshold_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Threshold_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_threshold_label(inputs)
-	return es_escalation_threshold_label(inputs)
+	if (locale === "es") return es_escalation_threshold_label(inputs)
+	return en_escalation_threshold_label(inputs)
 });

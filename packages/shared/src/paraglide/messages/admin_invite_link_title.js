@@ -24,6 +24,6 @@ const es_admin_invite_link_title = /** @type {(inputs: Admin_Invite_Link_TitleIn
 */
 export const admin_invite_link_title = /** @type {((inputs?: Admin_Invite_Link_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Link_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_link_title(inputs)
-	return es_admin_invite_link_title(inputs)
+	if (locale === "es") return es_admin_invite_link_title(inputs)
+	return en_admin_invite_link_title(inputs)
 });

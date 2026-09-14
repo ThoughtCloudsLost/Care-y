@@ -24,6 +24,6 @@ const es_admin_telephony_system_messages_helper = /** @type {(inputs: Admin_Tele
 */
 export const admin_telephony_system_messages_helper = /** @type {((inputs?: Admin_Telephony_System_Messages_HelperInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_System_Messages_HelperInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_system_messages_helper(inputs)
-	return es_admin_telephony_system_messages_helper(inputs)
+	if (locale === "es") return es_admin_telephony_system_messages_helper(inputs)
+	return en_admin_telephony_system_messages_helper(inputs)
 });

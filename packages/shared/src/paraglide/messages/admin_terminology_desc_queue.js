@@ -24,6 +24,6 @@ const es_admin_terminology_desc_queue = /** @type {(inputs: Admin_Terminology_De
 */
 export const admin_terminology_desc_queue = /** @type {((inputs?: Admin_Terminology_Desc_QueueInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Terminology_Desc_QueueInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_terminology_desc_queue(inputs)
-	return es_admin_terminology_desc_queue(inputs)
+	if (locale === "es") return es_admin_terminology_desc_queue(inputs)
+	return en_admin_terminology_desc_queue(inputs)
 });

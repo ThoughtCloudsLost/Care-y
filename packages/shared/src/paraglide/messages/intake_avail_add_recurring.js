@@ -24,6 +24,6 @@ const es_intake_avail_add_recurring = /** @type {(inputs: Intake_Avail_Add_Recur
 */
 export const intake_avail_add_recurring = /** @type {((inputs?: Intake_Avail_Add_RecurringInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Add_RecurringInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_avail_add_recurring(inputs)
-	return es_intake_avail_add_recurring(inputs)
+	if (locale === "es") return es_intake_avail_add_recurring(inputs)
+	return en_intake_avail_add_recurring(inputs)
 });

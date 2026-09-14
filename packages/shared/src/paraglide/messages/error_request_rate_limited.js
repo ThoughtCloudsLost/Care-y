@@ -24,6 +24,6 @@ const es_error_request_rate_limited = /** @type {(inputs: Error_Request_Rate_Lim
 */
 export const error_request_rate_limited = /** @type {((inputs?: Error_Request_Rate_LimitedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Request_Rate_LimitedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_request_rate_limited(inputs)
-	return es_error_request_rate_limited(inputs)
+	if (locale === "es") return es_error_request_rate_limited(inputs)
+	return en_error_request_rate_limited(inputs)
 });

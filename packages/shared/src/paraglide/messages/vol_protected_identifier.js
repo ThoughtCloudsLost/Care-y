@@ -24,6 +24,6 @@ const es_vol_protected_identifier = /** @type {(inputs: Vol_Protected_Identifier
 */
 export const vol_protected_identifier = /** @type {((inputs?: Vol_Protected_IdentifierInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Protected_IdentifierInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_vol_protected_identifier(inputs)
-	return es_vol_protected_identifier(inputs)
+	if (locale === "es") return es_vol_protected_identifier(inputs)
+	return en_vol_protected_identifier(inputs)
 });

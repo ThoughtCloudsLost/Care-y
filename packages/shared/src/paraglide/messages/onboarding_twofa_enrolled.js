@@ -24,6 +24,6 @@ const es_onboarding_twofa_enrolled = /** @type {(inputs: Onboarding_Twofa_Enroll
 */
 export const onboarding_twofa_enrolled = /** @type {((inputs: Onboarding_Twofa_EnrolledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Twofa_EnrolledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_twofa_enrolled(inputs)
-	return es_onboarding_twofa_enrolled(inputs)
+	if (locale === "es") return es_onboarding_twofa_enrolled(inputs)
+	return en_onboarding_twofa_enrolled(inputs)
 });

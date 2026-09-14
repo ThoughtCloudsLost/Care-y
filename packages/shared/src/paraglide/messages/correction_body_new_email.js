@@ -24,6 +24,6 @@ const es_correction_body_new_email = /** @type {(inputs: Correction_Body_New_Ema
 */
 export const correction_body_new_email = /** @type {((inputs?: Correction_Body_New_EmailInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Correction_Body_New_EmailInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_correction_body_new_email(inputs)
-	return es_correction_body_new_email(inputs)
+	if (locale === "es") return es_correction_body_new_email(inputs)
+	return en_correction_body_new_email(inputs)
 });

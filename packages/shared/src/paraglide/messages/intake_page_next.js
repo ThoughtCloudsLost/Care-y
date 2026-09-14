@@ -24,6 +24,6 @@ const es_intake_page_next = /** @type {(inputs: Intake_Page_NextInputs) => Local
 */
 export const intake_page_next = /** @type {((inputs?: Intake_Page_NextInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Page_NextInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_page_next(inputs)
-	return es_intake_page_next(inputs)
+	if (locale === "es") return es_intake_page_next(inputs)
+	return en_intake_page_next(inputs)
 });

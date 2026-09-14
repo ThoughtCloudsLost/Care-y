@@ -24,6 +24,6 @@ const es_ticket_table_col_activity = /** @type {(inputs: Ticket_Table_Col_Activi
 */
 export const ticket_table_col_activity = /** @type {((inputs?: Ticket_Table_Col_ActivityInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Table_Col_ActivityInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_table_col_activity(inputs)
-	return es_ticket_table_col_activity(inputs)
+	if (locale === "es") return es_ticket_table_col_activity(inputs)
+	return en_ticket_table_col_activity(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_clients_subtitle = /** @type {(inputs: Admin_Clients_SubtitleInpu
 */
 export const admin_clients_subtitle = /** @type {((inputs: Admin_Clients_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Clients_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_clients_subtitle(inputs)
-	return es_admin_clients_subtitle(inputs)
+	if (locale === "es") return es_admin_clients_subtitle(inputs)
+	return en_admin_clients_subtitle(inputs)
 });

@@ -24,6 +24,6 @@ const es_dashboard_encrypted_ticket = /** @type {(inputs: Dashboard_Encrypted_Ti
 */
 export const dashboard_encrypted_ticket = /** @type {((inputs: Dashboard_Encrypted_TicketInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Encrypted_TicketInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_encrypted_ticket(inputs)
-	return es_dashboard_encrypted_ticket(inputs)
+	if (locale === "es") return es_dashboard_encrypted_ticket(inputs)
+	return en_dashboard_encrypted_ticket(inputs)
 });

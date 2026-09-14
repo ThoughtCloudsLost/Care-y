@@ -24,6 +24,6 @@ const es_escalation_action_notify_managers = /** @type {(inputs: Escalation_Acti
 */
 export const escalation_action_notify_managers = /** @type {((inputs?: Escalation_Action_Notify_ManagersInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Action_Notify_ManagersInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_escalation_action_notify_managers(inputs)
-	return es_escalation_action_notify_managers(inputs)
+	if (locale === "es") return es_escalation_action_notify_managers(inputs)
+	return en_escalation_action_notify_managers(inputs)
 });

@@ -24,6 +24,6 @@ const es_tickets_exit_multiselect = /** @type {(inputs: Tickets_Exit_Multiselect
 */
 export const tickets_exit_multiselect = /** @type {((inputs?: Tickets_Exit_MultiselectInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Exit_MultiselectInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_tickets_exit_multiselect(inputs)
-	return es_tickets_exit_multiselect(inputs)
+	if (locale === "es") return es_tickets_exit_multiselect(inputs)
+	return en_tickets_exit_multiselect(inputs)
 });

@@ -24,6 +24,6 @@ const es_demo_tickets_descramble = /** @type {(inputs: Demo_Tickets_DescrambleIn
 */
 export const demo_tickets_descramble = /** @type {((inputs?: Demo_Tickets_DescrambleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Tickets_DescrambleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_tickets_descramble(inputs)
-	return es_demo_tickets_descramble(inputs)
+	if (locale === "es") return es_demo_tickets_descramble(inputs)
+	return en_demo_tickets_descramble(inputs)
 });

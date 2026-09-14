@@ -24,6 +24,6 @@ const es_reaction_you = /** @type {(inputs: Reaction_YouInputs) => LocalizedStri
 */
 export const reaction_you = /** @type {((inputs?: Reaction_YouInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Reaction_YouInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_reaction_you(inputs)
-	return es_reaction_you(inputs)
+	if (locale === "es") return es_reaction_you(inputs)
+	return en_reaction_you(inputs)
 });

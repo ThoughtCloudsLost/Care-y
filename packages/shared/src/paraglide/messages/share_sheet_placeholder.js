@@ -24,6 +24,6 @@ const es_share_sheet_placeholder = /** @type {(inputs: Share_Sheet_PlaceholderIn
 */
 export const share_sheet_placeholder = /** @type {((inputs?: Share_Sheet_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Sheet_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_sheet_placeholder(inputs)
-	return es_share_sheet_placeholder(inputs)
+	if (locale === "es") return es_share_sheet_placeholder(inputs)
+	return en_share_sheet_placeholder(inputs)
 });

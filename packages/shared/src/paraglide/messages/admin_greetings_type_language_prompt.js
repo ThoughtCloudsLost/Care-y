@@ -24,6 +24,6 @@ const es_admin_greetings_type_language_prompt = /** @type {(inputs: Admin_Greeti
 */
 export const admin_greetings_type_language_prompt = /** @type {((inputs?: Admin_Greetings_Type_Language_PromptInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Type_Language_PromptInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_greetings_type_language_prompt(inputs)
-	return es_admin_greetings_type_language_prompt(inputs)
+	if (locale === "es") return es_admin_greetings_type_language_prompt(inputs)
+	return en_admin_greetings_type_language_prompt(inputs)
 });

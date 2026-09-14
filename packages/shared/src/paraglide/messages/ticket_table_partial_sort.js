@@ -24,6 +24,6 @@ const es_ticket_table_partial_sort = /** @type {(inputs: Ticket_Table_Partial_So
 */
 export const ticket_table_partial_sort = /** @type {((inputs: Ticket_Table_Partial_SortInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Table_Partial_SortInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_table_partial_sort(inputs)
-	return es_ticket_table_partial_sort(inputs)
+	if (locale === "es") return es_ticket_table_partial_sort(inputs)
+	return en_ticket_table_partial_sort(inputs)
 });

@@ -24,6 +24,6 @@ const es_error_builtin_form_disabled = /** @type {(inputs: Error_Builtin_Form_Di
 */
 export const error_builtin_form_disabled = /** @type {((inputs?: Error_Builtin_Form_DisabledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Builtin_Form_DisabledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_builtin_form_disabled(inputs)
-	return es_error_builtin_form_disabled(inputs)
+	if (locale === "es") return es_error_builtin_form_disabled(inputs)
+	return en_error_builtin_form_disabled(inputs)
 });

@@ -24,6 +24,6 @@ const es_intake_protected_summary = /** @type {(inputs: Intake_Protected_Summary
 */
 export const intake_protected_summary = /** @type {((inputs?: Intake_Protected_SummaryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Protected_SummaryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_protected_summary(inputs)
-	return es_intake_protected_summary(inputs)
+	if (locale === "es") return es_intake_protected_summary(inputs)
+	return en_intake_protected_summary(inputs)
 });

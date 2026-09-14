@@ -24,6 +24,6 @@ const es_notif_reset_all_confirm = /** @type {(inputs: Notif_Reset_All_ConfirmIn
 */
 export const notif_reset_all_confirm = /** @type {((inputs?: Notif_Reset_All_ConfirmInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Reset_All_ConfirmInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_notif_reset_all_confirm(inputs)
-	return es_notif_reset_all_confirm(inputs)
+	if (locale === "es") return es_notif_reset_all_confirm(inputs)
+	return en_notif_reset_all_confirm(inputs)
 });

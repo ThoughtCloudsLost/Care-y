@@ -24,6 +24,6 @@ const es_ticket_close_skip = /** @type {(inputs: Ticket_Close_SkipInputs) => Loc
 */
 export const ticket_close_skip = /** @type {((inputs?: Ticket_Close_SkipInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Close_SkipInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_close_skip(inputs)
-	return es_ticket_close_skip(inputs)
+	if (locale === "es") return es_ticket_close_skip(inputs)
+	return en_ticket_close_skip(inputs)
 });

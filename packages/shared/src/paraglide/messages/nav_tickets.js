@@ -24,6 +24,6 @@ const es_nav_tickets = /** @type {(inputs: Nav_TicketsInputs) => LocalizedString
 */
 export const nav_tickets = /** @type {((inputs: Nav_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Nav_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_nav_tickets(inputs)
-	return es_nav_tickets(inputs)
+	if (locale === "es") return es_nav_tickets(inputs)
+	return en_nav_tickets(inputs)
 });

@@ -24,6 +24,6 @@ const es_demo_flow_lane_crypto = /** @type {(inputs: Demo_Flow_Lane_CryptoInputs
 */
 export const demo_flow_lane_crypto = /** @type {((inputs?: Demo_Flow_Lane_CryptoInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Lane_CryptoInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_lane_crypto(inputs)
-	return es_demo_flow_lane_crypto(inputs)
+	if (locale === "es") return es_demo_flow_lane_crypto(inputs)
+	return en_demo_flow_lane_crypto(inputs)
 });

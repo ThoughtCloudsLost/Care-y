@@ -24,6 +24,6 @@ const es_attachment_sms_unnamed = /** @type {(inputs: Attachment_Sms_UnnamedInpu
 */
 export const attachment_sms_unnamed = /** @type {((inputs?: Attachment_Sms_UnnamedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Attachment_Sms_UnnamedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_attachment_sms_unnamed(inputs)
-	return es_attachment_sms_unnamed(inputs)
+	if (locale === "es") return es_attachment_sms_unnamed(inputs)
+	return en_attachment_sms_unnamed(inputs)
 });

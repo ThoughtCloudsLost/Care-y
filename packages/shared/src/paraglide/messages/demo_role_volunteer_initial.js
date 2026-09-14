@@ -24,6 +24,6 @@ const es_demo_role_volunteer_initial = /** @type {(inputs: Demo_Role_Volunteer_I
 */
 export const demo_role_volunteer_initial = /** @type {((inputs?: Demo_Role_Volunteer_InitialInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Role_Volunteer_InitialInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_role_volunteer_initial(inputs)
-	return es_demo_role_volunteer_initial(inputs)
+	if (locale === "es") return es_demo_role_volunteer_initial(inputs)
+	return en_demo_role_volunteer_initial(inputs)
 });

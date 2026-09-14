@@ -24,6 +24,6 @@ const es_admin_blocklist_number_placeholder = /** @type {(inputs: Admin_Blocklis
 */
 export const admin_blocklist_number_placeholder = /** @type {((inputs?: Admin_Blocklist_Number_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Blocklist_Number_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_blocklist_number_placeholder(inputs)
-	return es_admin_blocklist_number_placeholder(inputs)
+	if (locale === "es") return es_admin_blocklist_number_placeholder(inputs)
+	return en_admin_blocklist_number_placeholder(inputs)
 });

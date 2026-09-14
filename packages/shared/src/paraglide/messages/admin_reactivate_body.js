@@ -24,6 +24,6 @@ const es_admin_reactivate_body = /** @type {(inputs: Admin_Reactivate_BodyInputs
 */
 export const admin_reactivate_body = /** @type {((inputs?: Admin_Reactivate_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Reactivate_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_reactivate_body(inputs)
-	return es_admin_reactivate_body(inputs)
+	if (locale === "es") return es_admin_reactivate_body(inputs)
+	return en_admin_reactivate_body(inputs)
 });

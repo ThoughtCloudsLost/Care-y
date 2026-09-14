@@ -24,6 +24,6 @@ const es_onboarding_org_terminology_admin_note = /** @type {(inputs: Onboarding_
 */
 export const onboarding_org_terminology_admin_note = /** @type {((inputs?: Onboarding_Org_Terminology_Admin_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Org_Terminology_Admin_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_org_terminology_admin_note(inputs)
-	return es_onboarding_org_terminology_admin_note(inputs)
+	if (locale === "es") return es_onboarding_org_terminology_admin_note(inputs)
+	return en_onboarding_org_terminology_admin_note(inputs)
 });

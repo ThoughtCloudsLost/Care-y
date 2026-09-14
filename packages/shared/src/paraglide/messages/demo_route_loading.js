@@ -24,6 +24,6 @@ const es_demo_route_loading = /** @type {(inputs: Demo_Route_LoadingInputs) => L
 */
 export const demo_route_loading = /** @type {((inputs?: Demo_Route_LoadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Route_LoadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_route_loading(inputs)
-	return es_demo_route_loading(inputs)
+	if (locale === "es") return es_demo_route_loading(inputs)
+	return en_demo_route_loading(inputs)
 });

@@ -24,6 +24,6 @@ const es_permission_view_clients = /** @type {(inputs: Permission_View_ClientsIn
 */
 export const permission_view_clients = /** @type {((inputs?: Permission_View_ClientsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_View_ClientsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_permission_view_clients(inputs)
-	return es_permission_view_clients(inputs)
+	if (locale === "es") return es_permission_view_clients(inputs)
+	return en_permission_view_clients(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_telephony_mode_byot = /** @type {(inputs: Admin_Telephony_Mode_By
 */
 export const admin_telephony_mode_byot = /** @type {((inputs: Admin_Telephony_Mode_ByotInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Mode_ByotInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_mode_byot(inputs)
-	return es_admin_telephony_mode_byot(inputs)
+	if (locale === "es") return es_admin_telephony_mode_byot(inputs)
+	return en_admin_telephony_mode_byot(inputs)
 });

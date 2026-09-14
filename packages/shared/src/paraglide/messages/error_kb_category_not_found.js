@@ -24,6 +24,6 @@ const es_error_kb_category_not_found = /** @type {(inputs: Error_Kb_Category_Not
 */
 export const error_kb_category_not_found = /** @type {((inputs?: Error_Kb_Category_Not_FoundInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Kb_Category_Not_FoundInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_kb_category_not_found(inputs)
-	return es_error_kb_category_not_found(inputs)
+	if (locale === "es") return es_error_kb_category_not_found(inputs)
+	return en_error_kb_category_not_found(inputs)
 });

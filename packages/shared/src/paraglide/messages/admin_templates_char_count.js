@@ -24,6 +24,6 @@ const es_admin_templates_char_count = /** @type {(inputs: Admin_Templates_Char_C
 */
 export const admin_templates_char_count = /** @type {((inputs: Admin_Templates_Char_CountInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Templates_Char_CountInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_templates_char_count(inputs)
-	return es_admin_templates_char_count(inputs)
+	if (locale === "es") return es_admin_templates_char_count(inputs)
+	return en_admin_templates_char_count(inputs)
 });

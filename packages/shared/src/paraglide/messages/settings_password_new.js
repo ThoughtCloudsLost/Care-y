@@ -24,6 +24,6 @@ const es_settings_password_new = /** @type {(inputs: Settings_Password_NewInputs
 */
 export const settings_password_new = /** @type {((inputs?: Settings_Password_NewInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Password_NewInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_password_new(inputs)
-	return es_settings_password_new(inputs)
+	if (locale === "es") return es_settings_password_new(inputs)
+	return en_settings_password_new(inputs)
 });

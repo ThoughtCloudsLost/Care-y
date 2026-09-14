@@ -24,6 +24,6 @@ const es_logs_calls_empty_title = /** @type {(inputs: Logs_Calls_Empty_TitleInpu
 */
 export const logs_calls_empty_title = /** @type {((inputs?: Logs_Calls_Empty_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Logs_Calls_Empty_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_logs_calls_empty_title(inputs)
-	return es_logs_calls_empty_title(inputs)
+	if (locale === "es") return es_logs_calls_empty_title(inputs)
+	return en_logs_calls_empty_title(inputs)
 });

@@ -24,6 +24,6 @@ const es_client_email_edit = /** @type {(inputs: Client_Email_EditInputs) => Loc
 */
 export const client_email_edit = /** @type {((inputs?: Client_Email_EditInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Email_EditInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_client_email_edit(inputs)
-	return es_client_email_edit(inputs)
+	if (locale === "es") return es_client_email_edit(inputs)
+	return en_client_email_edit(inputs)
 });

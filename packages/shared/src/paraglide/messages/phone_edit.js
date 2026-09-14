@@ -24,6 +24,6 @@ const es_phone_edit = /** @type {(inputs: Phone_EditInputs) => LocalizedString} 
 */
 export const phone_edit = /** @type {((inputs?: Phone_EditInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Phone_EditInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_phone_edit(inputs)
-	return es_phone_edit(inputs)
+	if (locale === "es") return es_phone_edit(inputs)
+	return en_phone_edit(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_hub_badge_keys_missing = /** @type {(inputs: Admin_Hub_Badge_Keys
 */
 export const admin_hub_badge_keys_missing = /** @type {((inputs?: Admin_Hub_Badge_Keys_MissingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Hub_Badge_Keys_MissingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_hub_badge_keys_missing(inputs)
-	return es_admin_hub_badge_keys_missing(inputs)
+	if (locale === "es") return es_admin_hub_badge_keys_missing(inputs)
+	return en_admin_hub_badge_keys_missing(inputs)
 });

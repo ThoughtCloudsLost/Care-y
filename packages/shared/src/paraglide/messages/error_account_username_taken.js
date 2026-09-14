@@ -24,6 +24,6 @@ const es_error_account_username_taken = /** @type {(inputs: Error_Account_Userna
 */
 export const error_account_username_taken = /** @type {((inputs?: Error_Account_Username_TakenInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Account_Username_TakenInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_account_username_taken(inputs)
-	return es_error_account_username_taken(inputs)
+	if (locale === "es") return es_error_account_username_taken(inputs)
+	return en_error_account_username_taken(inputs)
 });

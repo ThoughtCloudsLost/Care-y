@@ -24,6 +24,6 @@ const es_ticket_timeline_jump_to = /** @type {(inputs: Ticket_Timeline_Jump_ToIn
 */
 export const ticket_timeline_jump_to = /** @type {((inputs: Ticket_Timeline_Jump_ToInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Timeline_Jump_ToInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_timeline_jump_to(inputs)
-	return es_ticket_timeline_jump_to(inputs)
+	if (locale === "es") return es_ticket_timeline_jump_to(inputs)
+	return en_ticket_timeline_jump_to(inputs)
 });

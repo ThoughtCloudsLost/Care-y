@@ -24,6 +24,6 @@ const es_settings_title = /** @type {(inputs: Settings_TitleInputs) => Localized
 */
 export const settings_title = /** @type {((inputs?: Settings_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_title(inputs)
-	return es_settings_title(inputs)
+	if (locale === "es") return es_settings_title(inputs)
+	return en_settings_title(inputs)
 });

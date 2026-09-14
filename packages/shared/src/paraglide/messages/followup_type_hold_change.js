@@ -24,6 +24,6 @@ const es_followup_type_hold_change = /** @type {(inputs: Followup_Type_Hold_Chan
 */
 export const followup_type_hold_change = /** @type {((inputs?: Followup_Type_Hold_ChangeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Hold_ChangeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_followup_type_hold_change(inputs)
-	return es_followup_type_hold_change(inputs)
+	if (locale === "es") return es_followup_type_hold_change(inputs)
+	return en_followup_type_hold_change(inputs)
 });

@@ -24,6 +24,6 @@ const es_demo_peek_back_to = /** @type {(inputs: Demo_Peek_Back_ToInputs) => Loc
 */
 export const demo_peek_back_to = /** @type {((inputs: Demo_Peek_Back_ToInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Peek_Back_ToInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_peek_back_to(inputs)
-	return es_demo_peek_back_to(inputs)
+	if (locale === "es") return es_demo_peek_back_to(inputs)
+	return en_demo_peek_back_to(inputs)
 });

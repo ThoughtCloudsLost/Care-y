@@ -24,6 +24,6 @@ const es_role_manager = /** @type {(inputs: Role_ManagerInputs) => LocalizedStri
 */
 export const role_manager = /** @type {((inputs: Role_ManagerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Role_ManagerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_role_manager(inputs)
-	return es_role_manager(inputs)
+	if (locale === "es") return es_role_manager(inputs)
+	return en_role_manager(inputs)
 });

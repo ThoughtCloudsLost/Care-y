@@ -24,6 +24,6 @@ const es_auth_login_error = /** @type {(inputs: Auth_Login_ErrorInputs) => Local
 */
 export const auth_login_error = /** @type {((inputs?: Auth_Login_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Auth_Login_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_auth_login_error(inputs)
-	return es_auth_login_error(inputs)
+	if (locale === "es") return es_auth_login_error(inputs)
+	return en_auth_login_error(inputs)
 });

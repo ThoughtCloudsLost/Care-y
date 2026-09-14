@@ -24,6 +24,6 @@ const es_tickets_filter_status = /** @type {(inputs: Tickets_Filter_StatusInputs
 */
 export const tickets_filter_status = /** @type {((inputs?: Tickets_Filter_StatusInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Filter_StatusInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_tickets_filter_status(inputs)
-	return es_tickets_filter_status(inputs)
+	if (locale === "es") return es_tickets_filter_status(inputs)
+	return en_tickets_filter_status(inputs)
 });

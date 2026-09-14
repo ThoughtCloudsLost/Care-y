@@ -24,6 +24,6 @@ const es_logs_page_title = /** @type {(inputs: Logs_Page_TitleInputs) => Localiz
 */
 export const logs_page_title = /** @type {((inputs?: Logs_Page_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Logs_Page_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_logs_page_title(inputs)
-	return es_logs_page_title(inputs)
+	if (locale === "es") return es_logs_page_title(inputs)
+	return en_logs_page_title(inputs)
 });

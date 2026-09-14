@@ -24,6 +24,6 @@ const es_settings_password_step_fetch = /** @type {(inputs: Settings_Password_St
 */
 export const settings_password_step_fetch = /** @type {((inputs?: Settings_Password_Step_FetchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Password_Step_FetchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_password_step_fetch(inputs)
-	return es_settings_password_step_fetch(inputs)
+	if (locale === "es") return es_settings_password_step_fetch(inputs)
+	return en_settings_password_step_fetch(inputs)
 });

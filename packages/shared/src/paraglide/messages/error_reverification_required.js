@@ -24,6 +24,6 @@ const es_error_reverification_required = /** @type {(inputs: Error_Reverificatio
 */
 export const error_reverification_required = /** @type {((inputs?: Error_Reverification_RequiredInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Reverification_RequiredInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_reverification_required(inputs)
-	return es_error_reverification_required(inputs)
+	if (locale === "es") return es_error_reverification_required(inputs)
+	return en_error_reverification_required(inputs)
 });

@@ -24,6 +24,6 @@ const es_portal_incomplete_link = /** @type {(inputs: Portal_Incomplete_LinkInpu
 */
 export const portal_incomplete_link = /** @type {((inputs?: Portal_Incomplete_LinkInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Incomplete_LinkInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_incomplete_link(inputs)
-	return es_portal_incomplete_link(inputs)
+	if (locale === "es") return es_portal_incomplete_link(inputs)
+	return en_portal_incomplete_link(inputs)
 });

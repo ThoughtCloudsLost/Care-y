@@ -24,6 +24,6 @@ const es_admin_branding_preview_links = /** @type {(inputs: Admin_Branding_Previ
 */
 export const admin_branding_preview_links = /** @type {((inputs?: Admin_Branding_Preview_LinksInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Preview_LinksInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_preview_links(inputs)
-	return es_admin_branding_preview_links(inputs)
+	if (locale === "es") return es_admin_branding_preview_links(inputs)
+	return en_admin_branding_preview_links(inputs)
 });

@@ -24,6 +24,6 @@ const es_intake_responses_unknown_field = /** @type {(inputs: Intake_Responses_U
 */
 export const intake_responses_unknown_field = /** @type {((inputs?: Intake_Responses_Unknown_FieldInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Responses_Unknown_FieldInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_responses_unknown_field(inputs)
-	return es_intake_responses_unknown_field(inputs)
+	if (locale === "es") return es_intake_responses_unknown_field(inputs)
+	return en_intake_responses_unknown_field(inputs)
 });

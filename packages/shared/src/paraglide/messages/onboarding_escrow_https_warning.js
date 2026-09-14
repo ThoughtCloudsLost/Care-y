@@ -24,6 +24,6 @@ const es_onboarding_escrow_https_warning = /** @type {(inputs: Onboarding_Escrow
 */
 export const onboarding_escrow_https_warning = /** @type {((inputs?: Onboarding_Escrow_Https_WarningInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Escrow_Https_WarningInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_escrow_https_warning(inputs)
-	return es_onboarding_escrow_https_warning(inputs)
+	if (locale === "es") return es_onboarding_escrow_https_warning(inputs)
+	return en_onboarding_escrow_https_warning(inputs)
 });

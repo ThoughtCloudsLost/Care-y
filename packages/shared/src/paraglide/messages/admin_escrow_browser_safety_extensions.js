@@ -24,6 +24,6 @@ const es_admin_escrow_browser_safety_extensions = /** @type {(inputs: Admin_Escr
 */
 export const admin_escrow_browser_safety_extensions = /** @type {((inputs?: Admin_Escrow_Browser_Safety_ExtensionsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Escrow_Browser_Safety_ExtensionsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_escrow_browser_safety_extensions(inputs)
-	return es_admin_escrow_browser_safety_extensions(inputs)
+	if (locale === "es") return es_admin_escrow_browser_safety_extensions(inputs)
+	return en_admin_escrow_browser_safety_extensions(inputs)
 });

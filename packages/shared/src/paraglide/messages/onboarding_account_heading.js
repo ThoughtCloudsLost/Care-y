@@ -24,6 +24,6 @@ const es_onboarding_account_heading = /** @type {(inputs: Onboarding_Account_Hea
 */
 export const onboarding_account_heading = /** @type {((inputs?: Onboarding_Account_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Account_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_account_heading(inputs)
-	return es_onboarding_account_heading(inputs)
+	if (locale === "es") return es_onboarding_account_heading(inputs)
+	return en_onboarding_account_heading(inputs)
 });

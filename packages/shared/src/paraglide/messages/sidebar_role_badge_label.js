@@ -24,6 +24,6 @@ const es_sidebar_role_badge_label = /** @type {(inputs: Sidebar_Role_Badge_Label
 */
 export const sidebar_role_badge_label = /** @type {((inputs: Sidebar_Role_Badge_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Sidebar_Role_Badge_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_sidebar_role_badge_label(inputs)
-	return es_sidebar_role_badge_label(inputs)
+	if (locale === "es") return es_sidebar_role_badge_label(inputs)
+	return en_sidebar_role_badge_label(inputs)
 });

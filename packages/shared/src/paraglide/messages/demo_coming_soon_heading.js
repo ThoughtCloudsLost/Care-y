@@ -24,6 +24,6 @@ const es_demo_coming_soon_heading = /** @type {(inputs: Demo_Coming_Soon_Heading
 */
 export const demo_coming_soon_heading = /** @type {((inputs?: Demo_Coming_Soon_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Coming_Soon_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_coming_soon_heading(inputs)
-	return es_demo_coming_soon_heading(inputs)
+	if (locale === "es") return es_demo_coming_soon_heading(inputs)
+	return en_demo_coming_soon_heading(inputs)
 });

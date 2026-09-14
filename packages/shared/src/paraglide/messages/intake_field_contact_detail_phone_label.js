@@ -24,6 +24,6 @@ const es_intake_field_contact_detail_phone_label = /** @type {(inputs: Intake_Fi
 */
 export const intake_field_contact_detail_phone_label = /** @type {((inputs?: Intake_Field_Contact_Detail_Phone_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Field_Contact_Detail_Phone_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_field_contact_detail_phone_label(inputs)
-	return es_intake_field_contact_detail_phone_label(inputs)
+	if (locale === "es") return es_intake_field_contact_detail_phone_label(inputs)
+	return en_intake_field_contact_detail_phone_label(inputs)
 });

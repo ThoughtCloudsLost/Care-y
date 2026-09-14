@@ -24,6 +24,6 @@ const es_roles_reset_title = /** @type {(inputs: Roles_Reset_TitleInputs) => Loc
 */
 export const roles_reset_title = /** @type {((inputs?: Roles_Reset_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_Reset_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_roles_reset_title(inputs)
-	return es_roles_reset_title(inputs)
+	if (locale === "es") return es_roles_reset_title(inputs)
+	return en_roles_reset_title(inputs)
 });

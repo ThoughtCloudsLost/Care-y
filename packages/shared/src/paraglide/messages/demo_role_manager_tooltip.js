@@ -24,6 +24,6 @@ const es_demo_role_manager_tooltip = /** @type {(inputs: Demo_Role_Manager_Toolt
 */
 export const demo_role_manager_tooltip = /** @type {((inputs?: Demo_Role_Manager_TooltipInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Role_Manager_TooltipInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_role_manager_tooltip(inputs)
-	return es_demo_role_manager_tooltip(inputs)
+	if (locale === "es") return es_demo_role_manager_tooltip(inputs)
+	return en_demo_role_manager_tooltip(inputs)
 });

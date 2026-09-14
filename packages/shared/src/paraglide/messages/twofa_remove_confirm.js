@@ -24,6 +24,6 @@ const es_twofa_remove_confirm = /** @type {(inputs: Twofa_Remove_ConfirmInputs) 
 */
 export const twofa_remove_confirm = /** @type {((inputs?: Twofa_Remove_ConfirmInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Remove_ConfirmInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_remove_confirm(inputs)
-	return es_twofa_remove_confirm(inputs)
+	if (locale === "es") return es_twofa_remove_confirm(inputs)
+	return en_twofa_remove_confirm(inputs)
 });

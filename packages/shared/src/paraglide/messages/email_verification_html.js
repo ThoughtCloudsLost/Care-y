@@ -24,6 +24,6 @@ const es_email_verification_html = /** @type {(inputs: Email_Verification_HtmlIn
 */
 export const email_verification_html = /** @type {((inputs: Email_Verification_HtmlInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Email_Verification_HtmlInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_email_verification_html(inputs)
-	return es_email_verification_html(inputs)
+	if (locale === "es") return es_email_verification_html(inputs)
+	return en_email_verification_html(inputs)
 });

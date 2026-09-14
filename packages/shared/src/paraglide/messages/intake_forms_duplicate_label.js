@@ -24,6 +24,6 @@ const es_intake_forms_duplicate_label = /** @type {(inputs: Intake_Forms_Duplica
 */
 export const intake_forms_duplicate_label = /** @type {((inputs?: Intake_Forms_Duplicate_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Duplicate_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_duplicate_label(inputs)
-	return es_intake_forms_duplicate_label(inputs)
+	if (locale === "es") return es_intake_forms_duplicate_label(inputs)
+	return en_intake_forms_duplicate_label(inputs)
 });

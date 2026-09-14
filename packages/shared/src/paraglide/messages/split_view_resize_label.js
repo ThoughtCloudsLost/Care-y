@@ -24,6 +24,6 @@ const es_split_view_resize_label = /** @type {(inputs: Split_View_Resize_LabelIn
 */
 export const split_view_resize_label = /** @type {((inputs?: Split_View_Resize_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Split_View_Resize_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_split_view_resize_label(inputs)
-	return es_split_view_resize_label(inputs)
+	if (locale === "es") return es_split_view_resize_label(inputs)
+	return en_split_view_resize_label(inputs)
 });

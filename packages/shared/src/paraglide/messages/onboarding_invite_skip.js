@@ -24,6 +24,6 @@ const es_onboarding_invite_skip = /** @type {(inputs: Onboarding_Invite_SkipInpu
 */
 export const onboarding_invite_skip = /** @type {((inputs: Onboarding_Invite_SkipInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Invite_SkipInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_invite_skip(inputs)
-	return es_onboarding_invite_skip(inputs)
+	if (locale === "es") return es_onboarding_invite_skip(inputs)
+	return en_onboarding_invite_skip(inputs)
 });

@@ -24,6 +24,6 @@ const es_note_type_comment = /** @type {(inputs: Note_Type_CommentInputs) => Loc
 */
 export const note_type_comment = /** @type {((inputs?: Note_Type_CommentInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Note_Type_CommentInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_note_type_comment(inputs)
-	return es_note_type_comment(inputs)
+	if (locale === "es") return es_note_type_comment(inputs)
+	return en_note_type_comment(inputs)
 });

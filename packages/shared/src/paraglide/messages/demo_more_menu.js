@@ -24,6 +24,6 @@ const es_demo_more_menu = /** @type {(inputs: Demo_More_MenuInputs) => Localized
 */
 export const demo_more_menu = /** @type {((inputs?: Demo_More_MenuInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_More_MenuInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_more_menu(inputs)
-	return es_demo_more_menu(inputs)
+	if (locale === "es") return es_demo_more_menu(inputs)
+	return en_demo_more_menu(inputs)
 });

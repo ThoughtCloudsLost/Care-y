@@ -24,6 +24,6 @@ const es_portal_thread_rate_limited = /** @type {(inputs: Portal_Thread_Rate_Lim
 */
 export const portal_thread_rate_limited = /** @type {((inputs?: Portal_Thread_Rate_LimitedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Thread_Rate_LimitedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_thread_rate_limited(inputs)
-	return es_portal_thread_rate_limited(inputs)
+	if (locale === "es") return es_portal_thread_rate_limited(inputs)
+	return en_portal_thread_rate_limited(inputs)
 });

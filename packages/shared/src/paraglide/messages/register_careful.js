@@ -24,6 +24,6 @@ const es_register_careful = /** @type {(inputs: Register_CarefulInputs) => Local
 */
 export const register_careful = /** @type {((inputs?: Register_CarefulInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Register_CarefulInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_register_careful(inputs)
-	return es_register_careful(inputs)
+	if (locale === "es") return es_register_careful(inputs)
+	return en_register_careful(inputs)
 });

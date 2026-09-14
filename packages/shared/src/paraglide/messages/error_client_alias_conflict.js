@@ -24,6 +24,6 @@ const es_error_client_alias_conflict = /** @type {(inputs: Error_Client_Alias_Co
 */
 export const error_client_alias_conflict = /** @type {((inputs?: Error_Client_Alias_ConflictInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Client_Alias_ConflictInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_client_alias_conflict(inputs)
-	return es_error_client_alias_conflict(inputs)
+	if (locale === "es") return es_error_client_alias_conflict(inputs)
+	return en_error_client_alias_conflict(inputs)
 });

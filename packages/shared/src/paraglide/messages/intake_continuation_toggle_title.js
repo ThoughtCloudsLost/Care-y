@@ -24,6 +24,6 @@ const es_intake_continuation_toggle_title = /** @type {(inputs: Intake_Continuat
 */
 export const intake_continuation_toggle_title = /** @type {((inputs?: Intake_Continuation_Toggle_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Continuation_Toggle_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_continuation_toggle_title(inputs)
-	return es_intake_continuation_toggle_title(inputs)
+	if (locale === "es") return es_intake_continuation_toggle_title(inputs)
+	return en_intake_continuation_toggle_title(inputs)
 });

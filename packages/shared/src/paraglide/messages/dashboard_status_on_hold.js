@@ -24,6 +24,6 @@ const es_dashboard_status_on_hold = /** @type {(inputs: Dashboard_Status_On_Hold
 */
 export const dashboard_status_on_hold = /** @type {((inputs?: Dashboard_Status_On_HoldInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Status_On_HoldInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_status_on_hold(inputs)
-	return es_dashboard_status_on_hold(inputs)
+	if (locale === "es") return es_dashboard_status_on_hold(inputs)
+	return en_dashboard_status_on_hold(inputs)
 });

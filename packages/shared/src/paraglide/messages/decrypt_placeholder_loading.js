@@ -24,6 +24,6 @@ const es_decrypt_placeholder_loading = /** @type {(inputs: Decrypt_Placeholder_L
 */
 export const decrypt_placeholder_loading = /** @type {((inputs?: Decrypt_Placeholder_LoadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Decrypt_Placeholder_LoadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_decrypt_placeholder_loading(inputs)
-	return es_decrypt_placeholder_loading(inputs)
+	if (locale === "es") return es_decrypt_placeholder_loading(inputs)
+	return en_decrypt_placeholder_loading(inputs)
 });

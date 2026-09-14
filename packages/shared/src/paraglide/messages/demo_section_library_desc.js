@@ -24,6 +24,6 @@ const es_demo_section_library_desc = /** @type {(inputs: Demo_Section_Library_De
 */
 export const demo_section_library_desc = /** @type {((inputs?: Demo_Section_Library_DescInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Section_Library_DescInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_section_library_desc(inputs)
-	return es_demo_section_library_desc(inputs)
+	if (locale === "es") return es_demo_section_library_desc(inputs)
+	return en_demo_section_library_desc(inputs)
 });

@@ -24,6 +24,6 @@ const es_audit_event_web_intake_toggled = /** @type {(inputs: Audit_Event_Web_In
 */
 export const audit_event_web_intake_toggled = /** @type {((inputs?: Audit_Event_Web_Intake_ToggledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Audit_Event_Web_Intake_ToggledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_audit_event_web_intake_toggled(inputs)
-	return es_audit_event_web_intake_toggled(inputs)
+	if (locale === "es") return es_audit_event_web_intake_toggled(inputs)
+	return en_audit_event_web_intake_toggled(inputs)
 });

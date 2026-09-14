@@ -24,6 +24,6 @@ const es_library_select_article_prompt = /** @type {(inputs: Library_Select_Arti
 */
 export const library_select_article_prompt = /** @type {((inputs?: Library_Select_Article_PromptInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Select_Article_PromptInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_select_article_prompt(inputs)
-	return es_library_select_article_prompt(inputs)
+	if (locale === "es") return es_library_select_article_prompt(inputs)
+	return en_library_select_article_prompt(inputs)
 });

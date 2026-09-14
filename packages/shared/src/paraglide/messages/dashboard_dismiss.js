@@ -24,6 +24,6 @@ const es_dashboard_dismiss = /** @type {(inputs: Dashboard_DismissInputs) => Loc
 */
 export const dashboard_dismiss = /** @type {((inputs?: Dashboard_DismissInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_DismissInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_dashboard_dismiss(inputs)
-	return es_dashboard_dismiss(inputs)
+	if (locale === "es") return es_dashboard_dismiss(inputs)
+	return en_dashboard_dismiss(inputs)
 });

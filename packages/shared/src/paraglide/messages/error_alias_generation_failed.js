@@ -24,6 +24,6 @@ const es_error_alias_generation_failed = /** @type {(inputs: Error_Alias_Generat
 */
 export const error_alias_generation_failed = /** @type {((inputs: Error_Alias_Generation_FailedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Alias_Generation_FailedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_alias_generation_failed(inputs)
-	return es_error_alias_generation_failed(inputs)
+	if (locale === "es") return es_error_alias_generation_failed(inputs)
+	return en_error_alias_generation_failed(inputs)
 });

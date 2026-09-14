@@ -24,6 +24,6 @@ const es_ticket_filter_type_merge = /** @type {(inputs: Ticket_Filter_Type_Merge
 */
 export const ticket_filter_type_merge = /** @type {((inputs?: Ticket_Filter_Type_MergeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Filter_Type_MergeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_filter_type_merge(inputs)
-	return es_ticket_filter_type_merge(inputs)
+	if (locale === "es") return es_ticket_filter_type_merge(inputs)
+	return en_ticket_filter_type_merge(inputs)
 });

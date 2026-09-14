@@ -24,6 +24,6 @@ const es_admin_invite_menu_manual = /** @type {(inputs: Admin_Invite_Menu_Manual
 */
 export const admin_invite_menu_manual = /** @type {((inputs?: Admin_Invite_Menu_ManualInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Menu_ManualInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_menu_manual(inputs)
-	return es_admin_invite_menu_manual(inputs)
+	if (locale === "es") return es_admin_invite_menu_manual(inputs)
+	return en_admin_invite_menu_manual(inputs)
 });

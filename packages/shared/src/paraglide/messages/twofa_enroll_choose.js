@@ -24,6 +24,6 @@ const es_twofa_enroll_choose = /** @type {(inputs: Twofa_Enroll_ChooseInputs) =>
 */
 export const twofa_enroll_choose = /** @type {((inputs?: Twofa_Enroll_ChooseInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Enroll_ChooseInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_enroll_choose(inputs)
-	return es_twofa_enroll_choose(inputs)
+	if (locale === "es") return es_twofa_enroll_choose(inputs)
+	return en_twofa_enroll_choose(inputs)
 });

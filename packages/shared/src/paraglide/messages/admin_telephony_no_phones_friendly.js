@@ -24,6 +24,6 @@ const es_admin_telephony_no_phones_friendly = /** @type {(inputs: Admin_Telephon
 */
 export const admin_telephony_no_phones_friendly = /** @type {((inputs?: Admin_Telephony_No_Phones_FriendlyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_No_Phones_FriendlyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_telephony_no_phones_friendly(inputs)
-	return es_admin_telephony_no_phones_friendly(inputs)
+	if (locale === "es") return es_admin_telephony_no_phones_friendly(inputs)
+	return en_admin_telephony_no_phones_friendly(inputs)
 });

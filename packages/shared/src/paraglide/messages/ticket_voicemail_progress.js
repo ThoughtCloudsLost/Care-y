@@ -24,6 +24,6 @@ const es_ticket_voicemail_progress = /** @type {(inputs: Ticket_Voicemail_Progre
 */
 export const ticket_voicemail_progress = /** @type {((inputs: Ticket_Voicemail_ProgressInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Voicemail_ProgressInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_voicemail_progress(inputs)
-	return es_ticket_voicemail_progress(inputs)
+	if (locale === "es") return es_ticket_voicemail_progress(inputs)
+	return en_ticket_voicemail_progress(inputs)
 });

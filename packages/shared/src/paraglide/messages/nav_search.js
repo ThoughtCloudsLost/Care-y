@@ -24,6 +24,6 @@ const es_nav_search = /** @type {(inputs: Nav_SearchInputs) => LocalizedString} 
 */
 export const nav_search = /** @type {((inputs?: Nav_SearchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Nav_SearchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_nav_search(inputs)
-	return es_nav_search(inputs)
+	if (locale === "es") return es_nav_search(inputs)
+	return en_nav_search(inputs)
 });

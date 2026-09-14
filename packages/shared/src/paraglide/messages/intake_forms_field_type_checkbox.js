@@ -24,6 +24,6 @@ const es_intake_forms_field_type_checkbox = /** @type {(inputs: Intake_Forms_Fie
 */
 export const intake_forms_field_type_checkbox = /** @type {((inputs?: Intake_Forms_Field_Type_CheckboxInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Field_Type_CheckboxInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_field_type_checkbox(inputs)
-	return es_intake_forms_field_type_checkbox(inputs)
+	if (locale === "es") return es_intake_forms_field_type_checkbox(inputs)
+	return en_intake_forms_field_type_checkbox(inputs)
 });

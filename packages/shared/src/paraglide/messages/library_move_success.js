@@ -24,6 +24,6 @@ const es_library_move_success = /** @type {(inputs: Library_Move_SuccessInputs) 
 */
 export const library_move_success = /** @type {((inputs: Library_Move_SuccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Move_SuccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_move_success(inputs)
-	return es_library_move_success(inputs)
+	if (locale === "es") return es_library_move_success(inputs)
+	return en_library_move_success(inputs)
 });

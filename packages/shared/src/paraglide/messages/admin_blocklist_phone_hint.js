@@ -24,6 +24,6 @@ const es_admin_blocklist_phone_hint = /** @type {(inputs: Admin_Blocklist_Phone_
 */
 export const admin_blocklist_phone_hint = /** @type {((inputs?: Admin_Blocklist_Phone_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Blocklist_Phone_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_blocklist_phone_hint(inputs)
-	return es_admin_blocklist_phone_hint(inputs)
+	if (locale === "es") return es_admin_blocklist_phone_hint(inputs)
+	return en_admin_blocklist_phone_hint(inputs)
 });

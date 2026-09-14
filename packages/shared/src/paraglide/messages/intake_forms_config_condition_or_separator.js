@@ -24,6 +24,6 @@ const es_intake_forms_config_condition_or_separator = /** @type {(inputs: Intake
 */
 export const intake_forms_config_condition_or_separator = /** @type {((inputs?: Intake_Forms_Config_Condition_Or_SeparatorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Condition_Or_SeparatorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_condition_or_separator(inputs)
-	return es_intake_forms_config_condition_or_separator(inputs)
+	if (locale === "es") return es_intake_forms_config_condition_or_separator(inputs)
+	return en_intake_forms_config_condition_or_separator(inputs)
 });

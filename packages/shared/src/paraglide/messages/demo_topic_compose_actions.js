@@ -24,6 +24,6 @@ const es_demo_topic_compose_actions = /** @type {(inputs: Demo_Topic_Compose_Act
 */
 export const demo_topic_compose_actions = /** @type {((inputs?: Demo_Topic_Compose_ActionsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Topic_Compose_ActionsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_topic_compose_actions(inputs)
-	return es_demo_topic_compose_actions(inputs)
+	if (locale === "es") return es_demo_topic_compose_actions(inputs)
+	return en_demo_topic_compose_actions(inputs)
 });

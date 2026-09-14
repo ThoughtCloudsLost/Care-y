@@ -24,6 +24,6 @@ const es_twofa_totp_label = /** @type {(inputs: Twofa_Totp_LabelInputs) => Local
 */
 export const twofa_totp_label = /** @type {((inputs?: Twofa_Totp_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Totp_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_twofa_totp_label(inputs)
-	return es_twofa_totp_label(inputs)
+	if (locale === "es") return es_twofa_totp_label(inputs)
+	return en_twofa_totp_label(inputs)
 });

@@ -24,6 +24,6 @@ const es_admin_display_name_updated = /** @type {(inputs: Admin_Display_Name_Upd
 */
 export const admin_display_name_updated = /** @type {((inputs?: Admin_Display_Name_UpdatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Display_Name_UpdatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_display_name_updated(inputs)
-	return es_admin_display_name_updated(inputs)
+	if (locale === "es") return es_admin_display_name_updated(inputs)
+	return en_admin_display_name_updated(inputs)
 });

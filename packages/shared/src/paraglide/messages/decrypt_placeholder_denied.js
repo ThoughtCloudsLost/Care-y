@@ -24,6 +24,6 @@ const es_decrypt_placeholder_denied = /** @type {(inputs: Decrypt_Placeholder_De
 */
 export const decrypt_placeholder_denied = /** @type {((inputs?: Decrypt_Placeholder_DeniedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Decrypt_Placeholder_DeniedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_decrypt_placeholder_denied(inputs)
-	return es_decrypt_placeholder_denied(inputs)
+	if (locale === "es") return es_decrypt_placeholder_denied(inputs)
+	return en_decrypt_placeholder_denied(inputs)
 });

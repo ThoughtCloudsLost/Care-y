@@ -24,6 +24,6 @@ const es_onboarding_step_complete = /** @type {(inputs: Onboarding_Step_Complete
 */
 export const onboarding_step_complete = /** @type {((inputs?: Onboarding_Step_CompleteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Step_CompleteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_step_complete(inputs)
-	return es_onboarding_step_complete(inputs)
+	if (locale === "es") return es_onboarding_step_complete(inputs)
+	return en_onboarding_step_complete(inputs)
 });

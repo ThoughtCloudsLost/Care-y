@@ -24,6 +24,6 @@ const es_ticket_voicemail_group = /** @type {(inputs: Ticket_Voicemail_GroupInpu
 */
 export const ticket_voicemail_group = /** @type {((inputs: Ticket_Voicemail_GroupInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Voicemail_GroupInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_voicemail_group(inputs)
-	return es_ticket_voicemail_group(inputs)
+	if (locale === "es") return es_ticket_voicemail_group(inputs)
+	return en_ticket_voicemail_group(inputs)
 });

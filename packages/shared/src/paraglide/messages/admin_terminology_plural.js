@@ -24,6 +24,6 @@ const es_admin_terminology_plural = /** @type {(inputs: Admin_Terminology_Plural
 */
 export const admin_terminology_plural = /** @type {((inputs?: Admin_Terminology_PluralInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Terminology_PluralInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_terminology_plural(inputs)
-	return es_admin_terminology_plural(inputs)
+	if (locale === "es") return es_admin_terminology_plural(inputs)
+	return en_admin_terminology_plural(inputs)
 });

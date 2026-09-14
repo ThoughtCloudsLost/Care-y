@@ -24,6 +24,6 @@ const es_intake_submitting = /** @type {(inputs: Intake_SubmittingInputs) => Loc
 */
 export const intake_submitting = /** @type {((inputs?: Intake_SubmittingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_SubmittingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_submitting(inputs)
-	return es_intake_submitting(inputs)
+	if (locale === "es") return es_intake_submitting(inputs)
+	return en_intake_submitting(inputs)
 });

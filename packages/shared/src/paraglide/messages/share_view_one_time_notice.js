@@ -24,6 +24,6 @@ const es_share_view_one_time_notice = /** @type {(inputs: Share_View_One_Time_No
 */
 export const share_view_one_time_notice = /** @type {((inputs?: Share_View_One_Time_NoticeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_View_One_Time_NoticeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_view_one_time_notice(inputs)
-	return es_share_view_one_time_notice(inputs)
+	if (locale === "es") return es_share_view_one_time_notice(inputs)
+	return en_share_view_one_time_notice(inputs)
 });

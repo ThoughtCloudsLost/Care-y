@@ -24,6 +24,6 @@ const es_admin_org_general_client_blob_error = /** @type {(inputs: Admin_Org_Gen
 */
 export const admin_org_general_client_blob_error = /** @type {((inputs?: Admin_Org_General_Client_Blob_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Org_General_Client_Blob_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_org_general_client_blob_error(inputs)
-	return es_admin_org_general_client_blob_error(inputs)
+	if (locale === "es") return es_admin_org_general_client_blob_error(inputs)
+	return en_admin_org_general_client_blob_error(inputs)
 });

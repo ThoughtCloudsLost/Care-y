@@ -24,6 +24,6 @@ const es_demo_fs_exit = /** @type {(inputs: Demo_Fs_ExitInputs) => LocalizedStri
 */
 export const demo_fs_exit = /** @type {((inputs?: Demo_Fs_ExitInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Fs_ExitInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_fs_exit(inputs)
-	return es_demo_fs_exit(inputs)
+	if (locale === "es") return es_demo_fs_exit(inputs)
+	return en_demo_fs_exit(inputs)
 });

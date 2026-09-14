@@ -24,6 +24,6 @@ const es_password_common_pattern = /** @type {(inputs: Password_Common_PatternIn
 */
 export const password_common_pattern = /** @type {((inputs?: Password_Common_PatternInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Password_Common_PatternInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_password_common_pattern(inputs)
-	return es_password_common_pattern(inputs)
+	if (locale === "es") return es_password_common_pattern(inputs)
+	return en_password_common_pattern(inputs)
 });

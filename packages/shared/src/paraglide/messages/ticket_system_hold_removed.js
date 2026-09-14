@@ -24,6 +24,6 @@ const es_ticket_system_hold_removed = /** @type {(inputs: Ticket_System_Hold_Rem
 */
 export const ticket_system_hold_removed = /** @type {((inputs?: Ticket_System_Hold_RemovedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_System_Hold_RemovedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_system_hold_removed(inputs)
-	return es_ticket_system_hold_removed(inputs)
+	if (locale === "es") return es_ticket_system_hold_removed(inputs)
+	return en_ticket_system_hold_removed(inputs)
 });

@@ -24,6 +24,6 @@ const es_intake_forms_config_label_required = /** @type {(inputs: Intake_Forms_C
 */
 export const intake_forms_config_label_required = /** @type {((inputs?: Intake_Forms_Config_Label_RequiredInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Label_RequiredInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_config_label_required(inputs)
-	return es_intake_forms_config_label_required(inputs)
+	if (locale === "es") return es_intake_forms_config_label_required(inputs)
+	return en_intake_forms_config_label_required(inputs)
 });

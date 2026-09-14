@@ -24,6 +24,6 @@ const es_library_select_mode = /** @type {(inputs: Library_Select_ModeInputs) =>
 */
 export const library_select_mode = /** @type {((inputs?: Library_Select_ModeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Select_ModeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_select_mode(inputs)
-	return es_library_select_mode(inputs)
+	if (locale === "es") return es_library_select_mode(inputs)
+	return en_library_select_mode(inputs)
 });

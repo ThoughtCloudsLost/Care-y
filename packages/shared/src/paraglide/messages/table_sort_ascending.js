@@ -24,6 +24,6 @@ const es_table_sort_ascending = /** @type {(inputs: Table_Sort_AscendingInputs) 
 */
 export const table_sort_ascending = /** @type {((inputs?: Table_Sort_AscendingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Table_Sort_AscendingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_table_sort_ascending(inputs)
-	return es_table_sort_ascending(inputs)
+	if (locale === "es") return es_table_sort_ascending(inputs)
+	return en_table_sort_ascending(inputs)
 });

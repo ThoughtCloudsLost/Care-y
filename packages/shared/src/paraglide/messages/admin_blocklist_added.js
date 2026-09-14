@@ -24,6 +24,6 @@ const es_admin_blocklist_added = /** @type {(inputs: Admin_Blocklist_AddedInputs
 */
 export const admin_blocklist_added = /** @type {((inputs?: Admin_Blocklist_AddedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Blocklist_AddedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_blocklist_added(inputs)
-	return es_admin_blocklist_added(inputs)
+	if (locale === "es") return es_admin_blocklist_added(inputs)
+	return en_admin_blocklist_added(inputs)
 });

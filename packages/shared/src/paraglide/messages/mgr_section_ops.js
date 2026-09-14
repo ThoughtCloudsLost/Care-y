@@ -24,6 +24,6 @@ const es_mgr_section_ops = /** @type {(inputs: Mgr_Section_OpsInputs) => Localiz
 */
 export const mgr_section_ops = /** @type {((inputs?: Mgr_Section_OpsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Section_OpsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_mgr_section_ops(inputs)
-	return es_mgr_section_ops(inputs)
+	if (locale === "es") return es_mgr_section_ops(inputs)
+	return en_mgr_section_ops(inputs)
 });

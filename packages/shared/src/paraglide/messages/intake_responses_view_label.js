@@ -24,6 +24,6 @@ const es_intake_responses_view_label = /** @type {(inputs: Intake_Responses_View
 */
 export const intake_responses_view_label = /** @type {((inputs?: Intake_Responses_View_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Responses_View_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_responses_view_label(inputs)
-	return es_intake_responses_view_label(inputs)
+	if (locale === "es") return es_intake_responses_view_label(inputs)
+	return en_intake_responses_view_label(inputs)
 });

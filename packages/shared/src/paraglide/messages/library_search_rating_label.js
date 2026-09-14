@@ -24,6 +24,6 @@ const es_library_search_rating_label = /** @type {(inputs: Library_Search_Rating
 */
 export const library_search_rating_label = /** @type {((inputs: Library_Search_Rating_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Search_Rating_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_search_rating_label(inputs)
-	return es_library_search_rating_label(inputs)
+	if (locale === "es") return es_library_search_rating_label(inputs)
+	return en_library_search_rating_label(inputs)
 });

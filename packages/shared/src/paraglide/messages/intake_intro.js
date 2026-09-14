@@ -24,6 +24,6 @@ const es_intake_intro = /** @type {(inputs: Intake_IntroInputs) => LocalizedStri
 */
 export const intake_intro = /** @type {((inputs?: Intake_IntroInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_IntroInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_intro(inputs)
-	return es_intake_intro(inputs)
+	if (locale === "es") return es_intake_intro(inputs)
+	return en_intake_intro(inputs)
 });

@@ -24,6 +24,6 @@ const es_error_merge_undo_locked = /** @type {(inputs: Error_Merge_Undo_LockedIn
 */
 export const error_merge_undo_locked = /** @type {((inputs?: Error_Merge_Undo_LockedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Merge_Undo_LockedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_merge_undo_locked(inputs)
-	return es_error_merge_undo_locked(inputs)
+	if (locale === "es") return es_error_merge_undo_locked(inputs)
+	return en_error_merge_undo_locked(inputs)
 });

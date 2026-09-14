@@ -24,6 +24,6 @@ const es_portal_dead_link_title = /** @type {(inputs: Portal_Dead_Link_TitleInpu
 */
 export const portal_dead_link_title = /** @type {((inputs?: Portal_Dead_Link_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Dead_Link_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_portal_dead_link_title(inputs)
-	return es_portal_dead_link_title(inputs)
+	if (locale === "es") return es_portal_dead_link_title(inputs)
+	return en_portal_dead_link_title(inputs)
 });

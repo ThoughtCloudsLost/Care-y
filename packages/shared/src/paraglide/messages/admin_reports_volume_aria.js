@@ -24,6 +24,6 @@ const es_admin_reports_volume_aria = /** @type {(inputs: Admin_Reports_Volume_Ar
 */
 export const admin_reports_volume_aria = /** @type {((inputs: Admin_Reports_Volume_AriaInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Reports_Volume_AriaInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_reports_volume_aria(inputs)
-	return es_admin_reports_volume_aria(inputs)
+	if (locale === "es") return es_admin_reports_volume_aria(inputs)
+	return en_admin_reports_volume_aria(inputs)
 });

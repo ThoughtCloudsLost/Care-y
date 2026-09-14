@@ -24,6 +24,6 @@ const es_settings_light_mode = /** @type {(inputs: Settings_Light_ModeInputs) =>
 */
 export const settings_light_mode = /** @type {((inputs?: Settings_Light_ModeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Light_ModeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_settings_light_mode(inputs)
-	return es_settings_light_mode(inputs)
+	if (locale === "es") return es_settings_light_mode(inputs)
+	return en_settings_light_mode(inputs)
 });

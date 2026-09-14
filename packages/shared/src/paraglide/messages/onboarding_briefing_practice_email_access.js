@@ -24,6 +24,6 @@ const es_onboarding_briefing_practice_email_access = /** @type {(inputs: Onboard
 */
 export const onboarding_briefing_practice_email_access = /** @type {((inputs?: Onboarding_Briefing_Practice_Email_AccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Practice_Email_AccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_briefing_practice_email_access(inputs)
-	return es_onboarding_briefing_practice_email_access(inputs)
+	if (locale === "es") return es_onboarding_briefing_practice_email_access(inputs)
+	return en_onboarding_briefing_practice_email_access(inputs)
 });

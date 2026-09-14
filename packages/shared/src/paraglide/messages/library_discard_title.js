@@ -24,6 +24,6 @@ const es_library_discard_title = /** @type {(inputs: Library_Discard_TitleInputs
 */
 export const library_discard_title = /** @type {((inputs?: Library_Discard_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Discard_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_discard_title(inputs)
-	return es_library_discard_title(inputs)
+	if (locale === "es") return es_library_discard_title(inputs)
+	return en_library_discard_title(inputs)
 });

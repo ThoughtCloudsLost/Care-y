@@ -24,6 +24,6 @@ const es_onboarding_telephony_skip_description = /** @type {(inputs: Onboarding_
 */
 export const onboarding_telephony_skip_description = /** @type {((inputs?: Onboarding_Telephony_Skip_DescriptionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Telephony_Skip_DescriptionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_telephony_skip_description(inputs)
-	return es_onboarding_telephony_skip_description(inputs)
+	if (locale === "es") return es_onboarding_telephony_skip_description(inputs)
+	return en_onboarding_telephony_skip_description(inputs)
 });

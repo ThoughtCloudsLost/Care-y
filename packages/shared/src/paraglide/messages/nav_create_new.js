@@ -24,6 +24,6 @@ const es_nav_create_new = /** @type {(inputs: Nav_Create_NewInputs) => Localized
 */
 export const nav_create_new = /** @type {((inputs?: Nav_Create_NewInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Nav_Create_NewInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_nav_create_new(inputs)
-	return es_nav_create_new(inputs)
+	if (locale === "es") return es_nav_create_new(inputs)
+	return en_nav_create_new(inputs)
 });

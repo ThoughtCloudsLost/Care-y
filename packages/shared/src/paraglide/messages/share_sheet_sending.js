@@ -24,6 +24,6 @@ const es_share_sheet_sending = /** @type {(inputs: Share_Sheet_SendingInputs) =>
 */
 export const share_sheet_sending = /** @type {((inputs?: Share_Sheet_SendingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Sheet_SendingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_share_sheet_sending(inputs)
-	return es_share_sheet_sending(inputs)
+	if (locale === "es") return es_share_sheet_sending(inputs)
+	return en_share_sheet_sending(inputs)
 });

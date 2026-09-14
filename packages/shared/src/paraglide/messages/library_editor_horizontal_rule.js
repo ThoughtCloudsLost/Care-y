@@ -24,6 +24,6 @@ const es_library_editor_horizontal_rule = /** @type {(inputs: Library_Editor_Hor
 */
 export const library_editor_horizontal_rule = /** @type {((inputs?: Library_Editor_Horizontal_RuleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_Horizontal_RuleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_editor_horizontal_rule(inputs)
-	return es_library_editor_horizontal_rule(inputs)
+	if (locale === "es") return es_library_editor_horizontal_rule(inputs)
+	return en_library_editor_horizontal_rule(inputs)
 });

@@ -24,6 +24,6 @@ const es_intake_avail_day_sunday = /** @type {(inputs: Intake_Avail_Day_SundayIn
 */
 export const intake_avail_day_sunday = /** @type {((inputs?: Intake_Avail_Day_SundayInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Day_SundayInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_avail_day_sunday(inputs)
-	return es_intake_avail_day_sunday(inputs)
+	if (locale === "es") return es_intake_avail_day_sunday(inputs)
+	return en_intake_avail_day_sunday(inputs)
 });

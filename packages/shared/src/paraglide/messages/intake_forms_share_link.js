@@ -24,6 +24,6 @@ const es_intake_forms_share_link = /** @type {(inputs: Intake_Forms_Share_LinkIn
 */
 export const intake_forms_share_link = /** @type {((inputs?: Intake_Forms_Share_LinkInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Share_LinkInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_share_link(inputs)
-	return es_intake_forms_share_link(inputs)
+	if (locale === "es") return es_intake_forms_share_link(inputs)
+	return en_intake_forms_share_link(inputs)
 });

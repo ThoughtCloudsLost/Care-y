@@ -24,6 +24,6 @@ const es_demo_flow_toggle_short = /** @type {(inputs: Demo_Flow_Toggle_ShortInpu
 */
 export const demo_flow_toggle_short = /** @type {((inputs?: Demo_Flow_Toggle_ShortInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Toggle_ShortInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_toggle_short(inputs)
-	return es_demo_flow_toggle_short(inputs)
+	if (locale === "es") return es_demo_flow_toggle_short(inputs)
+	return en_demo_flow_toggle_short(inputs)
 });

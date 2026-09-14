@@ -24,6 +24,6 @@ const es_admin_invite_pending_revoke_body = /** @type {(inputs: Admin_Invite_Pen
 */
 export const admin_invite_pending_revoke_body = /** @type {((inputs?: Admin_Invite_Pending_Revoke_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Pending_Revoke_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_invite_pending_revoke_body(inputs)
-	return es_admin_invite_pending_revoke_body(inputs)
+	if (locale === "es") return es_admin_invite_pending_revoke_body(inputs)
+	return en_admin_invite_pending_revoke_body(inputs)
 });

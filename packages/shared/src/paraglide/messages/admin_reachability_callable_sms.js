@@ -24,6 +24,6 @@ const es_admin_reachability_callable_sms = /** @type {(inputs: Admin_Reachabilit
 */
 export const admin_reachability_callable_sms = /** @type {((inputs?: Admin_Reachability_Callable_SmsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Reachability_Callable_SmsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_reachability_callable_sms(inputs)
-	return es_admin_reachability_callable_sms(inputs)
+	if (locale === "es") return es_admin_reachability_callable_sms(inputs)
+	return en_admin_reachability_callable_sms(inputs)
 });

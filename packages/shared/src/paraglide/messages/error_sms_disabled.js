@@ -24,6 +24,6 @@ const es_error_sms_disabled = /** @type {(inputs: Error_Sms_DisabledInputs) => L
 */
 export const error_sms_disabled = /** @type {((inputs?: Error_Sms_DisabledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Sms_DisabledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_error_sms_disabled(inputs)
-	return es_error_sms_disabled(inputs)
+	if (locale === "es") return es_error_sms_disabled(inputs)
+	return en_error_sms_disabled(inputs)
 });

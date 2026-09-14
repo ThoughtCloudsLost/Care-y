@@ -24,6 +24,6 @@ const es_admin_branding_sheet_title = /** @type {(inputs: Admin_Branding_Sheet_T
 */
 export const admin_branding_sheet_title = /** @type {((inputs?: Admin_Branding_Sheet_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Sheet_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_branding_sheet_title(inputs)
-	return es_admin_branding_sheet_title(inputs)
+	if (locale === "es") return es_admin_branding_sheet_title(inputs)
+	return en_admin_branding_sheet_title(inputs)
 });

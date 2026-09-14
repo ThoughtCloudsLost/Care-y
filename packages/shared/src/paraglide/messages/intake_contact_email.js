@@ -24,6 +24,6 @@ const es_intake_contact_email = /** @type {(inputs: Intake_Contact_EmailInputs) 
 */
 export const intake_contact_email = /** @type {((inputs?: Intake_Contact_EmailInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Contact_EmailInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_contact_email(inputs)
-	return es_intake_contact_email(inputs)
+	if (locale === "es") return es_intake_contact_email(inputs)
+	return en_intake_contact_email(inputs)
 });

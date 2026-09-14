@@ -24,6 +24,6 @@ const es_intake_success_body = /** @type {(inputs: Intake_Success_BodyInputs) =>
 */
 export const intake_success_body = /** @type {((inputs?: Intake_Success_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Success_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_success_body(inputs)
-	return es_intake_success_body(inputs)
+	if (locale === "es") return es_intake_success_body(inputs)
+	return en_intake_success_body(inputs)
 });

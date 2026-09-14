@@ -24,6 +24,6 @@ const es_admin_keys_export_button = /** @type {(inputs: Admin_Keys_Export_Button
 */
 export const admin_keys_export_button = /** @type {((inputs?: Admin_Keys_Export_ButtonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Keys_Export_ButtonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_admin_keys_export_button(inputs)
-	return es_admin_keys_export_button(inputs)
+	if (locale === "es") return es_admin_keys_export_button(inputs)
+	return en_admin_keys_export_button(inputs)
 });

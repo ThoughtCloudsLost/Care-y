@@ -24,6 +24,6 @@ const es_intake_forms_preview_empty_subtitle = /** @type {(inputs: Intake_Forms_
 */
 export const intake_forms_preview_empty_subtitle = /** @type {((inputs?: Intake_Forms_Preview_Empty_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Preview_Empty_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_intake_forms_preview_empty_subtitle(inputs)
-	return es_intake_forms_preview_empty_subtitle(inputs)
+	if (locale === "es") return es_intake_forms_preview_empty_subtitle(inputs)
+	return en_intake_forms_preview_empty_subtitle(inputs)
 });

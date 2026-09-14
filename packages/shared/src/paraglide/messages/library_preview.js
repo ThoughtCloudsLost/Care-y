@@ -24,6 +24,6 @@ const es_library_preview = /** @type {(inputs: Library_PreviewInputs) => Localiz
 */
 export const library_preview = /** @type {((inputs?: Library_PreviewInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_PreviewInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_preview(inputs)
-	return es_library_preview(inputs)
+	if (locale === "es") return es_library_preview(inputs)
+	return en_library_preview(inputs)
 });

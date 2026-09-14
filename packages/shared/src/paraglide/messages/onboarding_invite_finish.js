@@ -24,6 +24,6 @@ const es_onboarding_invite_finish = /** @type {(inputs: Onboarding_Invite_Finish
 */
 export const onboarding_invite_finish = /** @type {((inputs?: Onboarding_Invite_FinishInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Invite_FinishInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_onboarding_invite_finish(inputs)
-	return es_onboarding_invite_finish(inputs)
+	if (locale === "es") return es_onboarding_invite_finish(inputs)
+	return en_onboarding_invite_finish(inputs)
 });

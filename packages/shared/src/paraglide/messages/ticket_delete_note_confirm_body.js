@@ -24,6 +24,6 @@ const es_ticket_delete_note_confirm_body = /** @type {(inputs: Ticket_Delete_Not
 */
 export const ticket_delete_note_confirm_body = /** @type {((inputs?: Ticket_Delete_Note_Confirm_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Delete_Note_Confirm_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_ticket_delete_note_confirm_body(inputs)
-	return es_ticket_delete_note_confirm_body(inputs)
+	if (locale === "es") return es_ticket_delete_note_confirm_body(inputs)
+	return en_ticket_delete_note_confirm_body(inputs)
 });

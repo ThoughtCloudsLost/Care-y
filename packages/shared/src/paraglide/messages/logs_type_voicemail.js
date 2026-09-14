@@ -24,6 +24,6 @@ const es_logs_type_voicemail = /** @type {(inputs: Logs_Type_VoicemailInputs) =>
 */
 export const logs_type_voicemail = /** @type {((inputs?: Logs_Type_VoicemailInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Logs_Type_VoicemailInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_logs_type_voicemail(inputs)
-	return es_logs_type_voicemail(inputs)
+	if (locale === "es") return es_logs_type_voicemail(inputs)
+	return en_logs_type_voicemail(inputs)
 });

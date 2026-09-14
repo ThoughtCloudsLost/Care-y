@@ -24,6 +24,6 @@ const es_library_filter_category = /** @type {(inputs: Library_Filter_CategoryIn
 */
 export const library_filter_category = /** @type {((inputs?: Library_Filter_CategoryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Filter_CategoryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_library_filter_category(inputs)
-	return es_library_filter_category(inputs)
+	if (locale === "es") return es_library_filter_category(inputs)
+	return en_library_filter_category(inputs)
 });

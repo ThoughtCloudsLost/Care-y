@@ -24,6 +24,6 @@ const es_demo_flow_slice_expand = /** @type {(inputs: Demo_Flow_Slice_ExpandInpu
 */
 export const demo_flow_slice_expand = /** @type {((inputs?: Demo_Flow_Slice_ExpandInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Slice_ExpandInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
-	if (locale === "en") return en_demo_flow_slice_expand(inputs)
-	return es_demo_flow_slice_expand(inputs)
+	if (locale === "es") return es_demo_flow_slice_expand(inputs)
+	return en_demo_flow_slice_expand(inputs)
 });
