@@ -1,10 +1,17 @@
 import { validateEnv, EnvValidationError } from "./env.js";
 import { extractErrorMessage } from "./errors.js";
+import { configureTrustedProxies } from "./http/request-utils.js";
 
 // Validate env vars before anything else. Exits with a clear error if
 // required vars are missing or malformed (same fail-fast as original).
 try {
-  validateEnv();
+  const env = validateEnv();
+  // Hand the trusted-proxy list to the request helpers here rather than
+  // letting them read the environment themselves. They are bundled into
+  // the demo, which runs the routers in a browser, so the environment
+  // read has to stay on this side. Applied before the listener starts,
+  // so no request can be served with an unconfigured list.
+  configureTrustedProxies(env.TRUSTED_PROXIES);
 } catch (err) {
   if (err instanceof EnvValidationError) {
     console.error(err.message);
