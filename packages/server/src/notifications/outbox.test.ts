@@ -853,8 +853,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         await drainOutbox(testDb.db, deps);
 
-        expect(dispatch).toHaveBeenCalledOnce();
-        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+        // Scoped to this test's ticket: drainOutbox processes every
+        // eligible row, so a leftover from an earlier test would add a
+        // call this test never enqueued.
+        const callsForTicket = dispatch.mock.calls.filter(
+          (call) => (call as unknown[])[5] === ticketId,
+        );
+        expect(callsForTicket).toHaveLength(1);
+        const recipientList = (callsForTicket[0] as unknown[])[7] as {
           recipients: readonly { userId: UserId; source: string }[];
         };
 
@@ -914,8 +920,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         await drainOutbox(testDb.db, deps);
 
-        expect(dispatch).toHaveBeenCalledOnce();
-        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+        // Scoped to this test's ticket: drainOutbox processes every
+        // eligible row, so a leftover from an earlier test would add a
+        // call this test never enqueued.
+        const callsForTicket = dispatch.mock.calls.filter(
+          (call) => (call as unknown[])[5] === ticketId,
+        );
+        expect(callsForTicket).toHaveLength(1);
+        const recipientList = (callsForTicket[0] as unknown[])[7] as {
           recipients: readonly { userId: UserId; source: string }[];
         };
 
@@ -979,7 +991,21 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where("ticket_id", "=", ticketId)
           .where("escalation_rule_id", "=", ruleId)
           .executeTakeFirst();
-        expect(row?.status).toBe("completed");
+        // Asserted as an object so a failure reports attempt_count and
+        // last_error alongside the status. A row left pending with
+        // attempt_count 0 and no error was never claimed; one with
+        // attempt_count 1 and an error was claimed and retried. The two
+        // have different causes and the status alone cannot tell them
+        // apart.
+        expect({
+          status: row?.status,
+          attemptCount: row?.attempt_count,
+          lastError: row?.last_error,
+        }).toEqual({
+          status: "completed",
+          attemptCount: 1,
+          lastError: null,
+        });
       });
 
       it("falls back to getQueueWatcherIds when action is notify_managers but getManagerIds dep is absent", async () => {
@@ -1021,8 +1047,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         await drainOutbox(testDb.db, deps);
 
-        expect(dispatch).toHaveBeenCalledOnce();
-        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+        // Scoped to this test's ticket rather than asserting a global
+        // call count. drainOutbox processes every eligible row, so a row
+        // left behind by an earlier test would dispatch here too and a
+        // bare toHaveBeenCalledOnce would fail on work this test never
+        // enqueued. The claim under test is that THIS ticket dispatched.
+        const callsForTicket = dispatch.mock.calls.filter(
+          (call) => (call as unknown[])[5] === ticketId,
+        );
+        expect(callsForTicket).toHaveLength(1);
+        const recipientList = (callsForTicket[0] as unknown[])[7] as {
           recipients: readonly { userId: UserId; source: string }[];
         };
 
