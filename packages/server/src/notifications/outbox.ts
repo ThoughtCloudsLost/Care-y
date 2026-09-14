@@ -314,20 +314,25 @@ export async function drainOutbox(
           .where("id", "=", row.id)
           .execute();
       } else {
-        // Schedule retry with exponential backoff
+        // Schedule retry with exponential backoff. The delay is added to
+        // the database clock rather than this process's, because the claim
+        // above compares next_attempt_at against now() in SQL. Building the
+        // value from Date.now() would put the write and the read on
+        // different clocks, which is the same defect the claim was fixed
+        // for, and the backoff base is short enough (30s) for ordinary
+        // skew to matter.
         const delayMs = computeBackoffMs(
           "exponential",
           nextAttempt,
           BACKOFF_BASE_MS,
         );
-        const nextAttemptAt = new Date(Date.now() + delayMs);
 
         await db
           .updateTable("notification_outbox")
           .set({
             status: "pending",
             attempt_count: nextAttempt,
-            next_attempt_at: nextAttemptAt,
+            next_attempt_at: sql<Date>`now() + make_interval(secs => ${delayMs / 1000})`,
             last_error: errorMsg,
           })
           .where("id", "=", row.id)
