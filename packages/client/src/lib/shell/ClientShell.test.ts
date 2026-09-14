@@ -143,6 +143,8 @@ if (typeof Element.prototype.animate !== "function") {
 
 const { default: ClientShellHarness } =
   await import("./test-helpers/ClientShellHarness.svelte");
+const { default: ClientShellRevokeHarness } =
+  await import("./test-helpers/ClientShellRevokeHarness.svelte");
 
 // --- Helpers ---
 
@@ -388,6 +390,44 @@ describe("ClientShell", () => {
       expect(window.location.replace).toHaveBeenCalledWith(
         "https://fresh.example.org/",
       );
+    });
+
+    it("forwards onrevoke from the registered page state to QuickExit", async () => {
+      Object.defineProperty(window, "location", {
+        value: { replace: vi.fn() },
+        writable: true,
+      });
+
+      const onrevoke = vi.fn();
+      const ondestroy = vi.fn();
+
+      const { container } = render(ClientShellRevokeHarness, {
+        props: { ondestroy, onrevoke },
+      });
+
+      await fireEvent.click(
+        container.querySelector("[data-testid='quick-exit']") as HTMLElement,
+      );
+
+      expect(onrevoke).toHaveBeenCalledOnce();
+      expect(ondestroy).toHaveBeenCalledOnce();
+    });
+
+    it("does not fail when no page has registered onrevoke", async () => {
+      Object.defineProperty(window, "location", {
+        value: { replace: vi.fn() },
+        writable: true,
+      });
+
+      const { container } = renderShell();
+
+      // Default harness registers no page state, so onrevoke is absent.
+      // Clicking quick exit must not throw.
+      await fireEvent.click(
+        container.querySelector("[data-testid='quick-exit']") as HTMLElement,
+      );
+
+      expect(window.location.replace).toHaveBeenCalled();
     });
   });
 

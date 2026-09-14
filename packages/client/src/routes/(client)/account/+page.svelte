@@ -669,6 +669,22 @@
     });
   }
 
+  /**
+   * Revoke the server-side cookie session via sendBeacon. Called by
+   * quick exit before navigation, so the request must survive the page
+   * unload. sendBeacon defaults Content-Type to text/plain, but tRPC v11
+   * rejects anything other than application/json with a 415. A Blob with
+   * an explicit type sidesteps that.
+   */
+  function revokeSession(): void {
+    if (typeof navigator.sendBeacon === "function") {
+      navigator.sendBeacon(
+        "/trpc/clientPortal.accountLogout",
+        new Blob(["{}"], { type: "application/json" }),
+      );
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Web chat hint (session-once)
   // ---------------------------------------------------------------------------
@@ -852,6 +868,7 @@
   $effect(() => {
     shellContainer.current = {
       ondestroy: destroySession,
+      onrevoke: revokeSession,
       safeUrl,
       actions: drawerActions,
       // Chat shape only once signed in; the login screen scrolls normally.

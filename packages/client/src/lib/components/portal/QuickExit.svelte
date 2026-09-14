@@ -11,8 +11,9 @@
 
   Activation (tap or Escape anywhere on the page):
     1. Scrub document.title
-    2. ondestroy() (zero seed, auth, private key)
-    3. location.replace(safeUrl) (no back-button entry)
+    2. onrevoke() if supplied (beacon to server logout endpoint)
+    3. ondestroy() (zero seed, auth, private key)
+    4. location.replace(safeUrl) (no back-button entry)
 
   Escape fires even while the drawer is open. The overlay stack also
   handles Escape (capture phase, attached when an overlay opens), but
@@ -32,14 +33,21 @@
   interface QuickExitProps {
     /** Zero all key material before navigation. No-op on pages without a session. */
     ondestroy: () => void;
+    /**
+     * Revoke the server-side session (beacon to the logout endpoint).
+     * Optional: only the account page supplies this. Other client surfaces
+     * have no cookie session and leave it unset.
+     */
+    onrevoke?: () => void;
     /** Org-configured safe URL, or the default weather site. */
     safeUrl: string;
   }
 
-  let { ondestroy, safeUrl }: QuickExitProps = $props();
+  let { ondestroy, onrevoke, safeUrl }: QuickExitProps = $props();
 
   function exit(): void {
     document.title = " ";
+    onrevoke?.();
     ondestroy();
     location.replace(safeUrl);
   }

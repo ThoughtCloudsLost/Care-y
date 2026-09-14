@@ -80,6 +80,11 @@
     shell?.ondestroy();
   }
 
+  /** Revoke the server session if the active page registered a callback. */
+  function revokeSession(): void {
+    shell?.onrevoke?.();
+  }
+
   const brandingQuery = createPublicBrandingQuery();
   const branding = $derived(brandingQuery.data ?? null);
 
@@ -201,7 +206,7 @@
 {/snippet}
 
 {#snippet quickExit()}
-  <QuickExit ondestroy={destroySession} {safeUrl} />
+  <QuickExit ondestroy={destroySession} onrevoke={revokeSession} {safeUrl} />
 {/snippet}
 
 <style>
