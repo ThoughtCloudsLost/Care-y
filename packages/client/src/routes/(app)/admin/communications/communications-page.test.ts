@@ -17,10 +17,10 @@ import type * as SectionScrollNavNS from "$lib/components/SectionScrollNav.svelt
 import type * as PathsNS from "$app/paths";
 import type * as NavigationNS from "$app/navigation";
 import type * as UseSectionScrollNS from "$lib/components/useSectionScroll.svelte.js";
+import { Permission } from "@care-y/shared";
+import { setPermissions, getMockPermissions } from "$mocks/permissions.js";
 
 // --- Controllable mock state ---
-
-let mockPermissions = new Set<string>();
 
 const mockGoto = vi.fn();
 
@@ -41,7 +41,7 @@ vi.mock("$app/paths", async (importOriginal) => ({
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ContextNS2>()),
-  getCurrentPermissions: () => () => mockPermissions,
+  getCurrentPermissions: () => getMockPermissions,
 }));
 vi.mock(
   "$lib/shell/context.js",
@@ -162,16 +162,10 @@ if (typeof Element.prototype.animate !== "function") {
   }) as unknown as Element["animate"];
 }
 
-// --- Helpers ---
-
-function setPermissions(...perms: string[]): void {
-  mockPermissions = new Set(perms);
-}
-
 // --- Setup ---
 
 beforeEach(() => {
-  mockPermissions = new Set(["manage_infrastructure"]);
+  setPermissions(Permission.MANAGE_INFRASTRUCTURE);
   mockNavbarCtx.current = undefined;
   mockGoto.mockClear();
 });
@@ -196,7 +190,7 @@ describe("Communications page", () => {
     });
 
     it("does not redirect when user has MANAGE_INFRASTRUCTURE", () => {
-      setPermissions("manage_infrastructure");
+      setPermissions(Permission.MANAGE_INFRASTRUCTURE);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
@@ -212,12 +206,12 @@ describe("Communications page", () => {
       expect(container.querySelector("#section-greetings")).toBeTruthy();
       expect(container.querySelector("#section-templates")).toBeTruthy();
       expect(container.querySelector("#section-quarantine")).toBeTruthy();
-      // Channel policy is gated on MANAGE_ORG_CONFIG, not infrastructure.
+      // Channel policy is gated on MANAGE_CHANNEL_ROUTING, not infrastructure.
       expect(container.querySelector("#section-channel-policy")).toBeNull();
     });
 
-    it("renders the channel policy anchor with MANAGE_ORG_CONFIG", () => {
-      setPermissions("manage_org_config");
+    it("renders the channel policy anchor with MANAGE_CHANNEL_ROUTING", () => {
+      setPermissions(Permission.MANAGE_CHANNEL_ROUTING);
       const { container } = renderPage();
 
       expect(container.querySelector("#section-channel-policy")).toBeTruthy();
@@ -225,7 +219,7 @@ describe("Communications page", () => {
     });
 
     it("renders no sections when user lacks MANAGE_INFRASTRUCTURE", () => {
-      setPermissions("manage_users");
+      setPermissions(Permission.MANAGE_USERS);
       const { container } = renderPage();
 
       expect(container.querySelector("#section-telephony")).toBeNull();

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_RolesInputs */
 
 const en_permission_manage_roles = /** @type {(inputs: Permission_Manage_RolesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Manage roles`)
+	return /** @type {LocalizedString} */ (`Set what each role can do`)
 };
 
 const es_permission_manage_roles = /** @type {(inputs: Permission_Manage_RolesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Administrar roles`)
+	return /** @type {LocalizedString} */ (`Definir lo que puede hacer cada rol`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Manage roles" |
+* | "Set what each role can do" |
 *
 * @param {Permission_Manage_RolesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

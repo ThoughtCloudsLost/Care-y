@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Manage queues" |
+* | "Create and change queues" |
 *
 * @param {Permission_Manage_QueuesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

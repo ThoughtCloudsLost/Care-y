@@ -126,15 +126,15 @@ const ADMIN_PERMISSIONS = new Set([
   Permission.MANAGE_USERS,
   Permission.MANAGE_QUEUES,
   Permission.MANAGE_INFRASTRUCTURE,
-  Permission.MANAGE_ORG_CONFIG,
+  Permission.MANAGE_ORG_IDENTITY,
   Permission.MANAGE_KEYS,
   Permission.VIEW_REPORTS,
   Permission.MANAGE_ROLES,
 ]);
 
 const VOLUNTEER_PERMISSIONS = new Set([
-  Permission.VIEW_TICKETS,
-  Permission.MANAGE_OWN_TICKETS,
+  Permission.VIEW_CASES,
+  Permission.WRITE_CASE_NOTES,
   Permission.VIEW_KNOWLEDGE_BASE,
 ]);
 

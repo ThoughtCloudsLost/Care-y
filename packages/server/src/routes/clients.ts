@@ -1,33 +1,29 @@
 /**
  * Client management tRPC router.
  *
- * Role requirements per procedure.
- * The list, get, suggestDuplicates, mergeScanData, getDismissals, and
- * putDismissals queries run on viewClientsProcedure (VIEW_CLIENTS,
- * manager and above). updateAlias and backfillAliasHash run on
- * adminProcedure. updatePhone and updateEmail run on volunteerProcedure
- * with a custom access check. backfillPhoneMatchHash runs on
- * viewClientsProcedure.
+ * Reading client records needs VIEW_CLIENTS. Renaming one needs
+ * EDIT_CLIENT_ALIAS. Changing a phone number or email needs either
+ * EDIT_CLIENT_CONTACT or an existing case with that client, checked in
+ * the handler.
  *
  * Client aliases are org-key encrypted. The server stores ciphertext and a
  * browser-supplied blind index hash. Phone values returned to the client
  * are always server-formatted strings, never Buffers. OPS_SECRETS_KEY is
- * server-only. Admin gets the full formatted number, manager gets the
- * masked form (***1234). The server decrypts, formats, and zeros the
- * Buffer immediately.
+ * server-only. Holders of VIEW_CLIENT_PII get the full formatted number,
+ * everyone else gets the masked form (***1234). The server decrypts,
+ * formats, and zeros the Buffer immediately.
  */
 
 import {
   router,
-  volunteerProcedure,
-  adminProcedure,
+  viewCasesProcedure,
   authed2faProcedure,
   requireRole,
   withErrorWrapping,
 } from "../trpc/trpc.js";
+import { hasPermissionForOrg } from "../auth/roles.js";
 import {
   Permission,
-  RoleId,
   ErrorCode,
   clientListInputSchema,
   clientGetInputSchema,
@@ -47,12 +43,7 @@ import type { EmailService } from "../clients/email-service.js";
 import type { DismissalService } from "../clients/dismissal-service.js";
 import type { MergeScanService } from "../clients/merge-scan-service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
-import {
-  maskPhone,
-  formatPhone,
-  maskEmail,
-  formatEmail,
-} from "../utils/sql.js";
+import { phoneForViewer, emailForViewer } from "../utils/sql.js";
 import { ForbiddenError, InternalError } from "../errors.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
@@ -96,58 +87,17 @@ export interface ClientRouterDeps {
 }
 
 // ---------------------------------------------------------------------------
-// Phone formatting helpers
+// Procedures
 // ---------------------------------------------------------------------------
 
-/**
- * Decrypts an OPS-encrypted phone Buffer and returns a formatted string
- * based on the caller's role. Admin sees the full formatted number;
- * manager sees masked (***1234). The plaintext Buffer is zeroed by
- * formatPhone/maskPhone in their finally blocks.
- */
-function phoneForRole(
-  encryptedNumber: Buffer | null,
-  roleId: string,
-  encryptor: FieldEncryptor,
-): string | null {
-  if (!encryptedNumber) return null;
-  const buf = encryptor.decryptToBuffer(encryptedNumber);
-  if (roleId === RoleId.ADMIN) {
-    return formatPhone(buf);
-  }
-  return maskPhone(buf);
-}
-
-// ---------------------------------------------------------------------------
-// Email formatting helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Decrypts an OPS-encrypted email Buffer and returns a formatted string
- * based on the caller's role. Admin sees the full address; manager sees a
- * masked form (first char + *** + @domain). Delegates to the shared
- * formatEmail/maskEmail helpers in utils/sql.ts, which zero the Buffer.
- */
-function emailForRole(
-  encryptedAddress: Buffer | null,
-  roleId: string,
-  encryptor: FieldEncryptor,
-): string | null {
-  if (!encryptedAddress) return null;
-  // care-y-ignore-next-line server-no-decrypt -- OPS_SECRETS_KEY operational encryption (ADR-005); mirrors phoneForRole above
-  const buf = encryptor.decryptToBuffer(encryptedAddress);
-  if (roleId === RoleId.ADMIN) {
-    return formatEmail(buf);
-  }
-  return maskEmail(buf);
-}
-
-// ---------------------------------------------------------------------------
-// Procedure: VIEW_CLIENTS (manager+)
-// ---------------------------------------------------------------------------
-
+/** Reading client records, with contact details masked unless VIEW_CLIENT_PII. */
 const viewClientsProcedure = authed2faProcedure.use(
   requireRole(Permission.VIEW_CLIENTS),
+);
+
+/** Changing the name a client is listed under. */
+const editClientAliasProcedure = authed2faProcedure.use(
+  requireRole(Permission.EDIT_CLIENT_ALIAS),
 );
 
 // ---------------------------------------------------------------------------
@@ -168,20 +118,27 @@ export function createClientRouter(deps: ClientRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
         const records = await svc.list(input);
+        // Resolved once for the page, not once per row.
+        const unmasked = await hasPermissionForOrg(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          ctx.user.roleId,
+          Permission.VIEW_CLIENT_PII,
+        );
 
         return records.map((r) => ({
           id: r.id,
           encryptedAlias: r.encryptedAlias.toString("base64url"),
           aliasHash: r.aliasHash,
-          phone: phoneForRole(
+          phone: phoneForViewer(
             r.encryptedNumber,
-            ctx.user.roleId,
+            unmasked,
             deps.fieldEncryptor,
           ),
           phoneMatchHash: r.phoneMatchHash,
-          email: emailForRole(
+          email: emailForViewer(
             r.encryptedAddress,
-            ctx.user.roleId,
+            unmasked,
             deps.fieldEncryptor,
           ),
           emailMatchHash: r.emailMatchHash,
@@ -200,20 +157,26 @@ export function createClientRouter(deps: ClientRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
         const record = await svc.getById(input.clientId);
+        const unmasked = await hasPermissionForOrg(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          ctx.user.roleId,
+          Permission.VIEW_CLIENT_PII,
+        );
 
         return {
           id: record.id,
           encryptedAlias: record.encryptedAlias.toString("base64url"),
           aliasHash: record.aliasHash,
-          phone: phoneForRole(
+          phone: phoneForViewer(
             record.encryptedNumber,
-            ctx.user.roleId,
+            unmasked,
             deps.fieldEncryptor,
           ),
           phoneHash: record.phoneHash,
-          email: emailForRole(
+          email: emailForViewer(
             record.encryptedAddress,
-            ctx.user.roleId,
+            unmasked,
             deps.fieldEncryptor,
           ),
           emailHash: record.emailHash,
@@ -249,24 +212,26 @@ export function createClientRouter(deps: ClientRouterDeps) {
      * Takes base64 ciphertext + blind index hash from the browser.
      * Throws CONFLICT on uniqueness violation.
      */
-    updateAlias: adminProcedure.input(updateAliasInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
-        await svc.updateAlias(
-          input.clientId,
-          input.encryptedAlias,
-          input.aliasHash,
-          ctx.user.id,
-        );
-      }),
-    ),
+    updateAlias: editClientAliasProcedure
+      .input(updateAliasInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
+          await svc.updateAlias(
+            input.clientId,
+            input.encryptedAlias,
+            input.aliasHash,
+            ctx.user.id,
+          );
+        }),
+      ),
 
     /**
      * Lazy backfill of alias_hash for webhook-created rows.
      * Idempotent: writes only when the row's hash is currently NULL.
      * Surfaces conflict rather than swallowing it.
      */
-    backfillAliasHash: volunteerProcedure
+    backfillAliasHash: authed2faProcedure
       .input(backfillAliasHashInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -295,16 +260,20 @@ export function createClientRouter(deps: ClientRouterDeps) {
     /**
      * Phone number update.
      *
-     * Uses volunteerProcedure (lowest role) with a custom in-handler
-     * access check. The caller must be admin, manager, or assigned to at
-     * least one ticket belonging to the target client.
+     * Runs on case access with a custom in-handler check. The caller needs
+     * EDIT_CLIENT_CONTACT, or an existing case with the target client.
      */
-    updatePhone: volunteerProcedure.input(updatePhoneInputSchema).mutation(
+    updatePhone: viewCasesProcedure.input(updatePhoneInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        // Custom access check: admin and manager pass unconditionally.
-        // Volunteers must be assigned to at least one ticket for this client.
-        const roleId = ctx.user.roleId;
-        if (roleId !== RoleId.ADMIN && roleId !== RoleId.MANAGER) {
+        // EDIT_CLIENT_CONTACT reaches any client. Without it, the caller
+        // needs an existing case with this one.
+        const anyClient = await hasPermissionForOrg(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          ctx.user.roleId,
+          Permission.EDIT_CLIENT_CONTACT,
+        );
+        if (!anyClient) {
           const assigned = await deps.isAssignedToClientTicket(
             ctx.org.tenantDb,
             input.clientId,
@@ -515,17 +484,20 @@ export function createClientRouter(deps: ClientRouterDeps) {
     /**
      * Email address update.
      *
-     * Uses volunteerProcedure (lowest role) with a custom in-handler
-     * access check mirroring updatePhone. The caller must be admin,
-     * manager, or assigned to at least one ticket belonging to the target
-     * client.
+     * Runs on case access with the same in-handler check as updatePhone:
+     * EDIT_CLIENT_CONTACT, or an existing case with the target client.
      */
-    updateEmail: volunteerProcedure.input(updateEmailInputSchema).mutation(
+    updateEmail: viewCasesProcedure.input(updateEmailInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        // Custom access check: admin and manager pass unconditionally.
-        // Volunteers must be assigned to at least one ticket for this client.
-        const roleId = ctx.user.roleId;
-        if (roleId !== RoleId.ADMIN && roleId !== RoleId.MANAGER) {
+        // Mirrors updatePhone: EDIT_CLIENT_CONTACT reaches any client,
+        // otherwise the caller needs an existing case with this one.
+        const anyClient = await hasPermissionForOrg(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          ctx.user.roleId,
+          Permission.EDIT_CLIENT_CONTACT,
+        );
+        if (!anyClient) {
           const assigned = await deps.isAssignedToClientTicket(
             ctx.org.tenantDb,
             input.clientId,

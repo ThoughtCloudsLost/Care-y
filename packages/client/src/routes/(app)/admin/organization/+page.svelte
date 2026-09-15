@@ -31,21 +31,21 @@
       id: "general",
       label: m.admin_tab_org_general,
       icon: BuildingComplex,
-      permission: Permission.MANAGE_ORG_CONFIG,
+      permission: Permission.MANAGE_ORG_IDENTITY,
       component: OrgGeneralSection,
     },
     {
       id: "branding",
       label: m.admin_tab_branding,
       icon: Palette,
-      permission: Permission.MANAGE_ORG_CONFIG,
+      permission: Permission.MANAGE_ORG_IDENTITY,
       component: BrandingSection,
     },
     {
       id: "terminology",
       label: m.admin_tab_terminology,
       icon: Languages,
-      permission: Permission.MANAGE_ORG_CONFIG,
+      permission: Permission.MANAGE_ORG_IDENTITY,
       component: TerminologySection,
     },
     {
@@ -59,14 +59,14 @@
       id: "retention",
       label: m.admin_tab_retention,
       icon: Shredder,
-      permission: Permission.MANAGE_ORG_CONFIG,
+      permission: Permission.MANAGE_RETENTION,
       component: RetentionSection,
     },
     {
       id: "note-types",
       label: m.admin_tab_note_types,
       icon: ClipboardPenLine,
-      permission: Permission.MANAGE_ORG_CONFIG,
+      permission: Permission.MANAGE_NOTE_TYPES,
       component: NoteTypesSection,
     },
     {
@@ -75,7 +75,7 @@
       id: "intake-forms",
       label: m.intake_forms_title,
       icon: ClipboardList,
-      permission: Permission.MANAGE_QUEUES,
+      permission: Permission.MANAGE_INTAKE_FORMS,
       component: IntakeFormsSection,
       props: {
         onopenform: (formId: string) =>

@@ -138,6 +138,8 @@ function makeDeps(
 
   return {
     platformDb: noDomainPlatformDb,
+    // Admin by default: these specs exercise channel policy, not authorization.
+    hasPermission: vi.fn().mockResolvedValue(true),
     replyTokenHasher: { hash: vi.fn().mockReturnValue("hash") },
     replyTokenCache: new Map<string, string>(),
     getProvider: vi.fn().mockResolvedValue(provider),

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "View own shifts" |
+* | "See your own shifts" |
 *
 * @param {Permission_View_Own_ShiftsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

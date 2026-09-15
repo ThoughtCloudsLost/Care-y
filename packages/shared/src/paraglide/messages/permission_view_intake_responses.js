@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_View_Intake_ResponsesInputs */
 
 const en_permission_view_intake_responses = /** @type {(inputs: Permission_View_Intake_ResponsesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`View intake form responses`)
+	return /** @type {LocalizedString} */ (`Read intake submissions from every queue`)
 };
 
 const es_permission_view_intake_responses = /** @type {(inputs: Permission_View_Intake_ResponsesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ver respuestas de formularios de ingreso`)
+	return /** @type {LocalizedString} */ (`Leer respuestas de ingreso de todas las colas`)
 };
 
 /**
 * | output |
 * | --- |
-* | "View intake form responses" |
+* | "Read intake submissions from every queue" |
 *
 * @param {Permission_View_Intake_ResponsesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -32,9 +32,10 @@ import type * as SubNavbarFilterLayoutNS from "$lib/shell/SubNavbarFilterLayout.
 import type * as AuditLogSectionNS from "$lib/components/admin/AuditLogSection.svelte";
 import type * as CallLogSectionNS from "$lib/components/admin/CallLogSection.svelte";
 
-// --- Controllable mock state ---
+import { Permission } from "@care-y/shared";
+import { setPermissions, getMockPermissions } from "$mocks/permissions.js";
 
-let mockPermissions = new Set<string>();
+// --- Controllable mock state ---
 
 let mockPageUrl = new URL("http://localhost/admin/logs");
 
@@ -77,7 +78,7 @@ vi.mock("$app/paths", async (importOriginal) => ({
 // outside a live component tree.
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof CryptoContext>()),
-  getCurrentPermissions: () => () => mockPermissions,
+  getCurrentPermissions: () => getMockPermissions,
   getOrgDecryptCache: () => ({
     decrypt: vi.fn().mockReturnValue(null),
     get: vi.fn().mockReturnValue(undefined),
@@ -332,10 +333,6 @@ if (typeof Element.prototype.animate !== "function") {
 
 // --- Helpers ---
 
-function setPermissions(...perms: string[]): void {
-  mockPermissions = new Set(perms);
-}
-
 function setUrl(path: string): void {
   mockPageUrl = new URL(`http://localhost${path}`);
 }
@@ -343,7 +340,7 @@ function setUrl(path: string): void {
 // --- Setup ---
 
 beforeEach(() => {
-  mockPermissions = new Set(["view_reports", "manage_users"]);
+  setPermissions(Permission.VIEW_REPORTS, Permission.MANAGE_USERS);
   mockPageUrl = new URL("http://localhost/admin/logs");
   mockNavbarCtx.current = undefined;
   mockGoto.mockClear();
@@ -370,21 +367,21 @@ describe("Logs page", () => {
     });
 
     it("redirects when user has only MANAGE_USERS (no VIEW_REPORTS)", () => {
-      setPermissions("manage_users");
+      setPermissions(Permission.MANAGE_USERS);
       renderPage();
 
       expect(mockGoto).toHaveBeenCalledWith("/");
     });
 
     it("does not redirect when user has VIEW_REPORTS", () => {
-      setPermissions("view_reports");
+      setPermissions(Permission.VIEW_REPORTS);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
     });
 
     it("does not redirect when user has both VIEW_REPORTS and MANAGE_USERS", () => {
-      setPermissions("view_reports", "manage_users");
+      setPermissions(Permission.VIEW_REPORTS, Permission.MANAGE_USERS);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
@@ -418,7 +415,7 @@ describe("Logs page", () => {
 
   describe("audit tab gating", () => {
     it("hides audit tab when user has VIEW_REPORTS but not MANAGE_USERS", () => {
-      setPermissions("view_reports");
+      setPermissions(Permission.VIEW_REPORTS);
       renderPage();
 
       // Only calls panel is rendered
@@ -428,7 +425,7 @@ describe("Logs page", () => {
     });
 
     it("forces ?tab=audit back to calls when user lacks MANAGE_USERS", () => {
-      setPermissions("view_reports");
+      setPermissions(Permission.VIEW_REPORTS);
       setUrl("/admin/logs?tab=audit");
       renderPage();
 
@@ -437,7 +434,7 @@ describe("Logs page", () => {
     });
 
     it("shows audit tab when user has both VIEW_REPORTS and MANAGE_USERS", () => {
-      setPermissions("view_reports", "manage_users");
+      setPermissions(Permission.VIEW_REPORTS, Permission.MANAGE_USERS);
       setUrl("/admin/logs?tab=audit");
       renderPage();
 

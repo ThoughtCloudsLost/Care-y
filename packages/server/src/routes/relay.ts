@@ -53,6 +53,7 @@ import type { PlatformDatabase } from "../db/types.js";
 import type {
   OrgId,
   OrgSchema,
+  UserId,
   E164,
   TicketId,
   CallSid,
@@ -60,6 +61,7 @@ import type {
   StoredProviderId,
 } from "@care-y/shared";
 import {
+  Permission,
   EMAIL_RELAY_LIMITS,
   phoneMatchHashSchema,
   orgSchemaNameSchema,
@@ -79,6 +81,16 @@ import { buildEmailEnvelope } from "../email/email-relay-service.js";
 export interface RelayHandlerDeps {
   readonly getProvider: (orgId: OrgId) => Promise<TelephonyProvider | null>;
   readonly getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>;
+  /**
+   * Whether a user holds a permission in this org. Injected rather than
+   * imported so the handler stays testable with a simple mock, matching
+   * how every other collaborator here is supplied.
+   */
+  readonly hasPermission: (
+    orgSchema: OrgSchema,
+    userId: UserId,
+    permission: Permission,
+  ) => Promise<boolean>;
   readonly createConsultantRepo: (
     db: Kysely<TenantDatabase>,
   ) => ConsultantRepository;
@@ -179,6 +191,23 @@ export interface RelayHandler {
   cleanup(): void;
 }
 
+/**
+ * The permission each relay endpoint requires. Reaching a client is split
+ * per channel, so an org can staff messaging and calling separately.
+ *
+ * `/relay/consultant-verify` is absent on purpose: it verifies the
+ * caller's own phone number and reaches no client. `/relay/phone-lookup`
+ * reveals a client's number without contacting anyone, so it takes the
+ * key that governs seeing contact details.
+ */
+const RELAY_PERMISSIONS: ReadonlyMap<string, Permission> = new Map([
+  ["/relay/sms", Permission.SEND_CLIENT_SMS],
+  ["/relay/email", Permission.SEND_CLIENT_EMAIL],
+  ["/relay/call", Permission.CALL_CLIENTS],
+  ["/relay/webrtc-token", Permission.CALL_CLIENTS],
+  ["/relay/phone-lookup", Permission.VIEW_CLIENT_PII],
+]);
+
 export function createRelayHandler(deps: RelayHandlerDeps): RelayHandler {
   const cleanupTimer = startPendingClientCleanup(deps.pendingClients);
 
@@ -215,6 +244,22 @@ export function createRelayHandler(deps: RelayHandlerDeps): RelayHandler {
       return;
     }
     const session = authResult.session;
+
+    // Authorization runs here, before any handler reads the body. Relay
+    // bodies carry plaintext the handlers zero after forwarding, so a
+    // refused caller must never reach code that has decrypted anything.
+    const needed = RELAY_PERMISSIONS.get(url);
+    if (needed !== undefined) {
+      const allowed = await deps.hasPermission(
+        session.orgSchema,
+        session.userId,
+        needed,
+      );
+      if (!allowed) {
+        sendRelayError(res, 403, "FORBIDDEN");
+        return;
+      }
+    }
 
     if (url === "/relay/sms") {
       await handleSmsRelay(req, res, session, deps);

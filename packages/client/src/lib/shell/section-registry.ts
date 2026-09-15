@@ -68,13 +68,13 @@ export const ORGANIZATION_SECTIONS: readonly ScrollSection[] = [
 ];
 
 const ORGANIZATION_PERMISSIONS: ReadonlyMap<string, Permission> = new Map([
-  ["general", Permission.MANAGE_ORG_CONFIG],
-  ["branding", Permission.MANAGE_ORG_CONFIG],
-  ["terminology", Permission.MANAGE_ORG_CONFIG],
+  ["general", Permission.MANAGE_ORG_IDENTITY],
+  ["branding", Permission.MANAGE_ORG_IDENTITY],
+  ["terminology", Permission.MANAGE_ORG_IDENTITY],
   ["keys", Permission.MANAGE_KEYS],
-  ["retention", Permission.MANAGE_ORG_CONFIG],
-  ["note-types", Permission.MANAGE_ORG_CONFIG],
-  ["intake-forms", Permission.MANAGE_QUEUES],
+  ["retention", Permission.MANAGE_RETENTION],
+  ["note-types", Permission.MANAGE_NOTE_TYPES],
+  ["intake-forms", Permission.MANAGE_INTAKE_FORMS],
 ]);
 
 export const COMMUNICATIONS_SECTIONS: readonly ScrollSection[] = [
@@ -84,6 +84,14 @@ export const COMMUNICATIONS_SECTIONS: readonly ScrollSection[] = [
   { id: "blocklist", label: m.admin_tab_blocklist, icon: Ban },
   { id: "quarantine", label: m.admin_tab_quarantine, icon: PhoneMissed },
 ];
+
+const COMMUNICATIONS_PERMISSIONS: ReadonlyMap<string, Permission> = new Map([
+  ["telephony", Permission.MANAGE_INFRASTRUCTURE],
+  ["greetings", Permission.WRITE_CALL_GREETINGS],
+  ["templates", Permission.WRITE_AUTOMATIC_REPLIES],
+  ["blocklist", Permission.MANAGE_INFRASTRUCTURE],
+  ["quarantine", Permission.MANAGE_VOICEMAIL_QUARANTINE],
+]);
 
 export const MANAGER_SECTIONS: readonly ScrollSection[] = [
   { id: "role", label: m.mgr_section_role, icon: ClipboardList },
@@ -272,13 +280,12 @@ export const SECTION_REGISTRY: readonly RouteSectionEntry[] = [
     pageLabel: m.admin_org_title,
     getSections: () => ORGANIZATION_SECTIONS,
     sectionPermissions: ORGANIZATION_PERMISSIONS,
-    pagePermission: Permission.MANAGE_ORG_CONFIG,
   },
   {
     route: "/admin/communications",
     pageLabel: m.admin_comms_title,
     getSections: () => COMMUNICATIONS_SECTIONS,
-    pagePermission: Permission.MANAGE_INFRASTRUCTURE,
+    sectionPermissions: COMMUNICATIONS_PERMISSIONS,
   },
   {
     route: "/admin/manager",
@@ -314,8 +321,19 @@ export function getHoverSections(
   const entry = findRegistryEntry(pathname);
   if (entry == null) return [];
 
-  // Page-level gate
-  if (entry.pagePermission != null && !permissions.has(entry.pagePermission)) {
+  // Page-level gate. Where a page declares per-section keys, holding any
+  // one of them reaches the page: its sections now sit behind several
+  // different keys, so a single page key would hide the page from someone
+  // who holds exactly one of them.
+  if (entry.sectionPermissions != null) {
+    const holdsAny = [...entry.sectionPermissions.values()].some((p) =>
+      permissions.has(p),
+    );
+    if (!holdsAny) return [];
+  } else if (
+    entry.pagePermission != null &&
+    !permissions.has(entry.pagePermission)
+  ) {
     return [];
   }
 

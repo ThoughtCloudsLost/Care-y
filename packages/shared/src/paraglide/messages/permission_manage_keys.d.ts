@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Manage encryption keys" |
+* | "Look after the encryption keys" |
 *
 * @param {Permission_Manage_KeysInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

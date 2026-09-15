@@ -24,6 +24,8 @@ import type * as TrpcNS from "$lib/trpc/index.js";
 import type * as SvelteQueryNS from "@tanstack/svelte-query";
 import type * as PathsNS from "$app/paths";
 import type * as NavigationNS from "$app/navigation";
+import { Permission } from "@care-y/shared";
+import { setPermissions, getMockPermissions } from "$mocks/permissions.js";
 
 // IntersectionObserver stub for DecryptPlaceholder; ResizeObserver stub for
 // TicketPreview's fit-mode clipping (both absent in jsdom).
@@ -54,14 +56,6 @@ vi.stubGlobal(
 );
 
 // --- Controllable mock state ---
-
-let mockPermissions = new Set([
-  "view_tickets",
-  "manage_own_tickets",
-  "view_knowledge_base",
-  "edit_knowledge_base",
-  "view_own_shifts",
-]);
 
 const mockGoto = vi.fn();
 
@@ -221,7 +215,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
     size: 0,
   }),
   getCurrentUserId: () => () => "user-001",
-  getCurrentPermissions: () => () => mockPermissions,
+  getCurrentPermissions: () => getMockPermissions,
 }));
 
 // Stable container so tests can reach the navbar actions the page registers.
@@ -320,13 +314,13 @@ if (typeof Element.prototype.animate !== "function") {
 
 // --- Setup ---
 
-const DEFAULT_PERMISSIONS = new Set([
-  "view_tickets",
-  "manage_own_tickets",
-  "view_knowledge_base",
-  "edit_knowledge_base",
-  "view_own_shifts",
-]);
+const DEFAULT_PERMISSIONS: readonly Permission[] = [
+  Permission.VIEW_CASES,
+  Permission.WRITE_CASE_NOTES,
+  Permission.VIEW_KNOWLEDGE_BASE,
+  Permission.EDIT_KNOWLEDGE_BASE,
+  Permission.VIEW_OWN_SHIFTS,
+];
 
 beforeEach(() => {
   queryCallIndex = 0;
@@ -338,7 +332,7 @@ beforeEach(() => {
     data: [],
   });
   mockGoto.mockClear();
-  mockPermissions = new Set(DEFAULT_PERMISSIONS);
+  setPermissions(...DEFAULT_PERMISSIONS);
 });
 
 afterEach(cleanup);
@@ -489,12 +483,12 @@ describe("Dashboard page", () => {
 
 describe("Dashboard create popover", () => {
   function renderWithAdminPermissions(): void {
-    mockPermissions = new Set([
+    setPermissions(
       ...DEFAULT_PERMISSIONS,
-      "manage_queues",
-      "manage_users",
-      "manage_knowledge_base_categories",
-    ]);
+      Permission.MANAGE_QUEUES,
+      Permission.MANAGE_USERS,
+      Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
+    );
     infiniteTicketsState = ticketsInfinite({
       isLoading: false,
       isError: false,

@@ -1,3 +1,5 @@
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+
 /**
  * Escapes SQL LIKE/ILIKE wildcards so user input cannot
  * alter the pattern semantics of a LIKE clause.
@@ -68,4 +70,39 @@ export function formatEmail(emailBuf: Buffer): string {
   } finally {
     emailBuf.fill(0);
   }
+}
+
+/**
+ * Decrypts an OPS-encrypted phone Buffer and returns either the full
+ * formatted number or the masked form. The plaintext Buffer is zeroed by
+ * formatPhone/maskPhone in their finally blocks.
+ *
+ * `unmasked` comes from VIEW_CLIENT_PII. Resolve it once per request
+ * rather than once per row: a permission lookup can hit the database on a
+ * cache miss, and a list of a hundred clients would pay for each one.
+ */
+export function phoneForViewer(
+  encryptedNumber: Buffer | null,
+  unmasked: boolean,
+  encryptor: FieldEncryptor,
+): string | null {
+  if (!encryptedNumber) return null;
+  const buf = encryptor.decryptToBuffer(encryptedNumber);
+  return unmasked ? formatPhone(buf) : maskPhone(buf);
+}
+
+/**
+ * Decrypts an OPS-encrypted email Buffer and returns either the full
+ * address or the masked form. Mirrors phoneForViewer. `unmasked` comes
+ * from VIEW_CLIENT_PII the same way.
+ */
+export function emailForViewer(
+  encryptedAddress: Buffer | null,
+  unmasked: boolean,
+  encryptor: FieldEncryptor,
+): string | null {
+  if (!encryptedAddress) return null;
+  // care-y-ignore-next-line server-no-decrypt -- OPS_SECRETS_KEY operational encryption (ADR-005); mirrors phoneForViewer above
+  const buf = encryptor.decryptToBuffer(encryptedAddress);
+  return unmasked ? formatEmail(buf) : maskEmail(buf);
 }

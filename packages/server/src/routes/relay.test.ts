@@ -263,6 +263,7 @@ function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
     replyTokenCache: new Map<string, string>(),
     getProvider: vi.fn().mockResolvedValue(mockProvider()),
     getTenantDb: vi.fn().mockReturnValue(mockTenantDbWithChannelPolicy()),
+    hasPermission: vi.fn().mockResolvedValue(true),
     createConsultantRepo: vi.fn().mockReturnValue(
       mockConsultantRepo({
         isVerified: true,

@@ -98,10 +98,10 @@ function makeCtxWithRole(roleId: RoleIdValue): Context {
 // requireRole is chained after authed2faProcedure (the real usage pattern).
 const testRouter = router({
   viewTickets: authed2faProcedure
-    .use(requireRole(Permission.VIEW_TICKETS))
+    .use(requireRole(Permission.VIEW_CASES))
     .query(() => "tickets-visible"),
   manageUsers: authed2faProcedure
-    .use(requireRole(Permission.MANAGE_USERS))
+    .use(requireRole(Permission.VIEW_CLIENTS))
     .query(() => "users-managed"),
   manageRoles: authed2faProcedure
     .use(requireRole(Permission.MANAGE_ROLES))
@@ -112,13 +112,13 @@ const factory = createCallerFactory(testRouter);
 
 describe("requireRole", () => {
   describe("when user has the required permission", () => {
-    it("allows volunteer to VIEW_TICKETS", async () => {
+    it("allows volunteer to VIEW_CASES", async () => {
       const caller = factory(makeCtxWithRole(RoleId.VOLUNTEER));
       const result = await caller.viewTickets();
       expect(result).toBe("tickets-visible");
     });
 
-    it("allows manager to MANAGE_USERS", async () => {
+    it("allows manager to VIEW_CLIENTS", async () => {
       const caller = factory(makeCtxWithRole(RoleId.MANAGER));
       const result = await caller.manageUsers();
       expect(result).toBe("users-managed");
@@ -130,7 +130,7 @@ describe("requireRole", () => {
       expect(result).toBe("roles-managed");
     });
 
-    it("allows all three roles to VIEW_TICKETS (inherited permission)", async () => {
+    it("allows all three roles to VIEW_CASES (inherited permission)", async () => {
       for (const roleId of [RoleId.VOLUNTEER, RoleId.MANAGER, RoleId.ADMIN]) {
         const caller = factory(makeCtxWithRole(roleId));
         const result = await caller.viewTickets();
@@ -150,7 +150,7 @@ describe("requireRole", () => {
       await expectTrpcError(caller.manageRoles(), "FORBIDDEN");
     });
 
-    it("rejects volunteer from MANAGE_USERS with FORBIDDEN", async () => {
+    it("rejects volunteer from VIEW_CLIENTS with FORBIDDEN", async () => {
       const caller = factory(makeCtxWithRole(RoleId.VOLUNTEER));
       await expectTrpcError(caller.manageUsers(), "FORBIDDEN");
     });

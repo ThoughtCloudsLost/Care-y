@@ -42,9 +42,7 @@ describe("getVisibleDestinations", () => {
     const permissions = new Set([Permission.MANAGE_USERS]);
     const visible = getVisibleDestinations(permissions);
 
-    // The audit log destination gates on MANAGE_USERS too, mirroring the
-    // manager-level server endpoint behind it.
-    expect(visible.map((d) => d.id)).toEqual(["users", "audit-log"]);
+    expect(visible.map((d) => d.id)).toEqual(["users"]);
   });
 
   it("returns multiple destinations for overlapping permissions", () => {
@@ -54,16 +52,11 @@ describe("getVisibleDestinations", () => {
     ]);
     const visible = getVisibleDestinations(permissions);
 
-    expect(visible.map((d) => d.id)).toEqual([
-      "users",
-      "queues",
-      "intake-forms",
-      "audit-log",
-    ]);
+    expect(visible.map((d) => d.id)).toEqual(["users", "queues"]);
   });
 
   it("returns empty array when no permissions match", () => {
-    const permissions = new Set([Permission.VIEW_TICKETS]);
+    const permissions = new Set([Permission.VIEW_CASES]);
     const visible = getVisibleDestinations(permissions);
 
     expect(visible).toEqual([]);
@@ -73,11 +66,18 @@ describe("getVisibleDestinations", () => {
     const permissions = new Set([
       Permission.MANAGE_USERS,
       Permission.MANAGE_QUEUES,
-      Permission.MANAGE_INFRASTRUCTURE,
-      Permission.MANAGE_ORG_CONFIG,
-      Permission.MANAGE_KEYS,
-      Permission.VIEW_REPORTS,
       Permission.VIEW_CLIENTS,
+      Permission.MANAGE_INFRASTRUCTURE,
+      Permission.WRITE_CALL_GREETINGS,
+      Permission.WRITE_AUTOMATIC_REPLIES,
+      Permission.MANAGE_VOICEMAIL_QUARANTINE,
+      Permission.MANAGE_ORG_IDENTITY,
+      Permission.MANAGE_KEYS,
+      Permission.MANAGE_RETENTION,
+      Permission.MANAGE_NOTE_TYPES,
+      Permission.MANAGE_INTAKE_FORMS,
+      Permission.VIEW_REPORTS,
+      Permission.VIEW_AUDIT_LOG,
     ]);
     const visible = getVisibleDestinations(permissions);
 
@@ -127,8 +127,9 @@ describe("groupDestinations", () => {
 });
 
 describe("communications destinations", () => {
-  const commsIds = ["telephony", "blocklist", "greetings", "sms-templates"];
-  const commsDests = ADMIN_DESTINATIONS.filter((d) => commsIds.includes(d.id));
+  const commsDests = ADMIN_DESTINATIONS.filter(
+    (d) => d.group === "communications",
+  );
 
   it("all communications destinations are implemented", () => {
     for (const dest of commsDests) {
@@ -162,9 +163,16 @@ describe("communications destinations", () => {
     expect(templates?.path).toBe("/admin/communications?tab=templates");
   });
 
-  it("all communications destinations require MANAGE_INFRASTRUCTURE", () => {
+  it("each communications destination uses the correct permission", () => {
+    const expected: Record<string, Permission> = {
+      telephony: Permission.MANAGE_INFRASTRUCTURE,
+      greetings: Permission.WRITE_CALL_GREETINGS,
+      "sms-templates": Permission.WRITE_AUTOMATIC_REPLIES,
+      blocklist: Permission.MANAGE_INFRASTRUCTURE,
+      quarantine: Permission.MANAGE_VOICEMAIL_QUARANTINE,
+    };
     for (const dest of commsDests) {
-      expect(dest.permission).toBe(Permission.MANAGE_INFRASTRUCTURE);
+      expect(dest.permission).toBe(expected[dest.id]);
     }
   });
 });

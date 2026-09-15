@@ -35,7 +35,7 @@
   const hasAdminAccess = $derived(
     permissions.has(Permission.MANAGE_USERS) ||
       permissions.has(Permission.MANAGE_KEYS) ||
-      permissions.has(Permission.MANAGE_ORG_CONFIG),
+      permissions.has(Permission.MANAGE_ORG_IDENTITY),
   );
 
   $effect(() => {

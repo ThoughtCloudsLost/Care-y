@@ -203,42 +203,57 @@ export function requireRole(permission: Permission) {
   });
 }
 
-/** Procedure that requires org + auth + 2FA + at least volunteer-level permissions. */
-export const volunteerProcedure = authed2faProcedure.use(
-  requireRole(Permission.VIEW_TICKETS),
+/**
+ * Shared permission procedures.
+ *
+ * Only keys used by more than one route file live here. A key gating a
+ * single router is defined in that router beside the operations it
+ * guards, with `authed2faProcedure.use(requireRole(Permission.X))`, so
+ * the gate stays next to what it gates.
+ *
+ * Procedures are named for the permission they check, not for a role.
+ * The old volunteer/manager/admin names implied a hierarchy the model
+ * does not have: an org can grant any key to any role except the three
+ * in LOCKED_PERMISSIONS.
+ */
+
+/** Reading a case: its notes, history, participants, and search. */
+export const viewCasesProcedure = authed2faProcedure.use(
+  requireRole(Permission.VIEW_CASES),
 );
 
-/** Procedure that requires org + auth + 2FA + manager-level permissions. */
-export const managerProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_USERS),
-);
-
-/** Procedure that requires org + auth + 2FA + admin-level permissions. */
+/** Role administration: the permission matrix itself, and role assignment. */
 export const adminProcedure = authed2faProcedure.use(
   requireRole(Permission.MANAGE_ROLES),
 );
 
-/** Procedure that requires org + auth + 2FA + knowledge base read access. */
+/** Key custody: org key rotation, per-user wraps, OPRF admin evaluation. */
+export const keyCustodyProcedure = authed2faProcedure.use(
+  requireRole(Permission.MANAGE_KEYS),
+);
+
+/** Reading knowledge base articles. */
 export const kbReadProcedure = authed2faProcedure.use(
   requireRole(Permission.VIEW_KNOWLEDGE_BASE),
 );
 
-/** Procedure that requires org + auth + 2FA + knowledge base edit access. */
+/** Writing and editing knowledge base articles. */
 export const kbEditProcedure = authed2faProcedure.use(
   requireRole(Permission.EDIT_KNOWLEDGE_BASE),
 );
 
-/** Procedure that requires org + auth + 2FA + knowledge base category management. */
+/** Knowledge base taxonomy: creating, renaming and reordering categories. */
 export const kbCategoryProcedure = authed2faProcedure.use(
   requireRole(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES),
 );
 
-/** Procedure that requires org + auth + 2FA + content moderation access. */
-export const moderationProcedure = authed2faProcedure.use(
-  requireRole(Permission.MODERATE_CONTENT),
+/** Deleting a knowledge base article. The KB has no authorship check;
+ *  contrast DELETE_OTHERS_NOTES, where the service does branch on author. */
+export const kbDeleteProcedure = authed2faProcedure.use(
+  requireRole(Permission.DELETE_KNOWLEDGE_BASE_ARTICLES),
 );
 
-/** Procedure that requires org + auth + 2FA + infrastructure management access. */
+/** Telephony provider configuration: credentials, numbers, routing. */
 export const infrastructureProcedure = authed2faProcedure.use(
   requireRole(Permission.MANAGE_INFRASTRUCTURE),
 );

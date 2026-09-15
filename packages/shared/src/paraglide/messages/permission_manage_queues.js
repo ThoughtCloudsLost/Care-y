@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_QueuesInputs */
 
 const en_permission_manage_queues = /** @type {(inputs: Permission_Manage_QueuesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Manage queues`)
+	return /** @type {LocalizedString} */ (`Create and change queues`)
 };
 
 const es_permission_manage_queues = /** @type {(inputs: Permission_Manage_QueuesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Administrar colas`)
+	return /** @type {LocalizedString} */ (`Crear y modificar colas`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Manage queues" |
+* | "Create and change queues" |
 *
 * @param {Permission_Manage_QueuesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

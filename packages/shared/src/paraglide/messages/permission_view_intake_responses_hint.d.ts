@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Grants decrypt capability for intake submissions across all queues. High-trust permission." |
+* | "Granting this decides who receives decryption keys when a form is submitted. Revoking it later does not take back keys already issued." |
 *
 * @param {Permission_View_Intake_Responses_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

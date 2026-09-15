@@ -6,7 +6,7 @@
  * Article create, article update and attachment upload run on
  * kbEditProcedure. Reads of categories, articles and attachments run on
  * kbReadProcedure, as does voting. Article deletion runs on
- * moderationProcedure.
+ * kbDeleteProcedure.
  *
  * All encrypted fields arrive as base64 strings from the client (org key encryption).
  * The router converts to Buffer before passing to the service layer.
@@ -20,7 +20,7 @@ import {
   kbReadProcedure,
   kbEditProcedure,
   kbCategoryProcedure,
-  moderationProcedure,
+  kbDeleteProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import type { OrgContext } from "../trpc/context.js";
@@ -231,7 +231,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       }),
     ),
 
-    deleteItem: moderationProcedure
+    deleteItem: kbDeleteProcedure
       .input(z.object({ itemId: kbItemIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {

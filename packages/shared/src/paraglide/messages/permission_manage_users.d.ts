@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Manage users" |
+* | "Manage people's accounts" |
 *
 * @param {Permission_Manage_UsersInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

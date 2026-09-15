@@ -248,7 +248,7 @@
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
   const canModerateContent = $derived(
-    permissions.has(Permission.MODERATE_CONTENT),
+    permissions.has(Permission.DELETE_OTHERS_NOTES),
   );
 
   // --- Data Loading ---

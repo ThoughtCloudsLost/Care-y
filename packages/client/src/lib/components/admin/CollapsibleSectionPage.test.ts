@@ -10,10 +10,7 @@ import type * as CollapsibleSectionNS from "$lib/components/dashboard/Collapsibl
 import type * as SectionScrollNavNS from "$lib/components/SectionScrollNav.svelte";
 import type * as NavigationNS from "$app/navigation";
 import type * as UseSectionScrollNS from "$lib/components/useSectionScroll.svelte.js";
-
-// --- Controllable mock state ---
-
-let mockPermissions = new Set<string>();
+import { setPermissions, getMockPermissions } from "$mocks/permissions.js";
 
 // --- Mocks ---
 
@@ -24,7 +21,7 @@ vi.mock("$app/navigation", async (importOriginal) => ({
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ContextNS2>()),
-  getCurrentPermissions: () => () => mockPermissions,
+  getCurrentPermissions: () => getMockPermissions,
 }));
 vi.mock(
   "$lib/shell/context.js",
@@ -80,19 +77,10 @@ const StubComponent = (
   await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
 ).default;
 
-// --- Helpers ---
-
-function setPermissions(...perms: string[]): void {
-  mockPermissions = new Set(perms);
-}
-
 // --- Setup ---
 
 beforeEach(() => {
-  mockPermissions = new Set([
-    Permission.MANAGE_ORG_CONFIG,
-    Permission.MANAGE_KEYS,
-  ]);
+  setPermissions(Permission.MANAGE_ORG_IDENTITY, Permission.MANAGE_KEYS);
   mockNavbarCtx.current = undefined;
 });
 
@@ -105,7 +93,7 @@ const SECTIONS = [
     id: "alpha",
     label: () => "Alpha",
     icon: {} as never,
-    permission: Permission.MANAGE_ORG_CONFIG,
+    permission: Permission.MANAGE_ORG_IDENTITY,
     component: StubComponent,
   },
   {
@@ -135,7 +123,7 @@ function renderCSP(title = "Test Page"): ReturnType<typeof render> {
 describe("CollapsibleSectionPage", () => {
   describe("section rendering", () => {
     it("renders only sections matching current permissions", () => {
-      setPermissions(Permission.MANAGE_ORG_CONFIG);
+      setPermissions(Permission.MANAGE_ORG_IDENTITY);
       const { container } = renderCSP();
 
       expect(container.querySelector("#section-alpha")).toBeTruthy();
@@ -145,7 +133,7 @@ describe("CollapsibleSectionPage", () => {
 
     it("renders all matching sections with full permissions", () => {
       setPermissions(
-        Permission.MANAGE_ORG_CONFIG,
+        Permission.MANAGE_ORG_IDENTITY,
         Permission.MANAGE_KEYS,
         Permission.MANAGE_INFRASTRUCTURE,
       );
@@ -175,7 +163,7 @@ describe("CollapsibleSectionPage", () => {
 
   describe("section anchors", () => {
     it("wraps sections in .csp-section divs with correct IDs", () => {
-      setPermissions(Permission.MANAGE_ORG_CONFIG, Permission.MANAGE_KEYS);
+      setPermissions(Permission.MANAGE_ORG_IDENTITY, Permission.MANAGE_KEYS);
       const { container } = renderCSP();
 
       const divs = container.querySelectorAll(".csp-section");

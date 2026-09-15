@@ -264,7 +264,7 @@ describe("crypto-context (lazy real objects)", () => {
     it("defaults to a manager-level permission set", () => {
       const getPerms = getCurrentPermissions();
       const perms = getPerms();
-      expect(perms.has(Permission.VIEW_TICKETS)).toBe(true);
+      expect(perms.has(Permission.VIEW_CASES)).toBe(true);
       expect(perms.has(Permission.MANAGE_USERS)).toBe(true);
       expect(perms.has(Permission.MANAGE_QUEUES)).toBe(true);
     });
@@ -273,18 +273,18 @@ describe("crypto-context (lazy real objects)", () => {
       const getPerms = getCurrentPermissions();
       const perms = getPerms();
       expect(perms.has(Permission.MANAGE_ROLES)).toBe(true);
-      expect(perms.has(Permission.MANAGE_ORG_CONFIG)).toBe(true);
+      expect(perms.has(Permission.MANAGE_ORG_IDENTITY)).toBe(true);
       expect(perms.has(Permission.MANAGE_KEYS)).toBe(true);
       expect(perms.has(Permission.VIEW_CLIENTS)).toBe(true);
       expect(perms.has(Permission.DELETE_CLIENTS)).toBe(true);
     });
 
     it("can be overridden via demoSeed", () => {
-      const custom = new Set<Permission>([Permission.VIEW_TICKETS]);
+      const custom = new Set<Permission>([Permission.VIEW_CASES]);
       demoSeed({ permissions: custom });
       const getPerms = getCurrentPermissions();
       const perms = getPerms();
-      expect(perms.has(Permission.VIEW_TICKETS)).toBe(true);
+      expect(perms.has(Permission.VIEW_CASES)).toBe(true);
       expect(perms.has(Permission.MANAGE_USERS)).toBe(false);
     });
 
@@ -332,45 +332,39 @@ describe("crypto-context (lazy real objects)", () => {
 
   describe("setRoleAndPermissions", () => {
     it("updates roleId via the getter", () => {
-      setRoleAndPermissions(
-        RoleId.VOLUNTEER,
-        new Set([Permission.VIEW_TICKETS]),
-      );
+      setRoleAndPermissions(RoleId.VOLUNTEER, new Set([Permission.VIEW_CASES]));
       const getRoleId = getCurrentUserRoleId();
       expect(getRoleId()).toBe(RoleId.VOLUNTEER);
     });
 
     it("updates permissions via the getter", () => {
       const volPerms = new Set([
-        Permission.VIEW_TICKETS,
+        Permission.VIEW_CASES,
         Permission.VIEW_OWN_SHIFTS,
       ]);
       setRoleAndPermissions(RoleId.VOLUNTEER, volPerms);
       const getPerms = getCurrentPermissions();
       const perms = getPerms();
-      expect(perms.has(Permission.VIEW_TICKETS)).toBe(true);
+      expect(perms.has(Permission.VIEW_CASES)).toBe(true);
       expect(perms.has(Permission.VIEW_OWN_SHIFTS)).toBe(true);
       expect(perms.has(Permission.MANAGE_USERS)).toBe(false);
     });
 
     it("is reversed by resetAuthDefaults", () => {
-      setRoleAndPermissions(RoleId.MANAGER, new Set([Permission.VIEW_TICKETS]));
+      setRoleAndPermissions(RoleId.MANAGER, new Set([Permission.VIEW_CASES]));
       resetAuthDefaults();
       const getRoleId = getCurrentUserRoleId();
       expect(getRoleId()).toBe(RoleId.ADMIN);
     });
 
     it("consecutive calls reflect the latest value", () => {
-      setRoleAndPermissions(
-        RoleId.VOLUNTEER,
-        new Set([Permission.VIEW_TICKETS]),
-      );
+      setRoleAndPermissions(RoleId.VOLUNTEER, new Set([Permission.VIEW_CASES]));
       setRoleAndPermissions(RoleId.MANAGER, new Set([Permission.MANAGE_USERS]));
       const getRoleId = getCurrentUserRoleId();
       expect(getRoleId()).toBe(RoleId.MANAGER);
       const getPerms = getCurrentPermissions();
       expect(getPerms().has(Permission.MANAGE_USERS)).toBe(true);
-      expect(getPerms().has(Permission.VIEW_TICKETS)).toBe(false);
+      expect(getPerms().has(Permission.VIEW_CASES)).toBe(false);
     });
   });
 

@@ -142,7 +142,7 @@ describe("createDashboardRouter", () => {
         );
       });
 
-      it(`rejects manager callers on ${name} (MANAGE_ROLES is admin-only)`, async () => {
+      it(`rejects manager callers on ${name} (MANAGE_ORG_IDENTITY is admin-only)`, async () => {
         const caller = factory(createContextWithRole(RoleId.MANAGER));
 
         await expectTrpcError(

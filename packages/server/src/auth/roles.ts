@@ -25,33 +25,80 @@ export interface RoleConfig {
   readonly level: number;
 }
 
+/**
+ * Defaults an org can change. Each key sits at the level that gated its
+ * operations before the permission rewrite, so no role gains or loses an
+ * ability by default.
+ *
+ * The four client-contact keys sit at volunteer level because reaching a
+ * client was previously ungated: the relay checked only for a session.
+ * An org that wants a back-office role withholds them deliberately rather
+ * than discovering on day one that nobody can answer anyone.
+ */
 const VOLUNTEER_PERMISSIONS: ReadonlySet<Permission> = new Set([
-  Permission.VIEW_TICKETS,
-  Permission.MANAGE_OWN_TICKETS,
+  // The case record
+  Permission.VIEW_CASES,
+  Permission.OPEN_CASES,
+  Permission.EDIT_CASE_SUMMARY,
+  Permission.WRITE_CASE_NOTES,
+  Permission.CHANGE_CASE_STATUS,
+  Permission.LINK_CASES,
+  Permission.CLAIM_CASES,
+  Permission.ASSIGN_CASES,
+  Permission.DOWNLOAD_CASE_MEDIA,
+  // Reaching a client
+  Permission.SEND_CLIENT_SMS,
+  Permission.SEND_CLIENT_MEDIA,
+  Permission.SEND_CLIENT_EMAIL,
+  Permission.CALL_CLIENTS,
+  Permission.MESSAGE_CLIENTS_IN_PORTAL,
+  // The client's own access to a case
+  Permission.MANAGE_SHARE_LINKS,
+  Permission.MANAGE_PORTAL_CHANNEL,
+  Permission.RESET_CLIENT_LOGIN,
+  Permission.REVOKE_REPLY_LINKS,
+  // Knowledge base
   Permission.VIEW_KNOWLEDGE_BASE,
   Permission.EDIT_KNOWLEDGE_BASE,
+  // Declared, no feature yet
   Permission.VIEW_OWN_SHIFTS,
 ]);
 
 const MANAGER_PERMISSIONS: ReadonlySet<Permission> = new Set([
   ...VOLUNTEER_PERMISSIONS,
-  Permission.MODERATE_CONTENT,
-  Permission.MANAGE_USERS,
-  Permission.MANAGE_QUEUES,
-  Permission.MANAGE_PRESETS,
-  Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
-  Permission.VIEW_REPORTS,
-  Permission.DELETE_CLIENTS,
   Permission.VIEW_CLIENTS,
+  Permission.EDIT_CLIENT_CONTACT,
+  Permission.MERGE_CLIENTS,
+  Permission.DELETE_CLIENTS,
+  Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
+  Permission.DELETE_KNOWLEDGE_BASE_ARTICLES,
+  Permission.MANAGE_PRESETS,
+  Permission.VIEW_REPORTS,
+  Permission.VIEW_AUDIT_LOG,
 ]);
 
 const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set([
   ...MANAGER_PERMISSIONS,
+  Permission.DELETE_OTHERS_NOTES,
+  Permission.VIEW_CLIENT_PII,
+  Permission.EDIT_CLIENT_ALIAS,
+  Permission.MANAGE_QUEUES,
+  Permission.MANAGE_QUEUE_MEMBERSHIP,
+  Permission.MANAGE_QUEUE_NOTIFICATIONS,
+  Permission.MANAGE_INTAKE_FORMS,
+  Permission.VIEW_INTAKE_RESPONSES,
   Permission.MANAGE_ROLES,
-  Permission.MANAGE_ORG_CONFIG,
+  Permission.MANAGE_USERS,
+  Permission.MANAGE_ORG_IDENTITY,
+  Permission.MANAGE_CHANNEL_ROUTING,
+  Permission.MANAGE_RETENTION,
+  Permission.MANAGE_NOTE_TYPES,
   Permission.MANAGE_KEYS,
   Permission.MANAGE_INFRASTRUCTURE,
-  Permission.VIEW_INTAKE_RESPONSES,
+  Permission.WRITE_CALL_GREETINGS,
+  Permission.WRITE_AUTOMATIC_REPLIES,
+  Permission.MANAGE_VOICEMAIL_QUARANTINE,
+  Permission.MANAGE_ESCALATION,
 ]);
 
 export const ROLE_CONFIG: ReadonlyMap<RoleIdValue, RoleConfig> = new Map([

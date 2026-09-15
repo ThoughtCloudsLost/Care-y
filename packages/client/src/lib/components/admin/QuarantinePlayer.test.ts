@@ -9,6 +9,7 @@ import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as CryptoContext from "$lib/crypto/context.js";
 import type * as AsyncDecryptCache from "$lib/crypto/async-decrypt-cache.js";
 import type * as DecryptResult from "$lib/crypto/decrypt-result.js";
+import { getMockPermissions } from "$mocks/permissions.js";
 
 const { mockOrgDecrypt } = vi.hoisted(() => ({
   mockOrgDecrypt: vi.fn().mockResolvedValue(new Uint8Array([0, 0, 0, 0])),
@@ -53,7 +54,7 @@ vi.mock(
       getTicketDecryptCache: () => ({ decrypt: vi.fn() }) as never,
       getCurrentUserId: () => () => undefined,
       getCurrentUserRoleId: () => () => undefined,
-      getCurrentPermissions: () => () => new Set(),
+      getCurrentPermissions: () => getMockPermissions,
       getFollowUpDecryptCache: () => ({ decryptContent: vi.fn() }) as never,
       getPreviewLoader: () => ({ load: vi.fn() }) as never,
       setCryptoBridge: (v) => v,

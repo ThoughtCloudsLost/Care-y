@@ -6,8 +6,10 @@
  *             portal-recordings
  *
  * Authenticated, by one of two credentials. A volunteer presents a session
- * cookie and must hold VIEW_TICKETS; the handler delegates to a media
- * service for record lookup and access control. A portal client presents a
+ * cookie and must hold the key for what they are fetching: case media
+ * takes DOWNLOAD_CASE_MEDIA, knowledge base attachments take
+ * VIEW_KNOWLEDGE_BASE. The handler then delegates to a media service for
+ * record lookup and per-object access control. A portal client presents a
  * channel secret or an account session and may read only files a wrap ties
  * to their own channel (ADR-089). Either way the handler streams
  * ciphertext and decrypts nothing.
@@ -168,16 +170,20 @@ export function createBlobDownloadHandler(
 
     const { orgSchema, userId } = auth.session;
 
+    // Knowledge base attachments are article content, not case media, so
+    // they take the key that governs reading articles. Applying the case
+    // key to every category would make an article attachment unreadable to
+    // someone who can read the article it hangs off.
+    const required =
+      category === "kb-attachments"
+        ? Permission.VIEW_KNOWLEDGE_BASE
+        : Permission.DOWNLOAD_CASE_MEDIA;
+
     const roleId = await getUserRole(orgSchema, userId);
     const tDb = createTenantDb(orgSchema);
     if (
       roleId === null ||
-      !(await hasPermissionForOrg(
-        tDb,
-        orgSchema,
-        roleId,
-        Permission.VIEW_TICKETS,
-      ))
+      !(await hasPermissionForOrg(tDb, orgSchema, roleId, required))
     ) {
       sendJsonResponse(res, 403, { error: "forbidden" });
       return;

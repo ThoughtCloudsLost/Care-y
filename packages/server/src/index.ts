@@ -42,7 +42,10 @@ import {
   createTotpReplayCache,
   assertSingleInstanceTotpReplayCache,
 } from "./auth/totp-replay-cache.js";
-import { assertSingleInstancePermissionCache } from "./auth/roles.js";
+import {
+  assertSingleInstancePermissionCache,
+  hasPermissionForOrg,
+} from "./auth/roles.js";
 import {
   deriveKeys,
   createFieldEncryptor,
@@ -186,6 +189,7 @@ import type {
   OrgId,
   OrgSchema,
   OrgSlug,
+  UserId,
   StoredProviderId,
 } from "@care-y/shared";
 
@@ -1019,6 +1023,25 @@ const webhookHandler = createWebhookHandler(
   env.WEBHOOK_BASE_URL,
 );
 
+/**
+ * Resolves an active user's role id within an org schema. Shared by the
+ * two raw HTTP paths that authorize outside tRPC: the relay and blob
+ * download. Returns null when the user is gone or deactivated, which both
+ * callers treat as a refusal.
+ */
+async function lookupUserRole(
+  orgSchema: OrgSchema,
+  userId: UserId,
+): Promise<string | null> {
+  const row = await tenantDb(orgSchema)
+    .selectFrom("users")
+    .select("role_id")
+    .where("id", "=", userId)
+    .where("is_active", "=", true)
+    .executeTakeFirst();
+  return row?.role_id ?? null;
+}
+
 // --- Relay infrastructure ---
 
 const pendingCalls = new Map<string, PendingCall>();
@@ -1121,6 +1144,16 @@ async function getOrgSealedBoxEncryptor(
 }
 
 const relayHandler = createRelayHandler({
+  hasPermission: async (orgSchema, userId, permission) => {
+    const roleId = await lookupUserRole(orgSchema, userId);
+    if (roleId === null) return false;
+    return hasPermissionForOrg(
+      tenantDb(orgSchema),
+      orgSchema,
+      roleId,
+      permission,
+    );
+  },
   getProvider: async (orgId: OrgId) => providerFactory.getProvider(orgId),
   getTenantDb: tenantDb,
   createConsultantRepo: (tDb: Kysely<TenantDatabase>) =>
@@ -1225,15 +1258,7 @@ const blobDownloadHandler = createBlobDownloadHandler({
     return createMediaService(tDb, blobStore, createTicketAccessChecker(tDb));
   },
   createKBMediaSvc: (orgSchema) => createKBMediaService(tenantDb(orgSchema)),
-  getUserRole: async (orgSchema, userId) => {
-    const row = await tenantDb(orgSchema)
-      .selectFrom("users")
-      .select("role_id")
-      .where("id", "=", userId)
-      .where("is_active", "=", true)
-      .executeTakeFirst();
-    return row?.role_id ?? null;
-  },
+  getUserRole: lookupUserRole,
   createTenantDb: (orgSchema) => tenantDb(orgSchema),
 });
 

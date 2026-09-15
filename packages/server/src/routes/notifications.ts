@@ -6,7 +6,7 @@
  * SSE stream is a raw HTTP handler (not tRPC, see index.ts).
  */
 
-import { router, volunteerProcedure, withErrorWrapping } from "../trpc/trpc.js";
+import { router, authed2faProcedure, withErrorWrapping } from "../trpc/trpc.js";
 import type { PushSubscriptionService } from "../notifications/push-subscriptions.js";
 import type { NotificationPreferencesService } from "../notifications/preferences.js";
 import type { OrgContext } from "../trpc/context.js";
@@ -30,12 +30,12 @@ export interface NotificationRouterDeps {
 export function createNotificationRouter(deps: NotificationRouterDeps) {
   return router({
     /** Returns the VAPID public key for push subscription. */
-    vapidPublicKey: volunteerProcedure.query(() => {
+    vapidPublicKey: authed2faProcedure.query(() => {
       return { publicKey: deps.vapidPublicKey };
     }),
 
     /** Subscribe this device for push notifications. */
-    subscribePush: volunteerProcedure
+    subscribePush: authed2faProcedure
       .input(pushSubscriptionInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -51,7 +51,7 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
       ),
 
     /** Unsubscribe a push endpoint. */
-    unsubscribePush: volunteerProcedure
+    unsubscribePush: authed2faProcedure
       .input(unsubscribePushInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -62,7 +62,7 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
       ),
 
     /** List current user's push subscriptions (endpoints only, for settings UI). */
-    listPushSubscriptions: volunteerProcedure.query(
+    listPushSubscriptions: authed2faProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = deps.createPushSubSvc(ctx.org.tenantDb);
         const subscriptions = await svc.listForUser(ctx.user.id);
@@ -71,7 +71,7 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
     ),
 
     /** Returns all notification preference rows for the calling user. */
-    getPreferences: volunteerProcedure.query(
+    getPreferences: authed2faProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const rows = await deps.preferencesService.listForUser(
           ctx.org.tenantDb,
@@ -88,7 +88,7 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
      * for the caller. Both failures produce NOT_FOUND to prevent existence
      * oracles.
      */
-    setPreference: volunteerProcedure.input(setPreferenceInputSchema).mutation(
+    setPreference: authed2faProcedure.input(setPreferenceInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const scope = {
           scopeType: input.scopeType,
@@ -115,7 +115,7 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
     ),
 
     /** Deletes preference override rows for the calling user. */
-    resetPreferences: volunteerProcedure
+    resetPreferences: authed2faProcedure
       .input(resetPreferencesInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {

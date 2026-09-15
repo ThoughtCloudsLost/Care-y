@@ -409,12 +409,12 @@ function initOrgKeyManager(): OrgKeyManager {
 // -----------------------------------------------------------------------
 
 const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
-  Permission.VIEW_TICKETS,
-  Permission.MANAGE_OWN_TICKETS,
+  Permission.VIEW_CASES,
+  Permission.WRITE_CASE_NOTES,
   Permission.VIEW_KNOWLEDGE_BASE,
   Permission.EDIT_KNOWLEDGE_BASE,
   Permission.VIEW_OWN_SHIFTS,
-  Permission.MODERATE_CONTENT,
+  Permission.DELETE_KNOWLEDGE_BASE_ARTICLES,
   Permission.MANAGE_USERS,
   Permission.MANAGE_QUEUES,
   Permission.MANAGE_PRESETS,
@@ -422,7 +422,7 @@ const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
   Permission.VIEW_REPORTS,
   Permission.DELETE_CLIENTS,
   Permission.VIEW_CLIENTS,
-  Permission.MANAGE_ORG_CONFIG,
+  Permission.MANAGE_ORG_IDENTITY,
   Permission.MANAGE_KEYS,
   Permission.MANAGE_INFRASTRUCTURE,
   Permission.MANAGE_ROLES,

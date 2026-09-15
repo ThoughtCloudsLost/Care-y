@@ -1,12 +1,18 @@
 /**
  * Voicemail quarantine admin router.
  *
- * All endpoints require admin-level permissions. Business logic is
+ * All endpoints require MANAGE_VOICEMAIL_QUARANTINE permission. Business logic is
  * delegated to the voicemail-quarantine service; this file contains
  * zero business logic.
  */
 
-import { router, adminProcedure, withErrorWrapping } from "../trpc/trpc.js";
+import { Permission } from "@care-y/shared";
+import {
+  router,
+  authed2faProcedure,
+  requireRole,
+  withErrorWrapping,
+} from "../trpc/trpc.js";
 import {
   listQuarantineInputSchema,
   downloadQuarantineInputSchema,
@@ -24,6 +30,10 @@ import {
 import type { BlobStore } from "../storage/store.js";
 import type { PendingClient } from "../tickets/ticket-service.js";
 
+const manageVoicemailQuarantineProcedure = authed2faProcedure.use(
+  requireRole(Permission.MANAGE_VOICEMAIL_QUARANTINE),
+);
+
 export interface VoicemailQuarantineRouterDeps {
   readonly blobStore: BlobStore;
   readonly pendingClients: Map<string, PendingClient>;
@@ -36,43 +46,55 @@ export function createVoicemailQuarantineRouter(
   const { blobStore, pendingClients } = deps;
 
   return router({
-    list: adminProcedure.input(listQuarantineInputSchema).query(
-      withErrorWrapping(async ({ ctx, input }) => {
-        return listQuarantined(ctx.org.tenantDb, input);
-      }),
-    ),
+    list: manageVoicemailQuarantineProcedure
+      .input(listQuarantineInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          return listQuarantined(ctx.org.tenantDb, input);
+        }),
+      ),
 
-    download: adminProcedure.input(downloadQuarantineInputSchema).query(
-      withErrorWrapping(async ({ ctx, input }) => {
-        return getQuarantineBlob(
-          ctx.org.tenantDb,
-          blobStore,
-          input.quarantineId,
-        );
-      }),
-    ),
+    download: manageVoicemailQuarantineProcedure
+      .input(downloadQuarantineInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          return getQuarantineBlob(
+            ctx.org.tenantDb,
+            blobStore,
+            input.quarantineId,
+          );
+        }),
+      ),
 
-    route: adminProcedure.input(routeQuarantineInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const routeDeps: RouteQuarantineDeps = {
-          tDb: ctx.org.tenantDb,
-          blobStore,
-          orgSchema: ctx.org.orgSchema,
-          pendingClients,
-          sealedBox: ctx.org.sealedBox,
-        };
-        return routeQuarantined(routeDeps, input, ctx.user.id);
-      }),
-    ),
+    route: manageVoicemailQuarantineProcedure
+      .input(routeQuarantineInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const routeDeps: RouteQuarantineDeps = {
+            tDb: ctx.org.tenantDb,
+            blobStore,
+            orgSchema: ctx.org.orgSchema,
+            pendingClients,
+            sealedBox: ctx.org.sealedBox,
+          };
+          return routeQuarantined(routeDeps, input, ctx.user.id);
+        }),
+      ),
 
-    dismiss: adminProcedure.input(dismissQuarantineInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const dismissDeps: DismissQuarantineDeps = {
-          tDb: ctx.org.tenantDb,
-          blobStore,
-        };
-        return dismissQuarantined(dismissDeps, input.quarantineId, ctx.user.id);
-      }),
-    ),
+    dismiss: manageVoicemailQuarantineProcedure
+      .input(dismissQuarantineInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const dismissDeps: DismissQuarantineDeps = {
+            tDb: ctx.org.tenantDb,
+            blobStore,
+          };
+          return dismissQuarantined(
+            dismissDeps,
+            input.quarantineId,
+            ctx.user.id,
+          );
+        }),
+      ),
   });
 }

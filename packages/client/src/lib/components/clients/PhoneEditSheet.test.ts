@@ -18,6 +18,11 @@ import type * as HapticModule from "$lib/utils/haptic.js";
 import type * as ToastModule from "$lib/stores/toast.svelte.js";
 import type * as KeysModule from "$lib/query/keys.js";
 import type * as CryptoContextModule from "$lib/crypto/context.js";
+import {
+  setPermissions,
+  resetPermissions,
+  getMockPermissions,
+} from "$mocks/permissions.js";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -224,9 +229,6 @@ vi.mock("$lib/query/keys.js", async (importOriginal) => {
   };
 });
 
-// Permissions control per test
-let mockHasViewClients = true;
-
 // vi.mock required: createContext from Svelte 5 throws "missing_context"
 // outside a live component tree.
 vi.mock("$lib/crypto/context.js", async (importOriginal) => {
@@ -246,14 +248,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => {
     getOrgKeyManager: () => ({
       phoneMatchHash: vi.fn().mockResolvedValue("ab".repeat(64)),
     }),
-    getCurrentPermissions: () => () => ({
-      has: (perm: string) => {
-        if (perm === (Permission.VIEW_CLIENTS as string)) {
-          return mockHasViewClients;
-        }
-        return false;
-      },
-    }),
+    getCurrentPermissions: () => getMockPermissions,
   };
 });
 
@@ -273,7 +268,7 @@ beforeEach(() => {
   mutationCallbacks = {};
   allMutationConfigs.length = 0;
   sharedLineQueryData = undefined;
-  mockHasViewClients = true;
+  setPermissions(Permission.VIEW_CLIENTS);
 });
 
 // ---------------------------------------------------------------------------
@@ -578,7 +573,7 @@ describe("PhoneEditSheet", () => {
   // ── Shared line toggle tests ──
 
   it("renders toggle when user has VIEW_CLIENTS and query returns shared: false", () => {
-    mockHasViewClients = true;
+    setPermissions(Permission.VIEW_CLIENTS);
     sharedLineQueryData = { shared: false };
 
     const { container } = render(PhoneEditSheet, { props: baseProps });
@@ -588,7 +583,7 @@ describe("PhoneEditSheet", () => {
   });
 
   it("hides toggle when user lacks VIEW_CLIENTS", () => {
-    mockHasViewClients = false;
+    resetPermissions();
     sharedLineQueryData = { shared: false };
 
     const { container } = render(PhoneEditSheet, { props: baseProps });
@@ -597,7 +592,7 @@ describe("PhoneEditSheet", () => {
   });
 
   it("hides toggle when shared is null (no phone on record)", () => {
-    mockHasViewClients = true;
+    setPermissions(Permission.VIEW_CLIENTS);
     sharedLineQueryData = { shared: null };
 
     const { container } = render(PhoneEditSheet, { props: baseProps });
@@ -606,7 +601,7 @@ describe("PhoneEditSheet", () => {
   });
 
   it("calls setPhoneSharedLine mutation when toggle is flipped", async () => {
-    mockHasViewClients = true;
+    setPermissions(Permission.VIEW_CLIENTS);
     sharedLineQueryData = { shared: false };
 
     const { container } = render(PhoneEditSheet, { props: baseProps });

@@ -181,7 +181,7 @@ describe("section-registry", () => {
   describe("getHoverSections", () => {
     it("returns sections for the organization page", () => {
       const perms = new Set([
-        Permission.MANAGE_ORG_CONFIG,
+        Permission.MANAGE_ORG_IDENTITY,
         Permission.MANAGE_KEYS,
         Permission.MANAGE_QUEUES,
       ]);
@@ -191,7 +191,7 @@ describe("section-registry", () => {
     });
 
     it("filters organization sections by per-section permissions", () => {
-      const perms = new Set([Permission.MANAGE_ORG_CONFIG]);
+      const perms = new Set([Permission.MANAGE_ORG_IDENTITY]);
       const qc = createMockQueryClient();
       const sections = getHoverSections("/admin/organization", perms, qc);
       const ids = sections.map((s) => s.id);
@@ -202,13 +202,13 @@ describe("section-registry", () => {
     });
 
     it("returns empty for routes not in the registry", () => {
-      const perms = new Set([Permission.MANAGE_ORG_CONFIG]);
+      const perms = new Set([Permission.MANAGE_ORG_IDENTITY]);
       const qc = createMockQueryClient();
       const sections = getHoverSections("/tickets", perms, qc);
       expect(sections).toHaveLength(0);
     });
 
-    it("returns empty when page-level permission fails", () => {
+    it("returns empty when caller holds none of the section permissions", () => {
       const perms = new Set<Permission>();
       const qc = createMockQueryClient();
       const sections = getHoverSections("/admin/organization", perms, qc);

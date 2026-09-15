@@ -52,7 +52,7 @@
   const orgCache = getOrgDecryptCache();
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
-  const isAdmin = $derived(permissions.has(Permission.MANAGE_ORG_CONFIG));
+  const canManageQueues = $derived(permissions.has(Permission.MANAGE_QUEUES));
 
   const isCreateMode = $derived(queueId === null);
 
@@ -235,7 +235,7 @@
       onstatechange={handleFormStateChange}
     />
 
-    {#if !isCreateMode && isAdmin && queueId !== null}
+    {#if !isCreateMode && canManageQueues && queueId !== null}
       <EscalationRulesList
         bind:this={escalationRulesListRef}
         {queueId}

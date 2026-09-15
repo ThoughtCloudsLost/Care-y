@@ -11,13 +11,7 @@
 
 import { z } from "zod";
 import {
-  router,
-  orgProcedure,
-  volunteerProcedure,
-  withErrorWrapping,
-} from "../trpc/trpc.js";
-import { TRPCError } from "@trpc/server";
-import {
+  Permission,
   intakeSubmissionInputSchema,
   portalBootstrapInputSchema,
   portalReplyInputSchema,
@@ -32,6 +26,14 @@ import {
   addPassphraseInputSchema,
   ErrorCode,
 } from "@care-y/shared";
+import {
+  router,
+  orgProcedure,
+  authed2faProcedure,
+  requireRole,
+  withErrorWrapping,
+} from "../trpc/trpc.js";
+import { TRPCError } from "@trpc/server";
 import type {
   OrgId,
   OrgSchema,
@@ -207,6 +209,10 @@ export interface ClientPortalRouterDeps {
   /** OPRF evaluate service for channel-scoped evaluations. */
   readonly oprfService: OprfEvaluateService | null;
 }
+
+const manageShareLinksProcedure = authed2faProcedure.use(
+  requireRole(Permission.MANAGE_SHARE_LINKS),
+);
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
@@ -565,22 +571,24 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
     // Share link procedures (appended by 8d)
     // -----------------------------------------------------------------
 
-    createShare: volunteerProcedure.input(createShareInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        await assertShareLinksEnabled(ctx.org.tenantDb);
-        const result = await createShare(ctx.org.tenantDb, {
-          shareId: input.shareId,
-          ticketId: input.ticketId,
-          ciphertext: Buffer.from(input.ciphertext, "base64"),
-          followUpId: input.followUpId,
-          encryptedFollowUp: Buffer.from(input.encryptedFollowUp, "base64"),
-          createdBy: ctx.session.userId,
-        });
-        return { expiresAt: result.expiresAt.toISOString() };
-      }),
-    ),
+    createShare: manageShareLinksProcedure
+      .input(createShareInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          await assertShareLinksEnabled(ctx.org.tenantDb);
+          const result = await createShare(ctx.org.tenantDb, {
+            shareId: input.shareId,
+            ticketId: input.ticketId,
+            ciphertext: Buffer.from(input.ciphertext, "base64"),
+            followUpId: input.followUpId,
+            encryptedFollowUp: Buffer.from(input.encryptedFollowUp, "base64"),
+            createdBy: ctx.session.userId,
+          });
+          return { expiresAt: result.expiresAt.toISOString() };
+        }),
+      ),
 
-    listShares: volunteerProcedure
+    listShares: manageShareLinksProcedure
       .input(z.object({ ticketId: ticketIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {

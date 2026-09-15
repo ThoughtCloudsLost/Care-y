@@ -19,6 +19,8 @@ import type * as CryptoContextModule from "$lib/crypto/context.js";
 import type * as SvelteQueryModule from "@tanstack/svelte-query";
 import type * as TrpcModule from "$lib/trpc/index.js";
 import type * as ShellContextModule from "$lib/shell/context.js";
+import { Permission } from "@care-y/shared";
+import { getMockPermissions, setPermissions } from "$mocks/permissions.js";
 
 // --- Query state controls ---
 // These let individual tests configure what the queries return.
@@ -122,14 +124,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => {
     }),
     getCurrentUserId: () => () => "user-001",
     getCurrentUserRoleId: () => () => "dXwG0zR9BtJp",
-    getCurrentPermissions: () => () =>
-      new Set([
-        "view_tickets",
-        "manage_own_tickets",
-        "view_knowledge_base",
-        "edit_knowledge_base",
-        "view_own_shifts",
-      ]),
+    getCurrentPermissions: () => getMockPermissions,
     getPreviewLoader: () => ({
       get: vi.fn().mockReturnValue(undefined),
       observe: vi.fn(),
@@ -229,6 +224,13 @@ const baseTicket = {
 };
 
 beforeEach(() => {
+  setPermissions(
+    Permission.VIEW_CASES,
+    Permission.WRITE_CASE_NOTES,
+    Permission.VIEW_KNOWLEDGE_BASE,
+    Permission.EDIT_KNOWLEDGE_BASE,
+    Permission.VIEW_OWN_SHIFTS,
+  );
   followUpDecryptState.content = "Decrypted message content";
   ticketQueryState = {
     isLoading: false,

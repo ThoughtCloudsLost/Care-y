@@ -7,7 +7,7 @@
  * hydrates branding and terminology from it, and nothing in the payload is
  * admin-only (the public fields are served unauthenticated anyway, and the
  * terminology ciphertext is org-key tier every volunteer holds the key for).
- * Write endpoints require admin-level permissions (MANAGE_ROLES).
+ * Write endpoints require MANAGE_ORG_IDENTITY permission.
  * Business logic is delegated to BrandingService.
  *
  * Branding is stored and served as plaintext (ADR-094). XSS defense for
@@ -15,20 +15,25 @@
  */
 
 import {
-  router,
-  orgProcedure,
-  volunteerProcedure,
-  adminProcedure,
-  withErrorWrapping,
-} from "../trpc/trpc.js";
-import {
+  Permission,
   saveBrandingFieldInputSchema,
   uploadIconsInputSchema,
 } from "@care-y/shared";
+import {
+  router,
+  orgProcedure,
+  authed2faProcedure,
+  requireRole,
+  withErrorWrapping,
+} from "../trpc/trpc.js";
 import { createBrandingService } from "../branding/branding-service.js";
 import type { BlobStore } from "../storage/store.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import { TRPCError } from "@trpc/server";
+
+const manageOrgIdentityProcedure = authed2faProcedure.use(
+  requireRole(Permission.MANAGE_ORG_IDENTITY),
+);
 
 export interface BrandingRouterDeps {
   readonly blobStore: BlobStore;
@@ -49,14 +54,14 @@ export function createBrandingRouter(deps: BrandingRouterDeps) {
       }),
     ),
 
-    getBranding: volunteerProcedure.query(
+    getBranding: authed2faProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = createBrandingService(ctx.org.tenantDb);
         return svc.getBranding();
       }),
     ),
 
-    saveBrandingField: adminProcedure
+    saveBrandingField: manageOrgIdentityProcedure
       .input(saveBrandingFieldInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -65,20 +70,22 @@ export function createBrandingRouter(deps: BrandingRouterDeps) {
         }),
       ),
 
-    uploadIcons: adminProcedure.input(uploadIconsInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        if (uploadLimiter) {
-          const rateResult = uploadLimiter.check(ctx.user.id);
-          if (!rateResult.allowed) {
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Upload rate limited. Retry after ${String(Math.ceil(rateResult.retryAfterMs / 1000))}s`,
-            });
+    uploadIcons: manageOrgIdentityProcedure
+      .input(uploadIconsInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (uploadLimiter) {
+            const rateResult = uploadLimiter.check(ctx.user.id);
+            if (!rateResult.allowed) {
+              throw new TRPCError({
+                code: "TOO_MANY_REQUESTS",
+                message: `Upload rate limited. Retry after ${String(Math.ceil(rateResult.retryAfterMs / 1000))}s`,
+              });
+            }
           }
-        }
-        const svc = createBrandingService(ctx.org.tenantDb);
-        await svc.uploadIcons(blobStore, ctx.org.orgSchema, input);
-      }),
-    ),
+          const svc = createBrandingService(ctx.org.tenantDb);
+          await svc.uploadIcons(blobStore, ctx.org.orgSchema, input);
+        }),
+      ),
   });
 }

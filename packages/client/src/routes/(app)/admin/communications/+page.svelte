@@ -29,7 +29,7 @@
       id: "channel-policy",
       label: m.admin_tab_channel_policy,
       icon: ToggleRight,
-      permission: Permission.MANAGE_ORG_CONFIG,
+      permission: Permission.MANAGE_CHANNEL_ROUTING,
       component: ChannelPolicySection,
     },
     {

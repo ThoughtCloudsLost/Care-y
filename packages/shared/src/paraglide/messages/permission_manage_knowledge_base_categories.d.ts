@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Manage knowledge base categories" |
+* | "Organise the knowledge base" |
 *
 * @param {Permission_Manage_Knowledge_Base_CategoriesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
