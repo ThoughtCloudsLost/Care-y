@@ -1,4 +1,6 @@
 import {
+  Permission,
+  ErrorCode,
   updateDisplayNameSchema,
   adminUpdateDisplayNameSchema,
   updateUsernameSchema,
@@ -14,13 +16,12 @@ import {
   RateLimitError,
   ValidationError,
 } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import { extractClientIp } from "../http/request-utils.js";
 import {
   router,
   authedProcedure,
-  adminProcedure,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
@@ -31,6 +32,8 @@ import {
 } from "../trpc/context.js";
 import type { OrgContext } from "../trpc/context.js";
 import type { AuthService } from "../auth/service.js";
+
+const manageUsersProcedure = permissionProcedure(Permission.MANAGE_USERS);
 
 export interface ProfileRouterDeps extends AuthServiceDeps {
   readonly passwordChangeLimiter: RateLimiter;
@@ -55,7 +58,7 @@ export function createProfileRouter(deps: ProfileRouterDeps) {
       }),
     ),
 
-    adminUpdateDisplayName: adminProcedure
+    adminUpdateDisplayName: manageUsersProcedure
       .input(adminUpdateDisplayNameSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -89,7 +92,7 @@ export function createProfileRouter(deps: ProfileRouterDeps) {
       }),
     ),
 
-    adminUpdateUsername: adminProcedure
+    adminUpdateUsername: manageUsersProcedure
       .input(adminUpdateUsernameSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {

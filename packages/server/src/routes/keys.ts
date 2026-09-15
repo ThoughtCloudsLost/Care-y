@@ -21,7 +21,7 @@ import { getEnv } from "../env.js";
 import {
   router,
   authedProcedure,
-  adminProcedure,
+  keyCustodyProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 
@@ -127,19 +127,21 @@ export function createKeysRouter() {
      * secret key in wrapped_org_keys for the calling admin. Rejects if the
      * org already has a public key (use key rotation to replace).
      */
-    uploadOrgPublicKey: adminProcedure.input(uploadOrgPublicKeySchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createOrgKeyQueryService(ctx.org.tenantDb);
-        await svc.uploadOrgPublicKey({
-          orgPublicKey: b64(input.orgPublicKey),
-          ephemeralPoint: b64(input.ephemeralPoint),
-          nonce: b64(input.nonce),
-          wrappedKey: b64(input.wrappedKey),
-          userId: ctx.session.userId,
-        });
-        return { success: true as const };
-      }),
-    ),
+    uploadOrgPublicKey: keyCustodyProcedure
+      .input(uploadOrgPublicKeySchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createOrgKeyQueryService(ctx.org.tenantDb);
+          await svc.uploadOrgPublicKey({
+            orgPublicKey: b64(input.orgPublicKey),
+            ephemeralPoint: b64(input.ephemeralPoint),
+            nonce: b64(input.nonce),
+            wrappedKey: b64(input.wrappedKey),
+            userId: ctx.session.userId,
+          });
+          return { success: true as const };
+        }),
+      ),
 
     /**
      * Org key rotation (admin-only).
@@ -147,7 +149,7 @@ export function createKeysRouter() {
      * The admin's browser generates a fresh Curve25519 keypair, re-wraps
      * the new secret for each active volunteer, and sends everything here.
      */
-    rotateOrgKey: adminProcedure.input(rotateOrgKeySchema).mutation(
+    rotateOrgKey: keyCustodyProcedure.input(rotateOrgKeySchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = createOrgKeyRotationService(ctx.org.tenantDb);
         await svc.rotateOrgKey({
@@ -167,24 +169,26 @@ export function createKeysRouter() {
      * Wrap the org secret key for a specific user (admin auto-wrap).
      * Uses INSERT ON CONFLICT DO NOTHING for idempotency.
      */
-    wrapOrgKeyForUser: adminProcedure.input(wrapOrgKeyForUserSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createOrgKeyQueryService(ctx.org.tenantDb);
-        await svc.wrapOrgKeyForUser({
-          userId: input.userId,
-          ephemeralPoint: b64(input.ephemeralPoint),
-          nonce: b64(input.nonce),
-          wrappedKey: b64(input.wrappedKey),
-        });
-        return { success: true as const };
-      }),
-    ),
+    wrapOrgKeyForUser: keyCustodyProcedure
+      .input(wrapOrgKeyForUserSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createOrgKeyQueryService(ctx.org.tenantDb);
+          await svc.wrapOrgKeyForUser({
+            userId: input.userId,
+            ephemeralPoint: b64(input.ephemeralPoint),
+            nonce: b64(input.nonce),
+            wrappedKey: b64(input.wrappedKey),
+          });
+          return { success: true as const };
+        }),
+      ),
 
     /**
      * List active users who have a volPublic but no wrapped org key.
      * Admin auto-wrap queries this to find volunteers needing wrapping.
      */
-    listUnwrappedUsers: adminProcedure.query(async ({ ctx }) => {
+    listUnwrappedUsers: keyCustodyProcedure.query(async ({ ctx }) => {
       const svc = createOrgKeyQueryService(ctx.org.tenantDb);
       const users = await svc.listUnwrappedUsers();
       return users.map((u) => ({
@@ -199,7 +203,7 @@ export function createKeysRouter() {
      * browser derives the new user's keys (it knows the password) and
      * wraps the org key using the new user's volPublic.
      */
-    adminBootstrapUserKeys: adminProcedure
+    adminBootstrapUserKeys: keyCustodyProcedure
       .input(adminBootstrapUserKeysSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {

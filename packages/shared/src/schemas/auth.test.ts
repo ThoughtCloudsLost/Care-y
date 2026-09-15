@@ -416,10 +416,10 @@ describe("setUserActiveInputSchema", () => {
 
 describe("permissionValueSchema", () => {
   it("accepts a valid Permission enum value", () => {
-    const result = permissionValueSchema.safeParse(Permission.VIEW_TICKETS);
+    const result = permissionValueSchema.safeParse(Permission.VIEW_CASES);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data).toBe("view_tickets");
+      expect(result.data).toBe("view_cases");
     }
   });
 
@@ -467,7 +467,7 @@ describe("setRolePermissionInputSchema", () => {
     expect(
       setRolePermissionInputSchema.safeParse({
         roleId: "unknown_role_id",
-        permission: Permission.VIEW_TICKETS,
+        permission: Permission.VIEW_CASES,
         enabled: true,
       }).success,
     ).toBe(false);
@@ -487,7 +487,7 @@ describe("setRolePermissionInputSchema", () => {
     expect(
       setRolePermissionInputSchema.safeParse({
         roleId: RoleId.ADMIN,
-        permission: Permission.VIEW_TICKETS,
+        permission: Permission.VIEW_CASES,
       }).success,
     ).toBe(false);
 
@@ -500,7 +500,7 @@ describe("setRolePermissionInputSchema", () => {
 
     expect(
       setRolePermissionInputSchema.safeParse({
-        permission: Permission.VIEW_TICKETS,
+        permission: Permission.VIEW_CASES,
         enabled: true,
       }).success,
     ).toBe(false);
@@ -510,7 +510,7 @@ describe("setRolePermissionInputSchema", () => {
     expect(
       setRolePermissionInputSchema.safeParse({
         roleId: RoleId.ADMIN,
-        permission: Permission.VIEW_TICKETS,
+        permission: Permission.VIEW_CASES,
         enabled: "true",
       }).success,
     ).toBe(false);
@@ -523,12 +523,12 @@ describe("rolePermissionsOutputSchema", () => {
       roles: [
         {
           roleId: RoleId.VOLUNTEER,
-          permissions: [Permission.VIEW_TICKETS, Permission.VIEW_OWN_SHIFTS],
+          permissions: [Permission.VIEW_CASES, Permission.VIEW_OWN_SHIFTS],
           overridden: [],
         },
         {
           roleId: RoleId.MANAGER,
-          permissions: [Permission.VIEW_TICKETS, Permission.MANAGE_USERS],
+          permissions: [Permission.VIEW_CASES, Permission.MANAGE_USERS],
           overridden: [Permission.MANAGE_USERS],
         },
         {

@@ -34,6 +34,7 @@ import {
   orgProcedure,
   authedProcedure,
   adminProcedure,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import {
@@ -195,6 +196,12 @@ async function handleGetSalt(
   const result = await saltDefense.getSalt(identifier);
   return { salt: encode(result.salt), userId: result.userId };
 }
+
+const manageUsersProcedure = permissionProcedure(Permission.MANAGE_USERS);
+
+const manageRetentionProcedure = permissionProcedure(
+  Permission.MANAGE_RETENTION,
+);
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createAuthRouter(deps: AuthRouterDeps) {
@@ -359,15 +366,17 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       }),
     ),
 
-    setPiiRetention: adminProcedure.input(setPiiRetentionInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const authService = getAuthService(ctx.org, deps);
-        await authService.setPiiRetentionDays(input.days);
-        return { success: true as const };
-      }),
-    ),
+    setPiiRetention: manageRetentionProcedure
+      .input(setPiiRetentionInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const authService = getAuthService(ctx.org, deps);
+          await authService.setPiiRetentionDays(input.days);
+          return { success: true as const };
+        }),
+      ),
 
-    listUsers: adminProcedure.query(
+    listUsers: manageUsersProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = createUserService(ctx.org.tenantDb);
         const users = await svc.listAllForAdmin();
@@ -390,17 +399,19 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       }),
     ),
 
-    setUserActive: adminProcedure.input(setUserActiveInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const authService = getAuthService(ctx.org, deps);
-        const updated = await authService.setUserActive(
-          ctx.user.id,
-          input.userId,
-          input.isActive,
-        );
-        return { user: toUserResponse(updated) };
-      }),
-    ),
+    setUserActive: manageUsersProcedure
+      .input(setUserActiveInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const authService = getAuthService(ctx.org, deps);
+          const updated = await authService.setUserActive(
+            ctx.user.id,
+            input.userId,
+            input.isActive,
+          );
+          return { user: toUserResponse(updated) };
+        }),
+      ),
 
     hubStatus: adminProcedure.query(
       withErrorWrapping(async ({ ctx }) => {

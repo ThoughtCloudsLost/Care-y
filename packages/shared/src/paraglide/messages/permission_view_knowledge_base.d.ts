@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "View knowledge base" |
+* | "Read the knowledge base" |
 *
 * @param {Permission_View_Knowledge_BaseInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

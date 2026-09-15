@@ -1,7 +1,7 @@
 /**
  * Admin intake form tRPC router.
  *
- * Thin procedures over IntakeFormService, gated with the MANAGE_QUEUES
+ * Thin procedures over IntakeFormService, gated with the MANAGE_INTAKE_FORMS
  * permission. Audit events are dispatched for save, delete, and
  * web-intake-toggle operations.
  *
@@ -13,8 +13,7 @@
 import { z } from "zod";
 import {
   router,
-  authed2faProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import type { OrgContext } from "../trpc/context.js";
@@ -44,12 +43,12 @@ export interface IntakeFormRouterDeps {
   readonly uploadLimiter: RateLimiter;
 }
 
-const queueManagerProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_QUEUES),
+const manageIntakeFormsProcedure = permissionProcedure(
+  Permission.MANAGE_INTAKE_FORMS,
 );
 
-const responseViewerProcedure = authed2faProcedure.use(
-  requireRole(Permission.VIEW_INTAKE_RESPONSES),
+const responseViewerProcedure = permissionProcedure(
+  Permission.VIEW_INTAKE_RESPONSES,
 );
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -57,7 +56,7 @@ const responseViewerProcedure = authed2faProcedure.use(
 export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
   return router({
     /** List all intake forms with summary info. */
-    list: queueManagerProcedure.query(
+    list: manageIntakeFormsProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const forms = await deps.intakeFormService.listForms(ctx.org.tenantDb);
         return { forms };
@@ -65,7 +64,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
     ),
 
     /** Load a single form with its fields (for the editor). */
-    get: queueManagerProcedure
+    get: manageIntakeFormsProcedure
       .input(z.object({ formId: intakeFormIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -77,7 +76,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
      * Create or update a form (whole-form save). Returns `{ formId, isActive }`.
      * A created form is not reachable by the public until `setActive` runs.
      */
-    save: queueManagerProcedure.input(saveIntakeFormInputSchema).mutation(
+    save: manageIntakeFormsProcedure.input(saveIntakeFormInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const result = await deps.intakeFormService.saveForm(
           ctx.org.tenantDb,
@@ -97,7 +96,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
     ),
 
     /** Delete a form. Throws FORM_HAS_RESPONSES when responses exist. */
-    remove: queueManagerProcedure
+    remove: manageIntakeFormsProcedure
       .input(z.object({ formId: intakeFormIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -118,7 +117,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
       ),
 
     /** Activate or deactivate a form. */
-    setActive: queueManagerProcedure
+    setActive: manageIntakeFormsProcedure
       .input(z.object({ formId: intakeFormIdSchema, active: z.boolean() }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -132,7 +131,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
       ),
 
     /** Read the org-wide web intake enabled flag. */
-    getWebIntakeEnabled: queueManagerProcedure.query(
+    getWebIntakeEnabled: manageIntakeFormsProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const enabled = await deps.intakeFormService.isWebIntakeEnabled(
           ctx.org.tenantDb,
@@ -142,7 +141,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
     ),
 
     /** Toggle the org-wide web intake enabled flag. */
-    setWebIntakeEnabled: queueManagerProcedure
+    setWebIntakeEnabled: manageIntakeFormsProcedure
       .input(z.object({ enabled: z.boolean() }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -163,7 +162,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
       ),
 
     /** Read the org-level built-in default form enabled flag. */
-    getBuiltinDefaultEnabled: queueManagerProcedure.query(
+    getBuiltinDefaultEnabled: manageIntakeFormsProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const enabled = await deps.intakeFormService.isBuiltinDefaultEnabled(
           ctx.org.tenantDb,
@@ -173,7 +172,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
     ),
 
     /** Toggle the org-level built-in default form enabled flag. */
-    setBuiltinDefaultEnabled: queueManagerProcedure
+    setBuiltinDefaultEnabled: manageIntakeFormsProcedure
       .input(z.object({ enabled: z.boolean() }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -298,7 +297,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
      * Stores the blob under the form-asset/ namespace in BlobStore and records
      * metadata for the serving handler.
      */
-    uploadFormAsset: queueManagerProcedure
+    uploadFormAsset: manageIntakeFormsProcedure
       .input(uploadFormAssetInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {

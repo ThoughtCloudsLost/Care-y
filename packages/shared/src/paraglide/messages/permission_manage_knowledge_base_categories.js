@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_Knowledge_Base_CategoriesInputs */
 
 const en_permission_manage_knowledge_base_categories = /** @type {(inputs: Permission_Manage_Knowledge_Base_CategoriesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Manage knowledge base categories`)
+	return /** @type {LocalizedString} */ (`Organise the knowledge base`)
 };
 
 const es_permission_manage_knowledge_base_categories = /** @type {(inputs: Permission_Manage_Knowledge_Base_CategoriesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Administrar categorías de base de conocimiento`)
+	return /** @type {LocalizedString} */ (`Organizar la base de conocimiento`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Manage knowledge base categories" |
+* | "Organise the knowledge base" |
 *
 * @param {Permission_Manage_Knowledge_Base_CategoriesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

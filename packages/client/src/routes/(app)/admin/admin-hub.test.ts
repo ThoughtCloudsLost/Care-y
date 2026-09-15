@@ -15,10 +15,8 @@ import type * as SectionScrollNavNS from "$lib/components/SectionScrollNav.svelt
 import type * as PathsNS from "$app/paths";
 import type * as NavigationNS from "$app/navigation";
 import type * as UseSectionScrollNS from "$lib/components/useSectionScroll.svelte.js";
-
-// --- Controllable mock state ---
-
-let mockPermissions = new Set<string>();
+import { Permission } from "@care-y/shared";
+import { setPermissions, getMockPermissions } from "$mocks/permissions.js";
 let mockHubStatusData: Record<string, unknown> | undefined;
 let mockProvisionedPhones:
   readonly { number: string; sid: string }[] | undefined;
@@ -40,7 +38,7 @@ vi.mock("$app/paths", async (importOriginal) => ({
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ContextNS2>()),
-  getCurrentPermissions: () => () => mockPermissions,
+  getCurrentPermissions: () => getMockPermissions,
 }));
 vi.mock(
   "$lib/shell/context.js",
@@ -191,23 +189,24 @@ if (typeof Element.prototype.animate !== "function") {
   }) as unknown as Element["animate"];
 }
 
-// --- Helpers ---
-
-function setPermissions(...perms: string[]): void {
-  mockPermissions = new Set(perms);
-}
-
 // --- Setup ---
 
 beforeEach(() => {
-  mockPermissions = new Set([
-    "manage_users",
-    "manage_keys",
-    "manage_org_config",
-    "manage_queues",
-    "manage_infrastructure",
-    "view_reports",
-  ]);
+  setPermissions(
+    Permission.MANAGE_USERS,
+    Permission.MANAGE_KEYS,
+    Permission.MANAGE_ORG_IDENTITY,
+    Permission.MANAGE_RETENTION,
+    Permission.MANAGE_NOTE_TYPES,
+    Permission.MANAGE_INTAKE_FORMS,
+    Permission.MANAGE_QUEUES,
+    Permission.MANAGE_INFRASTRUCTURE,
+    Permission.WRITE_CALL_GREETINGS,
+    Permission.WRITE_AUTOMATIC_REPLIES,
+    Permission.MANAGE_VOICEMAIL_QUARANTINE,
+    Permission.VIEW_AUDIT_LOG,
+    Permission.VIEW_REPORTS,
+  );
   mockHubStatusData = undefined;
   mockProvisionedPhones = undefined;
   mockNavbarCtx.current = undefined;
@@ -235,21 +234,21 @@ describe("Admin hub page", () => {
     });
 
     it("does not redirect when user has MANAGE_USERS", () => {
-      setPermissions("manage_users");
+      setPermissions(Permission.MANAGE_USERS);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
     });
 
     it("does not redirect when user has MANAGE_KEYS", () => {
-      setPermissions("manage_keys");
+      setPermissions(Permission.MANAGE_KEYS);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
     });
 
-    it("does not redirect when user has MANAGE_ORG_CONFIG", () => {
-      setPermissions("manage_org_config");
+    it("does not redirect when user has MANAGE_ORG_IDENTITY", () => {
+      setPermissions(Permission.MANAGE_ORG_IDENTITY);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
@@ -277,14 +276,15 @@ describe("Admin hub page", () => {
     });
 
     it("only renders groups the user has permission for", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       renderPage();
 
       expect(screen.getByText("People")).toBeTruthy();
       expect(screen.queryByText("Communications")).toBeNull();
-      // Organization group now visible: the Forms destination gates on
-      // MANAGE_QUEUES and lives in the organization group.
-      expect(screen.getByText("Organization")).toBeTruthy();
+      // Every Organization destination sits behind a key this caller does
+      // not hold, so the whole group stays hidden. Forms moved off
+      // MANAGE_QUEUES onto MANAGE_INTAKE_FORMS.
+      expect(screen.queryByText("Organization")).toBeNull();
     });
   });
 
@@ -422,12 +422,13 @@ describe("Admin hub page", () => {
   describe("log destinations", () => {
     it("renders Call Log destination for a manager with VIEW_REPORTS", () => {
       setPermissions(
-        "manage_users",
-        "manage_keys",
-        "manage_org_config",
-        "manage_queues",
-        "manage_infrastructure",
-        "view_reports",
+        Permission.MANAGE_USERS,
+        Permission.MANAGE_KEYS,
+        Permission.MANAGE_ORG_IDENTITY,
+        Permission.MANAGE_QUEUES,
+        Permission.MANAGE_INFRASTRUCTURE,
+        Permission.VIEW_REPORTS,
+        Permission.VIEW_AUDIT_LOG,
       );
       renderPage();
 
@@ -437,14 +438,15 @@ describe("Admin hub page", () => {
       ).toBeTruthy();
     });
 
-    it("renders Audit Log destination for a manager with MANAGE_USERS", () => {
+    it("renders Audit Log destination for a manager with VIEW_AUDIT_LOG", () => {
       setPermissions(
-        "manage_users",
-        "manage_keys",
-        "manage_org_config",
-        "manage_queues",
-        "manage_infrastructure",
-        "view_reports",
+        Permission.MANAGE_USERS,
+        Permission.MANAGE_KEYS,
+        Permission.MANAGE_ORG_IDENTITY,
+        Permission.MANAGE_QUEUES,
+        Permission.MANAGE_INFRASTRUCTURE,
+        Permission.VIEW_REPORTS,
+        Permission.VIEW_AUDIT_LOG,
       );
       renderPage();
 
@@ -455,7 +457,7 @@ describe("Admin hub page", () => {
     });
 
     it("hides both log destinations for a volunteer without VIEW_REPORTS or MANAGE_USERS", () => {
-      setPermissions("manage_queues");
+      setPermissions(Permission.MANAGE_QUEUES);
       renderPage();
 
       expect(screen.queryByText("Call Log")).toBeNull();
@@ -463,7 +465,7 @@ describe("Admin hub page", () => {
     });
 
     it("shows Call Log but hides Audit Log when user has VIEW_REPORTS without MANAGE_USERS", () => {
-      setPermissions("view_reports");
+      setPermissions(Permission.VIEW_REPORTS);
       renderPage();
 
       expect(screen.getByText("Call Log")).toBeTruthy();

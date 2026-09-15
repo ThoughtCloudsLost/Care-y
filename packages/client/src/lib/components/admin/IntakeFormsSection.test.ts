@@ -2,13 +2,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const { mockListForms, mockSetActive, mockGetForm, mockPermissions } =
-  vi.hoisted(() => ({
-    mockListForms: vi.fn(),
-    mockSetActive: vi.fn().mockResolvedValue({ ok: true }),
-    mockGetForm: vi.fn(),
-    mockPermissions: new Set<string>(),
-  }));
+const { mockListForms, mockSetActive, mockGetForm } = vi.hoisted(() => ({
+  mockListForms: vi.fn(),
+  mockSetActive: vi.fn().mockResolvedValue({ ok: true }),
+  mockGetForm: vi.fn(),
+}));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof MessagesNS>()),
@@ -83,7 +81,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   getOrgDecryptCache: () => ({
     decrypt: (_key: string, _value: string) => "Decrypted",
   }),
-  getCurrentPermissions: () => () => mockPermissions,
+  getCurrentPermissions: () => getMockPermissions,
 }));
 
 vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
@@ -160,6 +158,12 @@ import type * as IntakeFormCryptoNS from "$lib/portal/intake-form-crypto.js";
 import type * as ContextNS from "$lib/crypto/context.js";
 import type * as TrpcNS from "$lib/trpc/index.js";
 import type * as MessagesNS from "$lib/paraglide/messages.js";
+import { Permission } from "@care-y/shared";
+import {
+  mockPermissions,
+  resetPermissions,
+  getMockPermissions,
+} from "$mocks/permissions.js";
 
 // The section requests navigation through callback props; the route owns the
 // goto. Spying on the props is the whole navigation contract for this file.
@@ -175,7 +179,7 @@ function renderSection(): ReturnType<typeof render> {
 
 describe("IntakeFormsSection", () => {
   beforeEach(() => {
-    mockPermissions.clear();
+    resetPermissions();
     nav.onopenform.mockClear();
     nav.onopenresponses.mockClear();
     nav.oncreateform.mockClear();
@@ -227,7 +231,7 @@ describe("IntakeFormsSection", () => {
   });
 
   it("renders no anchor elements for navigation controls", () => {
-    mockPermissions.add("view_intake_responses");
+    mockPermissions.add(Permission.VIEW_INTAKE_RESPONSES);
     renderSection();
 
     // All navigation controls are buttons, not anchors
@@ -264,7 +268,7 @@ describe("IntakeFormsSection", () => {
   });
 
   it("requests the responses viewer when VIEW_INTAKE_RESPONSES is held", async () => {
-    mockPermissions.add("view_intake_responses");
+    mockPermissions.add(Permission.VIEW_INTAKE_RESPONSES);
     renderSection();
 
     const buttons = screen.getAllByLabelText("View responses");
@@ -279,7 +283,7 @@ describe("IntakeFormsSection", () => {
   });
 
   it("preserves aria-label on the responses action button", () => {
-    mockPermissions.add("view_intake_responses");
+    mockPermissions.add(Permission.VIEW_INTAKE_RESPONSES);
     renderSection();
 
     const buttons = screen.getAllByLabelText("View responses");

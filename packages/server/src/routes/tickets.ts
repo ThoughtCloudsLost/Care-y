@@ -6,10 +6,11 @@
  * creates per-request service instances from ctx.org.tenantDb (same
  * pattern as consultant.ts).
  *
- * Role requirements:
- * - volunteerProcedure: ticket CRUD, follow-ups, media reads, dependency management
- * - managerProcedure: presets, client merge
- * - adminProcedure: queue management
+ * Permission gates:
+ * - viewCasesProcedure (shared): reading a case, its follow-ups, and search
+ * - Local permission procedures: per-operation gates defined below
+ * - createFollowUp resolves its key from the entry's type, because an
+ *   outbound entry reaches the client and an internal note does not
  */
 
 import { z } from "zod";
@@ -17,11 +18,103 @@ import { getEnv } from "../env.js";
 import {
   router,
   authedProcedure,
-  volunteerProcedure,
-  managerProcedure,
-  adminProcedure,
+  viewCasesProcedure,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
+import { hasPermissionForOrg, requirePermissionForOrg } from "../auth/roles.js";
+
+/**
+ * Which key a follow-up needs, decided by what the entry does rather than
+ * where it is written. The four outbound types reach the client and take
+ * the key for the channel they travel on. Everything else records
+ * something that happened to the case, so it takes the note key.
+ */
+const OUTBOUND_FOLLOW_UP_PERMISSIONS: ReadonlyMap<FollowUpType, Permission> =
+  new Map([
+    ["sms_outbound", Permission.SEND_CLIENT_SMS],
+    ["email_outbound", Permission.SEND_CLIENT_EMAIL],
+    ["phone_call", Permission.CALL_CLIENTS],
+    ["message", Permission.MESSAGE_CLIENTS_IN_PORTAL],
+  ]);
+
+function permissionForFollowUpType(type: FollowUpType): Permission {
+  return (
+    OUTBOUND_FOLLOW_UP_PERMISSIONS.get(type) ?? Permission.WRITE_CASE_NOTES
+  );
+}
+
+// --- Local permission procedures (used only in this router) ---
+
+const openCasesProcedure = permissionProcedure(Permission.OPEN_CASES);
+
+/**
+ * Editing a message already sent. The service rejects anything that is not
+ * a volunteer-authored "message", so the only channel reachable here is the
+ * secure portal.
+ */
+const editSentPortalMessageProcedure = permissionProcedure(
+  Permission.MESSAGE_CLIENTS_IN_PORTAL,
+);
+
+const editCaseSummaryProcedure = permissionProcedure(
+  Permission.EDIT_CASE_SUMMARY,
+);
+
+const writeCaseNotesProcedure = permissionProcedure(
+  Permission.WRITE_CASE_NOTES,
+);
+
+const changeCaseStatusProcedure = permissionProcedure(
+  Permission.CHANGE_CASE_STATUS,
+);
+
+const linkCasesProcedure = permissionProcedure(Permission.LINK_CASES);
+
+const claimCasesProcedure = permissionProcedure(Permission.CLAIM_CASES);
+
+const assignCasesProcedure = permissionProcedure(Permission.ASSIGN_CASES);
+
+const sendClientMediaProcedure = permissionProcedure(
+  Permission.SEND_CLIENT_MEDIA,
+);
+
+const downloadCaseMediaProcedure = permissionProcedure(
+  Permission.DOWNLOAD_CASE_MEDIA,
+);
+
+const managePortalChannelProcedure = permissionProcedure(
+  Permission.MANAGE_PORTAL_CHANNEL,
+);
+
+const resetClientLoginProcedure = permissionProcedure(
+  Permission.RESET_CLIENT_LOGIN,
+);
+
+const revokeReplyLinksProcedure = permissionProcedure(
+  Permission.REVOKE_REPLY_LINKS,
+);
+
+const manageNoteTypesProcedure = permissionProcedure(
+  Permission.MANAGE_NOTE_TYPES,
+);
+
+const manageQueuesProcedure = permissionProcedure(Permission.MANAGE_QUEUES);
+
+const manageQueueMembershipProcedure = permissionProcedure(
+  Permission.MANAGE_QUEUE_MEMBERSHIP,
+);
+
+const manageQueueNotificationsProcedure = permissionProcedure(
+  Permission.MANAGE_QUEUE_NOTIFICATIONS,
+);
+
+const viewAuditLogProcedure = permissionProcedure(Permission.VIEW_AUDIT_LOG);
+
+const managePresetsProcedure = permissionProcedure(Permission.MANAGE_PRESETS);
+
+const mergeClientsProcedure = permissionProcedure(Permission.MERGE_CLIENTS);
+
 import type { BlobStore } from "../storage/store.js";
 import { storeAttachment } from "../portal/portal-attachment-service.js";
 import type { OrgContext } from "../trpc/context.js";
@@ -63,6 +156,7 @@ import type {
 } from "@care-y/shared";
 import {
   ErrorCode,
+  Permission,
   meetsRoleThreshold,
   upgradeToSecureLinkInputSchema,
   updateOutboundMessageInputSchema,
@@ -103,12 +197,7 @@ import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
 import { rewrapFollowUp } from "../tickets/rewrap-service.js";
 import { revokeTokensForTicket } from "../email/reply-token-service.js";
-import {
-  maskPhone,
-  formatPhone,
-  maskEmail,
-  formatEmail,
-} from "../utils/sql.js";
+import { phoneForViewer, emailForViewer } from "../utils/sql.js";
 import {
   createTicketInputSchema,
   resolveCreateTargetInputSchema,
@@ -152,7 +241,7 @@ import {
   toggleReactionInputSchema,
   searchClientsInputSchema,
   updateTicketContentInputSchema,
-  RoleId,
+  type FollowUpType,
   ticketIdSchema,
   followupIdSchema,
   recordingIdSchema,
@@ -302,7 +391,7 @@ function buildSearchRoutes(
   factory: (tDb: OrgContext["tenantDb"]) => SearchService,
 ) {
   return {
-    metadataSearch: volunteerProcedure.input(metadataSearchInputSchema).query(
+    metadataSearch: viewCasesProcedure.input(metadataSearchInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const search = factory(ctx.org.tenantDb);
         const result = await search.metadataSearch(input, ctx.user.id);
@@ -316,7 +405,7 @@ function buildSearchRoutes(
       }),
     ),
 
-    contentSearch: volunteerProcedure.input(contentSearchInputSchema).query(
+    contentSearch: viewCasesProcedure.input(contentSearchInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const search = factory(ctx.org.tenantDb);
         return search.contentSearch(input, ctx.user.id);
@@ -331,7 +420,7 @@ function buildNoteTypeRoutes(
 ) {
   return {
     noteTypes: router({
-      list: adminProcedure.query(
+      list: manageNoteTypesProcedure.query(
         withErrorWrapping(async ({ ctx }) => {
           const svc = factory(ctx.org.tenantDb);
           const rows = await svc.list();
@@ -344,7 +433,7 @@ function buildNoteTypeRoutes(
         }),
       ),
 
-      listActive: volunteerProcedure.query(
+      listActive: viewCasesProcedure.query(
         withErrorWrapping(async ({ ctx }) => {
           const svc = factory(ctx.org.tenantDb);
           const result = await svc.listActive(ctx.user.roleId);
@@ -360,73 +449,77 @@ function buildNoteTypeRoutes(
         }),
       ),
 
-      create: adminProcedure.input(createNoteTypeInputSchema).mutation(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const svc = factory(ctx.org.tenantDb);
-          const result = await svc.create({
-            encryptedName: Buffer.from(input.encryptedName, "base64"),
-            encryptedIcon: Buffer.from(input.encryptedIcon, "base64"),
-            encryptedDescription:
-              input.encryptedDescription !== undefined
-                ? Buffer.from(input.encryptedDescription, "base64")
-                : undefined,
-            escalationTargets: input.escalationTargets,
-            requiresOnClose: input.requiresOnClose,
-            minViewRole: input.minViewRole,
-            minCreateRole: input.minCreateRole,
-          });
-          auditFn(ctx.org.tenantDb, {
-            eventType: "note_type_created",
-            actorId: ctx.user.id,
-            metadata: { noteTypeId: result.id },
-          });
-          return {
-            ...result,
-            encryptedName: b64(result.encryptedName),
-            encryptedIcon: b64(result.encryptedIcon),
-            encryptedDescription: b64n(result.encryptedDescription),
-          };
-        }),
-      ),
-
-      update: adminProcedure.input(updateNoteTypeInputSchema).mutation(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const svc = factory(ctx.org.tenantDb);
-          const result = await svc.update({
-            id: input.id,
-            encryptedName:
-              input.encryptedName !== undefined
-                ? Buffer.from(input.encryptedName, "base64")
-                : undefined,
-            encryptedIcon:
-              input.encryptedIcon !== undefined
-                ? Buffer.from(input.encryptedIcon, "base64")
-                : undefined,
-            encryptedDescription:
-              input.encryptedDescription !== undefined
-                ? input.encryptedDescription !== null
+      create: manageNoteTypesProcedure
+        .input(createNoteTypeInputSchema)
+        .mutation(
+          withErrorWrapping(async ({ ctx, input }) => {
+            const svc = factory(ctx.org.tenantDb);
+            const result = await svc.create({
+              encryptedName: Buffer.from(input.encryptedName, "base64"),
+              encryptedIcon: Buffer.from(input.encryptedIcon, "base64"),
+              encryptedDescription:
+                input.encryptedDescription !== undefined
                   ? Buffer.from(input.encryptedDescription, "base64")
-                  : null
-                : undefined,
-            escalationTargets: input.escalationTargets,
-            isActive: input.isActive,
-            requiresOnClose: input.requiresOnClose,
-            minViewRole: input.minViewRole,
-            minCreateRole: input.minCreateRole,
-          });
-          auditFn(ctx.org.tenantDb, {
-            eventType: "note_type_updated",
-            actorId: ctx.user.id,
-            metadata: { noteTypeId: input.id },
-          });
-          return {
-            ...result,
-            encryptedName: b64(result.encryptedName),
-            encryptedIcon: b64(result.encryptedIcon),
-            encryptedDescription: b64n(result.encryptedDescription),
-          };
-        }),
-      ),
+                  : undefined,
+              escalationTargets: input.escalationTargets,
+              requiresOnClose: input.requiresOnClose,
+              minViewRole: input.minViewRole,
+              minCreateRole: input.minCreateRole,
+            });
+            auditFn(ctx.org.tenantDb, {
+              eventType: "note_type_created",
+              actorId: ctx.user.id,
+              metadata: { noteTypeId: result.id },
+            });
+            return {
+              ...result,
+              encryptedName: b64(result.encryptedName),
+              encryptedIcon: b64(result.encryptedIcon),
+              encryptedDescription: b64n(result.encryptedDescription),
+            };
+          }),
+        ),
+
+      update: manageNoteTypesProcedure
+        .input(updateNoteTypeInputSchema)
+        .mutation(
+          withErrorWrapping(async ({ ctx, input }) => {
+            const svc = factory(ctx.org.tenantDb);
+            const result = await svc.update({
+              id: input.id,
+              encryptedName:
+                input.encryptedName !== undefined
+                  ? Buffer.from(input.encryptedName, "base64")
+                  : undefined,
+              encryptedIcon:
+                input.encryptedIcon !== undefined
+                  ? Buffer.from(input.encryptedIcon, "base64")
+                  : undefined,
+              encryptedDescription:
+                input.encryptedDescription !== undefined
+                  ? input.encryptedDescription !== null
+                    ? Buffer.from(input.encryptedDescription, "base64")
+                    : null
+                  : undefined,
+              escalationTargets: input.escalationTargets,
+              isActive: input.isActive,
+              requiresOnClose: input.requiresOnClose,
+              minViewRole: input.minViewRole,
+              minCreateRole: input.minCreateRole,
+            });
+            auditFn(ctx.org.tenantDb, {
+              eventType: "note_type_updated",
+              actorId: ctx.user.id,
+              metadata: { noteTypeId: input.id },
+            });
+            return {
+              ...result,
+              encryptedName: b64(result.encryptedName),
+              encryptedIcon: b64(result.encryptedIcon),
+              encryptedDescription: b64n(result.encryptedDescription),
+            };
+          }),
+        ),
     }),
   };
 }
@@ -435,7 +528,7 @@ function buildAuditRoutes(
   factory: (tDb: OrgContext["tenantDb"]) => AuditService,
 ) {
   return {
-    auditLog: managerProcedure.input(auditLogQueryInputSchema).query(
+    auditLog: viewAuditLogProcedure.input(auditLogQueryInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const audit = factory(ctx.org.tenantDb);
         return audit.query(input);
@@ -578,9 +671,42 @@ export function createTicketRouter(deps: TicketRouterDeps) {
    * `contactWithheld` reports which kind of null the caller received, so
    * the UI never has to infer a permission from an absent value.
    */
+  /**
+   * What the caller may see of a client's contact details. Both keys are
+   * resolved once per request: a permission lookup can reach the database
+   * on a cache miss, and a ticket list would otherwise pay per row.
+   */
+  interface ContactViewer {
+    /** VIEW_CLIENTS: see contact details on cases you are not assigned to. */
+    readonly mayViewClients: boolean;
+    /** VIEW_CLIENT_PII: see the real number rather than the masked form. */
+    readonly unmasked: boolean;
+  }
+
+  async function resolveContactViewer(
+    org: OrgContext,
+    roleId: string,
+  ): Promise<ContactViewer> {
+    const [mayViewClients, unmasked] = await Promise.all([
+      hasPermissionForOrg(
+        org.tenantDb,
+        org.orgSchema,
+        roleId,
+        Permission.VIEW_CLIENTS,
+      ),
+      hasPermissionForOrg(
+        org.tenantDb,
+        org.orgSchema,
+        roleId,
+        Permission.VIEW_CLIENT_PII,
+      ),
+    ]);
+    return { mayViewClients, unmasked };
+  }
+
   function applyContactFormatting(
     ticket: TicketWithKeyWrap,
-    roleId: string,
+    viewer: ContactViewer,
     userId: string,
   ): TicketWireRecord {
     const {
@@ -601,20 +727,25 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       assignedDisplayName: b64n(rest.assignedDisplayName),
     };
 
-    // Volunteer not assigned to this ticket sees no contact details.
-    const hidden = roleId === RoleId.VOLUNTEER && ticket.assignedTo !== userId;
-    const isAdmin = roleId === RoleId.ADMIN;
+    // Without VIEW_CLIENTS, contact details show only on your own cases.
+    const hidden = !viewer.mayViewClients && ticket.assignedTo !== userId;
 
     let clientPhone: string | null = null;
-    if (!hidden && clientPhoneEncrypted !== null && encryptor) {
-      const buf = encryptor.decryptToBuffer(clientPhoneEncrypted);
-      clientPhone = isAdmin ? formatPhone(buf) : maskPhone(buf);
+    if (!hidden && encryptor) {
+      clientPhone = phoneForViewer(
+        clientPhoneEncrypted,
+        viewer.unmasked,
+        encryptor,
+      );
     }
 
     let clientEmail: string | null = null;
-    if (!hidden && clientEmailEncrypted !== null && encryptor) {
-      const buf = encryptor.decryptToBuffer(clientEmailEncrypted);
-      clientEmail = isAdmin ? formatEmail(buf) : maskEmail(buf);
+    if (!hidden && encryptor) {
+      clientEmail = emailForViewer(
+        clientEmailEncrypted,
+        viewer.unmasked,
+        encryptor,
+      );
     }
 
     return { ...base, clientPhone, clientEmail, contactWithheld: hidden };
@@ -622,7 +753,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
   return router({
     // --- Ticket CRUD ---
-    create: volunteerProcedure.input(createTicketInputSchema).mutation(
+    create: openCasesProcedure.input(createTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb, ctx.org.sealedBox);
         const ticket = await svc.create(ctx.user.id, {
@@ -660,7 +791,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // blocks the create, a closed one is reopened under its existing id.
     // The client needs the target id before encrypting because the AAD
     // binds it (ADR-053).
-    resolveCreateTarget: volunteerProcedure
+    resolveCreateTarget: viewCasesProcedure
       .input(resolveCreateTargetInputSchema)
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -669,25 +800,27 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    get: volunteerProcedure.input(z.object({ ticketId: ticketIdSchema })).query(
+    get: viewCasesProcedure.input(z.object({ ticketId: ticketIdSchema })).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const ticket = await svc.findById(input.ticketId, ctx.user.id);
-        return applyContactFormatting(ticket, ctx.user.roleId, ctx.user.id);
+        const viewer = await resolveContactViewer(ctx.org, ctx.user.roleId);
+        return applyContactFormatting(ticket, viewer, ctx.user.id);
       }),
     ),
 
-    list: volunteerProcedure.input(ticketListInputSchema).query(
+    list: viewCasesProcedure.input(ticketListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const tickets = await svc.list(ctx.user.id, input);
+        const viewer = await resolveContactViewer(ctx.org, ctx.user.roleId);
         return tickets.map((t) =>
-          applyContactFormatting(t, ctx.user.roleId, ctx.user.id),
+          applyContactFormatting(t, viewer, ctx.user.id),
         );
       }),
     ),
 
-    recentFollowUps: volunteerProcedure.input(recentFollowUpsInputSchema).query(
+    recentFollowUps: viewCasesProcedure.input(recentFollowUpsInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const result = await svc.recentFollowUps(ctx.user.id, input);
@@ -709,7 +842,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    listReadState: volunteerProcedure.input(listReadStateInputSchema).query(
+    listReadState: viewCasesProcedure.input(listReadStateInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const stateMap = await svc.listReadState(ctx.user.id, input);
@@ -727,7 +860,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    readStateSweep: volunteerProcedure.input(sweepReadStateInputSchema).query(
+    readStateSweep: viewCasesProcedure.input(sweepReadStateInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const sweep = await svc.sweepReadState(ctx.user.id, input);
@@ -741,21 +874,26 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    counts: volunteerProcedure.query(
+    counts: viewCasesProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         return svc.counts(ctx.user.id);
       }),
     ),
 
-    searchClients: volunteerProcedure.input(searchClientsInputSchema).query(
+    searchClients: viewCasesProcedure.input(searchClientsInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const results = await svc.searchClients(
           input.query,
           input.limit,
           ctx.user.id,
-          ctx.user.roleId === RoleId.ADMIN,
+          await hasPermissionForOrg(
+            ctx.org.tenantDb,
+            ctx.org.orgSchema,
+            ctx.user.roleId,
+            Permission.VIEW_CLIENT_PII,
+          ),
         );
         return results.map((r) => ({
           ...r,
@@ -764,7 +902,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    update: volunteerProcedure.input(updateTicketInputSchema).mutation(
+    update: changeCaseStatusProcedure.input(updateTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; field extraction from Zod-validated input is wire-format mapping, not business logic
@@ -783,7 +921,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    close: volunteerProcedure
+    close: changeCaseStatusProcedure
       .input(z.object({ ticketId: ticketIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -808,7 +946,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    reopen: volunteerProcedure
+    reopen: changeCaseStatusProcedure
       .input(
         z.object({
           ticketId: ticketIdSchema,
@@ -837,10 +975,18 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Follow-ups ---
-    createFollowUp: volunteerProcedure
+    createFollowUp: viewCasesProcedure
       .input(createFollowUpInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
+          // An outbound entry reaches the client, so it takes the key for
+          // its channel rather than the key for writing on the case.
+          await requirePermissionForOrg(
+            ctx.org.tenantDb,
+            ctx.org.orgSchema,
+            ctx.user.roleId,
+            permissionForFollowUpType(input.type),
+          );
           if (
             input.type === "internal_note" &&
             input.noteTypeId !== undefined &&
@@ -926,7 +1072,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    listFollowUps: volunteerProcedure.input(followUpListInputSchema).query(
+    listFollowUps: viewCasesProcedure.input(followUpListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const access = deps.createTicketAccess(ctx.org.tenantDb);
         const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
@@ -961,7 +1107,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    listFollowUpSummary: volunteerProcedure
+    listFollowUpSummary: viewCasesProcedure
       .input(followUpSummaryInputSchema)
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -997,7 +1143,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    listFollowUpsByIds: volunteerProcedure
+    listFollowUpsByIds: viewCasesProcedure
       .input(followUpsByIdsInputSchema)
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1019,7 +1165,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     // --- Read cursors ---
 
-    getReadCursor: volunteerProcedure
+    getReadCursor: viewCasesProcedure
       .input(z.object({ ticketId: ticketIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1033,7 +1179,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    updateReadCursor: volunteerProcedure
+    updateReadCursor: viewCasesProcedure
       .input(updateReadCursorInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1048,7 +1194,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Internal note edit/delete ---
-    updateInternalNote: volunteerProcedure
+    updateInternalNote: writeCaseNotesProcedure
       .input(updateInternalNoteInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1087,22 +1233,30 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    deleteInternalNote: volunteerProcedure
+    deleteInternalNote: viewCasesProcedure
       .input(deleteInternalNoteInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-          const isAdmin = ctx.user.roleId === RoleId.ADMIN;
+          // Your own notes are yours to delete. Reaching somebody else's
+          // takes DELETE_OTHERS_NOTES; the service decides which case
+          // applies from the note's author.
+          const mayDeleteOthers = await hasPermissionForOrg(
+            ctx.org.tenantDb,
+            ctx.org.orgSchema,
+            ctx.user.roleId,
+            Permission.DELETE_OTHERS_NOTES,
+          );
           await svc.softDeleteInternalNote(
             ctx.user.id,
             input.followUpId,
-            isAdmin,
+            mayDeleteOthers,
           );
         }),
       ),
 
-    toggleReaction: volunteerProcedure
+    toggleReaction: viewCasesProcedure
       .input(toggleReactionInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1117,7 +1271,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    getReactions: volunteerProcedure
+    getReactions: viewCasesProcedure
       .input(z.object({ followUpIds: z.array(followupIdSchema).max(100) }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1129,24 +1283,26 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Presets ---
-    createPreset: managerProcedure.input(createPresetReplyInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createPresetSvc(ctx.org.tenantDb);
-        const preset = await svc.create({
-          encryptedTitle: Buffer.from(input.encryptedTitle, "base64"),
-          encryptedBody: Buffer.from(input.encryptedBody, "base64"),
-          queueId: input.queueId,
-          createdBy: ctx.user.id,
-        });
-        return {
-          ...preset,
-          encryptedTitle: b64(preset.encryptedTitle),
-          encryptedBody: b64(preset.encryptedBody),
-        };
-      }),
-    ),
+    createPreset: managePresetsProcedure
+      .input(createPresetReplyInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createPresetSvc(ctx.org.tenantDb);
+          const preset = await svc.create({
+            encryptedTitle: Buffer.from(input.encryptedTitle, "base64"),
+            encryptedBody: Buffer.from(input.encryptedBody, "base64"),
+            queueId: input.queueId,
+            createdBy: ctx.user.id,
+          });
+          return {
+            ...preset,
+            encryptedTitle: b64(preset.encryptedTitle),
+            encryptedBody: b64(preset.encryptedBody),
+          };
+        }),
+      ),
 
-    listPresets: volunteerProcedure
+    listPresets: viewCasesProcedure
       .input(z.object({ queueId: queueIdSchema.optional() }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1160,32 +1316,34 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    updatePreset: managerProcedure.input(updatePresetReplyInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createPresetSvc(ctx.org.tenantDb);
-        const title =
-          input.encryptedTitle !== undefined
-            ? Buffer.from(input.encryptedTitle, "base64")
-            : undefined;
-        const body =
-          input.encryptedBody !== undefined
-            ? Buffer.from(input.encryptedBody, "base64")
-            : undefined;
-        // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; Buffer.from is wire-format (base64 to Buffer) conversion, not business logic
-        const updated = await svc.update(input.presetId, {
-          encryptedTitle: title,
-          encryptedBody: body,
-          queueId: input.queueId,
-        });
-        return {
-          ...updated,
-          encryptedTitle: b64(updated.encryptedTitle),
-          encryptedBody: b64(updated.encryptedBody),
-        };
-      }),
-    ),
+    updatePreset: managePresetsProcedure
+      .input(updatePresetReplyInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createPresetSvc(ctx.org.tenantDb);
+          const title =
+            input.encryptedTitle !== undefined
+              ? Buffer.from(input.encryptedTitle, "base64")
+              : undefined;
+          const body =
+            input.encryptedBody !== undefined
+              ? Buffer.from(input.encryptedBody, "base64")
+              : undefined;
+          // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; Buffer.from is wire-format (base64 to Buffer) conversion, not business logic
+          const updated = await svc.update(input.presetId, {
+            encryptedTitle: title,
+            encryptedBody: body,
+            queueId: input.queueId,
+          });
+          return {
+            ...updated,
+            encryptedTitle: b64(updated.encryptedTitle),
+            encryptedBody: b64(updated.encryptedBody),
+          };
+        }),
+      ),
 
-    deletePreset: managerProcedure
+    deletePreset: managePresetsProcedure
       .input(z.object({ presetId: presetReplyIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1196,7 +1354,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Dependencies ---
-    addDependency: volunteerProcedure.input(addDependencyInputSchema).mutation(
+    addDependency: linkCasesProcedure.input(addDependencyInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const { access } = ticketSvc(ctx.org.tenantDb);
         const svc = deps.createDependencySvc(ctx.org.tenantDb, access);
@@ -1208,7 +1366,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    removeDependency: volunteerProcedure
+    removeDependency: linkCasesProcedure
       .input(addDependencyInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1222,7 +1380,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    listDependencies: volunteerProcedure
+    listDependencies: viewCasesProcedure
       .input(z.object({ ticketId: ticketIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1232,7 +1390,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Client Merge ---
-    mergeClients: managerProcedure.input(mergeClientsInputSchema).mutation(
+    mergeClients: mergeClientsProcedure.input(mergeClientsInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createMergeSvc(ctx.org.tenantDb);
         const result = await svc.merge({
@@ -1256,7 +1414,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    undoMerge: managerProcedure.input(undoMergeInputSchema).mutation(
+    undoMerge: mergeClientsProcedure.input(undoMergeInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createMergeSvc(ctx.org.tenantDb);
         const result = await svc.undoMerge({
@@ -1275,7 +1433,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    lockMerge: managerProcedure
+    lockMerge: mergeClientsProcedure
       .input(
         z.object({
           mergeEventId: clientMergeEventIdSchema,
@@ -1297,7 +1455,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    getMergeChannelInfo: managerProcedure
+    getMergeChannelInfo: mergeClientsProcedure
       .input(
         z.object({
           primaryClientId: clientIdSchema,
@@ -1330,7 +1488,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Media ---
-    getRecording: volunteerProcedure
+    getRecording: downloadCaseMediaProcedure
       .input(z.object({ recordingId: recordingIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1343,7 +1501,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    getAttachment: volunteerProcedure
+    getAttachment: downloadCaseMediaProcedure
       .input(z.object({ attachmentId: attachmentIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1357,21 +1515,23 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    listRecordings: volunteerProcedure.input(recordingListInputSchema).query(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = mediaSvc(ctx.org.tenantDb);
-        const recs = await svc.listRecordings(ctx.user.id, input.ticketId, {
-          limit: input.limit,
-          cursor: input.cursor,
-          direction: input.direction,
-          followupId: input.followupId,
-        });
-        return recs.map((r) => ({
-          ...r,
-          fileKeyWrap: b64n(r.fileKeyWrap),
-        }));
-      }),
-    ),
+    listRecordings: downloadCaseMediaProcedure
+      .input(recordingListInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = mediaSvc(ctx.org.tenantDb);
+          const recs = await svc.listRecordings(ctx.user.id, input.ticketId, {
+            limit: input.limit,
+            cursor: input.cursor,
+            direction: input.direction,
+            followupId: input.followupId,
+          });
+          return recs.map((r) => ({
+            ...r,
+            fileKeyWrap: b64n(r.fileKeyWrap),
+          }));
+        }),
+      ),
 
     /**
      * Store one encrypted file for a ticket, before the message that
@@ -1382,7 +1542,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
      * The row is left with no follow-up until `createFollowUp` links it,
      * and media cleanup sweeps anything never linked.
      */
-    uploadAttachment: volunteerProcedure
+    uploadAttachment: sendClientMediaProcedure
       .input(uploadTicketAttachmentInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1408,25 +1568,27 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    listAttachments: volunteerProcedure.input(attachmentListInputSchema).query(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = mediaSvc(ctx.org.tenantDb);
-        const atts = await svc.listAttachments(ctx.user.id, input.ticketId, {
-          limit: input.limit,
-          cursor: input.cursor,
-          direction: input.direction,
-          followupId: input.followupId,
-        });
-        return atts.map((a) => ({
-          ...a,
-          encryptedFilename: b64n(a.encryptedFilename),
-          fileKeyWrap: b64n(a.fileKeyWrap),
-        }));
-      }),
-    ),
+    listAttachments: downloadCaseMediaProcedure
+      .input(attachmentListInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = mediaSvc(ctx.org.tenantDb);
+          const atts = await svc.listAttachments(ctx.user.id, input.ticketId, {
+            limit: input.limit,
+            cursor: input.cursor,
+            direction: input.direction,
+            followupId: input.followupId,
+          });
+          return atts.map((a) => ({
+            ...a,
+            encryptedFilename: b64n(a.encryptedFilename),
+            fileKeyWrap: b64n(a.fileKeyWrap),
+          }));
+        }),
+      ),
 
     // --- Queues ---
-    createQueue: adminProcedure.input(createQueueInputSchema).mutation(
+    createQueue: manageQueuesProcedure.input(createQueueInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createQueueSvc(ctx.org.tenantDb);
         const queue = await svc.create({
@@ -1449,7 +1611,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    listQueues: volunteerProcedure.query(
+    listQueues: viewCasesProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = deps.createQueueSvc(ctx.org.tenantDb);
         const queues = await svc.listActive();
@@ -1462,7 +1624,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    updateQueue: adminProcedure.input(updateQueueInputSchema).mutation(
+    updateQueue: manageQueuesProcedure.input(updateQueueInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createQueueSvc(ctx.org.tenantDb);
         const queue = await svc.update(input.queueId, {
@@ -1494,19 +1656,21 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    reorderQueues: adminProcedure.input(reorderQueuesInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createQueueSvc(ctx.org.tenantDb);
-        await svc.reorder(
-          input.map((item) => ({
-            queueId: item.queueId,
-            sortOrder: item.sortOrder,
-          })),
-        );
-      }),
-    ),
+    reorderQueues: manageQueuesProcedure
+      .input(reorderQueuesInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createQueueSvc(ctx.org.tenantDb);
+          await svc.reorder(
+            input.map((item) => ({
+              queueId: item.queueId,
+              sortOrder: item.sortOrder,
+            })),
+          );
+        }),
+      ),
 
-    deleteQueue: adminProcedure.input(deleteQueueInputSchema).mutation(
+    deleteQueue: manageQueuesProcedure.input(deleteQueueInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createQueueSvc(ctx.org.tenantDb);
         await svc.delete(input.queueId, input.reassignTo);
@@ -1520,7 +1684,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     ),
 
     // --- Assignment ---
-    assign: volunteerProcedure.input(assignTicketInputSchema).mutation(
+    assign: assignCasesProcedure.input(assignTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = assignmentSvc(ctx.org.tenantDb);
         const result = await svc.assignRoundRobin(input.ticketId);
@@ -1538,7 +1702,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    take: volunteerProcedure.input(takeTicketInputSchema).mutation(
+    take: claimCasesProcedure.input(takeTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = assignmentSvc(ctx.org.tenantDb);
         await svc.take(ctx.user.id, input.ticketId);
@@ -1553,7 +1717,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    release: volunteerProcedure.input(releaseTicketInputSchema).mutation(
+    release: claimCasesProcedure.input(releaseTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = assignmentSvc(ctx.org.tenantDb);
         await svc.release(ctx.user.id, input.ticketId);
@@ -1566,7 +1730,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    assignTo: volunteerProcedure.input(assignToInputSchema).mutation(
+    assignTo: assignCasesProcedure.input(assignToInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = assignmentSvc(ctx.org.tenantDb);
         await svc.assignTo(ctx.user.id, input.ticketId, input.targetUserId);
@@ -1582,7 +1746,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     ),
 
     // --- CC/Watchers ---
-    watchTicket: volunteerProcedure.input(watchTicketInputSchema).mutation(
+    watchTicket: viewCasesProcedure.input(watchTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const access = deps.createTicketAccess(ctx.org.tenantDb);
         const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
@@ -1590,7 +1754,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    unwatchTicket: volunteerProcedure.input(watchTicketInputSchema).mutation(
+    unwatchTicket: viewCasesProcedure.input(watchTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const access = deps.createTicketAccess(ctx.org.tenantDb);
         const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
@@ -1598,7 +1762,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    isWatching: volunteerProcedure.input(watchTicketInputSchema).query(
+    isWatching: viewCasesProcedure.input(watchTicketInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const access = deps.createTicketAccess(ctx.org.tenantDb);
         await access.assertAccess(ctx.user.id, input.ticketId);
@@ -1607,31 +1771,37 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    addQueueWatcher: adminProcedure.input(queueWatcherInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const access = deps.createTicketAccess(ctx.org.tenantDb);
-        const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
-        await svc.addQueueWatcher(input.queueId, input.userId);
-      }),
-    ),
+    addQueueWatcher: manageQueueNotificationsProcedure
+      .input(queueWatcherInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
+          await svc.addQueueWatcher(input.queueId, input.userId);
+        }),
+      ),
 
-    removeQueueWatcher: adminProcedure.input(queueWatcherInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const access = deps.createTicketAccess(ctx.org.tenantDb);
-        const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
-        await svc.removeQueueWatcher(input.queueId, input.userId);
-      }),
-    ),
+    removeQueueWatcher: manageQueueNotificationsProcedure
+      .input(queueWatcherInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
+          await svc.removeQueueWatcher(input.queueId, input.userId);
+        }),
+      ),
 
     // --- Queue Assignments ---
-    addQueueMember: adminProcedure.input(queueAssignmentInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
-        await svc.addMember(input.queueId, input.userId);
-      }),
-    ),
+    addQueueMember: manageQueueMembershipProcedure
+      .input(queueAssignmentInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+          await svc.addMember(input.queueId, input.userId);
+        }),
+      ),
 
-    removeQueueMember: adminProcedure
+    removeQueueMember: manageQueueMembershipProcedure
       .input(queueAssignmentInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1640,7 +1810,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    listQueueMembers: volunteerProcedure
+    listQueueMembers: viewCasesProcedure
       .input(z.object({ queueId: queueIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1649,7 +1819,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    getUserQueues: adminProcedure
+    getUserQueues: manageQueueMembershipProcedure
       .input(z.object({ userId: userIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1658,7 +1828,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    listAllQueueAssignments: adminProcedure.query(
+    listAllQueueAssignments: manageQueueMembershipProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
         return svc.listAllAssignments();
@@ -1666,7 +1836,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     ),
 
     // --- Volunteers (for @mention autocomplete) ---
-    listVolunteers: volunteerProcedure.query(
+    listVolunteers: viewCasesProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = createUserService(ctx.org.tenantDb);
         const vols = await svc.listActiveVolunteers();
@@ -1678,7 +1848,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     ),
 
     // --- Ticket participants (distinct volunteer authors) ---
-    listParticipants: volunteerProcedure
+    listParticipants: viewCasesProcedure
       .input(listParticipantsInputSchema)
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1693,7 +1863,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Dashboard: activity feed (scoped to user's queues) ---
-    recentActivity: volunteerProcedure
+    recentActivity: viewCasesProcedure
       .input(
         z
           .object({ limit: z.number().int().min(1).max(10).default(5) })
@@ -1726,7 +1896,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Dashboard: queue membership with open ticket counts ---
-    myQueues: volunteerProcedure.query(
+    myQueues: viewCasesProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const tDb = ctx.org.tenantDb;
         const qps = deps.createQueuePermissionsSvc(tDb);
@@ -1749,7 +1919,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     ),
 
     // --- Dashboard: shift info (STUB:SHIFT-SCHEDULING) ---
-    dashboardInfo: volunteerProcedure.query(
+    dashboardInfo: viewCasesProcedure.query(
       withErrorWrapping(() => {
         // TODO(shift-scheduling): Replace with real DB queries when
         // the shift scheduling feature lands.
@@ -1775,13 +1945,13 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // --- Metadata search (injected by 5d wiring) ---
     ...(deps.createSearchSvc ? buildSearchRoutes(deps.createSearchSvc) : {}),
 
-    // --- Audit log query (manager+ only, injected by 5d wiring) ---
+    // --- Audit log query (VIEW_AUDIT_LOG permission, injected by 5d wiring) ---
     ...(deps.createAuditSvc ? buildAuditRoutes(deps.createAuditSvc) : {}),
 
     // --- Ticket content editing (7.5b) ---
     // No audit() call here: the service writes the snapshot row
     // transactionally. No notify either: audit-only event.
-    updateContent: volunteerProcedure
+    updateContent: editCaseSummaryProcedure
       .input(updateTicketContentInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1808,7 +1978,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Re-wrap: volunteer re-encrypts tk_temp content with canonical tk ---
-    rewrapFollowUp: volunteerProcedure
+    rewrapFollowUp: viewCasesProcedure
       .input(
         z.object({
           followUpId: followupIdSchema,
@@ -1882,7 +2052,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Intake wrap conversion ---
-    getIntakeConversionTargets: volunteerProcedure
+    getIntakeConversionTargets: viewCasesProcedure
       .input(z.object({ ticketId: ticketIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1897,7 +2067,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    convertIntakeKeyWrap: volunteerProcedure
+    convertIntakeKeyWrap: viewCasesProcedure
       .input(
         z.object({
           ticketId: ticketIdSchema,
@@ -1934,7 +2104,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     // --- Secure Link tier management ---
 
-    upgradeToSecureLink: volunteerProcedure
+    upgradeToSecureLink: managePortalChannelProcedure
       .input(upgradeToSecureLinkInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -1976,7 +2146,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    regenerateSecureLink: volunteerProcedure
+    regenerateSecureLink: managePortalChannelProcedure
       .input(
         z.object({
           ticketId: ticketIdSchema,
@@ -2027,7 +2197,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    revokeSecureLink: volunteerProcedure
+    revokeSecureLink: managePortalChannelProcedure
       .input(z.object({ ticketId: ticketIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -2051,7 +2221,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     // --- Outbound message editing ---
 
-    updateOutboundMessage: volunteerProcedure
+    updateOutboundMessage: editSentPortalMessageProcedure
       .input(updateOutboundMessageInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -2085,7 +2255,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     // --- Encrypted Account: volunteer-side reset ---
 
-    resetClientAccount: volunteerProcedure
+    resetClientAccount: resetClientLoginProcedure
       .input(resetClientAccountInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -2112,7 +2282,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     // --- Portal thread reseed (volunteer re-seals history to new channel) ---
 
-    listForClient: volunteerProcedure
+    listForClient: viewCasesProcedure
       .input(listTicketsForClientInputSchema)
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -2126,7 +2296,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    reseedPortalHistory: volunteerProcedure
+    reseedPortalHistory: managePortalChannelProcedure
       .input(reseedPortalHistoryInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -2213,7 +2383,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    convertBlobForReseed: volunteerProcedure
+    convertBlobForReseed: managePortalChannelProcedure
       .input(convertBlobForReseedInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -2291,7 +2461,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     // --- Reply token revocation ---
 
-    revokeReplyToken: volunteerProcedure
+    revokeReplyToken: revokeReplyLinksProcedure
       .input(z.object({ ticketId: ticketIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {

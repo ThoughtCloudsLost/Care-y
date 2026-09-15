@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_InfrastructureInputs */
 
 const en_permission_manage_infrastructure = /** @type {(inputs: Permission_Manage_InfrastructureInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Manage server and infrastructure`)
+	return /** @type {LocalizedString} */ (`Configure the phone and messaging service`)
 };
 
 const es_permission_manage_infrastructure = /** @type {(inputs: Permission_Manage_InfrastructureInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Administrar servidor e infraestructura`)
+	return /** @type {LocalizedString} */ (`Configurar el servicio de telefonia y mensajeria`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Manage server and infrastructure" |
+* | "Configure the phone and messaging service" |
 *
 * @param {Permission_Manage_InfrastructureInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

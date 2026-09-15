@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_PresetsInputs */
 
 const en_permission_manage_presets = /** @type {(inputs: Permission_Manage_PresetsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Manage reply templates`)
+	return /** @type {LocalizedString} */ (`Manage saved replies`)
 };
 
 const es_permission_manage_presets = /** @type {(inputs: Permission_Manage_PresetsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Administrar plantillas de respuesta`)
+	return /** @type {LocalizedString} */ (`Administrar respuestas guardadas`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Manage reply templates" |
+* | "Manage saved replies" |
 *
 * @param {Permission_Manage_PresetsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

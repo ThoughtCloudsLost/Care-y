@@ -1,12 +1,18 @@
 /**
- * Admin CRUD routes for PhoneGreeting and SMSResponse content.
+ * CRUD routes for PhoneGreeting and SMSResponse content.
  *
- * All endpoints require admin-level permissions (MANAGE_ROLES).
+ * Greeting endpoints require WRITE_CALL_GREETINGS permission.
+ * SMS auto-reply endpoints require WRITE_AUTOMATIC_REPLIES permission.
  * Business logic is delegated to TelephonyContentService, which
  * creates repositories internally from the tenant-scoped DB.
  */
 
-import { router, adminProcedure, withErrorWrapping } from "../trpc/trpc.js";
+import { Permission } from "@care-y/shared";
+import {
+  router,
+  permissionProcedure,
+  withErrorWrapping,
+} from "../trpc/trpc.js";
 import {
   createTelephonyContentService,
   type TelephonyContentService,
@@ -30,6 +36,14 @@ import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import { InternalError } from "../errors.js";
 import { TRPCError } from "@trpc/server";
 
+const writeCallGreetingsProcedure = permissionProcedure(
+  Permission.WRITE_CALL_GREETINGS,
+);
+
+const writeAutomaticRepliesProcedure = permissionProcedure(
+  Permission.WRITE_AUTOMATIC_REPLIES,
+);
+
 export interface TelephonyContentRouterDeps {
   readonly createService: (
     tenantDb: OrgContext["tenantDb"],
@@ -49,50 +63,60 @@ export function createTelephonyContentRouter(
   const { createService, blobStore, uploadLimiter } = deps;
 
   return router({
-    listGreetings: adminProcedure.input(listGreetingsInputSchema).query(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createService(ctx.org.tenantDb);
-        return svc.listGreetings(input.phoneNumber);
-      }),
-    ),
+    listGreetings: writeCallGreetingsProcedure
+      .input(listGreetingsInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createService(ctx.org.tenantDb);
+          return svc.listGreetings(input.phoneNumber);
+        }),
+      ),
 
-    getGreetingAudio: adminProcedure.input(getGreetingAudioInputSchema).query(
-      withErrorWrapping(async ({ ctx, input }) => {
-        if (!blobStore) {
-          throw new InternalError("BlobStore not configured");
-        }
-        const svc = createService(ctx.org.tenantDb);
-        return svc.getGreetingAudio(blobStore, input.greetingId);
-      }),
-    ),
+    getGreetingAudio: writeCallGreetingsProcedure
+      .input(getGreetingAudioInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (!blobStore) {
+            throw new InternalError("BlobStore not configured");
+          }
+          const svc = createService(ctx.org.tenantDb);
+          return svc.getGreetingAudio(blobStore, input.greetingId);
+        }),
+      ),
 
-    createGreeting: adminProcedure.input(createGreetingInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createService(ctx.org.tenantDb);
-        return svc.createGreeting(input);
-      }),
-    ),
+    createGreeting: writeCallGreetingsProcedure
+      .input(createGreetingInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createService(ctx.org.tenantDb);
+          return svc.createGreeting(input);
+        }),
+      ),
 
-    updateGreeting: adminProcedure.input(updateGreetingInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createService(ctx.org.tenantDb);
-        return svc.updateGreeting(input.id, {
-          phoneNumber: input.phoneNumber,
-          text: input.text,
-          isAudio: input.isAudio,
-        });
-      }),
-    ),
+    updateGreeting: writeCallGreetingsProcedure
+      .input(updateGreetingInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createService(ctx.org.tenantDb);
+          return svc.updateGreeting(input.id, {
+            phoneNumber: input.phoneNumber,
+            text: input.text,
+            isAudio: input.isAudio,
+          });
+        }),
+      ),
 
-    deleteGreeting: adminProcedure.input(deleteGreetingInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createService(ctx.org.tenantDb);
-        await svc.deleteGreeting(input.id);
-        return { success: true as const };
-      }),
-    ),
+    deleteGreeting: writeCallGreetingsProcedure
+      .input(deleteGreetingInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createService(ctx.org.tenantDb);
+          await svc.deleteGreeting(input.id);
+          return { success: true as const };
+        }),
+      ),
 
-    uploadGreetingAudio: adminProcedure
+    uploadGreetingAudio: writeCallGreetingsProcedure
       .input(uploadGreetingAudioInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -119,7 +143,7 @@ export function createTelephonyContentRouter(
         }),
       ),
 
-    createAudioGreeting: adminProcedure
+    createAudioGreeting: writeCallGreetingsProcedure
       .input(createAudioGreetingInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -140,14 +164,16 @@ export function createTelephonyContentRouter(
         }),
       ),
 
-    listSmsResponses: adminProcedure.input(listSmsResponsesInputSchema).query(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createService(ctx.org.tenantDb);
-        return svc.listSmsResponses(input.locale);
-      }),
-    ),
+    listSmsResponses: writeAutomaticRepliesProcedure
+      .input(listSmsResponsesInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createService(ctx.org.tenantDb);
+          return svc.listSmsResponses(input.locale);
+        }),
+      ),
 
-    createSmsResponse: adminProcedure
+    createSmsResponse: writeAutomaticRepliesProcedure
       .input(createSmsResponseInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -156,7 +182,7 @@ export function createTelephonyContentRouter(
         }),
       ),
 
-    updateSmsResponse: adminProcedure
+    updateSmsResponse: writeAutomaticRepliesProcedure
       .input(updateSmsResponseInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -165,7 +191,7 @@ export function createTelephonyContentRouter(
         }),
       ),
 
-    deleteSmsResponse: adminProcedure
+    deleteSmsResponse: writeAutomaticRepliesProcedure
       .input(deleteSmsResponseInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {

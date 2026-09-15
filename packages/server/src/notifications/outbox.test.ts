@@ -32,6 +32,10 @@ import type { NotificationService } from "./service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import { createTicketAccessChecker } from "../tickets/access.js";
 import { createWatchersService } from "../tickets/watchers.js";
+import { createQueuePermissionsService } from "../tickets/queue-permissions.js";
+import { createUserService } from "../users/user-service.js";
+import type { NoteTypeService } from "../tickets/note-type-service.js";
+import { invalidateRolePermissionCache } from "../auth/roles.js";
 import {
   newTicketId,
   newKeyGeneration,
@@ -40,12 +44,43 @@ import {
   noteTypeIdSchema,
   escalationRuleIdSchema,
 } from "@care-y/shared";
-import type { QueueId, TicketId, UserId, OrgSchema } from "@care-y/shared";
-import { RoleId } from "@care-y/shared";
+import type {
+  QueueId,
+  TicketId,
+  UserId,
+  OrgSchema,
+  EscalationTarget,
+  RoleIdValue,
+} from "@care-y/shared";
+import { RoleId, Permission } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Note type service stub returning one escalation context. Only
+ * getEscalationContext is reached from the drain path; the rest of the
+ * interface exists so the stub satisfies NoteTypeService.
+ */
+function makeNoteTypeSvc(
+  escalationContext: {
+    targets: EscalationTarget[];
+    minViewRole: RoleIdValue;
+  } | null,
+): () => NoteTypeService {
+  return () =>
+    ({
+      list: vi.fn(),
+      listActive: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      getDefaultTypeId: vi.fn(),
+      getEscalationTargets: vi.fn(),
+      getEscalationContext: vi.fn().mockResolvedValue(escalationContext),
+      getMinCreateRole: vi.fn(),
+    }) as unknown as NoteTypeService;
+}
 
 function makeDrainDeps(overrides?: {
   dispatch?: NotificationService["dispatch"];
@@ -62,6 +97,20 @@ function makeDrainDeps(overrides?: {
     orgSlug: orgSlugIdSchema.parse("test-org"),
     createTicketAccess: (tDb) => createTicketAccessChecker(tDb),
     createWatchersSvc: (tDb, access) => createWatchersService(tDb, access),
+    // Real services by default. The drain resolves escalation through
+    // these, and mocking them by default is how the production wiring
+    // stayed unwired while every escalation test passed.
+    createNoteTypeSvc: makeNoteTypeSvc(null),
+    createQueuePermissionsSvc: createQueuePermissionsService,
+    createUserSvc: createUserService,
+    getManagerIds: async (tDb) => [
+      ...(await createUserService(tDb).listActiveIdsByRoleId(RoleId.MANAGER)),
+    ],
+    getQueueWatcherIds: async (tDb, qId) =>
+      createWatchersService(
+        tDb,
+        createTicketAccessChecker(tDb),
+      ).getQueueWatchers(qId),
   };
 }
 
@@ -946,7 +995,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         );
       });
 
-      it("returns empty recipients when getManagerIds and getQueueWatcherIds deps are both absent", async () => {
+      it("completes the row without dispatching when no user holds the manager role", async () => {
         const ticketId = await createTicketRow();
 
         const rule = await testDb.db
@@ -975,7 +1024,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .execute();
 
         const dispatch = vi.fn().mockResolvedValue(undefined);
-        // No getManagerIds or getQueueWatcherIds in deps
+        // Default deps: getManagerIds runs the real role lookup, which
+        // finds nobody in a schema with no manager-role user.
         const deps: OutboxDrainDeps = {
           ...makeDrainDeps({ dispatch }),
           orgSchema: testDb.schemaName as OrgSchema,
@@ -984,7 +1034,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await drainOutbox(testDb.db, deps);
 
         // Empty recipients, dispatch skipped, row still completed
-        expect(dispatch).not.toHaveBeenCalled();
+        expect(
+          dispatch.mock.calls.filter(
+            (call) => (call as unknown[])[5] === ticketId,
+          ),
+        ).toHaveLength(0);
         const row = await testDb.db
           .selectFrom("notification_outbox")
           .selectAll()
@@ -1008,9 +1062,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
       });
 
-      it("falls back to getQueueWatcherIds when action is notify_managers but getManagerIds dep is absent", async () => {
+      // The default deps here are the production shape rather than a
+      // mock: getManagerIds was optional and unwired, so notify_managers
+      // resolved to nobody in the running server while mocked tests
+      // passed.
+      it("resolves manager-role users for notify_managers through the default wiring", async () => {
         const ticketId = await createTicketRow();
-        const watcherUser = await createTestUser(testDb.db);
+        const managerUser = await createTestUser(testDb.db, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
 
         const rule = await testDb.db
           .insertInto("escalation_rules")
@@ -1041,8 +1101,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const deps: OutboxDrainDeps = {
           ...makeDrainDeps({ dispatch }),
           orgSchema: testDb.schemaName as OrgSchema,
-          // No getManagerIds, but getQueueWatcherIds is present
-          getQueueWatcherIds: vi.fn().mockResolvedValue([watcherUser.id]),
         };
 
         await drainOutbox(testDb.db, deps);
@@ -1060,18 +1118,21 @@ describe.skipIf(!process.env.DATABASE_URL)(
           recipients: readonly { userId: UserId; source: string }[];
         };
 
-        // The recipient ternary at L590 falls to getQueueWatcherIds
-        // because getManagerIds is absent. The source ternary at L596
-        // checks only the action string (still "notify_managers"), so
-        // the source is "note_escalation" even though the IDs came from
-        // the queue watcher dep.
-        expect(recipientList.recipients).toHaveLength(1);
-        expect(recipientList.recipients[0]).toEqual(
-          expect.objectContaining({
-            userId: watcherUser.id,
-            source: "note_escalation",
-          }),
+        expect(recipientList.recipients).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              userId: managerUser.id,
+              source: "note_escalation",
+            }),
+          ]),
         );
+
+        // Cleanup: a manager-role user left behind would make the
+        // no-managers test above resolve someone.
+        await testDb.db
+          .deleteFrom("users")
+          .where("id", "=", managerUser.id)
+          .execute();
       });
     });
 
@@ -1306,78 +1367,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const deps: OutboxDrainDeps = {
           ...makeDrainDeps({ dispatch }),
           orgSchema: testDb.schemaName as OrgSchema,
-          createNoteTypeSvc: () => ({
-            list: vi.fn(),
-            listActive: vi.fn(),
-            create: vi.fn(),
-            update: vi.fn(),
-            getDefaultTypeId: vi.fn(),
-            getEscalationTargets: vi.fn(),
-            // No context for this note type
-            getEscalationContext: vi.fn().mockResolvedValue(null),
-            getMinCreateRole: vi.fn(),
-          }),
+          createNoteTypeSvc: makeNoteTypeSvc(null),
         };
 
         await drainOutbox(testDb.db, deps);
 
         // Dispatch still called with ticket watcher (the escalation path
         // returned undefined, so buildRecipientList ran without escalation IDs)
-        expect(dispatch).toHaveBeenCalled();
-
-        // Cleanup
-        await testDb.db
-          .deleteFrom("ticket_watchers")
-          .where("ticket_id", "=", ticketId)
-          .where("user_id", "=", watcher.id)
-          .execute();
-      });
-
-      it("skips escalation when queue permissions or user service deps are absent", async () => {
-        const ticketId = await createTicketRow();
-        const watcher = await createTestUser(testDb.db);
-
-        await testDb.db
-          .insertInto("ticket_watchers")
-          .values({ ticket_id: ticketId, user_id: watcher.id })
-          .onConflict((oc) => oc.columns(["ticket_id", "user_id"]).doNothing())
-          .execute();
-
-        const noteTypeId = noteTypeIdSchema.parse(crypto.randomUUID());
-
-        await enqueueNotificationDurable(testDb.db, {
-          eventType: "followup_added",
-          ticketId,
-          queueId,
-          formId: null,
-          actorUserId: null,
-          noteTypeId,
-        });
-
-        const dispatch = vi.fn().mockResolvedValue(undefined);
-        const deps: OutboxDrainDeps = {
-          ...makeDrainDeps({ dispatch }),
-          orgSchema: testDb.schemaName as OrgSchema,
-          createNoteTypeSvc: () => ({
-            list: vi.fn(),
-            listActive: vi.fn(),
-            create: vi.fn(),
-            update: vi.fn(),
-            getDefaultTypeId: vi.fn(),
-            getEscalationTargets: vi.fn(),
-            getEscalationContext: vi.fn().mockResolvedValue({
-              targets: [{ type: "role" as const, value: "admin" as const }],
-              minViewRole: RoleId.VOLUNTEER,
-            }),
-            getMinCreateRole: vi.fn(),
-          }),
-          // createQueuePermissionsSvc and createUserSvc intentionally absent
-        };
-
-        await drainOutbox(testDb.db, deps);
-
-        // Escalation path returns undefined at L538, buildRecipientList
-        // still runs with ticket watcher
         expect(dispatch).toHaveBeenCalled();
 
         // Cleanup
@@ -1406,18 +1402,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const deps: OutboxDrainDeps = {
           ...makeDrainDeps({ dispatch }),
           orgSchema: testDb.schemaName as OrgSchema,
-          createNoteTypeSvc: () => ({
-            list: vi.fn(),
-            listActive: vi.fn(),
-            create: vi.fn(),
-            update: vi.fn(),
-            getDefaultTypeId: vi.fn(),
-            getEscalationTargets: vi.fn(),
-            getEscalationContext: vi.fn().mockResolvedValue({
-              targets: [{ type: "role" as const, value: "admin" as const }],
-              minViewRole: RoleId.VOLUNTEER,
-            }),
-            getMinCreateRole: vi.fn(),
+          createNoteTypeSvc: makeNoteTypeSvc({
+            targets: [{ type: "role", value: "admin" }],
+            minViewRole: RoleId.VOLUNTEER,
           }),
           createQueuePermissionsSvc: () => ({
             getQueueMembers: vi.fn().mockResolvedValue([]),
@@ -1425,8 +1412,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           createUserSvc: () => ({
             listActiveIdsByRoleId: vi
               .fn()
-              .mockResolvedValue(new Set([escalationUser.id])),
-            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue(new Set()),
+              .mockResolvedValue([escalationUser.id]),
+            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue([]),
             filterByRoleThreshold: vi.fn().mockResolvedValue([]),
           }),
         };
@@ -1465,18 +1452,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const deps: OutboxDrainDeps = {
           ...makeDrainDeps({ dispatch }),
           orgSchema: testDb.schemaName as OrgSchema,
-          createNoteTypeSvc: () => ({
-            list: vi.fn(),
-            listActive: vi.fn(),
-            create: vi.fn(),
-            update: vi.fn(),
-            getDefaultTypeId: vi.fn(),
-            getEscalationTargets: vi.fn(),
-            getEscalationContext: vi.fn().mockResolvedValue({
-              targets: [{ type: "role" as const, value: "admin" as const }],
-              minViewRole: RoleId.MANAGER,
-            }),
-            getMinCreateRole: vi.fn(),
+          createNoteTypeSvc: makeNoteTypeSvc({
+            targets: [{ type: "role", value: "admin" }],
+            minViewRole: RoleId.MANAGER,
           }),
           createQueuePermissionsSvc: () => ({
             getQueueMembers: vi.fn().mockResolvedValue([]),
@@ -1484,8 +1462,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           createUserSvc: () => ({
             listActiveIdsByRoleId: vi
               .fn()
-              .mockResolvedValue(new Set([adminUser.id, filteredOutUser.id])),
-            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue(new Set()),
+              .mockResolvedValue([adminUser.id, filteredOutUser.id]),
+            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue([]),
             // Only adminUser passes the role threshold filter
             filterByRoleThreshold: vi.fn().mockResolvedValue([adminUser.id]),
           }),
@@ -1522,18 +1500,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const deps: OutboxDrainDeps = {
           ...makeDrainDeps({ dispatch }),
           orgSchema: testDb.schemaName as OrgSchema,
-          createNoteTypeSvc: () => ({
-            list: vi.fn(),
-            listActive: vi.fn(),
-            create: vi.fn(),
-            update: vi.fn(),
-            getDefaultTypeId: vi.fn(),
-            getEscalationTargets: vi.fn(),
-            getEscalationContext: vi.fn().mockResolvedValue({
-              targets: [{ type: "role" as const, value: "admin" as const }],
-              minViewRole: RoleId.ADMIN,
-            }),
-            getMinCreateRole: vi.fn(),
+          createNoteTypeSvc: makeNoteTypeSvc({
+            targets: [{ type: "role", value: "admin" }],
+            minViewRole: RoleId.ADMIN,
           }),
           createQueuePermissionsSvc: () => ({
             getQueueMembers: vi.fn().mockResolvedValue([]),
@@ -1541,10 +1510,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           createUserSvc: () => ({
             listActiveIdsByRoleId: vi
               .fn()
-              .mockResolvedValue(
-                new Set([userIdSchema.parse(crypto.randomUUID())]),
-              ),
-            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue(new Set()),
+              .mockResolvedValue([userIdSchema.parse(crypto.randomUUID())]),
+            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue([]),
             // No users pass the filter
             filterByRoleThreshold: vi.fn().mockResolvedValue([]),
           }),
@@ -1575,26 +1542,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const deps: OutboxDrainDeps = {
           ...makeDrainDeps({ dispatch }),
           orgSchema: testDb.schemaName as OrgSchema,
-          createNoteTypeSvc: () => ({
-            list: vi.fn(),
-            listActive: vi.fn(),
-            create: vi.fn(),
-            update: vi.fn(),
-            getDefaultTypeId: vi.fn(),
-            getEscalationTargets: vi.fn(),
-            getEscalationContext: vi.fn().mockResolvedValue({
-              targets: [{ type: "role" as const, value: "manager" as const }],
-              minViewRole: RoleId.VOLUNTEER,
-            }),
-            getMinCreateRole: vi.fn(),
+          createNoteTypeSvc: makeNoteTypeSvc({
+            targets: [{ type: "role", value: "manager" }],
+            minViewRole: RoleId.VOLUNTEER,
           }),
           createQueuePermissionsSvc: () => ({
             getQueueMembers: vi.fn().mockResolvedValue([]),
           }),
           createUserSvc: () => ({
             // No users with the target role
-            listActiveIdsByRoleId: vi.fn().mockResolvedValue(new Set()),
-            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue(new Set()),
+            listActiveIdsByRoleId: vi.fn().mockResolvedValue([]),
+            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue([]),
             filterByRoleThreshold: vi.fn().mockResolvedValue([]),
           }),
         };
@@ -1604,6 +1562,154 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // Empty escalation targets -> undefined at L560, no escalation
         // recipients. No ticket/queue watchers seeded, so dispatch skipped.
         expect(dispatch).not.toHaveBeenCalled();
+      });
+
+      // Permission targets run against the real permission lookup rather
+      // than a mocked user service: the branch was stubbed to an empty
+      // array for as long as it existed, so a mock here would assert
+      // nothing about whether the key resolves to anyone.
+      it("resolves a permission target to holders of that permission", async () => {
+        const ticketId = await createTicketRow();
+        const manager = await createTestUser(testDb.db, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const volunteer = await createTestUser(testDb.db, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+        const noteTypeId = noteTypeIdSchema.parse(crypto.randomUUID());
+
+        await enqueueNotificationDurable(testDb.db, {
+          eventType: "followup_added",
+          ticketId,
+          queueId,
+          formId: null,
+          actorUserId: null,
+          noteTypeId,
+        });
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          createNoteTypeSvc: makeNoteTypeSvc({
+            // Manager and admin hold VIEW_AUDIT_LOG by default; volunteer
+            // does not.
+            targets: [{ type: "permission", value: Permission.VIEW_AUDIT_LOG }],
+            minViewRole: RoleId.VOLUNTEER,
+          }),
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        expect(dispatch).toHaveBeenCalled();
+        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+          recipients: readonly { userId: UserId; source: string }[];
+        };
+        const recipientIds = recipientList.recipients.map((r) => r.userId);
+
+        expect(recipientIds).toContain(manager.id);
+        expect(recipientIds).not.toContain(volunteer.id);
+
+        // Cleanup: a manager-role user is visible to every role-based
+        // resolution in this shared schema.
+        await testDb.db
+          .deleteFrom("users")
+          .where("id", "in", [manager.id, volunteer.id])
+          .execute();
+      });
+
+      it("resolves a permission target through an org override that grants the key", async () => {
+        const ticketId = await createTicketRow();
+        const volunteer = await createTestUser(testDb.db, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+        const noteTypeId = noteTypeIdSchema.parse(crypto.randomUUID());
+
+        await testDb.db
+          .insertInto("role_permission_overrides")
+          .values({
+            role_id: RoleId.VOLUNTEER,
+            permission: Permission.VIEW_AUDIT_LOG,
+            enabled: true,
+          })
+          .onConflict((oc) => oc.columns(["role_id", "permission"]).doNothing())
+          .execute();
+        invalidateRolePermissionCache(testDb.schemaName as OrgSchema);
+
+        await enqueueNotificationDurable(testDb.db, {
+          eventType: "followup_added",
+          ticketId,
+          queueId,
+          formId: null,
+          actorUserId: null,
+          noteTypeId,
+        });
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          createNoteTypeSvc: makeNoteTypeSvc({
+            targets: [{ type: "permission", value: Permission.VIEW_AUDIT_LOG }],
+            minViewRole: RoleId.VOLUNTEER,
+          }),
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        expect(dispatch).toHaveBeenCalled();
+        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+          recipients: readonly { userId: UserId; source: string }[];
+        };
+        expect(recipientList.recipients.map((r) => r.userId)).toContain(
+          volunteer.id,
+        );
+
+        // Cleanup: the override would leak into later tests in this schema
+        await testDb.db
+          .deleteFrom("role_permission_overrides")
+          .where("role_id", "=", RoleId.VOLUNTEER)
+          .where("permission", "=", Permission.VIEW_AUDIT_LOG)
+          .execute();
+        invalidateRolePermissionCache(testDb.schemaName as OrgSchema);
+      });
+
+      it("warns and resolves nobody when a permission target names an unknown key", async () => {
+        const ticketId = await createTicketRow();
+        const noteTypeId = noteTypeIdSchema.parse(crypto.randomUUID());
+        const warnSpy = vi
+          .spyOn(console, "warn")
+          .mockImplementation(() => undefined);
+
+        await enqueueNotificationDurable(testDb.db, {
+          eventType: "followup_added",
+          ticketId,
+          queueId,
+          formId: null,
+          actorUserId: null,
+          noteTypeId,
+        });
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          createNoteTypeSvc: makeNoteTypeSvc({
+            // A key removed by the permission rewrite, as a stale org
+            // config would still carry it.
+            targets: [{ type: "permission", value: "view_tickets" }],
+            minViewRole: RoleId.VOLUNTEER,
+          }),
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining("view_tickets"),
+        );
+        // No watchers seeded and no resolvable target, so nothing to send
+        expect(dispatch).not.toHaveBeenCalled();
+        warnSpy.mockRestore();
       });
     });
 

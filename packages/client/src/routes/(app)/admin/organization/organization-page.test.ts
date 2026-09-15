@@ -8,10 +8,10 @@ import type * as ContextNS from "$lib/shell/context.js";
 import type * as ContextNS2 from "$lib/crypto/context.js";
 import type * as PathsNS from "$app/paths";
 import type * as NavigationNS from "$app/navigation";
+import { Permission } from "@care-y/shared";
+import { setPermissions, getMockPermissions } from "$mocks/permissions.js";
 
 // --- Controllable mock state ---
-
-let mockPermissions = new Set<string>();
 
 const mockGoto = vi.fn();
 
@@ -32,7 +32,7 @@ vi.mock("$app/paths", async (importOriginal) => ({
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ContextNS2>()),
-  getCurrentPermissions: () => () => mockPermissions,
+  getCurrentPermissions: () => getMockPermissions,
 }));
 
 const mockNavbarCtx = { current: undefined as unknown };
@@ -184,23 +184,19 @@ if (typeof Element.prototype.animate !== "function") {
   }) as unknown as Element["animate"];
 }
 
-// --- Helpers ---
-
-function setPermissions(...perms: string[]): void {
-  mockPermissions = new Set(perms);
-}
-
-const ALL_ORG_PERMISSIONS = [
-  "manage_org_config",
-  "manage_keys",
-  "manage_queues",
-  "view_reports",
+const ALL_ORG_PERMISSIONS: readonly Permission[] = [
+  Permission.MANAGE_ORG_IDENTITY,
+  Permission.MANAGE_KEYS,
+  Permission.MANAGE_RETENTION,
+  Permission.MANAGE_NOTE_TYPES,
+  Permission.MANAGE_INTAKE_FORMS,
+  Permission.VIEW_REPORTS,
 ];
 
 // --- Setup ---
 
 beforeEach(() => {
-  mockPermissions = new Set(ALL_ORG_PERMISSIONS);
+  setPermissions(...ALL_ORG_PERMISSIONS);
   mockNavbarCtx.current = undefined;
   mockGoto.mockClear();
 });
@@ -225,14 +221,14 @@ describe("Organization page", () => {
     });
 
     it("does not redirect when user has MANAGE_KEYS", () => {
-      setPermissions("manage_keys");
+      setPermissions(Permission.MANAGE_KEYS);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
     });
 
-    it("does not redirect when user has MANAGE_ORG_CONFIG", () => {
-      setPermissions("manage_org_config");
+    it("does not redirect when user has MANAGE_ORG_IDENTITY", () => {
+      setPermissions(Permission.MANAGE_ORG_IDENTITY);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
@@ -253,7 +249,7 @@ describe("Organization page", () => {
     });
 
     it("only renders sections the user has permission for", () => {
-      setPermissions("manage_keys");
+      setPermissions(Permission.MANAGE_KEYS);
       const { container } = renderPage();
 
       expect(container.querySelector("#section-keys")).toBeTruthy();
@@ -265,8 +261,12 @@ describe("Organization page", () => {
       expect(container.querySelector("#section-intake-forms")).toBeNull();
     });
 
-    it("branding and retention both appear with MANAGE_ORG_CONFIG", () => {
-      setPermissions("manage_org_config");
+    it("renders each org-identity section only with its own key", () => {
+      setPermissions(
+        Permission.MANAGE_ORG_IDENTITY,
+        Permission.MANAGE_RETENTION,
+        Permission.MANAGE_NOTE_TYPES,
+      );
       const { container } = renderPage();
 
       expect(container.querySelector("#section-general")).toBeTruthy();

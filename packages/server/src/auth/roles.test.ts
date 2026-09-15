@@ -57,12 +57,12 @@ describe("ROLE_CONFIG", () => {
 });
 
 describe("hasPermission", () => {
-  it("returns true for volunteer + VIEW_TICKETS", () => {
-    expect(hasPermission(RoleId.VOLUNTEER, Permission.VIEW_TICKETS)).toBe(true);
+  it("returns true for volunteer + VIEW_CASES", () => {
+    expect(hasPermission(RoleId.VOLUNTEER, Permission.VIEW_CASES)).toBe(true);
   });
 
-  it("returns true for manager + MANAGE_USERS", () => {
-    expect(hasPermission(RoleId.MANAGER, Permission.MANAGE_USERS)).toBe(true);
+  it("returns true for manager + VIEW_CLIENTS", () => {
+    expect(hasPermission(RoleId.MANAGER, Permission.VIEW_CLIENTS)).toBe(true);
   });
 
   it("returns true for admin + MANAGE_ROLES", () => {
@@ -86,17 +86,17 @@ describe("hasPermission", () => {
   });
 
   it("returns false for an unknown role ID", () => {
-    expect(hasPermission("unknown-role", Permission.VIEW_TICKETS)).toBe(false);
+    expect(hasPermission("unknown-role", Permission.VIEW_CASES)).toBe(false);
   });
 
   it("returns false for an empty string role ID", () => {
-    expect(hasPermission("", Permission.VIEW_TICKETS)).toBe(false);
+    expect(hasPermission("", Permission.VIEW_CASES)).toBe(false);
   });
 
-  it("allows all three roles to VIEW_TICKETS", () => {
-    expect(hasPermission(RoleId.VOLUNTEER, Permission.VIEW_TICKETS)).toBe(true);
-    expect(hasPermission(RoleId.MANAGER, Permission.VIEW_TICKETS)).toBe(true);
-    expect(hasPermission(RoleId.ADMIN, Permission.VIEW_TICKETS)).toBe(true);
+  it("allows all three roles to VIEW_CASES", () => {
+    expect(hasPermission(RoleId.VOLUNTEER, Permission.VIEW_CASES)).toBe(true);
+    expect(hasPermission(RoleId.MANAGER, Permission.VIEW_CASES)).toBe(true);
+    expect(hasPermission(RoleId.ADMIN, Permission.VIEW_CASES)).toBe(true);
   });
 });
 
@@ -157,9 +157,9 @@ describe("mergePermissions", () => {
 
   it("removes a permission when override has enabled=false", () => {
     const result = mergePermissions(RoleId.VOLUNTEER, [
-      { permission: Permission.VIEW_TICKETS, enabled: false },
+      { permission: Permission.VIEW_CASES, enabled: false },
     ]);
-    expect(result.has(Permission.VIEW_TICKETS)).toBe(false);
+    expect(result.has(Permission.VIEW_CASES)).toBe(false);
   });
 
   it("ignores unknown permission strings", () => {
@@ -352,7 +352,7 @@ describe("getEffectivePermissions + cache", () => {
       },
       {
         role_id: RoleId.MANAGER,
-        permission: Permission.VIEW_TICKETS,
+        permission: Permission.VIEW_CASES,
         enabled: false,
       },
     ]);
@@ -373,7 +373,7 @@ describe("getEffectivePermissions + cache", () => {
       RoleId.MANAGER,
     );
     expect(queryCount).toBe(1);
-    expect(mgr.has(Permission.VIEW_TICKETS)).toBe(false);
+    expect(mgr.has(Permission.VIEW_CASES)).toBe(false);
 
     const admin = await getEffectivePermissions(
       tDb,
@@ -409,7 +409,7 @@ describe("hasPermissionForOrg", () => {
       tDb,
       schema("perm_test_org"),
       RoleId.VOLUNTEER,
-      Permission.VIEW_TICKETS,
+      Permission.VIEW_CASES,
     );
     expect(result).toBe(true);
   });
@@ -446,7 +446,7 @@ describe("hasPermissionForOrg", () => {
     const tDb = createStubTDb([
       {
         role_id: RoleId.VOLUNTEER,
-        permission: Permission.VIEW_TICKETS,
+        permission: Permission.VIEW_CASES,
         enabled: false,
       },
     ]);
@@ -454,7 +454,7 @@ describe("hasPermissionForOrg", () => {
       tDb,
       schema("perm_test_org"),
       RoleId.VOLUNTEER,
-      Permission.VIEW_TICKETS,
+      Permission.VIEW_CASES,
     );
     expect(result).toBe(false);
   });
@@ -465,7 +465,7 @@ describe("hasPermissionForOrg", () => {
       tDb,
       schema("perm_test_org"),
       "invalid-role-id",
-      Permission.VIEW_TICKETS,
+      Permission.VIEW_CASES,
     );
     expect(result).toBe(false);
   });

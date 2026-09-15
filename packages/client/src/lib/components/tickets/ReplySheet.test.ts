@@ -37,6 +37,7 @@ import type * as TicketQueries from "$lib/tickets/queries.js";
 import type * as CareYCrypto from "@care-y/crypto";
 import type * as TicketComposeMod from "$lib/components/tickets/TicketCompose.svelte";
 import type * as ChannelPolicyMod from "$lib/query/channel-policy.svelte.js";
+import { getMockPermissions } from "$mocks/permissions.js";
 
 // jsdom has no ResizeObserver; ShellMessagebar and Konsta may observe.
 vi.stubGlobal(
@@ -161,7 +162,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
     ({ decrypt: vi.fn().mockReturnValue(null) }) as never,
   getCurrentUserId: () => () => "8b7bd6a0-59f2-4f4b-9d6a-3f1c2e4a5b6c",
   getCurrentUserRoleId: () => () => undefined,
-  getCurrentPermissions: () => () => new Set(),
+  getCurrentPermissions: () => getMockPermissions,
   getFollowUpDecryptCache: () =>
     ({
       decryptContent: vi.fn().mockReturnValue("Decrypted preview content"),

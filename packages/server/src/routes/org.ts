@@ -11,6 +11,7 @@
  */
 
 import {
+  Permission,
   createOrgInputSchema,
   updateOrgGeneralAdminInputSchema,
   updateChannelPolicyInputSchema,
@@ -19,13 +20,21 @@ import {
 import {
   router,
   publicProcedure,
-  adminProcedure,
-  volunteerProcedure,
+  authed2faProcedure,
+  permissionProcedure,
   throwAsTrpc,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import type { OrgService } from "../org/service.js";
 import { createOrgConfigService } from "../org/org-config-service.js";
+
+const manageOrgIdentityProcedure = permissionProcedure(
+  Permission.MANAGE_ORG_IDENTITY,
+);
+
+const manageChannelRoutingProcedure = permissionProcedure(
+  Permission.MANAGE_CHANNEL_ROUTING,
+);
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createOrgRouter(orgService: OrgService) {
@@ -47,14 +56,14 @@ export function createOrgRouter(orgService: OrgService) {
         }
       }),
 
-    getOrgGeneral: adminProcedure.query(
+    getOrgGeneral: manageOrgIdentityProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = createOrgConfigService(ctx.org.tenantDb);
         return svc.getOrgGeneral();
       }),
     ),
 
-    updateOrgGeneral: adminProcedure
+    updateOrgGeneral: manageOrgIdentityProcedure
       .input(updateOrgGeneralAdminInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -64,7 +73,7 @@ export function createOrgRouter(orgService: OrgService) {
         }),
       ),
 
-    getIntakeQueue: adminProcedure.query(
+    getIntakeQueue: manageChannelRoutingProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = createOrgConfigService(ctx.org.tenantDb);
         const queueId = await svc.getIntakeQueue();
@@ -72,22 +81,24 @@ export function createOrgRouter(orgService: OrgService) {
       }),
     ),
 
-    setIntakeQueue: adminProcedure.input(setIntakeQueueInputSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = createOrgConfigService(ctx.org.tenantDb);
-        await svc.setIntakeQueue(input.queueId);
-        return { success: true as const };
-      }),
-    ),
+    setIntakeQueue: manageChannelRoutingProcedure
+      .input(setIntakeQueueInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createOrgConfigService(ctx.org.tenantDb);
+          await svc.setIntakeQueue(input.queueId);
+          return { success: true as const };
+        }),
+      ),
 
-    getChannelPolicy: volunteerProcedure.query(
+    getChannelPolicy: authed2faProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = createOrgConfigService(ctx.org.tenantDb);
         return svc.getChannelPolicy();
       }),
     ),
 
-    updateChannelPolicy: adminProcedure
+    updateChannelPolicy: manageChannelRoutingProcedure
       .input(updateChannelPolicyInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {

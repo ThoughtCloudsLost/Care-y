@@ -1,0 +1,16 @@
+/**
+* | output |
+* | --- |
+* | "Reset a client's portal login" |
+*
+* @param {Permission_Reset_Client_LoginInputs} inputs
+* @param {{ locale?: "en" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const permission_reset_client_login: ((inputs?: Permission_Reset_Client_LoginInputs, options?: {
+    locale?: "en" | "es";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Permission_Reset_Client_LoginInputs, {
+    locale?: "en" | "es";
+}, {}>;
+export type LocalizedString = import("../runtime.js").LocalizedString;
+export type Permission_Reset_Client_LoginInputs = {};

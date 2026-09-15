@@ -20,8 +20,8 @@ import { RoleId, Permission } from "@care-y/shared";
 // Duplicated here as test expectations so a drift between ROLE_CONFIG
 // and setSignedInRole's returned array causes a loud failure.
 const VOLUNTEER_PERMISSIONS: readonly Permission[] = [
-  Permission.VIEW_TICKETS,
-  Permission.MANAGE_OWN_TICKETS,
+  Permission.VIEW_CASES,
+  Permission.WRITE_CASE_NOTES,
   Permission.VIEW_KNOWLEDGE_BASE,
   Permission.EDIT_KNOWLEDGE_BASE,
   Permission.VIEW_OWN_SHIFTS,
@@ -29,7 +29,7 @@ const VOLUNTEER_PERMISSIONS: readonly Permission[] = [
 
 const ADMIN_ONLY_PERMISSIONS: readonly Permission[] = [
   Permission.MANAGE_ROLES,
-  Permission.MANAGE_ORG_CONFIG,
+  Permission.MANAGE_ORG_IDENTITY,
   Permission.MANAGE_KEYS,
   Permission.MANAGE_INFRASTRUCTURE,
 ];

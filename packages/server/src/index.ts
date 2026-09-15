@@ -42,7 +42,10 @@ import {
   createTotpReplayCache,
   assertSingleInstanceTotpReplayCache,
 } from "./auth/totp-replay-cache.js";
-import { assertSingleInstancePermissionCache } from "./auth/roles.js";
+import {
+  assertSingleInstancePermissionCache,
+  hasPermissionForOrg,
+} from "./auth/roles.js";
 import {
   deriveKeys,
   createFieldEncryptor,
@@ -127,6 +130,7 @@ import { createAssignmentService } from "./tickets/assignment.js";
 import { createWatchersService } from "./tickets/watchers.js";
 import { createNoteTypeService } from "./tickets/note-type-service.js";
 import { createQueuePermissionsService } from "./tickets/queue-permissions.js";
+import { createUserService } from "./users/user-service.js";
 import {
   registerEscalationHandler,
   escalateTenantTickets,
@@ -186,8 +190,10 @@ import type {
   OrgId,
   OrgSchema,
   OrgSlug,
+  UserId,
   StoredProviderId,
 } from "@care-y/shared";
+import { RoleId } from "@care-y/shared";
 
 // --- DB startup probe ---
 
@@ -971,6 +977,19 @@ registerOutboxDrainHandler(jobQueue, {
     orgSlug: org.slug,
     createTicketAccess: (tDb) => createTicketAccessChecker(tDb),
     createWatchersSvc: (tDb, access) => createWatchersService(tDb, access),
+    createNoteTypeSvc: (tDb) => createNoteTypeService(tDb, secretsEncryptor),
+    createQueuePermissionsSvc: createQueuePermissionsService,
+    createUserSvc: createUserService,
+    // "Notify managers" names the manager role, matching how a note-type
+    // escalation target of role:manager resolves. Both are runtime
+    // configuration naming a role, not an authorization decision.
+    getManagerIds: async (tDb) => [
+      ...(await createUserService(tDb).listActiveIdsByRoleId(RoleId.MANAGER)),
+    ],
+    getQueueWatcherIds: async (tDb, queueId) => {
+      const access = createTicketAccessChecker(tDb);
+      return createWatchersService(tDb, access).getQueueWatchers(queueId);
+    },
   }),
 });
 
@@ -1018,6 +1037,25 @@ const webhookHandler = createWebhookHandler(
   webhookDispatch,
   env.WEBHOOK_BASE_URL,
 );
+
+/**
+ * Resolves an active user's role id within an org schema. Shared by the
+ * two raw HTTP paths that authorize outside tRPC: the relay and blob
+ * download. Returns null when the user is gone or deactivated, which both
+ * callers treat as a refusal.
+ */
+async function lookupUserRole(
+  orgSchema: OrgSchema,
+  userId: UserId,
+): Promise<string | null> {
+  const row = await tenantDb(orgSchema)
+    .selectFrom("users")
+    .select("role_id")
+    .where("id", "=", userId)
+    .where("is_active", "=", true)
+    .executeTakeFirst();
+  return row?.role_id ?? null;
+}
 
 // --- Relay infrastructure ---
 
@@ -1121,6 +1159,16 @@ async function getOrgSealedBoxEncryptor(
 }
 
 const relayHandler = createRelayHandler({
+  hasPermission: async (orgSchema, userId, permission) => {
+    const roleId = await lookupUserRole(orgSchema, userId);
+    if (roleId === null) return false;
+    return hasPermissionForOrg(
+      tenantDb(orgSchema),
+      orgSchema,
+      roleId,
+      permission,
+    );
+  },
   getProvider: async (orgId: OrgId) => providerFactory.getProvider(orgId),
   getTenantDb: tenantDb,
   createConsultantRepo: (tDb: Kysely<TenantDatabase>) =>
@@ -1225,15 +1273,7 @@ const blobDownloadHandler = createBlobDownloadHandler({
     return createMediaService(tDb, blobStore, createTicketAccessChecker(tDb));
   },
   createKBMediaSvc: (orgSchema) => createKBMediaService(tenantDb(orgSchema)),
-  getUserRole: async (orgSchema, userId) => {
-    const row = await tenantDb(orgSchema)
-      .selectFrom("users")
-      .select("role_id")
-      .where("id", "=", userId)
-      .where("is_active", "=", true)
-      .executeTakeFirst();
-    return row?.role_id ?? null;
-  },
+  getUserRole: lookupUserRole,
   createTenantDb: (orgSchema) => tenantDb(orgSchema),
 });
 

@@ -281,7 +281,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           ctx.org.tenantDb,
           ctx.org.orgSchema,
           ctx.user.roleId,
-          Permission.MANAGE_ROLES,
+          Permission.MANAGE_USERS,
         );
 
         const inviteService = createInviteService(ctx.org.tenantDb);
@@ -313,7 +313,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           ctx.org.tenantDb,
           ctx.org.orgSchema,
           ctx.user.roleId,
-          Permission.MANAGE_ROLES,
+          Permission.MANAGE_USERS,
         );
 
         const inviteService = createInviteService(ctx.org.tenantDb);
@@ -336,7 +336,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           ctx.org.tenantDb,
           ctx.org.orgSchema,
           ctx.user.roleId,
-          Permission.MANAGE_ROLES,
+          Permission.MANAGE_USERS,
         );
 
         const inviteService = createInviteService(ctx.org.tenantDb);
@@ -354,7 +354,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
             ctx.org.tenantDb,
             ctx.org.orgSchema,
             ctx.user.roleId,
-            Permission.MANAGE_ROLES,
+            Permission.MANAGE_ORG_IDENTITY,
           );
 
           const service = createOnboardingService(ctx.org.tenantDb, deps);

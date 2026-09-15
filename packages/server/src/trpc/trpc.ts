@@ -22,41 +22,60 @@ import {
   PowRequiredError,
 } from "../errors.js";
 
-const t = initTRPC.context<Context>().create({
-  // Tested via caller round-trip in trpc.test.ts (errorFormatter suite).
-  // V8 can't trace execution through tRPC's internal callback invocation.
-  /* v8 ignore start */
-  errorFormatter({ shape, error }) {
-    const cause = error.cause;
+/**
+ * Per-procedure metadata.
+ *
+ * `permission` is the key the procedure enforces. It exists so the built
+ * router can be walked to enumerate what is enforced where: without it a
+ * required key lives only inside a middleware closure, and no test can
+ * tell an enforced key from an inert one. Set it through
+ * `permissionProcedure`, never by hand, so the declaration and the check
+ * cannot disagree.
+ */
+export interface ProcedureMeta {
+  readonly permission?: Permission;
+}
 
-    // Map AppError subtypes to tRPC error shape.
-    // Internal details stay in server logs; only code + message go to the client.
-    if (isAppError(cause)) {
-      return {
-        ...shape,
-        data: {
-          ...shape.data,
-          code: cause.code,
-          // Non-operational errors (bugs) get a generic message.
-          // Operational errors (bad input, auth failures) pass through.
-          ...(cause.isOperational ? {} : { message: "Internal server error" }),
-          // PoW challenge data forwarded so the client can solve and retry.
-          ...(cause instanceof PowRequiredError
-            ? { challenge: cause.challenge, difficulty: cause.difficulty }
-            : {}),
-          // Retry hint forwarded so the client can schedule a retry
-          // instead of parsing it out of the message string.
-          ...(cause instanceof RateLimitError
-            ? { retryAfterSeconds: cause.retryAfterSeconds }
-            : {}),
-        },
-      };
-    }
+const t = initTRPC
+  .context<Context>()
+  .meta<ProcedureMeta>()
+  .create({
+    // Tested via caller round-trip in trpc.test.ts (errorFormatter suite).
+    // V8 can't trace execution through tRPC's internal callback invocation.
+    /* v8 ignore start */
+    errorFormatter({ shape, error }) {
+      const cause = error.cause;
 
-    return shape;
-  },
-  /* v8 ignore stop */
-});
+      // Map AppError subtypes to tRPC error shape.
+      // Internal details stay in server logs; only code + message go to the client.
+      if (isAppError(cause)) {
+        return {
+          ...shape,
+          data: {
+            ...shape.data,
+            code: cause.code,
+            // Non-operational errors (bugs) get a generic message.
+            // Operational errors (bad input, auth failures) pass through.
+            ...(cause.isOperational
+              ? {}
+              : { message: "Internal server error" }),
+            // PoW challenge data forwarded so the client can solve and retry.
+            ...(cause instanceof PowRequiredError
+              ? { challenge: cause.challenge, difficulty: cause.difficulty }
+              : {}),
+            // Retry hint forwarded so the client can schedule a retry
+            // instead of parsing it out of the message string.
+            ...(cause instanceof RateLimitError
+              ? { retryAfterSeconds: cause.retryAfterSeconds }
+              : {}),
+          },
+        };
+      }
+
+      return shape;
+    },
+    /* v8 ignore stop */
+  });
 
 export const router = t.router;
 export const publicProcedure = t.procedure;
@@ -203,44 +222,68 @@ export function requireRole(permission: Permission) {
   });
 }
 
-/** Procedure that requires org + auth + 2FA + at least volunteer-level permissions. */
-export const volunteerProcedure = authed2faProcedure.use(
-  requireRole(Permission.VIEW_TICKETS),
+/**
+ * A procedure gated on one permission, with that permission declared in
+ * the procedure's metadata.
+ *
+ * One call sets both, so a procedure cannot enforce one key while
+ * declaring another, and every gate is visible to a caller walking the
+ * router. Build permission-gated procedures through this rather than
+ * chaining `requireRole` directly.
+ */
+// care-y-ignore-next-line missing-return-type -- tRPC's ProcedureBuilder is an internal generic that cannot be written explicitly; requireRole above uses the same pattern
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types -- same reason as above
+export function permissionProcedure(permission: Permission) {
+  return authed2faProcedure.meta({ permission }).use(requireRole(permission));
+}
+
+/**
+ * Shared permission procedures.
+ *
+ * Only keys used by more than one route file live here. A key gating a
+ * single router is defined in that router beside the operations it
+ * guards, with `permissionProcedure(Permission.X)`, so the gate stays
+ * next to what it gates.
+ *
+ * Procedures are named for the permission they check, not for a role.
+ * The old volunteer/manager/admin names implied a hierarchy the model
+ * does not have: an org can grant any key to any role except the three
+ * in LOCKED_PERMISSIONS.
+ */
+
+/** Reading a case: its notes, history, participants, and search. */
+export const viewCasesProcedure = permissionProcedure(Permission.VIEW_CASES);
+
+/** Role administration: the permission matrix itself, and role assignment. */
+export const adminProcedure = permissionProcedure(Permission.MANAGE_ROLES);
+
+/** Key custody: org key rotation, per-user wraps, OPRF admin evaluation. */
+export const keyCustodyProcedure = permissionProcedure(Permission.MANAGE_KEYS);
+
+/** Reading knowledge base articles. */
+export const kbReadProcedure = permissionProcedure(
+  Permission.VIEW_KNOWLEDGE_BASE,
 );
 
-/** Procedure that requires org + auth + 2FA + manager-level permissions. */
-export const managerProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_USERS),
+/** Writing and editing knowledge base articles. */
+export const kbEditProcedure = permissionProcedure(
+  Permission.EDIT_KNOWLEDGE_BASE,
 );
 
-/** Procedure that requires org + auth + 2FA + admin-level permissions. */
-export const adminProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_ROLES),
+/** Knowledge base taxonomy: creating, renaming and reordering categories. */
+export const kbCategoryProcedure = permissionProcedure(
+  Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
 );
 
-/** Procedure that requires org + auth + 2FA + knowledge base read access. */
-export const kbReadProcedure = authed2faProcedure.use(
-  requireRole(Permission.VIEW_KNOWLEDGE_BASE),
+/** Deleting a knowledge base article. The KB has no authorship check;
+ *  contrast DELETE_OTHERS_NOTES, where the service does branch on author. */
+export const kbDeleteProcedure = permissionProcedure(
+  Permission.DELETE_KNOWLEDGE_BASE_ARTICLES,
 );
 
-/** Procedure that requires org + auth + 2FA + knowledge base edit access. */
-export const kbEditProcedure = authed2faProcedure.use(
-  requireRole(Permission.EDIT_KNOWLEDGE_BASE),
-);
-
-/** Procedure that requires org + auth + 2FA + knowledge base category management. */
-export const kbCategoryProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES),
-);
-
-/** Procedure that requires org + auth + 2FA + content moderation access. */
-export const moderationProcedure = authed2faProcedure.use(
-  requireRole(Permission.MODERATE_CONTENT),
-);
-
-/** Procedure that requires org + auth + 2FA + infrastructure management access. */
-export const infrastructureProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_INFRASTRUCTURE),
+/** Telephony provider configuration: credentials, numbers, routing. */
+export const infrastructureProcedure = permissionProcedure(
+  Permission.MANAGE_INFRASTRUCTURE,
 );
 
 /**

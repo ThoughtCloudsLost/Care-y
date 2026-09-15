@@ -82,7 +82,9 @@
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
   const canEdit = $derived(permissions.has(Permission.EDIT_KNOWLEDGE_BASE));
-  const canDelete = $derived(permissions.has(Permission.MODERATE_CONTENT));
+  const canDelete = $derived(
+    permissions.has(Permission.DELETE_KNOWLEDGE_BASE_ARTICLES),
+  );
   const canManageCategories = $derived(
     permissions.has(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES),
   );

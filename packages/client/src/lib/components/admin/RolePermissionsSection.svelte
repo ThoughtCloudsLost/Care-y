@@ -22,40 +22,80 @@
   import ToggleMatrix from "$lib/components/ToggleMatrix.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
 
-  // ── Permission grouping ──
+  // ── Permission grouping (by capability area) ──
 
-  /** Volunteer-level permissions (all roles have these by default). */
-  const VOLUNTEER_PERMISSIONS: readonly Permission[] = [
-    Permission.VIEW_TICKETS,
-    Permission.MANAGE_OWN_TICKETS,
+  const CASE_RECORD_PERMISSIONS: readonly Permission[] = [
+    Permission.VIEW_CASES,
+    Permission.OPEN_CASES,
+    Permission.EDIT_CASE_SUMMARY,
+    Permission.WRITE_CASE_NOTES,
+    Permission.CHANGE_CASE_STATUS,
+    Permission.LINK_CASES,
+    Permission.CLAIM_CASES,
+    Permission.ASSIGN_CASES,
+    Permission.DELETE_OTHERS_NOTES,
+    Permission.DOWNLOAD_CASE_MEDIA,
+  ];
+
+  const REACHING_CLIENT_PERMISSIONS: readonly Permission[] = [
+    Permission.SEND_CLIENT_SMS,
+    Permission.SEND_CLIENT_MEDIA,
+    Permission.SEND_CLIENT_EMAIL,
+    Permission.CALL_CLIENTS,
+    Permission.MESSAGE_CLIENTS_IN_PORTAL,
+  ];
+
+  const CLIENT_ACCESS_PERMISSIONS: readonly Permission[] = [
+    Permission.MANAGE_SHARE_LINKS,
+    Permission.MANAGE_PORTAL_CHANNEL,
+    Permission.RESET_CLIENT_LOGIN,
+    Permission.REVOKE_REPLY_LINKS,
+  ];
+
+  const CLIENT_RECORDS_PERMISSIONS: readonly Permission[] = [
+    Permission.VIEW_CLIENTS,
+    Permission.VIEW_CLIENT_PII,
+    Permission.EDIT_CLIENT_CONTACT,
+    Permission.EDIT_CLIENT_ALIAS,
+    Permission.MERGE_CLIENTS,
+    Permission.DELETE_CLIENTS,
+  ];
+
+  const KNOWLEDGE_BASE_PERMISSIONS: readonly Permission[] = [
     Permission.VIEW_KNOWLEDGE_BASE,
     Permission.EDIT_KNOWLEDGE_BASE,
-    Permission.VIEW_OWN_SHIFTS,
-  ];
-
-  /** Manager-level permissions (managers and admins by default). */
-  const MANAGER_PERMISSIONS: readonly Permission[] = [
-    Permission.MODERATE_CONTENT,
-    Permission.MANAGE_USERS,
-    Permission.MANAGE_QUEUES,
-    Permission.MANAGE_PRESETS,
     Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
-    Permission.VIEW_REPORTS,
-    Permission.DELETE_CLIENTS,
-    Permission.VIEW_CLIENTS,
+    Permission.DELETE_KNOWLEDGE_BASE_ARTICLES,
   ];
 
-  /** Admin-level permissions (admins only by default). */
-  const ADMIN_PERMISSIONS: readonly Permission[] = [
+  const QUEUE_PERMISSIONS: readonly Permission[] = [
+    Permission.MANAGE_QUEUES,
+    Permission.MANAGE_QUEUE_MEMBERSHIP,
+    Permission.MANAGE_QUEUE_NOTIFICATIONS,
+  ];
+
+  const INTAKE_PERMISSIONS: readonly Permission[] = [
+    Permission.MANAGE_INTAKE_FORMS,
+    Permission.VIEW_INTAKE_RESPONSES,
+  ];
+
+  const RUNNING_ORG_PERMISSIONS: readonly Permission[] = [
     Permission.MANAGE_ROLES,
-    Permission.MANAGE_ORG_CONFIG,
+    Permission.MANAGE_USERS,
+    Permission.MANAGE_ORG_IDENTITY,
+    Permission.MANAGE_CHANNEL_ROUTING,
+    Permission.MANAGE_RETENTION,
+    Permission.MANAGE_NOTE_TYPES,
     Permission.MANAGE_KEYS,
     Permission.MANAGE_INFRASTRUCTURE,
-  ];
-
-  /** High-trust permissions (opt-in, cross-queue decrypt capability). */
-  const HIGH_TRUST_PERMISSIONS: readonly Permission[] = [
-    Permission.VIEW_INTAKE_RESPONSES,
+    Permission.WRITE_CALL_GREETINGS,
+    Permission.WRITE_AUTOMATIC_REPLIES,
+    Permission.MANAGE_VOICEMAIL_QUARANTINE,
+    Permission.MANAGE_ESCALATION,
+    Permission.MANAGE_PRESETS,
+    Permission.VIEW_REPORTS,
+    Permission.VIEW_AUDIT_LOG,
+    Permission.VIEW_OWN_SHIFTS,
   ];
 
   /** Locked permissions cannot be reassigned from Admin. */
@@ -83,33 +123,100 @@
   );
 
   const PERMISSION_LABELS = new Map<Permission, () => string>([
-    [Permission.VIEW_TICKETS, () => m.permission_view_tickets()],
-    [Permission.MANAGE_OWN_TICKETS, () => m.permission_manage_own_tickets()],
+    // The case record
+    [Permission.VIEW_CASES, () => m.permission_view_cases()],
+    [Permission.OPEN_CASES, () => m.permission_open_cases()],
+    [Permission.EDIT_CASE_SUMMARY, () => m.permission_edit_case_summary()],
+    [Permission.WRITE_CASE_NOTES, () => m.permission_write_case_notes()],
+    [Permission.CHANGE_CASE_STATUS, () => m.permission_change_case_status()],
+    [Permission.LINK_CASES, () => m.permission_link_cases()],
+    [Permission.CLAIM_CASES, () => m.permission_claim_cases()],
+    [Permission.ASSIGN_CASES, () => m.permission_assign_cases()],
+    [Permission.DELETE_OTHERS_NOTES, () => m.permission_delete_others_notes()],
+    [Permission.DOWNLOAD_CASE_MEDIA, () => m.permission_download_case_media()],
+    // Reaching a client
+    [Permission.SEND_CLIENT_SMS, () => m.permission_send_client_sms()],
+    [Permission.SEND_CLIENT_MEDIA, () => m.permission_send_client_media()],
+    [Permission.SEND_CLIENT_EMAIL, () => m.permission_send_client_email()],
+    [Permission.CALL_CLIENTS, () => m.permission_call_clients()],
+    [
+      Permission.MESSAGE_CLIENTS_IN_PORTAL,
+      () => m.permission_message_clients_in_portal(),
+    ],
+    // The client's access to the case
+    [Permission.MANAGE_SHARE_LINKS, () => m.permission_manage_share_links()],
+    [
+      Permission.MANAGE_PORTAL_CHANNEL,
+      () => m.permission_manage_portal_channel(),
+    ],
+    [Permission.RESET_CLIENT_LOGIN, () => m.permission_reset_client_login()],
+    [Permission.REVOKE_REPLY_LINKS, () => m.permission_revoke_reply_links()],
+    // Client records
+    [Permission.VIEW_CLIENTS, () => m.permission_view_clients()],
+    [Permission.VIEW_CLIENT_PII, () => m.permission_view_client_pii()],
+    [Permission.EDIT_CLIENT_CONTACT, () => m.permission_edit_client_contact()],
+    [Permission.EDIT_CLIENT_ALIAS, () => m.permission_edit_client_alias()],
+    [Permission.MERGE_CLIENTS, () => m.permission_merge_clients()],
+    [Permission.DELETE_CLIENTS, () => m.permission_delete_clients()],
+    // Knowledge base
     [Permission.VIEW_KNOWLEDGE_BASE, () => m.permission_view_knowledge_base()],
     [Permission.EDIT_KNOWLEDGE_BASE, () => m.permission_edit_knowledge_base()],
-    [Permission.VIEW_OWN_SHIFTS, () => m.permission_view_own_shifts()],
-    [Permission.MODERATE_CONTENT, () => m.permission_moderate_content()],
-    [Permission.MANAGE_USERS, () => m.permission_manage_users()],
-    [Permission.MANAGE_QUEUES, () => m.permission_manage_queues()],
-    [Permission.MANAGE_PRESETS, () => m.permission_manage_presets()],
     [
       Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
       () => m.permission_manage_knowledge_base_categories(),
     ],
-    [Permission.VIEW_REPORTS, () => m.permission_view_reports()],
-    [Permission.DELETE_CLIENTS, () => m.permission_delete_clients()],
-    [Permission.VIEW_CLIENTS, () => m.permission_view_clients()],
+    [
+      Permission.DELETE_KNOWLEDGE_BASE_ARTICLES,
+      () => m.permission_delete_knowledge_base_articles(),
+    ],
+    // Queues
+    [Permission.MANAGE_QUEUES, () => m.permission_manage_queues()],
+    [
+      Permission.MANAGE_QUEUE_MEMBERSHIP,
+      () => m.permission_manage_queue_membership(),
+    ],
+    [
+      Permission.MANAGE_QUEUE_NOTIFICATIONS,
+      () => m.permission_manage_queue_notifications(),
+    ],
+    // Intake
+    [Permission.MANAGE_INTAKE_FORMS, () => m.permission_manage_intake_forms()],
+    [
+      Permission.VIEW_INTAKE_RESPONSES,
+      () => m.permission_view_intake_responses(),
+    ],
+    // Running the organisation
     [Permission.MANAGE_ROLES, () => m.permission_manage_roles()],
-    [Permission.MANAGE_ORG_CONFIG, () => m.permission_manage_org_config()],
+    [Permission.MANAGE_USERS, () => m.permission_manage_users()],
+    [Permission.MANAGE_ORG_IDENTITY, () => m.permission_manage_org_identity()],
+    [
+      Permission.MANAGE_CHANNEL_ROUTING,
+      () => m.permission_manage_channel_routing(),
+    ],
+    [Permission.MANAGE_RETENTION, () => m.permission_manage_retention()],
+    [Permission.MANAGE_NOTE_TYPES, () => m.permission_manage_note_types()],
     [Permission.MANAGE_KEYS, () => m.permission_manage_keys()],
     [
       Permission.MANAGE_INFRASTRUCTURE,
       () => m.permission_manage_infrastructure(),
     ],
     [
-      Permission.VIEW_INTAKE_RESPONSES,
-      () => m.permission_view_intake_responses(),
+      Permission.WRITE_CALL_GREETINGS,
+      () => m.permission_write_call_greetings(),
     ],
+    [
+      Permission.WRITE_AUTOMATIC_REPLIES,
+      () => m.permission_write_automatic_replies(),
+    ],
+    [
+      Permission.MANAGE_VOICEMAIL_QUARANTINE,
+      () => m.permission_manage_voicemail_quarantine(),
+    ],
+    [Permission.MANAGE_ESCALATION, () => m.permission_manage_escalation()],
+    [Permission.MANAGE_PRESETS, () => m.permission_manage_presets()],
+    [Permission.VIEW_REPORTS, () => m.permission_view_reports()],
+    [Permission.VIEW_AUDIT_LOG, () => m.permission_view_audit_log()],
+    [Permission.VIEW_OWN_SHIFTS, () => m.permission_view_own_shifts()],
   ]);
 
   function permissionLabel(perm: Permission): string {
@@ -124,24 +231,44 @@
 
   const PERMISSION_GROUPS: readonly PermissionGroup[] = [
     {
-      key: "volunteer",
-      title: () => m.roles_group_volunteer(),
-      permissions: VOLUNTEER_PERMISSIONS,
+      key: "case_record",
+      title: () => m.roles_group_case_record(),
+      permissions: CASE_RECORD_PERMISSIONS,
     },
     {
-      key: "manager",
-      title: () => m.roles_group_manager(),
-      permissions: MANAGER_PERMISSIONS,
+      key: "reaching_client",
+      title: () => m.roles_group_reaching_client(),
+      permissions: REACHING_CLIENT_PERMISSIONS,
     },
     {
-      key: "admin",
-      title: () => m.roles_group_admin(),
-      permissions: ADMIN_PERMISSIONS,
+      key: "client_access",
+      title: () => m.roles_group_client_access(),
+      permissions: CLIENT_ACCESS_PERMISSIONS,
     },
     {
-      key: "high_trust",
-      title: () => m.roles_group_high_trust(),
-      permissions: HIGH_TRUST_PERMISSIONS,
+      key: "client_records",
+      title: () => m.roles_group_client_records(),
+      permissions: CLIENT_RECORDS_PERMISSIONS,
+    },
+    {
+      key: "knowledge_base",
+      title: () => m.roles_group_knowledge_base(),
+      permissions: KNOWLEDGE_BASE_PERMISSIONS,
+    },
+    {
+      key: "queues",
+      title: () => m.roles_group_queues(),
+      permissions: QUEUE_PERMISSIONS,
+    },
+    {
+      key: "intake",
+      title: () => m.roles_group_intake(),
+      permissions: INTAKE_PERMISSIONS,
+    },
+    {
+      key: "running_org",
+      title: () => m.roles_group_running_org(),
+      permissions: RUNNING_ORG_PERMISSIONS,
     },
   ];
 
@@ -330,7 +457,7 @@
 </script>
 
 {#if isLoading}
-  <BlockTitle>{m.roles_group_volunteer()}</BlockTitle>
+  <BlockTitle>{m.roles_group_case_record()}</BlockTitle>
   <Block strong inset>
     <div class="matrix">
       <div class="matrix-header">
@@ -338,7 +465,7 @@
           <span class="role-label">{roleLabel(colRole)}</span>
         {/each}
       </div>
-      {#each VOLUNTEER_PERMISSIONS as perm (perm)}
+      {#each CASE_RECORD_PERMISSIONS as perm (perm)}
         <div class="matrix-row">
           <span class="perm-label">
             <InlineSkeleton width="80%" />
@@ -373,7 +500,19 @@
 
   <div class="protected-register-wrapper">
     <Register kind="careful">
+      {m.permission_manage_queue_membership_hint()}
+    </Register>
+  </div>
+
+  <div class="protected-register-wrapper">
+    <Register kind="careful">
       {m.permission_view_intake_responses_hint()}
+    </Register>
+  </div>
+
+  <div class="protected-register-wrapper">
+    <Register kind="careful">
+      {m.permission_not_yet_built_hint()}
     </Register>
   </div>
 

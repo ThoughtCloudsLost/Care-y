@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Manage reply templates" |
+* | "Manage saved replies" |
 *
 * @param {Permission_Manage_PresetsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

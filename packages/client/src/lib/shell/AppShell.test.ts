@@ -34,6 +34,7 @@ import type * as LayoutModeModule from "$lib/stores/layout-mode.svelte.js";
 import type * as SvelteQuery from "@tanstack/svelte-query";
 import type { NavbarOverride } from "./types.js";
 import type * as PathsNS from "$app/paths";
+import { getMockPermissions } from "$mocks/permissions.js";
 
 // --- Controllable mock state ---
 
@@ -137,7 +138,6 @@ vi.mock("$lib/crypto/context.js", () => {
     getCurrentUserRoleId: unknown;
     getCurrentPermissions: unknown;
   };
-  const emptySet = new Set<string>();
   return {
     getCryptoBridge: () => ({
       sealSelfBlob: vi.fn(),
@@ -157,7 +157,7 @@ vi.mock("$lib/crypto/context.js", () => {
     getPreviewLoader: () => ({ get: () => undefined }),
     getCurrentUserId: () => () => undefined,
     getCurrentUserRoleId: () => () => "volunteer",
-    getCurrentPermissions: () => () => emptySet,
+    getCurrentPermissions: () => getMockPermissions,
   } satisfies typeof _usedExports;
 });
 

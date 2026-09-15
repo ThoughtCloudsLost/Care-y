@@ -8,16 +8,13 @@
 
 import {
   router,
-  authed2faProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { Permission, callLogQueryInputSchema } from "@care-y/shared";
 import { createReportsService } from "../tickets/reports-service.js";
 
-const reportsProcedure = authed2faProcedure.use(
-  requireRole(Permission.VIEW_REPORTS),
-);
+const reportsProcedure = permissionProcedure(Permission.VIEW_REPORTS);
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types

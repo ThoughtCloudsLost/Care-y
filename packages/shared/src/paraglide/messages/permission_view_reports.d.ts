@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "View reports" |
+* | "See reports and statistics" |
 *
 * @param {Permission_View_ReportsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

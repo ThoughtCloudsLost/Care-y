@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_UsersInputs */
 
 const en_permission_manage_users = /** @type {(inputs: Permission_Manage_UsersInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Manage users`)
+	return /** @type {LocalizedString} */ (`Manage people's accounts`)
 };
 
 const es_permission_manage_users = /** @type {(inputs: Permission_Manage_UsersInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Administrar usuarios`)
+	return /** @type {LocalizedString} */ (`Administrar cuentas de personas`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Manage users" |
+* | "Manage people's accounts" |
 *
 * @param {Permission_Manage_UsersInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -111,7 +111,7 @@ describe("DEFAULT_PERMISSIONS grant", () => {
 
   it("includes all E6-granted permissions in Permission enum", () => {
     // Verify these permission values exist in the enum
-    expect(Permission.MANAGE_ORG_CONFIG).toBeDefined();
+    expect(Permission.MANAGE_ORG_IDENTITY).toBeDefined();
     expect(Permission.MANAGE_KEYS).toBeDefined();
     expect(Permission.MANAGE_INFRASTRUCTURE).toBeDefined();
     expect(Permission.MANAGE_ROLES).toBeDefined();

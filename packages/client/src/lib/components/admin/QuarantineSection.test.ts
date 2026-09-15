@@ -15,6 +15,7 @@ import type * as CryptoContext from "$lib/crypto/context.js";
 import type * as AsyncDecryptCache from "$lib/crypto/async-decrypt-cache.js";
 import type * as DecryptResult from "$lib/crypto/decrypt-result.js";
 import type * as FormatTime from "$lib/utils/format-time.js";
+import { getMockPermissions } from "$mocks/permissions.js";
 
 const { mockDismiss, mockDownload, mockToastShow, mockHaptic, mockOrgDecrypt } =
   vi.hoisted(() => ({
@@ -207,7 +208,7 @@ vi.mock(
       getTicketDecryptCache: () => ({ decrypt: vi.fn() }) as never,
       getCurrentUserId: () => () => undefined,
       getCurrentUserRoleId: () => () => undefined,
-      getCurrentPermissions: () => () => new Set(),
+      getCurrentPermissions: () => getMockPermissions,
       getFollowUpDecryptCache: () => ({ decryptContent: vi.fn() }) as never,
       getPreviewLoader: () => ({ load: vi.fn() }) as never,
       setCryptoBridge: (v) => v,

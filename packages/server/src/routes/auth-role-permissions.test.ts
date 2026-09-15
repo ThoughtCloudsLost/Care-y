@@ -188,7 +188,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           (r) => r.roleId === RoleId.VOLUNTEER,
         );
         expect(volunteerRole).toBeDefined();
-        expect(volunteerRole?.permissions).toContain(Permission.VIEW_TICKETS);
+        expect(volunteerRole?.permissions).toContain(Permission.VIEW_CASES);
         expect(volunteerRole?.overridden).toHaveLength(0);
       });
     });
@@ -350,7 +350,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
         await caller.setRolePermission({
           roleId: RoleId.MANAGER,
-          permission: Permission.VIEW_TICKETS,
+          permission: Permission.VIEW_CASES,
           enabled: false,
         });
 

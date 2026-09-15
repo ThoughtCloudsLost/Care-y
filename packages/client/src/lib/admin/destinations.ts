@@ -95,7 +95,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     label: m.panel_greetings,
     subtitle: m.hub_greetings_subtitle,
     path: "/admin/communications?tab=greetings",
-    permission: Permission.MANAGE_INFRASTRUCTURE,
+    permission: Permission.WRITE_CALL_GREETINGS,
     implemented: true,
   },
   {
@@ -105,7 +105,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     label: m.panel_sms_templates,
     subtitle: m.hub_sms_templates_subtitle,
     path: "/admin/communications?tab=templates",
-    permission: Permission.MANAGE_INFRASTRUCTURE,
+    permission: Permission.WRITE_AUTOMATIC_REPLIES,
     implemented: true,
   },
   {
@@ -125,7 +125,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     label: m.panel_quarantine,
     subtitle: m.hub_quarantine_subtitle,
     path: "/admin/communications?tab=quarantine",
-    permission: Permission.MANAGE_INFRASTRUCTURE,
+    permission: Permission.MANAGE_VOICEMAIL_QUARANTINE,
     implemented: true,
   },
 
@@ -137,7 +137,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     label: m.panel_general,
     subtitle: m.hub_general_subtitle,
     path: "/admin/organization?tab=general",
-    permission: Permission.MANAGE_ORG_CONFIG,
+    permission: Permission.MANAGE_ORG_IDENTITY,
     implemented: true,
   },
   {
@@ -147,7 +147,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     label: m.panel_branding,
     subtitle: m.hub_branding_subtitle,
     path: "/admin/organization?tab=branding",
-    permission: Permission.MANAGE_ORG_CONFIG,
+    permission: Permission.MANAGE_ORG_IDENTITY,
     implemented: true,
   },
   {
@@ -157,7 +157,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     label: m.panel_terminology,
     subtitle: m.hub_terminology_subtitle,
     path: "/admin/organization?tab=terminology",
-    permission: Permission.MANAGE_ORG_CONFIG,
+    permission: Permission.MANAGE_ORG_IDENTITY,
     implemented: true,
   },
   {
@@ -177,7 +177,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     label: m.panel_retention,
     subtitle: m.hub_retention_subtitle,
     path: "/admin/organization?tab=retention",
-    permission: Permission.MANAGE_ORG_CONFIG,
+    permission: Permission.MANAGE_RETENTION,
     implemented: true,
   },
   {
@@ -187,7 +187,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     label: m.panel_note_types,
     subtitle: m.hub_note_types_subtitle,
     path: "/admin/organization?tab=note-types",
-    permission: Permission.MANAGE_ORG_CONFIG,
+    permission: Permission.MANAGE_NOTE_TYPES,
     implemented: true,
   },
   {
@@ -197,7 +197,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     label: m.intake_forms_title,
     subtitle: m.hub_intake_forms_subtitle,
     path: "/admin/organization?tab=intake-forms",
-    permission: Permission.MANAGE_QUEUES,
+    permission: Permission.MANAGE_INTAKE_FORMS,
     implemented: true,
   },
 
@@ -249,7 +249,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     label: m.panel_audit_log,
     subtitle: m.hub_audit_log_subtitle,
     path: "/admin/logs?tab=audit",
-    permission: Permission.MANAGE_USERS,
+    permission: Permission.VIEW_AUDIT_LOG,
     implemented: true,
   },
 ];

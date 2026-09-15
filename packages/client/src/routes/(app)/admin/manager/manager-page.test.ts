@@ -55,11 +55,8 @@ vi.mock("$app/paths", async (importOriginal) => ({
   base: "",
   assets: "",
 }));
-let mockPermissions = new Set([
-  "manage_users",
-  "view_reports",
-  "manage_queues",
-]);
+import { Permission } from "@care-y/shared";
+import { setPermissions, getMockPermissions } from "$mocks/permissions.js";
 
 vi.mock(
   "$lib/shell/context.js",
@@ -71,7 +68,7 @@ vi.mock(
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ContextNS2>()),
-  getCurrentPermissions: () => () => mockPermissions,
+  getCurrentPermissions: () => getMockPermissions,
   getOrgDecryptCache: () => ({
     decrypt: (_id: string, _data: unknown) => "Decrypted Queue",
   }),
@@ -210,7 +207,11 @@ beforeEach(() => {
   mockNavbarCtx.current = undefined;
   mockToastShow.mockClear();
   mockGoto.mockClear();
-  mockPermissions = new Set(["manage_users", "view_reports", "manage_queues"]);
+  setPermissions(
+    Permission.MANAGE_USERS,
+    Permission.VIEW_REPORTS,
+    Permission.MANAGE_QUEUES,
+  );
 });
 
 afterEach(cleanup);
@@ -355,7 +356,7 @@ describe("Manager role page", () => {
 
   describe("access control", () => {
     it("redirects volunteer-role users", () => {
-      mockPermissions = new Set(["view_tickets"]);
+      setPermissions(Permission.VIEW_CASES);
       renderPage();
 
       expect(mockGoto).toHaveBeenCalledWith("/");

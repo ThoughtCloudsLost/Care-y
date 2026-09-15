@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_View_ReportsInputs */
 
 const en_permission_view_reports = /** @type {(inputs: Permission_View_ReportsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`View reports`)
+	return /** @type {LocalizedString} */ (`See reports and statistics`)
 };
 
 const es_permission_view_reports = /** @type {(inputs: Permission_View_ReportsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ver reportes`)
+	return /** @type {LocalizedString} */ (`Ver reportes y estadisticas`)
 };
 
 /**
 * | output |
 * | --- |
-* | "View reports" |
+* | "See reports and statistics" |
 *
 * @param {Permission_View_ReportsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

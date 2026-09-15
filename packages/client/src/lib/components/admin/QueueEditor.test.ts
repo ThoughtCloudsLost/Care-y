@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import type * as CareYShared from "@care-y/shared";
+import { getMockPermissions } from "$mocks/permissions.js";
 
 const { mockCreateQueue, mockUpdateQueue, mockOrgCacheDelete } = vi.hoisted(
   () => ({
@@ -50,7 +51,7 @@ vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ContextNS2>()),
-  getCurrentPermissions: () => () => new Set(),
+  getCurrentPermissions: () => getMockPermissions,
   getOrgKeyManager: () => ({
     get isLoaded() {
       return mockOrgKeyLoaded;

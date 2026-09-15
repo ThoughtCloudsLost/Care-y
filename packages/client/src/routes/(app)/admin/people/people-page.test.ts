@@ -41,9 +41,10 @@ import type * as SubNavbarFilterLayoutNS from "$lib/shell/SubNavbarFilterLayout.
 import type * as QueuesSectionNS from "$lib/components/admin/QueuesSection.svelte";
 import type * as UsersSectionNS from "$lib/components/admin/UsersSection.svelte";
 
-// --- Controllable mock state ---
+import { Permission } from "@care-y/shared";
+import { setPermissions, getMockPermissions } from "$mocks/permissions.js";
 
-let mockPermissions = new Set<string>();
+// --- Controllable mock state ---
 
 let mockPageUrl = new URL("http://localhost/admin/people");
 
@@ -86,7 +87,7 @@ vi.mock("$app/paths", async (importOriginal) => ({
 // outside a live component tree.
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof CryptoContext>()),
-  getCurrentPermissions: () => () => mockPermissions,
+  getCurrentPermissions: () => getMockPermissions,
   getOrgDecryptCache: () => ({
     decrypt: vi.fn().mockReturnValue(null),
     get: vi.fn().mockReturnValue(undefined),
@@ -435,10 +436,6 @@ if (typeof Element.prototype.animate !== "function") {
 
 // --- Helpers ---
 
-function setPermissions(...perms: string[]): void {
-  mockPermissions = new Set(perms);
-}
-
 function setUrl(path: string): void {
   mockPageUrl = new URL(`http://localhost${path}`);
 }
@@ -446,7 +443,7 @@ function setUrl(path: string): void {
 // --- Setup ---
 
 beforeEach(() => {
-  mockPermissions = new Set(["manage_users", "manage_queues"]);
+  setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
   mockPageUrl = new URL("http://localhost/admin/people");
   mockNavbarCtx.current = undefined;
   mockGoto.mockClear();
@@ -473,14 +470,14 @@ describe("People page", () => {
     });
 
     it("does not redirect when user has MANAGE_USERS", () => {
-      setPermissions("manage_users");
+      setPermissions(Permission.MANAGE_USERS);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
     });
 
     it("does not redirect when user has MANAGE_QUEUES", () => {
-      setPermissions("manage_queues");
+      setPermissions(Permission.MANAGE_QUEUES);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
@@ -489,7 +486,7 @@ describe("People page", () => {
 
   describe("section rendering", () => {
     it("renders UsersSection by default when user has MANAGE_USERS", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       renderPage();
 
       expect(screen.getByText("User management loading...")).toBeTruthy();
@@ -497,7 +494,7 @@ describe("People page", () => {
     });
 
     it("renders QueuesSection when URL has ?tab=queues", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?tab=queues");
       renderPage();
 
@@ -506,14 +503,14 @@ describe("People page", () => {
     });
 
     it("defaults to QueuesSection when user only has MANAGE_QUEUES", () => {
-      setPermissions("manage_queues");
+      setPermissions(Permission.MANAGE_QUEUES);
       renderPage();
 
       expect(screen.getByText("Queue management loading...")).toBeTruthy();
     });
 
     it("ignores invalid tab param and defaults to Users", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?tab=invalid");
       renderPage();
 
@@ -523,7 +520,7 @@ describe("People page", () => {
 
   describe("tabpanel ARIA", () => {
     it("wraps the active section in a labeled tabpanel", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       renderPage();
 
       const panel = screen.getByRole("tabpanel");
@@ -532,7 +529,7 @@ describe("People page", () => {
     });
 
     it("switches tabpanel ID for queues tab", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?tab=queues");
       renderPage();
 
@@ -544,7 +541,7 @@ describe("People page", () => {
 
   describe("navbar context", () => {
     it("sets navbar title to People on mount", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -552,7 +549,7 @@ describe("People page", () => {
     });
 
     it("provides a subnavbar snippet to the navbar context", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -561,7 +558,7 @@ describe("People page", () => {
     });
 
     it("provides a right action snippet on the users tab", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -570,7 +567,7 @@ describe("People page", () => {
     });
 
     it("provides a right action snippet on the queues tab", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?tab=queues");
       renderPage();
 
@@ -580,7 +577,7 @@ describe("People page", () => {
     });
 
     it("provides a right action on the fallback tab when the other permission is absent", () => {
-      setPermissions("manage_queues");
+      setPermissions(Permission.MANAGE_QUEUES);
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -588,7 +585,7 @@ describe("People page", () => {
     });
 
     it("provides subnavbarHidden as a function that returns a boolean", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -599,7 +596,7 @@ describe("People page", () => {
     });
 
     it("provides right snippet when user has manage_users on the users tab", () => {
-      setPermissions("manage_users");
+      setPermissions(Permission.MANAGE_USERS);
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -609,7 +606,7 @@ describe("People page", () => {
 
   describe("permission guard (extended)", () => {
     it("redirects when user has unrelated permissions only", () => {
-      setPermissions("manage_keys", "manage_org_config");
+      setPermissions(Permission.MANAGE_KEYS, Permission.MANAGE_ORG_IDENTITY);
       renderPage();
 
       expect(mockGoto).toHaveBeenCalledWith("/");
@@ -623,7 +620,7 @@ describe("People page", () => {
     });
 
     it("renders content normally with both permissions", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       renderPage();
 
       expect(screen.getByRole("tabpanel")).toBeTruthy();
@@ -633,7 +630,7 @@ describe("People page", () => {
 
   describe("tab visibility based on permissions", () => {
     it("only shows users tabpanel when user has only MANAGE_USERS", () => {
-      setPermissions("manage_users");
+      setPermissions(Permission.MANAGE_USERS);
       renderPage();
 
       const panel = screen.getByRole("tabpanel");
@@ -642,7 +639,7 @@ describe("People page", () => {
     });
 
     it("only shows queues tabpanel when user has only MANAGE_QUEUES", () => {
-      setPermissions("manage_queues");
+      setPermissions(Permission.MANAGE_QUEUES);
       renderPage();
 
       const panel = screen.getByRole("tabpanel");
@@ -651,7 +648,7 @@ describe("People page", () => {
     });
 
     it("switches to queues tab via URL even with both permissions", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?tab=queues");
       renderPage();
 
@@ -660,7 +657,7 @@ describe("People page", () => {
     });
 
     it("falls back to users tab for unknown tab param with both permissions", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?tab=settings");
       renderPage();
 
@@ -671,7 +668,7 @@ describe("People page", () => {
 
   describe("section content by tab", () => {
     it("renders only UsersSection stub on users tab", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       renderPage();
 
       expect(screen.getByText("User management loading...")).toBeTruthy();
@@ -679,7 +676,7 @@ describe("People page", () => {
     });
 
     it("renders only QueuesSection stub on queues tab", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?tab=queues");
       renderPage();
 
@@ -688,7 +685,7 @@ describe("People page", () => {
     });
 
     it("does not render users section when user lacks MANAGE_USERS and tab is queues", () => {
-      setPermissions("manage_queues");
+      setPermissions(Permission.MANAGE_QUEUES);
       setUrl("/admin/people?tab=queues");
       renderPage();
 
@@ -699,7 +696,7 @@ describe("People page", () => {
 
   describe("deep link parameters", () => {
     it("forces users tab when ?user param is present", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?tab=queues&user=u-123");
       renderPage();
 
@@ -710,7 +707,7 @@ describe("People page", () => {
     });
 
     it("strips user param from URL via replaceState after processing", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?user=u-123");
       renderPage();
 
@@ -722,7 +719,7 @@ describe("People page", () => {
     });
 
     it("switches to users tab via ?tab=users URL param", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?tab=users");
       renderPage();
 
@@ -731,7 +728,7 @@ describe("People page", () => {
     });
 
     it("recognizes ?action=invite param", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?action=invite");
       renderPage();
 
@@ -743,7 +740,11 @@ describe("People page", () => {
 
   describe("MANAGE_ROLES permission influence", () => {
     it("provides right snippet regardless of MANAGE_ROLES presence", () => {
-      setPermissions("manage_users", "manage_queues", "manage_roles");
+      setPermissions(
+        Permission.MANAGE_USERS,
+        Permission.MANAGE_QUEUES,
+        Permission.MANAGE_ROLES,
+      );
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -753,7 +754,7 @@ describe("People page", () => {
 
   describe("navbar subnavbar hidden callback", () => {
     it("provides a subnavbarHidden callback in navbar context", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -762,7 +763,7 @@ describe("People page", () => {
     });
 
     it("returns false when scroll is not hidden and overlay is inactive", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -773,7 +774,11 @@ describe("People page", () => {
 
   describe("roles tab", () => {
     it("renders RolePermissionsSection when ?tab=roles and user has MANAGE_ROLES", () => {
-      setPermissions("manage_users", "manage_queues", "manage_roles");
+      setPermissions(
+        Permission.MANAGE_USERS,
+        Permission.MANAGE_QUEUES,
+        Permission.MANAGE_ROLES,
+      );
       setUrl("/admin/people?tab=roles");
       renderPage();
 
@@ -784,7 +789,7 @@ describe("People page", () => {
     });
 
     it("does not render roles panel when user lacks MANAGE_ROLES", () => {
-      setPermissions("manage_users", "manage_queues");
+      setPermissions(Permission.MANAGE_USERS, Permission.MANAGE_QUEUES);
       setUrl("/admin/people?tab=roles");
       renderPage();
 
@@ -793,7 +798,7 @@ describe("People page", () => {
     });
 
     it("allows access when user only has MANAGE_ROLES", () => {
-      setPermissions("manage_roles");
+      setPermissions(Permission.MANAGE_ROLES);
       renderPage();
 
       // hasAccess should be true, no redirect
@@ -803,7 +808,7 @@ describe("People page", () => {
 
   describe("navbar context varies by active tab and permissions", () => {
     it("uses users subnavbar when activeTab is users and has MANAGE_USERS", () => {
-      setPermissions("manage_users");
+      setPermissions(Permission.MANAGE_USERS);
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -813,7 +818,7 @@ describe("People page", () => {
     });
 
     it("uses queues subnavbar when activeTab is queues and has MANAGE_QUEUES", () => {
-      setPermissions("manage_queues");
+      setPermissions(Permission.MANAGE_QUEUES);
       renderPage();
 
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
@@ -825,7 +830,7 @@ describe("People page", () => {
     it("sets right to undefined when user only has users perm but tab is queues", () => {
       // The URL forces the queues tab, but the user lacks manage_queues:
       // neither tabpanel renders and the navbar right action is omitted.
-      setPermissions("manage_users");
+      setPermissions(Permission.MANAGE_USERS);
       setUrl("/admin/people?tab=queues");
       renderPage();
 

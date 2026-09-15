@@ -18,6 +18,7 @@ import type * as ShellContext from "$lib/shell/context.js";
 import type * as PanelNotesSection from "./PanelNotesSection.svelte";
 import type * as PanelMediaSection from "./PanelMediaSection.svelte";
 import type * as PortalTierSection from "./PortalTierSection.svelte";
+import { getMockPermissions } from "$mocks/permissions.js";
 
 // --- Mocks ---
 
@@ -116,7 +117,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   }),
   getCurrentUserId: () => () => "user-001",
   getCurrentUserRoleId: () => () => "dXwG0zR9BtJp",
-  getCurrentPermissions: () => () => new Set(),
+  getCurrentPermissions: () => getMockPermissions,
   getPreviewLoader: () => ({
     get: vi.fn().mockReturnValue(undefined),
     observe: vi.fn(),

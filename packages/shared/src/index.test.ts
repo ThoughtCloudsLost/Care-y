@@ -21,7 +21,7 @@ describe("@care-y/shared exports", () => {
   });
 
   it("exports Permission enum with expected members", () => {
-    expect(Permission.VIEW_TICKETS).toBeDefined();
+    expect(Permission.VIEW_CASES).toBeDefined();
     expect(Permission.MANAGE_USERS).toBeDefined();
     expect(Permission.MANAGE_ROLES).toBeDefined();
   });

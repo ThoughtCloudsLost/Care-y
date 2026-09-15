@@ -22,6 +22,8 @@ import type * as AppNavigationNS from "$app/navigation";
 import type * as AppPathsNS from "$app/paths";
 import type * as InternalNoteSheetNS from "$lib/components/tickets/InternalNoteSheet.svelte";
 import type * as ComposeActionsNS from "$lib/components/tickets/ComposeActions.svelte";
+import { Permission } from "@care-y/shared";
+import { setPermissions, getMockPermissions } from "$mocks/permissions.js";
 
 // --- Mocks ---
 
@@ -252,14 +254,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   }),
   getCurrentUserId: () => () => "user-001",
   getCurrentUserRoleId: () => () => "dXwG0zR9BtJp",
-  getCurrentPermissions: () => () =>
-    new Set([
-      "view_tickets",
-      "manage_own_tickets",
-      "view_knowledge_base",
-      "edit_knowledge_base",
-      "view_own_shifts",
-    ]),
+  getCurrentPermissions: () => getMockPermissions,
   getPreviewLoader: () => ({
     get: vi.fn().mockReturnValue(undefined),
     observe: vi.fn(),
@@ -384,6 +379,13 @@ const baseTicket = {
 };
 
 beforeEach(() => {
+  setPermissions(
+    Permission.VIEW_CASES,
+    Permission.WRITE_CASE_NOTES,
+    Permission.VIEW_KNOWLEDGE_BASE,
+    Permission.EDIT_KNOWLEDGE_BASE,
+    Permission.VIEW_OWN_SHIFTS,
+  );
   mockTabbarHidden.current = false;
   mockNavbarCtx.current = undefined;
 

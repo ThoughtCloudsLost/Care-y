@@ -25,33 +25,84 @@ export interface RoleConfig {
   readonly level: number;
 }
 
+/**
+ * Defaults an org can change. Each key sits at the level that gated its
+ * operations before the permission rewrite, so no role gains or loses an
+ * ability by default.
+ *
+ * The four client-contact keys sit at volunteer level because reaching a
+ * client was previously ungated: the relay checked only for a session.
+ * An org that wants a back-office role withholds them deliberately rather
+ * than discovering on day one that nobody can answer anyone.
+ */
 const VOLUNTEER_PERMISSIONS: ReadonlySet<Permission> = new Set([
-  Permission.VIEW_TICKETS,
-  Permission.MANAGE_OWN_TICKETS,
+  // The case record
+  Permission.VIEW_CASES,
+  Permission.OPEN_CASES,
+  Permission.EDIT_CASE_SUMMARY,
+  Permission.WRITE_CASE_NOTES,
+  Permission.CHANGE_CASE_STATUS,
+  Permission.LINK_CASES,
+  Permission.CLAIM_CASES,
+  Permission.ASSIGN_CASES,
+  Permission.DOWNLOAD_CASE_MEDIA,
+  // Reaching a client
+  Permission.SEND_CLIENT_SMS,
+  Permission.SEND_CLIENT_MEDIA,
+  Permission.SEND_CLIENT_EMAIL,
+  Permission.CALL_CLIENTS,
+  Permission.MESSAGE_CLIENTS_IN_PORTAL,
+  // The client's own access to a case
+  Permission.MANAGE_SHARE_LINKS,
+  Permission.MANAGE_PORTAL_CHANNEL,
+  Permission.RESET_CLIENT_LOGIN,
+  Permission.REVOKE_REPLY_LINKS,
+  // Knowledge base
   Permission.VIEW_KNOWLEDGE_BASE,
   Permission.EDIT_KNOWLEDGE_BASE,
+  // Declared, no feature yet
   Permission.VIEW_OWN_SHIFTS,
 ]);
 
 const MANAGER_PERMISSIONS: ReadonlySet<Permission> = new Set([
   ...VOLUNTEER_PERMISSIONS,
-  Permission.MODERATE_CONTENT,
-  Permission.MANAGE_USERS,
-  Permission.MANAGE_QUEUES,
-  Permission.MANAGE_PRESETS,
-  Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
-  Permission.VIEW_REPORTS,
-  Permission.DELETE_CLIENTS,
   Permission.VIEW_CLIENTS,
+  Permission.EDIT_CLIENT_CONTACT,
+  Permission.MERGE_CLIENTS,
+  Permission.DELETE_CLIENTS,
+  Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
+  Permission.DELETE_KNOWLEDGE_BASE_ARTICLES,
+  // Managers designed intake forms before this key existed: the old
+  // MANAGE_QUEUES sat at manager level and gated the form designer and
+  // nothing else. Inheriting by operation rather than by name keeps it
+  // here, and an org that wants it admin-only withholds it.
+  Permission.MANAGE_INTAKE_FORMS,
+  Permission.MANAGE_PRESETS,
+  Permission.VIEW_REPORTS,
+  Permission.VIEW_AUDIT_LOG,
 ]);
 
 const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set([
   ...MANAGER_PERMISSIONS,
+  Permission.DELETE_OTHERS_NOTES,
+  Permission.VIEW_CLIENT_PII,
+  Permission.EDIT_CLIENT_ALIAS,
+  Permission.MANAGE_QUEUES,
+  Permission.MANAGE_QUEUE_MEMBERSHIP,
+  Permission.MANAGE_QUEUE_NOTIFICATIONS,
+  Permission.VIEW_INTAKE_RESPONSES,
   Permission.MANAGE_ROLES,
-  Permission.MANAGE_ORG_CONFIG,
+  Permission.MANAGE_USERS,
+  Permission.MANAGE_ORG_IDENTITY,
+  Permission.MANAGE_CHANNEL_ROUTING,
+  Permission.MANAGE_RETENTION,
+  Permission.MANAGE_NOTE_TYPES,
   Permission.MANAGE_KEYS,
   Permission.MANAGE_INFRASTRUCTURE,
-  Permission.VIEW_INTAKE_RESPONSES,
+  Permission.WRITE_CALL_GREETINGS,
+  Permission.WRITE_AUTOMATIC_REPLIES,
+  Permission.MANAGE_VOICEMAIL_QUARANTINE,
+  Permission.MANAGE_ESCALATION,
 ]);
 
 export const ROLE_CONFIG: ReadonlyMap<RoleIdValue, RoleConfig> = new Map([
@@ -302,8 +353,57 @@ export function assertSingleInstancePermissionCache(
 }
 
 // ---------------------------------------------------------------------------
-// Permission holder query (shared by intake services)
+// Permission holder queries (shared by intake services and notification
+// targeting)
 // ---------------------------------------------------------------------------
+
+/**
+ * Role IDs whose effective permission set contains `permission`, after
+ * per-org overrides and lock enforcement.
+ */
+async function rolesWithPermission(
+  db: Kysely<TenantDatabase>,
+  orgSchema: OrgSchema,
+  permission: Permission,
+): Promise<RoleIdValue[]> {
+  const roles: RoleIdValue[] = [];
+  for (const roleId of ROLE_ID_VALUES) {
+    const perms = await getEffectivePermissions(db, orgSchema, roleId);
+    if (perms.has(permission)) {
+      roles.push(roleId);
+    }
+  }
+  return roles;
+}
+
+/**
+ * Active user IDs holding the given permission in any role, accounting
+ * for per-org permission overrides.
+ *
+ * Notification targeting asks who should be told, which is a different
+ * question from who can be issued a key wrap, so this deliberately does
+ * not require `vol_public` the way getUsersWithPermission does: a holder
+ * who has not enrolled keys yet still holds the permission and still
+ * needs the message. Selects the same population as
+ * listActiveIdsByRoleId, which role-based targeting uses.
+ */
+export async function listActiveUserIdsWithPermission(
+  db: Kysely<TenantDatabase>,
+  orgSchema: OrgSchema,
+  permission: Permission,
+): Promise<UserId[]> {
+  const roles = await rolesWithPermission(db, orgSchema, permission);
+  if (roles.length === 0) return [];
+
+  const rows = await db
+    .selectFrom("users")
+    .select("id")
+    .where("role_id", "in", roles)
+    .where("is_active", "=", true)
+    .execute();
+
+  return rows.map((r) => r.id);
+}
 
 /**
  * Returns active user IDs with vol_public who hold the given permission
@@ -317,13 +417,7 @@ export async function getUsersWithPermission(
   orgSchema: OrgSchema,
   permission: Permission,
 ): Promise<Map<UserId, Buffer>> {
-  const rolesWithPerm: RoleIdValue[] = [];
-  for (const roleId of ROLE_ID_VALUES) {
-    const perms = await getEffectivePermissions(db, orgSchema, roleId);
-    if (perms.has(permission)) {
-      rolesWithPerm.push(roleId);
-    }
-  }
+  const rolesWithPerm = await rolesWithPermission(db, orgSchema, permission);
 
   if (rolesWithPerm.length === 0) return new Map();
 
@@ -350,8 +444,12 @@ const KNOWN_PERMISSIONS: ReadonlySet<string> = new Set(
   Object.values(Permission),
 );
 
-/** Type guard for known Permission enum values. */
-function isKnownPermission(value: string): value is Permission {
+/**
+ * Type guard for known Permission enum values. Exported so callers
+ * holding a permission name from runtime configuration (note-type
+ * escalation targets, override rows) can narrow it before querying.
+ */
+export function isKnownPermission(value: string): value is Permission {
   return KNOWN_PERMISSIONS.has(value);
 }
 
