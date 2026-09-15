@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The admin hub is the landing page for organization management. It groups the management pages into People, Communications, Organization, and Analytics cards,..." |
+* | "The admin hub is the landing page for organization management, showing only the destinations the user's permissions include." |
 *
 * @param {Demo_Section_Admin_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "CARE-Y never stores the keys that decrypt its data. They are computed from the password at each sign in, they live only in the browser's memory and are erase..." |
+* | "CARE-Y never stores the keys that decrypt its data. They are computed from the password at each sign in, live only in browser memory, and are erased when the..." |
 *
 * @param {Demo_Narrative_Topic_Key_Derivation_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

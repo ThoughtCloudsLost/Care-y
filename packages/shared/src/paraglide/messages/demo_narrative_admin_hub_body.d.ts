@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The hub organizes destinations into four groups. People, Communications, Organization, and Analytics each show a live count from the database and link to the..." |
+* | "The hub organizes destinations into four groups, People, Communications, Organization, and Analytics, and each destination shows a live count from the databa..." |
 *
 * @param {Demo_Narrative_Admin_Hub_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

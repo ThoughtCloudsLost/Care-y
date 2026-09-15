@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A second factor is required alongside the password, and every request for encrypted content is refused on a session that has not cleared its second factor. *..." |
+* | "A second factor is required alongside the password, and any request for encrypted content is refused on a session that has not cleared its second factor. The..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

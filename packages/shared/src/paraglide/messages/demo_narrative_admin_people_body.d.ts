@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The roster shows every volunteer in the organization with their role and assigned queues. **Role management.** Each volunteer has one of three roles: Volunte..." |
+* | "The roster shows every user in the organization with their role and assigned queues. **Role management.** Each user holds one of three roles. The first two r..." |
 *
 * @param {Demo_Narrative_Admin_People_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

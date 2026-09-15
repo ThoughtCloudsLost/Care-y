@@ -6,23 +6,23 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Hub_BodyInputs */
 
 const en_demo_narrative_admin_hub_body = /** @type {(inputs: Demo_Narrative_Admin_Hub_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The hub organizes destinations into four groups. People, Communications, Organization, and Analytics each show a live count from the database and link to the relevant management page.
-**Status badges.** Each destination's count doubles as a health signal. A badge switches to a warning style when something needs attention, such as missing keys or no connected phone numbers.
-**Permissions.** The destinations shown depend on the volunteer's role. Administrators see all destinations. Managers see people management, queues, the client list, and analytics, but not organization configuration or infrastructure settings.
-**Analytics.** The analytics group is planned but not yet available, so its rows are dimmed and tapping one shows a notice.`)
+	return /** @type {LocalizedString} */ (`The hub organizes destinations into four groups, People, Communications, Organization, and Analytics, and each destination shows a live count from the database and links to the relevant management page.
+**Status badges.** The hub's live counts double as health signals, switching to a warning style when a count crosses a threshold such as zero connected phone numbers or missing encryption keys.
+**Permissions.** Each destination requires a specific permission, and the hub shows only the destinations the user's current permission set includes. Since the permission matrix is configurable, two users with the same role title may see different destinations if their organization has changed the defaults.
+**Analytics.** The analytics group is in development.`)
 };
 
 const es_demo_narrative_admin_hub_body = /** @type {(inputs: Demo_Narrative_Admin_Hub_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El centro organiza los destinos en cuatro grupos. Personas, Comunicaciones, Organización y Analíticas muestran cada uno un conteo en vivo de la base de datos y enlazan a la página de gestión correspondiente.
-**Insignias de estado.** El conteo de cada destino funciona también como señal de salud. Una insignia cambia a estilo de advertencia cuando algo necesita atención, como claves faltantes o líneas telefónicas sin conectar.
-**Permisos.** Los destinos mostrados dependen del rol del voluntario. Los administradores ven todos los destinos. Los gestores ven la gestión de personas, colas, la lista de clientes y analíticas, pero no la configuración de la organización ni los ajustes de infraestructura.
-**Analíticas.** El grupo de analíticas está planificado pero aún no disponible, por lo que sus filas aparecen atenuadas y tocar una muestra un aviso.`)
+	return /** @type {LocalizedString} */ (`El centro organiza los destinos en cuatro grupos, Personas, Comunicaciones, Organización y Analíticas, y cada destino muestra un conteo en vivo de la base de datos y enlaza a la página de gestión correspondiente.
+**Insignias de estado.** Los conteos en vivo del centro funcionan también como señales de salud, cambiando a estilo de advertencia cuando un conteo cruza un umbral como cero líneas telefónicas conectadas o claves de cifrado faltantes.
+**Permisos.** Cada destino requiere un permiso específico, y el centro muestra solo los destinos que el conjunto de permisos de la persona usuaria incluye. Como la matriz de permisos es configurable, dos personas con el mismo título de rol pueden ver destinos diferentes si su organización ha cambiado los valores predeterminados.
+**Analíticas.** El grupo de analíticas está en desarrollo.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The hub organizes destinations into four groups. People, Communications, Organization, and Analytics each show a live count from the database and link to the..." |
+* | "The hub organizes destinations into four groups, People, Communications, Organization, and Analytics, and each destination shows a live count from the databa..." |
 *
 * @param {Demo_Narrative_Admin_Hub_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

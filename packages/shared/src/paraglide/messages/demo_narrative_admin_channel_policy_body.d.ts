@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The channel policy section controls which communication channels are available to users across the organization, with five channels that each have an indepen..." |
+* | "The channel policy controls which communication channels are available across the organization, with five channels that each have an independent toggle. **Ef..." |
 *
 * @param {Demo_Narrative_Admin_Channel_Policy_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Push approval sends a notification to the devices where the user has turned push notifications on, and approving it there completes the sign in on the device..." |
+* | "Push approval sends a notification to the devices where the user has turned push notifications on, and approving there completes the sign in on the device th..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Push_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

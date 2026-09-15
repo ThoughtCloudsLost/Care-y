@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteer roster" |
+* | "User roster" |
 *
 * @param {Demo_Narrative_Admin_People_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The telephony section starts with how the organization connects to its phone provider. **Two modes.** In managed mode the numbers are provisioned for the org..." |
+* | "The telephony provider section configures how the organization connects to its phone service. **Two modes.** In managed mode the numbers are provisioned for ..." |
 *
 * @param {Demo_Narrative_Admin_Telephony_Provider_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A passkey makes a device the second factor, so there is no code to type. CARE-Y accepts two forms of it, one held by the device being used and unlocked with ..." |
+* | "A passkey makes a device the second factor, so there is no code to type. Two forms are accepted: one held by the device in use and unlocked with its own scre..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Passkey_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

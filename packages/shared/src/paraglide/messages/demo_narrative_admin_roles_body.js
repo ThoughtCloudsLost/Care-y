@@ -6,21 +6,19 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Roles_BodyInputs */
 
 const en_demo_narrative_admin_roles_body = /** @type {(inputs: Demo_Narrative_Admin_Roles_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A reference page for each role describes what managers and volunteers can see and do.
-**Contents.** Each page summarizes the role's permissions, the queues it can work, its operational statistics, which protected fields stay hidden from it, and links onward to reports and security status.
-**Why it matters.** The role pages are the quickest way to answer what a volunteer's account could expose if it were compromised, because the encryption boundaries are described per role.`)
+	return /** @type {LocalizedString} */ (`The role reference pages summarize what users in each role can see and do, and the security status link on each page is in development.
+**Permissions.** Viewing the role reference pages requires the Manage users permission.`)
 };
 
 const es_demo_narrative_admin_roles_body = /** @type {(inputs: Demo_Narrative_Admin_Roles_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una página de referencia para cada rol describe lo que los gestores y voluntarios pueden ver y hacer.
-**Contenido.** Cada página resume los permisos del rol, las colas en las que puede trabajar, sus estadísticas operativas, qué campos protegidos permanecen ocultos para el, y enlaces a informes y estado de seguridad.
-**Por qué importa.** Las páginas de roles son la forma más rápida de responder qué podría exponer la cuenta de un voluntario si fuera comprometida, porque los límites del cifrado se describen por rol.`)
+	return /** @type {LocalizedString} */ (`Las páginas de referencia de roles resumen lo que las personas usuarias en cada rol pueden ver y hacer, y el enlace de estado de seguridad en cada página está en desarrollo.
+**Permisos.** Ver las páginas de referencia de roles requiere el permiso Gestionar usuarios.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "A reference page for each role describes what managers and volunteers can see and do. **Contents.** Each page summarizes the role's permissions, the queues i..." |
+* | "The role reference pages summarize what users in each role can see and do, and the security status link on each page is in development. **Permissions.** View..." |
 *
 * @param {Demo_Narrative_Admin_Roles_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

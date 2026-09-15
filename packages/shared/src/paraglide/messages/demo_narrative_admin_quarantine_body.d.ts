@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Voicemails from unknown callers wait here for review. The audio is encrypted to the organization's public key before storage, so the server never has access ..." |
+* | "Voicemails from unknown callers land in the quarantine and wait for review. **Encryption.** Quarantine audio is sealed to the organization's public key befor..." |
 *
 * @param {Demo_Narrative_Admin_Quarantine_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

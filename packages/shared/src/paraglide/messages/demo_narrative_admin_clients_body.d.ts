@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The client list shows all clients who have contacted the organization. Client records link to their associated tickets. **Encryption.** Client identifiers ar..." |
+* | "The client list shows all clients who have contacted the organization, and each record links to the client's associated tickets. **Encryption.** Client ident..." |
 *
 * @param {Demo_Narrative_Admin_Clients_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

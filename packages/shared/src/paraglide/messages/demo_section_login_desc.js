@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Login_DescInputs */
 
 const en_demo_section_login_desc = /** @type {(inputs: Demo_Section_Login_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The login screen is where a user signs in and where the browser turns the password into the encryption keys that make the organization's data readable. The entries in this section cover the language choice offered before sign in, the username and password step with the defenses that stand behind it, the five kinds of second factor and the backup codes that come with them, and how the encryption keys are derived. The screen takes its name, logo, and colors from the organization's public branding, which is set during onboarding and can be changed later from the administration pages.`)
+	return /** @type {LocalizedString} */ (`The login screen is where the user signs in and where the browser turns the password into the encryption keys that make organization data readable. This section covers language choice, username and password with the defenses behind them, five methods for the second factor and backup codes, and key derivation. The screen takes its name, logo, and colors from the organization's public branding, which is set during onboarding and changeable later from the admin pages.`)
 };
 
 const es_demo_section_login_desc = /** @type {(inputs: Demo_Section_Login_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pantalla de inicio de sesión es donde se accede a la aplicación y donde el navegador convierte la contraseña en las claves de cifrado que hacen legibles los datos de la organización. Las entradas de esta sección cubren la elección de idioma que se ofrece antes de iniciar sesión, el paso de nombre de usuario y contraseña con las defensas que lo respaldan, los cinco tipos de segundo factor y los códigos de respaldo que los acompañan, y cómo se derivan las claves de cifrado. La pantalla toma su nombre, su logotipo y sus colores de la marca pública de la organización, que se configura durante la incorporación y puede cambiarse después desde las páginas de administración.`)
+	return /** @type {LocalizedString} */ (`La pantalla de inicio de sesión es donde se inicia sesión y donde el navegador transforma la contraseña en las claves de cifrado que hacen legibles los datos de la organización. Esta sección cubre la elección de idioma, nombre de usuario y contraseña con las defensas que los respaldan, cinco métodos para el segundo factor y códigos de respaldo, y la derivación de claves. La pantalla toma su nombre, logotipo y colores de la marca pública de la organización, que se establece durante la incorporación y puede cambiarse después desde las páginas de administración.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The login screen is where a user signs in and where the browser turns the password into the encryption keys that make the organization's data readable. The e..." |
+* | "The login screen is where the user signs in and where the browser turns the password into the encryption keys that make organization data readable. This sect..." |
 *
 * @param {Demo_Section_Login_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
