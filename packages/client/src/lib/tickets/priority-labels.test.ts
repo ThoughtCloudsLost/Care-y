@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { ticketPrioritySchema } from "@care-y/shared";
 import type * as Runtime from "$lib/paraglide/runtime.js";
 import { PRIORITY_OPTIONS, priorityLabel } from "./priority-labels.js";
@@ -12,6 +12,12 @@ vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
   ...(await importOriginal<typeof Runtime>()),
   getLocale: () => mockLocale,
 }));
+
+// Restore in a hook, not at the end of the test body: a test that fails
+// partway would otherwise leave the locale switched for everything after it.
+afterEach(() => {
+  mockLocale = "en";
+});
 
 describe("PRIORITY_OPTIONS", () => {
   it("covers every priority the schema accepts, in schema order", () => {
@@ -29,8 +35,6 @@ describe("PRIORITY_OPTIONS", () => {
 
     mockLocale = "es";
     expect(low.label()).toBe("Baja");
-
-    mockLocale = "en";
   });
 });
 
