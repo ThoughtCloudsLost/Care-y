@@ -29,6 +29,7 @@
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import { requireRouter } from "$lib/errors.js";
   import { enabledTicketId } from "$lib/tickets/queries.js";
+  import { PRIORITY_OPTIONS } from "$lib/tickets/priority-labels.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -85,13 +86,6 @@
     })),
   );
 
-  const priorities: readonly { value: TicketPriority; label: string }[] = [
-    { value: "low", label: m.ticket_new_priority_low() },
-    { value: "normal", label: m.ticket_new_priority_normal() },
-    { value: "high", label: m.ticket_new_priority_high() },
-    { value: "urgent", label: m.ticket_new_priority_urgent() },
-  ];
-
   // ---- Decrypt scope ----
 
   const decrypt = $derived(
@@ -132,6 +126,14 @@
   let saving = $state(false);
   let wasOpen = $state(false);
   let prefilled = $state(false);
+  // Same validation message and same feed/clear timing as the create
+  // form: set on a save attempt, cleared as soon as a queue is picked.
+  let queueError = $state<string | undefined>(undefined);
+
+  function handleQueueChange(value: string): void {
+    queueId = value;
+    if (value !== "") queueError = undefined;
+  }
 
   // The detail query types priority as a plain string, so validate rather
   // than assert. Falls back to the same default the create form uses.
@@ -170,6 +172,7 @@
       originalDescription = "";
       originalPriority = toPriority(ticket?.priority);
       originalQueueId = ticket?.queueId ?? "";
+      queueError = undefined;
     }
     wasOpen = opened;
   });
@@ -213,6 +216,10 @@
   async function handleSave(): Promise<void> {
     const kw = ticket?.keyWrap;
     if (ticket == null || kw == null) return;
+    if (queueId === "") {
+      queueError = m.ticket_new_error_queue_required(withTerms());
+      return;
+    }
     saving = true;
     try {
       const needsContentSave = contentDirty;
@@ -367,8 +374,8 @@
           }}
           disabled={saving || !prefilled}
         >
-          {#each priorities as p (p.value)}
-            <option value={p.value}>{p.label}</option>
+          {#each PRIORITY_OPTIONS as option (option.value)}
+            <option value={option.value}>{option.label()}</option>
           {/each}
         </ListInput>
       </List>
@@ -377,10 +384,9 @@
         label={m.ticket_new_field_queue(withTerms())}
         value={queueId}
         options={decryptedQueues.map((q) => ({ value: q.id, label: q.name }))}
-        onchange={(v: string) => {
-          queueId = v;
-        }}
+        onchange={handleQueueChange}
         placeholder={m.ticket_new_field_queue_placeholder(withTerms())}
+        error={queueError}
         disabled={saving || !prefilled}
         listClass="edit-input-list"
       >

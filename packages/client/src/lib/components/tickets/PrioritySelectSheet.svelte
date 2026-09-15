@@ -8,7 +8,8 @@
   import { List, ListItem } from "konsta/svelte";
   import { Check } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { ticketPrioritySchema, type TicketPriority } from "@care-y/shared";
+  import type { TicketPriority } from "@care-y/shared";
+  import { PRIORITY_OPTIONS } from "$lib/tickets/priority-labels.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
   interface PrioritySelectSheetProps {
@@ -25,15 +26,6 @@
     onselect,
   }: PrioritySelectSheetProps = $props();
 
-  const priorities = ticketPrioritySchema.options;
-
-  const labelMap = new Map<TicketPriority, () => string>([
-    ["low", m.ticket_new_priority_low],
-    ["normal", m.ticket_new_priority_normal],
-    ["high", m.ticket_new_priority_high],
-    ["urgent", m.ticket_new_priority_urgent],
-  ]);
-
   function handleSelect(priority: TicketPriority): void {
     onselect(priority);
     ondismiss();
@@ -47,14 +39,14 @@
   title={m.ticket_priority_sheet_title()}
 >
   <List nested aria-label={m.ticket_priority_sheet_title()}>
-    {#each priorities as priority (priority)}
+    {#each PRIORITY_OPTIONS as option (option.value)}
       <ListItem
-        title={labelMap.get(priority)?.() ?? priority}
-        aria-current={priority === currentPriority ? "true" : undefined}
-        onclick={() => handleSelect(priority)}
+        title={option.label()}
+        aria-current={option.value === currentPriority ? "true" : undefined}
+        onclick={() => handleSelect(option.value)}
       >
         {#snippet after()}
-          {#if priority === currentPriority}
+          {#if option.value === currentPriority}
             <Check size={16} class="text-primary" aria-hidden="true" />
           {/if}
         {/snippet}

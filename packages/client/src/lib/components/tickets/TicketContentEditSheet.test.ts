@@ -524,4 +524,72 @@ describe("TicketContentEditSheet", () => {
       priority: "urgent",
     });
   });
+
+  describe("queue validation", () => {
+    const queueRequired = (): string =>
+      m.ticket_new_error_queue_required(withTerms());
+
+    // The placeholder option carries the same wording as the validation
+    // message, so presence of the text alone proves nothing: the error
+    // is the match that is not the <option>.
+    const queueErrorShown = (): boolean =>
+      screen
+        .queryAllByText(queueRequired())
+        .some((el) => el.tagName !== "OPTION");
+
+    beforeEach(() => {
+      ticketQueryState.data = { ...baseTicket, queueId: null };
+      queuesQueryState.data = [
+        {
+          id: "queue-002",
+          encryptedName: "enc-name",
+          encryptedColor: null,
+          encryptedIcon: null,
+        },
+      ];
+    });
+
+    afterEach(() => {
+      queuesQueryState.data = [];
+    });
+
+    it("surfaces the queue error and saves nothing when no queue is selected", async () => {
+      render(TicketContentEditSheet, { props: baseProps });
+
+      const titleInput = await screen.findByDisplayValue("Original Title");
+      await fireEvent.input(titleInput, { target: { value: "New Title" } });
+
+      await fireEvent.click(
+        screen.getByRole("button", { name: m.common_save() }),
+      );
+
+      await waitFor(() => {
+        expect(queueErrorShown()).toBe(true);
+      });
+      expect(mockUpdateContent).not.toHaveBeenCalled();
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it("clears the queue error as soon as a queue is picked", async () => {
+      render(TicketContentEditSheet, { props: baseProps });
+
+      const titleInput = await screen.findByDisplayValue("Original Title");
+      await fireEvent.input(titleInput, { target: { value: "New Title" } });
+      await fireEvent.click(
+        screen.getByRole("button", { name: m.common_save() }),
+      );
+      await waitFor(() => {
+        expect(queueErrorShown()).toBe(true);
+      });
+
+      // Priority renders before queue, so the queue select is the second.
+      const queueSelect = screen.getAllByRole("combobox")[1];
+      if (queueSelect === undefined) throw new Error("queue select missing");
+      await fireEvent.change(queueSelect, { target: { value: "queue-002" } });
+
+      await waitFor(() => {
+        expect(queueErrorShown()).toBe(false);
+      });
+    });
+  });
 });

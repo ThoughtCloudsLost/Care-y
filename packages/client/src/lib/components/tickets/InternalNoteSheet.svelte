@@ -22,6 +22,9 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { RoleId } from "@care-y/shared";
   import { createNoteTypesQuery } from "$lib/tickets/queries.js";
+  import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
+  import RichSelect from "$lib/components/inputs/RichSelect.svelte";
+  import type { RichSelectOption } from "$lib/components/inputs/rich-select.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import Register from "$lib/components/Register.svelte";
@@ -238,26 +241,28 @@
     </Register>
 
     {#if noteTypesResult.data && creatableTypes.length > 0}
-      <List nested class="note-type-select-list">
-        <ListInput
-          dropdown
-          label={m.note_compose_type_label()}
-          type="select"
-          value={effectiveNoteTypeId}
-          onChange={(e: Event) => {
-            const target = e.target;
-            if (target instanceof HTMLSelectElement) {
-              selectedNoteTypeId = target.value;
-            }
-          }}
-        >
-          {#each creatableTypes as nt (nt.id)}
-            <option value={nt.id}>
-              {orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? ""}
-            </option>
-          {/each}
-        </ListInput>
-      </List>
+      <RichSelect
+        label={m.note_compose_type_label()}
+        value={effectiveNoteTypeId ?? ""}
+        options={creatableTypes.map((nt) => ({
+          value: nt.id,
+          label: orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? "",
+        }))}
+        onchange={(value: string) => {
+          selectedNoteTypeId = value;
+        }}
+        listClass="note-type-select-list"
+      >
+        {#snippet leading(option: RichSelectOption)}
+          {@const nt = creatableTypes.find((t) => t.id === option.value)}
+          {#if nt}
+            {@const NoteTypeIcon = resolveNoteTypeIcon(
+              orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon),
+            )}
+            <NoteTypeIcon size={16} class="note-type-icon" aria-hidden="true" />
+          {/if}
+        {/snippet}
+      </RichSelect>
       {#if typeDescription}
         <p class="note-type-desc">{typeDescription}</p>
       {/if}
@@ -342,6 +347,11 @@
 
   :global(.note-type-select-list) {
     margin: 0 !important;
+  }
+
+  /* Same treatment the close-resolution sheet gives a note type's icon. */
+  :global(.note-type-icon) {
+    color: var(--brand-accent, var(--brand-primary));
   }
 
   .deactivate-action {

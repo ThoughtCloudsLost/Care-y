@@ -29,6 +29,9 @@
     BellRing,
     Link2,
     KeyRound,
+    UserCheck,
+    ChevronsUp,
+    FolderInput,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -337,24 +340,41 @@
         {/snippet}
       </ListItem>
     {/if}
+    <!--
+      Icons match the timeline glyph for the event each row produces
+      (see resolveFollowUpTypeIcon in $lib/utils/note-type-icons.js), so
+      the action and the entry it writes read as the same thing.
+    -->
     <ListItem
       link
       chevron
       title={m.ticket_action_assign()}
       onclick={() => onaction("assign")}
-    />
+    >
+      {#snippet media()}
+        <UserCheck class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+      {/snippet}
+    </ListItem>
     <ListItem
       link
       chevron
       title={m.ticket_action_change_priority()}
       onclick={() => onaction("changePriority")}
-    />
+    >
+      {#snippet media()}
+        <ChevronsUp class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+      {/snippet}
+    </ListItem>
     <ListItem
       link
       chevron
       title={m.ticket_action_change_queue(withTerms())}
       onclick={() => onaction("changeQueue")}
-    />
+    >
+      {#snippet media()}
+        <FolderInput class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+      {/snippet}
+    </ListItem>
     {#if shareLinkEnabled}
       <ListItem
         link

@@ -23,6 +23,7 @@ import { ErrorCode } from "@care-y/shared";
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
+import { TRPC_BASE_PATH } from "./base-path.js";
 
 // DEV-only artificial delay for testing loading/skeleton states.
 // Adds 5-15s latency to both tRPC calls and ECIES decryption.
@@ -130,9 +131,7 @@ export const trpc: TRPCClient<AppRouter> = createTRPCClient<AppRouter>({
   links: [
     twoFaInterceptorLink(),
     httpBatchLink({
-      // Vite proxy in dev (/trpc -> localhost:3000), Caddy route in prod.
-      // Same-origin requests: no CORS, cookies work naturally.
-      url: "/trpc",
+      url: TRPC_BASE_PATH,
       // Dev: send X-Org-Slug header for org resolution (no subdomain in dev).
       // import.meta.env.DEV is compile-time; Vite strips the header in prod builds.
       headers: import.meta.env.DEV ? { "x-org-slug": DEV_ORG_SLUG } : undefined,

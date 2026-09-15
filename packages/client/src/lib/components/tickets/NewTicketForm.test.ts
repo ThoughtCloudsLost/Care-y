@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import NewTicketForm from "./NewTicketForm.svelte";
+import { resolveQueueAppearance } from "$lib/utils/queue-appearance.js";
 import type * as ErrorsNS from "$lib/errors.js";
 import type * as ContextNS from "$lib/shell/context.js";
 import type * as OrgSlugNS from "$lib/utils/org-slug.js";
@@ -96,8 +97,16 @@ afterEach(() => {
 });
 
 const defaultQueues = [
-  { id: "q1", name: "General Intake" },
-  { id: "q2", name: "Evening Line" },
+  {
+    id: "q1",
+    name: "General Intake",
+    appearance: resolveQueueAppearance("blue", "folder"),
+  },
+  {
+    id: "q2",
+    name: "Evening Line",
+    appearance: resolveQueueAppearance(null, null),
+  },
 ];
 
 const mockSearchClients = vi.fn().mockResolvedValue([]);

@@ -29,6 +29,7 @@
   } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { TRPC_BASE_PATH } from "$lib/trpc/base-path.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { encode } from "@care-y/crypto";
@@ -679,7 +680,7 @@
   function revokeSession(): void {
     if (typeof navigator.sendBeacon === "function") {
       navigator.sendBeacon(
-        "/trpc/clientPortal.accountLogout",
+        `${TRPC_BASE_PATH}/clientPortal.accountLogout`,
         new Blob(["{}"], { type: "application/json" }),
       );
     }
