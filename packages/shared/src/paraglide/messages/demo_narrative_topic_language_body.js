@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Language_BodyInputs */
 
 const en_demo_narrative_topic_language_body = /** @type {(inputs: Demo_Narrative_Topic_Language_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Volunteers can switch the interface language at the login screen or at any point after signing in. The switch happens instantly without a page reload because all translations are bundled in the app.
-**Privacy.** The server does not know which language a volunteer is using because no language preference is transmitted. Language choice is private by default.
-**Supported languages.** English and Spanish are currently included, and adding a new language requires only a translation file.`)
+	return /** @type {LocalizedString} */ (`The interface language can be changed before signing in and at any point afterward, and the change takes effect immediately because both languages travel inside the app rather than arriving from the server at the moment of the switch.
+**Privacy.** The user's language preference is stored on the server as ciphertext the server cannot read, so it reveals nothing about who is signing in. It is sent in plaintext once, when the account is created, because the server performs the sealing at that point, and the app applies the sealed copy again at each sign in.
+**Supported languages.** English and Spanish are the two languages CARE-Y ships. Until someone picks one, the app follows the language the browser itself asks for, and English when the browser asks for neither.`)
 };
 
 const es_demo_narrative_topic_language_body = /** @type {(inputs: Demo_Narrative_Topic_Language_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las personas voluntarias pueden cambiar el idioma de la interfaz en la pantalla de inicio de sesión o en cualquier momento después de iniciar sesión. El cambio es instantáneo sin recargar la página porque todas las traducciones están incluidas en la aplicación.
-**Privacidad.** El servidor no sabe qué idioma usa cada voluntario porque no se transmite ninguna preferencia de idioma. La elección de idioma es privada por defecto.
-**Idiomas disponibles.** Actualmente se incluyen inglés y español, y añadir un nuevo idioma solo requiere un archivo de traducción.`)
+	return /** @type {LocalizedString} */ (`El idioma de la interfaz puede cambiarse antes de iniciar sesión y en cualquier momento posterior, y el cambio surte efecto de inmediato porque ambos idiomas viajan dentro de la aplicación en lugar de llegar desde el servidor en el momento del cambio.
+**Privacidad.** La preferencia de idioma de la persona usuaria se guarda en el servidor como texto cifrado que el servidor no puede leer, así que no revela nada sobre quién inicia sesión. Se envía en texto plano una sola vez, al crear la cuenta, porque el servidor realiza el sellado en ese momento, y la aplicación vuelve a aplicar esa copia sellada en cada inicio de sesión.
+**Idiomas disponibles.** El inglés y el español son los dos idiomas que trae CARE-Y. Mientras nadie elija uno, la aplicación sigue el idioma que pide el propio navegador, y el inglés cuando el navegador no pide ninguno de los dos.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Volunteers can switch the interface language at the login screen or at any point after signing in. The switch happens instantly without a page reload because..." |
+* | "The interface language can be changed before signing in and at any point afterward, and the change takes effect immediately because both languages travel ins..." |
 *
 * @param {Demo_Narrative_Topic_Language_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

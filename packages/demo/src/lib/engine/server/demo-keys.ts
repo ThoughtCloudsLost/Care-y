@@ -45,6 +45,7 @@ import {
 } from "../../../../../server/src/crypto/oprf-tags.js";
 import type { Kysely } from "kysely";
 import type { UserId } from "@care-y/shared";
+import { clientAccountIdSchema } from "@care-y/shared";
 import type { TenantDatabase } from "../../../../../server/src/db/types.js";
 import { DemoEngineError } from "../errors.js";
 import {
@@ -203,7 +204,10 @@ function tagForRequest(req: OprfEvaluateRequest): string {
     case "volunteer":
       return volunteerTag(req.userId);
     case "account":
-      return accountTag(req.userId);
+      // The evaluate wire reuses the UserId-branded slot for account ids,
+      // so re-parse to mint the right brand rather than casting. Mirrors
+      // tagForEvaluateRequest in oprf-evaluate-service.ts.
+      return accountTag(clientAccountIdSchema.parse(req.userId));
   }
 }
 

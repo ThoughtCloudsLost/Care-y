@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Login_DescInputs */
 
 const en_demo_section_login_desc = /** @type {(inputs: Demo_Section_Login_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The login screen is where volunteers sign in and where CARE-Y derives the encryption keys that protect all data in the system. Volunteers enter a username and password, then verify with a second factor before the app unlocks. The password never leaves the device. CARE-Y uses it locally to derive encryption keys through a protocol that requires two independent servers in separate countries to cooperate. This process takes a few seconds because the password function is intentionally slow, and the login screen shows each step as it completes. The screen carries your organization's logo, name, and brand palette from its public branding set during onboarding or in the admin settins page.`)
+	return /** @type {LocalizedString} */ (`The login screen is where a user signs in and where the browser turns the password into the encryption keys that make the organization's data readable. The entries in this section cover the language choice offered before sign in, the username and password step with the defenses that stand behind it, the five kinds of second factor and the backup codes that come with them, and how the encryption keys are derived. The screen takes its name, logo, and colors from the organization's public branding, which is set during onboarding and can be changed later from the administration pages.`)
 };
 
 const es_demo_section_login_desc = /** @type {(inputs: Demo_Section_Login_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pantalla de inicio de sesión es donde las personas voluntarias inician sesión y donde CARE-Y deriva las claves de cifrado que protegen todos los datos del sistema. Se introduce un nombre de usuario y contraseña, y luego se verifica con un segundo factor antes de que la aplicación se desbloquee. La contraseña nunca sale del dispositivo. CARE-Y la usa localmente para derivar claves de cifrado a través de un protocolo que requiere la cooperación de dos servidores independientes en países separados. Este proceso tarda unos segundos porque la función de contraseña es intencionalmente lenta, y la pantalla de inicio de sesión muestra cada paso a medida que se completa. La pantalla lleva el logotipo, el nombre y la paleta de marca de tu organización desde su marca pública configurada durante la incorporación o en la página de configuración de administración.`)
+	return /** @type {LocalizedString} */ (`La pantalla de inicio de sesión es donde se accede a la aplicación y donde el navegador convierte la contraseña en las claves de cifrado que hacen legibles los datos de la organización. Las entradas de esta sección cubren la elección de idioma que se ofrece antes de iniciar sesión, el paso de nombre de usuario y contraseña con las defensas que lo respaldan, los cinco tipos de segundo factor y los códigos de respaldo que los acompañan, y cómo se derivan las claves de cifrado. La pantalla toma su nombre, su logotipo y sus colores de la marca pública de la organización, que se configura durante la incorporación y puede cambiarse después desde las páginas de administración.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The login screen is where volunteers sign in and where CARE-Y derives the encryption keys that protect all data in the system. Volunteers enter a username an..." |
+* | "The login screen is where a user signs in and where the browser turns the password into the encryption keys that make the organization's data readable. The e..." |
 *
 * @param {Demo_Section_Login_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

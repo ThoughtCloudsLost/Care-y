@@ -351,6 +351,10 @@ export const CROP_REGISTRY = {
   },
 
   // -- admin-comms --
+  "admin-comms/channel-policy": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "admin-comms/phone-lines": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -455,6 +459,10 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "ticket-detail/email-thread": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "ticket-detail/outbound-edit": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -474,7 +482,19 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "admin-forms/field-config": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-forms/locales": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "admin-forms/preview": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-forms/form-settings": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -484,6 +504,10 @@ export const CROP_REGISTRY = {
     fallbackRect: { ...DEFAULT_RECT },
   },
   "admin-responses/key-not-held": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-responses/export": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -522,6 +546,14 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "client-intake/contact-method": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-intake/closed-form": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   // -- client-privacy (added with the client-portal taxonomy) --
   "client-privacy/notice": {
     selector: null,
@@ -536,7 +568,15 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "client-portal/passphrase": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "client-portal/quick-exit": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-portal/account-upgrade": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -549,7 +589,15 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "client-account/change-password": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "client-account/settings": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-account/sign-out": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -559,6 +607,10 @@ export const CROP_REGISTRY = {
     fallbackRect: { ...DEFAULT_RECT },
   },
   "client-share/one-time": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-share/exposure-hint": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },

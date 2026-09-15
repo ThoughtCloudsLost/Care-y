@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Voicemails from unknown callers wait here for review. The audio is sealed to the organization's public key before storage using crypto_box_seal, so the serve..." |
+* | "Voicemails from unknown callers wait here for review. The audio is encrypted to the organization's public key before storage, so the server never has access ..." |
 *
 * @param {Demo_Narrative_Admin_Quarantine_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

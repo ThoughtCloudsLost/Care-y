@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Passkeys" |
+* | "Passkeys and security keys" |
 *
 * @param {Demo_Narrative_Topic_Twofa_Passkey_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

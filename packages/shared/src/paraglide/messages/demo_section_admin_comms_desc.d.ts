@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The communications page configures how the organization talks to clients by phone and text. It covers phone lines and their greetings, SMS templates, the blo..." |
+* | "The communications page configures how the organization talks to clients by phone, text, and email. It covers the channel policy that controls which channels..." |
 *
 * @param {Demo_Section_Admin_Comms_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,0 +1,16 @@
+/**
+* | output |
+* | --- |
+* | "Submitted intake forms appear as cards in the response viewer. Each card shows the fields the visitor filled in. **Decryption.** Field values are encrypted a..." |
+*
+* @param {Demo_Narrative_Admin_Form_Responses_BodyInputs} inputs
+* @param {{ locale?: "en" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const demo_narrative_admin_form_responses_body: ((inputs?: Demo_Narrative_Admin_Form_Responses_BodyInputs, options?: {
+    locale?: "en" | "es";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Narrative_Admin_Form_Responses_BodyInputs, {
+    locale?: "en" | "es";
+}, {}>;
+export type LocalizedString = import("../runtime.js").LocalizedString;
+export type Demo_Narrative_Admin_Form_Responses_BodyInputs = {};

@@ -7,7 +7,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 const en_demo_narrative_topic_case_fold_body = /** @type {(inputs: Demo_Narrative_Topic_Case_Fold_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`The disclosure handle under the ticket header folds the case fields away to give the conversation more room and brings them back when needed.
-**What folds.** The description, the queue and assignee, and the opened date collapse behind the handle. The title, status, and priority stay visible in the header above  so volunteers always have some context about the ticket they are viewing and replying to.
+**What folds.** The description, the queue and assignee, and the opened date collapse behind the handle. The title, status, and priority stay visible in the header above so volunteers always have some context about the ticket they are viewing and replying to.
 **Encryption.** The description is encrypted with the per ticket key, and the queue and assignee names with the organization key. The opened date is plaintext metadata the server uses for sorting.
 **The full record.** The complete field list, along with the role masked client phone number and the case actions, lives in the case panel described next.`)
 };

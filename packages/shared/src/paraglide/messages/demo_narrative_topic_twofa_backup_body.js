@@ -6,23 +6,25 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_Backup_BodyInputs */
 
 const en_demo_narrative_topic_twofa_backup_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Backup_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A set of one time codes generated during enrollment and stored by the volunteer outside the system. Each code works exactly once.
-**When to use them.** Backup codes are the last resort when no other second factor method is available, such as a lost phone, a new device, or a broken authenticator app.
-**Storage.** Volunteers should write these codes down or store them in a password manager. They should not be stored on the same device used for login, since losing that device would mean losing both the primary method and the backup.
-**Regeneration.** New backup codes can be generated from the Settings page, which invalidates all previously issued codes.`)
+	return /** @type {LocalizedString} */ (`Backup codes are a set of eight one time codes, generated as soon as the first second factor method is enrolled and kept by the user outside the system, and each code is accepted once and then spent.
+**Fallback.** A backup code stands in whenever no other enrolled method can be used, whatever has made the others unavailable.
+**One time reveal.** Backup codes are shown once, at the moment they are generated, and the server keeps only hashes of them, so no screen can show them again and a set that has been lost cannot be recovered.
+**Where to keep them.** Backup codes are meant for paper or a password manager, and keeping them on the device used to sign in defeats the point, since losing that device would take the primary method and the fallback together.
+**Regeneration.** Generating a new set of backup codes deletes every code in the old set in the same step, so a sheet printed earlier stops working the moment the new codes appear.`)
 };
 
 const es_demo_narrative_topic_twofa_backup_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Backup_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un conjunto de códigos de un solo uso generados durante el registro y almacenados por el voluntario fuera del sistema. Cada código funciona exactamente una vez.
-**Cuándo usarlos.** Los códigos de respaldo son el último recurso cuando ningún otro método de segundo factor está disponible, como un teléfono perdido, un dispositivo nuevo o una aplicación de autenticación rota.
-**Almacenamiento.** Los voluntarios deben anotar estos códigos o guardarlos en un gestor de contraseñas. No deben almacenarse en el mismo dispositivo usado para iniciar sesión, ya que perder ese dispositivo significaría perder tanto el método principal como el respaldo.
-**Regeneración.** Se pueden generar nuevos códigos de respaldo desde la página de Configuración, lo que invalida todos los códigos emitidos anteriormente.`)
+	return /** @type {LocalizedString} */ (`Los códigos de respaldo son un juego de ocho códigos de un solo uso, generados en cuanto se registra el primer método de segundo factor y guardados por la persona usuaria fuera del sistema, y cada código se acepta una vez y queda gastado.
+**Alternativa.** Un código de respaldo sirve siempre que no pueda usarse ningún otro método registrado, cualquiera que sea la razón por la que los demás no están disponibles.
+**Revelación única.** Los códigos de respaldo se muestran una sola vez, en el momento en que se generan, y el servidor guarda solo hashes de ellos, así que ninguna pantalla puede volver a mostrarlos y un juego perdido no puede recuperarse.
+**Dónde guardarlos.** Los códigos de respaldo están pensados para el papel o para un gestor de contraseñas, y guardarlos en el mismo dispositivo con el que se inicia sesión desvirtúa su propósito, ya que perder ese dispositivo se llevaría a la vez el método principal y la alternativa.
+**Regeneración.** Generar un juego nuevo de códigos de respaldo elimina en el mismo paso todos los códigos del juego anterior, de modo que una hoja impresa antes deja de funcionar en cuanto aparecen los códigos nuevos.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "A set of one time codes generated during enrollment and stored by the volunteer outside the system. Each code works exactly once. **When to use them.** Backu..." |
+* | "Backup codes are a set of eight one time codes, generated as soon as the first second factor method is enrolled and kept by the user outside the system, and ..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Backup_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

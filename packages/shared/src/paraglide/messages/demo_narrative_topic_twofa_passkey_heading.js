@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_Passkey_HeadingInputs */
 
 const en_demo_narrative_topic_twofa_passkey_heading = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Passkey_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Passkeys`)
+	return /** @type {LocalizedString} */ (`Passkeys and security keys`)
 };
 
 const es_demo_narrative_topic_twofa_passkey_heading = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Passkey_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Passkeys`)
+	return /** @type {LocalizedString} */ (`Passkeys y llaves de seguridad`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Passkeys" |
+* | "Passkeys and security keys" |
 *
 * @param {Demo_Narrative_Topic_Twofa_Passkey_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

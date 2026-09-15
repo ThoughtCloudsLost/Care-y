@@ -6,21 +6,23 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_BodyInputs */
 
 const en_demo_narrative_topic_twofa_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`After entering a password, CARE-Y requires a second factor to verify the volunteer's identity before deriving encryption keys. A stolen or guessed password alone is not enough to access any data.
-**Methods.** Six are supported, volunteers can enroll in more than one from the Settings page, and each method is described in its own section below.
-**Enrollment guidance.** Organizations should encourage volunteers to enroll at least two methods so they have a fallback if one becomes unavailable, such as a lost phone or a new device.`)
+	return /** @type {LocalizedString} */ (`A second factor is required alongside the password, and every request for encrypted content is refused on a session that has not cleared its second factor.
+**Available methods.** Five kinds of second factor can be enrolled. A passkey covers both a device's own screen lock and a separate physical security key, and the other four are an authenticator app, a code sent by email, a code sent by text message, and a push approval on another device. More than one can be enrolled at a time, and a set of backup codes is generated as soon as the first method is enrolled.
+**First sign in.** A user with nothing enrolled yet is not challenged, because there is nothing to challenge with. That sign in derives the encryption keys first and lands on enrollment afterward, so on that one occasion the keys exist before any second factor has been proven, and the session stays unable to read ticket data until enrollment finishes and marks it verified.
+**Why more than one method.** Each enrolled method is an independent way back in, and since CARE-Y has no password or account recovery path, a user whose only method sits on a lost device has nothing left but the backup codes, and for that reason the product refuses to remove the last enrolled method.`)
 };
 
 const es_demo_narrative_topic_twofa_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Después de introducir la contraseña, CARE-Y requiere un segundo factor para verificar la identidad antes de derivar las claves de cifrado. Una contraseña robada o adivinada por sí sola no es suficiente para acceder a ningún dato.
-**Métodos.** Se admiten seis, las personas voluntarias pueden registrarse en más de uno desde la página de Configuración, y cada método se describe en su propia sección a continuación.
-**Guía de registro.** Las organizaciones deben animar a sus voluntarios a registrar al menos dos métodos para tener una alternativa si uno deja de estar disponible, como un teléfono perdido o un dispositivo nuevo.`)
+	return /** @type {LocalizedString} */ (`Además de la contraseña se exige un segundo factor, y toda petición de contenido cifrado se rechaza en una sesión que no ha superado su segundo factor.
+**Métodos disponibles.** Pueden registrarse cinco tipos de segundo factor. Una passkey cubre tanto el bloqueo de pantalla del propio dispositivo como una llave de seguridad física aparte, y los otros cuatro son una aplicación de autenticación, un código por correo, un código por mensaje de texto y una aprobación push en otro dispositivo. Se puede tener más de uno registrado a la vez, y en cuanto se registra el primero se genera un juego de códigos de respaldo.
+**Primer inicio de sesión.** A la persona usuaria que todavía no tiene nada registrado no se le plantea ningún desafío, porque no hay con qué plantearlo. Ese inicio de sesión deriva primero las claves de cifrado y desemboca después en el registro, de modo que en esa única ocasión las claves existen antes de haber demostrado ningún segundo factor, y la sesión sigue sin poder leer datos de tickets hasta que el registro termina y la marca como verificada.
+**Por qué más de un método.** Cada método registrado es una vía de entrada independiente y, como CARE-Y no tiene ninguna ruta de recuperación de contraseña ni de cuenta, a la persona usuaria cuyo único método está en un dispositivo perdido no le quedan más que los códigos de respaldo, y por esa razón el producto se niega a eliminar el último método registrado.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "After entering a password, CARE-Y requires a second factor to verify the volunteer's identity before deriving encryption keys. A stolen or guessed password a..." |
+* | "A second factor is required alongside the password, and every request for encrypted content is refused on a session that has not cleared its second factor. *..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

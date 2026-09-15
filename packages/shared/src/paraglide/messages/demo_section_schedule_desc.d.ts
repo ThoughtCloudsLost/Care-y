@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The schedule page will manage volunteer shifts. The scheduling feature is still in development." |
+* | "Shift scheduling is in development and the schedule page carries a placeholder instead of a calendar, so this section describes the shape the feature is plan..." |
 *
 * @param {Demo_Section_Schedule_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

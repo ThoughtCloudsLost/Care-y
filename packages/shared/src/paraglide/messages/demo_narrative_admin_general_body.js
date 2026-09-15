@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_General_BodyInputs */
 
 const en_demo_narrative_admin_general_body = /** @type {(inputs: Demo_Narrative_Admin_General_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The organization name, country, and default interface language are configured here, and each is encrypted with the organization key before storage.`)
+	return /** @type {LocalizedString} */ (`The organization name, country, and default interface language are configured here. These values are stored as plaintext because they appear on pre auth pages and do not contain sensitive content.`)
 };
 
 const es_demo_narrative_admin_general_body = /** @type {(inputs: Demo_Narrative_Admin_General_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El nombre de la organización, el país y el idioma predeterminado de la interfaz se configuran aquí, y cada uno se cifra con la clave de la organización antes de almacenarse.`)
+	return /** @type {LocalizedString} */ (`El nombre de la organización, el país y el idioma predeterminado de la interfaz se configuran aquí. Estos valores se almacenan en texto plano porque aparecen en páginas previas a la autenticación y no contienen contenido sensible.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The organization name, country, and default interface language are configured here, and each is encrypted with the organization key before storage." |
+* | "The organization name, country, and default interface language are configured here. These values are stored as plaintext because they appear on pre auth page..." |
 *
 * @param {Demo_Narrative_Admin_General_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

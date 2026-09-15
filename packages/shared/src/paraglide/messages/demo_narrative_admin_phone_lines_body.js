@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Phone_Lines_BodyInputs */
 
 const en_demo_narrative_admin_phone_lines_body = /** @type {(inputs: Demo_Narrative_Admin_Phone_Lines_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Each phone line has a number, a purpose role, and associated greetings. Purpose roles like intake and outbound determine how the line is used. The simulator seeds two fictional 555 numbers with purpose roles for demonstration.`)
+	return /** @type {LocalizedString} */ (`Each phone line has a number, a purpose role, and associated greetings. Purpose roles determine how the line is used, with outbound handling volunteer initiated calls and system messages handling automated notifications. The simulator seeds two fictional 555 numbers with purpose roles for demonstration.`)
 };
 
 const es_demo_narrative_admin_phone_lines_body = /** @type {(inputs: Demo_Narrative_Admin_Phone_Lines_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cada línea telefónica tiene un número, un rol de propósito y saludos asociados. Los roles de propósito como recepción y salida determinan cómo se usa la línea. El simulador configura dos números ficticios 555 con roles de propósito para la demostración.`)
+	return /** @type {LocalizedString} */ (`Cada línea telefónica tiene un número, un rol de propósito y saludos asociados. Los roles de propósito determinan cómo se usa la línea, con saliente para las llamadas iniciadas por voluntarios y mensajes del sistema para las notificaciones automatizadas. El simulador configura dos números ficticios 555 con roles de propósito para la demostración.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Each phone line has a number, a purpose role, and associated greetings. Purpose roles like intake and outbound determine how the line is used. The simulator ..." |
+* | "Each phone line has a number, a purpose role, and associated greetings. Purpose roles determine how the line is used, with outbound handling volunteer initia..." |
 *
 * @param {Demo_Narrative_Admin_Phone_Lines_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

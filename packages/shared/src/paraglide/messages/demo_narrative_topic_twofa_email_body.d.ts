@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A six digit code sent to the email address on file for the volunteer's account. Codes expire after a short window and each one works exactly once. **Resend.*..." |
+* | "A six digit code is sent to the email address on file for the account, and it expires five minutes after it is sent. **Attempts.** An email code survives thr..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Email_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

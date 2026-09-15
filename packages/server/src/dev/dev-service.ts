@@ -37,8 +37,9 @@ const SEED_TABLES_DELETE_ORDER: readonly (keyof TenantDatabase)[] = [
   // depend on clients/queues
   "tickets",
   "client_merge_events",
-  // depend on phones
+  // depend on phones/emails
   "clients",
+  "emails",
   "phone_greetings",
   "phones",
   // depend on queues

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Organization name, primary and accent colors, logo, and client facing text are all encrypted with the organization key before storage. **App icon** When a lo..." |
+* | "Organization name, primary and accent colors, logo, and client facing text are stored as plaintext on the server so pre auth pages can display them without d..." |
 *
 * @param {Demo_Narrative_Admin_Branding_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

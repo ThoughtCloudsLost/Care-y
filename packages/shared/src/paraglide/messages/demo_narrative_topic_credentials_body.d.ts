@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers sign in with a username and password assigned by their organization. The password is never sent to the server in any form. When you submit your pa..." |
+* | "A user signs in with a username and a password. The username is a login name rather than an email address, chosen by the person accepting an invitation or se..." |
 *
 * @param {Demo_Narrative_Topic_Credentials_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
