@@ -935,9 +935,9 @@ describe("SECTIONS taxonomy", () => {
     expect(tickets?.subs).toHaveLength(12);
   });
 
-  it("ticket-detail has 26 subs", () => {
+  it("ticket-detail has 27 subs", () => {
     const detail = SECTIONS.find((s) => s.id === "ticket-detail");
-    expect(detail?.subs).toHaveLength(26);
+    expect(detail?.subs).toHaveLength(27);
   });
 
   it("search has 3 subs", () => {
@@ -960,9 +960,9 @@ describe("SECTIONS taxonomy", () => {
     expect(people?.subs).toHaveLength(7);
   });
 
-  it("admin-comms has 6 subs", () => {
+  it("admin-comms has 7 subs", () => {
     const comms = SECTIONS.find((s) => s.id === "admin-comms");
-    expect(comms?.subs).toHaveLength(6);
+    expect(comms?.subs).toHaveLength(7);
   });
 
   it("admin-org has 7 subs", () => {
@@ -970,14 +970,14 @@ describe("SECTIONS taxonomy", () => {
     expect(org?.subs).toHaveLength(7);
   });
 
-  it("admin-forms has 2 subs", () => {
+  it("admin-forms has 5 subs", () => {
     const forms = SECTIONS.find((s) => s.id === "admin-forms");
-    expect(forms?.subs).toHaveLength(2);
+    expect(forms?.subs).toHaveLength(5);
   });
 
-  it("admin-responses has 2 subs", () => {
+  it("admin-responses has 3 subs", () => {
     const responses = SECTIONS.find((s) => s.id === "admin-responses");
-    expect(responses?.subs).toHaveLength(2);
+    expect(responses?.subs).toHaveLength(3);
   });
 
   it("admin-logs has 2 subs", () => {
@@ -995,9 +995,9 @@ describe("SECTIONS taxonomy", () => {
     expect(settings?.subs).toHaveLength(7);
   });
 
-  it("client-intake has 4 subs", () => {
+  it("client-intake has 6 subs", () => {
     const intake = SECTIONS.find((s) => s.id === "client-intake");
-    expect(intake?.subs).toHaveLength(4);
+    expect(intake?.subs).toHaveLength(6);
   });
 
   it("client-privacy has 1 sub", () => {
@@ -1005,20 +1005,96 @@ describe("SECTIONS taxonomy", () => {
     expect(privacy?.subs).toHaveLength(1);
   });
 
-  it("client-portal has 3 subs", () => {
+  it("client-portal has 5 subs", () => {
     const portal = SECTIONS.find((s) => s.id === "client-portal");
-    expect(portal?.subs).toHaveLength(3);
+    expect(portal?.subs).toHaveLength(5);
   });
 
-  it("client-account has 3 subs", () => {
+  it("client-account has 5 subs", () => {
     const account = SECTIONS.find((s) => s.id === "client-account");
-    expect(account?.subs).toHaveLength(3);
+    expect(account?.subs).toHaveLength(5);
   });
 
-  it("client-share has 2 subs", () => {
+  it("client-share has 3 subs", () => {
     const share = SECTIONS.find((s) => s.id === "client-share");
-    expect(share?.subs).toHaveLength(2);
+    expect(share?.subs).toHaveLength(3);
   });
+});
+
+// -----------------------------------------------------------------------
+// Sub-section command symmetry (scroll-down and scroll-up)
+//
+// Every section and every sub-section, exhaustively. The loop derives
+// its cases from SECTIONS at runtime, so adding a section or sub
+// automatically adds coverage without touching this block.
+// -----------------------------------------------------------------------
+
+describe("sub-section commands play identically forward and backward", () => {
+  const TICKET_ID = "test-ticket-id";
+  const ARTICLE_ID = "test-article-id";
+
+  /** Strip the query the router removes before storing detail. */
+  function stripQuery(detail: string | null): string | null {
+    return detail !== null ? detail.split("?")[0]! : null;
+  }
+
+  for (const section of SECTIONS) {
+    describe(section.id, () => {
+      const commands = section.subs.map((sub) =>
+        resolvePhoneCommand(section.id, sub.slug, TICKET_ID, ARTICLE_ID),
+      );
+
+      it("walking subs forward then backward produces identical commands", () => {
+        const forward = section.subs.map((sub) =>
+          resolvePhoneCommand(section.id, sub.slug, TICKET_ID, ARTICLE_ID),
+        );
+        const backward = [...section.subs]
+          .reverse()
+          .map((sub) =>
+            resolvePhoneCommand(section.id, sub.slug, TICKET_ID, ARTICLE_ID),
+          );
+        for (const sub of section.subs) {
+          const fwdIdx = section.subs.indexOf(sub);
+          const revIdx = section.subs.length - 1 - fwdIdx;
+          expect(forward[fwdIdx]).toEqual(backward[revIdx]);
+        }
+      });
+
+      it("every sub converges with its own section", () => {
+        for (let i = 0; i < section.subs.length; i++) {
+          const cmd = commands[i]!;
+          const detail = stripQuery(cmd.detail);
+          expect(
+            sectionMatchesPhone(
+              section.id,
+              cmd.feature,
+              detail,
+              cmd.openSearch,
+            ),
+          ).toBe(true);
+        }
+      });
+
+      it("no sub converges with a different section", () => {
+        const others = SECTIONS.filter((s) => s.id !== section.id);
+        for (let i = 0; i < section.subs.length; i++) {
+          const sub = section.subs[i]!;
+          const cmd = commands[i]!;
+          const detail = stripQuery(cmd.detail);
+          for (const other of others) {
+            if (
+              sectionMatchesPhone(other.id, cmd.feature, detail, cmd.openSearch)
+            ) {
+              throw new Error(
+                `${section.id}/${sub.slug} converges with ${other.id} ` +
+                  `(feature=${cmd.feature}, detail=${detail})`,
+              );
+            }
+          }
+        }
+      });
+    });
+  }
 });
 
 // -----------------------------------------------------------------------

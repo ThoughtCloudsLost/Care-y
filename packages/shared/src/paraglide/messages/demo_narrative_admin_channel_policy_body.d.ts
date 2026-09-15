@@ -1,0 +1,16 @@
+/**
+* | output |
+* | --- |
+* | "The channel policy section controls which communication channels are available to users across the organization, with five channels that each have an indepen..." |
+*
+* @param {Demo_Narrative_Admin_Channel_Policy_BodyInputs} inputs
+* @param {{ locale?: "en" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const demo_narrative_admin_channel_policy_body: ((inputs?: Demo_Narrative_Admin_Channel_Policy_BodyInputs, options?: {
+    locale?: "en" | "es";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Narrative_Admin_Channel_Policy_BodyInputs, {
+    locale?: "en" | "es";
+}, {}>;
+export type LocalizedString = import("../runtime.js").LocalizedString;
+export type Demo_Narrative_Admin_Channel_Policy_BodyInputs = {};

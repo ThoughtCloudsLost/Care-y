@@ -58,6 +58,7 @@ import {
   buildIntakeFormResponse,
   channelSecretSchema,
   composeIntakeTicketContent,
+  emailHashSchema,
   extractMessageText,
   intakeFormIdSchema,
   newClientAccountId,
@@ -78,6 +79,7 @@ import {
   type OrgSchema,
   type OrgSlug,
   type QueueId,
+  replyTokenHashSchema,
   type ShareId,
   type TicketId,
   type UserId,
@@ -86,7 +88,10 @@ import {
 
 import { InternalError } from "../errors.js";
 import type { TenantDatabase } from "../db/types.js";
-import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+import type {
+  FieldEncryptor,
+  BlindIndexer,
+} from "../crypto/field-encryptor.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { channelTag, accountTag } from "../crypto/oprf-tags.js";
 import type { NotificationService } from "../notifications/service.js";
@@ -160,6 +165,8 @@ export interface SeedPortalDeps {
     blindedElement: Uint8Array,
     tag: string,
   ) => Uint8Array;
+  /** Blind indexer for deterministic email hash (same derivation as email-service). */
+  readonly blindIndexer: BlindIndexer;
   /** Credentials the demo publishes for the seeded account. */
   readonly accountUsername: string;
   readonly accountPassword: string;
@@ -944,9 +951,16 @@ async function sealAnchorTicketMedia(
 
 /**
  * Eligible followup types for portal message copies, matching the
- * production rule in reseed-service.ts (MESSAGE_COPY_TYPES).
+ * production rule in reseed-service.ts (MESSAGE_COPY_TYPES):
+ * message, sms_outbound, sms_inbound, email_outbound, email_inbound.
  */
-const MESSAGE_COPY_TYPES = new Set(["message", "sms_outbound", "sms_inbound"]);
+const MESSAGE_COPY_TYPES = new Set([
+  "message",
+  "sms_outbound",
+  "sms_inbound",
+  "email_outbound",
+  "email_inbound",
+]);
 
 /**
  * Mirror the anchor ticket's text-bearing follow-ups as portal messages.
@@ -1200,7 +1214,6 @@ async function submitSeedResponse(
         // intent to the outbox inside its own transaction and the drainer
         // dispatches from there, so the caller supplies no dispatcher.
         sealedBox: deps.sealedBox,
-        fieldEncryptor: deps.fieldEncryptor,
         orgId: deps.orgId,
         orgSchema: deps.orgSchema,
         orgSlug: deps.orgSlug,
@@ -1266,6 +1279,79 @@ function portalMessageDeps(deps: SeedPortalDeps): PortalMessageServiceDeps {
 }
 
 // ---------------------------------------------------------------------------
+// Client email seeding
+// ---------------------------------------------------------------------------
+
+/** Seeded email address for the anchor ticket's client. */
+const ANCHOR_CLIENT_EMAIL = "maria.l@example.org";
+
+/**
+ * Store an email address on the anchor ticket's client, following the
+ * same storage shape as email-service.ts: encrypted address, blind-index
+ * hash, and the client FK update. Audit logging is skipped for seed data.
+ */
+async function seedClientEmail(
+  deps: SeedPortalDeps,
+  clientId: ClientId,
+): Promise<void> {
+  const { tDb, fieldEncryptor, blindIndexer, orgId } = deps;
+
+  const encryptedAddress = fieldEncryptor.encrypt(ANCHOR_CLIENT_EMAIL);
+  const emailHash = emailHashSchema.parse(
+    blindIndexer.hash(ANCHOR_CLIENT_EMAIL, orgId),
+  );
+
+  const row = await tDb
+    .insertInto("emails")
+    .values({
+      email_hash: emailHash,
+      encrypted_address: encryptedAddress,
+      email_match_hash: null,
+      locale: "en-US",
+    })
+    .returning("id")
+    .executeTakeFirstOrThrow();
+
+  await tDb
+    .updateTable("clients")
+    .set({ email_id: row.id, updated_at: new Date() })
+    .where("id", "=", clientId)
+    .execute();
+}
+
+// ---------------------------------------------------------------------------
+// Reply token seeding
+// ---------------------------------------------------------------------------
+
+/**
+ * Seed an active (unrevoked) email_reply_tokens row for the anchor ticket
+ * so the ticket panel's revoke action has something to act on.
+ *
+ * The token_hash is a deterministic placeholder. No real token is minted
+ * because the demo has no SMTP receiver to resolve it, and the hash is
+ * never looked up. Only the row's existence (with revoked_at = null)
+ * matters for the UI.
+ */
+async function seedReplyToken(
+  tDb: Kysely<TenantDatabase>,
+  ticketId: TicketId,
+): Promise<void> {
+  // Deterministic hex string minted through the schema. Not a real HMAC;
+  // just needs to be non-null and unique.
+  const placeholderHash = replyTokenHashSchema.parse(
+    "seed0000000000000000000000000000000000000000000000000000deadbeef",
+  );
+
+  await tDb
+    .insertInto("email_reply_tokens")
+    .values({
+      ticket_id: ticketId,
+      token_hash: placeholderHash,
+    })
+    .execute();
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -1283,6 +1369,14 @@ export async function seedPortal(
   const routingQueueIds = queues.map((q) => q.id);
 
   const anchorClientId = await resolveTicketClient(tDb, deps.anchorTicketId);
+
+  // Store an email address on the anchor client so the ticket panel shows
+  // the email contact and the revoke-reply-token action.
+  await seedClientEmail(deps, anchorClientId);
+
+  // Seed an active reply token row so the revoke action has something to
+  // act on when the demo user opens the ticket panel.
+  await seedReplyToken(tDb, deps.anchorTicketId);
 
   // Secure Link and the account are mutually exclusive tiers on one client
   // (the partial unique index rejects two active channels), so the account

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Schedule_BodyInputs */
 
 const en_demo_narrative_schedule_body = /** @type {(inputs: Demo_Narrative_Schedule_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`This page will let managers create and assign volunteer shifts. Shift start and end times, coverage requirements, and volunteer availability will be managed here. The shift summary card on the overview page already reads from the shift data structure, and the card will show real data once scheduling is complete.`)
+	return /** @type {LocalizedString} */ (`Shift scheduling is planned to cover shifts that repeat on a schedule, assigning people to cover them, and a calendar showing where coverage is complete and where it is thin. Until it arrives, the shift summary on the overview page is filled from fixed placeholder values rather than from any schedule, so the times and initials it shows are the same for every user instead of describing anyone's real shift.`)
 };
 
 const es_demo_narrative_schedule_body = /** @type {(inputs: Demo_Narrative_Schedule_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esta página permitirá a los gestores crear y asignar turnos de voluntarios. Los horarios de inicio y fin de turno, requisitos de cobertura y disponibilidad de voluntarios se gestionarán aquí. La tarjeta de resumen de turno en la página de resumen ya lee de la estructura de datos de turnos, y la tarjeta mostrará datos reales cuando la programación esté completa.`)
+	return /** @type {LocalizedString} */ (`La programación de turnos está prevista para cubrir turnos que se repiten según un calendario, la asignación de las personas que los atienden y una vista de calendario que muestra dónde la cobertura está completa y dónde es escasa. Hasta que llegue, el resumen de turno de la página de resumen se rellena con valores fijos de marcador de posición y no con un horario real, así que los horarios y las iniciales que muestra son los mismos para todas las personas usuarias en lugar de describir el turno real de nadie.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "This page will let managers create and assign volunteer shifts. Shift start and end times, coverage requirements, and volunteer availability will be managed ..." |
+* | "Shift scheduling is planned to cover shifts that repeat on a schedule, assigning people to cover them, and a calendar showing where coverage is complete and ..." |
 *
 * @param {Demo_Narrative_Schedule_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

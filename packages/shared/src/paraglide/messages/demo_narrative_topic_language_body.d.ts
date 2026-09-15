@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers can switch the interface language at the login screen or at any point after signing in. The switch happens instantly without a page reload because..." |
+* | "The interface language can be changed before signing in and at any point afterward, and the change takes effect immediately because both languages travel ins..." |
 *
 * @param {Demo_Narrative_Topic_Language_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

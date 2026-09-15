@@ -484,6 +484,7 @@ export async function bootDemoEngine(
     sealedBox,
     orgPublicKey,
     fieldEncryptor: encryptor,
+    blindIndexer: indexer,
     blobStore,
     intakeFormService,
     notificationService,

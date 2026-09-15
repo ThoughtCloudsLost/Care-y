@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Tapping and holding a message opens a context menu with actions for that specific message. **Available actions.** Three actions are available: copy, edit, an..." |
+* | "Tapping and holding a message opens a context menu with actions for that specific message. **Available actions.** Copy, edit, and delete are available. Edit ..." |
 *
 * @param {Demo_Narrative_Topic_Message_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

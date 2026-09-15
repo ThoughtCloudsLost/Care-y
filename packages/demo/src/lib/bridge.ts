@@ -225,7 +225,9 @@ export type DemoTopic =
   | "ticket-share-status"
   | "ticket-outbound-edit"
   | "ticket-correction-status"
+  | "ticket-email-thread"
   | "admin-role-permissions"
+  | "admin-channel-policy"
   | "admin-intake-forms"
   | "admin-form-builder"
   | "admin-form-preview"
@@ -233,21 +235,30 @@ export type DemoTopic =
   | "admin-response-key-not-held"
   | "admin-call-log"
   | "admin-audit-log"
+  | "admin-field-config"
+  | "admin-form-locales"
+  | "admin-form-settings"
+  | "admin-response-export"
   // Client-portal topics. Every one of these resolves through
   // TOPIC_SELECTORS rather than through label candidates: the client
   // shell's targets are form regions and page sections, not controls
   // carrying a translatable label the classifier could match.
   | "client-intake-form"
   | "client-intake-protection"
+  | "client-intake-contact"
   | "client-intake-fields"
   | "client-intake-submit"
   | "client-privacy-notice"
   | "client-portal-thread"
+  | "client-portal-passphrase"
   | "client-portal-composer"
   | "client-quick-exit"
+  | "client-portal-upgrade"
   | "client-account-sign-in"
   | "client-account-thread"
+  | "client-account-change-password"
   | "client-account-settings"
+  | "client-account-sign-out"
   | "client-share-view"
   | "client-share-one-time";
 
@@ -301,6 +312,7 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   "ticket-share-link",
   "ticket-share-status",
   "ticket-correction-status",
+  "ticket-email-thread",
   "compose-actions",
   "ticket-outbound-edit",
   "reply",
@@ -320,6 +332,7 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   "admin-client-merge",
   "admin-roles",
   "admin-role-permissions",
+  "admin-channel-policy",
   "admin-telephony-provider",
   "admin-phone-lines",
   "admin-greetings",
@@ -339,6 +352,10 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   "admin-response-key-not-held",
   "admin-call-log",
   "admin-audit-log",
+  "admin-field-config",
+  "admin-form-locales",
+  "admin-form-settings",
+  "admin-response-export",
   "settings-profile",
   "settings-password",
   "settings-appearance",
@@ -349,15 +366,20 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   // Client arc last, matching the section order.
   "client-intake-form",
   "client-intake-protection",
+  "client-intake-contact",
   "client-intake-fields",
   "client-intake-submit",
   "client-privacy-notice",
   "client-portal-thread",
+  "client-portal-passphrase",
   "client-portal-composer",
   "client-quick-exit",
+  "client-portal-upgrade",
   "client-account-sign-in",
   "client-account-thread",
+  "client-account-change-password",
   "client-account-settings",
+  "client-account-sign-out",
   "client-share-view",
   "client-share-one-time",
 ] as const;

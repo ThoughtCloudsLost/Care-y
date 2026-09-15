@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A notification sent to another device where the volunteer is already signed in. Approving the notification on that device completes the sign in on this one w..." |
+* | "Push approval sends a notification to the devices where the user has turned push notifications on, and approving it there completes the sign in on the device..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Push_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

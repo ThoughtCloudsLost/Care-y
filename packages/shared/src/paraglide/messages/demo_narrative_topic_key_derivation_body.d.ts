@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This is the core of how CARE-Y protects data and what makes it different from a system that simply encrypts a database. After the password is processed and t..." |
+* | "CARE-Y never stores the keys that decrypt its data. They are computed from the password at each sign in, they live only in the browser's memory and are erase..." |
 *
 * @param {Demo_Narrative_Topic_Key_Derivation_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

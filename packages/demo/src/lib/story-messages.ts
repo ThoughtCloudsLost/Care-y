@@ -325,6 +325,10 @@ const lookup: Record<string, () => string> = {
   demo_narrative_admin_roles_heading: () =>
     m.demo_narrative_admin_roles_heading(),
   demo_narrative_admin_roles_body: () => m.demo_narrative_admin_roles_body(),
+  demo_narrative_admin_channel_policy_heading: () =>
+    m.demo_narrative_admin_channel_policy_heading(),
+  demo_narrative_admin_channel_policy_body: () =>
+    m.demo_narrative_admin_channel_policy_body(),
   demo_narrative_admin_telephony_provider_heading: () =>
     m.demo_narrative_admin_telephony_provider_heading(),
   demo_narrative_admin_telephony_provider_body: () =>
@@ -402,6 +406,218 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_settings_security_heading(),
   demo_narrative_settings_security_body: () =>
     m.demo_narrative_settings_security_body(),
+  demo_narrative_settings_notifications_heading: () =>
+    m.demo_narrative_settings_notifications_heading(),
+  demo_narrative_settings_notifications_body: () =>
+    m.demo_narrative_settings_notifications_body(),
+  demo_narrative_settings_consultant_phone_heading: () =>
+    m.demo_narrative_settings_consultant_phone_heading(),
+  demo_narrative_settings_consultant_phone_body: () =>
+    m.demo_narrative_settings_consultant_phone_body(),
+
+  // Dashboard (new subs)
+  demo_narrative_dashboard_merge_candidates_heading: () =>
+    m.demo_narrative_dashboard_merge_candidates_heading(),
+  demo_narrative_dashboard_merge_candidates_body: () =>
+    m.demo_narrative_dashboard_merge_candidates_body(),
+
+  // Ticket detail (new subs)
+  demo_narrative_topic_portal_tier_heading: () =>
+    m.demo_narrative_topic_portal_tier_heading(),
+  demo_narrative_topic_portal_tier_body: () =>
+    m.demo_narrative_topic_portal_tier_body(),
+  demo_narrative_topic_secure_link_heading: () =>
+    m.demo_narrative_topic_secure_link_heading(),
+  demo_narrative_topic_secure_link_body: () =>
+    m.demo_narrative_topic_secure_link_body(),
+  demo_narrative_topic_share_link_heading: () =>
+    m.demo_narrative_topic_share_link_heading(),
+  demo_narrative_topic_share_link_body: () =>
+    m.demo_narrative_topic_share_link_body(),
+  demo_narrative_topic_share_status_heading: () =>
+    m.demo_narrative_topic_share_status_heading(),
+  demo_narrative_topic_share_status_body: () =>
+    m.demo_narrative_topic_share_status_body(),
+  demo_narrative_topic_correction_status_heading: () =>
+    m.demo_narrative_topic_correction_status_heading(),
+  demo_narrative_topic_correction_status_body: () =>
+    m.demo_narrative_topic_correction_status_body(),
+  demo_narrative_topic_email_thread_heading: () =>
+    m.demo_narrative_topic_email_thread_heading(),
+  demo_narrative_topic_email_thread_body: () =>
+    m.demo_narrative_topic_email_thread_body(),
+  demo_narrative_topic_outbound_edit_heading: () =>
+    m.demo_narrative_topic_outbound_edit_heading(),
+  demo_narrative_topic_outbound_edit_body: () =>
+    m.demo_narrative_topic_outbound_edit_body(),
+
+  // Admin people (new subs)
+  demo_narrative_admin_role_permissions_heading: () =>
+    m.demo_narrative_admin_role_permissions_heading(),
+  demo_narrative_admin_role_permissions_body: () =>
+    m.demo_narrative_admin_role_permissions_body(),
+
+  // Admin org (new subs)
+  demo_narrative_admin_intake_forms_heading: () =>
+    m.demo_narrative_admin_intake_forms_heading(),
+  demo_narrative_admin_intake_forms_body: () =>
+    m.demo_narrative_admin_intake_forms_body(),
+
+  // Admin forms section (5 subs)
+  demo_section_admin_forms_title: () => m.demo_section_admin_forms_title(),
+  demo_section_admin_forms_desc: () => m.demo_section_admin_forms_desc(),
+  demo_narrative_admin_form_builder_heading: () =>
+    m.demo_narrative_admin_form_builder_heading(),
+  demo_narrative_admin_form_builder_body: () =>
+    m.demo_narrative_admin_form_builder_body(),
+  demo_narrative_admin_field_config_heading: () =>
+    m.demo_narrative_admin_field_config_heading(),
+  demo_narrative_admin_field_config_body: () =>
+    m.demo_narrative_admin_field_config_body(),
+  demo_narrative_admin_form_locales_heading: () =>
+    m.demo_narrative_admin_form_locales_heading(),
+  demo_narrative_admin_form_locales_body: () =>
+    m.demo_narrative_admin_form_locales_body(),
+  demo_narrative_admin_form_preview_heading: () =>
+    m.demo_narrative_admin_form_preview_heading(),
+  demo_narrative_admin_form_preview_body: () =>
+    m.demo_narrative_admin_form_preview_body(),
+  demo_narrative_admin_form_settings_heading: () =>
+    m.demo_narrative_admin_form_settings_heading(),
+  demo_narrative_admin_form_settings_body: () =>
+    m.demo_narrative_admin_form_settings_body(),
+
+  // Admin responses section (3 subs)
+  demo_section_admin_responses_title: () =>
+    m.demo_section_admin_responses_title(),
+  demo_section_admin_responses_desc: () =>
+    m.demo_section_admin_responses_desc(),
+  demo_narrative_admin_form_responses_heading: () =>
+    m.demo_narrative_admin_form_responses_heading(),
+  demo_narrative_admin_form_responses_body: () =>
+    m.demo_narrative_admin_form_responses_body(),
+  demo_narrative_admin_response_key_not_held_heading: () =>
+    m.demo_narrative_admin_response_key_not_held_heading(),
+  demo_narrative_admin_response_key_not_held_body: () =>
+    m.demo_narrative_admin_response_key_not_held_body(),
+  demo_narrative_admin_response_export_heading: () =>
+    m.demo_narrative_admin_response_export_heading(),
+  demo_narrative_admin_response_export_body: () =>
+    m.demo_narrative_admin_response_export_body(),
+
+  // Admin logs section
+  demo_section_admin_logs_title: () => m.demo_section_admin_logs_title(),
+  demo_section_admin_logs_desc: () => m.demo_section_admin_logs_desc(),
+  demo_narrative_admin_call_log_heading: () =>
+    m.demo_narrative_admin_call_log_heading(),
+  demo_narrative_admin_call_log_body: () =>
+    m.demo_narrative_admin_call_log_body(),
+  demo_narrative_admin_audit_log_heading: () =>
+    m.demo_narrative_admin_audit_log_heading(),
+  demo_narrative_admin_audit_log_body: () =>
+    m.demo_narrative_admin_audit_log_body(),
+
+  // Client intake section (6 subs)
+  demo_section_client_intake_title: () => m.demo_section_client_intake_title(),
+  demo_section_client_intake_desc: () => m.demo_section_client_intake_desc(),
+  demo_narrative_client_intake_form_heading: () =>
+    m.demo_narrative_client_intake_form_heading(),
+  demo_narrative_client_intake_form_body: () =>
+    m.demo_narrative_client_intake_form_body(),
+  demo_narrative_client_intake_protection_heading: () =>
+    m.demo_narrative_client_intake_protection_heading(),
+  demo_narrative_client_intake_protection_body: () =>
+    m.demo_narrative_client_intake_protection_body(),
+  demo_narrative_client_intake_contact_heading: () =>
+    m.demo_narrative_client_intake_contact_heading(),
+  demo_narrative_client_intake_contact_body: () =>
+    m.demo_narrative_client_intake_contact_body(),
+  demo_narrative_client_intake_fields_heading: () =>
+    m.demo_narrative_client_intake_fields_heading(),
+  demo_narrative_client_intake_fields_body: () =>
+    m.demo_narrative_client_intake_fields_body(),
+  demo_narrative_client_intake_submit_heading: () =>
+    m.demo_narrative_client_intake_submit_heading(),
+  demo_narrative_client_intake_submit_body: () =>
+    m.demo_narrative_client_intake_submit_body(),
+  demo_narrative_client_intake_closed_heading: () =>
+    m.demo_narrative_client_intake_closed_heading(),
+  demo_narrative_client_intake_closed_body: () =>
+    m.demo_narrative_client_intake_closed_body(),
+
+  // Client privacy section
+  demo_section_client_privacy_title: () =>
+    m.demo_section_client_privacy_title(),
+  demo_section_client_privacy_desc: () => m.demo_section_client_privacy_desc(),
+  demo_narrative_client_privacy_notice_heading: () =>
+    m.demo_narrative_client_privacy_notice_heading(),
+  demo_narrative_client_privacy_notice_body: () =>
+    m.demo_narrative_client_privacy_notice_body(),
+
+  // Client portal section (5 subs)
+  demo_section_client_portal_title: () => m.demo_section_client_portal_title(),
+  demo_section_client_portal_desc: () => m.demo_section_client_portal_desc(),
+  demo_narrative_client_portal_thread_heading: () =>
+    m.demo_narrative_client_portal_thread_heading(),
+  demo_narrative_client_portal_thread_body: () =>
+    m.demo_narrative_client_portal_thread_body(),
+  demo_narrative_client_portal_passphrase_heading: () =>
+    m.demo_narrative_client_portal_passphrase_heading(),
+  demo_narrative_client_portal_passphrase_body: () =>
+    m.demo_narrative_client_portal_passphrase_body(),
+  demo_narrative_client_portal_composer_heading: () =>
+    m.demo_narrative_client_portal_composer_heading(),
+  demo_narrative_client_portal_composer_body: () =>
+    m.demo_narrative_client_portal_composer_body(),
+  demo_narrative_client_quick_exit_heading: () =>
+    m.demo_narrative_client_quick_exit_heading(),
+  demo_narrative_client_quick_exit_body: () =>
+    m.demo_narrative_client_quick_exit_body(),
+  demo_narrative_client_portal_upgrade_heading: () =>
+    m.demo_narrative_client_portal_upgrade_heading(),
+  demo_narrative_client_portal_upgrade_body: () =>
+    m.demo_narrative_client_portal_upgrade_body(),
+
+  // Client account section (5 subs)
+  demo_section_client_account_title: () =>
+    m.demo_section_client_account_title(),
+  demo_section_client_account_desc: () => m.demo_section_client_account_desc(),
+  demo_narrative_client_account_sign_in_heading: () =>
+    m.demo_narrative_client_account_sign_in_heading(),
+  demo_narrative_client_account_sign_in_body: () =>
+    m.demo_narrative_client_account_sign_in_body(),
+  demo_narrative_client_account_thread_heading: () =>
+    m.demo_narrative_client_account_thread_heading(),
+  demo_narrative_client_account_thread_body: () =>
+    m.demo_narrative_client_account_thread_body(),
+  demo_narrative_client_account_password_heading: () =>
+    m.demo_narrative_client_account_password_heading(),
+  demo_narrative_client_account_password_body: () =>
+    m.demo_narrative_client_account_password_body(),
+  demo_narrative_client_account_settings_heading: () =>
+    m.demo_narrative_client_account_settings_heading(),
+  demo_narrative_client_account_settings_body: () =>
+    m.demo_narrative_client_account_settings_body(),
+  demo_narrative_client_account_sign_out_heading: () =>
+    m.demo_narrative_client_account_sign_out_heading(),
+  demo_narrative_client_account_sign_out_body: () =>
+    m.demo_narrative_client_account_sign_out_body(),
+
+  // Client share section (3 subs)
+  demo_section_client_share_title: () => m.demo_section_client_share_title(),
+  demo_section_client_share_desc: () => m.demo_section_client_share_desc(),
+  demo_narrative_client_share_view_heading: () =>
+    m.demo_narrative_client_share_view_heading(),
+  demo_narrative_client_share_view_body: () =>
+    m.demo_narrative_client_share_view_body(),
+  demo_narrative_client_share_one_time_heading: () =>
+    m.demo_narrative_client_share_one_time_heading(),
+  demo_narrative_client_share_one_time_body: () =>
+    m.demo_narrative_client_share_one_time_body(),
+  demo_narrative_client_share_exposure_heading: () =>
+    m.demo_narrative_client_share_exposure_heading(),
+  demo_narrative_client_share_exposure_body: () =>
+    m.demo_narrative_client_share_exposure_body(),
 
   // Coming-soon placeholder
   demo_coming_soon_title: () => m.demo_coming_soon_title(),

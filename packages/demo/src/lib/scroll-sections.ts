@@ -106,8 +106,9 @@ export interface Section {
  * Entry page section: displayed before the visitor enters the story.
  * Uses id "login" because FlowStory blocks need a legal SectionId and
  * the phone is on the login splash under the entry page. NOT added to
- * SECTIONS so TopBar, parseHash, pill math, and the 12-section invariant
- * are unaffected. While the entry page is visible, App-level gates
+ * SECTIONS so TopBar, parseHash, and pill math are unaffected. Every
+ * count derived from SECTIONS excludes it. While the entry page is
+ * visible, App-level gates
  * prevent these subs from reaching the location store.
  */
 export const ENTRY_SECTION: Section = {
@@ -509,6 +510,21 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_topic_correction_status_body",
         highlight: { selectors: ['[data-testid="correction-status-line"]'] },
       },
+      {
+        slug: "email-thread",
+        topic: "ticket-email-thread",
+        headingKey: "demo_narrative_topic_email_thread_heading",
+        bodyKey: "demo_narrative_topic_email_thread_body",
+        // The seeded inbound email sits mid-thread (before the final
+        // client SMS, so the composer's email-expected banner stays
+        // off by default); the subject row and chip carry testids.
+        highlight: {
+          selectors: [
+            '[data-testid="email-inbound-subject"]',
+            '[data-testid="email-channel-chip"]',
+          ],
+        },
+      },
       // call-log and the three media subs directly follow the
       // conversation sub: its pulse lands the thread in the message
       // view, where the call entries and the seeded media cluster
@@ -813,9 +829,17 @@ export const SECTIONS: readonly Section[] = [
     routes: SECTION_ROUTES["admin-comms"],
     group: "org",
     // Scroll-nav page (CollapsibleSectionPage). Section ids come from
-    // admin/communications/+page.svelte:21-49; two subs share the
-    // telephony section and sms-templates maps to "templates".
+    // admin/communications/+page.svelte; two subs share the telephony
+    // section and sms-templates maps to "templates". channel-policy
+    // leads because it is the page's first section.
     subs: [
+      {
+        slug: "channel-policy",
+        topic: "admin-channel-policy",
+        headingKey: "demo_narrative_admin_channel_policy_heading",
+        bodyKey: "demo_narrative_admin_channel_policy_body",
+        highlight: { section: "channel-policy" },
+      },
       {
         slug: "provider",
         topic: "admin-telephony-provider",
@@ -943,19 +967,37 @@ export const SECTIONS: readonly Section[] = [
         highlight: { selectors: [".field-actions", ".default-hint"] },
       },
       {
+        slug: "field-config",
+        topic: "admin-field-config",
+        headingKey: "demo_narrative_admin_field_config_heading",
+        bodyKey: "demo_narrative_admin_field_config_body",
+        highlight: { selectors: [".sheet-content", ".field-actions"] },
+      },
+      {
+        slug: "locales",
+        topic: "admin-form-locales",
+        headingKey: "demo_narrative_admin_form_locales_heading",
+        bodyKey: "demo_narrative_admin_form_locales_body",
+        highlight: { selectors: [".locale-badge", ".locale-hint"] },
+      },
+      {
         slug: "preview",
         topic: "admin-form-preview",
         headingKey: "demo_narrative_admin_form_preview_heading",
         bodyKey: "demo_narrative_admin_form_preview_body",
-        // The preview pane switches between form, success, and closed
-        // states; the switcher renders only once the form has fields,
-        // and the empty state stands in when it has none.
         highlight: {
           selectors: [
             '[data-testid="preview-state-switcher"]',
             '[data-testid="preview-empty-state"]',
           ],
         },
+      },
+      {
+        slug: "form-settings",
+        topic: "admin-form-settings",
+        headingKey: "demo_narrative_admin_form_settings_heading",
+        bodyKey: "demo_narrative_admin_form_settings_body",
+        highlight: { selectors: [".default-hint", ".copy-btn"] },
       },
     ],
   },
@@ -986,6 +1028,15 @@ export const SECTIONS: readonly Section[] = [
         // failed row appearing here would mean the seed broke, which is
         // worth seeing rather than hiding behind a narrower selector.
         highlight: { selectors: [".irv-state-row", ".irv-card"] },
+      },
+      {
+        slug: "export",
+        topic: "admin-response-export",
+        headingKey: "demo_narrative_admin_response_export_heading",
+        bodyKey: "demo_narrative_admin_response_export_body",
+        highlight: {
+          selectors: ['[data-testid="export-csv-btn"]', ".irv-root"],
+        },
       },
     ],
   },
@@ -1120,6 +1171,13 @@ export const SECTIONS: readonly Section[] = [
         highlight: { selectors: [".how-protected"] },
       },
       {
+        slug: "contact-method",
+        topic: "client-intake-contact",
+        headingKey: "demo_narrative_client_intake_contact_heading",
+        bodyKey: "demo_narrative_client_intake_contact_body",
+        highlight: { selectors: ['[role="radiogroup"]'] },
+      },
+      {
         slug: "fields",
         topic: "client-intake-fields",
         headingKey: "demo_narrative_client_intake_fields_heading",
@@ -1145,6 +1203,13 @@ export const SECTIONS: readonly Section[] = [
             '[data-testid="intake-page-next"]',
           ],
         },
+      },
+      {
+        slug: "closed-form",
+        topic: null,
+        headingKey: "demo_narrative_client_intake_closed_heading",
+        bodyKey: "demo_narrative_client_intake_closed_body",
+        highlight: { selectors: [".intake-not-available", ".intake-intro"] },
       },
     ],
   },
@@ -1180,6 +1245,15 @@ export const SECTIONS: readonly Section[] = [
         highlight: { selectors: ['[data-testid="portal-thread"]'] },
       },
       {
+        slug: "passphrase",
+        topic: "client-portal-passphrase",
+        headingKey: "demo_narrative_client_portal_passphrase_heading",
+        bodyKey: "demo_narrative_client_portal_passphrase_body",
+        highlight: {
+          selectors: ['[data-testid="passphrase-input"]', ".gate-hint"],
+        },
+      },
+      {
         slug: "composer",
         topic: "client-portal-composer",
         headingKey: "demo_narrative_client_portal_composer_heading",
@@ -1196,6 +1270,18 @@ export const SECTIONS: readonly Section[] = [
         // real and stays mounted; phone-main.ts intercepts its trigger
         // so narrating it cannot navigate the iframe off-site.
         highlight: { selectors: ['[data-testid="quick-exit"]'] },
+      },
+      {
+        slug: "account-upgrade",
+        topic: "client-portal-upgrade",
+        headingKey: "demo_narrative_client_portal_upgrade_heading",
+        bodyKey: "demo_narrative_client_portal_upgrade_body",
+        highlight: {
+          selectors: [
+            '[data-testid="upgrade-body"]',
+            '[data-testid="portal-thread"]',
+          ],
+        },
       },
     ],
   },
@@ -1227,12 +1313,30 @@ export const SECTIONS: readonly Section[] = [
         highlight: { selectors: ['[data-testid="portal-thread"]'] },
       },
       {
+        slug: "change-password",
+        topic: "client-account-change-password",
+        headingKey: "demo_narrative_client_account_password_heading",
+        bodyKey: "demo_narrative_client_account_password_body",
+        highlight: {
+          selectors: ['[data-testid="account-settings"]', ".settings-section"],
+        },
+      },
+      {
         slug: "settings",
         topic: "client-account-settings",
         headingKey: "demo_narrative_client_account_settings_heading",
         bodyKey: "demo_narrative_client_account_settings_body",
         highlight: {
-          selectors: ['[data-testid="account-settings-toggle"]'],
+          selectors: ['[data-testid="account-settings"]', ".settings-section"],
+        },
+      },
+      {
+        slug: "sign-out",
+        topic: "client-account-sign-out",
+        headingKey: "demo_narrative_client_account_sign_out_heading",
+        bodyKey: "demo_narrative_client_account_sign_out_body",
+        highlight: {
+          selectors: [".settings-section", '[data-testid="account-settings"]'],
         },
       },
     ],
@@ -1261,6 +1365,18 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_client_share_one_time_body",
         highlight: {
           selectors: [".share-one-time-notice", ".share-terminal-text"],
+        },
+      },
+      {
+        slug: "exposure-hint",
+        topic: null,
+        headingKey: "demo_narrative_client_share_exposure_heading",
+        bodyKey: "demo_narrative_client_share_exposure_body",
+        highlight: {
+          selectors: [
+            '[data-testid="share-view-hint-dismiss"]',
+            ".share-content-block",
+          ],
         },
       },
     ],

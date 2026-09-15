@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_Push_BodyInputs */
 
 const en_demo_narrative_topic_twofa_push_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Push_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A notification sent to another device where the volunteer is already signed in. Approving the notification on that device completes the sign in on this one without typing a code.
-**How it works.** The login screen waits until the challenge is approved, denied, or times out. Push approval is useful when a volunteer has the app open on a second device, such as a tablet at a desk and a phone in hand.
-**Fallback.** If the volunteer denies the push or it times out, they can switch to another enrolled method from the login screen.`)
+	return /** @type {LocalizedString} */ (`Push approval sends a notification to the devices where the user has turned push notifications on, and approving it there completes the sign in on the device that asked, with no code typed anywhere.
+**How it works.** A push challenge ends when it is approved, when it is denied, or when it expires two minutes after being sent, and the sign in screen waits for whichever comes first. The challenge is tied to the session that created it, so an approval releases that one sign in attempt and nothing else.
+**Fallback.** A denied or expired push challenge leaves every other enrolled method available, and the sign in can go on with any of them.`)
 };
 
 const es_demo_narrative_topic_twofa_push_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Push_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una notificación enviada a otro dispositivo donde el voluntario ya tiene sesión iniciada. Aprobar la notificación en ese dispositivo completa el inicio de sesión en este sin escribir ningún código.
-**Cómo funciona.** La pantalla de inicio de sesión espera hasta que el desafío se aprueba, se niega o caduca. La aprobación push es útil cuando un voluntario tiene la aplicación abierta en un segundo dispositivo, como una tableta en el escritorio y un teléfono en la mano.
-**Alternativa.** Si el voluntario niega la notificación push o caduca, puede cambiar a otro método registrado desde la pantalla de inicio de sesión.`)
+	return /** @type {LocalizedString} */ (`La aprobación push envía una notificación a los dispositivos donde la persona usuaria ha activado las notificaciones push, y aprobarla allí completa el inicio de sesión en el dispositivo que lo pidió, sin escribir ningún código en ninguna parte.
+**Cómo funciona.** Un desafío push termina cuando se aprueba, cuando se deniega o cuando caduca dos minutos después de enviarse, y la pantalla de inicio de sesión espera a lo que ocurra primero. El desafío queda ligado a la sesión que lo creó, así que una aprobación libera ese único intento de inicio de sesión y nada más.
+**Alternativa.** Un desafío push denegado o caducado deja disponibles todos los demás métodos registrados, y el inicio de sesión puede continuar con cualquiera de ellos.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "A notification sent to another device where the volunteer is already signed in. Approving the notification on that device completes the sign in on this one w..." |
+* | "Push approval sends a notification to the devices where the user has turned push notifications on, and approving it there completes the sign in on the device..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Push_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

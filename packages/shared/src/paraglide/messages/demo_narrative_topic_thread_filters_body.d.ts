@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Inside a ticket, filter the thread by message type, author, or date. Thread filters narrow the visible messages without a new server request because all mess..." |
+* | "Inside a ticket, filter the thread by message type, author, or date. Thread filters narrow the visible messages by querying the server for the matching set a..." |
 *
 * @param {Demo_Narrative_Topic_Thread_Filters_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

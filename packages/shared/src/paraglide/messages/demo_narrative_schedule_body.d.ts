@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This page will let managers create and assign volunteer shifts. Shift start and end times, coverage requirements, and volunteer availability will be managed ..." |
+* | "Shift scheduling is planned to cover shifts that repeat on a schedule, assigning people to cover them, and a calendar showing where coverage is complete and ..." |
 *
 * @param {Demo_Narrative_Schedule_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

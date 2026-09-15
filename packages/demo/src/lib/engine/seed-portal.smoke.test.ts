@@ -202,14 +202,14 @@ describe("client portal seed", () => {
 
     // The full text-bearing conversation from the anchor ticket thread,
     // plus the two messages seedSecureLink wrote. Mirrors every eligible
-    // follow-up (message, sms_outbound, sms_inbound) excluding private
-    // and system rows.
+    // follow-up (message, sms_outbound, sms_inbound, email_outbound,
+    // email_inbound) excluding private and system rows.
     // The anchor ticket's eligible follow-ups plus the two seedSecureLink
     // wrote. Eligible is wider than the explicitly-typed rows suggest:
     // seed-tickets defaults a missing type to "message", so the untyped
     // entries count too. An exact number is the cheapest leak guard we
     // have, since over-mirroring shows up here as a larger thread.
-    expect(result.messages.length).toBe(31);
+    expect(result.messages.length).toBe(34);
     expect(result.ticketId).not.toBeNull();
 
     // The key check opens under the OPRF-derived keypair: blind the seed,

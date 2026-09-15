@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Each phone line has a number, a purpose role, and associated greetings. Purpose roles like intake and outbound determine how the line is used. The simulator ..." |
+* | "Each phone line has a number, a purpose role, and associated greetings. Purpose roles determine how the line is used, with outbound handling volunteer initia..." |
 *
 * @param {Demo_Narrative_Admin_Phone_Lines_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

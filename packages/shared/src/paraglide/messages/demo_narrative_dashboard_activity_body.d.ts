@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A chronological list of recent events across the organization. Events include new tickets, status changes, assignments, and messages. **Encryption.** The cli..." |
+* | "A chronological list of recent events scoped to the queues the volunteer can access, so two volunteers with different queue memberships see different feeds. ..." |
 *
 * @param {Demo_Narrative_Dashboard_Activity_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A set of one time codes generated during enrollment and stored by the volunteer outside the system. Each code works exactly once. **When to use them.** Backu..." |
+* | "Backup codes are a set of eight one time codes, generated as soon as the first second factor method is enrolled and kept by the user outside the system, and ..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Backup_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

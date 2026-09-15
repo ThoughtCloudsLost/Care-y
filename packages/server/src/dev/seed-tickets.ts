@@ -549,7 +549,7 @@ export async function seedTestTickets(
           content: JSON.stringify({
             subject: "Re: your appointment",
             text: "Thank you, I have the letter and my ID ready. Do I need anything else for tonight?",
-            from: "client@example.org",
+            from: "maria.l@example.org",
             droppedAttachments: 0,
           }),
           source: "client",
@@ -568,6 +568,55 @@ export async function seedTestTickets(
               contentType: "text/plain",
             },
           ],
+        },
+        // email_outbound: volunteer follows up by email with bed
+        // confirmation details. Content is JSON.stringify({ subject, doc })
+        // where doc is a minimal ProseMirror doc, matching the shape the
+        // email compose editor produces.
+        {
+          content: JSON.stringify({
+            subject: "Bed confirmation for tonight",
+            doc: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "text",
+                      text: "The east side shelter confirmed a bed for you tonight. Check in is between 6pm and 8pm at the front desk.",
+                    },
+                  ],
+                },
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "text",
+                      text: "Bring the referral letter and your ID. Let me know if you need anything else before then.",
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+          source: "volunteer",
+          type: "email_outbound",
+          agoMinutes: 120,
+        },
+        // email_inbound: client replies by email. droppedAttachments: 1 so
+        // the dropped-attachment notice renders in the bubble. The from
+        // value matches the seeded email address on this client.
+        {
+          content: JSON.stringify({
+            subject: "Re: Bed confirmation for tonight",
+            text: "Got it, I will be there by 7. I tried to attach a photo of the letter but it would not go through.",
+            from: "maria.l@example.org",
+            droppedAttachments: 1,
+          }),
+          source: "client",
+          type: "email_inbound",
+          agoMinutes: 90,
         },
         {
           content:

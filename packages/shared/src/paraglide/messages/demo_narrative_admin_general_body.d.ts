@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The organization name, country, and default interface language are configured here, and each is encrypted with the organization key before storage." |
+* | "The organization name, country, and default interface language are configured here. These values are stored as plaintext because they appear on pre auth page..." |
 *
 * @param {Demo_Narrative_Admin_General_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

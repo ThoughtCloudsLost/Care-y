@@ -12,7 +12,7 @@ const en_demo_narrative_topic_view_modes_body = /** @type {(inputs: Demo_Narrati
 - **Cards** show each ticket with a message preview bubble for more context
 - **Grid** arranges tickets in a grid of smaller compact cards
 - **Kanban** (coming soon) will group tickets into swimlanes by status
-**Persistence.** The selected mode is saved locally and persists between sessions. The same view mode options are available on the overview page ticket sections.`)
+**Persistence.** The selected mode is saved locally and persists between sessions. The overview page has its own view mode preference stored separately, and it does not include the Kanban option.`)
 };
 
 const es_demo_narrative_topic_view_modes_body = /** @type {(inputs: Demo_Narrative_Topic_View_Modes_BodyInputs) => LocalizedString} */ () => {
@@ -22,7 +22,7 @@ const es_demo_narrative_topic_view_modes_body = /** @type {(inputs: Demo_Narrati
 - **Tarjetas** muestran cada ticket con una burbuja de vista previa del mensaje para más contexto
 - **Cuadrícula** organiza los tickets en una cuadrícula de tarjetas compactas más pequeñas
 - **Kanban** (próximamente) agrupará los tickets en carriles por estado
-**Persistencia.** El modo seleccionado se guarda localmente y persiste entre sesiones. Las mismas opciones de modo de vista están disponibles en las secciones de tickets de la página de resumen.`)
+**Persistencia.** El modo seleccionado se guarda localmente y persiste entre sesiones. La página de resumen tiene su propia preferencia de modo de vista almacenada por separado, y no incluye la opción Kanban.`)
 };
 
 /**

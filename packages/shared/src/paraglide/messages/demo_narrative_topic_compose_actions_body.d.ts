@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The compose bar is accessed via the + icon at the bottom of the screen and is where volunteers write replies to clients and internal notes to other org membe..." |
+* | "The + button at the bottom of the screen opens a popover listing the available compose actions. The entries that appear depend on the client's contact method..." |
 *
 * @param {Demo_Narrative_Topic_Compose_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

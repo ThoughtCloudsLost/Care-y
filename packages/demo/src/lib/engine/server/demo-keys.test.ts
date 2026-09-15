@@ -175,6 +175,13 @@ describe("createDemoOprfService", () => {
     _sodium.memzero(stretched);
   });
 
+  // The account branch re-parses the id to mint the ClientAccountId brand,
+  // the same way the real evaluate service does, so this one needs a UUID
+  // that actually parses where the volunteer-only tests can pass a short
+  // label. Zod checks the version and variant nibbles, so the digits in
+  // those two positions are load-bearing rather than decorative.
+  const ACCOUNT_CAPABLE_ID = "00000000-0000-4000-8000-00000000000a" as UserId;
+
   it("different tags produce different evaluations for the same blinded element", async () => {
     const k = deriveDemoOprfScalar();
     const service = createDemoOprfService(k);
@@ -184,7 +191,7 @@ describe("createDemoOprfService", () => {
     const b64Blinded = encode(blindedElement);
 
     const volResult = await service.evaluate({
-      userId: "user-a" as UserId,
+      userId: ACCOUNT_CAPABLE_ID,
       blindedElement: b64Blinded,
       ip: "127.0.0.1",
       kind: "volunteer" as const,
@@ -193,7 +200,7 @@ describe("createDemoOprfService", () => {
       powSolution: undefined,
     });
     const acctResult = await service.evaluate({
-      userId: "user-a" as UserId,
+      userId: ACCOUNT_CAPABLE_ID,
       blindedElement: b64Blinded,
       ip: "127.0.0.1",
       kind: "account" as const,

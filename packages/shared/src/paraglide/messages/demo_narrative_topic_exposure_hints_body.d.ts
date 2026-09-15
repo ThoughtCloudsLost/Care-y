@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When a volunteer initiates an SMS reply or a phone call from a ticket, a brief notice appears reminding them that the channel is not encrypted. **SMS warning..." |
+* | "When the user initiates an SMS reply or a phone call from a ticket, a brief notice appears reminding them that the channel is not encrypted. **SMS warning.**..." |
 *
 * @param {Demo_Narrative_Topic_Exposure_Hints_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

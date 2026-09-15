@@ -7,22 +7,22 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 const en_demo_narrative_topic_message_actions_body = /** @type {(inputs: Demo_Narrative_Topic_Message_Actions_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Tapping and holding a message opens a context menu with actions for that specific message.
-**Available actions.** Three actions are available: copy, edit, and delete. Edit and delete are restricted to internal notes authored by the current volunteer. Administrators can delete other volunteers' notes but cannot edit them.
+**Available actions.** Copy, edit, and delete are available. Edit and delete on internal notes are restricted to the note's author, and administrators can delete other volunteers' notes but cannot edit them. Outbound in app messages authored by the current volunteer can also be edited from this menu.
 **Copy.** Copies the decrypted message text to the clipboard. The copied text stays on the device.
-**Client messages.** Messages from clients and volunteer replies support copy only. Edit and delete are not available for these message types.`)
+**Client messages.** Messages from clients support copy only, since the volunteer cannot alter content the client sent.`)
 };
 
 const es_demo_narrative_topic_message_actions_body = /** @type {(inputs: Demo_Narrative_Topic_Message_Actions_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Mantener pulsado un mensaje abre un menú contextual con acciones para ese mensaje específico.
-**Acciones disponibles.** Tres acciones están disponibles: copiar, editar y eliminar. Editar y eliminar están restringidos a notas internas creadas por el voluntario actual. Los administradores pueden eliminar notas de otros voluntarios pero no pueden editarlas.
+**Acciones disponibles.** Copiar, editar y eliminar están disponibles. Editar y eliminar en notas internas están restringidos al autor de la nota, y los administradores pueden eliminar notas de otros voluntarios pero no pueden editarlas. Los mensajes salientes en la aplicación escritos por el voluntario actual también pueden editarse desde este menú.
 **Copiar.** Copia el texto descifrado del mensaje al portapapeles. El texto copiado permanece en el dispositivo.
-**Mensajes del cliente.** Los mensajes de clientes y las respuestas de voluntarios solo admiten copiar. Editar y eliminar no están disponibles para estos tipos de mensaje.`)
+**Mensajes del cliente.** Los mensajes de clientes solo admiten copiar, ya que el voluntario no puede alterar contenido enviado por el cliente.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Tapping and holding a message opens a context menu with actions for that specific message. **Available actions.** Three actions are available: copy, edit, an..." |
+* | "Tapping and holding a message opens a context menu with actions for that specific message. **Available actions.** Copy, edit, and delete are available. Edit ..." |
 *
 * @param {Demo_Narrative_Topic_Message_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

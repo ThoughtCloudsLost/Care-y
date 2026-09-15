@@ -80,6 +80,7 @@ const DETAIL_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "ticket-share-link",
   "ticket-share-status",
   "ticket-correction-status",
+  "ticket-email-thread",
   "ticket-outbound-edit",
 ]);
 
@@ -119,17 +120,22 @@ const SETTINGS_TOPICS: ReadonlySet<DemoTopic> = new Set([
 const CLIENT_TOPIC_TARGETS: ReadonlyMap<DemoTopic, string> = new Map([
   ["client-intake-form", "intake"],
   ["client-intake-protection", "intake"],
+  ["client-intake-contact", "intake"],
   ["client-intake-fields", "intake"],
   ["client-intake-submit", "intake"],
   ["client-privacy-notice", "intake/privacy"],
   ["client-portal-thread", DEMO_PORTAL_CHANNEL_ID],
+  ["client-portal-passphrase", DEMO_PORTAL_CHANNEL_ID],
   ["client-portal-composer", DEMO_PORTAL_CHANNEL_ID],
   // QuickExit mounts on both the portal and the account page. The portal
   // is the one the story reaches first, so a stray tap resolves there.
   ["client-quick-exit", DEMO_PORTAL_CHANNEL_ID],
+  ["client-portal-upgrade", DEMO_PORTAL_CHANNEL_ID],
   ["client-account-sign-in", "account"],
   ["client-account-thread", "account"],
+  ["client-account-change-password", "account"],
   ["client-account-settings", "account"],
+  ["client-account-sign-out", "account"],
   ["client-share-view", DEMO_SHARE_ID],
   ["client-share-one-time", DEMO_SHARE_ID],
 ]);
@@ -148,6 +154,10 @@ const ADMIN_DETAIL_TOPIC_TARGETS: ReadonlyMap<DemoTopic, string> = new Map([
   ["admin-call-log", "logs?tab=calls"],
   ["admin-audit-log", "logs?tab=audit"],
   ["admin-role-permissions", "people"],
+  ["admin-field-config", `forms?id=${DEMO_INTAKE_FORM_ID}`],
+  ["admin-form-locales", `forms?id=${DEMO_INTAKE_FORM_ID}`],
+  ["admin-form-settings", `forms?id=${DEMO_INTAKE_FORM_ID}`],
+  ["admin-response-export", `forms/responses?id=${DEMO_INTAKE_FORM_ID}`],
 ]);
 
 /** Resolve the feature + detail a topic's element lives on. */
@@ -200,7 +210,8 @@ export function topicFeatureTarget(topic: DemoTopic): {
     topic === "admin-phone-lines" ||
     topic === "admin-telephony-provider" ||
     topic === "admin-sms-templates" ||
-    topic === "admin-blocklist"
+    topic === "admin-blocklist" ||
+    topic === "admin-channel-policy"
   ) {
     return { feature: "admin", detail: "communications" };
   }
@@ -660,22 +671,33 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
       case "ticket-share-status":
       case "ticket-outbound-edit":
       case "ticket-correction-status":
+      case "ticket-email-thread":
       case "admin-role-permissions":
+      case "admin-channel-policy":
       case "admin-form-builder":
       case "admin-form-preview":
       case "admin-form-responses":
       case "admin-response-key-not-held":
+      case "admin-field-config":
+      case "admin-form-locales":
+      case "admin-form-settings":
+      case "admin-response-export":
       case "client-intake-form":
       case "client-intake-protection":
+      case "client-intake-contact":
       case "client-intake-fields":
       case "client-intake-submit":
       case "client-privacy-notice":
       case "client-portal-thread":
+      case "client-portal-passphrase":
       case "client-portal-composer":
       case "client-quick-exit":
+      case "client-portal-upgrade":
       case "client-account-sign-in":
       case "client-account-thread":
+      case "client-account-change-password":
       case "client-account-settings":
+      case "client-account-sign-out":
       case "client-share-view":
       case "client-share-one-time":
         break;
@@ -1054,7 +1076,9 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
       case "ticket-share-status":
       case "ticket-outbound-edit":
       case "ticket-correction-status":
+      case "ticket-email-thread":
       case "admin-role-permissions":
+      case "admin-channel-policy":
       case "admin-intake-forms":
       case "admin-form-builder":
       case "admin-form-preview":
@@ -1062,17 +1086,26 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
       case "admin-response-key-not-held":
       case "admin-call-log":
       case "admin-audit-log":
+      case "admin-field-config":
+      case "admin-form-locales":
+      case "admin-form-settings":
+      case "admin-response-export":
       case "client-intake-form":
       case "client-intake-protection":
+      case "client-intake-contact":
       case "client-intake-fields":
       case "client-intake-submit":
       case "client-privacy-notice":
       case "client-portal-thread":
+      case "client-portal-passphrase":
       case "client-portal-composer":
       case "client-quick-exit":
+      case "client-portal-upgrade":
       case "client-account-sign-in":
       case "client-account-thread":
+      case "client-account-change-password":
       case "client-account-settings":
+      case "client-account-sign-out":
       case "client-share-view":
       case "client-share-one-time":
         break;
@@ -1447,6 +1480,7 @@ export const TOPIC_SELECTORS: ReadonlyMap<DemoTopic, readonly string[]> =
     // scroll-sections.ts, and every entry is traceable to product source.
     ["client-intake-form", [".intake-intro"]],
     ["client-intake-protection", [".how-protected"]],
+    ["client-intake-contact", ['[role="radiogroup"]']],
     ["client-intake-fields", ['[role="radiogroup"]', ".intake-intro"]],
     [
       "client-intake-submit",
@@ -1454,14 +1488,33 @@ export const TOPIC_SELECTORS: ReadonlyMap<DemoTopic, readonly string[]> =
     ],
     ["client-privacy-notice", [".retention-disclosure"]],
     ["client-portal-thread", ['[data-testid="portal-thread"]']],
+    [
+      "client-portal-passphrase",
+      ['[data-testid="passphrase-input"]', ".gate-hint"],
+    ],
     ["client-portal-composer", ['[data-testid="portal-composer"]']],
     ["client-quick-exit", ['[data-testid="quick-exit"]']],
+    [
+      "client-portal-upgrade",
+      ['[data-testid="upgrade-body"]', '[data-testid="portal-thread"]'],
+    ],
     [
       "client-account-sign-in",
       ['[data-testid="account-username"]', ".login-list"],
     ],
     ["client-account-thread", ['[data-testid="portal-thread"]']],
-    ["client-account-settings", ['[data-testid="account-settings-toggle"]']],
+    [
+      "client-account-change-password",
+      ['[data-testid="account-settings"]', ".settings-section"],
+    ],
+    [
+      "client-account-settings",
+      ['[data-testid="account-settings"]', ".settings-section"],
+    ],
+    [
+      "client-account-sign-out",
+      [".settings-section", '[data-testid="account-settings"]'],
+    ],
     ["client-share-view", [".share-content-block", ".share-heading"]],
     [
       "client-share-one-time",
@@ -1475,6 +1528,14 @@ export const TOPIC_SELECTORS: ReadonlyMap<DemoTopic, readonly string[]> =
     ["ticket-share-link", [".share-sheet-body", ".case-header"]],
     ["ticket-share-status", ['[data-testid="share-status-line"]']],
     ["ticket-correction-status", ['[data-testid="correction-status-line"]']],
+    [
+      "ticket-email-thread",
+      [
+        '[data-testid="email-inbound-subject"]',
+        '[data-testid="email-channel-chip"]',
+      ],
+    ],
+    ["admin-channel-policy", [".cps-card"]],
     ["ticket-outbound-edit", [".char-counter", ".msg-body"]],
     ["admin-role-permissions", ["#panel-roles", ".matrix"]],
     ["admin-form-builder", [".field-actions", ".default-hint"]],
@@ -1496,6 +1557,10 @@ export const TOPIC_SELECTORS: ReadonlyMap<DemoTopic, readonly string[]> =
       [".merge-candidates-notice", ".notice-text"],
     ],
     ["admin-intake-forms", [".ifs-card-inner", ".section-desc"]],
+    ["admin-field-config", [".sheet-content", ".field-actions"]],
+    ["admin-form-locales", [".locale-badge", ".locale-hint"]],
+    ["admin-form-settings", [".default-hint", ".copy-btn"]],
+    ["admin-response-export", ['[data-testid="export-csv-btn"]', ".irv-root"]],
     // GettingStartedCard collapse toggle (CollapsibleSection.svelte line 55)
     ["dashboard-getting-started", [".collapsible-section .section-toggle"]],
   ]);

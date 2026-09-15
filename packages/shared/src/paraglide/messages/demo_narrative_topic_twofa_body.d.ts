@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "After entering a password, CARE-Y requires a second factor to verify the volunteer's identity before deriving encryption keys. A stolen or guessed password a..." |
+* | "A second factor is required alongside the password, and every request for encrypted content is refused on a session that has not cleared its second factor. *..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

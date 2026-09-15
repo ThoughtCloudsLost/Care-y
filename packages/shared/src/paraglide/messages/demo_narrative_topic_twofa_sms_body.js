@@ -6,19 +6,25 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_Sms_BodyInputs */
 
 const en_demo_narrative_topic_twofa_sms_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Sms_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A six digit code sent to the enrolled phone number through the organization's own telephony provider. Like email codes, each code is single use and expires quickly.
-**Security tradeoff.** Text message codes carry the same interception risk as email codes, with the additional concern that phone numbers can be transferred through social engineering attacks on carriers. Organizations should treat SMS as a convenience fallback rather than a primary second factor for volunteers handling high risk cases.`)
+	return /** @type {LocalizedString} */ (`A six digit code is sent by text message to the phone number enrolled on the account, delivered through the organization's own telephony provider, and it expires five minutes after it is sent.
+**Attempts.** A text message code survives three wrong entries, after which it is deleted and a new one has to be requested, and a code that has been accepted is deleted as well.
+**Resend.** A replacement text message code can be asked for ninety seconds after the last one, up to three in an hour.
+**What the server holds.** The phone number enrolled for text message codes is stored under the server's operational key rather than the end to end scheme, because the server has to read it to place the message with the telephony provider.
+**Security tradeoff.** A text message code carries the interception risk of an email code plus the risk that a phone number can be moved to another device by social engineering a carrier, and the message passes through the telephony provider in the clear, which is why the product treats this as the weakest of the methods that can be enrolled and why it suits a convenience fallback better than the primary factor for high risk work.`)
 };
 
 const es_demo_narrative_topic_twofa_sms_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Sms_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un código de seis dígitos enviado al número de teléfono registrado a través del proveedor de telefonía de la organización. Como los códigos por correo, cada código es de un solo uso y caduca rápidamente.
-**Compromiso de seguridad.** Los códigos por mensaje de texto tienen el mismo riesgo de interceptación que los códigos por correo, con la preocupación adicional de que los números de teléfono pueden transferirse mediante ataques de ingeniería social a las operadoras. Las organizaciones deberían tratar los SMS como una alternativa de conveniencia en lugar de un segundo factor principal para voluntarios que manejan casos de alto riesgo.`)
+	return /** @type {LocalizedString} */ (`Se envía un código de seis dígitos por mensaje de texto al número de teléfono registrado en la cuenta, entregado a través del proveedor de telefonía de la propia organización, y caduca cinco minutos después de enviarse.
+**Intentos.** Un código por mensaje de texto resiste tres entradas incorrectas, tras las cuales se elimina y hay que pedir uno nuevo, y un código aceptado también se elimina.
+**Reenvío.** Puede pedirse un código de repuesto por mensaje de texto noventa segundos después del anterior, hasta tres en una hora.
+**Lo que guarda el servidor.** El número de teléfono registrado para los códigos por mensaje de texto se almacena bajo la clave operativa del servidor y no bajo el esquema de extremo a extremo, porque el servidor tiene que leerlo para cursar el mensaje con el proveedor de telefonía.
+**Compromiso de seguridad.** Un código por mensaje de texto arrastra el riesgo de interceptación del código por correo más el riesgo de que un número de teléfono se traslade a otro dispositivo mediante ingeniería social con la operadora, y el mensaje pasa en claro por el proveedor de telefonía, razón por la cual el producto lo trata como el más débil de los métodos que pueden registrarse y encaja mejor como alternativa cómoda que como factor principal en trabajo de alto riesgo.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "A six digit code sent to the enrolled phone number through the organization's own telephony provider. Like email codes, each code is single use and expires q..." |
+* | "A six digit code is sent by text message to the phone number enrolled on the account, delivered through the organization's own telephony provider, and it exp..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Sms_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
