@@ -163,7 +163,9 @@ function createMockNotificationService(): NotificationService {
 // Stub tenant DB (unit tests only; DB integration tests use createTestDb)
 // ---------------------------------------------------------------------------
 
-function createStubTenantDb(): Kysely<TenantDatabase> {
+function createStubTenantDb(
+  tableRows?: Record<string, Record<string, unknown>[]>,
+): Kysely<TenantDatabase> {
   const insertedRows: Record<string, unknown>[] = [];
 
   const chainable = {
@@ -193,42 +195,37 @@ function createStubTenantDb(): Kysely<TenantDatabase> {
     insertInto() {
       return chainable;
     },
-    selectFrom() {
-      return {
+    selectFrom(table: string) {
+      const rows = tableRows?.[table] ?? [];
+      interface StubChain {
+        execute(): Promise<Record<string, unknown>[]>;
+        executeTakeFirst(): Promise<Record<string, unknown> | undefined>;
+        where(): StubChain;
+        orderBy(): StubChain;
+        limit(): StubChain;
+        select(): StubChain;
+      }
+      const terminal: StubChain = {
+        async execute() {
+          return rows;
+        },
+        async executeTakeFirst() {
+          return rows[0];
+        },
+        where() {
+          return terminal;
+        },
+        orderBy() {
+          return terminal;
+        },
+        limit() {
+          return terminal;
+        },
         select() {
-          return {
-            where() {
-              return {
-                orderBy() {
-                  return {
-                    limit() {
-                      return {
-                        async execute() {
-                          return [];
-                        },
-                      };
-                    },
-                  };
-                },
-                async executeTakeFirst() {
-                  return undefined;
-                },
-              };
-            },
-            orderBy() {
-              return {
-                limit() {
-                  return {
-                    async execute() {
-                      return [];
-                    },
-                  };
-                },
-              };
-            },
-          };
+          return terminal;
         },
       };
+      return terminal;
     },
   } as unknown as Kysely<TenantDatabase>;
 }
@@ -274,6 +271,7 @@ describe("quarantineRecording", () => {
   let deps: QuarantineDeps;
 
   beforeEach(() => {
+    invalidateRolePermissionCache(UNIT_ORG_SCHEMA);
     deps = makeDeps();
   });
 
@@ -369,6 +367,14 @@ describe("quarantineRecording", () => {
   });
 
   it("does not fail when notification dispatch throws", async () => {
+    // The stub DB must return a user row so the notification path
+    // reaches dispatchTicketless rather than short-circuiting on
+    // zero recipients.
+    invalidateRolePermissionCache(UNIT_ORG_SCHEMA);
+    const stubDb = createStubTenantDb({
+      users: [{ id: "fake-admin-id", role_id: RoleId.ADMIN, is_active: true }],
+    });
+
     const notificationService = createMockNotificationService();
     vi.mocked(notificationService.dispatchTicketless).mockRejectedValueOnce(
       new Error("SSE broken"),
@@ -377,10 +383,13 @@ describe("quarantineRecording", () => {
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
 
-    deps = makeDeps({ notificationService });
+    deps = makeDeps({ tDb: stubDb, notificationService });
     await quarantineRecording(deps, makeParams());
 
-    // Provider deletion still happens
+    // dispatchTicketless must have been reached (not short-circuited by
+    // an earlier error in the notification path)
+    expect(notificationService.dispatchTicketless).toHaveBeenCalledOnce();
+    // Provider deletion still happens despite the notification failure
     expect(deps.provider.deleteRecording).toHaveBeenCalledOnce();
     expect(deps.provider.deleteCallLog).toHaveBeenCalledOnce();
     expect(consoleSpy).toHaveBeenCalledWith(
