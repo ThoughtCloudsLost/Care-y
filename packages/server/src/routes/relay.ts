@@ -200,7 +200,7 @@ export interface RelayHandler {
  * reveals a client's number without contacting anyone, so it takes the
  * key that governs seeing contact details.
  */
-const RELAY_PERMISSIONS: ReadonlyMap<string, Permission> = new Map([
+export const RELAY_PERMISSIONS: ReadonlyMap<string, Permission> = new Map([
   ["/relay/sms", Permission.SEND_CLIENT_SMS],
   ["/relay/email", Permission.SEND_CLIENT_EMAIL],
   ["/relay/call", Permission.CALL_CLIENTS],

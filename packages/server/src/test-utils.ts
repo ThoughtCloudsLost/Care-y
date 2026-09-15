@@ -974,7 +974,14 @@ export const DOCKER_SOCKET_B = "/run/oprf/oprf-b.sock";
 // ---------------------------------------------------------------------------
 
 import type { OprfRouterDeps } from "./routes/oprf.js";
-import type { OptionalRouterDeps } from "./routes/router.js";
+import type { OptionalRouterDeps, RouterDeps } from "./routes/router.js";
+import type { OrgService } from "./org/service.js";
+import { createScryptHasher } from "./auth/password.js";
+import {
+  createInMemoryRateLimiter,
+  type RateLimiter,
+} from "./ratelimit/rate-limiter.js";
+import { createInMemoryTotpReplayCache } from "./auth/totp-replay-cache.js";
 import type { ProviderFactory } from "./telephony/factory.js";
 import type {
   TelephonyProvider,
@@ -1184,6 +1191,108 @@ export const NO_OPTIONAL_ROUTERS: OptionalRouterDeps = {
   clientPortalDeps: null,
   devDeps: null,
 };
+
+/**
+ * A dep group where every property is present and callable.
+ *
+ * Routers mount parts of themselves on their optional factories, so a
+ * plain `{}` produces a router missing whole sections while still
+ * type-checking, and a procedure that never mounted looks to a test like
+ * a gate that was never written. Nothing here is meant to be invoked for
+ * its result: a test that calls a procedure wires the real group.
+ */
+function everyDepPresent(): never {
+  const stub: unknown = new Proxy(() => undefined, {
+    get: () => stub,
+    apply: () => stub,
+  });
+  // `never` is assignable to every group's type, so one stub serves all
+  // fifteen without a type parameter per call site.
+  return stub as never;
+}
+
+/**
+ * Every optional router mounted, for tests that need the whole surface
+ * present rather than one router's behaviour.
+ */
+export const ALL_OPTIONAL_ROUTERS: OptionalRouterDeps = {
+  telephonyAdminDeps: everyDepPresent(),
+  telephonyContentDeps: everyDepPresent(),
+  consultant: true,
+  reports: true,
+  ticketDeps: everyDepPresent(),
+  kbDeps: everyDepPresent(),
+  notificationDeps: everyDepPresent(),
+  brandingDeps: everyDepPresent(),
+  onboardingDeps: everyDepPresent(),
+  voicemailQuarantineDeps: everyDepPresent(),
+  clientDeps: everyDepPresent(),
+  escalationDeps: everyDepPresent(),
+  intakeFormDeps: everyDepPresent(),
+  clientPortalDeps: everyDepPresent(),
+  devDeps: everyDepPresent(),
+};
+
+/**
+ * The six required router dep groups, wired to test doubles, with every
+ * optional router declined. Spread and override the groups a test needs.
+ */
+export function createTestRouterDeps(
+  overrides?: Partial<RouterDeps>,
+): RouterDeps {
+  const hasher = createScryptHasher();
+  const allowLimiter = (): RateLimiter =>
+    createInMemoryRateLimiter({ windowMs: 60_000, maxRequests: 1000 });
+
+  return {
+    ...NO_OPTIONAL_ROUTERS,
+    authDeps: {
+      hasher,
+      loginLimiter: allowLimiter(),
+      saltLimiter: allowLimiter(),
+      fakeSaltKey: Buffer.alloc(32, 0),
+      encryptor: testFieldEncryptor,
+      indexer: testBlindIndexer,
+      tokenizer: testSessionTokenizer,
+      isSecureCookie: false,
+      emailSender: createMockEmailSender(),
+      providerFactory: createThrowingProviderFactory(),
+      resolveCallerId: async () => "+15551234567" as E164,
+      totpReplayCache: createInMemoryTotpReplayCache(),
+      createAuditSvc: null,
+    },
+    profileDeps: {
+      hasher,
+      encryptor: testFieldEncryptor,
+      indexer: testBlindIndexer,
+      tokenizer: testSessionTokenizer,
+      passwordChangeLimiter: allowLimiter(),
+    },
+    twoFactorDeps: {
+      emailSender: createMockEmailSender(),
+      encryptor: testFieldEncryptor,
+      indexer: testBlindIndexer,
+      tokenizer: testSessionTokenizer,
+      providerFactory: createThrowingProviderFactory(),
+      resolveCallerId: async () => "+15551234567" as E164,
+      pushSender: null,
+      pushHmacKey: null,
+      totpReplayCache: createInMemoryTotpReplayCache(),
+    },
+    oprfDeps: createMockOprfDeps(),
+    orgService: {
+      createOrg: async () => {
+        throw new NotFoundError("not wired in tests");
+      },
+      findBySlug: async () => null,
+      findById: async () => null,
+      validateSetupToken: async () => null,
+      consumeSetupToken: async () => undefined,
+    } as unknown as OrgService,
+    providerFactory: createThrowingProviderFactory(),
+    ...overrides,
+  };
+}
 
 /**
  * Tenant DB stub for route contract tests that never touch the DB directly

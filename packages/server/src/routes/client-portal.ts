@@ -29,8 +29,7 @@ import {
 import {
   router,
   orgProcedure,
-  authed2faProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
@@ -210,8 +209,8 @@ export interface ClientPortalRouterDeps {
   readonly oprfService: OprfEvaluateService | null;
 }
 
-const manageShareLinksProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_SHARE_LINKS),
+const manageShareLinksProcedure = permissionProcedure(
+  Permission.MANAGE_SHARE_LINKS,
 );
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly

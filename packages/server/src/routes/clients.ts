@@ -18,7 +18,7 @@ import {
   router,
   viewCasesProcedure,
   authed2faProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { hasPermissionForOrg } from "../auth/roles.js";
@@ -91,13 +91,11 @@ export interface ClientRouterDeps {
 // ---------------------------------------------------------------------------
 
 /** Reading client records, with contact details masked unless VIEW_CLIENT_PII. */
-const viewClientsProcedure = authed2faProcedure.use(
-  requireRole(Permission.VIEW_CLIENTS),
-);
+const viewClientsProcedure = permissionProcedure(Permission.VIEW_CLIENTS);
 
 /** Changing the name a client is listed under. */
-const editClientAliasProcedure = authed2faProcedure.use(
-  requireRole(Permission.EDIT_CLIENT_ALIAS),
+const editClientAliasProcedure = permissionProcedure(
+  Permission.EDIT_CLIENT_ALIAS,
 );
 
 // ---------------------------------------------------------------------------

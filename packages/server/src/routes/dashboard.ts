@@ -1,7 +1,6 @@
 import {
   router,
-  authed2faProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { Permission } from "@care-y/shared";
@@ -10,8 +9,8 @@ import { Permission } from "@care-y/shared";
  * The checklist reports which parts of org setup are still incomplete, so
  * it carries administrative status rather than being neutral furniture.
  */
-const setupChecklistProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_ORG_IDENTITY),
+const setupChecklistProcedure = permissionProcedure(
+  Permission.MANAGE_ORG_IDENTITY,
 );
 import { createDashboardService } from "../dashboard/dashboard-service.js";
 

@@ -21,19 +21,19 @@ import {
   router,
   publicProcedure,
   authed2faProcedure,
-  requireRole,
+  permissionProcedure,
   throwAsTrpc,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import type { OrgService } from "../org/service.js";
 import { createOrgConfigService } from "../org/org-config-service.js";
 
-const manageOrgIdentityProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_ORG_IDENTITY),
+const manageOrgIdentityProcedure = permissionProcedure(
+  Permission.MANAGE_ORG_IDENTITY,
 );
 
-const manageChannelRoutingProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_CHANNEL_ROUTING),
+const manageChannelRoutingProcedure = permissionProcedure(
+  Permission.MANAGE_CHANNEL_ROUTING,
 );
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly

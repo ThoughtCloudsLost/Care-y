@@ -18,9 +18,8 @@ import { getEnv } from "../env.js";
 import {
   router,
   authedProcedure,
-  authed2faProcedure,
   viewCasesProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { hasPermissionForOrg, requirePermissionForOrg } from "../auth/roles.js";
@@ -47,90 +46,74 @@ function permissionForFollowUpType(type: FollowUpType): Permission {
 
 // --- Local permission procedures (used only in this router) ---
 
-const openCasesProcedure = authed2faProcedure.use(
-  requireRole(Permission.OPEN_CASES),
-);
+const openCasesProcedure = permissionProcedure(Permission.OPEN_CASES);
 
 /**
  * Editing a message already sent. The service rejects anything that is not
  * a volunteer-authored "message", so the only channel reachable here is the
  * secure portal.
  */
-const editSentPortalMessageProcedure = authed2faProcedure.use(
-  requireRole(Permission.MESSAGE_CLIENTS_IN_PORTAL),
+const editSentPortalMessageProcedure = permissionProcedure(
+  Permission.MESSAGE_CLIENTS_IN_PORTAL,
 );
 
-const editCaseSummaryProcedure = authed2faProcedure.use(
-  requireRole(Permission.EDIT_CASE_SUMMARY),
+const editCaseSummaryProcedure = permissionProcedure(
+  Permission.EDIT_CASE_SUMMARY,
 );
 
-const writeCaseNotesProcedure = authed2faProcedure.use(
-  requireRole(Permission.WRITE_CASE_NOTES),
+const writeCaseNotesProcedure = permissionProcedure(
+  Permission.WRITE_CASE_NOTES,
 );
 
-const changeCaseStatusProcedure = authed2faProcedure.use(
-  requireRole(Permission.CHANGE_CASE_STATUS),
+const changeCaseStatusProcedure = permissionProcedure(
+  Permission.CHANGE_CASE_STATUS,
 );
 
-const linkCasesProcedure = authed2faProcedure.use(
-  requireRole(Permission.LINK_CASES),
+const linkCasesProcedure = permissionProcedure(Permission.LINK_CASES);
+
+const claimCasesProcedure = permissionProcedure(Permission.CLAIM_CASES);
+
+const assignCasesProcedure = permissionProcedure(Permission.ASSIGN_CASES);
+
+const sendClientMediaProcedure = permissionProcedure(
+  Permission.SEND_CLIENT_MEDIA,
 );
 
-const claimCasesProcedure = authed2faProcedure.use(
-  requireRole(Permission.CLAIM_CASES),
+const downloadCaseMediaProcedure = permissionProcedure(
+  Permission.DOWNLOAD_CASE_MEDIA,
 );
 
-const assignCasesProcedure = authed2faProcedure.use(
-  requireRole(Permission.ASSIGN_CASES),
+const managePortalChannelProcedure = permissionProcedure(
+  Permission.MANAGE_PORTAL_CHANNEL,
 );
 
-const sendClientMediaProcedure = authed2faProcedure.use(
-  requireRole(Permission.SEND_CLIENT_MEDIA),
+const resetClientLoginProcedure = permissionProcedure(
+  Permission.RESET_CLIENT_LOGIN,
 );
 
-const downloadCaseMediaProcedure = authed2faProcedure.use(
-  requireRole(Permission.DOWNLOAD_CASE_MEDIA),
+const revokeReplyLinksProcedure = permissionProcedure(
+  Permission.REVOKE_REPLY_LINKS,
 );
 
-const managePortalChannelProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_PORTAL_CHANNEL),
+const manageNoteTypesProcedure = permissionProcedure(
+  Permission.MANAGE_NOTE_TYPES,
 );
 
-const resetClientLoginProcedure = authed2faProcedure.use(
-  requireRole(Permission.RESET_CLIENT_LOGIN),
+const manageQueuesProcedure = permissionProcedure(Permission.MANAGE_QUEUES);
+
+const manageQueueMembershipProcedure = permissionProcedure(
+  Permission.MANAGE_QUEUE_MEMBERSHIP,
 );
 
-const revokeReplyLinksProcedure = authed2faProcedure.use(
-  requireRole(Permission.REVOKE_REPLY_LINKS),
+const manageQueueNotificationsProcedure = permissionProcedure(
+  Permission.MANAGE_QUEUE_NOTIFICATIONS,
 );
 
-const manageNoteTypesProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_NOTE_TYPES),
-);
+const viewAuditLogProcedure = permissionProcedure(Permission.VIEW_AUDIT_LOG);
 
-const manageQueuesProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_QUEUES),
-);
+const managePresetsProcedure = permissionProcedure(Permission.MANAGE_PRESETS);
 
-const manageQueueMembershipProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_QUEUE_MEMBERSHIP),
-);
-
-const manageQueueNotificationsProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_QUEUE_NOTIFICATIONS),
-);
-
-const viewAuditLogProcedure = authed2faProcedure.use(
-  requireRole(Permission.VIEW_AUDIT_LOG),
-);
-
-const managePresetsProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_PRESETS),
-);
-
-const mergeClientsProcedure = authed2faProcedure.use(
-  requireRole(Permission.MERGE_CLIENTS),
-);
+const mergeClientsProcedure = permissionProcedure(Permission.MERGE_CLIENTS);
 
 import type { BlobStore } from "../storage/store.js";
 import { storeAttachment } from "../portal/portal-attachment-service.js";

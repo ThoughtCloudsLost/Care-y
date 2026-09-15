@@ -12,79 +12,10 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { createAppRouter, type RouterDeps } from "./router.js";
-import {
-  testFieldEncryptor,
-  testBlindIndexer,
-  testSessionTokenizer,
-  createMockEmailSender,
-  createMockOprfDeps,
-  createThrowingProviderFactory,
-  NO_OPTIONAL_ROUTERS,
-} from "../test-utils.js";
-import { createScryptHasher } from "../auth/password.js";
-import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
-import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
-import type { OrgService } from "../org/service.js";
-
-function allowLimiter(): ReturnType<typeof createInMemoryRateLimiter> {
-  return createInMemoryRateLimiter({ windowMs: 60_000, maxRequests: 1000 });
-}
-
-function mockOrgService(): OrgService {
-  return {
-    createOrg: vi.fn(),
-    findBySlug: vi.fn(),
-    findById: vi.fn(),
-    validateSetupToken: vi.fn(),
-    consumeSetupToken: vi.fn(),
-  };
-}
+import { createTestRouterDeps, NO_OPTIONAL_ROUTERS } from "../test-utils.js";
 
 /** The six required deps, with every optional router declined. */
-function baseDeps(): RouterDeps {
-  const hasher = createScryptHasher();
-  const totpReplayCache = createInMemoryTotpReplayCache();
-
-  return {
-    ...NO_OPTIONAL_ROUTERS,
-    authDeps: {
-      hasher,
-      loginLimiter: allowLimiter(),
-      saltLimiter: allowLimiter(),
-      fakeSaltKey: Buffer.alloc(32, 0),
-      encryptor: testFieldEncryptor,
-      indexer: testBlindIndexer,
-      tokenizer: testSessionTokenizer,
-      isSecureCookie: false,
-      emailSender: createMockEmailSender(),
-      providerFactory: createThrowingProviderFactory(),
-      resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
-      totpReplayCache,
-      createAuditSvc: null,
-    },
-    profileDeps: {
-      hasher,
-      encryptor: testFieldEncryptor,
-      indexer: testBlindIndexer,
-      tokenizer: testSessionTokenizer,
-      passwordChangeLimiter: allowLimiter(),
-    },
-    twoFactorDeps: {
-      emailSender: createMockEmailSender(),
-      encryptor: testFieldEncryptor,
-      indexer: testBlindIndexer,
-      tokenizer: testSessionTokenizer,
-      providerFactory: createThrowingProviderFactory(),
-      resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
-      pushSender: null,
-      pushHmacKey: null,
-      totpReplayCache,
-    },
-    oprfDeps: createMockOprfDeps(),
-    orgService: mockOrgService(),
-    providerFactory: createThrowingProviderFactory(),
-  };
-}
+const baseDeps = createTestRouterDeps;
 
 /**
  * Top-level names on the built router. `_def.record` is the router's own

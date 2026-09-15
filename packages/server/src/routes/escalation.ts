@@ -11,8 +11,7 @@ import { TRPCError } from "@trpc/server";
 import { Permission } from "@care-y/shared";
 import {
   router,
-  authed2faProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import type { OrgContext } from "../trpc/context.js";
@@ -32,8 +31,8 @@ import {
   getRuleById,
 } from "../tickets/escalation-service.js";
 
-const manageEscalationProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_ESCALATION),
+const manageEscalationProcedure = permissionProcedure(
+  Permission.MANAGE_ESCALATION,
 );
 
 export interface EscalationRouterDeps {

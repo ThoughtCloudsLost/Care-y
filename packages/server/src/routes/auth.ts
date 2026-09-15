@@ -33,9 +33,8 @@ import {
   router,
   orgProcedure,
   authedProcedure,
-  authed2faProcedure,
   adminProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import {
@@ -198,12 +197,10 @@ async function handleGetSalt(
   return { salt: encode(result.salt), userId: result.userId };
 }
 
-const manageUsersProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_USERS),
-);
+const manageUsersProcedure = permissionProcedure(Permission.MANAGE_USERS);
 
-const manageRetentionProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_RETENTION),
+const manageRetentionProcedure = permissionProcedure(
+  Permission.MANAGE_RETENTION,
 );
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly

@@ -23,7 +23,7 @@ import {
   router,
   orgProcedure,
   authed2faProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { createBrandingService } from "../branding/branding-service.js";
@@ -31,8 +31,8 @@ import type { BlobStore } from "../storage/store.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import { TRPCError } from "@trpc/server";
 
-const manageOrgIdentityProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_ORG_IDENTITY),
+const manageOrgIdentityProcedure = permissionProcedure(
+  Permission.MANAGE_ORG_IDENTITY,
 );
 
 export interface BrandingRouterDeps {

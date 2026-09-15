@@ -9,8 +9,7 @@
 import { Permission } from "@care-y/shared";
 import {
   router,
-  authed2faProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import {
@@ -30,8 +29,8 @@ import {
 import type { BlobStore } from "../storage/store.js";
 import type { PendingClient } from "../tickets/ticket-service.js";
 
-const manageVoicemailQuarantineProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_VOICEMAIL_QUARANTINE),
+const manageVoicemailQuarantineProcedure = permissionProcedure(
+  Permission.MANAGE_VOICEMAIL_QUARANTINE,
 );
 
 export interface VoicemailQuarantineRouterDeps {

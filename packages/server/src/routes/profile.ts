@@ -21,8 +21,7 @@ import { extractClientIp } from "../http/request-utils.js";
 import {
   router,
   authedProcedure,
-  authed2faProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
@@ -34,9 +33,7 @@ import {
 import type { OrgContext } from "../trpc/context.js";
 import type { AuthService } from "../auth/service.js";
 
-const manageUsersProcedure = authed2faProcedure.use(
-  requireRole(Permission.MANAGE_USERS),
-);
+const manageUsersProcedure = permissionProcedure(Permission.MANAGE_USERS);
 
 export interface ProfileRouterDeps extends AuthServiceDeps {
   readonly passwordChangeLimiter: RateLimiter;

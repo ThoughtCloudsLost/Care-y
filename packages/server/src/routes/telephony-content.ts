@@ -10,8 +10,7 @@
 import { Permission } from "@care-y/shared";
 import {
   router,
-  authed2faProcedure,
-  requireRole,
+  permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import {
@@ -37,12 +36,12 @@ import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import { InternalError } from "../errors.js";
 import { TRPCError } from "@trpc/server";
 
-const writeCallGreetingsProcedure = authed2faProcedure.use(
-  requireRole(Permission.WRITE_CALL_GREETINGS),
+const writeCallGreetingsProcedure = permissionProcedure(
+  Permission.WRITE_CALL_GREETINGS,
 );
 
-const writeAutomaticRepliesProcedure = authed2faProcedure.use(
-  requireRole(Permission.WRITE_AUTOMATIC_REPLIES),
+const writeAutomaticRepliesProcedure = permissionProcedure(
+  Permission.WRITE_AUTOMATIC_REPLIES,
 );
 
 export interface TelephonyContentRouterDeps {
