@@ -78,12 +78,15 @@ async function loadSealedBox(
 ): Promise<SealedBoxEncryptor | null> {
   const row = await tDb
     .selectFrom("org_config")
-    .select("org_public_key")
+    .select(["org_public_key", "current_key_generation"])
     .executeTakeFirst();
 
   if (!row?.org_public_key) return null;
 
-  return createSealedBoxEncryptor(row.org_public_key);
+  return createSealedBoxEncryptor(
+    row.org_public_key,
+    row.current_key_generation,
+  );
 }
 
 async function resolveOrg(

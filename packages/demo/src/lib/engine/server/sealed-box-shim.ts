@@ -17,6 +17,7 @@ class CryptoError extends Error {
 }
 
 export interface SealedBoxEncryptor {
+  readonly generation: number;
   seal(plaintext: string): Buffer;
   sealBuffer(data: Buffer): Buffer;
 }
@@ -25,6 +26,7 @@ const CURVE25519_PK_BYTES = 32;
 
 export function createSealedBoxEncryptor(
   orgPublicKey: Buffer,
+  generation: number,
 ): SealedBoxEncryptor {
   if (orgPublicKey.length !== CURVE25519_PK_BYTES) {
     throw new CryptoError(
@@ -35,6 +37,7 @@ export function createSealedBoxEncryptor(
   const pkU8 = new Uint8Array(orgPublicKey);
 
   return {
+    generation,
     seal(plaintext: string): Buffer {
       const message = Buffer.from(plaintext, "utf-8");
       try {

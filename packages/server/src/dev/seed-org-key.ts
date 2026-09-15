@@ -21,6 +21,7 @@ function sealWithOrgKey(plaintext: string, orgPk: Uint8Array): Buffer {
 async function resealOrgEncryptedNames(
   tDb: Kysely<TenantDatabase>,
   orgPk: Uint8Array,
+  generation: number,
 ): Promise<void> {
   const queues = await tDb
     .selectFrom("queues")
@@ -103,6 +104,7 @@ async function resealOrgEncryptedNames(
         encrypted_name: sealWithOrgKey(def.name, orgPk),
         encrypted_icon: sealWithOrgKey(def.icon, orgPk),
         encrypted_description: sealWithOrgKey(def.desc, orgPk),
+        org_key_generation: generation,
       })
       .where("id", "=", noteType.id)
       .execute();
@@ -192,7 +194,15 @@ export async function seedOrgKey(
     // Re-encrypt queue and KB category names with the new org public key.
     // The server seed encrypts these with a throwaway key that gets replaced
     // above, so they need re-sealing to be decryptable by the client.
-    await resealOrgEncryptedNames(tDb, publicKey);
+    const genRow = await tDb
+      .selectFrom("org_config")
+      .select("current_key_generation")
+      .executeTakeFirstOrThrow();
+    await resealOrgEncryptedNames(
+      tDb,
+      publicKey,
+      genRow.current_key_generation,
+    );
     await resealClientAliases(tDb, publicKey);
 
     return { success: true, skipped: false };

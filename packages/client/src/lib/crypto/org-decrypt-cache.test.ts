@@ -25,6 +25,7 @@ function createMockBridge(): CryptoBridge & {
         return items.map((item) => ({
           cacheKey: item.cacheKey,
           plaintext: `decrypted:${item.cacheKey}`,
+          generation: 1,
         }));
       },
     ),
@@ -117,7 +118,7 @@ describe("OrgDecryptCache", () => {
 
     it("caches sentinel for failed items and blocks re-queuing", async () => {
       bridge.orgDecryptBatch.mockResolvedValueOnce([
-        { cacheKey: "kb-fail", plaintext: null },
+        { cacheKey: "kb-fail", plaintext: null, generation: null },
       ]);
 
       cache.decrypt("kb-fail", fakeData("bad"));
@@ -269,7 +270,7 @@ describe("OrgDecryptCache", () => {
 
     it("returns null when Worker returns null plaintext and caches sentinel", async () => {
       bridge.orgDecryptBatch.mockResolvedValueOnce([
-        { cacheKey: "kb-async-7", plaintext: null },
+        { cacheKey: "kb-async-7", plaintext: null, generation: null },
       ]);
       const result = await cache.decryptAsync("kb-async-7", fakeData("nil"));
       expect(result).toBeNull();
@@ -284,7 +285,7 @@ describe("OrgDecryptCache", () => {
 
     it("returns null for sentinel-cached entry without calling bridge", async () => {
       bridge.orgDecryptBatch.mockResolvedValueOnce([
-        { cacheKey: "kb-async-sentinel", plaintext: null },
+        { cacheKey: "kb-async-sentinel", plaintext: null, generation: null },
       ]);
       await cache.decryptAsync("kb-async-sentinel", fakeData("bad"));
       expect(cache.isFailed("kb-async-sentinel")).toBe(true);
@@ -312,7 +313,7 @@ describe("OrgDecryptCache", () => {
 
     it("returns true after per-item decrypt failure", async () => {
       bridge.orgDecryptBatch.mockResolvedValueOnce([
-        { cacheKey: "kb-bad", plaintext: null },
+        { cacheKey: "kb-bad", plaintext: null, generation: null },
       ]);
       cache.decrypt("kb-bad", fakeData("corrupt"));
       await cache.whenSettled();

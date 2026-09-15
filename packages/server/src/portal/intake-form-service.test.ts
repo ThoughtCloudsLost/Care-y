@@ -91,6 +91,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
           escalationRecipientIds: f.escalationRecipientIds ?? null,
         })),
       },
+      1,
     );
     return result.formId as IntakeFormId;
   }
@@ -346,19 +347,24 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       let forms = await svc.listForms(testDb.db);
       expect(forms.find((f) => f.id === formId)?.fieldCount).toBe(2);
 
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Replace Test Updated",
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "select",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: true,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Replace Test Updated",
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "select",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: true,
+            },
+          ],
+        },
+        1,
+      );
 
       forms = await svc.listForms(testDb.db);
       const updated = forms.find((f) => f.id === formId);
@@ -368,26 +374,31 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
 
     it("rejects more than one availability field", async () => {
       await expect(
-        svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-          formId: null,
-          name: "Too Many Availability",
-          fields: [
-            {
-              fieldKey: crypto.randomUUID(),
-              fieldType: "availability",
-              encryptedLabel: Buffer.from("a1").toString("base64"),
-              encryptedConfig: Buffer.from("c1").toString("base64"),
-              isRequired: false,
-            },
-            {
-              fieldKey: crypto.randomUUID(),
-              fieldType: "availability",
-              encryptedLabel: Buffer.from("a2").toString("base64"),
-              encryptedConfig: Buffer.from("c2").toString("base64"),
-              isRequired: false,
-            },
-          ],
-        }),
+        svc.saveForm(
+          testDb.db,
+          crypto.randomUUID() as UserId,
+          {
+            formId: null,
+            name: "Too Many Availability",
+            fields: [
+              {
+                fieldKey: crypto.randomUUID(),
+                fieldType: "availability",
+                encryptedLabel: Buffer.from("a1").toString("base64"),
+                encryptedConfig: Buffer.from("c1").toString("base64"),
+                isRequired: false,
+              },
+              {
+                fieldKey: crypto.randomUUID(),
+                fieldType: "availability",
+                encryptedLabel: Buffer.from("a2").toString("base64"),
+                encryptedConfig: Buffer.from("c2").toString("base64"),
+                isRequired: false,
+              },
+            ],
+          },
+          1,
+        ),
       ).rejects.toThrow(ValidationError);
     });
 
@@ -409,6 +420,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
             },
           ],
         },
+        1,
       );
 
       expect(result.isActive).toBe(false);
@@ -437,6 +449,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
             },
           ],
         },
+        1,
       );
 
       expect(result.isActive).toBe(true);
@@ -448,19 +461,24 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
 
     it("throws NotFoundError when updating a nonexistent form", async () => {
       await expect(
-        svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-          formId: crypto.randomUUID() as IntakeFormId,
-          name: "Ghost",
-          fields: [
-            {
-              fieldKey: crypto.randomUUID(),
-              fieldType: "text",
-              encryptedLabel: Buffer.from("l").toString("base64"),
-              encryptedConfig: Buffer.from("c").toString("base64"),
-              isRequired: false,
-            },
-          ],
-        }),
+        svc.saveForm(
+          testDb.db,
+          crypto.randomUUID() as UserId,
+          {
+            formId: crypto.randomUUID() as IntakeFormId,
+            name: "Ghost",
+            fields: [
+              {
+                fieldKey: crypto.randomUUID(),
+                fieldType: "text",
+                encryptedLabel: Buffer.from("l").toString("base64"),
+                encryptedConfig: Buffer.from("c").toString("base64"),
+                isRequired: false,
+              },
+            ],
+          },
+          1,
+        ),
       ).rejects.toThrow(NotFoundError);
     });
   });
@@ -504,19 +522,24 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       });
 
       // Re-save with the same key but a different label
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Stable Key Updated",
-        fields: [
-          {
-            fieldKey: stableKey,
-            fieldType: "text",
-            encryptedLabel: Buffer.from("new-label").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: true,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Stable Key Updated",
+          fields: [
+            {
+              fieldKey: stableKey,
+              fieldType: "text",
+              encryptedLabel: Buffer.from("new-label").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: true,
+            },
+          ],
+        },
+        1,
+      );
 
       const detail = await svc.getForm(testDb.db, formId);
       expect(detail.fields[0]?.fieldKey).toBe(stableKey);
@@ -684,21 +707,26 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       });
 
       // Re-save with encryptedFormMeta
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Meta RT",
-        slug: "meta-rt",
-        encryptedFormMeta: metaBlob,
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "text",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: false,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Meta RT",
+          slug: "meta-rt",
+          encryptedFormMeta: metaBlob,
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+        1,
+      );
 
       const detail = await svc.getForm(testDb.db, formId);
       expect(detail.encryptedFormMeta).toBe(metaBlob);
@@ -712,21 +740,26 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
         slug: "meta-public",
       });
 
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Meta Public",
-        slug: "meta-public",
-        encryptedFormMeta: metaBlob,
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "text",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: false,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Meta Public",
+          slug: "meta-public",
+          encryptedFormMeta: metaBlob,
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+        1,
+      );
 
       await svc.setActive(testDb.db, formId, true);
       const publicForm = await svc.getPublicForm(testDb.db, "meta-public");
@@ -744,21 +777,26 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
         slug: "meta-resolve",
       });
 
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Meta Resolve",
-        slug: "meta-resolve",
-        encryptedFormMeta: metaBlob,
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "text",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: false,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Meta Resolve",
+          slug: "meta-resolve",
+          encryptedFormMeta: metaBlob,
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+        1,
+      );
 
       await svc.setActive(testDb.db, formId, true);
       const result = await svc.resolvePublicForm(testDb.db, "meta-resolve");
@@ -783,40 +821,50 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       });
 
       // Save with meta
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Clear Meta",
-        slug: "clear-meta",
-        encryptedFormMeta: metaBlob,
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "text",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: false,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Clear Meta",
+          slug: "clear-meta",
+          encryptedFormMeta: metaBlob,
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+        1,
+      );
 
       let detail = await svc.getForm(testDb.db, formId);
       expect(detail.encryptedFormMeta).toBe(metaBlob);
 
       // Re-save without meta (omit encryptedFormMeta entirely)
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Clear Meta",
-        slug: "clear-meta",
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "text",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: false,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Clear Meta",
+          slug: "clear-meta",
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+        1,
+      );
 
       detail = await svc.getForm(testDb.db, formId);
       expect(detail.encryptedFormMeta).toBeNull();
@@ -917,20 +965,25 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     it("getForm returns closesAt as ISO string when set", async () => {
       const closesAt = new Date(Date.now() + 86_400_000).toISOString();
       const formId = await createForm("Closes Future");
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Closes Future",
-        closesAt,
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "text",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: false,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Closes Future",
+          closesAt,
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+        1,
+      );
 
       const detail = await svc.getForm(testDb.db, formId);
       expect(detail.closesAt).toBe(closesAt);
@@ -947,21 +1000,26 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       const formId = await createForm("Closed Form", {
         slug: "closed-form-test",
       });
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Closed Form",
-        slug: "closed-form-test",
-        closesAt: pastDate,
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "text",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: false,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Closed Form",
+          slug: "closed-form-test",
+          closesAt: pastDate,
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+        1,
+      );
       await svc.setActive(testDb.db, formId, true);
 
       const result = await svc.resolvePublicForm(testDb.db, "closed-form-test");
@@ -981,21 +1039,26 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       const formId = await createForm("Open Form", {
         slug: "open-form-test",
       });
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Open Form",
-        slug: "open-form-test",
-        closesAt: futureDate,
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "text",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: false,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Open Form",
+          slug: "open-form-test",
+          closesAt: futureDate,
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+        1,
+      );
       await svc.setActive(testDb.db, formId, true);
 
       const result = await svc.resolvePublicForm(testDb.db, "open-form-test");
@@ -1021,39 +1084,49 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     it("saveForm clears closes_at when null is passed", async () => {
       const closesAt = new Date(Date.now() + 86_400_000).toISOString();
       const formId = await createForm("Clear Closes");
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Clear Closes",
-        closesAt,
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "text",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: false,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Clear Closes",
+          closesAt,
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+        1,
+      );
 
       let detail = await svc.getForm(testDb.db, formId);
       expect(detail.closesAt).not.toBeNull();
 
       // Clear the closing date
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Clear Closes",
-        closesAt: null,
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "text",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: false,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Clear Closes",
+          closesAt: null,
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+        1,
+      );
 
       detail = await svc.getForm(testDb.db, formId);
       expect(detail.closesAt).toBeNull();
@@ -1067,22 +1140,27 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       const formId = await createForm("Closed With Meta", {
         slug: "closed-meta-test",
       });
-      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
-        formId,
-        name: "Closed With Meta",
-        slug: "closed-meta-test",
-        closesAt: pastDate,
-        encryptedFormMeta: metaBlob,
-        fields: [
-          {
-            fieldKey: crypto.randomUUID(),
-            fieldType: "text",
-            encryptedLabel: Buffer.from("l").toString("base64"),
-            encryptedConfig: Buffer.from("c").toString("base64"),
-            isRequired: false,
-          },
-        ],
-      });
+      await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Closed With Meta",
+          slug: "closed-meta-test",
+          closesAt: pastDate,
+          encryptedFormMeta: metaBlob,
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+        1,
+      );
       await svc.setActive(testDb.db, formId, true);
 
       const result = await svc.resolvePublicForm(testDb.db, "closed-meta-test");

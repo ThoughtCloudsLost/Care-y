@@ -703,6 +703,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       const { rawToken } = await inviteService.generate({
         invitedBy: inviter.id,
         roleId: RoleId.VOLUNTEER,
+        orgKeyGeneration: 1,
       });
 
       const { caller } = buildCaller(slug);

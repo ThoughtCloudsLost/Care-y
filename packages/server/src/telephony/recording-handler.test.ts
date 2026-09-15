@@ -80,6 +80,7 @@ function createMockProvider(): TelephonyProvider {
 
 function createMockSealedBox(): SealedBoxEncryptor {
   return {
+    generation: 1,
     seal(plaintext: string): Buffer {
       return Buffer.from(`sealed:${plaintext}`);
     },

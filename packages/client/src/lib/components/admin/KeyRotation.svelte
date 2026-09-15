@@ -4,6 +4,7 @@
   import { adminKeys, orgKeyKeys } from "$lib/query/keys.js";
   import {
     generateOrgKeypair,
+    sealPrevGeneration,
     wrapKey,
     encode,
     decode,
@@ -70,10 +71,22 @@
 
     try {
       await getSodium();
+
+      // The outgoing secret seals into the generation chain so every blob
+      // written before this rotation stays readable afterwards. Without it
+      // the swap below would orphan all org-tier ciphertext.
+      const currentKey = await keysRouter.getWrappedOrgKey.query();
+      if (currentKey === null) {
+        throw new Error("no org key to rotate");
+      }
+      const outgoingSecret = new Uint8Array(await bridge.exportOrgSecretKey());
+
       const { publicKey, secretKey } = generateOrgKeypair();
 
       try {
         rotationPhase = "wrapping";
+
+        const chain = sealPrevGeneration(outgoingSecret, secretKey);
 
         const wrappedKeys = activeWithKeys.map((u) => {
           const volPubBytes = decode(u.volPublic);
@@ -91,6 +104,11 @@
 
         await keysRouter.rotateOrgKey.mutate({
           newOrgPublicKey: encode(publicKey),
+          newGeneration: currentKey.currentGeneration + 1,
+          chainedFrom: {
+            prevSecretCt: encode(chain.ciphertext),
+            prevNonce: encode(chain.nonce),
+          },
           wrappedKeys,
         });
 
@@ -110,6 +128,7 @@
         const { requireSodium } = await import("@care-y/crypto");
         const sodium = requireSodium();
         sodium.memzero(secretKey);
+        sodium.memzero(outgoingSecret);
       }
     } catch (err: unknown) {
       rotationPhase = "error";

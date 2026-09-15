@@ -200,6 +200,7 @@ export async function quarantineRecording(
       client_id: clientId ?? null,
       encrypted_caller_number: encryptedCaller,
       encrypted_called_number: encryptedCalled,
+      org_key_generation: sealedBox.generation,
     })
     .onConflict((oc) => oc.column("recording_sid").doNothing())
     .executeTakeFirst();

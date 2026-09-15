@@ -139,6 +139,7 @@ function createMockJobQueue(): JobQueue {
 
 function createMockSealedBox(): SealedBoxEncryptor {
   return {
+    generation: 1,
     seal(plaintext: string): Buffer {
       // Prefix with "sealed:" so tests can verify it was sealed
       return Buffer.from(`sealed:${plaintext}`);

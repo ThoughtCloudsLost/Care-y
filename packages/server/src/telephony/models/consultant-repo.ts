@@ -71,6 +71,7 @@ export interface ConsultantRepository {
     cooldownNotBefore: Date,
     hourlyWindowNotBefore: Date,
     hourlyLimit: number,
+    orgKeyGeneration: number,
   ): Promise<number>;
   /** Atomic verify: sets is_verified, clears code, finalizes ops columns. */
   verifyAndActivate(
@@ -173,6 +174,7 @@ export function createConsultantRepository(
       cooldownNotBefore: Date,
       hourlyWindowNotBefore: Date,
       hourlyLimit: number,
+      orgKeyGeneration: number,
     ): Promise<number> {
       // Single conditional UPDATE: stages all phone artifacts, resets
       // is_verified, stores new code, rolls the hourly window, increments
@@ -187,6 +189,7 @@ export function createConsultantRepository(
           encrypted_phone: artifacts.orgSealedPhone,
           ops_phone_hash: artifacts.opsPhoneHash,
           ops_encrypted_phone: artifacts.opsEncryptedPhone,
+          org_key_generation: orgKeyGeneration,
           is_verified: eb.lit(false),
           verification_code_hash: codeHash,
           verification_expires_at: expiresAt,

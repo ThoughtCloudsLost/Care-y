@@ -1011,7 +1011,12 @@ async function handleConsultantVerifyRelay(
     try {
       const result = await consultantService.prepareVerification(
         session.userId,
-        { orgSealedPhone, opsPhoneHash, opsEncryptedPhone },
+        {
+          orgSealedPhone,
+          opsPhoneHash,
+          opsEncryptedPhone,
+          orgKeyGeneration: sealedBox.generation,
+        },
       );
       code = result.code;
     } catch (err: unknown) {

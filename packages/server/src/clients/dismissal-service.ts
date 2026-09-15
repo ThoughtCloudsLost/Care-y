@@ -37,7 +37,7 @@ export interface DismissalService {
   get(): Promise<DismissalBlobRecord | null>;
 
   /** Upserts the encrypted dismissal blob (ciphertext passthrough). */
-  put(encryptedDismissals: Buffer): Promise<void>;
+  put(encryptedDismissals: Buffer, orgKeyGeneration: number): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -63,15 +63,20 @@ export function createDismissalService(
       };
     },
 
-    async put(encryptedDismissals: Buffer): Promise<void> {
+    async put(
+      encryptedDismissals: Buffer,
+      orgKeyGeneration: number,
+    ): Promise<void> {
       await db
         .insertInto("merge_candidate_dismissals")
         .values({
           encrypted_dismissals: encryptedDismissals,
+          org_key_generation: orgKeyGeneration,
         })
         .onConflict((oc) =>
           oc.column("id").doUpdateSet({
             encrypted_dismissals: encryptedDismissals,
+            org_key_generation: orgKeyGeneration,
           }),
         )
         .execute();

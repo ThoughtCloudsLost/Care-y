@@ -37,6 +37,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PhoneRepository", () => {
     const phone = await repo.create({
       phoneHash: phoneHash(raw),
       encryptedNumber: encryptedNumber(raw),
+      orgKeyGeneration: 1,
     });
 
     expect(phone.id).toBeDefined();
@@ -58,6 +59,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PhoneRepository", () => {
     const phone = await repo.create({
       phoneHash: phoneHash(raw),
       encryptedNumber: encryptedNumber(raw),
+      orgKeyGeneration: 1,
     });
 
     // Verify it exists while active
@@ -75,6 +77,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PhoneRepository", () => {
     const phone = await repo.create({
       phoneHash: phoneHash(raw),
       encryptedNumber: encryptedNumber(raw),
+      orgKeyGeneration: 1,
     });
 
     expect(phone.locale).toBe("en-US");
@@ -93,12 +96,14 @@ describe.skipIf(!process.env.DATABASE_URL)("PhoneRepository", () => {
     await repo.create({
       phoneHash: hash,
       encryptedNumber: encryptedNumber(raw),
+      orgKeyGeneration: 1,
     });
 
     await expect(
       repo.create({
         phoneHash: hash,
         encryptedNumber: encryptedNumber(raw),
+        orgKeyGeneration: 1,
       }),
     ).rejects.toThrow();
   });
@@ -108,6 +113,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PhoneRepository", () => {
     const phone = await repo.create({
       phoneHash: phoneHash(raw),
       encryptedNumber: encryptedNumber(raw),
+      orgKeyGeneration: 1,
     });
 
     expect(phone.locale).toBe("en-US");
@@ -121,6 +127,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PhoneRepository", () => {
       locale: "fr-FR",
       locationCity: "Paris",
       locationRegion: "IDF",
+      orgKeyGeneration: 1,
     });
 
     // Verify all PhoneRecord fields are present and correct

@@ -91,6 +91,8 @@ export async function fetchAndUnwrapOrgKey(
       orgKeyData.wrappedKey,
       orgKeyData.ephemeralPoint,
       orgKeyData.nonce,
+      orgKeyData.currentGeneration,
+      orgKeyData.generations,
     );
   } catch (err: unknown) {
     if (import.meta.env.DEV) {

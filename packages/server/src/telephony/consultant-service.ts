@@ -80,6 +80,7 @@ export interface ConsultantService {
       readonly orgSealedPhone: Buffer;
       readonly opsPhoneHash: OpsPhoneHash;
       readonly opsEncryptedPhone: Buffer | null;
+      readonly orgKeyGeneration: number;
     },
   ): Promise<{ code: string }>;
   /**
@@ -154,6 +155,7 @@ export function createConsultantService(
         readonly orgSealedPhone: Buffer;
         readonly opsPhoneHash: OpsPhoneHash;
         readonly opsEncryptedPhone: Buffer | null;
+        readonly orgKeyGeneration: number;
       },
     ): Promise<{ code: string }> {
       const record = await requireConsultantByUserId(repo, userId);
@@ -184,6 +186,7 @@ export function createConsultantService(
         cooldownNotBefore,
         hourlyWindowNotBefore,
         HOURLY_LIMIT,
+        artifacts.orgKeyGeneration,
       );
 
       if (rowsUpdated === 0) {

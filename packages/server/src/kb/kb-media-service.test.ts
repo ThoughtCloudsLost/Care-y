@@ -62,6 +62,7 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
       sizeBytes: 2048,
       encryptedFilename: Buffer.from("encrypted-name"),
       contentType: "image/png",
+      orgKeyGeneration: 1,
     });
 
     expect(record.id).toBeDefined();
@@ -78,6 +79,7 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
       itemId,
       blobKey: "blob-key-2" as BlobKey,
       sizeBytes: 512,
+      orgKeyGeneration: 1,
     });
 
     expect(record.encryptedFilename).toBeNull();
@@ -91,6 +93,7 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
       blobKey,
       sizeBytes: 100,
       contentType: "application/pdf",
+      orgKeyGeneration: 1,
     });
 
     const fetched = await svc.getAttachment(created.id);
@@ -135,11 +138,13 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
       itemId: item.id,
       blobKey: listKey1,
       sizeBytes: 100,
+      orgKeyGeneration: 1,
     });
     await svc.createAttachment({
       itemId: item.id,
       blobKey: listKey2,
       sizeBytes: 200,
+      orgKeyGeneration: 1,
     });
 
     const attachments = await svc.listAttachments(item.id);
@@ -153,6 +158,7 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
       itemId,
       blobKey: "soft-del-key" as BlobKey,
       sizeBytes: 50,
+      orgKeyGeneration: 1,
     });
 
     await svc.softDeleteAttachment(created.id);
@@ -166,6 +172,7 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
       itemId,
       blobKey: "double-del-key" as BlobKey,
       sizeBytes: 50,
+      orgKeyGeneration: 1,
     });
 
     await svc.softDeleteAttachment(created.id);

@@ -66,7 +66,7 @@ export function createBrandingRouter(deps: BrandingRouterDeps) {
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = createBrandingService(ctx.org.tenantDb);
-          await svc.saveBrandingField(input);
+          await svc.saveBrandingField(input, ctx.org.sealedBox.generation);
         }),
       ),
 

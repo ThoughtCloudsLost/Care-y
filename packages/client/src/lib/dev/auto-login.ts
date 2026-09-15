@@ -987,9 +987,14 @@ async function bootstrapOrgKeypair(
     // ECIES-wrap org secret for the admin
     const wrap = wrapKey(secretKey, volPublicPoint);
 
-    // Rotate: replace the throwaway seed keypair with the real one
+    // Rotate: replace the throwaway seed keypair with the real one.
+    // chainedFrom is null because the browser never holds the seed secret
+    // and nothing needs to stay readable under it: the seeder reseals every
+    // row it wrote as soon as this returns.
     await trpc.keys.rotateOrgKey.mutate({
       newOrgPublicKey: encode(publicKey),
+      newGeneration: 2,
+      chainedFrom: null,
       wrappedKeys: [
         {
           userId,

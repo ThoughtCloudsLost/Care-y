@@ -33,6 +33,7 @@ import {
 
 function createMockSealedBox(): SealedBoxEncryptor {
   return {
+    generation: 1,
     seal: vi.fn((s: string) => Buffer.from(`sealed:${s}`)),
     sealBuffer: vi.fn((b: Buffer) => Buffer.from(`sealed:${b.toString()}`)),
   };

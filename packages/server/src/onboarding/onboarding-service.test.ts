@@ -232,6 +232,7 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
       const invite = await inviteSvc.generate({
         invitedBy: admin.id,
         roleId: RoleId.VOLUNTEER,
+        orgKeyGeneration: 1,
       });
       rawToken = invite.rawToken;
 

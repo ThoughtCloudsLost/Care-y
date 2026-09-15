@@ -41,6 +41,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("test-type"),
         encryptedIcon: Buffer.from("star"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
 
       expect(nt.minViewRole).toBe(RoleId.VOLUNTEER);
@@ -54,6 +55,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         escalationTargets: [],
         minViewRole: RoleId.MANAGER,
         minCreateRole: RoleId.ADMIN,
+        orgKeyGeneration: 1,
       });
 
       expect(nt.minViewRole).toBe(RoleId.MANAGER);
@@ -67,6 +69,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         escalationTargets: [],
         minViewRole: RoleId.ADMIN,
         minCreateRole: RoleId.VOLUNTEER,
+        orgKeyGeneration: 1,
       });
 
       expect(nt.minViewRole).toBe(RoleId.ADMIN);
@@ -79,6 +82,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedIcon: Buffer.from("clipboard"),
         escalationTargets: [],
         requiresOnClose: true,
+        orgKeyGeneration: 1,
       });
 
       expect(nt.requiresOnClose).toBe(true);
@@ -89,6 +93,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("no-close"),
         encryptedIcon: Buffer.from("note"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
 
       expect(nt.requiresOnClose).toBe(false);
@@ -101,6 +106,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("original"),
         encryptedIcon: Buffer.from("old-icon"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
 
       const updated = await svc.update({
@@ -122,6 +128,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("esc-test"),
         encryptedIcon: Buffer.from("bell"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
 
       await svc.update({ id: created.id, escalationTargets: targets });
@@ -135,6 +142,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("deactivate-me"),
         encryptedIcon: Buffer.from("x"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
 
       const updated = await svc.update({ id: nt.id, isActive: false });
@@ -155,6 +163,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("no-op-update"),
         encryptedIcon: Buffer.from("circle"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
 
       const result = await svc.update({ id: created.id });
@@ -175,6 +184,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("default-guard"),
         encryptedIcon: Buffer.from("lock"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
 
       await testDb.db
@@ -197,6 +207,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("default-rename"),
         encryptedIcon: Buffer.from("star"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
 
       await testDb.db
@@ -226,11 +237,13 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("list-active"),
         encryptedIcon: Buffer.from("a"),
         escalationTargets: targets,
+        orgKeyGeneration: 1,
       });
       const inactive = await svc.create({
         encryptedName: Buffer.from("list-inactive"),
         encryptedIcon: Buffer.from("b"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
       await svc.update({ id: inactive.id, isActive: false });
 
@@ -252,6 +265,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedIcon: Buffer.from("lock"),
         escalationTargets: [],
         minCreateRole: RoleId.ADMIN,
+        orgKeyGeneration: 1,
       });
 
       const asVolunteer = await svc.listActive(RoleId.VOLUNTEER);
@@ -268,6 +282,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("will-deactivate"),
         encryptedIcon: Buffer.from("x"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
       await svc.update({ id: nt.id, isActive: false });
 
@@ -284,6 +299,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
           { type: "role", value: "admin" },
           { type: "ticket_access" },
         ],
+        orgKeyGeneration: 1,
       });
 
       const result = await svc.listActive(RoleId.ADMIN);
@@ -298,6 +314,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("default-check"),
         encryptedIcon: Buffer.from("d"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
 
       await testDb.db
@@ -326,6 +343,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedIcon: Buffer.from("shield"),
         escalationTargets: targets,
         minViewRole: RoleId.MANAGER,
+        orgKeyGeneration: 1,
       });
 
       const ctx = await svc.getEscalationContext(nt.id);
@@ -355,6 +373,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("no-targets"),
         encryptedIcon: Buffer.from("circle"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
 
       const targets = await svc.getEscalationTargets(nt.id);
@@ -369,6 +388,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedIcon: Buffer.from("key"),
         escalationTargets: [],
         minCreateRole: RoleId.MANAGER,
+        orgKeyGeneration: 1,
       });
 
       const role = await svc.getMinCreateRole(nt.id);
@@ -399,6 +419,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         encryptedName: Buffer.from("default-id-test"),
         encryptedIcon: Buffer.from("d"),
         escalationTargets: [],
+        orgKeyGeneration: 1,
       });
 
       await testDb.db

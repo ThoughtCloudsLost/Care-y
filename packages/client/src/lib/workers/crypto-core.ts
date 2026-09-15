@@ -45,6 +45,7 @@ import {
   fileKeySlot,
   filenameSlot,
   encodeFileKeyPayload,
+  openPrevGeneration,
   encode,
   decode,
   hkdfDerive32,
@@ -89,6 +90,8 @@ import type {
   OrgEncryptRequest,
   OrgDecryptBatchRequest,
   ExportOrgSecretKeyRequest,
+  GetOrgPublicKeyRequest,
+  OrgResealBatchRequest,
   AliasHashRequest,
   PhoneMatchHashRequest,
   EmailMatchHashRequest,
@@ -134,6 +137,14 @@ let volPublic: RistrettoPoint | null = null;
 
 let orgSecret: Uint8Array | null = null;
 let orgPublicKey: Uint8Array | null = null;
+/** Current org key generation number. 0 when no org key is loaded. */
+let currentGeneration = 0;
+/** Older org key generations (newest first). Secrets never cross to the main thread. */
+let orgGenerations: {
+  generation: number;
+  secret: Uint8Array;
+  publicKey: Uint8Array;
+}[] = [];
 let aliasIndexKey: Uint8Array | null = null;
 let phoneMatchIndexKey: Uint8Array | null = null;
 let emailMatchIndexKey: Uint8Array | null = null;
@@ -297,6 +308,14 @@ function zeroAndClear(
 ): null {
   if (buf) sodium.memzero(buf);
   return null;
+}
+
+/** Zero and clear all older org key generation secrets. */
+function zeroOrgGenerations(sodium: ReturnType<typeof requireSodium>): void {
+  for (const gen of orgGenerations) {
+    sodium.memzero(gen.secret);
+  }
+  orgGenerations = [];
 }
 
 // ── Handlers ────────────────────────────────────────────────────────
@@ -1107,6 +1126,8 @@ export function handleZeroAll(id: number, sink: Sink): void {
   stretched = zeroAndClear(sodium, stretched);
   blindState = zeroAndClear(sodium, blindState);
   orgSecret = zeroAndClear(sodium, orgSecret);
+  zeroOrgGenerations(sodium);
+  currentGeneration = 0;
   aliasIndexKey = zeroAndClear(sodium, aliasIndexKey);
   phoneMatchIndexKey = zeroAndClear(sodium, phoneMatchIndexKey);
   emailMatchIndexKey = zeroAndClear(sodium, emailMatchIndexKey);
@@ -1148,7 +1169,9 @@ function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest, sink: Sink): void {
       assertPresent(volPrivate, "volPrivate"),
     );
 
+    // Zero prior org state before overwriting
     orgSecret = zeroAndClear(sodium, orgSecret);
+    zeroOrgGenerations(sodium);
     aliasIndexKey = zeroAndClear(sodium, aliasIndexKey);
     phoneMatchIndexKey = zeroAndClear(sodium, phoneMatchIndexKey);
     emailMatchIndexKey = zeroAndClear(sodium, emailMatchIndexKey);
@@ -1158,6 +1181,61 @@ function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest, sink: Sink): void {
     orgSecret.set(unwrappedOrgSecret);
     sodium.memzero(unwrappedOrgSecret);
     orgPublicKey = sodium.crypto_scalarmult_base(orgSecret);
+    currentGeneration = req.currentGeneration;
+
+    // Walk the generation chain to recover older secrets.
+    // The chain is newest first. Start from the current secret and find
+    // each predecessor by matching generation numbers.
+    if (req.chain.length > 0) {
+      let walkSecret = orgSecret;
+      // Build a lookup from generation number to chain link
+      const linkMap = new Map(
+        req.chain.map((link) => [link.generation, link] as const),
+      );
+
+      // Walk backward from the current generation. A generation with no
+      // predecessor ciphertext ends the chain; so does a missing link. The
+      // walk cannot exceed the number of links the server sent, which also
+      // bounds it against a chain that loops back on itself.
+      let gen = req.currentGeneration;
+      for (const _step of req.chain) {
+        const link = linkMap.get(gen);
+        const prevSecretCt = link?.prevSecretCt ?? null;
+        const prevNonce = link?.prevNonce ?? null;
+        if (prevSecretCt === null || prevNonce === null) {
+          break;
+        }
+
+        const ctBytes = decode(prevSecretCt);
+        const nonceBytes = decode(prevNonce);
+
+        let prevSecret: Uint8Array;
+        try {
+          prevSecret = openPrevGeneration(ctBytes, nonceBytes, walkSecret);
+        } catch {
+          // Chain link failed to open (corrupted or wrong key). Stop walking
+          // but keep what was recovered.
+          if (import.meta.env.DEV) {
+            console.warn(
+              `[handleUnwrapOrgKey] chain walk stopped at generation ${String(gen)}`,
+            );
+          }
+          break;
+        }
+
+        const prevPub = sodium.crypto_scalarmult_base(prevSecret);
+        const prevGen = gen - 1;
+
+        orgGenerations.push({
+          generation: prevGen,
+          secret: prevSecret,
+          publicKey: prevPub,
+        });
+
+        walkSecret = prevSecret;
+        gen = prevGen;
+      }
+    }
 
     const msg: WorkerResponse = {
       id: req.id,
@@ -1494,30 +1572,25 @@ function handleOrgDecrypt(req: OrgDecryptRequest, sink: Sink): void {
   const sodium = requireSodium();
   const ciphertext = decode(req.ciphertext);
 
-  try {
-    const plainBytes = sodium.crypto_box_seal_open(
-      ciphertext,
-      assertPresent(orgPublicKey, "orgPublicKey"),
-      assertPresent(orgSecret, "orgSecret"),
-    );
-
+  const result = tryOrgDecryptAllGenerations(ciphertext, sodium);
+  if (result) {
     try {
       const msg: WorkerResponse = {
         id: req.id,
         ok: true,
         type: "orgDecrypt",
-        plaintext: encode(plainBytes),
+        plaintext: encode(result.plainBytes),
       };
       sink(msg);
     } finally {
-      sodium.memzero(plainBytes);
+      sodium.memzero(result.plainBytes);
     }
-  } catch (err: unknown) {
+  } else {
     postError(
       sink,
       req.id,
       "orgDecrypt",
-      err instanceof Error ? err.message : String(err),
+      "Decryption failed across all org key generations",
       "DECRYPT_FAILED",
     );
   }
@@ -1669,30 +1742,118 @@ function handleEmailMatchHash(req: EmailMatchHashRequest, sink: Sink): void {
   sink(msg);
 }
 
+/**
+ * Try to open a sealed box with the current org keypair, then fall back
+ * to older generations newest first. Returns the plaintext bytes and the
+ * generation number that succeeded, or null on total failure.
+ */
+function tryOrgDecryptAllGenerations(
+  ciphertextBytes: Uint8Array,
+  sodium: ReturnType<typeof requireSodium>,
+): { plainBytes: Uint8Array; generation: number } | null {
+  const pk = assertPresent(orgPublicKey, "orgPublicKey");
+  const sk = assertPresent(orgSecret, "orgSecret");
+
+  // Try current generation first
+  try {
+    const plainBytes = sodium.crypto_box_seal_open(ciphertextBytes, pk, sk);
+    return { plainBytes, generation: currentGeneration };
+  } catch {
+    // Current key did not open it; try older generations
+  }
+
+  for (const gen of orgGenerations) {
+    try {
+      const plainBytes = sodium.crypto_box_seal_open(
+        ciphertextBytes,
+        gen.publicKey,
+        gen.secret,
+      );
+      return { plainBytes, generation: gen.generation };
+    } catch {
+      // This generation did not open it either; continue
+    }
+  }
+
+  return null;
+}
+
 function handleOrgDecryptBatch(req: OrgDecryptBatchRequest, sink: Sink): void {
   if (!requireOrgKeyed(sink, req.id, "orgDecryptBatch")) return;
 
   const sodium = requireSodium();
-  const pk = assertPresent(orgPublicKey, "orgPublicKey");
-  const sk = assertPresent(orgSecret, "orgSecret");
 
-  const results: { cacheKey: string; plaintext: string | null }[] =
-    req.items.map((item) => {
-      try {
-        const ciphertext = decode(item.ciphertext);
-        const plainBytes = sodium.crypto_box_seal_open(ciphertext, pk, sk);
-        const plaintext = textDecoder.decode(plainBytes);
-        sodium.memzero(plainBytes);
-        return { cacheKey: item.cacheKey, plaintext };
-      } catch {
-        return { cacheKey: item.cacheKey, plaintext: null };
-      }
-    });
+  const results: {
+    cacheKey: string;
+    plaintext: string | null;
+    generation: number | null;
+  }[] = req.items.map((item) => {
+    const ciphertext = decode(item.ciphertext);
+    const result = tryOrgDecryptAllGenerations(ciphertext, sodium);
+    if (result) {
+      const plaintext = textDecoder.decode(result.plainBytes);
+      sodium.memzero(result.plainBytes);
+      return {
+        cacheKey: item.cacheKey,
+        plaintext,
+        generation: result.generation,
+      };
+    }
+    return { cacheKey: item.cacheKey, plaintext: null, generation: null };
+  });
 
   const msg: WorkerResponse = {
     id: req.id,
     ok: true,
     type: "orgDecryptBatch",
+    results,
+  };
+  sink(msg);
+}
+
+function handleOrgResealBatch(req: OrgResealBatchRequest, sink: Sink): void {
+  if (!requireOrgKeyed(sink, req.id, "orgResealBatch")) return;
+
+  const sodium = requireSodium();
+  const curPk = assertPresent(orgPublicKey, "orgPublicKey");
+
+  const results: {
+    cacheKey: string;
+    resealed: string | null;
+    fromGeneration: number | null;
+  }[] = req.items.map((item) => {
+    const ciphertext = decode(item.ciphertext);
+    const result = tryOrgDecryptAllGenerations(ciphertext, sodium);
+    if (!result) {
+      return { cacheKey: item.cacheKey, resealed: null, fromGeneration: null };
+    }
+
+    try {
+      if (result.generation === currentGeneration) {
+        // Already sealed under the current key; nothing to do
+        return {
+          cacheKey: item.cacheKey,
+          resealed: null,
+          fromGeneration: currentGeneration,
+        };
+      }
+
+      // Re-seal the plaintext under the current public key
+      const resealed = sodium.crypto_box_seal(result.plainBytes, curPk);
+      return {
+        cacheKey: item.cacheKey,
+        resealed: encode(resealed),
+        fromGeneration: result.generation,
+      };
+    } finally {
+      sodium.memzero(result.plainBytes);
+    }
+  });
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "orgResealBatch",
     results,
   };
   sink(msg);
@@ -1717,11 +1878,43 @@ function handleExportOrgSecretKey(
   sink(msg, [abuf]);
 }
 
-function handleGetOrgPublicKey(id: number, sink: Sink): void {
-  if (!requireOrgKeyed(sink, id, "getOrgPublicKey")) return;
+function handleGetOrgPublicKey(req: GetOrgPublicKeyRequest, sink: Sink): void {
+  if (!requireOrgKeyed(sink, req.id, "getOrgPublicKey")) return;
+
+  if (req.generation !== undefined) {
+    if (req.generation === currentGeneration) {
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "getOrgPublicKey",
+        orgPublicKey: encode(assertPresent(orgPublicKey, "orgPublicKey")),
+      };
+      sink(msg);
+      return;
+    }
+    const gen = orgGenerations.find((g) => g.generation === req.generation);
+    if (!gen) {
+      postError(
+        sink,
+        req.id,
+        "getOrgPublicKey",
+        `Generation ${String(req.generation)} not available`,
+        "INVALID_STATE",
+      );
+      return;
+    }
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "getOrgPublicKey",
+      orgPublicKey: encode(gen.publicKey),
+    };
+    sink(msg);
+    return;
+  }
 
   const msg: WorkerResponse = {
-    id,
+    id: req.id,
     ok: true,
     type: "getOrgPublicKey",
     orgPublicKey: encode(assertPresent(orgPublicKey, "orgPublicKey")),
@@ -2656,7 +2849,10 @@ export function createDispatcher(
           handleExportOrgSecretKey(req, sink);
           break;
         case "getOrgPublicKey":
-          handleGetOrgPublicKey(req.id, sink);
+          handleGetOrgPublicKey(req, sink);
+          break;
+        case "orgResealBatch":
+          handleOrgResealBatch(req, sink);
           break;
         case "aliasHash":
           handleAliasHash(req, sink);

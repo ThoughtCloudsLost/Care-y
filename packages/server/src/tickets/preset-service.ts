@@ -27,6 +27,7 @@ export interface PresetService {
     encryptedBody: Buffer;
     queueId: QueueId | null;
     createdBy: UserId;
+    orgKeyGeneration: number;
   }): Promise<PresetReplyRecord>;
 
   list(queueId?: QueueId): Promise<PresetReplyRecord[]>;
@@ -71,6 +72,7 @@ export function createPresetService(db: Kysely<TenantDatabase>): PresetService {
           encrypted_body: input.encryptedBody,
           queue_id: input.queueId,
           created_by: input.createdBy,
+          org_key_generation: input.orgKeyGeneration,
         })
         .returningAll()
         .executeTakeFirstOrThrow();

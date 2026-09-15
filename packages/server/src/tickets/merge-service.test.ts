@@ -60,6 +60,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snapshot-data"),
+      orgKeyGeneration: 1,
     });
 
     expect(event.primaryClientId).toBe(a.clientId);
@@ -77,6 +78,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
     });
 
     const secondary = await testDb.db
@@ -96,6 +98,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
     });
 
     const ticket = await testDb.db
@@ -114,6 +117,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
         primaryClientId: a.clientId,
         secondaryClientId: a.clientId,
         encryptedSnapshot: Buffer.from("snap"),
+        orgKeyGeneration: 1,
       }),
     ).rejects.toBeInstanceOf(MergeError);
   });
@@ -127,6 +131,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
     });
 
     await expect(
@@ -134,6 +139,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
         primaryClientId: c.clientId,
         secondaryClientId: b.clientId,
         encryptedSnapshot: Buffer.from("snap2"),
+        orgKeyGeneration: 1,
       }),
     ).rejects.toBeInstanceOf(MergeError);
   });
@@ -156,6 +162,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
         primaryClientId: a.clientId,
         secondaryClientId: b.clientId,
         encryptedSnapshot: Buffer.from("snap"),
+        orgKeyGeneration: 1,
       }),
     ).rejects.toBeInstanceOf(MergeError);
 
@@ -175,6 +182,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
         primaryClientId: a.clientId,
         secondaryClientId: crypto.randomUUID() as ClientId,
         encryptedSnapshot: Buffer.from("snap"),
+        orgKeyGeneration: 1,
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
@@ -187,11 +195,13 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
     });
 
     const undone = await svc.undoMerge({
       mergeEventId: event.id,
       encryptedSnapshot: Buffer.from("undo-snap"),
+      orgKeyGeneration: 1,
     });
 
     expect(undone.isUndone).toBe(true);
@@ -212,6 +222,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
     });
 
     await svc.setUndoLock(event.id, true);
@@ -220,6 +231,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       svc.undoMerge({
         mergeEventId: event.id,
         encryptedSnapshot: Buffer.from("undo"),
+        orgKeyGeneration: 1,
       }),
     ).rejects.toBeInstanceOf(MergeError);
   });
@@ -232,17 +244,20 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
     });
 
     await svc.undoMerge({
       mergeEventId: event.id,
       encryptedSnapshot: Buffer.from("undo"),
+      orgKeyGeneration: 1,
     });
 
     await expect(
       svc.undoMerge({
         mergeEventId: event.id,
         encryptedSnapshot: Buffer.from("undo2"),
+        orgKeyGeneration: 1,
       }),
     ).rejects.toBeInstanceOf(MergeError);
   });
@@ -255,6 +270,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
     });
 
     await svc.setUndoLock(event.id, true);
@@ -284,6 +300,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
     });
 
     const forPrimary = await svc.listByClient(a.clientId);
@@ -472,6 +489,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
     });
 
     // Channel now belongs to primary
@@ -521,6 +539,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
     });
 
     // Older (primary) channel survives
@@ -554,6 +573,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
       keepChannelOf: "secondary",
     });
 
@@ -592,6 +612,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
       keepChannelOf: "primary",
     });
 
@@ -627,6 +648,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
       keepChannelOf: "primary",
     });
 
@@ -658,6 +680,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       primaryClientId: a.clientId,
       secondaryClientId: b.clientId,
       encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
       keepChannelOf: "primary",
     });
 

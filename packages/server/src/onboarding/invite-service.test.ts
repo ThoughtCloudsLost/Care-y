@@ -53,6 +53,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
     const result = await inviteService.generate({
       invitedBy: adminUserId,
       roleId: RoleId.VOLUNTEER,
+      orgKeyGeneration: 1,
     });
 
     expect(result.rawToken).toHaveLength(43); // 32 bytes base64url = 43 chars
@@ -64,6 +65,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
     const { rawToken } = await inviteService.generate({
       invitedBy: adminUserId,
       roleId: RoleId.VOLUNTEER,
+      orgKeyGeneration: 1,
     });
 
     const expectedHash = createHash("sha256").update(rawToken, "utf8").digest();
@@ -81,6 +83,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
     const { rawToken } = await inviteService.generate({
       invitedBy: adminUserId,
       roleId: RoleId.VOLUNTEER,
+      orgKeyGeneration: 1,
     });
 
     const result = await inviteService.validate(rawToken);
@@ -98,6 +101,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
     const { rawToken } = await inviteService.generate({
       invitedBy: adminUserId,
       roleId: RoleId.VOLUNTEER,
+      orgKeyGeneration: 1,
     });
 
     const invite = await inviteService.validate(rawToken);
@@ -114,6 +118,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       invitedBy: adminUserId,
       roleId: RoleId.VOLUNTEER,
       expiresInHours: 0,
+      orgKeyGeneration: 1,
     });
 
     // Token expires immediately (0 hours).
@@ -126,6 +131,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       invitedBy: adminUserId,
       roleId: RoleId.VOLUNTEER,
       expiresInHours: 1,
+      orgKeyGeneration: 1,
     });
 
     const oneHourFromNow = Date.now() + 3600_000;
@@ -140,6 +146,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       invitedBy: adminUserId,
       roleId: RoleId.VOLUNTEER,
       encryptedEmail: fakeEncryptedEmail,
+      orgKeyGeneration: 1,
     });
 
     const tokenHash = createHash("sha256").update(rawToken, "utf8").digest();
@@ -160,6 +167,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       invitedBy: adminUserId,
       roleId: RoleId.VOLUNTEER,
       seal: mockSeal,
+      orgKeyGeneration: 1,
     });
 
     const tokenHash = createHash("sha256").update(rawToken, "utf8").digest();
@@ -177,6 +185,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
     const { rawToken } = await inviteService.generate({
       invitedBy: adminUserId,
       roleId: RoleId.VOLUNTEER,
+      orgKeyGeneration: 1,
     });
 
     const tokenHash = createHash("sha256").update(rawToken, "utf8").digest();
@@ -193,6 +202,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
     const { rawToken } = await inviteService.generate({
       invitedBy: adminUserId,
       roleId: RoleId.MANAGER,
+      orgKeyGeneration: 1,
     });
 
     const result = await inviteService.validate(rawToken);
@@ -204,6 +214,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
     const { rawToken } = await inviteService.generate({
       invitedBy: adminUserId,
       roleId: RoleId.VOLUNTEER,
+      orgKeyGeneration: 1,
     });
 
     const invite = await inviteService.validate(rawToken);
@@ -220,10 +231,12 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       const first = await inviteService.generate({
         invitedBy: adminUserId,
         roleId: RoleId.VOLUNTEER,
+        orgKeyGeneration: 1,
       });
       const second = await inviteService.generate({
         invitedBy: adminUserId,
         roleId: RoleId.MANAGER,
+        orgKeyGeneration: 1,
       });
 
       const pending = await inviteService.listPending();
@@ -243,6 +256,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       const { rawToken } = await inviteService.generate({
         invitedBy: adminUserId,
         roleId: RoleId.VOLUNTEER,
+        orgKeyGeneration: 1,
       });
 
       const invite = await inviteService.validate(rawToken);
@@ -257,6 +271,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       const { rawToken } = await inviteService.generate({
         invitedBy: adminUserId,
         roleId: RoleId.VOLUNTEER,
+        orgKeyGeneration: 1,
       });
 
       const invite = await inviteService.validate(rawToken);
@@ -272,6 +287,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
         invitedBy: adminUserId,
         roleId: RoleId.VOLUNTEER,
         expiresInHours: 0,
+        orgKeyGeneration: 1,
       });
 
       const pending = await inviteService.listPending();
@@ -289,6 +305,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
         invitedBy: adminUserId,
         roleId: RoleId.ADMIN,
         seal: mockSeal,
+        orgKeyGeneration: 1,
       });
 
       const invite = await inviteService.validate(rawToken);
@@ -310,6 +327,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       const { rawToken } = await inviteService.generate({
         invitedBy: adminUserId,
         roleId: RoleId.VOLUNTEER,
+        orgKeyGeneration: 1,
       });
 
       const invite = await inviteService.validate(rawToken);
@@ -326,6 +344,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       const { rawToken } = await inviteService.generate({
         invitedBy: adminUserId,
         roleId: RoleId.VOLUNTEER,
+        orgKeyGeneration: 1,
       });
 
       const invite = await inviteService.validate(rawToken);
@@ -354,6 +373,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       const { rawToken } = await inviteService.generate({
         invitedBy: adminUserId,
         roleId: RoleId.VOLUNTEER,
+        orgKeyGeneration: 1,
       });
 
       const invite = await inviteService.validate(rawToken);
@@ -369,6 +389,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       const { rawToken } = await inviteService.generate({
         invitedBy: adminUserId,
         roleId: RoleId.VOLUNTEER,
+        orgKeyGeneration: 1,
       });
 
       const invite = await inviteService.validate(rawToken);
@@ -383,6 +404,7 @@ describe.skipIf(!HAS_DB)("invite-service (DB integration)", () => {
       const { rawToken } = await inviteService.generate({
         invitedBy: adminUserId,
         roleId: RoleId.VOLUNTEER,
+        orgKeyGeneration: 1,
       });
 
       const invite = await inviteService.validate(rawToken);

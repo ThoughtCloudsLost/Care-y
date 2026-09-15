@@ -458,6 +458,8 @@ describe("crypto.worker", () => {
         wrappedOrgKey: encode(wrap.ciphertext),
         ephemeralPoint: encode(wrap.ephemeralPoint),
         nonce: encode(wrap.nonce),
+        currentGeneration: 1,
+        chain: [],
       })) as UnwrapOrgKeyResponse;
 
       expect(resp.ok).toBe(true);

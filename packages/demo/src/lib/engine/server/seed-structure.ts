@@ -191,7 +191,7 @@ export async function seedStructure(
     })
     .execute();
 
-  const sealedBox = createSealedBoxEncryptor(orgPublicKey);
+  const sealedBox = createSealedBoxEncryptor(orgPublicKey, 1);
 
   // 3b. Update org_config with branding/general config fields.
   // OrgGeneralSection reads name, default_language, default_country_code.
