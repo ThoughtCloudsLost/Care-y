@@ -41,9 +41,14 @@
     PhoneLookupResult,
   } from "$lib/components/inputs/ClientSelect.svelte";
   import { ClientError } from "$lib/errors.js";
+  import { PRIORITY_OPTIONS } from "$lib/tickets/priority-labels.js";
+  import type { QueueAppearance } from "$lib/utils/queue-appearance.js";
+  import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
+  import RichSelect from "$lib/components/inputs/RichSelect.svelte";
+  import type { RichSelectOption } from "$lib/components/inputs/rich-select.js";
 
   interface Props {
-    queues: { id: string; name: string }[];
+    queues: { id: string; name: string; appearance: QueueAppearance }[];
     searchClients: (query: string) => Promise<ClientSearchResult[]>;
     phoneLookup?: (phone: string) => Promise<PhoneLookupResult>;
     /**
@@ -93,13 +98,6 @@
 
   const bridge = getCryptoBridge();
   const busy = $derived(encrypting || submitting);
-
-  const priorities: readonly { value: TicketPriority; label: string }[] = [
-    { value: "low", label: m.ticket_new_priority_low() },
-    { value: "normal", label: m.ticket_new_priority_normal() },
-    { value: "high", label: m.ticket_new_priority_high() },
-    { value: "urgent", label: m.ticket_new_priority_urgent() },
-  ];
 
   function validate(): boolean {
     const next: Record<string, string> = {};
@@ -257,35 +255,28 @@
       }}
       disabled={busy}
     >
-      {#each priorities as p (p.value)}
-        <option value={p.value}>{p.label}</option>
+      {#each PRIORITY_OPTIONS as option (option.value)}
+        <option value={option.value}>{option.label()}</option>
       {/each}
     </ListInput>
   </List>
 
-  <List nested>
-    <ListInput
-      dropdown
-      label={m.ticket_new_field_queue(withTerms())}
-      type="select"
-      value={queueId}
-      onChange={(e: Event) => {
-        const target = e.target;
-        if (target instanceof HTMLSelectElement) {
-          handleQueueChange(target.value);
-        }
-      }}
-      error={errors.queue}
-      disabled={busy}
-    >
-      <option value="" disabled
-        >{m.ticket_new_field_queue_placeholder(withTerms())}</option
-      >
-      {#each queues as q (q.id)}
-        <option value={q.id}>{q.name}</option>
-      {/each}
-    </ListInput>
-  </List>
+  <RichSelect
+    label={m.ticket_new_field_queue(withTerms())}
+    value={queueId}
+    options={queues.map((q) => ({ value: q.id, label: q.name }))}
+    onchange={handleQueueChange}
+    placeholder={m.ticket_new_field_queue_placeholder(withTerms())}
+    error={errors.queue}
+    disabled={busy}
+  >
+    {#snippet leading(option: RichSelectOption)}
+      {@const q = queues.find((x) => x.id === option.value)}
+      {#if q}
+        <QueueGlyph appearance={q.appearance} />
+      {/if}
+    {/snippet}
+  </RichSelect>
 
   {#if errors.form}
     <p class="form-error" role="alert">{errors.form}</p>

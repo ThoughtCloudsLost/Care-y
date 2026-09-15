@@ -20,6 +20,7 @@
   } from "$lib/components/inputs/ClientSelect.svelte";
   import { isPhoneLookupResult } from "$lib/components/inputs/client-select-types.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
+  import { decryptQueueAppearance } from "$lib/utils/queue-appearance.js";
   import { trpc } from "$lib/trpc/index.js";
   import { ticketsKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -52,6 +53,7 @@
     (queuesQuery.data ?? []).map((q) => ({
       id: q.id,
       name: orgCache.decrypt(`queue:${q.id}`, q.encryptedName) ?? "...",
+      appearance: decryptQueueAppearance(orgCache, q),
     })),
   );
 

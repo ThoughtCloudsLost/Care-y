@@ -129,6 +129,7 @@ function makeNoteType(overrides: Record<string, unknown> = {}) {
   return {
     id: "nt-1",
     encryptedName: { type: "Buffer", data: [1] },
+    encryptedIcon: { type: "Buffer", data: [2] },
     encryptedDescription: null,
     canCreate: true,
     minViewRole: "role-any",
