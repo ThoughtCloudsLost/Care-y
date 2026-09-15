@@ -669,6 +669,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(admin);
         const result = await caller.keys.rotateOrgKey({
           newOrgPublicKey: testOrgPublicKey(0xc3),
+          newGeneration: 2,
+          chainedFrom: null,
           wrappedKeys: [
             {
               userId: admin.id,
@@ -714,6 +716,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expectTrpcError(
           caller.keys.rotateOrgKey({
             newOrgPublicKey: testOrgPublicKey(),
+            newGeneration: 2,
+            chainedFrom: null,
             wrappedKeys: [
               {
                 userId: volunteer.id,

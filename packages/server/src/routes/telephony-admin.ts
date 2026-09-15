@@ -91,7 +91,12 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
           }
 
           const encryptedNumber = ctx.org.sealedBox.seal(input.phoneNumber);
-          const entry = await repo.add(phoneHash, encryptedNumber, ctx.user.id);
+          const entry = await repo.add(
+            phoneHash,
+            encryptedNumber,
+            ctx.user.id,
+            ctx.org.sealedBox.generation,
+          );
           return {
             ...entry,
             encryptedNumber: entry.encryptedNumber.toString("base64url"),

@@ -37,6 +37,7 @@ export interface QueueService {
     encryptedColor: Buffer;
     encryptedIcon: Buffer;
     escalateDays?: number;
+    orgKeyGeneration: number;
   }): Promise<QueueRecord>;
   listActive(): Promise<QueueRecord[]>;
   update(
@@ -129,6 +130,7 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
           encrypted_color: input.encryptedColor,
           encrypted_icon: input.encryptedIcon,
           sort_order: nextSortOrder,
+          org_key_generation: input.orgKeyGeneration,
           ...(input.escalateDays !== undefined
             ? { escalate_days: input.escalateDays }
             : {}),

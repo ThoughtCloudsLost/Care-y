@@ -82,7 +82,7 @@ export async function seedQuarantineEntries(
 ): Promise<{ count: number }> {
   const orgConfig = await tDb
     .selectFrom("org_config")
-    .select("org_public_key")
+    .select(["org_public_key", "current_key_generation"])
     .executeTakeFirst();
 
   if (!orgConfig?.org_public_key) {
@@ -92,6 +92,7 @@ export async function seedQuarantineEntries(
 
   const sealedBox = createSealedBoxEncryptor(
     Buffer.from(orgConfig.org_public_key),
+    orgConfig.current_key_generation,
   );
 
   let count = 0;
@@ -130,6 +131,7 @@ export async function seedQuarantineEntries(
         encrypted_caller_number: encryptedCaller,
         encrypted_called_number: encryptedCalled,
         created_at: createdAt,
+        org_key_generation: sealedBox.generation,
       })
       .execute();
 

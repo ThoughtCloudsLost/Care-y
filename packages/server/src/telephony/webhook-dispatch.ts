@@ -60,12 +60,15 @@ export async function resolveOrgForWebhook(
   const tDb = tenantDb(org.schemaName);
   const row = await tDb
     .selectFrom("org_config")
-    .select(["org_public_key", "intake_queue_id"])
+    .select(["org_public_key", "intake_queue_id", "current_key_generation"])
     .executeTakeFirst();
 
   if (!row?.org_public_key) return null;
 
-  const sealedBox = createSealedBoxEncryptor(row.org_public_key);
+  const sealedBox = createSealedBoxEncryptor(
+    row.org_public_key,
+    row.current_key_generation,
+  );
   return {
     orgId: org.id,
     orgSchema: org.schemaName,

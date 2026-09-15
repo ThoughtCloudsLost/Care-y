@@ -35,6 +35,7 @@ function makeArtifacts(
   orgSealedPhone: Buffer;
   opsPhoneHash: OpsPhoneHash;
   opsEncryptedPhone: Buffer | null;
+  orgKeyGeneration: number;
 } {
   const consultantIndexKey = deriveConsultantPhoneIndexKey(TEST_OPS_KEY);
   const consultantIndexer = createBlindIndexer(consultantIndexKey);
@@ -44,6 +45,7 @@ function makeArtifacts(
     opsEncryptedPhone: wantsPings
       ? testFieldEncryptor.encryptBuffer(Buffer.from(phone))
       : null,
+    orgKeyGeneration: 1,
   };
 }
 

@@ -247,6 +247,8 @@ describe("changePassword", () => {
         wrappedKey: "org-wrapped-b64",
         ephemeralPoint: "org-ep-b64",
         nonce: "org-nonce-b64",
+        currentGeneration: 1,
+        generations: [],
       });
 
       const { deps, primaryBridge, tempBridge } = createDeps();
@@ -258,6 +260,8 @@ describe("changePassword", () => {
         "org-wrapped-b64",
         "org-ep-b64",
         "org-nonce-b64",
+        1,
+        [],
       );
 
       // Re-wrap with NEW keys via temp bridge (has new volPublic)
@@ -299,11 +303,15 @@ describe("changePassword", () => {
           wrappedKey: "org-wrapped-b64",
           ephemeralPoint: "org-ep-b64",
           nonce: "org-nonce-b64",
+          currentGeneration: 1,
+          generations: [],
         })
         .mockResolvedValueOnce({
           wrappedKey: "fresh-wrapped-b64", // gitleaks:allow (test fixture, not a real key)
           ephemeralPoint: "fresh-ep-b64",
           nonce: "fresh-nonce-b64",
+          currentGeneration: 1,
+          generations: [],
         });
 
       const { deps, orgKeyManager } = createDeps();
@@ -379,6 +387,8 @@ describe("changePassword", () => {
         wrappedKey: "org-wrapped-b64",
         ephemeralPoint: "org-ep-b64",
         nonce: "org-nonce-b64",
+        currentGeneration: 1,
+        generations: [],
       });
 
       const { deps } = createDeps();

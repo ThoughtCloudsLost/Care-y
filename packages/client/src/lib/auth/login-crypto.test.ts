@@ -124,6 +124,8 @@ describe("loginCrypto", () => {
       wrappedKey: "test-wrapped-key-b64",
       ephemeralPoint: "test-ephemeral-point-b64",
       nonce: "test-nonce-b64",
+      currentGeneration: 1,
+      generations: [],
     });
 
     // Dynamic import to pick up mocks
@@ -227,6 +229,8 @@ describe("loginCrypto", () => {
         "test-wrapped-key-b64",
         "test-ephemeral-point-b64",
         "test-nonce-b64",
+        1,
+        [],
       );
     });
   });

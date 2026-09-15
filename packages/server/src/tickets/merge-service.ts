@@ -34,12 +34,14 @@ export interface MergeService {
     primaryClientId: ClientId;
     secondaryClientId: ClientId;
     encryptedSnapshot: Buffer;
+    orgKeyGeneration: number;
     keepChannelOf?: "primary" | "secondary";
   }): Promise<MergeEventRecord>;
 
   undoMerge(input: {
     mergeEventId: ClientMergeEventId;
     encryptedSnapshot: Buffer;
+    orgKeyGeneration: number;
   }): Promise<MergeEventRecord>;
 
   setUndoLock(mergeEventId: ClientMergeEventId, locked: boolean): Promise<void>;
@@ -262,6 +264,7 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
             primary_client_id: input.primaryClientId,
             secondary_client_id: input.secondaryClientId,
             snapshot: input.encryptedSnapshot,
+            org_key_generation: input.orgKeyGeneration,
           })
           .returningAll()
           .executeTakeFirstOrThrow();
@@ -345,6 +348,7 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
           .set({
             is_undone: true,
             snapshot: input.encryptedSnapshot,
+            org_key_generation: input.orgKeyGeneration,
           })
           .where("id", "=", input.mergeEventId)
           .returningAll()

@@ -24,6 +24,7 @@ export interface InviteService {
     encryptedEmail?: Buffer;
     expiresInHours?: number;
     seal?: (token: string) => Buffer;
+    orgKeyGeneration: number;
   }): Promise<{ rawToken: string; expiresAt: Date }>;
 
   validate(rawToken: string): Promise<{
@@ -63,6 +64,7 @@ export function createInviteService(db: Kysely<TenantDatabase>): InviteService {
           encrypted_token: encryptedToken,
           role_id: input.roleId,
           expires_at: expiresAt,
+          org_key_generation: input.orgKeyGeneration,
         })
         .execute();
 

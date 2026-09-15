@@ -296,6 +296,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           roleId: input.roleId,
           encryptedEmail,
           seal: (token: string) => ctx.org.sealedBox.seal(token),
+          orgKeyGeneration: ctx.org.sealedBox.generation,
         });
 
         const inviteUrl = `/first-login/${rawToken}`;
@@ -358,7 +359,10 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           );
 
           const service = createOnboardingService(ctx.org.tenantDb, deps);
-          await service.updateOrgGeneral(input);
+          await service.updateOrgGeneral({
+            ...input,
+            orgKeyGeneration: ctx.org.sealedBox.generation,
+          });
 
           return { success: true as const };
         }),

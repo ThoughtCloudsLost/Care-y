@@ -1,11 +1,16 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { generateOrgKeypair, sealForOrgKey } from "./org-keypair.js";
+import {
+  generateOrgKeypair,
+  sealForOrgKey,
+  sealPrevGeneration,
+  openPrevGeneration,
+} from "./org-keypair.js";
 import {
   getSodium,
   _resetSodiumForTesting,
   type SodiumBackend,
 } from "./sodium.js";
-import { CryptoError } from "./errors.js";
+import { CryptoError, DecryptionError, InvalidKeyError } from "./errors.js";
 
 describe("org keypair", () => {
   let sodium: SodiumBackend;
@@ -64,6 +69,76 @@ describe("org keypair", () => {
       const badKey = new Uint8Array(16);
       const plaintext = new TextEncoder().encode("test");
       expect(() => sealForOrgKey(plaintext, badKey)).toThrow(CryptoError);
+    });
+  });
+
+  describe("generation chain (sealPrevGeneration / openPrevGeneration)", () => {
+    it("round-trips a sealed previous-generation secret", () => {
+      const gen1 = generateOrgKeypair();
+      const gen2 = generateOrgKeypair();
+
+      const sealed = sealPrevGeneration(gen1.secretKey, gen2.secretKey);
+      const recovered = openPrevGeneration(
+        sealed.ciphertext,
+        sealed.nonce,
+        gen2.secretKey,
+      );
+
+      expect(recovered).toEqual(gen1.secretKey);
+    });
+
+    it("throws DecryptionError when opened with an unrelated key", () => {
+      const gen1 = generateOrgKeypair();
+      const gen2 = generateOrgKeypair();
+      const gen3 = generateOrgKeypair();
+
+      const sealed = sealPrevGeneration(gen1.secretKey, gen2.secretKey);
+
+      expect(() =>
+        openPrevGeneration(sealed.ciphertext, sealed.nonce, gen3.secretKey),
+      ).toThrow(DecryptionError);
+    });
+
+    it("enforces old-under-new direction: old secret cannot open the chain entry", () => {
+      const gen1 = generateOrgKeypair();
+      const gen2 = generateOrgKeypair();
+
+      // gen1 sealed under gen2 (correct direction)
+      const sealed = sealPrevGeneration(gen1.secretKey, gen2.secretKey);
+
+      // Attempting to open with gen1 (the old secret) must fail
+      expect(() =>
+        openPrevGeneration(sealed.ciphertext, sealed.nonce, gen1.secretKey),
+      ).toThrow(DecryptionError);
+    });
+
+    it("produces different nonces and ciphertexts for identical inputs", () => {
+      const gen1 = generateOrgKeypair();
+      const gen2 = generateOrgKeypair();
+
+      const a = sealPrevGeneration(gen1.secretKey, gen2.secretKey);
+      const b = sealPrevGeneration(gen1.secretKey, gen2.secretKey);
+
+      expect(a.nonce).not.toEqual(b.nonce);
+      expect(a.ciphertext).not.toEqual(b.ciphertext);
+    });
+
+    it("throws InvalidKeyError for a 31-byte prevSecret", () => {
+      const gen2 = generateOrgKeypair();
+      const shortKey = new Uint8Array(31);
+
+      expect(() => sealPrevGeneration(shortKey, gen2.secretKey)).toThrow(
+        InvalidKeyError,
+      );
+    });
+
+    it("throws InvalidKeyError for a 31-byte nextSecret", () => {
+      const gen1 = generateOrgKeypair();
+      const shortKey = new Uint8Array(31);
+
+      expect(() => sealPrevGeneration(gen1.secretKey, shortKey)).toThrow(
+        InvalidKeyError,
+      );
     });
   });
 });

@@ -127,6 +127,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
         primaryClientId: a.clientId,
         secondaryClientId: b.clientId,
         encryptedSnapshot: Buffer.from("snap"),
+        orgKeyGeneration: 1,
       });
 
       const results = await svc.list({
@@ -248,6 +249,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
         primaryClientId: a.clientId,
         secondaryClientId: b.clientId,
         encryptedSnapshot: Buffer.from("snap"),
+        orgKeyGeneration: 1,
       });
 
       const results = await svc.list({
@@ -322,6 +324,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
         primaryClientId: a.clientId,
         secondaryClientId: b.clientId,
         encryptedSnapshot: Buffer.from("snap"),
+        orgKeyGeneration: 1,
       });
 
       await expect(svc.getById(b.clientId)).rejects.toBeInstanceOf(
@@ -415,6 +418,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
         primaryClientId: a.clientId,
         secondaryClientId: b.clientId,
         encryptedSnapshot: Buffer.from("snap"),
+        orgKeyGeneration: 1,
       });
 
       await expect(
@@ -611,6 +615,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
         primaryClientId: a.clientId,
         secondaryClientId: b.clientId,
         encryptedSnapshot: Buffer.from("snap"),
+        orgKeyGeneration: 1,
       });
 
       const result = await svc.suggestDuplicates(b.phoneHash);

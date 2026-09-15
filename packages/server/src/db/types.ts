@@ -188,6 +188,7 @@ export interface UsersTable {
   encrypted_display_name: Buffer;
   encrypted_notification_addr: Buffer | null;
   encrypted_preferred_locale: Buffer | null;
+  org_key_generation: Generated<number>;
   role_id: RoleIdValue;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   has_seen_briefing: ColumnType<boolean, boolean | undefined, boolean>;
@@ -199,6 +200,7 @@ export interface SessionsTable {
   user_id: UserId;
   encrypted_ip_address: Buffer;
   encrypted_user_agent: Buffer;
+  org_key_generation: Generated<number>;
   ip_token: IpToken;
   ua_token: UaToken;
   expires_at: Date;
@@ -232,6 +234,7 @@ export interface OrgConfigTable {
   icon_maskable_blob_key: BlobKey | null;
   default_language: ColumnType<string, string | undefined, string>;
   encrypted_terminology: Buffer | null; // encrypted JSON blob (nonce || ciphertext), per-language labels
+  org_key_generation: Generated<number>;
   default_note_type_id: NoteTypeId | null;
   intake_queue_id: QueueId | null;
   web_intake_enabled: ColumnType<boolean, boolean | undefined, boolean>;
@@ -256,6 +259,7 @@ export interface OrgConfigTable {
   >;
   channel_voice_enabled: ColumnType<boolean, boolean | undefined, boolean>;
   channel_share_link_enabled: ColumnType<boolean, boolean | undefined, boolean>;
+  current_key_generation: Generated<number>;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -268,6 +272,15 @@ export interface UserKeysTable {
   key_version: ColumnType<number, number | undefined, number>;
   rotated_at: Date | null;
   rotation_lock: ColumnType<boolean, boolean | undefined, boolean>;
+}
+
+// --- Org key generations (rotation history of the org keypair) ---
+export interface OrgKeyGenerationsTable {
+  generation: number;
+  public_key: Buffer;
+  prev_secret_ct: Buffer | null;
+  prev_nonce: Buffer | null;
+  rotated_at: Generated<Date>;
 }
 
 // --- Wrapped org keys (per-volunteer encrypted copies of org secret key) ---
@@ -359,11 +372,13 @@ export interface PhonesTable {
   phone_hash: PhoneHash;
   encrypted_number: Buffer;
   phone_match_hash: PhoneMatchHash | null;
+  index_key_generation: Generated<number>;
   locale: string;
   location_city: string | null;
   location_region: string | null;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   is_shared_line: ColumnType<boolean, boolean | undefined, boolean>;
+  org_key_generation: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -375,6 +390,7 @@ export interface EmailsTable {
   locale: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   email_match_hash: EmailMatchHash | null;
+  index_key_generation: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -383,10 +399,12 @@ export interface ClientsTable {
   id: Generated<ClientId>;
   encrypted_alias: Buffer;
   alias_hash: AliasHash | null;
+  index_key_generation: Generated<number>;
   phone_id: PhoneId | null;
   email_id: EmailId | null;
   merged_into: ClientId | null;
   communication_tier: ColumnType<string, string | undefined, string>;
+  org_key_generation: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -432,6 +450,7 @@ export interface ConsultantsTable {
   verify_sends_in_hour: ColumnType<number, number | undefined, number>;
   verify_last_sent_at: Date | null;
   verification_attempts: ColumnType<number, number | undefined, number>;
+  org_key_generation: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -447,6 +466,7 @@ export interface QueuesTable {
   created_at: Generated<Date>;
   encrypted_color: Buffer | null; // org-key sealed picker token, null pre-078
   encrypted_icon: Buffer | null; // org-key sealed picker token, null pre-078
+  org_key_generation: Generated<number>;
 }
 
 export interface TicketsTable {
@@ -543,6 +563,7 @@ export interface PresetRepliesTable {
   encrypted_body: Buffer;
   queue_id: QueueId | null;
   created_by: UserId;
+  org_key_generation: Generated<number>;
   created_at: Generated<Date>;
 }
 
@@ -552,6 +573,7 @@ export interface ClientMergeEventsTable {
   secondary_client_id: ClientId;
   merged_at: Generated<Date>;
   snapshot: Buffer;
+  org_key_generation: Generated<number>;
   undo_locked: ColumnType<boolean, boolean | undefined, boolean>;
   is_undone: ColumnType<boolean, boolean | undefined, boolean>;
 }
@@ -563,6 +585,7 @@ export interface KBCategoriesTable {
   encrypted_name: Buffer;
   sort_order: number;
   encrypted_description: Buffer | null;
+  org_key_generation: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -577,6 +600,7 @@ export interface KBItemsTable {
   vote_up_count: ColumnType<number, number | undefined, number>;
   vote_down_count: ColumnType<number, number | undefined, number>;
   rating: ColumnType<number, number | undefined, number>;
+  org_key_generation: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -596,6 +620,7 @@ export interface KBAttachmentsTable {
   size_bytes: number;
   encrypted_filename: Buffer | null;
   content_type: string | null;
+  org_key_generation: Generated<number>;
   created_at: Generated<Date>;
   deleted_at: Date | null;
 }
@@ -651,6 +676,7 @@ export interface PhoneBlocklistTable {
   phone_hash: PhoneHash;
   encrypted_number: Buffer;
   added_by: UserId;
+  org_key_generation: Generated<number>;
   created_at: ColumnType<Date, Date | undefined, never>;
 }
 
@@ -664,6 +690,7 @@ export interface NoteTypesTable {
   encrypted_escalation_targets: Buffer;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   requires_on_close: ColumnType<boolean, boolean | undefined, boolean>;
+  org_key_generation: Generated<number>;
   min_view_role: ColumnType<RoleIdValue, RoleIdValue | undefined, RoleIdValue>;
   min_create_role: ColumnType<
     RoleIdValue,
@@ -713,6 +740,7 @@ export interface InviteTokensTable {
   consumed_at: Date | null;
   revoked_at: Date | null;
   encrypted_token: Buffer | null;
+  org_key_generation: Generated<number>;
   created_at: Generated<Date>;
 }
 
@@ -741,6 +769,7 @@ export interface VoicemailQuarantineTable {
   client_id: ClientId | null;
   encrypted_caller_number: Buffer | null;
   encrypted_called_number: Buffer | null;
+  org_key_generation: Generated<number>;
   routed_ticket_id: TicketId | null;
   routed_followup_id: FollowupId | null;
   resolved_by: UserId | null;
@@ -807,6 +836,7 @@ export interface IntakeFormsTable {
   is_default: ColumnType<boolean, boolean | undefined, boolean>;
   destination_queue_id: QueueId | null;
   encrypted_form_meta: Buffer | null;
+  org_key_generation: Generated<number>;
   closes_at: ColumnType<
     Date | null,
     Date | string | null | undefined,
@@ -828,6 +858,7 @@ export interface IntakeFormFieldsTable {
   is_required: ColumnType<boolean, boolean | undefined, boolean>;
   routing_queue_ids: QueueId[] | null;
   encrypted_escalation_recipient_ids: Buffer | null;
+  org_key_generation: Generated<number>;
   created_at: Generated<Date>;
 }
 
@@ -836,6 +867,7 @@ export interface IntakeFormFieldsTable {
 export interface MergeCandidateDismissalsTable {
   id: ColumnType<number, number | undefined, never>;
   encrypted_dismissals: Buffer;
+  org_key_generation: Generated<number>;
   updated_at: Generated<Date>;
 }
 
@@ -850,6 +882,7 @@ export interface IntakeKeyWrapsTable {
   ticket_id: TicketId;
   wrapped_tk: Buffer;
   algorithm: Generated<string>;
+  org_key_generation: Generated<number>;
   created_at: Generated<Date>;
 }
 
@@ -908,6 +941,7 @@ export interface PortalMessagesTable {
 export interface PortalReplyKeyWrapsTable {
   followup_id: FollowupId;
   wrapped_tk: Buffer;
+  org_key_generation: Generated<number>;
   created_at: Generated<Date>;
 }
 
@@ -1014,6 +1048,7 @@ export interface TenantDatabase {
   sms_codes: SmsCodesTable;
   backup_codes: BackupCodesTable;
   two_factor_methods: TwoFactorMethodsTable;
+  org_key_generations: OrgKeyGenerationsTable;
   wrapped_org_keys: WrappedOrgKeysTable;
   ticket_key_wraps: TicketKeyWrapsTable;
   // Telephony data models

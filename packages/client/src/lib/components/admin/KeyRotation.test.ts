@@ -66,6 +66,10 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   getCryptoBridge: () => ({
     orgEncrypt: vi.fn().mockResolvedValue("encrypted"),
     orgDecrypt: vi.fn().mockResolvedValue("decrypted"),
+    // 32 bytes: the outgoing secret the rotation seals into the chain.
+    exportOrgSecretKey: vi
+      .fn()
+      .mockResolvedValue(new Uint8Array(32).fill(7).buffer),
   }),
 }));
 
@@ -101,6 +105,15 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     },
     keys: {
       rotateOrgKey: { mutate: mockRotateOrgKey },
+      getWrappedOrgKey: {
+        query: vi.fn().mockResolvedValue({
+          wrappedKey: "w",
+          ephemeralPoint: "e",
+          nonce: "n",
+          currentGeneration: 1,
+          generations: [],
+        }),
+      },
     },
   },
 }));
@@ -140,6 +153,10 @@ const fakeKeypair = {
 vi.mock("@care-y/crypto", async (importOriginal) => ({
   ...(await importOriginal<typeof CryptoNS>()),
   generateOrgKeypair: () => fakeKeypair,
+  sealPrevGeneration: () => ({
+    ciphertext: new Uint8Array(48),
+    nonce: new Uint8Array(24),
+  }),
   wrapKey: () => ({
     ephemeralPoint: new Uint8Array(32),
     nonce: new Uint8Array(24),
@@ -206,9 +223,17 @@ describe("KeyRotation", () => {
 
     const call = mockRotateOrgKey.mock.calls[0]![0] as {
       newOrgPublicKey: string;
+      newGeneration: number;
+      chainedFrom: { prevSecretCt: string; prevNonce: string } | null;
       wrappedKeys: unknown[];
     };
     expect(call.wrappedKeys).toHaveLength(2);
+    // Without a chain entry the swap would orphan every pre-rotation blob,
+    // so the rotation must never go out with chainedFrom null.
+    expect(call.newGeneration).toBe(2);
+    expect(call.chainedFrom).not.toBeNull();
+    expect(call.chainedFrom?.prevSecretCt).toBeTruthy();
+    expect(call.chainedFrom?.prevNonce).toBeTruthy();
   });
 
   it("shows completion state after successful rotation", async () => {

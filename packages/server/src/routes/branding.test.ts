@@ -63,7 +63,7 @@ function createMockOrgContext(): OrgContext {
     orgSlug: "test-org" as OrgSlug,
     orgSchema: FIXTURE_ORG_SCHEMA,
     tenantDb: stubTenantDbDefaultRoles(),
-    sealedBox: {} as OrgContext["sealedBox"],
+    sealedBox: { generation: 1 } as OrgContext["sealedBox"],
   };
 }
 
@@ -212,10 +212,13 @@ describe("branding router", () => {
         value: "New Org Name",
       });
 
-      expect(mockSaveBrandingField).toHaveBeenCalledWith({
-        field: "name",
-        value: "New Org Name",
-      });
+      expect(mockSaveBrandingField).toHaveBeenCalledWith(
+        {
+          field: "name",
+          value: "New Org Name",
+        },
+        1,
+      );
     });
 
     it("uploadIcons delegates to service", async () => {

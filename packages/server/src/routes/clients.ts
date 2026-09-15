@@ -365,7 +365,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
           if (deps.createDismissalSvc === null) return;
           const svc = deps.createDismissalSvc(ctx.org.tenantDb);
           const buf = Buffer.from(input.encryptedDismissals, "base64");
-          await svc.put(buf);
+          await svc.put(buf, ctx.org.sealedBox.generation);
         }),
       ),
 

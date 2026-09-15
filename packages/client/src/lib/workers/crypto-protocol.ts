@@ -192,6 +192,14 @@ export interface GetVolPublicRequest {
   readonly id: number;
 }
 
+/** One row of the org key generation chain returned by the server. */
+export interface OrgKeyChainLink {
+  readonly generation: number;
+  readonly publicKey: string;
+  readonly prevSecretCt: string | null;
+  readonly prevNonce: string | null;
+}
+
 export interface UnwrapOrgKeyRequest {
   readonly type: "unwrapOrgKey";
   readonly id: number;
@@ -201,6 +209,10 @@ export interface UnwrapOrgKeyRequest {
   readonly ephemeralPoint: string;
   /** ECIES nonce, base64. */
   readonly nonce: string;
+  /** Current org key generation number. */
+  readonly currentGeneration: number;
+  /** Generation chain rows, newest first. */
+  readonly chain: readonly OrgKeyChainLink[];
 }
 
 export interface OrgDecryptRequest {
@@ -234,6 +246,17 @@ export interface ExportOrgSecretKeyRequest {
 export interface GetOrgPublicKeyRequest {
   readonly type: "getOrgPublicKey";
   readonly id: number;
+  /** When set, return the public key for that generation instead of current. */
+  readonly generation?: number;
+}
+
+export interface OrgResealBatchRequest {
+  readonly type: "orgResealBatch";
+  readonly id: number;
+  readonly items: readonly {
+    readonly cacheKey: string;
+    readonly ciphertext: string;
+  }[];
 }
 
 export interface AliasHashRequest {
@@ -685,6 +708,7 @@ export type WorkerRequest =
   | OrgDecryptBatchRequest
   | ExportOrgSecretKeyRequest
   | GetOrgPublicKeyRequest
+  | OrgResealBatchRequest
   | AliasHashRequest
   | PhoneMatchHashRequest
   | EmailMatchHashRequest
@@ -894,6 +918,19 @@ export interface OrgDecryptBatchResponse extends SuccessBase {
     readonly cacheKey: string;
     /** null on individual item failure (wrong key, corrupted ciphertext). */
     readonly plaintext: string | null;
+    /** Which generation opened it; null when the item failed. */
+    readonly generation: number | null;
+  }[];
+}
+
+export interface OrgResealBatchResponse extends SuccessBase {
+  readonly type: "orgResealBatch";
+  readonly results: readonly {
+    readonly cacheKey: string;
+    /** Fresh ciphertext sealed under the current public key, or null when already current or failed. */
+    readonly resealed: string | null;
+    /** Which generation opened the original ciphertext, or null on failure. */
+    readonly fromGeneration: number | null;
   }[];
 }
 
@@ -1062,6 +1099,7 @@ export type WorkerSuccessResponse =
   | OrgDecryptResponse
   | OrgEncryptResponse
   | OrgDecryptBatchResponse
+  | OrgResealBatchResponse
   | ExportOrgSecretKeyResponse
   | GetOrgPublicKeyResponse
   | AliasHashResponse

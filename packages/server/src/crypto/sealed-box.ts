@@ -13,6 +13,8 @@ import sodium from "sodium-native";
 import { CryptoError } from "../errors.js";
 
 export interface SealedBoxEncryptor {
+  /** The org key generation this encryptor is bound to. */
+  readonly generation: number;
   /** Encrypt plaintext string so only the org key holder can read it. */
   seal(plaintext: string): Buffer;
   /** Encrypt a raw Buffer. Caller must zero the input after use. */
@@ -22,11 +24,13 @@ export interface SealedBoxEncryptor {
 const CURVE25519_PK_BYTES = 32; // sodium.crypto_box_PUBLICKEYBYTES
 
 /**
- * Creates a SealedBoxEncryptor bound to a specific org public key.
- * The public key is loaded once (from org_config) and reused for all seal() calls.
+ * Creates a SealedBoxEncryptor bound to a specific org public key and
+ * key generation. The generation stamps rows so the rotation sweep knows
+ * which rows still hold ciphertext sealed under an older key.
  */
 export function createSealedBoxEncryptor(
   orgPublicKey: Buffer,
+  generation: number,
 ): SealedBoxEncryptor {
   if (orgPublicKey.length !== CURVE25519_PK_BYTES) {
     throw new CryptoError(
@@ -34,7 +38,15 @@ export function createSealedBoxEncryptor(
     );
   }
 
+  if (!Number.isInteger(generation) || generation < 1) {
+    throw new CryptoError(
+      `generation must be a positive integer, got ${String(generation)}`,
+    );
+  }
+
   return {
+    generation,
+
     seal(plaintext: string): Buffer {
       const message = Buffer.from(plaintext, "utf-8");
       try {

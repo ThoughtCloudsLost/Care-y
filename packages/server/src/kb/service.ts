@@ -82,6 +82,7 @@ export interface KBCategoryService {
   create(input: {
     encryptedName: Buffer;
     encryptedDescription?: Buffer;
+    orgKeyGeneration: number;
   }): Promise<KBCategoryRecord>;
 
   list(): Promise<KBCategoryRecord[]>;
@@ -109,6 +110,7 @@ export interface KBItemService {
       encryptedTitle: Buffer;
       encryptedBody: Buffer;
       encryptedExcerpt?: Buffer;
+      orgKeyGeneration: number;
     },
   ): Promise<KBItemRecord>;
 
@@ -270,6 +272,7 @@ export function createKBCategoryService(
           encrypted_name: input.encryptedName,
           sort_order: nextSortOrder,
           encrypted_description: input.encryptedDescription ?? null,
+          org_key_generation: input.orgKeyGeneration,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -373,6 +376,7 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
           encrypted_body: input.encryptedBody,
           encrypted_excerpt: input.encryptedExcerpt ?? null,
           created_by: createdBy,
+          org_key_generation: input.orgKeyGeneration,
         })
         .returningAll()
         .executeTakeFirstOrThrow();

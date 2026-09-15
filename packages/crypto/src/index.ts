@@ -104,7 +104,12 @@ export {
 export { wrapKey, unwrapKey } from "./keywrap.js";
 
 // --- Org Keypair + Sealed Box ---
-export { generateOrgKeypair, sealForOrgKey } from "./org-keypair.js";
+export {
+  generateOrgKeypair,
+  sealForOrgKey,
+  sealPrevGeneration,
+  openPrevGeneration,
+} from "./org-keypair.js";
 
 // --- Branding ---
 export {

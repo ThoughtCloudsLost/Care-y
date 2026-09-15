@@ -31,6 +31,7 @@ export interface KBMediaService {
     sizeBytes: number;
     encryptedFilename?: Buffer;
     contentType?: string;
+    orgKeyGeneration: number;
   }): Promise<KBAttachmentRecord>;
 
   getAttachment(attachmentId: KbAttachmentId): Promise<KBAttachmentRecord>;
@@ -78,6 +79,7 @@ export function createKBMediaService(
           size_bytes: input.sizeBytes,
           encrypted_filename: input.encryptedFilename ?? null,
           content_type: input.contentType ?? null,
+          org_key_generation: input.orgKeyGeneration,
         })
         .returningAll()
         .executeTakeFirstOrThrow();

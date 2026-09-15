@@ -3,6 +3,7 @@ import * as crypto from "node:crypto";
 import { createTestDb, createTestUser, type TestDb } from "../test-utils.js";
 import { createOrgKeyRotationService } from "./org-key-rotation.js";
 import type { OrgKeyRotationService } from "./org-key-rotation.js";
+import { ConflictError } from "../errors.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
   let testDb: TestDb;
@@ -21,23 +22,49 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
   beforeEach(async () => {
     // Clean up from previous test
     await testDb.db.deleteFrom("wrapped_org_keys").execute();
+    await testDb.db.deleteFrom("org_key_generations").execute();
     await testDb.db.deleteFrom("org_config").execute();
 
-    // Seed org_config with an initial public key
+    // Seed org_config with an initial public key and generation 1
     await testDb.db
       .insertInto("org_config")
-      .values({ org_public_key: crypto.randomBytes(32) })
+      .values({
+        org_public_key: crypto.randomBytes(32),
+        current_key_generation: 1,
+      })
       .execute();
   });
+
+  /** Build a rotation input with all required fields. */
+  function makeRotationInput(
+    overrides: Partial<{
+      newOrgPublicKey: Buffer;
+      newGeneration: number;
+      chainedFrom: Parameters<typeof service.rotateOrgKey>[0]["chainedFrom"];
+      wrappedKeys: Parameters<typeof service.rotateOrgKey>[0]["wrappedKeys"];
+    }> = {},
+  ): Parameters<typeof service.rotateOrgKey>[0] {
+    return {
+      newOrgPublicKey: overrides.newOrgPublicKey ?? crypto.randomBytes(32),
+      newGeneration: overrides.newGeneration ?? 2,
+      chainedFrom:
+        overrides.chainedFrom === undefined
+          ? {
+              prevSecretCt: crypto.randomBytes(48),
+              prevNonce: crypto.randomBytes(24),
+            }
+          : overrides.chainedFrom,
+      wrappedKeys: overrides.wrappedKeys ?? [],
+    };
+  }
 
   describe("rotateOrgKey", () => {
     it("updates org_public_key to the new value", async () => {
       const newPubKey = crypto.randomBytes(32);
 
-      await service.rotateOrgKey({
-        newOrgPublicKey: newPubKey,
-        wrappedKeys: [],
-      });
+      await service.rotateOrgKey(
+        makeRotationInput({ newOrgPublicKey: newPubKey }),
+      );
 
       const row = await testDb.db
         .selectFrom("org_config")
@@ -64,10 +91,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
           .execute();
       }
 
-      await service.rotateOrgKey({
-        newOrgPublicKey: crypto.randomBytes(32),
-        wrappedKeys: [],
-      });
+      await service.rotateOrgKey(makeRotationInput());
 
       const rows = await testDb.db
         .selectFrom("wrapped_org_keys")
@@ -94,10 +118,9 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
         nonce: crypto.randomBytes(24),
       };
 
-      await service.rotateOrgKey({
-        newOrgPublicKey: crypto.randomBytes(32),
-        wrappedKeys: [wrapA, wrapB],
-      });
+      await service.rotateOrgKey(
+        makeRotationInput({ wrappedKeys: [wrapA, wrapB] }),
+      );
 
       const rows = await testDb.db
         .selectFrom("wrapped_org_keys")
@@ -116,10 +139,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
 
     it("succeeds with empty wrappedKeys (no volunteers left)", async () => {
       await expect(
-        service.rotateOrgKey({
-          newOrgPublicKey: crypto.randomBytes(32),
-          wrappedKeys: [],
-        }),
+        service.rotateOrgKey(makeRotationInput({ wrappedKeys: [] })),
       ).resolves.toBeUndefined();
     });
 
@@ -144,10 +164,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
         nonce: crypto.randomBytes(24),
       };
 
-      await service.rotateOrgKey({
-        newOrgPublicKey: crypto.randomBytes(32),
-        wrappedKeys: [newWrap],
-      });
+      await service.rotateOrgKey(makeRotationInput({ wrappedKeys: [newWrap] }));
 
       // Should have exactly 1 row (old deleted, new inserted)
       const rows = await testDb.db
@@ -157,6 +174,109 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
 
       expect(rows).toHaveLength(1);
       expect(Buffer.compare(rows[0]!.wrapped_key, newWrap.wrappedKey)).toBe(0);
+    });
+
+    it("inserts the generation row with exact input bytes", async () => {
+      const pubKey = crypto.randomBytes(32);
+      const prevCt = crypto.randomBytes(48);
+      const prevNonce = crypto.randomBytes(24);
+
+      await service.rotateOrgKey(
+        makeRotationInput({
+          newOrgPublicKey: pubKey,
+          newGeneration: 2,
+          chainedFrom: { prevSecretCt: prevCt, prevNonce },
+        }),
+      );
+
+      const genRows = await testDb.db
+        .selectFrom("org_key_generations")
+        .selectAll()
+        .execute();
+
+      expect(genRows).toHaveLength(1);
+      const row = genRows[0]!;
+      expect(row.generation).toBe(2);
+      expect(Buffer.compare(row.public_key, pubKey)).toBe(0);
+      expect(Buffer.compare(row.prev_secret_ct!, prevCt)).toBe(0);
+      expect(Buffer.compare(row.prev_nonce!, prevNonce)).toBe(0);
+    });
+
+    it("stores a null chain entry when the caller declares no predecessor", async () => {
+      await service.rotateOrgKey(makeRotationInput({ chainedFrom: null }));
+
+      const genRows = await testDb.db
+        .selectFrom("org_key_generations")
+        .selectAll()
+        .execute();
+
+      expect(genRows).toHaveLength(1);
+      expect(genRows[0]!.prev_secret_ct).toBeNull();
+      expect(genRows[0]!.prev_nonce).toBeNull();
+    });
+
+    it("bumps current_key_generation in org_config", async () => {
+      await service.rotateOrgKey(makeRotationInput({ newGeneration: 2 }));
+
+      const config = await testDb.db
+        .selectFrom("org_config")
+        .select("current_key_generation")
+        .executeTakeFirstOrThrow();
+
+      expect(config.current_key_generation).toBe(2);
+    });
+
+    it("throws ConflictError when newGeneration is not current + 1", async () => {
+      // current_key_generation is 1, so only 2 is valid
+      await expect(
+        service.rotateOrgKey(makeRotationInput({ newGeneration: 3 })),
+      ).rejects.toThrow(ConflictError);
+
+      await expect(
+        service.rotateOrgKey(makeRotationInput({ newGeneration: 1 })),
+      ).rejects.toThrow(ConflictError);
+    });
+
+    it("performs no writes when generation conflict is detected", async () => {
+      const originalConfig = await testDb.db
+        .selectFrom("org_config")
+        .select(["org_public_key", "current_key_generation"])
+        .executeTakeFirstOrThrow();
+
+      try {
+        await service.rotateOrgKey(makeRotationInput({ newGeneration: 5 }));
+      } catch {
+        // expected
+      }
+
+      // org_config unchanged
+      const config = await testDb.db
+        .selectFrom("org_config")
+        .select(["org_public_key", "current_key_generation"])
+        .executeTakeFirstOrThrow();
+      expect(config.current_key_generation).toBe(
+        originalConfig.current_key_generation,
+      );
+      expect(
+        Buffer.compare(
+          config.org_public_key as Buffer,
+          originalConfig.org_public_key as Buffer,
+        ),
+      ).toBe(0);
+
+      // No generation rows inserted
+      const genRows = await testDb.db
+        .selectFrom("org_key_generations")
+        .selectAll()
+        .execute();
+      expect(genRows).toHaveLength(0);
+
+      // No wrapped keys inserted
+      const wrapRows = await testDb.db
+        .selectFrom("wrapped_org_keys")
+        .selectAll()
+        .execute();
+      expect(wrapRows).toHaveLength(0);
     });
   });
 });

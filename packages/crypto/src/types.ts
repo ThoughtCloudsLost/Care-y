@@ -101,6 +101,7 @@ export const HKDF_LABELS = {
   CLIENT_ACCOUNT_ECIES: "care-y-client-ecies-v1",
   CLIENT_ACCOUNT_AUTH: "care-y-client-auth-v1",
   OPRF_TAG: "care-y-oprf-tag-v1",
+  ORG_CHAIN: "care-y-org-chain-v1",
 } as const;
 
 /** BLAKE2b domain separation label for branding key derivation */

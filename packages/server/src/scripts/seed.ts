@@ -186,7 +186,8 @@ async function seed(): Promise<void> {
 
   // --- Create admin user ---
   const tokenizer = createSessionTokenizer(deriveSessionHmacKey(opsKey));
-  const sealedBox = createSealedBoxEncryptor(orgPublicKey);
+  // Dev seed always uses generation 1 (throwaway keypair, pre-rotation).
+  const sealedBox = createSealedBoxEncryptor(orgPublicKey, 1);
   const sessions = createDbSessionRepository(
     tenantDatabase,
     tokenizer,
@@ -309,6 +310,7 @@ async function seed(): Promise<void> {
           encrypted_color: sealName(color),
           encrypted_icon: sealName(icon),
           sort_order: sortOrder,
+          org_key_generation: sealedBox.generation,
         })
         .returning("id")
         .executeTakeFirstOrThrow();
@@ -360,6 +362,7 @@ async function seed(): Promise<void> {
           encrypted_alias: sealName(alias),
           alias_hash: null,
           phone_id: phoneId,
+          org_key_generation: sealedBox.generation,
         })
         .execute();
     }
@@ -390,7 +393,11 @@ async function seed(): Promise<void> {
     } else {
       const inserted = await tenantDatabase
         .insertInto("kb_categories")
-        .values({ encrypted_name: sealName(name), sort_order: sortOrder })
+        .values({
+          encrypted_name: sealName(name),
+          sort_order: sortOrder,
+          org_key_generation: sealedBox.generation,
+        })
         .returning("id")
         .executeTakeFirstOrThrow();
       console.log(`Created KB category "${name}" (${inserted.id})`);

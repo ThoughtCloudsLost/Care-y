@@ -34,6 +34,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
       encryptedBody: Buffer.from("body-enc"),
       queueId: null,
       createdBy: "user-123" as UserId,
+      orgKeyGeneration: 1,
     });
 
     expect(preset.id).toBeTruthy();
@@ -49,12 +50,14 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
       encryptedBody: Buffer.from("g-body"),
       queueId: null,
       createdBy: "u1" as UserId,
+      orgKeyGeneration: 1,
     });
     await svc.create({
       encryptedTitle: Buffer.from("queue-specific"),
       encryptedBody: Buffer.from("q-body"),
       queueId,
       createdBy: "u2" as UserId,
+      orgKeyGeneration: 1,
     });
 
     const all = await svc.list(queueId);
@@ -74,6 +77,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
       encryptedBody: Buffer.from("old-body"),
       queueId: null,
       createdBy: "u1" as UserId,
+      orgKeyGeneration: 1,
     });
 
     const updated = await svc.update(preset.id, {
@@ -90,6 +94,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
       encryptedBody: Buffer.from("same-body"),
       queueId: null,
       createdBy: "u1" as UserId,
+      orgKeyGeneration: 1,
     });
     const same = await svc.update(preset.id, {});
     expect(same.encryptedTitle.toString()).toBe("same");
@@ -109,6 +114,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PresetService (DB)", () => {
       encryptedBody: Buffer.from("del-body"),
       queueId: null,
       createdBy: "u1" as UserId,
+      orgKeyGeneration: 1,
     });
 
     await svc.delete(preset.id);

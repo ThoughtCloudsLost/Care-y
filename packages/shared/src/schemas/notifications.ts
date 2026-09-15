@@ -139,6 +139,8 @@ export const auditEventTypeSchema = z.enum([
   "form_asset_uploaded",
   "client_email_changed",
   "reply_token_revoked",
+  "org_key_reseal",
+  "org_key_reindex",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 

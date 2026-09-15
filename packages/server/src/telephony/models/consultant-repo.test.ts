@@ -149,6 +149,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
       cooldownNotBefore,
       hourlyWindowNotBefore,
       5,
+      1,
     );
 
     expect(rows).toBe(1);
@@ -186,6 +187,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
       new Date(now.getTime() - 60_000),
       new Date(now.getTime() - 3_600_000),
       5,
+      1,
     );
 
     // Second call with now = same time: cooldown threshold is now - 60s,
@@ -200,6 +202,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
       new Date(now.getTime() - 60_000),
       new Date(now.getTime() - 3_600_000),
       5,
+      1,
     );
 
     expect(rows).toBe(0);
@@ -239,6 +242,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
       new Date(now.getTime() - 60_000),
       new Date(now.getTime() - 3_600_000),
       5,
+      1,
     );
 
     expect(rows).toBe(0);
@@ -454,6 +458,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
       new Date(now.getTime() - 60_000),
       new Date(now.getTime() - 3_600_000),
       5,
+      1,
     );
 
     await repo.setSmsPingsEnabled(consultant.id, true);

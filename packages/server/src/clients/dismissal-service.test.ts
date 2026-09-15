@@ -29,7 +29,7 @@ describe.skipIf(!process.env.DATABASE_URL)("DismissalService", () => {
 
   it("stores and retrieves a dismissal blob", async () => {
     const blob = Buffer.from("encrypted-dismissal-blob-content");
-    await svc.put(blob);
+    await svc.put(blob, 1);
 
     const result = await svc.get();
     expect(result).not.toBe(null);
@@ -43,10 +43,10 @@ describe.skipIf(!process.env.DATABASE_URL)("DismissalService", () => {
 
   it("overwrites the existing blob on subsequent put (last-write-wins)", async () => {
     const blob1 = Buffer.from("first-version");
-    await svc.put(blob1);
+    await svc.put(blob1, 1);
 
     const blob2 = Buffer.from("second-version");
-    await svc.put(blob2);
+    await svc.put(blob2, 1);
 
     const result = await svc.get();
     expect(result).not.toBe(null);
@@ -56,7 +56,7 @@ describe.skipIf(!process.env.DATABASE_URL)("DismissalService", () => {
 
   it("maintains only one row (singleton table)", async () => {
     const blob = Buffer.from("singleton-test");
-    await svc.put(blob);
+    await svc.put(blob, 1);
 
     // Verify only one row exists
     const rows = await testDb.db

@@ -465,6 +465,7 @@ function buildNoteTypeRoutes(
               requiresOnClose: input.requiresOnClose,
               minViewRole: input.minViewRole,
               minCreateRole: input.minCreateRole,
+              orgKeyGeneration: ctx.org.sealedBox.generation,
             });
             auditFn(ctx.org.tenantDb, {
               eventType: "note_type_created",
@@ -1293,6 +1294,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             encryptedBody: Buffer.from(input.encryptedBody, "base64"),
             queueId: input.queueId,
             createdBy: ctx.user.id,
+            orgKeyGeneration: ctx.org.sealedBox.generation,
           });
           return {
             ...preset,
@@ -1397,6 +1399,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           primaryClientId: input.primaryClientId,
           secondaryClientId: input.secondaryClientId,
           encryptedSnapshot: Buffer.from(input.encryptedSnapshot, "base64"),
+          orgKeyGeneration: ctx.org.sealedBox.generation,
           keepChannelOf: input.keepChannelOf,
         });
         audit(ctx.org.tenantDb, {
@@ -1420,6 +1423,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         const result = await svc.undoMerge({
           mergeEventId: input.mergeEventId,
           encryptedSnapshot: Buffer.from(input.encryptedSnapshot, "base64"),
+          orgKeyGeneration: ctx.org.sealedBox.generation,
         });
         audit(ctx.org.tenantDb, {
           eventType: "merge_undone",
@@ -1596,6 +1600,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           encryptedColor: Buffer.from(input.encryptedColor, "base64"),
           encryptedIcon: Buffer.from(input.encryptedIcon, "base64"),
           escalateDays: input.escalateDays,
+          orgKeyGeneration: ctx.org.sealedBox.generation,
         });
         audit(ctx.org.tenantDb, {
           eventType: "queue_created",

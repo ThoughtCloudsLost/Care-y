@@ -37,6 +37,7 @@ import type {
   MergeCandidate,
   PortalCopyTriple,
   KeyWrapTriple,
+  OrgKeyChainLink,
 } from "./crypto-protocol.js";
 
 export type BridgeState = "LOADING" | "READY" | "KEYED" | "DESTROYED";
@@ -617,11 +618,16 @@ export class CryptoBridge {
    * Unwrap the org key via ECIES using the Worker's volPrivate.
    * The Worker retains the secret for XSS isolation. Returns only the
    * org public key (base64) for main-thread caching.
+   *
+   * When chain and currentGeneration are provided, the Worker also
+   * recovers older generation secrets for backward-compatible decryption.
    */
   async unwrapOrgKey(
     wrappedOrgKey: string,
     ephemeralPoint: string,
     nonce: string,
+    currentGeneration = 1,
+    chain: readonly OrgKeyChainLink[] = [],
   ): Promise<string> {
     const resp = expectResponse(
       await this.sendRequest({
@@ -629,6 +635,8 @@ export class CryptoBridge {
         wrappedOrgKey,
         ephemeralPoint,
         nonce,
+        currentGeneration,
+        chain,
       }),
       "unwrapOrgKey",
     );
@@ -785,13 +793,41 @@ export class CryptoBridge {
   /**
    * Batch decrypt multiple org-tier sealed-box ciphertexts.
    * Returns per-item results with null for individual failures.
+   * Each result includes the generation that opened it (null on failure).
    */
   async orgDecryptBatch(
     items: readonly { cacheKey: string; ciphertext: string }[],
-  ): Promise<readonly { cacheKey: string; plaintext: string | null }[]> {
+  ): Promise<
+    readonly {
+      cacheKey: string;
+      plaintext: string | null;
+      generation: number | null;
+    }[]
+  > {
     const resp = expectResponse(
       await this.sendRequest({ type: "orgDecryptBatch", items }),
       "orgDecryptBatch",
+    );
+    return resp.results;
+  }
+
+  /**
+   * Batch re-seal org-encrypted items under the current generation's public key.
+   * Items already sealed under the current generation return resealed: null.
+   * Failed items return both fields null.
+   */
+  async orgResealBatch(
+    items: readonly { cacheKey: string; ciphertext: string }[],
+  ): Promise<
+    readonly {
+      cacheKey: string;
+      resealed: string | null;
+      fromGeneration: number | null;
+    }[]
+  > {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "orgResealBatch", items }),
+      "orgResealBatch",
     );
     return resp.results;
   }
@@ -1087,10 +1123,17 @@ export class CryptoBridge {
     };
   }
 
-  /** Get the org public key (base64) from the Worker. */
-  async getOrgPublicKey(): Promise<string> {
+  /**
+   * Get the org public key (base64) from the Worker.
+   * When generation is provided, returns the public key for that specific
+   * generation instead of the current one.
+   */
+  async getOrgPublicKey(generation?: number): Promise<string> {
     const resp = expectResponse(
-      await this.sendRequest({ type: "getOrgPublicKey" }),
+      await this.sendRequest({
+        type: "getOrgPublicKey",
+        ...(generation !== undefined ? { generation } : {}),
+      }),
       "getOrgPublicKey",
     );
     return resp.orgPublicKey;

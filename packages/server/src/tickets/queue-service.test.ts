@@ -29,11 +29,13 @@ function queueInput(
   encryptedColor: Buffer;
   encryptedIcon: Buffer;
   escalateDays?: number;
+  orgKeyGeneration: number;
 } {
   return {
     encryptedName: encName(label),
     encryptedColor: encName("blue"),
     encryptedIcon: encName("folder"),
+    orgKeyGeneration: 1,
     ...extras,
   };
 }
@@ -73,6 +75,7 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
       encryptedName: encName("Styled"),
       encryptedColor: encName("red"),
       encryptedIcon: encName("triangle-alert"),
+      orgKeyGeneration: 1,
     });
     expect(q.encryptedColor?.toString()).toBe("red");
     expect(q.encryptedIcon?.toString()).toBe("triangle-alert");

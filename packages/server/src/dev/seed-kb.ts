@@ -390,6 +390,7 @@ export async function seedKbArticles(
         encrypted_title: sealedBox.seal(article.title),
         encrypted_body: sealedBox.seal(article.body),
         encrypted_excerpt: sealedBox.seal(article.excerpt),
+        org_key_generation: sealedBox.generation,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
@@ -593,6 +594,7 @@ export async function seedKbArticles(
           size_bytes: encryptedBlob.length,
           encrypted_filename: encryptedFilename,
           content_type: att.contentType,
+          org_key_generation: sealedBox.generation,
         })
         .execute();
     }

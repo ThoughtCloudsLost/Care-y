@@ -29,6 +29,7 @@ export interface CreatePhoneInput {
   readonly locale?: string;
   readonly locationCity?: string;
   readonly locationRegion?: string;
+  readonly orgKeyGeneration: number;
 }
 
 export interface PhoneRepository {
@@ -77,6 +78,7 @@ export function createPhoneRepository(
           locale: input.locale ?? "en-US",
           location_city: input.locationCity ?? null,
           location_region: input.locationRegion ?? null,
+          org_key_generation: input.orgKeyGeneration,
         })
         .returningAll()
         .executeTakeFirstOrThrow();

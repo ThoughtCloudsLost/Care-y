@@ -15,6 +15,8 @@ import {
   rotateOrgKeySchema,
   wrapOrgKeyForUserSchema,
   adminBootstrapUserKeysSchema,
+  resealRowsSchema,
+  reindexRowsSchema,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import { getEnv } from "../env.js";
@@ -31,6 +33,8 @@ function b64(s: string): Buffer {
 import { createKeyRotationService } from "../crypto/key-rotation.js";
 import { createOrgKeyRotationService } from "../crypto/org-key-rotation.js";
 import { createOrgKeyQueryService } from "../crypto/org-key-query-service.js";
+import { createOrgResealService } from "../crypto/org-reseal-service.js";
+import { createAuditService } from "../tickets/audit.js";
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createKeysRouter() {
@@ -118,6 +122,13 @@ export function createKeysRouter() {
         ephemeralPoint: encode(wrap.ephemeralPoint),
         wrappedKey: encode(wrap.wrappedKey),
         nonce: encode(wrap.nonce),
+        currentGeneration: wrap.currentGeneration,
+        generations: wrap.generations.map((g) => ({
+          generation: g.generation,
+          publicKey: encode(g.publicKey),
+          prevSecretCt: g.prevSecretCt ? encode(g.prevSecretCt) : null,
+          prevNonce: g.prevNonce ? encode(g.prevNonce) : null,
+        })),
       };
     }),
 
@@ -154,6 +165,14 @@ export function createKeysRouter() {
         const svc = createOrgKeyRotationService(ctx.org.tenantDb);
         await svc.rotateOrgKey({
           newOrgPublicKey: b64(input.newOrgPublicKey),
+          newGeneration: input.newGeneration,
+          chainedFrom:
+            input.chainedFrom === null
+              ? null
+              : {
+                  prevSecretCt: b64(input.chainedFrom.prevSecretCt),
+                  prevNonce: b64(input.chainedFrom.prevNonce),
+                },
           wrappedKeys: input.wrappedKeys.map((w) => ({
             userId: w.userId,
             ephemeralPoint: b64(w.ephemeralPoint),
@@ -226,6 +245,63 @@ export function createKeysRouter() {
           return { success: true as const };
         }),
       ),
+
+    /** Counts of rows per org-sealed table still at an old key generation. */
+    resealStatus: keyCustodyProcedure.query(async ({ ctx }) => {
+      const svc = createOrgResealService(ctx.org.tenantDb);
+      return svc.resealStatus();
+    }),
+
+    /** Accept a batch of re-encrypted rows for one table and bump their generation stamps. */
+    resealRows: keyCustodyProcedure.input(resealRowsSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = createOrgResealService(ctx.org.tenantDb);
+        const result = await svc.resealRows({
+          table: input.table,
+          rows: input.rows.map((r) => ({
+            id: r.id,
+            columns: Object.fromEntries(
+              Object.entries(r.columns).map(([col, v]) => [col, b64(v)]),
+            ),
+          })),
+          skippedIds: input.skippedIds,
+        });
+        const audit = createAuditService(ctx.org.tenantDb);
+        await audit.log({
+          eventType: "org_key_reseal",
+          actorId: ctx.session.userId,
+          metadata: {
+            table: input.table,
+            resealed: result.resealed,
+            skipped: result.skipped,
+          },
+        });
+        return result;
+      }),
+    ),
+
+    /** Accept a batch of re-derived blind-index hashes for one table and bump their index generation stamps. */
+    reindexRows: keyCustodyProcedure.input(reindexRowsSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = createOrgResealService(ctx.org.tenantDb);
+        const result = await svc.reindexRows({
+          table: input.table,
+          rows: input.rows,
+          skippedIds: input.skippedIds,
+        });
+        const audit = createAuditService(ctx.org.tenantDb);
+        await audit.log({
+          eventType: "org_key_reindex",
+          actorId: ctx.session.userId,
+          metadata: {
+            table: input.table,
+            reindexed: result.reindexed,
+            skipped: result.skipped,
+          },
+        });
+        return result;
+      }),
+    ),
 
     ...(getEnv().NODE_ENV === "development"
       ? {
