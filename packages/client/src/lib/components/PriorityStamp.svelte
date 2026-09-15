@@ -11,6 +11,11 @@
   // Inkwell rule: priority is the single hue channel in any list, and Normal
   // renders nothing at all. If everything shouts, nothing does. Map lookup
   // (not object indexing) per the lint security rules.
+  //
+  // Deliberately not the shared set in $lib/tickets/priority-labels.js: the
+  // stamp has its own shorter uppercase wording and omits Normal entirely,
+  // while the pickers must offer all four in full words. Merging them would
+  // break one surface or the other.
   const labels = new Map<TicketPriority, () => string>([
     ["urgent", m.priority_stamp_urgent],
     ["high", m.priority_stamp_high],

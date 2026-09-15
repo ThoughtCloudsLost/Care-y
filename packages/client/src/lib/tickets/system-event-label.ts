@@ -1,20 +1,6 @@
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
-
-function priorityLabel(value: string): string {
-  switch (value) {
-    case "low":
-      return m.ticket_new_priority_low();
-    case "normal":
-      return m.ticket_new_priority_normal();
-    case "high":
-      return m.ticket_new_priority_high();
-    case "urgent":
-      return m.ticket_new_priority_urgent();
-    default:
-      return value;
-  }
-}
+import { priorityLabel } from "./priority-labels.js";
 
 type LabelResolver = (
   eventParams?: Record<string, unknown> | null,
