@@ -6,21 +6,23 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_People_BodyInputs */
 
 const en_demo_narrative_admin_people_body = /** @type {(inputs: Demo_Narrative_Admin_People_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The roster shows every volunteer in the organization with their role and assigned queues.
-**Role management.** Each volunteer has one of three roles: Volunteer, Manager, or Admin, these role names can be changed per-org in the admin settings. The role determines which features and data are accessible.
-**Invitations.** Administrators invite new volunteers either by generating an invite link to share or by creating the account manually. A pending invitation can be revoked before it is accepted. The invited volunteer completes onboarding and key generation on their own device.`)
+	return /** @type {LocalizedString} */ (`The roster shows every user in the organization with their role and assigned queues.
+**Role management.** Each user holds one of three roles. The first two role names are defaults the organization can rename in terminology settings, while the administrator name is fixed. The role determines which permissions are granted by default, and those defaults are adjustable per role in the permission matrix.
+**Invitations.** New users are invited either by generating an invite link or by creating the account manually, and a pending invitation can be revoked before it is accepted. The invited person completes onboarding and key generation on their own device.
+**Permissions.** Viewing and managing the roster requires the Manage users permission.`)
 };
 
 const es_demo_narrative_admin_people_body = /** @type {(inputs: Demo_Narrative_Admin_People_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El directorio muestra cada voluntario de la organización con su rol y colas asignadas.
-**Gestión de roles.** Cada voluntario tiene uno de tres roles: Voluntario, Gestor o Administrador, estos nombres de rol se pueden cambiar por organización en la configuración de administración. El rol determina qué funciones y datos son accesibles.
-**Invitaciones.** Los administradores invitan a nuevos voluntarios generando un enlace de invitación para compartir o creando la cuenta manualmente. Una invitación pendiente puede revocarse antes de ser aceptada. El voluntario invitado completa la incorporación y la generación de claves en su propio dispositivo.`)
+	return /** @type {LocalizedString} */ (`El directorio muestra a cada persona usuaria de la organización con su rol y colas asignadas.
+**Gestión de roles.** Cada persona usuaria tiene uno de tres roles. Los dos primeros nombres de rol son predeterminados que la organización puede renombrar en la configuración de terminología, mientras que el de administrador es fijo. El rol determina qué permisos se otorgan por defecto, y esos valores predeterminados se pueden ajustar por rol en la matriz de permisos.
+**Invitaciones.** Se invita a nuevas personas generando un enlace de invitación o creando la cuenta manualmente, y una invitación pendiente puede revocarse antes de ser aceptada. La persona invitada completa la incorporación y la generación de claves en su propio dispositivo.
+**Permisos.** Ver y gestionar el directorio requiere el permiso Gestionar usuarios.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The roster shows every volunteer in the organization with their role and assigned queues. **Role management.** Each volunteer has one of three roles: Volunte..." |
+* | "The roster shows every user in the organization with their role and assigned queues. **Role management.** Each user holds one of three roles. The first two r..." |
 *
 * @param {Demo_Narrative_Admin_People_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

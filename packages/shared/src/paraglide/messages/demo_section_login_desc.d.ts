@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The login screen is where a user signs in and where the browser turns the password into the encryption keys that make the organization's data readable. The e..." |
+* | "The login screen is where the user signs in and where the browser turns the password into the encryption keys that make organization data readable. This sect..." |
 *
 * @param {Demo_Section_Login_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

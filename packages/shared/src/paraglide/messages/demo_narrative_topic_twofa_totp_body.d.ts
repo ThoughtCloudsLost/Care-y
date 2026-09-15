@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An authenticator app on the user's own device generates a six digit code that changes every thirty seconds, computed from a secret shared with CARE-Y when th..." |
+* | "An authenticator app on the user's own device generates a six digit code that changes every 30 seconds, computed from a secret shared with CARE-Y at enrollme..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Totp_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

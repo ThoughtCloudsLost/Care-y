@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A six digit code is sent by text message to the phone number enrolled on the account, delivered through the organization's own telephony provider, and it exp..." |
+* | "The server sends a six digit code by text to the enrolled phone number, delivered through the organization's own telephony provider. The code expires after 5..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Sms_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

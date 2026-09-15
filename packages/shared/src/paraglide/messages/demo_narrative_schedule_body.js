@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Schedule_BodyInputs */
 
 const en_demo_narrative_schedule_body = /** @type {(inputs: Demo_Narrative_Schedule_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Shift scheduling is planned to cover shifts that repeat on a schedule, assigning people to cover them, and a calendar showing where coverage is complete and where it is thin. Until it arrives, the shift summary on the overview page is filled from fixed placeholder values rather than from any schedule, so the times and initials it shows are the same for every user instead of describing anyone's real shift.`)
+	return /** @type {LocalizedString} */ (`The planned scope for shift scheduling is shifts that repeat on a schedule, assigning people to cover them, and a calendar showing where coverage is complete and where it is thin. The shift summary on the overview page is filled from placeholder values that are fixed rather than drawn from any schedule, so its times and initials are identical for every user and describe nobody's real shift.`)
 };
 
 const es_demo_narrative_schedule_body = /** @type {(inputs: Demo_Narrative_Schedule_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La programación de turnos está prevista para cubrir turnos que se repiten según un calendario, la asignación de las personas que los atienden y una vista de calendario que muestra dónde la cobertura está completa y dónde es escasa. Hasta que llegue, el resumen de turno de la página de resumen se rellena con valores fijos de marcador de posición y no con un horario real, así que los horarios y las iniciales que muestra son los mismos para todas las personas usuarias en lugar de describir el turno real de nadie.`)
+	return /** @type {LocalizedString} */ (`El alcance previsto para la programación de turnos son turnos que se repiten según un horario, asignar personas para cubrirlos, y un calendario que muestre dónde la cobertura es completa y dónde es escasa. El resumen de turnos en la página de resumen general se llena con valores de marcador de posición que son fijos en lugar de provenir de un horario real, de modo que sus horas e iniciales son idénticas para cada cuenta y no describen el turno real de nadie.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Shift scheduling is planned to cover shifts that repeat on a schedule, assigning people to cover them, and a calendar showing where coverage is complete and ..." |
+* | "The planned scope for shift scheduling is shifts that repeat on a schedule, assigning people to cover them, and a calendar showing where coverage is complete..." |
 *
 * @param {Demo_Narrative_Schedule_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

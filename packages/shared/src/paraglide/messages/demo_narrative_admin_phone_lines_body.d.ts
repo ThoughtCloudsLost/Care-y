@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Each phone line has a number, a purpose role, and associated greetings. Purpose roles determine how the line is used, with outbound handling volunteer initia..." |
+* | "Each phone line has a number, a purpose role, and associated greetings. On a running CARE-Y server, phone lines connect to numbers provisioned through the te..." |
 *
 * @param {Demo_Narrative_Admin_Phone_Lines_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

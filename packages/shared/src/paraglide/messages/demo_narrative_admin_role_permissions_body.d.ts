@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The permission matrix on the people page shows which capabilities each role grants, with permissions arranged in a grid grouped by level. **Permission levels..." |
+* | "The permission matrix on the people page shows which capabilities each role grants, with fifty permissions arranged across eight capability groups. **Capabil..." |
 *
 * @param {Demo_Narrative_Admin_Role_Permissions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

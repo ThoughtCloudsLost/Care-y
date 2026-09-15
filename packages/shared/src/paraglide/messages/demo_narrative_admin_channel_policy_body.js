@@ -6,23 +6,23 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Channel_Policy_BodyInputs */
 
 const en_demo_narrative_admin_channel_policy_body = /** @type {(inputs: Demo_Narrative_Admin_Channel_Policy_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The channel policy section controls which communication channels are available to users across the organization, with five channels that each have an independent on/off toggle.
-**Off hints.** When a channel is turned off, a hint appears below the toggle explaining what the change removes for users working tickets.
-**Effect on users.** A disabled channel disappears from the compose actions and from any control that would use it, so a user working a ticket never sees an option the organization has turned off.
-**Onboarding.** The same channel policy section appears during the organization setup flow on the communications step, so an administrator can set the initial channel availability before anyone starts working tickets.`)
+	return /** @type {LocalizedString} */ (`The channel policy controls which communication channels are available across the organization, with five channels that each have an independent toggle.
+**Effect on users.** A disabled channel disappears from compose actions and from any control that would use it, so a user working a ticket never sees an option the organization has turned off. The policy is also enforced on the server, not only in the interface, so a direct request for a disabled channel is rejected.
+**Onboarding.** The channel policy also appears during the organization setup flow on the communications step, so the initial channel availability can be set before anyone starts working tickets.
+**Permissions.** Changing the channel policy requires the Manage channel routing permission.`)
 };
 
 const es_demo_narrative_admin_channel_policy_body = /** @type {(inputs: Demo_Narrative_Admin_Channel_Policy_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La sección de política de canales controla qué canales de comunicación están disponibles para los usuarios en toda la organización, con cinco canales que tienen cada uno un interruptor independiente de activar/desactivar.
-**Indicaciones de desactivación.** Cuando un canal se desactiva, aparece una indicación debajo del interruptor explicando lo que el cambio elimina para los usuarios que trabajan en tickets.
-**Efecto en los usuarios.** Un canal desactivado desaparece de las acciones de composición y de cualquier control que lo use, de modo que un usuario que trabaje en un ticket nunca ve una opción que la organización ha desactivado.
-**Incorporación.** La misma sección de política de canales aparece durante el flujo de configuración de la organización en el paso de comunicaciones, para que un administrador pueda establecer la disponibilidad inicial de los canales antes de que nadie empiece a trabajar tickets.`)
+	return /** @type {LocalizedString} */ (`La política de canales controla qué canales de comunicación están disponibles en toda la organización, con cinco canales que tienen cada uno un interruptor independiente.
+**Efecto en la persona usuaria.** Un canal desactivado desaparece de las acciones de composición y de cualquier control que lo use, de modo que la persona usuaria que trabaje en un ticket nunca ve una opción que la organización ha desactivado. La política también se aplica en el servidor, no solo en la interfaz, de modo que una solicitud directa para un canal desactivado se rechaza.
+**Incorporación.** La política de canales también aparece durante el flujo de configuración de la organización en el paso de comunicaciones, para que la disponibilidad inicial se establezca antes de que nadie empiece a trabajar tickets.
+**Permisos.** Cambiar la política de canales requiere el permiso Gestionar enrutamiento de canales.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The channel policy section controls which communication channels are available to users across the organization, with five channels that each have an indepen..." |
+* | "The channel policy controls which communication channels are available across the organization, with five channels that each have an independent toggle. **Ef..." |
 *
 * @param {Demo_Narrative_Admin_Channel_Policy_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

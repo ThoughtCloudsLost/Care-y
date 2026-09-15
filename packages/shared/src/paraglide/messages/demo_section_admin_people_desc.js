@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_People_DescInputs */
 
 const en_demo_section_admin_people_desc = /** @type {(inputs: Demo_Section_Admin_People_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The people page manages everyone the organization works with. Administrators maintain the volunteer roster and roles, configure the queues that organize and route tickets, and review the client list. Client identifiers and queue names are encrypted before they reach the database.`)
+	return /** @type {LocalizedString} */ (`The people page covers everyone the organization works with and how they are organized. It holds the user roster, role and permission configuration, queue management, and the client list, and both client identifiers and queue names are encrypted before they reach the database.`)
 };
 
 const es_demo_section_admin_people_desc = /** @type {(inputs: Demo_Section_Admin_People_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La página de personas gestiona a todas las personas con las que trabaja la organización. Los administradores mantienen el registro de voluntarios y sus roles, configuran las colas que organizan y enrutan los tickets, y revisan la lista de clientes. Los identificadores de clientes y los nombres de las colas se cifran antes de llegar a la base de datos.`)
+	return /** @type {LocalizedString} */ (`La página de personas cubre a todas las personas con las que trabaja la organización y cómo se organizan. Contiene el directorio de usuarios, la configuración de roles y permisos, la gestión de colas y la lista de clientes, y tanto los identificadores de clientes como los nombres de las colas se cifran antes de llegar a la base de datos.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The people page manages everyone the organization works with. Administrators maintain the volunteer roster and roles, configure the queues that organize and ..." |
+* | "The people page covers everyone the organization works with and how they are organized. It holds the user roster, role and permission configuration, queue ma..." |
 *
 * @param {Demo_Section_Admin_People_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

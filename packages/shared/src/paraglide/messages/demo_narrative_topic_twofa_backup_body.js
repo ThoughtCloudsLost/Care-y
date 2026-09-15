@@ -6,25 +6,23 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_Backup_BodyInputs */
 
 const en_demo_narrative_topic_twofa_backup_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Backup_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Backup codes are a set of eight one time codes, generated as soon as the first second factor method is enrolled and kept by the user outside the system, and each code is accepted once and then spent.
-**Fallback.** A backup code stands in whenever no other enrolled method can be used, whatever has made the others unavailable.
-**One time reveal.** Backup codes are shown once, at the moment they are generated, and the server keeps only hashes of them, so no screen can show them again and a set that has been lost cannot be recovered.
-**Where to keep them.** Backup codes are meant for paper or a password manager, and keeping them on the device used to sign in defeats the point, since losing that device would take the primary method and the fallback together.
-**Regeneration.** Generating a new set of backup codes deletes every code in the old set in the same step, so a sheet printed earlier stops working the moment the new codes appear.`)
+	return /** @type {LocalizedString} */ (`Backup codes are eight one time codes, generated as soon as the first method for the second factor is enrolled and kept by the user outside the system. Each code is accepted once and then spent, and they stand in whenever no other enrolled method can be used, whatever has made the others unavailable.
+**What the server holds.** The server keeps only hashes of the codes, never the codes themselves.
+**Persistence.** The codes are shown once, at generation, and no screen can show them again. A lost set cannot be recovered. They are meant for paper or a password manager, and keeping them on the device used to sign in defeats the point since losing that device would take the primary method and the fallback together.
+**Regenerating.** Regenerating deletes every code in the old set in the same step, so a sheet printed earlier stops working the moment the new codes appear.`)
 };
 
 const es_demo_narrative_topic_twofa_backup_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Backup_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los códigos de respaldo son un juego de ocho códigos de un solo uso, generados en cuanto se registra el primer método de segundo factor y guardados por la persona usuaria fuera del sistema, y cada código se acepta una vez y queda gastado.
-**Alternativa.** Un código de respaldo sirve siempre que no pueda usarse ningún otro método registrado, cualquiera que sea la razón por la que los demás no están disponibles.
-**Revelación única.** Los códigos de respaldo se muestran una sola vez, en el momento en que se generan, y el servidor guarda solo hashes de ellos, así que ninguna pantalla puede volver a mostrarlos y un juego perdido no puede recuperarse.
-**Dónde guardarlos.** Los códigos de respaldo están pensados para el papel o para un gestor de contraseñas, y guardarlos en el mismo dispositivo con el que se inicia sesión desvirtúa su propósito, ya que perder ese dispositivo se llevaría a la vez el método principal y la alternativa.
-**Regeneración.** Generar un juego nuevo de códigos de respaldo elimina en el mismo paso todos los códigos del juego anterior, de modo que una hoja impresa antes deja de funcionar en cuanto aparecen los códigos nuevos.`)
+	return /** @type {LocalizedString} */ (`Los códigos de respaldo son ocho códigos de un solo uso, generados en cuanto se registra el primer método para el segundo factor y conservados fuera del sistema por la persona usuaria. Cada código se acepta una vez y queda gastado, y sirven como sustituto cuando ningún otro método registrado puede usarse, sea cual sea la razón.
+**Lo que almacena el servidor.** El servidor solo guarda los hashes de los códigos, nunca los códigos en sí.
+**Persistencia.** Los códigos se muestran una sola vez, al generarse, y ninguna pantalla puede volver a mostrarlos. Un conjunto perdido no puede recuperarse. Están pensados para papel o un gestor de contraseñas, y guardarlos en el mismo dispositivo con el que se inicia sesión anula su propósito, ya que perder ese dispositivo llevaría consigo tanto el método principal como el de respaldo.
+**Regeneración.** Regenerar elimina todos los códigos del conjunto anterior en el mismo paso, de modo que una hoja impresa anteriormente deja de funcionar en el momento en que aparecen los nuevos códigos.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Backup codes are a set of eight one time codes, generated as soon as the first second factor method is enrolled and kept by the user outside the system, and ..." |
+* | "Backup codes are eight one time codes, generated as soon as the first method for the second factor is enrolled and kept by the user outside the system. Each ..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Backup_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

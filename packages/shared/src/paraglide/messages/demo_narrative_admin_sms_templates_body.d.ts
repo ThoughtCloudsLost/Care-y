@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "SMS templates define the automated messages the system sends to clients. Templates support multiple languages so the system can send messages in the client's..." |
+* | "SMS templates define the automated messages the system sends to clients, and templates support multiple languages so the system can send messages in the clie..." |
 *
 * @param {Demo_Narrative_Admin_Sms_Templates_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

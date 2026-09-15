@@ -6,21 +6,19 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Language_BodyInputs */
 
 const en_demo_narrative_topic_language_body = /** @type {(inputs: Demo_Narrative_Topic_Language_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The interface language can be changed before signing in and at any point afterward, and the change takes effect immediately because both languages travel inside the app rather than arriving from the server at the moment of the switch.
-**Privacy.** The user's language preference is stored on the server as ciphertext the server cannot read, so it reveals nothing about who is signing in. It is sent in plaintext once, when the account is created, because the server performs the sealing at that point, and the app applies the sealed copy again at each sign in.
-**Supported languages.** English and Spanish are the two languages CARE-Y ships. Until someone picks one, the app follows the language the browser itself asks for, and English when the browser asks for neither.`)
+	return /** @type {LocalizedString} */ (`The interface language is changeable before sign in and at any time after, and the change is immediate because both languages ship inside the app with nothing fetched from the server at switch time. With no choice made, the app follows the browser's requested language and falls back to English when the browser asks for neither.
+**Privacy.** The stored language preference is ciphertext the server cannot read, so it reveals nothing about who is signing in. It is sent in plaintext exactly once, at account creation, because the server performs the initial sealing at that point, and the sealed copy is reapplied at each sign in afterward.`)
 };
 
 const es_demo_narrative_topic_language_body = /** @type {(inputs: Demo_Narrative_Topic_Language_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El idioma de la interfaz puede cambiarse antes de iniciar sesión y en cualquier momento posterior, y el cambio surte efecto de inmediato porque ambos idiomas viajan dentro de la aplicación en lugar de llegar desde el servidor en el momento del cambio.
-**Privacidad.** La preferencia de idioma de la persona usuaria se guarda en el servidor como texto cifrado que el servidor no puede leer, así que no revela nada sobre quién inicia sesión. Se envía en texto plano una sola vez, al crear la cuenta, porque el servidor realiza el sellado en ese momento, y la aplicación vuelve a aplicar esa copia sellada en cada inicio de sesión.
-**Idiomas disponibles.** El inglés y el español son los dos idiomas que trae CARE-Y. Mientras nadie elija uno, la aplicación sigue el idioma que pide el propio navegador, y el inglés cuando el navegador no pide ninguno de los dos.`)
+	return /** @type {LocalizedString} */ (`El idioma de la interfaz se puede cambiar antes de iniciar sesión y en cualquier momento después, y el cambio es inmediato porque ambos idiomas se distribuyen dentro de la aplicación sin necesidad de solicitar nada al servidor en el momento del cambio. Sin una elección explícita, la aplicación sigue el idioma que solicita el navegador y recurre al inglés cuando el navegador no pide ninguno de los dos.
+**Privacidad.** La preferencia de idioma almacenada es texto cifrado que el servidor no puede leer, de modo que no revela nada sobre quién inicia sesión. Se envía en texto plano exactamente una vez, al crear la cuenta, porque el servidor realiza el sellado inicial en ese momento, y la copia sellada se reaplica en cada inicio de sesión posterior.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The interface language can be changed before signing in and at any point afterward, and the change takes effect immediately because both languages travel ins..." |
+* | "The interface language is changeable before sign in and at any time after, and the change is immediate because both languages ship inside the app with nothin..." |
 *
 * @param {Demo_Narrative_Topic_Language_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The same person can end up as two client records, usually after calling from a new number. Administrators resolve this by merging the records from the client..." |
+* | "The same person can end up as two client records, usually after calling from a new number, and the merge tool resolves this from the client detail sheet. **W..." |
 *
 * @param {Demo_Narrative_Admin_Client_Merge_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

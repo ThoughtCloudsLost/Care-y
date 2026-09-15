@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Schedule_DescInputs */
 
 const en_demo_section_schedule_desc = /** @type {(inputs: Demo_Section_Schedule_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Shift scheduling is in development and the schedule page carries a placeholder instead of a calendar, so this section describes the shape the feature is planned to take rather than one that works today.`)
+	return /** @type {LocalizedString} */ (`Shift scheduling is in development, and the schedule page carries a placeholder instead of a calendar.`)
 };
 
 const es_demo_section_schedule_desc = /** @type {(inputs: Demo_Section_Schedule_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La programación de turnos está en desarrollo y la página de horario muestra un marcador de posición en lugar de un calendario, por lo que esta sección describe la forma que se planea dar a la función y no una que ya funcione.`)
+	return /** @type {LocalizedString} */ (`La programación de turnos está en desarrollo, y la página de horarios muestra un marcador de posición en lugar de un calendario.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Shift scheduling is in development and the schedule page carries a placeholder instead of a calendar, so this section describes the shape the feature is plan..." |
+* | "Shift scheduling is in development, and the schedule page carries a placeholder instead of a calendar." |
 *
 * @param {Demo_Section_Schedule_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

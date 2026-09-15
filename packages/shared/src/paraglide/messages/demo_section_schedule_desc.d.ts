@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Shift scheduling is in development and the schedule page carries a placeholder instead of a calendar, so this section describes the shape the feature is plan..." |
+* | "Shift scheduling is in development, and the schedule page carries a placeholder instead of a calendar." |
 *
 * @param {Demo_Section_Schedule_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

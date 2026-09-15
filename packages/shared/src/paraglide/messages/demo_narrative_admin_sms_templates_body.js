@@ -6,19 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Sms_Templates_BodyInputs */
 
 const en_demo_narrative_admin_sms_templates_body = /** @type {(inputs: Demo_Narrative_Admin_Sms_Templates_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`SMS templates define the automated messages the system sends to clients. Templates support multiple languages so the system can send messages in the client's preferred language.
-**Message length.** The editor counts characters as you type and shows how many SMS segments the message will use.`)
+	return /** @type {LocalizedString} */ (`SMS templates define the automated messages the system sends to clients, and templates support multiple languages so the system can send messages in the client's preferred language.
+**Message length.** Template text is capped at 1600 characters, which is ten standard SMS segments, and the server rejects a save that exceeds the limit.
+**Permissions.** Editing SMS templates requires the Write automatic replies permission.`)
 };
 
 const es_demo_narrative_admin_sms_templates_body = /** @type {(inputs: Demo_Narrative_Admin_Sms_Templates_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las plantillas SMS definen los mensajes automatizados que el sistema envía a los clientes. Las plantillas admiten múltiples idiomas para que el sistema pueda enviar mensajes en el idioma preferido del cliente.
-**Longitud del mensaje.** El editor cuenta caracteres mientras escribes y muestra cuántos segmentos SMS usará el mensaje.`)
+	return /** @type {LocalizedString} */ (`Las plantillas SMS definen los mensajes automatizados que el sistema envía a los clientes, y admiten múltiples idiomas para que el sistema pueda enviar mensajes en el idioma preferido del cliente.
+**Longitud del mensaje.** El texto de la plantilla tiene un límite de 1600 caracteres, lo que equivale a diez segmentos SMS estándar, y el servidor rechaza un guardado que exceda el límite.
+**Permisos.** Editar plantillas SMS requiere el permiso Escribir respuestas automáticas.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "SMS templates define the automated messages the system sends to clients. Templates support multiple languages so the system can send messages in the client's..." |
+* | "SMS templates define the automated messages the system sends to clients, and templates support multiple languages so the system can send messages in the clie..." |
 *
 * @param {Demo_Narrative_Admin_Sms_Templates_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

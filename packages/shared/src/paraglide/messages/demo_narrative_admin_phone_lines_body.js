@@ -6,17 +6,19 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Phone_Lines_BodyInputs */
 
 const en_demo_narrative_admin_phone_lines_body = /** @type {(inputs: Demo_Narrative_Admin_Phone_Lines_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Each phone line has a number, a purpose role, and associated greetings. Purpose roles determine how the line is used, with outbound handling volunteer initiated calls and system messages handling automated notifications. The simulator seeds two fictional 555 numbers with purpose roles for demonstration.`)
+	return /** @type {LocalizedString} */ (`Each phone line has a number, a purpose role, and associated greetings. On a running CARE-Y server, phone lines connect to numbers provisioned through the telephony provider, with the outbound role handling calls that users initiate and the system messages role handling automated notifications. The demo seeds two fictional 555 numbers with purpose roles instead.
+**Permissions.** Phone line configuration requires the Manage infrastructure permission.`)
 };
 
 const es_demo_narrative_admin_phone_lines_body = /** @type {(inputs: Demo_Narrative_Admin_Phone_Lines_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cada línea telefónica tiene un número, un rol de propósito y saludos asociados. Los roles de propósito determinan cómo se usa la línea, con saliente para las llamadas iniciadas por voluntarios y mensajes del sistema para las notificaciones automatizadas. El simulador configura dos números ficticios 555 con roles de propósito para la demostración.`)
+	return /** @type {LocalizedString} */ (`Cada línea telefónica tiene un número, un rol de propósito y saludos asociados. En un servidor CARE-Y en producción, las líneas se conectan a números aprovisionados a través del proveedor de telefonía, con el rol de saliente para las llamadas iniciadas por la persona usuaria y el rol de mensajes del sistema para las notificaciones automatizadas. La demo configura dos números ficticios 555 con roles de propósito en su lugar.
+**Permisos.** La configuración de líneas telefónicas requiere el permiso Gestionar infraestructura.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Each phone line has a number, a purpose role, and associated greetings. Purpose roles determine how the line is used, with outbound handling volunteer initia..." |
+* | "Each phone line has a number, a purpose role, and associated greetings. On a running CARE-Y server, phone lines connect to numbers provisioned through the te..." |
 *
 * @param {Demo_Narrative_Admin_Phone_Lines_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Backup codes are a set of eight one time codes, generated as soon as the first second factor method is enrolled and kept by the user outside the system, and ..." |
+* | "Backup codes are eight one time codes, generated as soon as the first method for the second factor is enrolled and kept by the user outside the system. Each ..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Backup_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

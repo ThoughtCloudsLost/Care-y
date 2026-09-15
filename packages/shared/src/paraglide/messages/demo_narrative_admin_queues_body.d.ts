@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Queues control how tickets are organized and routed. Administrators create queues, assign volunteers to them, and configure sort order and appearance. **Life..." |
+* | "Queues control how tickets are organized and routed. Creating queues, assigning users to them, and configuring their sort order and appearance all happen fro..." |
 *
 * @param {Demo_Narrative_Admin_Queues_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

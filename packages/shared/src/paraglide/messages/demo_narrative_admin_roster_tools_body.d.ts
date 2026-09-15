@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The users tab has the same working tools as the ticket list. **Filters.** Pills narrow the roster by role, status, key state, and queue membership. **Sort.**..." |
+* | "The users tab has the same working tools as the ticket list. **Filters.** The roster's filter pills narrow results by role, status, key state, and queue memb..." |
 *
 * @param {Demo_Narrative_Admin_Roster_Tools_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
