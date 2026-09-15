@@ -42,7 +42,13 @@ import { resolveValidMentionIds as resolveMentions } from "../tickets/mentions.j
 import type { TicketAccessChecker } from "../tickets/access.js";
 import type { WatchersService } from "../tickets/watchers.js";
 import type { NoteTypeService } from "../tickets/note-type-service.js";
+import type { QueuePermissionsService } from "../tickets/queue-permissions.js";
+import type { UserService } from "../users/user-service.js";
 import { resolveEscalationTargets } from "../tickets/notification-recipients.js";
+import {
+  isKnownPermission,
+  listActiveUserIdsWithPermission,
+} from "../auth/roles.js";
 import { computeBackoffMs } from "../jobs/postgres-queue.js";
 import { z } from "zod";
 import type {
@@ -202,24 +208,30 @@ export interface OutboxDrainDeps {
     tDb: Kysely<TenantDatabase>,
     access: TicketAccessChecker,
   ) => WatchersService;
+  /**
+   * Escalation resolution deps. Required rather than optional: every one
+   * of these guards a branch that silently resolves to nobody when it is
+   * absent, and the production wiring omitted all of them for as long as
+   * they were optional. A missing factory is now a compile error.
+   */
   /** Factory for creating a note type service (needed for note-type escalation resolution). */
-  readonly createNoteTypeSvc?: (tDb: Kysely<TenantDatabase>) => NoteTypeService;
+  readonly createNoteTypeSvc: (tDb: Kysely<TenantDatabase>) => NoteTypeService;
   /** Factory for creating a queue permissions service (needed for escalation target resolution). */
-  readonly createQueuePermissionsSvc?: (tDb: Kysely<TenantDatabase>) => {
-    getQueueMembers(queueId: QueueId): Promise<UserId[]>;
-  };
+  readonly createQueuePermissionsSvc: (
+    tDb: Kysely<TenantDatabase>,
+  ) => Pick<QueuePermissionsService, "getQueueMembers">;
   /** Factory for creating a user service (needed for escalation target resolution). */
-  readonly createUserSvc?: (tDb: Kysely<TenantDatabase>) => {
-    listActiveIdsByRoleId(roleId: string): Promise<Set<UserId>>;
-    listActiveKeyWrapHolderIds(ticketId: TicketId): Promise<Set<UserId>>;
-    filterByRoleThreshold(
-      userIds: UserId[],
-      minRole: string,
-    ): Promise<UserId[]>;
-  };
+  readonly createUserSvc: (
+    tDb: Kysely<TenantDatabase>,
+  ) => Pick<
+    UserService,
+    | "listActiveIdsByRoleId"
+    | "listActiveKeyWrapHolderIds"
+    | "filterByRoleThreshold"
+  >;
   /** Escalation rule service deps for rule-based escalation (getManagerIds, getQueueWatcherIds). */
-  readonly getManagerIds?: (tDb: Kysely<TenantDatabase>) => Promise<UserId[]>;
-  readonly getQueueWatcherIds?: (
+  readonly getManagerIds: (tDb: Kysely<TenantDatabase>) => Promise<UserId[]>;
+  readonly getQueueWatcherIds: (
     tDb: Kysely<TenantDatabase>,
     queueId: QueueId,
   ) => Promise<UserId[]>;
@@ -523,13 +535,10 @@ async function resolveNoteTypeEscalationForDrain(
   deps: OutboxDrainDeps,
 ): Promise<UserId[] | undefined> {
   if (noteTypeId === null) return undefined;
-  if (!deps.createNoteTypeSvc) return undefined;
 
   const ntSvc = deps.createNoteTypeSvc(db);
   const ctx = await ntSvc.getEscalationContext(noteTypeId);
   if (!ctx) return undefined;
-
-  if (!deps.createQueuePermissionsSvc || !deps.createUserSvc) return undefined;
 
   const qp = deps.createQueuePermissionsSvc(db);
   const userSvc = deps.createUserSvc(db);
@@ -541,8 +550,20 @@ async function resolveNoteTypeEscalationForDrain(
         const roleId = role === "admin" ? RoleId.ADMIN : RoleId.MANAGER;
         return [...(await userSvc.listActiveIdsByRoleId(roleId))];
       },
-      // eslint-disable-next-line @typescript-eslint/require-await -- stub for future permission-based targeting
-      getUsersByPermission: async () => [],
+      getUsersByPermission: async (permission) => {
+        // Escalation targets carry a permission name from admin
+        // configuration, so the value is only as current as the config.
+        // A key that no longer exists resolves to nobody by definition;
+        // log the name (never PII) so the dead target is visible rather
+        // than silent.
+        if (!isKnownPermission(permission)) {
+          console.warn(
+            `Escalation target names an unknown permission: ${permission}`,
+          );
+          return [];
+        }
+        return listActiveUserIdsWithPermission(db, deps.orgSchema, permission);
+      },
       getQueueMembers: async (queueId) => qp.getQueueMembers(queueId),
       getTicketKeyWrapHolders: async (tid) => [
         ...(await userSvc.listActiveKeyWrapHolderIds(tid)),
@@ -581,11 +602,9 @@ async function resolveRuleEscalationRecipients(
   if (!rule) return { recipients: [] };
 
   const recipientUserIds =
-    rule.action === "notify_managers" && deps.getManagerIds
+    rule.action === "notify_managers"
       ? await deps.getManagerIds(db)
-      : deps.getQueueWatcherIds
-        ? await deps.getQueueWatcherIds(db, rule.queue_id)
-        : [];
+      : await deps.getQueueWatcherIds(db, rule.queue_id);
 
   const source: "note_escalation" | "queue_watcher" =
     rule.action === "notify_managers" ? "note_escalation" : "queue_watcher";

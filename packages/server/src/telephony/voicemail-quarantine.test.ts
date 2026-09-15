@@ -44,7 +44,9 @@ import {
   SYSTEM_ACTOR_ID,
   VOICEMAIL_QUARANTINE_MAX_BYTES,
   RoleId,
+  Permission,
 } from "@care-y/shared";
+import { invalidateRolePermissionCache } from "../auth/roles.js";
 import type { RouteQuarantineInput, E164 } from "@care-y/shared";
 import {
   createTestDb,
@@ -382,7 +384,7 @@ describe("quarantineRecording", () => {
     expect(deps.provider.deleteRecording).toHaveBeenCalledOnce();
     expect(deps.provider.deleteCallLog).toHaveBeenCalledOnce();
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to notify admins"),
+      expect.stringContaining("Failed to notify quarantine handlers"),
     );
     consoleSpy.mockRestore();
   });
@@ -475,7 +477,67 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(rows[0]!.status).toBe("pending");
     });
 
-    it("passes orgId to dispatchTicketless when admins exist", async () => {
+    it("notifies a manager granted the quarantine permission and no one without it", async () => {
+      const manager = await createTestUser(testDb.db, {
+        overrides: { role_id: RoleId.MANAGER },
+      });
+      const volunteer = await createTestUser(testDb.db, {
+        overrides: { role_id: RoleId.VOLUNTEER },
+      });
+
+      await testDb.db
+        .insertInto("role_permission_overrides")
+        .values({
+          role_id: RoleId.MANAGER,
+          permission: Permission.MANAGE_VOICEMAIL_QUARANTINE,
+          enabled: true,
+        })
+        .onConflict((oc) => oc.columns(["role_id", "permission"]).doNothing())
+        .execute();
+      invalidateRolePermissionCache(testDb.schemaName as OrgSchema);
+
+      const notificationService = createMockNotificationService();
+      const deps: QuarantineDeps = {
+        tDb: testDb.db,
+        provider: createMockProvider(),
+        blobStore: createMockBlobStore(),
+        jobQueue: createMockJobQueue(),
+        sealedBox: createMockSealedBox(),
+        orgId: orgIdSchema.parse(crypto.randomUUID()),
+        orgSchema: testDb.schemaName as OrgSchema,
+        orgSlug: "integ-org" as OrgSlug,
+        notificationService,
+      };
+
+      await quarantineRecording(deps, {
+        recordingSid: recordingSidSchema.parse(
+          `RE_PERM_${crypto.randomUUID().slice(0, 8)}`,
+        ),
+        callSid: callSidSchema.parse(
+          `CA_PERM_${crypto.randomUUID().slice(0, 8)}`,
+        ),
+        reason: "tracker_miss",
+      });
+
+      const recipients = vi.mocked(notificationService.dispatchTicketless).mock
+        .calls[0]![5];
+      expect(recipients).toContain(manager.id);
+      expect(recipients).not.toContain(volunteer.id);
+
+      // Clean up: the override and users would leak into later tests
+      await testDb.db
+        .deleteFrom("role_permission_overrides")
+        .where("role_id", "=", RoleId.MANAGER)
+        .where("permission", "=", Permission.MANAGE_VOICEMAIL_QUARANTINE)
+        .execute();
+      invalidateRolePermissionCache(testDb.schemaName as OrgSchema);
+      await testDb.db
+        .deleteFrom("users")
+        .where("id", "in", [manager.id, volunteer.id])
+        .execute();
+    });
+
+    it("passes orgId to dispatchTicketless when quarantine handlers exist", async () => {
       const admin = await createTestUser(testDb.db, {
         overrides: { role_id: RoleId.ADMIN },
       });

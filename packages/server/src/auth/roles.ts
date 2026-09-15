@@ -353,8 +353,57 @@ export function assertSingleInstancePermissionCache(
 }
 
 // ---------------------------------------------------------------------------
-// Permission holder query (shared by intake services)
+// Permission holder queries (shared by intake services and notification
+// targeting)
 // ---------------------------------------------------------------------------
+
+/**
+ * Role IDs whose effective permission set contains `permission`, after
+ * per-org overrides and lock enforcement.
+ */
+async function rolesWithPermission(
+  db: Kysely<TenantDatabase>,
+  orgSchema: OrgSchema,
+  permission: Permission,
+): Promise<RoleIdValue[]> {
+  const roles: RoleIdValue[] = [];
+  for (const roleId of ROLE_ID_VALUES) {
+    const perms = await getEffectivePermissions(db, orgSchema, roleId);
+    if (perms.has(permission)) {
+      roles.push(roleId);
+    }
+  }
+  return roles;
+}
+
+/**
+ * Active user IDs holding the given permission in any role, accounting
+ * for per-org permission overrides.
+ *
+ * Notification targeting asks who should be told, which is a different
+ * question from who can be issued a key wrap, so this deliberately does
+ * not require `vol_public` the way getUsersWithPermission does: a holder
+ * who has not enrolled keys yet still holds the permission and still
+ * needs the message. Selects the same population as
+ * listActiveIdsByRoleId, which role-based targeting uses.
+ */
+export async function listActiveUserIdsWithPermission(
+  db: Kysely<TenantDatabase>,
+  orgSchema: OrgSchema,
+  permission: Permission,
+): Promise<UserId[]> {
+  const roles = await rolesWithPermission(db, orgSchema, permission);
+  if (roles.length === 0) return [];
+
+  const rows = await db
+    .selectFrom("users")
+    .select("id")
+    .where("role_id", "in", roles)
+    .where("is_active", "=", true)
+    .execute();
+
+  return rows.map((r) => r.id);
+}
 
 /**
  * Returns active user IDs with vol_public who hold the given permission
@@ -368,13 +417,7 @@ export async function getUsersWithPermission(
   orgSchema: OrgSchema,
   permission: Permission,
 ): Promise<Map<UserId, Buffer>> {
-  const rolesWithPerm: RoleIdValue[] = [];
-  for (const roleId of ROLE_ID_VALUES) {
-    const perms = await getEffectivePermissions(db, orgSchema, roleId);
-    if (perms.has(permission)) {
-      rolesWithPerm.push(roleId);
-    }
-  }
+  const rolesWithPerm = await rolesWithPermission(db, orgSchema, permission);
 
   if (rolesWithPerm.length === 0) return new Map();
 
@@ -401,8 +444,12 @@ const KNOWN_PERMISSIONS: ReadonlySet<string> = new Set(
   Object.values(Permission),
 );
 
-/** Type guard for known Permission enum values. */
-function isKnownPermission(value: string): value is Permission {
+/**
+ * Type guard for known Permission enum values. Exported so callers
+ * holding a permission name from runtime configuration (note-type
+ * escalation targets, override rows) can narrow it before querying.
+ */
+export function isKnownPermission(value: string): value is Permission {
   return KNOWN_PERMISSIONS.has(value);
 }
 

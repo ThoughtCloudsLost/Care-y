@@ -130,6 +130,7 @@ import { createAssignmentService } from "./tickets/assignment.js";
 import { createWatchersService } from "./tickets/watchers.js";
 import { createNoteTypeService } from "./tickets/note-type-service.js";
 import { createQueuePermissionsService } from "./tickets/queue-permissions.js";
+import { createUserService } from "./users/user-service.js";
 import {
   registerEscalationHandler,
   escalateTenantTickets,
@@ -192,6 +193,7 @@ import type {
   UserId,
   StoredProviderId,
 } from "@care-y/shared";
+import { RoleId } from "@care-y/shared";
 
 // --- DB startup probe ---
 
@@ -975,6 +977,19 @@ registerOutboxDrainHandler(jobQueue, {
     orgSlug: org.slug,
     createTicketAccess: (tDb) => createTicketAccessChecker(tDb),
     createWatchersSvc: (tDb, access) => createWatchersService(tDb, access),
+    createNoteTypeSvc: (tDb) => createNoteTypeService(tDb, secretsEncryptor),
+    createQueuePermissionsSvc: createQueuePermissionsService,
+    createUserSvc: createUserService,
+    // "Notify managers" names the manager role, matching how a note-type
+    // escalation target of role:manager resolves. Both are runtime
+    // configuration naming a role, not an authorization decision.
+    getManagerIds: async (tDb) => [
+      ...(await createUserService(tDb).listActiveIdsByRoleId(RoleId.MANAGER)),
+    ],
+    getQueueWatcherIds: async (tDb, queueId) => {
+      const access = createTicketAccessChecker(tDb);
+      return createWatchersService(tDb, access).getQueueWatchers(queueId);
+    },
   }),
 });
 

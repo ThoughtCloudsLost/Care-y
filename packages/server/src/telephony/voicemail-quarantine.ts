@@ -36,7 +36,7 @@ import type {
 } from "@care-y/shared";
 import {
   SYSTEM_ACTOR_ID,
-  RoleId,
+  Permission,
   VOICEMAIL_QUARANTINE_MAX_BYTES,
   newVoicemailQuarantineId,
   userIdSchema,
@@ -44,7 +44,7 @@ import {
 import { sealBufferAndZero, sealString } from "./crypto-helpers.js";
 import { deleteOrEnqueue } from "./log-deletion-helpers.js";
 import { createAuditService } from "../tickets/audit.js";
-import { createUserService } from "../users/user-service.js";
+import { listActiveUserIdsWithPermission } from "../auth/roles.js";
 import { NotFoundError, ConflictError, ValidationError } from "../errors.js";
 import { createEncryptedFollowUp } from "../tickets/server-followup-create.js";
 import { resolveInboundTicket } from "./resolve-inbound-ticket.js";
@@ -223,23 +223,29 @@ export async function quarantineRecording(
     },
   });
 
-  // (f) Notify admins (best-effort).
+  // (f) Notify whoever can work the queue (best-effort). Targeting the
+  // permission rather than the admin role keeps the notice and the
+  // capability together: an org that grants MANAGE_VOICEMAIL_QUARANTINE
+  // to a manager gets someone who is told the queue has something in it.
   try {
-    const userService = createUserService(tDb);
-    const adminIds = await userService.listActiveIdsByRoleId(RoleId.ADMIN);
-    if (adminIds.length > 0) {
+    const recipientIds = await listActiveUserIdsWithPermission(
+      tDb,
+      orgSchema,
+      Permission.MANAGE_VOICEMAIL_QUARANTINE,
+    );
+    if (recipientIds.length > 0) {
       await notificationService.dispatchTicketless(
         tDb,
         orgId,
         orgSchema,
         orgSlug,
         "voicemail_quarantined",
-        adminIds,
+        recipientIds,
       );
     }
   } catch (_notifyErr: unknown) {
     // Notification failure must not block the quarantine.
-    console.error("Failed to notify admins of quarantined voicemail");
+    console.error("Failed to notify quarantine handlers of a voicemail");
   }
 
   // (g) Provider-side cleanup (only after durable insert).
