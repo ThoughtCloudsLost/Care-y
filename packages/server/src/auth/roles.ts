@@ -72,6 +72,11 @@ const MANAGER_PERMISSIONS: ReadonlySet<Permission> = new Set([
   Permission.DELETE_CLIENTS,
   Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
   Permission.DELETE_KNOWLEDGE_BASE_ARTICLES,
+  // Managers designed intake forms before this key existed: the old
+  // MANAGE_QUEUES sat at manager level and gated the form designer and
+  // nothing else. Inheriting by operation rather than by name keeps it
+  // here, and an org that wants it admin-only withholds it.
+  Permission.MANAGE_INTAKE_FORMS,
   Permission.MANAGE_PRESETS,
   Permission.VIEW_REPORTS,
   Permission.VIEW_AUDIT_LOG,
@@ -85,7 +90,6 @@ const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set([
   Permission.MANAGE_QUEUES,
   Permission.MANAGE_QUEUE_MEMBERSHIP,
   Permission.MANAGE_QUEUE_NOTIFICATIONS,
-  Permission.MANAGE_INTAKE_FORMS,
   Permission.VIEW_INTAKE_RESPONSES,
   Permission.MANAGE_ROLES,
   Permission.MANAGE_USERS,
