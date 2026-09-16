@@ -1053,7 +1053,7 @@
     cancelFsAnimation();
     fsCtrl.reset();
     geo.reset();
-    moveColumnToSlot(demoMode.mode === "read" ? "left" : "right");
+    moveColumnToSlot("left");
     resetLinked();
     resetExcursion();
     resetGuideProgress();
@@ -1372,7 +1372,7 @@
       peekCtrl.resetToIdle();
       capturedStill = null;
       geo.reset();
-      moveColumnToSlot("right");
+      moveColumnToSlot("left");
 
       // Mobile default: enter fullscreen on narrow viewports, using the
       // fitted phone preset as the saved snapshot so pill-exit lands on

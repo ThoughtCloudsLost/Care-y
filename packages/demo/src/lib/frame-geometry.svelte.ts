@@ -161,14 +161,17 @@ export function contentBandFor(windowW: number): ContentBand {
 }
 
 /**
- * The half of the container the frame occupies: the left slot, mirroring
- * the text column's right slot. Below the wide breakpoint there are no
+ * The half of the container the frame occupies: the right slot, mirroring
+ * the text column's left slot. Below the wide breakpoint there are no
  * slots and the frame gets the whole window.
  */
 export function frameSlotFor(windowW: number): { left: number; right: number } {
   if (windowW < WIDE_BREAKPOINT) return { left: 0, right: windowW };
   const content = contentBandFor(windowW);
-  return { left: content.left, right: content.left + content.width / 2 };
+  return {
+    left: content.left + content.width / 2,
+    right: content.left + content.width,
+  };
 }
 
 /** Space a frame has to fit into, excluding chrome and margins. */
@@ -244,9 +247,9 @@ export function fitPreset(
 /**
  * Compute the initial spawn position and footprint.
  *
- * At >= 900px window width: phone preset in the left half, vertically
+ * At >= 900px window width: phone preset in the right half, vertically
  * centered in the viewport below the top bar. The story text flows in
- * the right half beside it.
+ * the left half beside it.
  * Below 900px: scaled down to fit roughly 40vh, centered horizontally.
  */
 export function computeSpawn(
@@ -265,8 +268,8 @@ export function computeSpawn(
 
   // Centre within the slot on both axes, then clamp so an oversized
   // frame still lands on screen rather than hanging off an edge. The
-  // slot starts right of the rail, so a frame centred in it clears the
-  // rail instead of sitting over it.
+  // slot is the right half of the content band, so a centred frame
+  // leaves the left half (rail included) to the text column.
   const top = bandTop + Math.max(0, (band.h - outerH) / 2);
   const slot = frameSlotFor(windowW);
   const centredLeft = slot.left + (slot.right - slot.left - outerW) / 2;
@@ -283,7 +286,7 @@ export const FRAME_FIT_MARGIN = 8;
 
 /**
  * Window width at or above which the wide layout applies: the frame
- * spawns in the left half and the story text flows in the right half.
+ * spawns in the right half and the story text flows in the left half.
  * Below it the frame is centred and the layout is single-column.
  */
 export const WIDE_BREAKPOINT = 900;

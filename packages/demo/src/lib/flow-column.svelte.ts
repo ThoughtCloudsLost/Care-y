@@ -79,11 +79,14 @@ function xForSlot(s: "left" | "right"): number {
 // -----------------------------------------------------------------------
 
 /**
- * Set the initial slot based on mode. Read mode starts left, simulate mode
- * starts right. The tween snaps instantly (no animation on boot).
+ * Set the initial slot based on mode. Both modes start left: read mode
+ * has no frame, and simulate mode spawns the frame in the right half.
+ * The tween snaps instantly (no animation on boot). The mode parameter
+ * stays so a future asymmetry has its seam.
  */
 export function initColumnSlot(mode: "read" | "simulate"): void {
-  slot = mode === "read" ? "left" : "right";
+  void mode;
+  slot = "left";
   firstEvaluation = true;
   // Normalized, so this is correct before the container is measured.
   // Tween.set resolves when the motion finishes; nothing awaits a snap.
@@ -94,11 +97,11 @@ export function initColumnSlot(mode: "read" | "simulate"): void {
  * Move the column to a slot, animated.
  *
  * For moves the layout dictates rather than the frame's travel. Entering
- * simulate mode spawns the frame centered in the left slot, on top of a
- * column that read mode left there. Nothing travelled into the column,
- * so the pressure rule correctly declines to fire, but the two still
- * cannot share a side: the mode change itself is what re-establishes
- * the arrangement.
+ * simulate mode spawns the frame centered in the right slot; the column
+ * may have been flipped right by earlier frame pressure, and nothing
+ * travelled into it, so the pressure rule correctly declines to fire.
+ * The two still cannot share a side: the mode change itself is what
+ * re-establishes the arrangement.
  */
 export function moveColumnToSlot(s: "left" | "right"): void {
   if (slot === s) return;

@@ -167,11 +167,14 @@ describe("computeSpawn", () => {
     expect(spawn.top).toBeGreaterThanOrEqual(topBar);
   });
 
-  it("clears the rail the slot starts after", () => {
-    // The slot begins right of the rail track, so a centred frame never
-    // sits over the rail.
-    const spawn = computeSpawn(1280, 900, topBar);
-    expect(spawn.left).toBeGreaterThanOrEqual(WRAPPER_PAD_LEFT + RAIL_WIDTH);
+  it("spawns in the right half, clear of the rail and text column", () => {
+    // The slot is the right half of the content band, so a centred
+    // frame sits past the band midpoint and never over the rail.
+    const windowW = 1280;
+    const spawn = computeSpawn(windowW, 900, topBar);
+    const slot = frameSlotFor(windowW);
+    expect(spawn.left).toBeGreaterThanOrEqual(slot.left);
+    expect(spawn.left).toBeGreaterThan(WRAPPER_PAD_LEFT + RAIL_WIDTH);
   });
 
   it("keeps a frame wider than its slot fully on screen", () => {
@@ -246,11 +249,11 @@ describe("contentBandFor", () => {
 });
 
 describe("frameSlotFor", () => {
-  it("gives the frame the container's left half at wide widths", () => {
+  it("gives the frame the container's right half at wide widths", () => {
     const content = contentBandFor(1512);
     const slot = frameSlotFor(1512);
-    expect(slot.left).toBe(content.left);
-    expect(slot.right - slot.left).toBe(content.width / 2);
+    expect(slot.left).toBe(content.left + content.width / 2);
+    expect(slot.right).toBe(content.left + content.width);
   });
 
   it("clears the rail track", () => {
