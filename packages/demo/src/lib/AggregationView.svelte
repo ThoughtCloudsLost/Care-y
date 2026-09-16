@@ -11,6 +11,7 @@
   import { getCorpusEntry, type CorpusEntry } from "./handbook-corpus.js";
   import { getSection, getSub } from "./scroll-sections.js";
   import PermissionMatrix from "./PermissionMatrix.svelte";
+  import HandbookSearch from "./HandbookSearch.svelte";
   import type { SectionId } from "./bridge.js";
 
   interface Props {
@@ -129,6 +130,8 @@
         {/if}
       {:else if section.kind === "matrix"}
         <PermissionMatrix />
+      {:else if section.kind === "search"}
+        <HandbookSearch {locale} {onNavigate} />
       {/if}
     {/each}
   </div>
