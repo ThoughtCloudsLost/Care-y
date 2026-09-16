@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_Logs_DescInputs */
 
 const en_demo_section_admin_logs_desc = /** @type {(inputs: Demo_Section_Admin_Logs_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The logs page combines call history and audit events behind two tabs. The call tab lists telephony entries already stored on tickets, and the audit tab records administrative actions across the organization. Both tabs have their own filter pills for narrowing results.`)
+	return /** @type {LocalizedString} */ (`Both tabs on the logs page show plaintext metadata with a single decrypted name per row. The View reports permission gates the page, and the View audit log permission gates the audit tab within it.`)
 };
 
 const es_demo_section_admin_logs_desc = /** @type {(inputs: Demo_Section_Admin_Logs_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La página de registros combina el historial de llamadas y los eventos de auditoría detrás de dos pestañas. La pestaña de llamadas lista las entradas de telefonía ya almacenadas en los tickets, y la pestaña de auditoría registra acciones administrativas en toda la organización. Ambas pestañas tienen sus propias pastillas de filtro para acotar resultados.`)
+	return /** @type {LocalizedString} */ (`Ambas pestañas de la página de registros muestran metadatos en texto plano con un solo nombre descifrado por fila. El permiso Ver reportes y estadísticas controla el acceso a la página, y el permiso Leer el registro de auditoría controla la pestaña de auditoría dentro de ella.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The logs page combines call history and audit events behind two tabs. The call tab lists telephony entries already stored on tickets, and the audit tab recor..." |
+* | "Both tabs on the logs page show plaintext metadata with a single decrypted name per row. The View reports permission gates the page, and the View audit log p..." |
 *
 * @param {Demo_Section_Admin_Logs_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The preview pane renders the form as a visitor would see it, updating as fields are added or edited. **State switcher.** A segmented control at the top of th..." |
+* | "The preview renders the form using the same field renderer the public intake page uses, so what the user sees while editing is what the visitor sees when sub..." |
 *
 * @param {Demo_Narrative_Admin_Form_Preview_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

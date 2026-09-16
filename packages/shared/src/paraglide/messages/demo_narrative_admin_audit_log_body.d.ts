@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The audit tab lists administrative actions across the organization. Each row shows the actor (who performed the action), the event type, a timestamp, and a d..." |
+* | "The audit log records 47 event types spanning the full range of administrative and lifecycle actions across the organization. **What the server holds.** The ..." |
 *
 * @param {Demo_Narrative_Admin_Audit_Log_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

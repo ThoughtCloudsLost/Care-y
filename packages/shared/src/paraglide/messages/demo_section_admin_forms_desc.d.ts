@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Custom intake forms let organizations collect the information their workflow needs. Each form feeds a destination queue so tickets land in the right place au..." |
+* | "The form builder is where intake forms are authored, localized, previewed, and configured. Form definitions are encrypted under a key anyone can derive from ..." |
 *
 * @param {Demo_Section_Admin_Forms_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

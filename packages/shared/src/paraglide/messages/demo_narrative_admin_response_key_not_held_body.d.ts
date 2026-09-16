@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An unreadable response row shows what a user sees when an intake response was encrypted under a key they do not hold. The card displays the submission date, ..." |
+* | "When a response was encrypted under a key the user does not hold, the response row shows the submission time but not the field values, so the user can see th..." |
 *
 * @param {Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

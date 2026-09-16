@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Organization name, primary and accent colors, logo, and client facing text are stored as plaintext on the server so pre auth pages can display them without d..." |
+* | "The organization's logo, two brand colors, and the text shown to the visitor on the portal are stored as plaintext on the server so pages visited before sign..." |
 *
 * @param {Demo_Narrative_Admin_Branding_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

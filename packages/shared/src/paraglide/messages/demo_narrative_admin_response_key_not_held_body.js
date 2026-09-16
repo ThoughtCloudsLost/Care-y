@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs */
 
 const en_demo_narrative_admin_response_key_not_held_body = /** @type {(inputs: Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`An unreadable response row shows what a user sees when an intake response was encrypted under a key they do not hold. The card displays the submission date, but the field values stay encrypted.
-**Why it happens.** When the first user opens a ticket created from an intake form, the system distributes the decryption key to every active user who has a published key and belongs to either the destination queue or holds the intake response viewing permission. A user outside that set at conversion time cannot decrypt the response fields because they never received a copy of the key.
-**Same pattern as tickets.** When a user does not hold a ticket's content key, its title shows as ciphertext rather than hiding the ticket entirely, and the same deliberate choice applies to intake responses.`)
+	return /** @type {LocalizedString} */ (`When a response was encrypted under a key the user does not hold, the response row shows the submission time but not the field values, so the user can see that a response exists without being able to read it.
+**How it works.** When the first user opens a ticket created from an intake form, the system distributes the decryption key to every active user who has a published key and belongs to either the destination queue or holds the View intake responses permission. A user outside that set at conversion time has no copy of the key and cannot decrypt the response fields.
+**If it fails.** A separate state appears when key material exists for the user but decryption did not succeed, and there may be nothing the user can do about either state. Each carries its own glyph and explanation so the user can tell which situation applies.`)
 };
 
 const es_demo_narrative_admin_response_key_not_held_body = /** @type {(inputs: Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una fila de respuesta ilegible muestra lo que ve un usuario cuando una respuesta de admisión fue cifrada con una clave que no posee. La tarjeta muestra la fecha de envío, pero los valores de los campos permanecen cifrados.
-**Por qué sucede.** Cuando el primer usuario abre un ticket creado a partir de un formulario de admisión, el sistema distribuye la clave de descifrado a todos los usuarios activos que tienen una clave publicada y pertenecen a la cola de destino o poseen el permiso de visualización de respuestas de admisión. Un usuario fuera de ese conjunto en el momento de la conversión no puede descifrar los campos de la respuesta porque nunca recibió una copia de la clave.
-**Mismo patrón que los tickets.** Cuando un usuario no posee la clave de contenido de un ticket, su título aparece como texto cifrado en lugar de ocultar el ticket por completo, y la misma decisión deliberada se aplica a las respuestas de admisión.`)
+	return /** @type {LocalizedString} */ (`Cuando una respuesta fue cifrada con una clave que la persona usuaria no posee, la fila de respuesta muestra la fecha de envío pero no los valores de los campos, de modo que se puede ver que existe una respuesta sin poder leerla.
+**Cómo funciona.** Cuando la primera persona abre un ticket creado a partir de un formulario de admisión, el sistema distribuye la clave de descifrado a todas las personas activas que tienen una clave publicada y pertenecen a la cola de destino o poseen el permiso Leer respuestas de ingreso de todas las colas. Una persona fuera de ese conjunto en el momento de la conversión no tiene copia de la clave y no puede descifrar los campos de la respuesta.
+**Si falla.** Un estado distinto aparece cuando existe material de clave para la persona usuaria pero el descifrado no tuvo éxito, y puede que no haya nada que hacer ante ninguno de los dos estados. Cada uno lleva su propio glifo y explicación para que la persona usuaria pueda distinguir cuál aplica.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "An unreadable response row shows what a user sees when an intake response was encrypted under a key they do not hold. The card displays the submission date, ..." |
+* | "When a response was encrypted under a key the user does not hold, the response row shows the submission time but not the field values, so the user can see th..." |
 *
 * @param {Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

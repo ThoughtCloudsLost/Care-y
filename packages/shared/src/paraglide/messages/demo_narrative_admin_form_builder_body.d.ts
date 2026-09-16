@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The field list shows every field on the form in order, with page breaks appearing as separator rows between the fields they divide. **Removing.** Removing a ..." |
+* | "The form editor saves as a whole, so changes to fields accumulate until the user saves the form. **Removing.** Removing a field is immediate and has no confi..." |
 *
 * @param {Demo_Narrative_Admin_Form_Builder_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

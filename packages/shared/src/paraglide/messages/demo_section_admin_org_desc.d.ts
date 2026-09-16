@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The organization page holds settings that shape the whole workspace. General info and branding are stored without encryption so they can appear on pages the ..." |
+* | "These entries cover settings that shape the whole workspace rather than any one ticket or person. General info and branding are stored without encryption so ..." |
 *
 * @param {Demo_Section_Admin_Org_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

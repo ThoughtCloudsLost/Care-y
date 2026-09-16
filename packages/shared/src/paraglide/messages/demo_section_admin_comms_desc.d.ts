@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The communications page configures how the organization reaches clients by phone, text, and email." |
+* | "These entries configure the external channels the organization uses to communicate with clients, and the channel policy entry determines which of those chann..." |
 *
 * @param {Demo_Section_Admin_Comms_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

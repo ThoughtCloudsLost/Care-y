@@ -6,23 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Response_Export_BodyInputs */
 
 const en_demo_narrative_admin_response_export_body = /** @type {(inputs: Demo_Narrative_Admin_Response_Export_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The export button at the top of the response viewer opens a dialog for downloading the responses as a CSV file.
-**What is included.** The CSV contains every response the volunteer's browser was able to decrypt. Responses with a key not held or decryption failure status are skipped, and the dialog shows how many rows will be included versus how many will be left out.
-**Where decryption happens.** The CSV is assembled entirely in the browser from data that has already been decrypted. No plaintext leaves the device during export. The server is not involved beyond having delivered the encrypted response data when the viewer first loaded.
-**Audit.** Exporting logs an audit event with the form identifier and the count of exported rows. The event appears in the audit log so the organization has a record of when response data was downloaded.`)
+	return /** @type {LocalizedString} */ (`The export button opens a dialog for downloading the current form's responses as a CSV file. The CSV is assembled entirely in the browser from responses that have already been decrypted, and no plaintext leaves the device during the export. Responses that could not be decrypted are skipped rather than exported blank, and the dialog names both the number of rows that will be included and the number that will be left out.
+**Security tradeoff.** The dialog warns that the exported file contains personally identifiable information in plaintext. Everything the system does to keep answers encrypted ends at the moment someone exports them, and the export button is disabled while any response is still decrypting so a partial export cannot happen by accident.
+**Audit.** An audit event recording the form identifier and the count of exported rows is written before the file is offered. The record is best effort and does not block the download, so the audit log is a record of the export rather than a gate on it.`)
 };
 
 const es_demo_narrative_admin_response_export_body = /** @type {(inputs: Demo_Narrative_Admin_Response_Export_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El botón de exportar en la parte superior del visor de respuestas abre un diálogo para descargar las respuestas como un archivo CSV.
-**Qué se incluye.** El CSV contiene todas las respuestas que el navegador del voluntario pudo descifrar. Las respuestas con estado de clave no disponible o fallo de descifrado se omiten, y el diálogo muestra cuántas filas se incluirán frente a cuántas se dejarán fuera.
-**Dónde ocurre el descifrado.** El CSV se ensambla completamente en el navegador a partir de datos ya descifrados. Ningún texto plano sale del dispositivo durante la exportación. El servidor no participa más allá de haber entregado los datos de respuesta cifrados cuando el visor se cargó inicialmente.
-**Auditoría.** Exportar registra un evento de auditoría con el identificador del formulario y el conteo de filas exportadas. El evento aparece en el registro de auditoría para que la organización tenga un registro de cuándo se descargaron datos de respuestas.`)
+	return /** @type {LocalizedString} */ (`El botón de exportar abre un diálogo para descargar las respuestas del formulario actual como archivo CSV. El CSV se ensambla completamente en el navegador a partir de respuestas que ya fueron descifradas, y ningún texto plano sale del dispositivo durante la exportación. Las respuestas que no pudieron descifrarse se omiten en lugar de exportarse en blanco, y el diálogo indica tanto el número de filas que se incluirán como el número que se dejará fuera.
+**Compromiso de seguridad.** El diálogo advierte que el archivo exportado contiene información personal identificable en texto plano. Todo lo que el sistema hace para mantener las respuestas cifradas termina en el momento en que alguien las exporta, y el botón de exportar se deshabilita mientras alguna respuesta aún se está descifrando para que una exportación parcial no pueda ocurrir por accidente.
+**Auditoría.** Se registra un evento de auditoría con el identificador del formulario y el conteo de filas exportadas antes de ofrecer el archivo. El registro es de mejor esfuerzo y no bloquea la descarga, de modo que el registro de auditoría es constancia de la exportación, no una condición para ella.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The export button at the top of the response viewer opens a dialog for downloading the responses as a CSV file. **What is included.** The CSV contains every ..." |
+* | "The export button opens a dialog for downloading the current form's responses as a CSV file. The CSV is assembled entirely in the browser from responses that..." |
 *
 * @param {Demo_Narrative_Admin_Response_Export_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

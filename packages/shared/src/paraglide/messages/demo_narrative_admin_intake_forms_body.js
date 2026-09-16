@@ -6,23 +6,23 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Intake_Forms_BodyInputs */
 
 const en_demo_narrative_admin_intake_forms_body = /** @type {(inputs: Demo_Narrative_Admin_Intake_Forms_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The intake forms section on the organization settings page lists every intake form the organization has created.
-**Status.** Each row shows whether the form is active (accepting submissions) or a draft (not yet published). A new form starts as a draft and becomes visible to the public intake page only after an administrator publishes it. Published forms can be deactivated to stop accepting submissions without deleting the form.
-**Queue.** The row also shows which queue the form feeds. Tickets created through a form land in that queue automatically.
-**Opening the editor.** Tapping a form row opens the form builder with that form's fields loaded.`)
+	return /** @type {LocalizedString} */ (`The intake forms section lists every form the organization has created. Web intake can be switched on or off for the whole organization, and when it is on and no custom form is marked as default, a default form appears so intake always has something to serve.
+**Permissions.** The Manage intake forms permission is a manager default, and the View intake responses permission is an administrator default. The two are independent and either can be granted to the other role, so a user who builds and publishes a form cannot read any responses to it unless the organization also grants the View intake responses permission.
+**Encryption.** Form definitions are encrypted under a key derived from the organization's public key, so the intake page reads a form without an account while a database dump stays opaque. Duplicate produces a new encrypted copy with fresh field keys and a cleared slug so the copy cannot collide on a public URL.
+**Lifecycle.** Creating a form does not publish it. A created form stays unreachable until it is activated, and deactivating it later stops submissions without deleting the form or its responses.`)
 };
 
 const es_demo_narrative_admin_intake_forms_body = /** @type {(inputs: Demo_Narrative_Admin_Intake_Forms_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La sección de formularios de admisión en la página de configuración de la organización lista todos los formularios de admisión que la organización ha creado.
-**Estado.** Cada fila muestra si el formulario está activo (aceptando envíos) o es un borrador (aún no publicado). Un formulario nuevo comienza como borrador y se vuelve visible en la página pública de admisión solo cuando un administrador lo publica. Los formularios publicados pueden desactivarse para dejar de aceptar envíos sin eliminar el formulario.
-**Cola.** La fila también muestra qué cola alimenta el formulario. Los tickets creados a través de un formulario llegan a esa cola automáticamente.
-**Abrir el editor.** Tocar una fila de formulario abre el constructor de formularios con los campos de ese formulario cargados.`)
+	return /** @type {LocalizedString} */ (`La sección de formularios de admisión lista todos los formularios que la organización ha creado. La admisión web se puede activar o desactivar para toda la organización, y cuando está activa y ningún formulario personalizado está marcado como predeterminado, aparece un formulario predeterminado para que la admisión siempre tenga algo que servir.
+**Permisos.** El permiso Crear formularios de ingreso públicos es un valor predeterminado de gestor, y el permiso Leer respuestas de ingreso de todas las colas es un valor predeterminado de administrador. Los dos son independientes y cualquiera puede otorgarse al otro rol, de modo que una persona que construye y publica un formulario no puede leer ninguna de sus respuestas a menos que la organización también le otorgue el permiso Leer respuestas de ingreso de todas las colas.
+**Cifrado.** Las definiciones de formulario se cifran con una clave derivada de la clave pública de la organización, de modo que la página de admisión lee un formulario sin cuenta mientras que un volcado de base de datos permanece opaco. Duplicar produce una nueva copia cifrada con claves de campo nuevas y un slug vacío para que la copia no colisione en una URL pública.
+**Ciclo de vida.** Crear un formulario no lo publica. Un formulario creado permanece inaccesible hasta que se activa, y desactivarlo después detiene los envíos sin eliminar el formulario ni sus respuestas.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The intake forms section on the organization settings page lists every intake form the organization has created. **Status.** Each row shows whether the form ..." |
+* | "The intake forms section lists every form the organization has created. Web intake can be switched on or off for the whole organization, and when it is on an..." |
 *
 * @param {Demo_Narrative_Admin_Intake_Forms_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

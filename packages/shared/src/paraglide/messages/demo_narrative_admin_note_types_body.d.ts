@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Administrators create and configure the note types that volunteers use when writing internal notes on tickets. **Configuration.** Each note type has a name, ..." |
+* | "The note types section holds two groups. The first is the configurable types the organization defines, each carrying a name, icon, and optional description e..." |
 *
 * @param {Demo_Narrative_Admin_Note_Types_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

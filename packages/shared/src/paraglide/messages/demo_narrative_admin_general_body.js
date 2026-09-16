@@ -6,17 +6,23 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_General_BodyInputs */
 
 const en_demo_narrative_admin_general_body = /** @type {(inputs: Demo_Narrative_Admin_General_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The organization name, country, and default interface language are configured here. These values are stored as plaintext because they appear on pre auth pages and do not contain sensitive content.`)
+	return /** @type {LocalizedString} */ (`The general info section holds the organization name, country code, default interface language, and portal safe exit URL, and all four are stored as plaintext.
+**Safe exit URL.** The server validates the URL scheme on read as well as on write, because the value becomes the destination of a navigation that replaces the page on the client quick exit path. A stored value that fails validation falls back to the client default.
+**Persistence.** Changing the organization name also updates the branding display name so the two stay consistent.
+**Permissions.** Editing general info requires the Manage organization identity permission.`)
 };
 
 const es_demo_narrative_admin_general_body = /** @type {(inputs: Demo_Narrative_Admin_General_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El nombre de la organización, el país y el idioma predeterminado de la interfaz se configuran aquí. Estos valores se almacenan en texto plano porque aparecen en páginas previas a la autenticación y no contienen contenido sensible.`)
+	return /** @type {LocalizedString} */ (`La sección de información general contiene el nombre de la organización, el código de país, el idioma predeterminado de la interfaz y la URL de salida rápida del portal, y los cuatro valores se almacenan en texto plano.
+**URL de salida rápida.** El servidor valida el esquema de la URL tanto al leerla como al escribirla, porque el valor se convierte en el destino de una navegación que reemplaza la página en la ruta de salida rápida del cliente. Un valor almacenado que no pasa la validación se sustituye por el destino predeterminado del cliente.
+**Persistencia.** Cambiar el nombre de la organización también actualiza el nombre visible en la marca para que ambos se mantengan coherentes.
+**Permisos.** Editar la información general requiere el permiso Cambiar como se presenta la organización.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The organization name, country, and default interface language are configured here. These values are stored as plaintext because they appear on pre auth page..." |
+* | "The general info section holds the organization name, country code, default interface language, and portal safe exit URL, and all four are stored as plaintex..." |
 *
 * @param {Demo_Narrative_Admin_General_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

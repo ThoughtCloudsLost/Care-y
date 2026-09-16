@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The calls tab shows a chronological list of phone calls and voicemail entries across the organization. Each row shows the call direction, the client alias de..." |
+* | "No phone number appears anywhere in the call log. The client alias on each row is decrypted in the browser with the organization key and is the only encrypte..." |
 *
 * @param {Demo_Narrative_Admin_Call_Log_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

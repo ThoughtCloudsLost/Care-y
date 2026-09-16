@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The organization name, country, and default interface language are configured here. These values are stored as plaintext because they appear on pre auth page..." |
+* | "The general info section holds the organization name, country code, default interface language, and portal safe exit URL, and all four are stored as plaintex..." |
 *
 * @param {Demo_Narrative_Admin_General_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

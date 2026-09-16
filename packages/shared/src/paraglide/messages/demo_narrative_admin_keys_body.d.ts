@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The keys section shows the organization key status and provides escrow export. **Escrow.** The escrow flow creates a passphrase protected file (minimum 20 ch..." |
+* | "The keys section reports the organization key status and provides two operations on it. **Escrow.** The escrow file carries its own KDF parameters, salt, non..." |
 *
 * @param {Demo_Narrative_Admin_Keys_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
