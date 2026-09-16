@@ -126,6 +126,7 @@
     POLL_TIMEOUT_STANDARD_MS,
   } from "$demo/poll.js";
   import type { DemoEngineResult } from "$demo/engine/engine.js";
+  import { createDirtyTracker, type DirtyTrackerHandle } from "$demo/dirty-tracker.js";
   import { onOutboxAppend } from "$demo/engine/outbox.js";
   import {
     beginFlowInteraction,
@@ -398,6 +399,13 @@
    * then, so the shell insets that clear them come off too.
    */
   let frameFullscreen = $state(false);
+
+  /**
+   * Whether the phone has unsaved user input. Set by the dirty tracker
+   * (capture-phase input/change listeners); cleared on form submit,
+   * recognized save/send clicks, and route changes.
+   */
+  let simulatorDirty = $state(false);
 
   // -----------------------------------------------------------------------
   // Pathname for RouteMount (derived from router state)
@@ -745,6 +753,40 @@
     return () => {
       document.removeEventListener("click", handleClick, { capture: true });
     };
+  });
+
+  // -----------------------------------------------------------------------
+  // Dirty tracker (unsaved input detection)
+  //
+  // Mounted on the document root in capture phase. Reports dirtiness to
+  // the simulatorDirty flag, which is published in bridge snapshots.
+  // Route changes (any feature/detail/searchOpen transition in the
+  // router) clear dirtiness: navigating away discards unsaved input.
+  // -----------------------------------------------------------------------
+
+  let dirtyHandle: DirtyTrackerHandle | null = null;
+
+  $effect(() => {
+    const handle = createDirtyTracker(document.documentElement, {
+      onChange(dirty: boolean): void {
+        simulatorDirty = dirty;
+      },
+    });
+    dirtyHandle = handle;
+    return () => {
+      handle.destroy();
+      dirtyHandle = null;
+    };
+  });
+
+  // Clear dirtiness on any route change. Reading feature, detail, and
+  // searchOpen together catches every navigation path (tab tap, goto,
+  // navigate, search toggle).
+  $effect(() => {
+    void router.feature;
+    void router.detail;
+    void router.searchOpen;
+    dirtyHandle?.markClean("route-change");
   });
 
   // -----------------------------------------------------------------------
@@ -1110,6 +1152,7 @@
       engineReady: engineReady,
       role: currentRole,
       dark,
+      simulatorDirty,
     };
   }
 

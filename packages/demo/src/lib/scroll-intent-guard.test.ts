@@ -3,6 +3,7 @@ import {
   shouldBackstopUnmute,
   backstopDecision,
   relinkDecision,
+  dirtyGuardDecision,
 } from "./scroll-intent-guard.js";
 
 describe("shouldBackstopUnmute", () => {
@@ -116,5 +117,65 @@ describe("relinkDecision", () => {
 
   it("favors the reader on a same-millisecond tie", () => {
     expect(relinkDecision(5000, 5000)).toBe("push-local");
+  });
+});
+
+describe("dirtyGuardDecision", () => {
+  // -----------------------------------------------------------------
+  // Not dirty: always navigate
+  // -----------------------------------------------------------------
+
+  it("navigates when not dirty", () => {
+    expect(dirtyGuardDecision(false, 0, 10000)).toBe("navigate");
+  });
+
+  it("navigates when not dirty even with a recent suppression", () => {
+    expect(dirtyGuardDecision(false, 9000, 10000)).toBe("navigate");
+  });
+
+  // -----------------------------------------------------------------
+  // Dirty, no prior suppression
+  // -----------------------------------------------------------------
+
+  it("suppresses when dirty and never suppressed (lastSuppressedAt = 0)", () => {
+    expect(dirtyGuardDecision(true, 0, 10000)).toBe("suppress");
+  });
+
+  // -----------------------------------------------------------------
+  // Dirty, within override window
+  // -----------------------------------------------------------------
+
+  it("navigates when dirty and within the override window", () => {
+    // Suppressed 2s ago, override window is 4s
+    expect(dirtyGuardDecision(true, 8000, 10000)).toBe("navigate");
+  });
+
+  it("navigates at exactly the override boundary (now - lastSuppressedAt = overrideMs)", () => {
+    // Boundary: 10000 - 6000 = 4000, which is <= 4000
+    expect(dirtyGuardDecision(true, 6000, 10000)).toBe("navigate");
+  });
+
+  // -----------------------------------------------------------------
+  // Dirty, outside override window
+  // -----------------------------------------------------------------
+
+  it("suppresses when dirty and just past the override window", () => {
+    // 10000 - 5999 = 4001, which is > 4000
+    expect(dirtyGuardDecision(true, 5999, 10000)).toBe("suppress");
+  });
+
+  it("suppresses when dirty and well outside the override window", () => {
+    expect(dirtyGuardDecision(true, 1000, 10000)).toBe("suppress");
+  });
+
+  // -----------------------------------------------------------------
+  // Custom override window
+  // -----------------------------------------------------------------
+
+  it("respects a custom override window", () => {
+    // 10000 - 8000 = 2000, overrideMs = 2000
+    expect(dirtyGuardDecision(true, 8000, 10000, 2000)).toBe("navigate");
+    // 10000 - 7999 = 2001, overrideMs = 2000
+    expect(dirtyGuardDecision(true, 7999, 10000, 2000)).toBe("suppress");
   });
 });

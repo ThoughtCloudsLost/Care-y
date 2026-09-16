@@ -486,6 +486,12 @@ export interface DemoBridgeState {
    * surfaces stay in step.
    */
   readonly dark: boolean;
+  /**
+   * Whether the phone simulator has unsaved user input (dirty form
+   * state). The page-side nav guard reads this to suppress handbook-
+   * originated navigation until the reader taps a second time.
+   */
+  readonly simulatorDirty: boolean;
 }
 
 export type DemoBridgeListener = (state: DemoBridgeState) => void;
