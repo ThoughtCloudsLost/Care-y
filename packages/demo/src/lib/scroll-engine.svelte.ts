@@ -34,7 +34,17 @@ import {
   type SectionId,
 } from "./scroll-sections.js";
 import type { DemoBridge, DemoBridgeState, DemoTopic } from "./bridge.js";
-import { backstopDecision, relinkDecision } from "./scroll-intent-guard.js";
+import {
+  backstopDecision,
+  relinkDecision,
+  readingChipDecision,
+} from "./scroll-intent-guard.js";
+import {
+  offerChip,
+  dismissChip,
+  isFollowSuspended,
+  CHIP_RESUME_MODE,
+} from "./reading-chip.svelte.js";
 import { guardNavigation } from "./nav-guard.svelte.js";
 import {
   readingLineY,
@@ -63,6 +73,11 @@ export interface ScrollEngine {
   initFromHash(): void;
   /** Returns the reading line position (viewport px from the top) */
   remeasure(): number;
+  /**
+   * Scroll the story to the chip's target without commanding the phone.
+   * The phone is already there; only the story catches up.
+   */
+  jumpToChipTarget(sectionId: SectionId, subSlug: string): void;
   /**
    * Scroll the story back to the location it already holds, without
    * involving the phone.
@@ -295,8 +310,16 @@ export function createScrollEngine(
   // while the visitor is scrolling it themselves.
   let lastScrollAt = 0;
 
+  // Reader-claim timestamp for the reading chip. Unlike lastScrollAt,
+  // this ignores scrolls that arrive while suppression is armed: those
+  // are the engine's own alignment scrolls, and counting them would
+  // make every phone-follow look like a reader position claim, offering
+  // a chip on the next move and killing following entirely.
+  let lastReaderScrollAt = 0;
+
   function noteUserScroll(): void {
     lastScrollAt = Date.now();
+    if (!suppressSettle) lastReaderScrollAt = lastScrollAt;
     setViewportScrollY(window.scrollY);
   }
 
@@ -441,6 +464,43 @@ export function createScrollEngine(
       // update the URL hash, but do NOT arm suppression and do NOT
       // scroll the page: corrections must never yank the reader.
       return;
+    }
+
+    // Reading-chip gate: when a phone-originated move arrives and the
+    // reader has a recent reading position, skip the auto-scroll and
+    // offer a one-tap chip instead. Only phone-origin moves are gated:
+    // clicks, deep links, and init transitions must always proceed.
+    // The decision uses lastReaderScrollAt as the local-move signal:
+    // while linked, reader scrolling is tracked there (lastLocalMoveAt
+    // only updates during explicit unlinks), and engine-driven
+    // alignment scrolls are excluded so a follow never claims the
+    // reader's position on their behalf.
+    if (state.origin === "phone") {
+      const now = Date.now();
+      const chipDecision = readingChipDecision(
+        now,
+        lastReaderScrollAt,
+        now, // the phone just moved
+        CHIP_RESUME_MODE,
+        isFollowSuspended(),
+      );
+      if (chipDecision === "offer-chip") {
+        const sub =
+          state.location.subSlug ??
+          getSection(state.location.sectionId)?.subs[0]?.slug;
+        if (sub !== undefined) {
+          offerChip({
+            sectionId: state.location.sectionId,
+            subSlug: sub,
+          });
+        }
+        // The mirror is already updated (line above), so the URL hash
+        // and progress tracking are current. Only the visual scroll is
+        // suppressed: the story stays where the reader left it.
+        return;
+      }
+      // Decision is "follow": clear any stale chip and proceed.
+      dismissChip();
     }
 
     // Every programmatic transition arms suppression with the target
@@ -720,6 +780,27 @@ export function createScrollEngine(
     return readingLineY();
   }
 
+  /**
+   * Scroll the story to a chip-jump target without commanding the
+   * phone. The phone is already at this location (it moved there and
+   * the chip intercepted the auto-scroll). Uses "page-click" origin so
+   * the scroll-grace gate does not skip it, and the dirty guard is not
+   * involved (the phone owns no form state that this scroll touches).
+   */
+  function jumpToChipTarget(sectionId: SectionId, subSlug: string): void {
+    armSuppression({
+      section: sectionId,
+      sub: subSlug,
+    });
+
+    const sectionChanged = sectionId !== activeSection;
+    if (sectionChanged) {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+
+    void alignToLocation(sectionId, subSlug, "page-click");
+  }
+
   function realign(): void {
     const sectionId = activeSection;
     const subSlug = activeSub;
@@ -777,6 +858,7 @@ export function createScrollEngine(
     selectSub,
     handleBridgeState,
     initFromHash,
+    jumpToChipTarget,
     remeasure,
     realign,
     suppressLayoutShift,

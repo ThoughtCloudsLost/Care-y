@@ -4,6 +4,7 @@ import {
   backstopDecision,
   relinkDecision,
   dirtyGuardDecision,
+  readingChipDecision,
 } from "./scroll-intent-guard.js";
 
 describe("shouldBackstopUnmute", () => {
@@ -177,5 +178,147 @@ describe("dirtyGuardDecision", () => {
     expect(dirtyGuardDecision(true, 8000, 10000, 2000)).toBe("navigate");
     // 10000 - 7999 = 2001, overrideMs = 2000
     expect(dirtyGuardDecision(true, 7999, 10000, 2000)).toBe("suppress");
+  });
+});
+
+describe("readingChipDecision", () => {
+  const DEFAULTS = { recentLocalMs: 8000, dwellMs: 15000 };
+
+  // -----------------------------------------------------------------
+  // Rule 1: reader never scrolled (lastLocalMoveAt = 0)
+  // -----------------------------------------------------------------
+
+  it("follows when the reader never scrolled (dwell mode)", () => {
+    expect(readingChipDecision(10000, 0, 10000, "dwell", false, DEFAULTS)).toBe(
+      "follow",
+    );
+  });
+
+  it("follows when the reader never scrolled (second-tap mode)", () => {
+    expect(
+      readingChipDecision(10000, 0, 10000, "second-tap", false, DEFAULTS),
+    ).toBe("follow");
+  });
+
+  // -----------------------------------------------------------------
+  // Rule 2: reader scrolled within recentLocalMs
+  // -----------------------------------------------------------------
+
+  it("offers chip when reader scrolled 1ms ago (dwell mode)", () => {
+    expect(
+      readingChipDecision(10000, 9999, 10000, "dwell", false, DEFAULTS),
+    ).toBe("offer-chip");
+  });
+
+  it("offers chip when reader scrolled exactly at recentLocalMs boundary", () => {
+    // now - lastLocalMoveAt = 8000 = recentLocalMs (within boundary)
+    expect(
+      readingChipDecision(10000, 2000, 10000, "dwell", false, DEFAULTS),
+    ).toBe("offer-chip");
+  });
+
+  it("offers chip in second-tap mode when reader scrolled recently", () => {
+    expect(
+      readingChipDecision(10000, 9000, 10000, "second-tap", false, DEFAULTS),
+    ).toBe("offer-chip");
+  });
+
+  // -----------------------------------------------------------------
+  // Rule 3: dwell mode between recentLocalMs and dwellMs
+  // -----------------------------------------------------------------
+
+  it("offers chip during the dwell window (between recentLocalMs and dwellMs)", () => {
+    // now - lastLocalMoveAt = 10000: past recentLocalMs(8000), within dwellMs(15000)
+    expect(
+      readingChipDecision(20000, 10000, 20000, "dwell", false, DEFAULTS),
+    ).toBe("offer-chip");
+  });
+
+  it("offers chip at exactly the dwellMs boundary", () => {
+    // now - lastLocalMoveAt = 15000 = dwellMs (within boundary)
+    expect(
+      readingChipDecision(25000, 10000, 25000, "dwell", false, DEFAULTS),
+    ).toBe("offer-chip");
+  });
+
+  it("follows after dwell expires (just past dwellMs)", () => {
+    // now - lastLocalMoveAt = 15001 > dwellMs(15000)
+    expect(
+      readingChipDecision(25001, 10000, 25001, "dwell", false, DEFAULTS),
+    ).toBe("follow");
+  });
+
+  it("follows in second-tap mode when past recentLocalMs and not suspended", () => {
+    // now - lastLocalMoveAt = 10000 > recentLocalMs(8000), no dwell window
+    expect(
+      readingChipDecision(20000, 10000, 20000, "second-tap", false, DEFAULTS),
+    ).toBe("follow");
+  });
+
+  // -----------------------------------------------------------------
+  // Rule 4: followSuspended in second-tap mode
+  // -----------------------------------------------------------------
+
+  it("offers chip when followSuspended is true in second-tap mode", () => {
+    // Even though the reader never scrolled (lastLocalMoveAt = 0),
+    // the suspension flag forces the chip.
+    expect(
+      readingChipDecision(10000, 0, 10000, "second-tap", true, DEFAULTS),
+    ).toBe("offer-chip");
+  });
+
+  it("offers chip when followSuspended is true and well past dwellMs", () => {
+    expect(
+      readingChipDecision(100000, 10000, 100000, "second-tap", true, DEFAULTS),
+    ).toBe("offer-chip");
+  });
+
+  it("ignores followSuspended in dwell mode", () => {
+    // followSuspended = true but in dwell mode, so it falls through to
+    // timestamp rules. lastLocalMoveAt = 0 means no claim.
+    expect(readingChipDecision(10000, 0, 10000, "dwell", true, DEFAULTS)).toBe(
+      "follow",
+    );
+  });
+
+  // -----------------------------------------------------------------
+  // lastPhoneMoveAt is currently not used in the decision (it signals
+  // freshness via the caller passing Date.now()), but the parameter
+  // is accepted for interface consistency.
+  // -----------------------------------------------------------------
+
+  it("treats lastPhoneMoveAt as a pass-through (does not affect decision)", () => {
+    // Same inputs, different lastPhoneMoveAt values
+    const a = readingChipDecision(10000, 9000, 5000, "dwell", false, DEFAULTS);
+    const b = readingChipDecision(10000, 9000, 10000, "dwell", false, DEFAULTS);
+    expect(a).toBe(b);
+  });
+
+  // -----------------------------------------------------------------
+  // Custom opts
+  // -----------------------------------------------------------------
+
+  it("respects custom recentLocalMs", () => {
+    const opts = { recentLocalMs: 3000, dwellMs: 10000 };
+    // now - lastLocalMoveAt = 3000 = recentLocalMs
+    expect(readingChipDecision(13000, 10000, 13000, "dwell", false, opts)).toBe(
+      "offer-chip",
+    );
+    // now - lastLocalMoveAt = 3001 > recentLocalMs, within dwellMs
+    expect(readingChipDecision(13001, 10000, 13001, "dwell", false, opts)).toBe(
+      "offer-chip",
+    );
+  });
+
+  it("respects custom dwellMs", () => {
+    const opts = { recentLocalMs: 3000, dwellMs: 5000 };
+    // now - lastLocalMoveAt = 5000 = dwellMs (boundary)
+    expect(readingChipDecision(15000, 10000, 15000, "dwell", false, opts)).toBe(
+      "offer-chip",
+    );
+    // now - lastLocalMoveAt = 5001 > dwellMs
+    expect(readingChipDecision(15001, 10000, 15001, "dwell", false, opts)).toBe(
+      "follow",
+    );
   });
 });
