@@ -15,7 +15,13 @@
     Link2Off,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { SECTIONS, type Section, type SectionId } from "./scroll-sections.js";
+  import {
+    SECTIONS,
+    getSection,
+    getSub,
+    type Section,
+    type SectionId,
+  } from "./scroll-sections.js";
   import { DRAWER_DEFAULT_W } from "./fullscreen.svelte.js";
   import { chromeFade } from "./chrome-fade.js";
   import {
@@ -29,6 +35,7 @@
   import { guideProgress } from "./guide-progress.svelte.js";
   import { openGuide, openAggregation } from "./excursion.svelte.js";
   import { PAGES, type AggregationPageId } from "./aggregation-pages.js";
+  import { searchHandbook, type SearchHit } from "./handbook-search.js";
 
   interface Props {
     /** null on the entry page, where no section is being shown yet. */
@@ -56,6 +63,8 @@
     exiting?: boolean;
     seenTopics: ReadonlySet<DemoTopic>;
     onSectionClick: (id: SectionId) => void;
+    /** Navigate to a specific sub-section (used by contents-panel search). */
+    onSubClick?: (sectionId: SectionId, subSlug: string) => void;
     onToggleDark: () => void;
     onRestart: () => void;
     onLocaleChange: () => void;
@@ -79,6 +88,7 @@
     exiting = false,
     seenTopics,
     onSectionClick,
+    onSubClick,
     onToggleDark,
     onRestart,
     onLocaleChange,
@@ -199,11 +209,14 @@
     return () => window.removeEventListener("keydown", onKeydown);
   });
 
-  // ArrowUp/Down roving focus within a menu panel
+  // ArrowUp/Down roving focus within a menu panel.
+  // When focus is in an input (the search field), let the input handle
+  // its own keyboard events so the roving logic does not fight it.
   function handleMenuKeydown(
     e: KeyboardEvent,
     panelRef: HTMLDivElement | undefined,
   ): void {
+    if (e.target instanceof HTMLInputElement) return;
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
     if (panelRef === undefined) return;
@@ -319,6 +332,115 @@
   const forceTight: boolean = $derived(
     layoutWidth !== null && layoutWidth < DRAWER_DEFAULT_W,
   );
+
+  // -----------------------------------------------------------------------
+  // Contents-panel search
+  // -----------------------------------------------------------------------
+
+  let contentsQuery = $state("");
+  let contentsDebouncedQuery = $state("");
+  let contentsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  $effect(() => {
+    const q = contentsQuery;
+    if (contentsDebounceTimer !== null) clearTimeout(contentsDebounceTimer);
+    contentsDebounceTimer = setTimeout(() => {
+      contentsDebouncedQuery = q;
+    }, 150);
+    return () => {
+      if (contentsDebounceTimer !== null) clearTimeout(contentsDebounceTimer);
+    };
+  });
+
+  const contentsSearchResults: readonly SearchHit[] = $derived(
+    contentsDebouncedQuery.trim().length > 0
+      ? searchHandbook(contentsDebouncedQuery, locale)
+      : [],
+  );
+
+  const contentsSearchActive: boolean = $derived(
+    contentsQuery.trim().length > 0,
+  );
+
+  let contentsSearchIdx = $state(-1);
+
+  // Reset active index when results change
+  $effect(() => {
+    void contentsSearchResults;
+    contentsSearchIdx = -1;
+  });
+
+  // Clear search when the panel closes
+  $effect(() => {
+    if (openMenu !== "contents") {
+      contentsQuery = "";
+      contentsDebouncedQuery = "";
+    }
+  });
+
+  function contentsSearchBreadcrumb(hit: SearchHit): string {
+    const section = getSection(hit.sectionId);
+    const sectionTitle =
+      section !== undefined
+        ? resolveStoryMessage(section.titleKey, locale)
+        : hit.sectionId;
+
+    if (hit.subSlug === null) return sectionTitle;
+
+    const subLookup = getSub(hit.sectionId, hit.subSlug);
+    const subHeading =
+      subLookup !== undefined
+        ? resolveStoryMessage(subLookup.sub.headingKey, locale)
+        : hit.subSlug;
+
+    return `${sectionTitle} › ${subHeading}`;
+  }
+
+  function activateSearchHit(hit: SearchHit): void {
+    if (hit.subSlug !== null && onSubClick !== undefined) {
+      onSubClick(hit.sectionId as SectionId, hit.subSlug);
+    } else {
+      onSectionClick(hit.sectionId as SectionId);
+    }
+    closeMenus();
+  }
+
+  function handleContentsSearchKeydown(e: KeyboardEvent): void {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (contentsSearchResults.length > 0) {
+        contentsSearchIdx =
+          contentsSearchIdx < contentsSearchResults.length - 1
+            ? contentsSearchIdx + 1
+            : 0;
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (contentsSearchResults.length > 0) {
+        contentsSearchIdx =
+          contentsSearchIdx > 0
+            ? contentsSearchIdx - 1
+            : contentsSearchResults.length - 1;
+      }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (
+        contentsSearchIdx >= 0 &&
+        contentsSearchIdx < contentsSearchResults.length
+      ) {
+        const hit = contentsSearchResults[contentsSearchIdx];
+        if (hit !== undefined) activateSearchHit(hit);
+      }
+    } else if (e.key === "Escape") {
+      if (contentsQuery.length > 0) {
+        contentsQuery = "";
+        contentsDebouncedQuery = "";
+      } else {
+        closeMenus();
+        contentsTriggerRef?.focus();
+      }
+    }
+  }
 </script>
 
 <header
@@ -405,77 +527,124 @@
           bind:this={contentsPanelRef}
           onkeydown={(e) => handleMenuKeydown(e, contentsPanelRef)}
         >
-          <div class="contents-header">
-            {m.demo_progress_explored({
-              seen: String(seen),
-              total: String(total),
-            })}
+          <div class="contents-search-box">
+            <input
+              class="contents-search-input"
+              type="search"
+              placeholder={m.demo_handbook_search_placeholder()}
+              bind:value={contentsQuery}
+              onkeydown={handleContentsSearchKeydown}
+              aria-label={m.demo_handbook_search_placeholder()}
+            />
           </div>
-          {#each SECTIONS as section, i (section.id)}
-            {@const state = deriveSectionState(section, seenTopics)}
-            <button
-              class="contents-item"
-              class:contents-item-active={activeSection === section.id}
-              role="menuitemradio"
-              aria-checked={activeSection === section.id}
-              type="button"
-              onclick={() => selectSection(section.id)}
-            >
-              <span class="contents-index">{i + 1}</span>
-              <span class="contents-item-label">
-                {sectionLabel(section.titleKey)}
-              </span>
-              <span class="contents-count">
-                {#if state.complete}
-                  <Check size={12} class="contents-check" />
-                {:else if state.topicCount > 0}
-                  {state.seenCount}/{state.topicCount}
-                {/if}
-              </span>
-            </button>
-          {/each}
-          {#if visibleGuides.length > 0}
-            <div class="contents-header contents-header-guides">
-              {m.demo_guides_menu_label()}
+          {#if contentsSearchActive}
+            <div class="contents-search-status" aria-live="polite">
+              {#if contentsSearchResults.length > 0}
+                {m.demo_handbook_search_result_count({
+                  count: String(contentsSearchResults.length),
+                })}
+              {:else if contentsDebouncedQuery.trim().length > 0}
+                {m.demo_handbook_search_no_results()}
+              {/if}
             </div>
-            {#each visibleGuides as guide (guide.slug)}
-              {@const gp = guideProgress(guide.slug)}
+            {#each contentsSearchResults as hit, i (hit.key + "#" + hit.lineIdx)}
               <button
                 class="contents-item"
-                role="menuitem"
+                class:contents-item-active={i === contentsSearchIdx}
+                role="option"
+                aria-selected={i === contentsSearchIdx}
                 type="button"
-                onclick={() => selectGuide(guide.slug)}
+                disabled={hit.subSlug === null}
+                onclick={() => activateSearchHit(hit)}
               >
                 <span class="contents-item-label">
-                  {guideTitle(guide.titleKey)}
-                </span>
-                {#if gp.done > 0}
-                  <span class="contents-count">
-                    {m.demo_guide_progress({
-                      done: String(gp.done),
-                      total: String(gp.total),
-                    })}
+                  <span class="contents-search-breadcrumb"
+                    >{contentsSearchBreadcrumb(hit)}</span
+                  >
+                  {#if hit.label !== null}
+                    <span class="contents-search-label">{hit.label}</span>
+                  {/if}
+                  <span class="contents-search-snippet">
+                    <span>{hit.snippet.before}</span>
+                    <strong>{hit.snippet.match}</strong>
+                    <span>{hit.snippet.after}</span>
                   </span>
-                {/if}
-              </button>
-            {/each}
-          {/if}
-          {#if visibleAggPages.length > 0}
-            <div class="contents-header contents-header-guides">
-              {m.demo_agg_menu_label()}
-            </div>
-            {#each visibleAggPages as aggPage (aggPage.id)}
-              <button
-                class="contents-item"
-                role="menuitem"
-                type="button"
-                onclick={() => selectAggPage(aggPage.id)}
-              >
-                <span class="contents-item-label">
-                  {aggPageTitle(aggPage.titleKey)}
                 </span>
               </button>
             {/each}
+          {:else}
+            <div class="contents-header">
+              {m.demo_progress_explored({
+                seen: String(seen),
+                total: String(total),
+              })}
+            </div>
+            {#each SECTIONS as section, i (section.id)}
+              {@const state = deriveSectionState(section, seenTopics)}
+              <button
+                class="contents-item"
+                class:contents-item-active={activeSection === section.id}
+                role="menuitemradio"
+                aria-checked={activeSection === section.id}
+                type="button"
+                onclick={() => selectSection(section.id)}
+              >
+                <span class="contents-index">{i + 1}</span>
+                <span class="contents-item-label">
+                  {sectionLabel(section.titleKey)}
+                </span>
+                <span class="contents-count">
+                  {#if state.complete}
+                    <Check size={12} class="contents-check" />
+                  {:else if state.topicCount > 0}
+                    {state.seenCount}/{state.topicCount}
+                  {/if}
+                </span>
+              </button>
+            {/each}
+            {#if visibleGuides.length > 0}
+              <div class="contents-header contents-header-guides">
+                {m.demo_guides_menu_label()}
+              </div>
+              {#each visibleGuides as guide (guide.slug)}
+                {@const gp = guideProgress(guide.slug)}
+                <button
+                  class="contents-item"
+                  role="menuitem"
+                  type="button"
+                  onclick={() => selectGuide(guide.slug)}
+                >
+                  <span class="contents-item-label">
+                    {guideTitle(guide.titleKey)}
+                  </span>
+                  {#if gp.done > 0}
+                    <span class="contents-count">
+                      {m.demo_guide_progress({
+                        done: String(gp.done),
+                        total: String(gp.total),
+                      })}
+                    </span>
+                  {/if}
+                </button>
+              {/each}
+            {/if}
+            {#if visibleAggPages.length > 0}
+              <div class="contents-header contents-header-guides">
+                {m.demo_agg_menu_label()}
+              </div>
+              {#each visibleAggPages as aggPage (aggPage.id)}
+                <button
+                  class="contents-item"
+                  role="menuitem"
+                  type="button"
+                  onclick={() => selectAggPage(aggPage.id)}
+                >
+                  <span class="contents-item-label">
+                    {aggPageTitle(aggPage.titleKey)}
+                  </span>
+                </button>
+              {/each}
+            {/if}
           {/if}
         </div>
       {/if}
@@ -907,6 +1076,61 @@
 
   .contents-count :global(.contents-check) {
     color: var(--meter-strong);
+  }
+
+  /* -----------------------------------------------------------------------
+     Contents-panel search
+     ----------------------------------------------------------------------- */
+
+  .contents-search-box {
+    padding: 0.5rem 0.625rem;
+    border-bottom: 1px solid var(--hair);
+  }
+
+  .contents-search-input {
+    width: 100%;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--hair-2, #ccc);
+    border-radius: 6px;
+    background: var(--raised, #fafafa);
+    font-size: var(--text-sm, 0.8125rem);
+    color: var(--ink, #1a1a1a);
+    outline: none;
+  }
+
+  .contents-search-input:focus {
+    border-color: var(--demo-accent, #0066cc);
+  }
+
+  .contents-search-input::placeholder {
+    color: var(--muted, #888);
+  }
+
+  .contents-search-status {
+    padding: 0.375rem 0.8125rem 0.25rem;
+    font-size: 0.6875rem;
+    color: var(--muted, #888);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .contents-search-breadcrumb {
+    display: block;
+    font-size: 0.6875rem;
+    color: var(--muted, #888);
+  }
+
+  .contents-search-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--ink, #1a1a1a);
+  }
+
+  .contents-search-snippet {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--ink-2, #444);
+    overflow-wrap: break-word;
   }
 
   /* -----------------------------------------------------------------------

@@ -24,7 +24,8 @@ export type AggSection =
       readonly refs: readonly string[];
     }
   | { readonly kind: "prose"; readonly key: string }
-  | { readonly kind: "matrix" };
+  | { readonly kind: "matrix" }
+  | { readonly kind: "search" };
 
 export interface AggPageDef {
   readonly id: AggregationPageId;
@@ -167,6 +168,7 @@ const PAGES: readonly AggPageDef[] = [
     titleKey: "demo_agg_searching_title",
     introKey: "demo_agg_searching_intro",
     sections: [
+      { kind: "search" },
       {
         kind: "stretches",
         refs: [

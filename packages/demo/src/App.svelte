@@ -2155,6 +2155,7 @@
           mode={demoMode.mode}
           {seenTopics}
           onSectionClick={handleSectionClick}
+          onSubClick={handleSubClick}
           onToggleDark={handleToggleDark}
           onRestart={handleRestart}
           onLocaleChange={handleLocaleChange}
@@ -2621,6 +2622,7 @@
           mode={demoMode.mode}
           {seenTopics}
           onSectionClick={handleSectionClick}
+          onSubClick={handleSubClick}
           onToggleDark={handleToggleDark}
           onRestart={handleRestart}
           onLocaleChange={handleLocaleChange}

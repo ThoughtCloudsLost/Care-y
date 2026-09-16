@@ -62,4 +62,13 @@ describe("aggregation-pages", () => {
       expect(found).toBe(page);
     }
   });
+
+  it("searching contains exactly one search section", () => {
+    const searching = getAggPage("searching");
+    expect(searching).toBeDefined();
+    const searchSections = searching!.sections.filter(
+      (s) => s.kind === "search",
+    );
+    expect(searchSections.length).toBe(1);
+  });
 });
