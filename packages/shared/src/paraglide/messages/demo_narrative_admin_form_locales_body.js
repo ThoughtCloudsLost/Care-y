@@ -6,23 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Form_Locales_BodyInputs */
 
 const en_demo_narrative_admin_form_locales_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Locales_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A segmented control above the editor lets administrators switch between the organization's supported languages while editing. The currently selected locale controls which language the field labels, help text, and form content editors show.
-**Completeness badge.** Each locale button shows a count of how many translatable fields have been filled out of the total, so it is visible at a glance which languages need more work.
-**Fallback hint.** When editing a locale other than the base language, a hint below the selector explains that translations are optional and the base language will be used for any field left blank.
-**Preview.** The preview pane has its own locale switcher that is independent of the editor's. Changing the preview locale shows how the form will look to a visitor in that language.`)
+	return /** @type {LocalizedString} */ (`The completeness count for each locale tracks how many translatable items have been filled out of the total, and the total counts only items that exist in at least one locale, so it grows as the form is authored. Help text counts only when it has been written somewhere, while a field label always counts because it is always required.
+**Fallback.** A field left blank in a translated locale uses the base language instead, so a form with partial translations still renders completely.
+**Preview.** The preview pane has its own locale switcher, independent of the editor's, so the user can write in one language and check the other without changing what they are editing.`)
 };
 
 const es_demo_narrative_admin_form_locales_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Locales_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un control segmentado sobre el editor permite a los administradores cambiar entre los idiomas soportados por la organización mientras editan. El idioma seleccionado controla qué idioma muestran los editores de etiquetas de campo, texto de ayuda y contenido del formulario.
-**Insignia de completitud.** Cada botón de idioma muestra un conteo de cuántos campos traducibles se han completado del total, para que sea visible de un vistazo qué idiomas necesitan más trabajo.
-**Idioma alternativo.** Cuando se edita un idioma distinto al idioma base, una indicación debajo del selector explica que las traducciones son opcionales y que se usará el idioma base para cualquier campo dejado en blanco.
-**Vista previa.** El panel de vista previa tiene su propio selector de idioma independiente del editor. Cambiar el idioma de la vista previa muestra cómo se verá el formulario para un visitante en ese idioma.`)
+	return /** @type {LocalizedString} */ (`El conteo de completitud de cada idioma registra cuántos elementos traducibles se han completado del total, y el total solo cuenta elementos que existen en al menos un idioma, de modo que crece a medida que se crea el formulario. El texto de ayuda solo cuenta cuando se ha escrito en algún lugar, mientras que la etiqueta de campo siempre cuenta porque siempre es obligatoria.
+**Alternativa.** Un campo dejado en blanco en un idioma traducido usa el idioma base en su lugar, de modo que un formulario con traducciones parciales se muestra completo.
+**Vista previa.** El panel de vista previa tiene su propio selector de idioma, independiente del editor, para que la persona usuaria pueda escribir en un idioma y comprobar el otro sin cambiar lo que está editando.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "A segmented control above the editor lets administrators switch between the organization's supported languages while editing. The currently selected locale c..." |
+* | "The completeness count for each locale tracks how many translatable items have been filled out of the total, and the total counts only items that exist in at..." |
 *
 * @param {Demo_Narrative_Admin_Form_Locales_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

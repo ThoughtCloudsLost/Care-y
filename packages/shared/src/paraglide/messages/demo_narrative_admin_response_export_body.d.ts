@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The export button at the top of the response viewer opens a dialog for downloading the responses as a CSV file. **What is included.** The CSV contains every ..." |
+* | "The export button opens a dialog for downloading the current form's responses as a CSV file. The CSV is assembled entirely in the browser from responses that..." |
 *
 * @param {Demo_Narrative_Admin_Response_Export_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

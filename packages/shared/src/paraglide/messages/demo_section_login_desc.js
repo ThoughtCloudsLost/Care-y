@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Login_DescInputs */
 
 const en_demo_section_login_desc = /** @type {(inputs: Demo_Section_Login_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The login screen is where the user signs in and where the browser turns the password into the encryption keys that make organization data readable. This section covers language choice, username and password with the defenses behind them, five methods for the second factor and backup codes, and key derivation. The screen takes its name, logo, and colors from the organization's public branding, which is set during onboarding and changeable later from the admin pages.`)
+	return /** @type {LocalizedString} */ (`The login screen is where the browser turns a password into the encryption keys that make organization data readable. Everything in this section is a step in that transaction or a defense on it, and the screen draws its name, logo, and colors from the organization's branding.`)
 };
 
 const es_demo_section_login_desc = /** @type {(inputs: Demo_Section_Login_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pantalla de inicio de sesión es donde se inicia sesión y donde el navegador transforma la contraseña en las claves de cifrado que hacen legibles los datos de la organización. Esta sección cubre la elección de idioma, nombre de usuario y contraseña con las defensas que los respaldan, cinco métodos para el segundo factor y códigos de respaldo, y la derivación de claves. La pantalla toma su nombre, logotipo y colores de la marca pública de la organización, que se establece durante la incorporación y puede cambiarse después desde las páginas de administración.`)
+	return /** @type {LocalizedString} */ (`La pantalla de inicio de sesión es donde el navegador transforma una contraseña en las claves de cifrado que hacen legibles los datos de la organización. Todo en esta sección es un paso de esa operación o una defensa sobre ella, y la pantalla toma su nombre, logotipo y colores de la marca de la organización.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The login screen is where the user signs in and where the browser turns the password into the encryption keys that make organization data readable. This sect..." |
+* | "The login screen is where the browser turns a password into the encryption keys that make organization data readable. Everything in this section is a step in..." |
 *
 * @param {Demo_Section_Login_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

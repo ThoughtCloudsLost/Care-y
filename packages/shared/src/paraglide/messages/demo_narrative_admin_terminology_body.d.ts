@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Organizations can rename standard terms to match their own language. For example, an organization might call tickets \"cases\" or volunteers \"advocates.\" Termi..." |
+* | "Organizations rename the standard terms used throughout the interface to match their own language. Six term groups are available, each with a singular and a ..." |
 *
 * @param {Demo_Narrative_Admin_Terminology_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A segmented control above the editor lets administrators switch between the organization's supported languages while editing. The currently selected locale c..." |
+* | "The completeness count for each locale tracks how many translatable items have been filled out of the total, and the total counts only items that exist in at..." |
 *
 * @param {Demo_Narrative_Admin_Form_Locales_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

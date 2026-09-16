@@ -6,23 +6,23 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Form_Builder_BodyInputs */
 
 const en_demo_narrative_admin_form_builder_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Builder_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The field list shows every field on the form in order, with page breaks appearing as separator rows between the fields they divide.
-**Removing.** Removing a field is immediate and has no confirmation dialog, but the change is not saved until the user saves the form.
-**Field types.** The available field types are grouped into data fields and structural elements. Data fields collect answers from the visitor, while structural elements control layout without collecting data.
-**Save and delete.** The save button saves the entire form and is disabled when no changes have been made, while the delete button opens a confirmation dialog.`)
+	return /** @type {LocalizedString} */ (`The form editor saves as a whole, so changes to fields accumulate until the user saves the form.
+**Removing.** Removing a field is immediate and has no confirmation, but the removal is not persisted until the form is saved.
+**Field types.** Nine types are available, split between seven that collect answers and two structural elements that do not. The structural pair, page break and rich text, controls layout only, and a rich text row shows a preview of its body in place of a label.
+**Encryption.** Field labels, configuration, and form metadata are encrypted under a key derived from the organization's public key, so the intake page can read the form without an account while a database dump stays opaque.`)
 };
 
 const es_demo_narrative_admin_form_builder_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Builder_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La lista de campos muestra cada campo del formulario en orden, con los saltos de página apareciendo como filas separadoras entre los campos que dividen.
-**Eliminar.** Eliminar un campo es inmediato y no tiene diálogo de confirmación, pero el cambio no se guarda hasta que el usuario guarda el formulario.
-**Tipos de campo.** Los tipos de campo disponibles se agrupan en campos de datos y elementos estructurales. Los campos de datos recogen respuestas del visitante, mientras que los elementos estructurales controlan el diseño sin recoger datos.
-**Guardar y eliminar.** El botón de guardar guarda todo el formulario y se deshabilita cuando no hay cambios, mientras que el botón de eliminar abre un diálogo de confirmación.`)
+	return /** @type {LocalizedString} */ (`El editor de formularios guarda como un todo, de modo que los cambios en los campos se acumulan hasta que la persona usuaria guarda el formulario.
+**Eliminar.** Eliminar un campo es inmediato y no tiene confirmación, pero la eliminación no se persiste hasta que se guarda el formulario.
+**Tipos de campo.** Hay nueve tipos disponibles, divididos entre siete que recogen respuestas y dos elementos estructurales que no. El par estructural, salto de página y texto enriquecido, solo controla el diseño, y una fila de texto enriquecido muestra una vista previa de su contenido en lugar de una etiqueta.
+**Cifrado.** Las etiquetas de campo, la configuración y los metadatos del formulario se cifran con una clave derivada de la clave pública de la organización, de modo que la página de admisión puede leer el formulario sin cuenta mientras que un volcado de base de datos permanece opaco.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The field list shows every field on the form in order, with page breaks appearing as separator rows between the fields they divide. **Removing.** Removing a ..." |
+* | "The form editor saves as a whole, so changes to fields accumulate until the user saves the form. **Removing.** Removing a field is immediate and has no confi..." |
 *
 * @param {Demo_Narrative_Admin_Form_Builder_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

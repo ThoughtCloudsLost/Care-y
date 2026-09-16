@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The logs page combines call history and audit events behind two tabs. The call tab lists telephony entries already stored on tickets, and the audit tab recor..." |
+* | "Both tabs on the logs page show plaintext metadata with a single decrypted name per row. The View reports permission gates the page, and the View audit log p..." |
 *
 * @param {Demo_Section_Admin_Logs_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

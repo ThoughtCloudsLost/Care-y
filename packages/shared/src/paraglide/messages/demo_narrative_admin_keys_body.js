@@ -6,21 +6,23 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Keys_BodyInputs */
 
 const en_demo_narrative_admin_keys_body = /** @type {(inputs: Demo_Narrative_Admin_Keys_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The keys section shows the organization key status and provides escrow export.
-**Escrow.** The escrow flow creates a passphrase protected file (minimum 20 characters) containing the organization's secret key. The passphrase protects the key using Argon2id key derivation. The administrator downloads the file and stores it offline on a USB drive or other secure medium. This file is the recovery path if all volunteers lose access to their accounts simultaneously.
-**Key rotation.** Administrators can rotate the organization key from this section.`)
+	return /** @type {LocalizedString} */ (`The keys section reports the organization key status and provides two operations on it.
+**Escrow.** The escrow file carries its own KDF parameters, salt, nonce, and ciphertext in base64, so it can be read on any machine without CARE-Y installed. The passphrase must be at least 20 characters, and the key derivation is Argon2id. The file's SHA-256 is shown in groups of four characters for visual comparison, and both the passphrase bytes and the organization's secret key are zeroed after the export whether or not it succeeded.
+**Key rotation.** Rotation generates a new keypair in the browser, wraps the new secret key once per active user who holds a public key, and submits all wraps in one request. Users who are inactive or have never signed in receive no wrapped copy. On completion the browser fetches and unwraps the key through the normal sign in path rather than trusting the key it just generated, and the rotation dialog cannot be dismissed while the operation is in flight.
+**Permissions.** Both escrow export and key rotation require the Manage keys permission.`)
 };
 
 const es_demo_narrative_admin_keys_body = /** @type {(inputs: Demo_Narrative_Admin_Keys_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La sección de claves muestra el estado de la clave de la organización y ofrece exportación de custodia.
-**Custodia.** El flujo de custodia crea un archivo protegido con frase de paso (mínimo 20 caracteres) que contiene la clave secreta de la organización. La frase de paso protege la clave usando derivación de claves Argon2id. El administrador descarga el archivo y lo almacena sin conexión en una memoria USB u otro medio seguro. Este archivo es la vía de recuperación si todos los voluntarios pierden acceso a sus cuentas simultáneamente.
-**Rotación de claves.** Los administradores pueden rotar la clave de la organización desde esta sección.`)
+	return /** @type {LocalizedString} */ (`La sección de claves muestra el estado de la clave de la organización y ofrece dos operaciones sobre ella.
+**Custodia.** El archivo de custodia lleva sus propios parámetros KDF, sal, nonce y texto cifrado en base64, de modo que se puede abrir en cualquier máquina sin CARE-Y instalado. La frase de paso debe tener al menos 20 caracteres, y la derivación de claves es Argon2id. El SHA-256 del archivo se muestra en grupos de cuatro caracteres para comparación visual, y tanto los bytes de la frase de paso como la clave secreta de la organización se borran después de la exportación haya tenido éxito o no.
+**Rotación de claves.** La rotación genera un nuevo par de claves en el navegador, envuelve la nueva clave secreta una vez por cada persona activa que posee una clave pública y envía todos los envoltorios en una sola petición. Las personas inactivas o que nunca han iniciado sesión no reciben copia envuelta. Al completarse, el navegador obtiene y desenvuelve la clave por la vía normal de inicio de sesión en lugar de confiar en la clave que acaba de generar, y el diálogo de rotación no se puede cerrar mientras la operación está en curso.
+**Permisos.** Tanto la exportación de custodia como la rotación de claves requieren el permiso Cuidar las claves de cifrado.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The keys section shows the organization key status and provides escrow export. **Escrow.** The escrow flow creates a passphrase protected file (minimum 20 ch..." |
+* | "The keys section reports the organization key status and provides two operations on it. **Escrow.** The escrow file carries its own KDF parameters, salt, non..." |
 *
 * @param {Demo_Narrative_Admin_Keys_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

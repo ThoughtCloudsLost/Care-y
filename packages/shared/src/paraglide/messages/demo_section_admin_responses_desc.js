@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_Responses_DescInputs */
 
 const en_demo_section_admin_responses_desc = /** @type {(inputs: Demo_Section_Admin_Responses_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The response viewer shows intake form submissions as decrypted cards, where each card displays the fields the visitor filled in. When the current user does not hold the intake key for a response, that response appears as a locked card explaining why the content is unreadable.`)
+	return /** @type {LocalizedString} */ (`Responses are the one form artifact encrypted to private keys rather than the derivable key used for form definitions, and reading them requires a separate permission from building forms.`)
 };
 
 const es_demo_section_admin_responses_desc = /** @type {(inputs: Demo_Section_Admin_Responses_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El visor de respuestas muestra los envíos de formularios de admisión como tarjetas descifradas, donde cada tarjeta muestra los campos que el visitante completó. Cuando el usuario actual no posee la clave de admisión de una respuesta, esa respuesta aparece como una tarjeta bloqueada que explica por qué el contenido es ilegible.`)
+	return /** @type {LocalizedString} */ (`Las respuestas son el único artefacto de formulario cifrado con claves privadas en lugar de la clave derivable que se usa para las definiciones, y leerlas requiere un permiso distinto del de construir formularios.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The response viewer shows intake form submissions as decrypted cards, where each card displays the fields the visitor filled in. When the current user does n..." |
+* | "Responses are the one form artifact encrypted to private keys rather than the derivable key used for form definitions, and reading them requires a separate p..." |
 *
 * @param {Demo_Section_Admin_Responses_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

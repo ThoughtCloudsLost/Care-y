@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The response viewer shows intake form submissions as decrypted cards, where each card displays the fields the visitor filled in. When the current user does n..." |
+* | "Responses are the one form artifact encrypted to private keys rather than the derivable key used for form definitions, and reading them requires a separate p..." |
 *
 * @param {Demo_Section_Admin_Responses_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

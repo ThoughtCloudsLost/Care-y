@@ -6,29 +6,25 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Form_Settings_BodyInputs */
 
 const en_demo_narrative_admin_form_settings_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Settings_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The settings block at the top of the editor controls the form's identity and behavior.
-**Name and slug.** The name is what administrators see in the forms list, and the slug becomes the public URL path for the form. Both are stored as plaintext on the server because they carry no sensitive content.
-**Default toggle.** A toggle marks this form as the organization's default. The default form is what visitors see at the base intake URL without a slug, and only one form can be the default at a time.
-**Destination queue.** A dropdown selects which queue receives tickets created through this form, and the list shows the organization's decrypted queue names.
-**Closing date.** A date time picker sets when the form stops accepting submissions. Leaving it blank means the form stays open indefinitely, and a clear button appears when a date is set.
-**Share link.** When the form has been saved, a row shows the public URL with a copy button so administrators can share or embed it.
-**Banner image.** An upload button adds a banner image that appears at the top of the form. Once uploaded, the image shows a preview with an alt text field and a remove button, and the banner file itself is encrypted with the organization's public key before upload.`)
+	return /** @type {LocalizedString} */ (`The settings block controls the form's identity and behavior.
+**What the server holds.** The form name and public slug are stored as plaintext on the server because they carry no sensitive content, while the banner image is encrypted under a key derived from the organization's public key before upload.
+**How it works.** Only one form can hold the default at a time, and the default is what web intake serves at the base URL when no slug is specified. The destination queue determines which queue receives tickets created through this form.
+**Closing date.** When the closing date passes, the visitor sees the closed message, which falls back to a default if the organization has not written one. Leaving the date blank means the form stays open indefinitely.
+**Share link.** The public URL is produced from the form's slug and requires no account to reach, and it does not exist until the form has been saved.`)
 };
 
 const es_demo_narrative_admin_form_settings_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Settings_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El bloque de configuración en la parte superior del editor controla la identidad y el comportamiento del formulario.
-**Nombre y slug.** El nombre es lo que los administradores ven en la lista de formularios, y el slug se convierte en la ruta URL pública del formulario. Ambos se almacenan en texto plano en el servidor porque no contienen contenido sensible.
-**Alternancia de predeterminado.** Una alternancia marca este formulario como el predeterminado de la organización. El formulario predeterminado es lo que ven los visitantes en la URL base de admisión sin un slug, y solo un formulario puede ser el predeterminado a la vez.
-**Cola de destino.** Un desplegable selecciona qué cola recibe los tickets creados a través de este formulario, y la lista muestra los nombres descifrados de las colas de la organización.
-**Fecha de cierre.** Un selector de fecha y hora establece cuándo el formulario deja de aceptar envíos. Dejarlo en blanco significa que el formulario permanece abierto indefinidamente, y un botón de limpiar aparece cuando se ha establecido una fecha.
-**Enlace para compartir.** Cuando el formulario se ha guardado, una fila muestra la URL pública con un botón de copiar para que los administradores puedan compartirlo o incrustarlo.
-**Imagen de banner.** Un botón de subir añade una imagen de banner que aparece en la parte superior del formulario. Una vez subida, la imagen muestra una vista previa con un campo de texto alternativo y un botón de eliminar, y el archivo de banner se cifra con la clave pública de la organización antes de subirlo.`)
+	return /** @type {LocalizedString} */ (`El bloque de configuración controla la identidad y el comportamiento del formulario.
+**Lo que almacena el servidor.** El nombre del formulario y el slug público se almacenan en texto plano en el servidor porque no contienen contenido sensible, mientras que la imagen de banner se cifra con una clave derivada de la clave pública de la organización antes de subirla.
+**Cómo funciona.** Solo un formulario puede ser el predeterminado a la vez, y el predeterminado es lo que la admisión web sirve en la URL base cuando no se especifica un slug. La cola de destino determina qué cola recibe los tickets creados a través de este formulario.
+**Fecha de cierre.** Cuando pasa la fecha de cierre, el visitante ve el mensaje de cierre, que recurre a un valor predeterminado si la organización no ha escrito uno. Dejar la fecha en blanco significa que el formulario permanece abierto indefinidamente.
+**Enlace para compartir.** La URL pública se produce a partir del slug del formulario y no requiere cuenta para acceder, y no existe hasta que el formulario se ha guardado.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The settings block at the top of the editor controls the form's identity and behavior. **Name and slug.** The name is what administrators see in the forms li..." |
+* | "The settings block controls the form's identity and behavior. **What the server holds.** The form name and public slug are stored as plaintext on the server ..." |
 *
 * @param {Demo_Narrative_Admin_Form_Settings_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

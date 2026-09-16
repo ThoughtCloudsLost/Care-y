@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_Forms_DescInputs */
 
 const en_demo_section_admin_forms_desc = /** @type {(inputs: Demo_Section_Admin_Forms_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Custom intake forms let organizations collect the information their workflow needs. Each form feeds a destination queue so tickets land in the right place automatically, each gets its own shareable link, and a closing date can stop submissions on a schedule.`)
+	return /** @type {LocalizedString} */ (`The form builder is where intake forms are authored, localized, previewed, and configured. Form definitions are encrypted under a key anyone can derive from the organization's public key, while responses are encrypted to private keys and gated by a separate permission.`)
 };
 
 const es_demo_section_admin_forms_desc = /** @type {(inputs: Demo_Section_Admin_Forms_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los formularios de admisión personalizados permiten a las organizaciones recopilar la información que su flujo de trabajo necesita. Cada formulario alimenta una cola de destino para que los tickets lleguen al lugar correcto automáticamente, cada uno tiene su propio enlace para compartir, y una fecha de cierre puede detener los envíos de forma programada.`)
+	return /** @type {LocalizedString} */ (`El constructor de formularios es donde se crean, traducen, previsualizan y configuran los formularios de admisión. Las definiciones de formularios se cifran con una clave que cualquier persona puede derivar de la clave pública de la organización, mientras que las respuestas se cifran con claves privadas y están controladas por un permiso aparte.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Custom intake forms let organizations collect the information their workflow needs. Each form feeds a destination queue so tickets land in the right place au..." |
+* | "The form builder is where intake forms are authored, localized, previewed, and configured. Form definitions are encrypted under a key anyone can derive from ..." |
 *
 * @param {Demo_Section_Admin_Forms_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

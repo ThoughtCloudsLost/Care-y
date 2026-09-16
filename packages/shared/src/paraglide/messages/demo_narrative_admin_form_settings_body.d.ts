@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The settings block at the top of the editor controls the form's identity and behavior. **Name and slug.** The name is what administrators see in the forms li..." |
+* | "The settings block controls the form's identity and behavior. **What the server holds.** The form name and public slug are stored as plaintext on the server ..." |
 *
 * @param {Demo_Narrative_Admin_Form_Settings_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

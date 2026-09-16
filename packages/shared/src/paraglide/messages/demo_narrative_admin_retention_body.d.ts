@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Administrators configure how long different types of data are retained before automatic deletion. Retention rules apply to closed tickets, voicemails, and ot..." |
+* | "Automatic deletion accepts a window of 1 to 3,650 days, and both enabling and changing the value ask for confirmation. The confirmation states that deleted d..." |
 *
 * @param {Demo_Narrative_Admin_Retention_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

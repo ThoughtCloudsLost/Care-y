@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_Comms_DescInputs */
 
 const en_demo_section_admin_comms_desc = /** @type {(inputs: Demo_Section_Admin_Comms_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The communications page configures how the organization reaches clients by phone, text, and email.`)
+	return /** @type {LocalizedString} */ (`These entries configure the external channels the organization uses to communicate with clients, and the channel policy entry determines which of those channels are available on any given ticket.`)
 };
 
 const es_demo_section_admin_comms_desc = /** @type {(inputs: Demo_Section_Admin_Comms_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La página de comunicaciones configura cómo la organización contacta a los clientes por teléfono, mensajes de texto y correo electrónico.`)
+	return /** @type {LocalizedString} */ (`Estas entradas configuran los canales externos que la organización usa para comunicarse con los clientes, y la entrada de política de canales determina cuáles de esos canales están disponibles en cada ticket.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The communications page configures how the organization reaches clients by phone, text, and email." |
+* | "These entries configure the external channels the organization uses to communicate with clients, and the channel policy entry determines which of those chann..." |
 *
 * @param {Demo_Section_Admin_Comms_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

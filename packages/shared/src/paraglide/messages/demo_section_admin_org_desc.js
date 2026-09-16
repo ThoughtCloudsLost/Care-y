@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_Org_DescInputs */
 
 const en_demo_section_admin_org_desc = /** @type {(inputs: Demo_Section_Admin_Org_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The organization page holds settings that shape the whole workspace. General info and branding are stored without encryption so they can appear on pages the visitor sees before signing in, while terminology is encrypted with the organization key. The page also covers encryption key escrow, the data retention policy, and the note types available on tickets.`)
+	return /** @type {LocalizedString} */ (`These entries cover settings that shape the whole workspace rather than any one ticket or person. General info and branding are stored without encryption so pages the visitor sees before signing in can display them, while terminology is encrypted with the organization key.`)
 };
 
 const es_demo_section_admin_org_desc = /** @type {(inputs: Demo_Section_Admin_Org_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La página de organización contiene los ajustes que dan forma a todo el espacio de trabajo. La información general y la marca se almacenan sin cifrar para que puedan aparecer en las páginas que el visitante ve antes de iniciar sesión, mientras que la terminología se cifra con la clave de la organización. La página también cubre el depósito de claves de cifrado, la política de retención de datos y los tipos de nota disponibles en los tickets.`)
+	return /** @type {LocalizedString} */ (`Estas entradas cubren ajustes que dan forma a todo el espacio de trabajo en lugar de a un ticket o una persona en particular. La información general y la marca se almacenan sin cifrar para que las páginas que el visitante ve antes de iniciar sesión puedan mostrarlas, mientras que la terminología se cifra con la clave de la organización.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The organization page holds settings that shape the whole workspace. General info and branding are stored without encryption so they can appear on pages the ..." |
+* | "These entries cover settings that shape the whole workspace rather than any one ticket or person. General info and branding are stored without encryption so ..." |
 *
 * @param {Demo_Section_Admin_Org_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
