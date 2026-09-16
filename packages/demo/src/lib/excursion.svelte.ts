@@ -15,12 +15,9 @@
 import { isLinked, toggleLinked } from "./link-state.svelte.js";
 import type { GuideSlug } from "./guide-checklists.js";
 
-// -----------------------------------------------------------------------
-// Types
-// -----------------------------------------------------------------------
-
-export type AggregationPageId =
-  "encryption" | "server-holds" | "who-sees" | "cannot-prove" | "searching";
+// Re-export from the canonical definition (aggregation-pages.ts owns it).
+export type { AggregationPageId } from "./aggregation-pages.js";
+import type { AggregationPageId } from "./aggregation-pages.js";
 
 type Excursion =
   | { kind: "aggregation"; page: AggregationPageId }
