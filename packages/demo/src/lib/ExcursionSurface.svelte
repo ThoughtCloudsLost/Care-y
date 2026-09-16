@@ -3,6 +3,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { activeExcursion, closeExcursion } from "./excursion.svelte.js";
   import GuideChecklist from "./GuideChecklist.svelte";
+  import AggregationView from "./AggregationView.svelte";
   import type { SectionId } from "./bridge.js";
 
   interface Props {
@@ -51,9 +52,7 @@
       {#if excursion.kind === "guide"}
         <GuideChecklist slug={excursion.slug} {locale} {onNavigate} />
       {:else}
-        <div class="excursion-agg-placeholder">
-          <p>{m.demo_agg_placeholder()}</p>
-        </div>
+        <AggregationView pageId={excursion.page} {locale} {onNavigate} />
       {/if}
     </div>
   </div>
@@ -106,12 +105,5 @@
   .excursion-body {
     flex: 1;
     overflow-y: auto;
-  }
-
-  .excursion-agg-placeholder {
-    padding: 24px 16px;
-    text-align: center;
-    color: var(--ink-muted, #666);
-    font-size: 0.875rem;
   }
 </style>

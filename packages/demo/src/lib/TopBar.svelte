@@ -27,7 +27,8 @@
   import type { DemoTopic } from "./bridge.js";
   import { GUIDES, guideIsReady, type GuideSlug } from "./guide-checklists.js";
   import { guideProgress } from "./guide-progress.svelte.js";
-  import { openGuide } from "./excursion.svelte.js";
+  import { openGuide, openAggregation } from "./excursion.svelte.js";
+  import { PAGES, type AggregationPageId } from "./aggregation-pages.js";
 
   interface Props {
     /** null on the entry page, where no section is being shown yet. */
@@ -251,6 +252,24 @@
     return resolveOptionalStoryMessage(titleKey, locale) ?? titleKey;
   }
 
+  /** Aggregation pages visible in the contents menu. In DEV all show;
+   *  in prod only those whose title key resolves to translated text. */
+  const visibleAggPages = $derived(
+    PAGES.filter((p) => {
+      if (import.meta.env.DEV) return true;
+      return resolveOptionalStoryMessage(p.titleKey, locale) !== null;
+    }),
+  );
+
+  function selectAggPage(id: AggregationPageId): void {
+    openAggregation(id);
+    closeMenus();
+  }
+
+  function aggPageTitle(titleKey: string): string {
+    return resolveOptionalStoryMessage(titleKey, locale) ?? titleKey;
+  }
+
   function handleLocale(): void {
     onLocaleChange();
     closeMenus();
@@ -438,6 +457,23 @@
                     })}
                   </span>
                 {/if}
+              </button>
+            {/each}
+          {/if}
+          {#if visibleAggPages.length > 0}
+            <div class="contents-header contents-header-guides">
+              {m.demo_agg_menu_label()}
+            </div>
+            {#each visibleAggPages as aggPage (aggPage.id)}
+              <button
+                class="contents-item"
+                role="menuitem"
+                type="button"
+                onclick={() => selectAggPage(aggPage.id)}
+              >
+                <span class="contents-item-label">
+                  {aggPageTitle(aggPage.titleKey)}
+                </span>
               </button>
             {/each}
           {/if}
