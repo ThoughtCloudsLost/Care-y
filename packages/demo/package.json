@@ -14,7 +14,9 @@
     "dev:mobile": "pnpm --filter @care-y/client run build:paraglide && node scripts/dev-network.js",
     "build": "pnpm --filter @care-y/client run build:paraglide && NODE_OPTIONS=--max-old-space-size=4096 vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "check:handbook-refs": "node scripts/check-handbook-refs.mjs",
     "health": "pnpm --filter @care-y/client run build:paraglide && vite --open /health.html",
+    "test": "pnpm --filter @care-y/client run build:paraglide && vitest run",
     "test:smoke": "vitest run --config vitest.smoke.config.ts"
   },
   "dependencies": {

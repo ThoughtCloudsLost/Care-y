@@ -1516,15 +1516,12 @@ export const TOPIC_SELECTORS: ReadonlyMap<DemoTopic, readonly string[]> =
       [".settings-section", '[data-testid="account-settings"]'],
     ],
     ["client-share-view", [".share-content-block", ".share-heading"]],
-    [
-      "client-share-one-time",
-      [".share-one-time-notice", ".share-terminal-text"],
-    ],
+    ["client-share-one-time", [".share-one-time-notice", ".link-error-body"]],
     // Org-side additions whose target is a region rather than a labelled
     // control. The rest of the new admin and settings topics resolve
     // through their tab or section labels in buildTopicCandidates.
     ["ticket-portal-tier", [".tier-name", ".case-header"]],
-    ["ticket-secure-link", [".intro-text", ".offer-row", ".case-header"]],
+    ["ticket-secure-link", [".intro-text", ".tier-actions", ".case-header"]],
     ["ticket-share-link", [".share-sheet-body", ".case-header"]],
     ["ticket-share-status", ['[data-testid="share-status-line"]']],
     ["ticket-correction-status", ['[data-testid="correction-status-line"]']],
