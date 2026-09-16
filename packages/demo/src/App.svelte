@@ -93,6 +93,11 @@
     isNavSuppressed,
     resetNavGuard,
   } from "$demo/nav-guard.svelte.js";
+  import ReadingChip from "$demo/ReadingChip.svelte";
+  import {
+    chipTargetValue,
+    resetReadingChip,
+  } from "$demo/reading-chip.svelte.js";
   import { resetGuideProgress } from "$demo/guide-progress.svelte.js";
   import ExcursionSurface from "$demo/ExcursionSurface.svelte";
   import {
@@ -1053,6 +1058,7 @@
     resetExcursion();
     resetGuideProgress();
     resetNavGuard();
+    resetReadingChip();
     entryVisible = true;
     frameRef?.reload();
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -1146,6 +1152,22 @@
     subSlug: string,
   ): void {
     scrollEngine.selectSub(sectionId, subSlug);
+  }
+
+  /** Chip jump: scroll the story to the chip target without commanding
+   *  the phone. The phone already navigated there; only the story
+   *  catches up. */
+  function handleChipJump(sectionId: SectionId, subSlug: string): void {
+    scrollEngine.jumpToChipTarget(sectionId, subSlug);
+  }
+
+  /** Chip jump in the fullscreen drawer: scroll the drawer prose. */
+  function handleDrawerChipJump(
+    sectionId: SectionId,
+    subSlug: string,
+  ): void {
+    void sectionId;
+    drawerRef?.scrollToSub(subSlug);
   }
 
   // Close excursion on ESC in windowed mode. Fullscreen ESC already
@@ -2018,7 +2040,12 @@
       return;
     }
 
+    // Reading-chip gate for drawer follow: when the engine offered a
+    // chip instead of auto-scrolling (chipTargetValue is non-null),
+    // the drawer should not scroll either. The chip in the drawer
+    // footer lets the reader jump at their own pace.
     if (sub !== null) {
+      if (chipTargetValue() !== null) return;
       drawerRef?.scrollToSub(sub);
     }
   });
@@ -2228,6 +2255,17 @@
     >
       {m.demo_dirty_guard_note()}
     </p>
+  {/if}
+  <!-- Reading-position chip (windowed mode): appears when the phone
+       moves the story while the reader has a recent scroll position.
+       Hidden during excursions (the overlay covers the column) and
+       when the entry page is visible (no story to follow). -->
+  {#if !fsActive && !entryVisible}
+    <ReadingChip
+      locale={uiLocale}
+      hidden={excursionOpen}
+      onJump={handleChipJump}
+    />
   {/if}
   <!-- Data flow band: normal flow directly after the sticky top bar, so
        opening it moves the story down rather than covering it. The
@@ -2663,6 +2701,14 @@
       />
     {/snippet}
     {#snippet footer()}
+      <!-- Reading chip (drawer mode): hidden during excursions since
+           the takeover covers the drawer body. -->
+      <ReadingChip
+        locale={uiLocale}
+        drawer
+        hidden={excursionOpen}
+        onJump={handleDrawerChipJump}
+      />
       <!-- Same control and handler as the page's fixed pill, docked
            rather than floating: fullscreen has no page under it to pin
            against. The rule lives here, not on the dock, so no next

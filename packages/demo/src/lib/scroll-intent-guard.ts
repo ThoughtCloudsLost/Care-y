@@ -127,3 +127,74 @@ export function relinkDecision(
   if (lastLocalMoveAt === 0 && lastPhoneMoveAt === 0) return "none";
   return lastLocalMoveAt >= lastPhoneMoveAt ? "push-local" : "adopt-phone";
 }
+
+// -----------------------------------------------------------------------
+// Reading-position chip decision
+// -----------------------------------------------------------------------
+
+export type ChipDecision = "follow" | "offer-chip";
+
+export interface ChipOpts {
+  /** How recently the reader must have scrolled for the claim to count. */
+  recentLocalMs: number;
+  /** In dwell mode, how long after the last reader scroll before
+   *  following resumes automatically (counted from lastLocalMoveAt). */
+  dwellMs: number;
+}
+
+/**
+ * Whether a phone-originated location change should auto-scroll the
+ * story ("follow") or offer a one-tap chip instead ("offer-chip").
+ *
+ * The chip protects a reader who has established their own reading
+ * position by scrolling the story. When the phone moves the story
+ * location and the reader scrolled recently, the story should NOT
+ * yank away from wherever they are; a chip lets them jump at their
+ * own pace.
+ *
+ * Rules:
+ *
+ * 1. lastLocalMoveAt is 0 (the reader never scrolled): "follow".
+ *    No reading position to protect.
+ *
+ * 2. lastLocalMoveAt is within recentLocalMs of now: "offer-chip".
+ *    The reader scrolled recently; their position is worth guarding.
+ *
+ * 3. In "dwell" mode, when the gap between now and lastLocalMoveAt
+ *    exceeds dwellMs: "follow". The reader stopped scrolling long
+ *    enough for auto-following to resume, and the chip dismisses.
+ *    Between recentLocalMs and dwellMs the decision stays
+ *    "offer-chip" (the dwell clock runs from the last reader move).
+ *
+ * 4. In "second-tap" mode, followSuspended forces "offer-chip"
+ *    regardless of timestamps. The reader jumped via the chip but
+ *    has not yet opted back into following; the chip stays until
+ *    they explicitly resume.
+ */
+export function readingChipDecision(
+  now: number,
+  lastLocalMoveAt: number,
+  lastPhoneMoveAt: number,
+  chipMode: "dwell" | "second-tap",
+  followSuspended: boolean,
+  opts: ChipOpts = { recentLocalMs: 8000, dwellMs: 15000 },
+): ChipDecision {
+  // Rule 4: second-tap suspension overrides timestamps.
+  if (chipMode === "second-tap" && followSuspended) return "offer-chip";
+
+  // Rule 1: reader never scrolled.
+  if (lastLocalMoveAt === 0) return "follow";
+
+  const elapsed = now - lastLocalMoveAt;
+
+  // Rule 2: reader scrolled recently.
+  if (elapsed <= opts.recentLocalMs) return "offer-chip";
+
+  // Rule 3 (dwell mode): reader stopped scrolling but dwell has
+  // not expired yet. Between recentLocalMs and dwellMs the chip
+  // remains because the dwell timer has not run out.
+  if (chipMode === "dwell" && elapsed <= opts.dwellMs) return "offer-chip";
+
+  // Dwell expired, or second-tap mode without suspension.
+  return "follow";
+}

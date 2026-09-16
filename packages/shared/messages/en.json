@@ -3250,5 +3250,8 @@
   "revoke_reply_token_confirm_title": "Revoke reply token?",
   "revoke_reply_token_confirm_body": "The client will no longer be able to reply to emails for this ticket. A new token will be created on the next outbound email.",
   "revoke_reply_token_confirm_action": "Revoke",
-  "revoke_reply_token_success": "Reply token revoked"
+  "revoke_reply_token_success": "Reply token revoked",
+  "demo_chip_jump_to": "Jump to {heading}",
+  "demo_chip_resume_follow": "Resume following",
+  "demo_chip_dismiss": "Dismiss reading chip"
 }

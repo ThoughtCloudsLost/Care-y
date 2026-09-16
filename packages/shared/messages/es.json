@@ -3250,5 +3250,8 @@
   "revoke_reply_token_confirm_title": "¿Revocar token de respuesta?",
   "revoke_reply_token_confirm_body": "El cliente ya no podrá responder a los correos de este caso. Se creará un token nuevo en el próximo correo saliente.",
   "revoke_reply_token_confirm_action": "Revocar",
-  "revoke_reply_token_success": "Token de respuesta revocado"
+  "revoke_reply_token_success": "Token de respuesta revocado",
+  "demo_chip_jump_to": "Ir a {heading}",
+  "demo_chip_resume_follow": "Reanudar seguimiento",
+  "demo_chip_dismiss": "Cerrar indicador de lectura"
 }
