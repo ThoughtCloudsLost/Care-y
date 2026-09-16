@@ -18,9 +18,16 @@
   import { SECTIONS, type Section, type SectionId } from "./scroll-sections.js";
   import { DRAWER_DEFAULT_W } from "./fullscreen.svelte.js";
   import { chromeFade } from "./chrome-fade.js";
-  import { resolveStoryMessage, deriveSectionState } from "./story-messages.js";
+  import {
+    resolveStoryMessage,
+    resolveOptionalStoryMessage,
+    deriveSectionState,
+  } from "./story-messages.js";
   import type { DemoMode } from "./demo-mode.svelte.js";
   import type { DemoTopic } from "./bridge.js";
+  import { GUIDES, guideIsReady, type GuideSlug } from "./guide-checklists.js";
+  import { guideProgress } from "./guide-progress.svelte.js";
+  import { openGuide } from "./excursion.svelte.js";
 
   interface Props {
     /** null on the entry page, where no section is being shown yet. */
@@ -227,6 +234,23 @@
     closeMenus();
   }
 
+  function selectGuide(slug: GuideSlug): void {
+    openGuide(slug);
+    closeMenus();
+  }
+
+  /** Guides visible in the contents menu. In DEV all show; in prod
+   *  only those whose title key resolves to translated text. */
+  const visibleGuides = $derived(
+    GUIDES.filter((g) =>
+      guideIsReady(g.slug, locale, resolveOptionalStoryMessage),
+    ),
+  );
+
+  function guideTitle(titleKey: string): string {
+    return resolveOptionalStoryMessage(titleKey, locale) ?? titleKey;
+  }
+
   function handleLocale(): void {
     onLocaleChange();
     closeMenus();
@@ -391,6 +415,32 @@
               </span>
             </button>
           {/each}
+          {#if visibleGuides.length > 0}
+            <div class="contents-header contents-header-guides">
+              {m.demo_guides_menu_label()}
+            </div>
+            {#each visibleGuides as guide (guide.slug)}
+              {@const gp = guideProgress(guide.slug)}
+              <button
+                class="contents-item"
+                role="menuitem"
+                type="button"
+                onclick={() => selectGuide(guide.slug)}
+              >
+                <span class="contents-item-label">
+                  {guideTitle(guide.titleKey)}
+                </span>
+                {#if gp.done > 0}
+                  <span class="contents-count">
+                    {m.demo_guide_progress({
+                      done: String(gp.done),
+                      total: String(gp.total),
+                    })}
+                  </span>
+                {/if}
+              </button>
+            {/each}
+          {/if}
         </div>
       {/if}
     </div>
@@ -742,6 +792,11 @@
     font-variant-numeric: tabular-nums;
     color: var(--muted);
     white-space: nowrap;
+  }
+
+  .contents-header-guides {
+    margin-top: 0.25rem;
+    border-top: 1px solid var(--hair);
   }
 
   .contents-item {
