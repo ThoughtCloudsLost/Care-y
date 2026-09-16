@@ -84,6 +84,14 @@
     resetLinked,
   } from "$demo/link-state.svelte.js";
   import {
+    activeExcursion,
+    closeExcursion,
+    closeOnPhoneNavigation,
+    resetExcursion,
+  } from "$demo/excursion.svelte.js";
+  import { resetGuideProgress } from "$demo/guide-progress.svelte.js";
+  import ExcursionSurface from "$demo/ExcursionSurface.svelte";
+  import {
     createFlowBandStore,
     BAND_MIN_HOST_W,
   } from "$demo/flow-band.svelte.js";
@@ -218,6 +226,7 @@
   );
 
   const fsActive: boolean = $derived(fsCtrl.active);
+  const excursionOpen: boolean = $derived(activeExcursion() !== null);
 
   // Fixed pill size estimate (px): exit + drawer toggle + role badge,
   // 44px buttons + 4px padding x2 + 2px border x2 = 52px tall. Clamping
@@ -991,6 +1000,14 @@
 
       scrollEngine.handleBridgeState(state);
 
+      // Close aggregation excursions on phone-origin navigation
+      if (
+        state.origin === "phone" ||
+        state.origin === "phone-correction"
+      ) {
+        closeOnPhoneNavigation();
+      }
+
       // Phone-initiated restart (avatar sign-out -> /logout)
       if (state.restartSeq > lastRestartSeq) {
         lastRestartSeq = state.restartSeq;
@@ -1029,6 +1046,8 @@
     geo.reset();
     moveColumnToSlot(demoMode.mode === "read" ? "left" : "right");
     resetLinked();
+    resetExcursion();
+    resetGuideProgress();
     entryVisible = true;
     frameRef?.reload();
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -1114,6 +1133,28 @@
     if (entryVisible) return;
     scrollEngine.selectSub(sectionId, subSlug);
   }
+
+  /** Navigate from an excursion guide step. Routes through the bridge
+   *  the same way contents-menu navigation does. */
+  function handleExcursionNavigate(
+    sectionId: SectionId,
+    subSlug: string,
+  ): void {
+    scrollEngine.selectSub(sectionId, subSlug);
+  }
+
+  // Close excursion on ESC in windowed mode. Fullscreen ESC already
+  // closes the drawer (which carries the excursion takeover).
+  $effect(() => {
+    if (!excursionOpen || fsActive) return;
+    function onEscKey(e: KeyboardEvent): void {
+      if (e.key === "Escape") {
+        closeExcursion("user");
+      }
+    }
+    window.addEventListener("keydown", onEscKey);
+    return () => window.removeEventListener("keydown", onEscKey);
+  });
 
   // -----------------------------------------------------------------------
   // Locale: reactive $state owned here, passed down as prop
@@ -2207,6 +2248,14 @@
   />
 {/snippet}
 
+{#snippet excursionPanel()}
+  <ExcursionSurface
+    presentation="drawer"
+    locale={uiLocale}
+    onNavigate={handleExcursionNavigate}
+  />
+{/snippet}
+
 <!-- Z-order (single source):
      story 1, frame 50, fullscreen edge strips + top hot strip 60,
      TopBar 100, popovers 110, drawer 120, toolbar-pill 130. -->
@@ -2459,7 +2508,7 @@
   >
     <div class="flow-story-wrapper">
       {#key uiLocale}{#key pageKey}
-          <div class="section-view" class:section-view--railed={showRail}>
+          <div class="section-view" class:section-view--railed={showRail} inert={excursionOpen || undefined}>
             {#if showRail}
               <SectionRail
                 section={activeSectionDef}
@@ -2498,6 +2547,15 @@
             </div>
           </div>
         {/key}{/key}
+      {#if excursionOpen}
+        <div class="excursion-overlay">
+          <ExcursionSurface
+            presentation="column"
+            locale={uiLocale}
+            onNavigate={handleExcursionNavigate}
+          />
+        </div>
+      {/if}
     </div>
   </div>
 
@@ -2548,7 +2606,7 @@
     onSettle={handleFsDrawerSettle}
     onScrollSub={handleDrawerScrollSub}
     band={flowBand.open && drawerSeatsBand ? flowDock : undefined}
-    takeover={flowBand.open && !drawerSeatsBand ? flowPanel : undefined}
+    takeover={excursionOpen ? excursionPanel : flowBand.open && !drawerSeatsBand ? flowPanel : undefined}
     bind:this={drawerRef}
   >
     {#snippet topbar()}
@@ -2649,6 +2707,13 @@
     .flow-story-wrapper {
       padding-top: 1.5rem;
     }
+  }
+
+  .excursion-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    background: var(--paper, #fff);
   }
 
   /* shared.css locks html/body scroll for the product app shell (only

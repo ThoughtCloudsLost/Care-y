@@ -659,6 +659,25 @@ export function resolveStoryMessage(key: string, locale: string): string {
   return key;
 }
 
+/**
+ * Resolve a message key that may not exist in the lookup yet.
+ *
+ * Returns null when the key is absent. In DEV, returns the raw key
+ * string so missing-prose gaps are visible during authoring. In
+ * production, returns null so callers can hide unready content.
+ */
+export function resolveOptionalStoryMessage(
+  key: string,
+  locale: string,
+): string | null {
+  void locale;
+  // eslint-disable-next-line security/detect-object-injection -- key is a message key from guide config, not user input
+  const fn = lookup[key];
+  if (fn !== undefined) return fn();
+  if (import.meta.env.DEV) return key;
+  return null;
+}
+
 // -----------------------------------------------------------------------
 // Sub-item state derivation
 //
