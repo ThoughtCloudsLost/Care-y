@@ -63,14 +63,16 @@ describe("initColumnSlot", () => {
     expect(restingColumnRect().x).toBe(0);
   });
 
-  it("simulate mode places the column in the right slot instantly", () => {
+  it("simulate mode also places the column in the left slot instantly", () => {
+    // The frame spawns in the right half, so the column takes the left
+    // in both modes.
     setupWide();
     initColumnSlot("simulate");
     flushSync();
 
-    expect(columnSlot()).toBe("right");
-    expect(columnRect().x).toBe(WIDE_CW / 2);
-    expect(restingColumnRect().x).toBe(WIDE_CW / 2);
+    expect(columnSlot()).toBe("left");
+    expect(columnRect().x).toBe(0);
+    expect(restingColumnRect().x).toBe(0);
   });
 
   it("places the column correctly when init precedes the container measurement", () => {
@@ -82,7 +84,10 @@ describe("initColumnSlot", () => {
     setColumnContainer(WIDE_CW, 0);
     flushSync();
 
-    expect(columnRect().x).toBe(WIDE_CW / 2);
+    // Both modes start in the left slot; the width that arrives later
+    // still resolves the slot rect (x stays 0, width becomes a half).
+    expect(columnRect().x).toBe(0);
+    expect(columnRect().width).toBe(WIDE_CW / 2);
     expect(columnRect().x).toBe(restingColumnRect().x);
   });
 
@@ -126,7 +131,7 @@ describe("slot width", () => {
     flushSync();
     const left = restingColumnRect();
 
-    initColumnSlot("simulate");
+    moveColumnToSlot("right");
     flushSync();
     const right = restingColumnRect();
 
