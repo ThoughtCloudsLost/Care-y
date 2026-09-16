@@ -30,6 +30,13 @@ pre-commit:
           # on a large staged batch exceeds the Node default on this box.
           echo "$lintable" | NODE_OPTIONS=--max-old-space-size=4096 xargs pnpm exec eslint
         fi
+    handbook-refs:
+      # Handbook highlight selectors must resolve in product source. Only
+      # runs when the selector tables or client components are staged,
+      # since those are the only files that can introduce rot.
+      glob: "{packages/demo/src/lib/scroll-sections.ts,packages/demo/src/lib/tap-pulse.ts,packages/client/src/**/*.svelte}"
+      run: node packages/demo/scripts/check-handbook-refs.mjs
+
     id-brands:
       # Identifier columns must carry branded types (ADR-074). Only runs when
       # the type definitions are staged, since that is the only file that can

@@ -65,6 +65,17 @@ jobs:
       - name: Compile shared paraglide
         run: pnpm --filter @care-y/shared run build:paraglide
 
+      # Fast and build-free: fails on handbook selectors that no longer
+      # resolve in product source, before spending minutes on the build.
+      - name: Check handbook selector references
+        run: node packages/demo/scripts/check-handbook-refs.mjs
+
+      # The demo vitest project is not part of the root CI test run, so
+      # this workflow is where its unit tests (including the handbook
+      # route-mapping completeness checks) actually execute.
+      - name: Demo unit tests
+        run: pnpm --filter @care-y/demo run test
+
       - name: Build demo
         run: pnpm --filter @care-y/demo run build
 

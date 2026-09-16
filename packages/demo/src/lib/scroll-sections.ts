@@ -452,9 +452,11 @@ export const SECTIONS: readonly Section[] = [
         topic: "ticket-secure-link",
         headingKey: "demo_narrative_topic_secure_link_heading",
         bodyKey: "demo_narrative_topic_secure_link_body",
-        // .offer-row is the tier upgrade control (PortalTierSection.svelte:195);
+        // .tier-actions holds the tier controls (PortalTierSection.svelte);
         // .intro-text is SecureLinkSheet's own body once it opens.
-        highlight: { selectors: [".intro-text", ".offer-row", ".case-header"] },
+        highlight: {
+          selectors: [".intro-text", ".tier-actions", ".case-header"],
+        },
       },
       {
         slug: "share-link",
@@ -1364,7 +1366,7 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_client_share_one_time_heading",
         bodyKey: "demo_narrative_client_share_one_time_body",
         highlight: {
-          selectors: [".share-one-time-notice", ".share-terminal-text"],
+          selectors: [".share-one-time-notice", ".link-error-body"],
         },
       },
       {
@@ -1373,10 +1375,7 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_client_share_exposure_heading",
         bodyKey: "demo_narrative_client_share_exposure_body",
         highlight: {
-          selectors: [
-            '[data-testid="share-view-hint-dismiss"]',
-            ".share-content-block",
-          ],
+          selectors: ['[data-testid="portal-hint-ok"]', ".share-content-block"],
         },
       },
     ],
