@@ -2373,6 +2373,7 @@
   "demo_excursion_unlinked_note": "The simulator is unlinked while this guide is pinned.",
   "demo_guide_progress": "{done} of {total}",
   "demo_guides_menu_label": "Guides",
+  "demo_dirty_guard_note": "Unsaved input on the simulator. Select again to continue.",
   "demo_mode_read": "Read",
   "demo_mode_simulate": "Simulate",
   "demo_mode_label": "Viewing mode",

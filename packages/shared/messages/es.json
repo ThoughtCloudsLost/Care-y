@@ -2373,6 +2373,7 @@
   "demo_excursion_unlinked_note": "El simulador esta desvinculado mientras esta guia esta fijada.",
   "demo_guide_progress": "{done} de {total}",
   "demo_guides_menu_label": "Guias",
+  "demo_dirty_guard_note": "Hay datos sin guardar en el simulador. Selecciona de nuevo para continuar.",
   "demo_mode_read": "Lectura",
   "demo_mode_simulate": "Simular",
   "demo_mode_label": "Modo de vista",

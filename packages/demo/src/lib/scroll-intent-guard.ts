@@ -71,6 +71,38 @@ export function backstopDecision(
 // Relink reconciliation
 // -----------------------------------------------------------------------
 
+// -----------------------------------------------------------------------
+// Dirty-state guard decision
+// -----------------------------------------------------------------------
+
+export type DirtyGuardDecision = "navigate" | "suppress";
+
+/**
+ * Whether handbook-originated navigation should proceed when the phone
+ * simulator has unsaved user input.
+ *
+ * - Not dirty: always navigate.
+ * - Dirty, and a suppression was recorded within the override window:
+ *   the reader was just warned and tapped again, so navigate.
+ * - Dirty, outside the window (or never suppressed): suppress.
+ */
+export function dirtyGuardDecision(
+  dirty: boolean,
+  lastSuppressedAt: number,
+  now: number,
+  overrideMs = 4000,
+): DirtyGuardDecision {
+  if (!dirty) return "navigate";
+  if (lastSuppressedAt > 0 && now - lastSuppressedAt <= overrideMs) {
+    return "navigate";
+  }
+  return "suppress";
+}
+
+// -----------------------------------------------------------------------
+// Relink reconciliation
+// -----------------------------------------------------------------------
+
 export type RelinkDecision = "push-local" | "adopt-phone" | "none";
 
 /**

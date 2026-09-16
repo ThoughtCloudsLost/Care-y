@@ -89,6 +89,10 @@
     closeOnPhoneNavigation,
     resetExcursion,
   } from "$demo/excursion.svelte.js";
+  import {
+    isNavSuppressed,
+    resetNavGuard,
+  } from "$demo/nav-guard.svelte.js";
   import { resetGuideProgress } from "$demo/guide-progress.svelte.js";
   import ExcursionSurface from "$demo/ExcursionSurface.svelte";
   import {
@@ -1048,6 +1052,7 @@
     resetLinked();
     resetExcursion();
     resetGuideProgress();
+    resetNavGuard();
     entryVisible = true;
     frameRef?.reload();
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -2211,6 +2216,19 @@
       />
     </div>
   {/if}
+  <!-- Dirty-state guard notice: appears when handbook navigation was
+       suppressed because the phone has unsaved input. Auto-clears
+       after the override window expires. -->
+  {#if isNavSuppressed() && !entryVisible && !fsActive}
+    <p
+      class="dirty-guard-note"
+      role="status"
+      aria-live="polite"
+      style="--wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
+    >
+      {m.demo_dirty_guard_note()}
+    </p>
+  {/if}
   <!-- Data flow band: normal flow directly after the sticky top bar, so
        opening it moves the story down rather than covering it. The
        floating frame (z:50) passes under it. Fullscreen renders it in
@@ -2680,6 +2698,30 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--hair);
+  }
+
+  .dirty-guard-note {
+    margin: 0;
+    padding: 0.375rem var(--wrapper-pad-right) 0.375rem var(--wrapper-pad-left);
+    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted);
+    text-align: center;
+    animation: dirty-guard-fade-in 0.15s ease-out;
+  }
+
+  @keyframes dirty-guard-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dirty-guard-note {
+      animation: none;
+    }
   }
 
   .scroll-story {

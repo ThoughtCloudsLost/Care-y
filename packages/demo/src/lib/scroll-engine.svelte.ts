@@ -35,6 +35,7 @@ import {
 } from "./scroll-sections.js";
 import type { DemoBridge, DemoBridgeState, DemoTopic } from "./bridge.js";
 import { backstopDecision, relinkDecision } from "./scroll-intent-guard.js";
+import { guardNavigation } from "./nav-guard.svelte.js";
 import {
   readingLineY,
   scrollTargetFor,
@@ -619,6 +620,16 @@ export function createScrollEngine(
     // these sections to that sub.
     const subs = getSection(id)?.subs;
     const loneSub = subs?.length === 1 ? (subs[0]?.slug ?? null) : null;
+
+    // Dirty-state guard: when the phone has unsaved input, suppress
+    // the first handbook-originated navigation. A second tap within the
+    // override window passes through (guardNavigation handles the
+    // window logic). Page-scroll intents and local navigation bypass
+    // the guard: the reader is already scrolling or unlinked.
+    if (mirror?.simulatorDirty === true) {
+      if (guardNavigation(true) === "suppress") return;
+    }
+
     if (!getUserLinked()) {
       localNavigate(id, loneSub);
       return;
@@ -628,6 +639,11 @@ export function createScrollEngine(
   }
 
   function selectSub(sectionId: SectionId, subSlug: string): void {
+    // Dirty-state guard (same logic as selectSection).
+    if (mirror?.simulatorDirty === true) {
+      if (guardNavigation(true) === "suppress") return;
+    }
+
     if (!getUserLinked()) {
       localNavigate(sectionId, subSlug);
       return;
