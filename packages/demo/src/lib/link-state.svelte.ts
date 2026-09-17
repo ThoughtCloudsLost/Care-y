@@ -34,6 +34,11 @@ export function toggleLinked(): void {
   linked = !linked;
 }
 
+/** Set the linked state directly. */
+export function setLinked(value: boolean): void {
+  linked = value;
+}
+
 /**
  * Reset to the default linked state. Called on restart so a fresh
  * demo session always starts coupled.

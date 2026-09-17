@@ -80,6 +80,7 @@
   import {
     isLinked,
     toggleLinked,
+    setLinked,
     resetLinked,
   } from "$demo/link-state.svelte.js";
   import {
@@ -285,13 +286,16 @@
     }, 150);
     return () => clearTimeout(handle);
   });
-  // Opening the search excursion seeds and resets the query state.
+  // Opening the search excursion seeds the query state and auto-unlinks
+  // so search results don't drive the simulator. The user can re-link
+  // manually if they want.
   $effect(() => {
     const exc = activeExcursion();
     if (exc?.kind === "search") {
       searchQuery = exc.initialQuery ?? "";
       searchDebounced = exc.initialQuery ?? "";
       searchFacet = null;
+      setLinked(false);
     }
   });
 
@@ -1033,7 +1037,7 @@
   // and it must not mistake a transient gesture for that state.
   const scrollEngine = createScrollEngine(
     () => bridge,
-    () => isLinked() && !gestureActive && !peekActive && !storyExcursionOpen,
+    () => isLinked() && !gestureActive && !peekActive,
     // Page scroll drives navigation only while the story is on screen
     // and interactive. It is unmounted in fullscreen, where the app owns
     // scrolling, and a story excursion shows a synthetic section whose
