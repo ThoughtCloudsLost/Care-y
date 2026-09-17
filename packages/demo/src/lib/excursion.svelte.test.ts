@@ -185,10 +185,10 @@ describe("excursion", () => {
     expect(activeExcursion()).toBe(null);
   });
 
-  it("closeOnPhoneNavigation closes search", () => {
+  it("closeOnPhoneNavigation does NOT close search", () => {
     openSearch();
     closeOnPhoneNavigation();
-    expect(activeExcursion()).toBe(null);
+    expect(activeExcursion()).not.toBe(null);
   });
 
   it("closeOnPhoneNavigation does NOT close guides", () => {

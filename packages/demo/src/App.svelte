@@ -102,10 +102,7 @@
   } from "$demo/search-highlight.js";
   import SearchDock from "$demo/SearchDock.svelte";
   import EdgeTab from "$demo/EdgeTab.svelte";
-  import {
-    isNavSuppressed,
-    resetNavGuard,
-  } from "$demo/nav-guard.svelte.js";
+  import { isNavSuppressed, resetNavGuard } from "$demo/nav-guard.svelte.js";
   import ReadingChip from "$demo/ReadingChip.svelte";
   import {
     chipTargetValue,
@@ -366,7 +363,6 @@
       clearSearchHighlights();
     };
   });
-
 
   /** Still captured from the clip's current frame at peek fire time. */
   let capturedStill: CapturedStill | null = $state(null);
@@ -1149,10 +1145,7 @@
       scrollEngine.handleBridgeState(state);
 
       // Close aggregation excursions on phone-origin navigation
-      if (
-        state.origin === "phone" ||
-        state.origin === "phone-correction"
-      ) {
+      if (state.origin === "phone" || state.origin === "phone-correction") {
         closeOnPhoneNavigation();
       }
 
@@ -1312,10 +1305,7 @@
   }
 
   /** Chip jump in the fullscreen drawer: scroll the drawer prose. */
-  function handleDrawerChipJump(
-    sectionId: SectionId,
-    subSlug: string,
-  ): void {
+  function handleDrawerChipJump(sectionId: SectionId, subSlug: string): void {
     void sectionId;
     drawerRef?.scrollToSub(subSlug);
   }
@@ -1787,7 +1777,6 @@
   /** Chrome fade duration in ms. */
   const CHROME_FADE_MS = 180;
 
-
   /** The drawer defaults to open when the USER enters fullscreen
    *  (toolbar button or preset menu item). Automatic entries (mobile
    *  simulate default, live-drag pressure) keep it closed. */
@@ -1835,8 +1824,9 @@
    * resize drag swaps the flow between its two drawer presentations at
    * the threshold the same way a window resize swaps the page's.
    */
-  const drawerSeatsBand: boolean = $derived(fsCtrl.drawerMeasure >= BAND_MIN_HOST_W);
-
+  const drawerSeatsBand: boolean = $derived(
+    fsCtrl.drawerMeasure >= BAND_MIN_HOST_W,
+  );
 
   /**
    * Programmatic fullscreen entry (button, menu, mobile default).
@@ -2089,7 +2079,6 @@
     }
   });
 
-
   function handleFsToggleDrawer(): void {
     fsCtrl.toggleDrawer();
   }
@@ -2319,7 +2308,7 @@
     <div
       class="fs-topbar-container"
       class:fs-topbar-container--revealed={topBarRevealed}
-      class:fs-topbar-container--above-tab={fsCtrl.dockEdge === 'top'}
+      class:fs-topbar-container--above-tab={fsCtrl.dockEdge === "top"}
       aria-hidden={topBarRevealed ? undefined : "true"}
       inert={topBarRevealed ? undefined : true}
       onpointerenter={handleTopBarEnter}
@@ -2518,7 +2507,8 @@
   {#if showDesktopChrome && !fsActive && !splashActive}
     <FrameToolbar
       shrunk={geo.shrunk}
-      phoneActive={geo.footprintW === fittedPhone.w && geo.footprintH === fittedPhone.h}
+      phoneActive={geo.footprintW === fittedPhone.w &&
+        geo.footprintH === fittedPhone.h}
       desktopActive={geo.footprintW === fittedDesktop.w &&
         geo.footprintH === fittedDesktop.h}
       {activeRole}
@@ -2744,7 +2734,11 @@
   >
     <div class="flow-story-wrapper" bind:this={storyWrapperEl}>
       {#key uiLocale}{#key pageKey}
-          <div class="section-view" class:section-view--railed={showRail} inert={guideExcursionOpen || undefined}>
+          <div
+            class="section-view"
+            class:section-view--railed={showRail}
+            inert={guideExcursionOpen || undefined}
+          >
             {#if showRail}
               <SectionRail
                 section={activeSectionDef}
@@ -2785,7 +2779,8 @@
         {/key}{/key}
       {#if guideExcursionOpen}
         <div
-          style="position: fixed; z-index: 50; background: var(--paper); top: {stickyTopOffset()}px; bottom: 0; left: {columnContainerLeft() + columnRect().x}px; width: {columnRect().width}px"
+          style="position: fixed; z-index: 50; background: var(--paper); top: {stickyTopOffset()}px; bottom: 0; left: {columnContainerLeft() +
+            columnRect().x}px; width: {columnRect().width}px"
         >
           <ExcursionSurface
             presentation="column"
@@ -2846,7 +2841,11 @@
     onScrollSub={handleDrawerScrollSub}
     band={flowBand.open && drawerSeatsBand ? flowDock : undefined}
     searchDock={storyExcursionOpen ? drawerSearchDock : undefined}
-    takeover={guideExcursionOpen ? excursionPanel : flowBand.open && !drawerSeatsBand ? flowPanel : undefined}
+    takeover={guideExcursionOpen
+      ? excursionPanel
+      : flowBand.open && !drawerSeatsBand
+        ? flowPanel
+        : undefined}
     bind:this={drawerRef}
   >
     {#snippet topbar()}
@@ -2917,7 +2916,8 @@
           desktopActive={false}
           {activeRole}
           onPhonePreset={() => exitFsToPreset(fittedPhone.w, fittedPhone.h)}
-          onDesktopPreset={() => exitFsToPreset(fittedDesktop.w, fittedDesktop.h)}
+          onDesktopPreset={() =>
+            exitFsToPreset(fittedDesktop.w, fittedDesktop.h)}
           onShrinkGrow={() => {}}
           onRoleChange={handleRoleChange}
           onClose={() => {}}

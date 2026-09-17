@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Read and Simulate are toggled from the top bar. Read mode shows the handbook as a document with the simulator hidden but still running, and you can long pres..." |
+* | "Read and Simulate are toggled from the top bar. Read mode shows the handbook as a document with the simulator hidden but still running. Simulate mode shows t..." |
 *
 * @param {Demo_Entry_Modes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

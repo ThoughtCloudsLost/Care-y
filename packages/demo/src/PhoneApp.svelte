@@ -126,7 +126,10 @@
     POLL_TIMEOUT_STANDARD_MS,
   } from "$demo/poll.js";
   import type { DemoEngineResult } from "$demo/engine/engine.js";
-  import { createDirtyTracker, type DirtyTrackerHandle } from "$demo/dirty-tracker.js";
+  import {
+    createDirtyTracker,
+    type DirtyTrackerHandle,
+  } from "$demo/dirty-tracker.js";
   import { onOutboxAppend } from "$demo/engine/outbox.js";
   import {
     beginFlowInteraction,
