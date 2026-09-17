@@ -133,11 +133,14 @@ export function buildBlocks(sects: Section[], loc: string): FlowBlock[] {
     const descParas = resolveStoryMessage(section.descKey, loc).split("\n");
     for (let pi = 0; pi < descParas.length; pi++) {
       result.push({
-        id: pi === 0 ? `${section.id}--desc` : `${section.id}--desc--p${pi}`,
+        id:
+          pi === 0
+            ? `${section.id}--desc`
+            : `${section.id}--desc--p${String(pi)}`,
         sectionId: section.id,
         subSlug: null,
         kind: "section-desc",
-        text: descParas[pi] ?? "",
+        text: descParas.at(pi) ?? "",
         spaceBefore: pi > 0 ? PARA_SPACE : undefined,
       } satisfies FlowTextBlock);
     }

@@ -21,7 +21,7 @@ export interface PermissionGroupDef {
   readonly permissions: readonly Permission[];
 }
 
-export const GROUPS: ReadonlyArray<PermissionGroupDef> = [
+export const GROUPS: readonly PermissionGroupDef[] = [
   {
     labelFn: () => m.roles_group_case_record(),
     permissions: [

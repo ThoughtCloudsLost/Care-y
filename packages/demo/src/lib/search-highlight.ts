@@ -29,10 +29,11 @@ function normalizeWithMap(original: string): {
   const normChars: string[] = [];
   const map: number[] = [];
   for (let i = 0; i < original.length; i++) {
-    const ch = original[i]!;
+    const ch = original.at(i);
+    if (ch === undefined) continue;
     const normCh = ch.toLowerCase().normalize("NFD").replace(COMBINING_RE, "");
-    for (let j = 0; j < normCh.length; j++) {
-      normChars.push(normCh[j]!);
+    for (const normChar of normCh) {
+      normChars.push(normChar);
       map.push(i);
     }
   }
@@ -41,6 +42,7 @@ function normalizeWithMap(original: string): {
 
 function highlightRegistry(): Map<string, unknown> | null {
   if (typeof CSS === "undefined") return null;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- CSS Custom Highlight API typing
   const holder = CSS as unknown as { highlights?: Map<string, unknown> };
   return holder.highlights ?? null;
 }
@@ -74,8 +76,8 @@ export function applySearchHighlights(root: Element, query: string): void {
       for (;;) {
         const pos = normalized.indexOf(token, from);
         if (pos === -1) break;
-        const start = offsetMap[pos];
-        const lastOrig = offsetMap[pos + token.length - 1];
+        const start = offsetMap.at(pos);
+        const lastOrig = offsetMap.at(pos + token.length - 1);
         if (start !== undefined && lastOrig !== undefined) {
           const range = document.createRange();
           range.setStart(node, start);
@@ -87,9 +89,10 @@ export function applySearchHighlights(root: Element, query: string): void {
     }
   }
 
-  const HighlightCtor = (
-    globalThis as unknown as { Highlight?: new (...r: Range[]) => unknown }
-  ).Highlight;
+  const HighlightCtor =
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- CSS Custom Highlight API constructor
+    (globalThis as unknown as { Highlight?: new (...r: Range[]) => unknown })
+      .Highlight;
   if (HighlightCtor === undefined) return;
   registry.set(HIGHLIGHT_NAME, new HighlightCtor(...ranges));
 }

@@ -73,7 +73,8 @@ export function buildSearchIndex(locale: string): readonly IndexEntry[] {
   const headingCache = new Map<string, string>();
 
   for (let order = 0; order < corpus.length; order++) {
-    const c = corpus[order]!;
+    const c = corpus.at(order);
+    if (c === undefined) continue;
 
     const headingKey = `${c.sectionId}/${c.subSlug ?? ""}`;
     let heading = headingCache.get(headingKey);
@@ -184,6 +185,7 @@ export function searchEntries(
     let bucket = buckets.get(key);
     if (bucket === undefined) {
       bucket = {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- sectionId comes from SCROLL_SECTIONS corpus
         sectionId: line.corpus.sectionId as SectionId,
         subSlug: line.corpus.subSlug,
         lines: [],
@@ -201,7 +203,7 @@ export function searchEntries(
     }
   }
 
-  const scored: Array<{ bucket: EntryBucket; score: number }> = [];
+  const scored: { bucket: EntryBucket; score: number }[] = [];
 
   for (const bucket of buckets.values()) {
     if (labelFilter !== null) {
