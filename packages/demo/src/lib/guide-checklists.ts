@@ -38,14 +38,14 @@ export interface GuideStep {
 export interface GuideDef {
   readonly slug: GuideSlug;
   readonly titleKey: string;
-  readonly steps: ReadonlyArray<GuideStep>;
+  readonly steps: readonly GuideStep[];
 }
 
 // -----------------------------------------------------------------------
 // Guide definitions
 // -----------------------------------------------------------------------
 
-const GUIDES: ReadonlyArray<GuideDef> = [
+const GUIDES: readonly GuideDef[] = [
   {
     slug: "take-a-call",
     titleKey: "demo_guide_take_a_call_title",

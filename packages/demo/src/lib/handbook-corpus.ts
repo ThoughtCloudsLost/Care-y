@@ -113,7 +113,8 @@ function addKeyEntries(
   if (hasFlowMarkup(resolved)) {
     const units = parseFlowMarkup(resolved);
     for (let i = 0; i < units.length; i++) {
-      const unit = units[i]!;
+      const unit = units.at(i);
+      if (unit === undefined) continue;
       const { label, plainText } = extractLabel(unit);
       out.push({
         sectionId,
@@ -183,7 +184,7 @@ function ensureIndex(locale: string): Map<string, CorpusEntry> {
   const corpus = buildCorpus(locale);
   const index = new Map<string, CorpusEntry>();
   for (const entry of corpus) {
-    const ref = `${entry.key}#${entry.lineIdx}`;
+    const ref = `${entry.key}#${String(entry.lineIdx)}`;
     // First entry wins (ENTRY_SECTION comes first and may share keys,
     // but the ref includes lineIdx so collisions are not expected).
     if (!index.has(ref)) {
@@ -203,7 +204,7 @@ export function getCorpusEntry(
   key: string,
   lineIdx: number,
 ): CorpusEntry | null {
-  const ref = `${key}#${lineIdx}`;
+  const ref = `${key}#${String(lineIdx)}`;
   return ensureIndex(locale).get(ref) ?? null;
 }
 
