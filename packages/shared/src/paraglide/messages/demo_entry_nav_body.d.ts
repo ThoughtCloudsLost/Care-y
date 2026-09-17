@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The section tabs at the top of the page jump to a feature, and the simulator opens that screen. Tapping around inside the simulator works in the other direct..." |
+* | "The contents menu in the top bar lists every handbook section, and clicking one jumps there. The simulator follows where the handbook goes, and tapping aroun..." |
 *
 * @param {Demo_Entry_Nav_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
