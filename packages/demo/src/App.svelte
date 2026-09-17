@@ -1033,7 +1033,7 @@
   // and it must not mistake a transient gesture for that state.
   const scrollEngine = createScrollEngine(
     () => bridge,
-    () => isLinked() && !gestureActive && !peekActive,
+    () => isLinked() && !gestureActive && !peekActive && !storyExcursionOpen,
     // Page scroll drives navigation only while the story is on screen
     // and interactive. It is unmounted in fullscreen, where the app owns
     // scrolling, and a story excursion shows a synthetic section whose
