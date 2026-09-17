@@ -1,15 +1,15 @@
 /**
- * Excursion state: aggregation pages and guide checklists.
+ * Excursion state: aggregation pages, guide checklists, and search.
  *
  * Only one excursion is active at a time (single nullable $state).
  * Opening a guide unlinks the phone-story coupling so the reader can
  * work through steps on the phone without the handbook fighting them.
- * Opening an aggregation never touches the link state.
+ * Opening an aggregation or search never touches the link state.
  *
- * Phone-tap close: aggregations close on phone-origin navigation
- * (the coupling always wins). Guides do NOT close on phone taps
- * because the reader is deliberately unlinked and working through
- * steps on the phone.
+ * Phone-tap close: aggregations and search close on phone-origin
+ * navigation (the coupling always wins). Guides do NOT close on
+ * phone taps because the reader is deliberately unlinked and working
+ * through steps on the phone.
  */
 
 import { isLinked, toggleLinked } from "./link-state.svelte.js";
@@ -21,7 +21,8 @@ import type { AggregationPageId } from "./aggregation-pages.js";
 
 type Excursion =
   | { kind: "aggregation"; page: AggregationPageId }
-  | { kind: "guide"; slug: GuideSlug };
+  | { kind: "guide"; slug: GuideSlug }
+  | { kind: "search"; initialQuery?: string };
 
 // -----------------------------------------------------------------------
 // Reactive state
@@ -55,13 +56,28 @@ export function openAggregation(page: AggregationPageId): void {
 }
 
 /**
+ * Open the full search surface. Closes any open guide (with link
+ * restoration) first. Never touches link state itself.
+ */
+export function openSearch(initialQuery?: string): void {
+  if (excursion !== null && excursion.kind === "guide") {
+    restoreLinkIfNeeded();
+  }
+  wasLinkedOnOpen = false;
+  excursion = { kind: "search", initialQuery };
+}
+
+/**
  * Open a guide checklist. Closes any open aggregation first. If the
  * phone-story coupling is linked, unlinks it so the reader can work
  * through steps on the phone without the handbook scrolling away.
  */
 export function openGuide(slug: GuideSlug): void {
-  // Close any open aggregation (no link side effects for aggregations)
-  if (excursion !== null && excursion.kind === "aggregation") {
+  // Close any open aggregation or search (no link side effects)
+  if (
+    excursion !== null &&
+    (excursion.kind === "aggregation" || excursion.kind === "search")
+  ) {
     excursion = null;
   }
 
@@ -85,12 +101,15 @@ export function closeExcursion(_reason: "user" | "phone-tap" | "relink"): void {
 }
 
 /**
- * Close an aggregation on phone-origin navigation. Guides are NOT
- * closed by phone taps: the reader is deliberately unlinked and
- * working through steps, and closing would fight them.
+ * Close an aggregation or search on phone-origin navigation. Guides
+ * are NOT closed by phone taps: the reader is deliberately unlinked
+ * and working through steps, and closing would fight them.
  */
 export function closeOnPhoneNavigation(): void {
-  if (excursion !== null && excursion.kind === "aggregation") {
+  if (
+    excursion !== null &&
+    (excursion.kind === "aggregation" || excursion.kind === "search")
+  ) {
     excursion = null;
   }
 }

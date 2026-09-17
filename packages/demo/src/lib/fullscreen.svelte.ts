@@ -15,14 +15,20 @@ import type { FrameGeometry } from "./frame-geometry.svelte.js";
 import type { SavedGeometry } from "./peek-controller.svelte.js";
 
 // -----------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------
+
+export type DockEdge = "top" | "right" | "bottom" | "left";
+
+// -----------------------------------------------------------------------
 // Constants
 // -----------------------------------------------------------------------
 
 /** Maximum prose measure inside the drawer (MAX_MEASURE precedent). */
 export const DRAWER_MAX_MEASURE = 620;
 
-/** Width the drawer opens at, and returns to after a snap close. */
-export const DRAWER_DEFAULT_W = 320;
+/** Measure the drawer opens at, and returns to after a snap close. */
+export const DRAWER_DEFAULT_MEASURE = 320;
 
 /**
  * Resizing below this closes the drawer instead.
@@ -33,7 +39,7 @@ export const DRAWER_DEFAULT_W = 320;
  * already down to nothing. A drag past that reads as "close" rather
  * than "make it tiny".
  */
-export const DRAWER_SNAP_CLOSE_W = 200;
+export const DRAWER_SNAP_CLOSE_MEASURE = 200;
 
 /** Duration (ms) for the frame box and toolbar FLIP animations. */
 export const FULLSCREEN_ANIM_MS = 300;
@@ -43,22 +49,11 @@ export const FULLSCREEN_ANIM_MS = 300;
  *  bounce would look jittery. */
 export const FULLSCREEN_EASE = "cubic-bezier(0.25, 1, 0.5, 1)";
 
-/** Inset kept around the pill on every edge. */
-const PILL_MARGIN = 8;
+/** Inset from edge ends for the tab button. */
+export const TAB_MARGIN = 8;
 
-/**
- * Height of the TopBar reveal strip (.fs-top-hot-strip), the invisible
- * band along the window's top edge that slides the hidden TopBar into
- * view on hover. The pill rests clear of it, so reaching for the pill
- * does not pull the TopBar down on the way.
- */
-const TOP_HOT_STRIP = 8;
-
-/** Gap left between that strip and the pill's resting top. */
-const PILL_TOP_CLEARANCE = 2;
-
-/** Resting inset from the left edge. */
-const PILL_REST_LEFT = 40;
+/** The tab button's dimension (width or height depending on edge). */
+export const TAB_SIZE = 44;
 
 // -----------------------------------------------------------------------
 // Pure functions
@@ -85,11 +80,9 @@ export function isFullscreenPressure(
   windowH: number,
   chromeH: number,
 ): boolean {
-  // Horizontal: neither side can hold a MIN_SEGMENT line plus its gap
   const horizontalRoom = windowW - outerW - HOLE_GAP * 2;
   const horizontalBlocked = horizontalRoom < MIN_SEGMENT;
 
-  // Vertical: the band gap above and below the frame is tiny
   const usableH = windowH - chromeH;
   const verticalGap = usableH - outerH;
   const verticalBlocked = verticalGap < FULL_BLEED_SLIVER;
@@ -98,57 +91,62 @@ export function isFullscreenPressure(
 }
 
 /**
- * Clamp pill position so the pill stays ENTIRELY on screen with an
- * 8px margin on every edge. Unlike clampPosition's 80px-sliver rule,
- * the pill is small enough that partial visibility looks broken.
+ * Clamp a desired drawer measure to the window dimension for the
+ * active edge. Left/right edges clamp against width; top/bottom
+ * clamp against height.
  */
-export function clampPillPosition(
-  top: number,
-  left: number,
-  pillW: number,
-  pillH: number,
+export function clampDrawerMeasure(
+  desired: number,
+  windowW: number,
+  windowH: number,
+  edge: DockEdge,
+): number {
+  const max = edge === "left" || edge === "right" ? windowW : windowH;
+  return Math.min(Math.max(desired, 0), Math.max(max, 0));
+}
+
+/** Convert a fractional offset (0-1) along an edge to a pixel {top, left} for the tab. */
+export function resolveTabPosition(
+  edge: DockEdge,
+  offset: number,
+  tabSize: number,
   windowW: number,
   windowH: number,
 ): { top: number; left: number } {
-  // Ceiling first, floor last: when the pill is larger than the window
-  // the two bounds cross, and the floor must win so the pill's top-left
-  // controls stay reachable.
+  const margin = TAB_MARGIN;
+  if (edge === "top" || edge === "bottom") {
+    const range = windowW - tabSize - margin * 2;
+    const along =
+      margin + Math.max(0, range) * Math.min(1, Math.max(0, offset));
+    return {
+      top: edge === "top" ? 0 : windowH - tabSize,
+      left: along,
+    };
+  }
+  // left or right
+  const range = windowH - tabSize - margin * 2;
+  const along = margin + Math.max(0, range) * Math.min(1, Math.max(0, offset));
   return {
-    top: Math.max(PILL_MARGIN, Math.min(top, windowH - pillH - PILL_MARGIN)),
-    left: Math.max(PILL_MARGIN, Math.min(left, windowW - pillW - PILL_MARGIN)),
+    top: along,
+    left: edge === "left" ? 0 : windowW - tabSize,
   };
 }
 
-/**
- * Clamp a desired drawer width to the window.
- *
- * The drawer sizes freely: it may cover the window edge to edge or
- * close down to nothing. Only the physical bounds apply, so a drag
- * that runs past either side of the window stops there instead of
- * producing a negative or larger-than-window width.
- */
-export function clampDrawerWidth(desired: number, windowW: number): number {
-  return Math.min(Math.max(desired, 0), Math.max(windowW, 0));
-}
-
-/**
- * Default pill position: near the top-left of the window, just clear of
- * the TopBar reveal strip.
- */
-export function defaultPillPosition(
-  pillW: number,
-  pillH: number,
+/** Determine which edge is nearest to a pointer position. */
+export function edgeFromDragPosition(
+  x: number,
+  y: number,
   windowW: number,
   windowH: number,
-): { top: number; left: number } {
-  return clampPillPosition(
-    TOP_HOT_STRIP + PILL_TOP_CLEARANCE,
-    PILL_REST_LEFT,
-    pillW,
-    pillH,
-    windowW,
-    windowH,
-  );
+): DockEdge {
+  const distances: [DockEdge, number][] = [
+    ["top", y],
+    ["bottom", windowH - y],
+    ["left", x],
+    ["right", windowW - x],
+  ];
+  distances.sort((a, b) => a[1] - b[1]);
+  return distances[0]![0];
 }
 
 // -----------------------------------------------------------------------
@@ -162,12 +160,14 @@ export interface FullscreenController {
   readonly autoEntered: boolean;
   /** Saved geometry from before entry, for restore on exit. */
   readonly saved: SavedGeometry | null;
-  /** Current pill position. */
-  readonly pillPos: { top: number; left: number };
+  /** Which window edge the tab is docked to. */
+  readonly dockEdge: DockEdge;
+  /** Fractional position (0-1) along the docked edge. */
+  readonly dockOffset: number;
   /** Whether the handbook drawer is open. */
   readonly drawerOpen: boolean;
-  /** Current drawer width. */
-  readonly drawerW: number;
+  /** Current drawer measure (width for L/R edge, height for T/B). */
+  readonly drawerMeasure: number;
 
   /**
    * Enter fullscreen mode.
@@ -188,8 +188,8 @@ export interface FullscreenController {
    */
   exitIntoResize(): void;
 
-  /** Update pill position (clamped). */
-  setPillPos(top: number, left: number, pillW: number, pillH: number): void;
+  /** Update dock edge and fractional offset (clamped to [0, 1]). */
+  setDock(edge: DockEdge, offset: number): void;
 
   /** Toggle the handbook drawer open/closed. */
   toggleDrawer(): void;
@@ -200,13 +200,13 @@ export interface FullscreenController {
   /** Close the handbook drawer. */
   closeDrawer(): void;
 
-  /** Set drawer width (clamped). Never closes; see settleDrawer. */
-  setDrawerW(w: number): void;
+  /** Set drawer measure (clamped). Never closes; see settleDrawer. */
+  setDrawerMeasure(m: number): void;
 
   /**
    * End a resize gesture. Closes the drawer when it came to rest under
-   * DRAWER_SNAP_CLOSE_W, so a drag can cross the threshold and come
-   * back out without the drawer shutting mid-gesture.
+   * DRAWER_SNAP_CLOSE_MEASURE, so a drag can cross the threshold and
+   * come back out without the drawer shutting mid-gesture.
    */
   settleDrawer(): void;
 
@@ -236,9 +236,10 @@ export function createFullscreenController(
   let active = $state(false);
   let autoEntered = $state(false);
   let saved: SavedGeometry | null = $state(null);
-  let pillPos = $state({ top: 0, left: 0 });
+  let dockEdge: DockEdge = $state("right");
+  let dockOffset = $state(0.85);
   let drawerOpen = $state(false);
-  let drawerW = $state(DRAWER_DEFAULT_W);
+  let drawerMeasure = $state(DRAWER_DEFAULT_MEASURE);
 
   function enter(auto: boolean, snapshot: SavedGeometry): void {
     if (!isPeekIdle()) return;
@@ -247,10 +248,6 @@ export function createFullscreenController(
     saved = snapshot;
     autoEntered = auto;
     active = true;
-
-    const win = getWindowSize();
-    const defaultPos = defaultPillPosition(160, 40, win.w, win.h);
-    pillPos = defaultPos;
   }
 
   function exit(): void {
@@ -276,14 +273,16 @@ export function createFullscreenController(
     drawerOpen = false;
   }
 
-  function setPillPos(
-    top: number,
-    left: number,
-    pillW: number,
-    pillH: number,
-  ): void {
-    const win = getWindowSize();
-    pillPos = clampPillPosition(top, left, pillW, pillH, win.w, win.h);
+  function setDock(edge: DockEdge, offset: number): void {
+    const wasHorizontal = dockEdge === "top" || dockEdge === "bottom";
+    const isHorizontal = edge === "top" || edge === "bottom";
+    dockEdge = edge;
+    dockOffset = Math.min(1, Math.max(0, offset));
+    if (wasHorizontal !== isHorizontal) {
+      drawerMeasure = isHorizontal
+        ? Math.round(getWindowSize().h * 0.75)
+        : DRAWER_DEFAULT_MEASURE;
+    }
   }
 
   function toggleDrawer(): void {
@@ -291,11 +290,13 @@ export function createFullscreenController(
   }
 
   function openDrawer(): void {
-    // A gesture that settled shut leaves its sliver width behind.
-    // Restore a usable one here, while the drawer is still off screen:
-    // doing it at close time would play the resize out in full view.
-    if (drawerW < DRAWER_SNAP_CLOSE_W) {
-      drawerW = DRAWER_DEFAULT_W;
+    if (drawerMeasure < DRAWER_SNAP_CLOSE_MEASURE) {
+      const isHorizontal = dockEdge === "top" || dockEdge === "bottom";
+      if (isHorizontal) {
+        drawerMeasure = Math.round(getWindowSize().h * 0.75);
+      } else {
+        drawerMeasure = DRAWER_DEFAULT_MEASURE;
+      }
     }
     drawerOpen = true;
   }
@@ -304,16 +305,13 @@ export function createFullscreenController(
     drawerOpen = false;
   }
 
-  function setDrawerW(w: number): void {
+  function setDrawerMeasure(m: number): void {
     const win = getWindowSize();
-    drawerW = clampDrawerWidth(w, win.w);
+    drawerMeasure = clampDrawerMeasure(m, win.w, win.h, dockEdge);
   }
 
   function settleDrawer(): void {
-    // The snap decision belongs to the release, not to the drag: a
-    // gesture that crosses the threshold and comes back out again
-    // should leave the drawer open. Only where it comes to rest counts.
-    if (drawerW < DRAWER_SNAP_CLOSE_W) {
+    if (drawerMeasure < DRAWER_SNAP_CLOSE_MEASURE) {
       drawerOpen = false;
     }
   }
@@ -322,9 +320,10 @@ export function createFullscreenController(
     active = false;
     autoEntered = false;
     saved = null;
-    pillPos = { top: 0, left: 0 };
+    dockEdge = "right";
+    dockOffset = 0.85;
     drawerOpen = false;
-    drawerW = DRAWER_DEFAULT_W;
+    drawerMeasure = DRAWER_DEFAULT_MEASURE;
   }
 
   return {
@@ -337,23 +336,26 @@ export function createFullscreenController(
     get saved(): SavedGeometry | null {
       return saved;
     },
-    get pillPos(): { top: number; left: number } {
-      return pillPos;
+    get dockEdge(): DockEdge {
+      return dockEdge;
+    },
+    get dockOffset(): number {
+      return dockOffset;
     },
     get drawerOpen(): boolean {
       return drawerOpen;
     },
-    get drawerW(): number {
-      return drawerW;
+    get drawerMeasure(): number {
+      return drawerMeasure;
     },
     enter,
     exit,
     exitIntoResize,
-    setPillPos,
+    setDock,
     toggleDrawer,
     openDrawer,
     closeDrawer,
-    setDrawerW,
+    setDrawerMeasure,
     settleDrawer,
     reset,
   };

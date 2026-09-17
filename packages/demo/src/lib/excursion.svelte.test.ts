@@ -3,6 +3,7 @@ import {
   activeExcursion,
   openAggregation,
   openGuide,
+  openSearch,
   closeExcursion,
   closeOnPhoneNavigation,
   resetExcursion,
@@ -43,6 +44,23 @@ describe("excursion", () => {
     }
   });
 
+  it("openSearch sets a search excursion", () => {
+    openSearch();
+    const ex = activeExcursion();
+    expect(ex).not.toBe(null);
+    expect(ex!.kind).toBe("search");
+  });
+
+  it("openSearch with initialQuery preserves the query", () => {
+    openSearch("encryption");
+    const ex = activeExcursion();
+    expect(ex).not.toBe(null);
+    expect(ex!.kind).toBe("search");
+    if (ex!.kind === "search") {
+      expect(ex!.initialQuery).toBe("encryption");
+    }
+  });
+
   it("opening a guide then an aggregation closes the guide and restores link", () => {
     // Start linked, open a guide (unlinks)
     expect(isLinked()).toBe(true);
@@ -68,6 +86,39 @@ describe("excursion", () => {
     }
   });
 
+  it("opening search then guide closes search", () => {
+    openSearch();
+    openGuide("take-a-call");
+    const ex = activeExcursion();
+    expect(ex!.kind).toBe("guide");
+  });
+
+  it("opening guide then search closes guide and restores link", () => {
+    expect(isLinked()).toBe(true);
+    openGuide("take-a-call");
+    expect(isLinked()).toBe(false);
+
+    openSearch();
+    const ex = activeExcursion();
+    expect(ex!.kind).toBe("search");
+    // Link was restored because the guide was open and had unlinked
+    expect(isLinked()).toBe(true);
+  });
+
+  it("opening search then aggregation replaces search", () => {
+    openSearch();
+    openAggregation("encryption");
+    const ex = activeExcursion();
+    expect(ex!.kind).toBe("aggregation");
+  });
+
+  it("opening aggregation then search replaces aggregation", () => {
+    openAggregation("encryption");
+    openSearch();
+    const ex = activeExcursion();
+    expect(ex!.kind).toBe("search");
+  });
+
   // -------------------------------------------------------------------
   // Link management on guide open
   // -------------------------------------------------------------------
@@ -84,6 +135,12 @@ describe("excursion", () => {
     openGuide("take-a-call");
     // Still unlinked, not re-linked
     expect(isLinked()).toBe(false);
+  });
+
+  it("openSearch does not touch link state", () => {
+    expect(isLinked()).toBe(true);
+    openSearch();
+    expect(isLinked()).toBe(true);
   });
 
   // -------------------------------------------------------------------
@@ -124,6 +181,12 @@ describe("excursion", () => {
 
   it("closeOnPhoneNavigation closes aggregations", () => {
     openAggregation("encryption");
+    closeOnPhoneNavigation();
+    expect(activeExcursion()).toBe(null);
+  });
+
+  it("closeOnPhoneNavigation closes search", () => {
+    openSearch();
     closeOnPhoneNavigation();
     expect(activeExcursion()).toBe(null);
   });

@@ -1,18 +1,36 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { overwriteGetLocale } from "$lib/paraglide/runtime";
 import {
   normalize,
-  searchHandbook,
+  searchEntries,
   invalidateSearchIndex,
 } from "./handbook-search.js";
 import { invalidateCorpusCache } from "./handbook-corpus.js";
+import { getSub } from "./scroll-sections.js";
 
 const EN = "en";
 const ES = "es";
+
+/** The corpus resolves through paraglide's GLOBAL locale; the locale
+ *  argument is a cache key and reactivity signal. Tests that need ES
+ *  text must switch the global. */
+function withLocale<T>(locale: string, fn: () => T): T {
+  overwriteGetLocale(() => locale as "en");
+  try {
+    return fn();
+  } finally {
+    overwriteGetLocale(() => "en");
+  }
+}
 
 beforeEach(() => {
   // Start each test with fresh caches
   invalidateSearchIndex();
   invalidateCorpusCache();
+});
+
+afterEach(() => {
+  overwriteGetLocale(() => "en");
 });
 
 describe("normalize", () => {
@@ -31,132 +49,103 @@ describe("normalize", () => {
   });
 });
 
-describe("searchHandbook", () => {
-  it("returns empty array for empty or whitespace-only query", () => {
-    expect(searchHandbook("", EN)).toEqual([]);
-    expect(searchHandbook("   ", EN)).toEqual([]);
-    expect(searchHandbook("\t\n", EN)).toEqual([]);
+describe("searchEntries", () => {
+  it("returns empty for empty or whitespace-only query with no labels", () => {
+    expect(searchEntries("", EN)).toEqual([]);
+    expect(searchEntries("   ", EN)).toEqual([]);
+    expect(searchEntries("\t\n", EN)).toEqual([]);
   });
 
-  it("AND-matches across tokens (all tokens must appear)", () => {
-    // Search for two tokens that should both appear in a single entry
-    const singleToken = searchHandbook("encryption", EN);
-    const twoToken = searchHandbook("encryption password", EN);
-
-    // Two-token search must be a subset of single-token: every hit from
-    // the two-token search must also match the single token, so the
-    // two-token count is at most the single-token count.
-    expect(twoToken.length).toBeLessThanOrEqual(singleToken.length);
-
-    // Every two-token hit matches both words
-    for (const hit of twoToken) {
-      const normBody = normalize(
-        hit.snippet.before + hit.snippet.match + hit.snippet.after,
-      );
-      const normLabel = normalize(hit.label ?? "");
-      const combined = `${normBody} ${normLabel}`;
-      // At least one of the tokens must appear in the snippet or label
-      // (the other may be in the heading which is not in the snippet)
+  it("returns whole entries: every hit resolves to a real sub", () => {
+    const hits = searchEntries("encryption", EN);
+    expect(hits.length).toBeGreaterThan(0);
+    for (const hit of hits) {
       expect(
-        combined.includes("encryption") ||
-          combined.includes("password") ||
-          true, // AND is checked against heading+label+body, not just snippet
-      ).toBe(true);
+        getSub(hit.sectionId, hit.subSlug),
+        `${hit.sectionId}/${hit.subSlug} is not a real sub`,
+      ).toBeDefined();
     }
   });
 
-  it("diacritic match: query without accents finds accented text", () => {
-    // "atencion" (no accent) should find entries containing "atención"
-    // in the ES corpus
-    const hits = searchHandbook("atencion", ES);
-    // The ES corpus should have some content with accented characters
-    // This test validates the normalization pipeline works end-to-end
-    // even if the specific word is not in the corpus, the normalization
-    // path is exercised
-    expect(Array.isArray(hits)).toBe(true);
+  it("dedupes: an entry appears once no matter how many lines match", () => {
+    const hits = searchEntries("encryption", EN, { limit: 100 });
+    const keys = hits.map((h) => `${h.sectionId}--${h.subSlug}`);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("diacritic match: query with accents finds matching text", () => {
-    const hits = searchHandbook("atención", ES);
-    expect(Array.isArray(hits)).toBe(true);
+  it("AND-matches across the entry's heading and body together", () => {
+    // Both tokens must appear somewhere in the entry, not per line.
+    const hits = searchEntries("encryption keys", EN);
+    expect(hits.length).toBeGreaterThan(0);
+    const single = searchEntries("zzzznotaword encryption", EN);
+    expect(single).toEqual([]);
   });
 
-  it("scoring: heading match scores higher than body match", () => {
-    // Search for a term that appears as a section/sub heading somewhere
-    // and also in body text elsewhere. Heading matches should rank first.
-    const hits = searchHandbook("encryption", EN);
-    if (hits.length >= 2) {
-      // The search results are sorted by score descending. We verify
-      // the invariant that results are ordered (no unsorted gaps).
-      // The exact ordering depends on corpus content, but the sort
-      // must be stable and consistent.
-      expect(hits.length).toBeGreaterThanOrEqual(1);
-    }
+  it("matches diacritics both directions", () => {
+    withLocale(ES, () => {
+      const bare = searchEntries("cifrado", ES);
+      expect(bare.length).toBeGreaterThan(0);
+      // Accented and bare spellings of the same word find the same
+      // entries: both sides of the match are normalized.
+      const accented = searchEntries("organización", ES);
+      const unaccented = searchEntries("organizacion", ES);
+      expect(accented.length).toBeGreaterThan(0);
+      expect(accented.map((h) => h.subSlug)).toEqual(
+        unaccented.map((h) => h.subSlug),
+      );
+    });
   });
 
-  it("caps results at 20", () => {
-    // Use a very broad single-character token that matches many entries
-    const hits = searchHandbook("a", EN);
+  it("caps at the default limit of 20", () => {
+    const hits = searchEntries("the", EN);
     expect(hits.length).toBeLessThanOrEqual(20);
   });
 
-  it("snippet.match equals the original (accented) substring", () => {
-    // Search the ES corpus for a normalized term. If any hit's
-    // snippet.match contains a combining-mark character (accent), the
-    // match was extracted from the original text, not the normalized
-    // form. This confirms the offset map works correctly.
-    //
-    // "cifrado" (encrypted) is common in ES handbook prose.
-    const hits = searchHandbook("cifrado", ES);
-    for (const hit of hits) {
-      // snippet.match must be a substring of original text, so it
-      // must NOT be fully lowercase-NFD-stripped when the source had
-      // accents. We verify the match is non-empty and not normalized.
-      expect(hit.snippet.match.length).toBeGreaterThan(0);
-      // The match should equal itself (identity sanity) and should be
-      // a verbatim slice of the source text (which we cannot access
-      // directly, but we can verify it is not double-normalized by
-      // checking that normalizing the match does not change its case
-      // pattern when it should).
-    }
+  it("honors a custom limit", () => {
+    const hits = searchEntries("the", EN, { limit: 5 });
+    expect(hits.length).toBeLessThanOrEqual(5);
+  });
 
-    // Stronger check: search for "informacion" which is the
-    // normalized form of "información". If the ES corpus contains
-    // this word, the snippet.match should preserve the accent.
-    const accentHits = searchHandbook("informacion", ES);
-    for (const hit of accentHits) {
-      // The match substring comes from original text, so if it
-      // contains the matched word, it should have the accent.
-      if (hit.snippet.match.toLowerCase().includes("informacion")) {
-        // The original should have "información" with accent
-        expect(
-          hit.snippet.match.includes("ó") ||
-            hit.snippet.match.includes("informacion"),
-        ).toBe(true);
-      }
+  it("ranks heading matches above body-only matches", () => {
+    // Any query that appears in some entry's heading should surface
+    // that entry ahead of entries where it appears only in body text.
+    const hits = searchEntries("encryption", EN, { limit: 100 });
+    expect(hits.length).toBeGreaterThan(1);
+    expect(hits[0]!.score).toBeGreaterThanOrEqual(hits.at(-1)!.score);
+  });
+
+  it("label filter narrows to entries carrying the label", () => {
+    const all = searchEntries("", EN, {
+      labels: ["Encryption."],
+      limit: 100,
+    });
+    expect(all.length).toBeGreaterThan(0);
+    for (const hit of all) {
+      expect(hit.labels).toContain("Encryption.");
     }
+  });
+
+  it("empty query with labels returns entries in taxonomy order", () => {
+    const hits = searchEntries("", EN, {
+      labels: ["Encryption."],
+      limit: 100,
+    });
+    // Zero scores throughout; order is the corpus walk order, which is
+    // stable across calls.
+    const again = searchEntries("", EN, {
+      labels: ["Encryption."],
+      limit: 100,
+    });
+    expect(hits.map((h) => h.subSlug)).toEqual(again.map((h) => h.subSlug));
+    expect(hits.every((h) => h.score === 0)).toBe(true);
   });
 
   it("per-locale caches are independent", () => {
-    // Searching EN should not return ES-specific results and vice versa
-    const enHits = searchHandbook("encryption", EN);
-    const esHits = searchHandbook("cifrado", ES);
-
-    expect(Array.isArray(enHits)).toBe(true);
-    expect(Array.isArray(esHits)).toBe(true);
-
-    // Both locales produce results from their respective corpora
-    // "encryption" is an EN term, "cifrado" is an ES term
-    // (overlap is possible but each locale should resolve independently)
-  });
-
-  it("invalidateSearchIndex clears the cache", () => {
-    // Populate by searching
-    searchHandbook("test", EN);
-    // Invalidate
-    invalidateSearchIndex();
-    // Search again should work without error (rebuilds cache)
-    const hits = searchHandbook("test", EN);
-    expect(Array.isArray(hits)).toBe(true);
+    const en = searchEntries("encryption", EN);
+    expect(en.length).toBeGreaterThan(0);
+    const es = withLocale(ES, () => searchEntries("cifrado", ES));
+    expect(es.length).toBeGreaterThan(0);
+    // The EN cache was not clobbered by the ES build.
+    expect(searchEntries("encryption", EN).length).toBe(en.length);
   });
 });

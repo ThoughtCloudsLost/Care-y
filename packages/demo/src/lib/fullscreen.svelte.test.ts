@@ -2,14 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { flushSync } from "svelte";
 import {
   isFullscreenPressure,
-  clampPillPosition,
-  clampDrawerWidth,
-  defaultPillPosition,
+  clampDrawerMeasure,
+  resolveTabPosition,
+  edgeFromDragPosition,
   createFullscreenController,
   DRAWER_MAX_MEASURE,
-  DRAWER_DEFAULT_W,
-  DRAWER_SNAP_CLOSE_W,
+  DRAWER_DEFAULT_MEASURE,
+  DRAWER_SNAP_CLOSE_MEASURE,
+  TAB_SIZE,
+  TAB_MARGIN,
   type FullscreenController,
+  type DockEdge,
 } from "./fullscreen.svelte.js";
 import {
   createFrameGeometry,
@@ -26,20 +29,17 @@ describe("isFullscreenPressure", () => {
   const chromeH = 48;
 
   it("returns true when neither axis has room for text", () => {
-    // Frame fills most of the window on both axes
     const result = isFullscreenPressure(1200, 850, 1280, 900, chromeH);
     expect(result).toBe(true);
   });
 
   it("returns false when the horizontal axis has room for a text column", () => {
-    // outerW leaves enough room: windowW - outerW - 2*HOLE_GAP >= MIN_SEGMENT
     const outerW = 1280 - MIN_SEGMENT - HOLE_GAP * 2;
     const result = isFullscreenPressure(outerW, 850, 1280, 900, chromeH);
     expect(result).toBe(false);
   });
 
   it("returns false when the vertical gap exceeds FULL_BLEED_SLIVER", () => {
-    // outerH leaves enough vertical gap: usableH - outerH >= FULL_BLEED_SLIVER
     const usableH = 900 - chromeH;
     const outerH = usableH - FULL_BLEED_SLIVER;
     const result = isFullscreenPressure(1200, outerH, 1280, 900, chromeH);
@@ -47,14 +47,12 @@ describe("isFullscreenPressure", () => {
   });
 
   it("triggers at exactly the horizontal threshold (boundary -1px)", () => {
-    // One pixel short of MIN_SEGMENT room: pressure
     const outerW = 1280 - (MIN_SEGMENT - 1) - HOLE_GAP * 2;
     const result = isFullscreenPressure(outerW, 850, 1280, 900, chromeH);
     expect(result).toBe(true);
   });
 
   it("does not trigger at exactly MIN_SEGMENT room (boundary)", () => {
-    // Exactly MIN_SEGMENT room: no pressure
     const outerW = 1280 - MIN_SEGMENT - HOLE_GAP * 2;
     const result = isFullscreenPressure(outerW, 850, 1280, 900, chromeH);
     expect(result).toBe(false);
@@ -62,7 +60,6 @@ describe("isFullscreenPressure", () => {
 
   it("triggers at exactly the vertical threshold (boundary -1px)", () => {
     const usableH = 900 - chromeH;
-    // One pixel short of FULL_BLEED_SLIVER: pressure
     const outerH = usableH - (FULL_BLEED_SLIVER - 1);
     const result = isFullscreenPressure(1200, outerH, 1280, 900, chromeH);
     expect(result).toBe(true);
@@ -76,123 +73,152 @@ describe("isFullscreenPressure", () => {
   });
 
   it("is symmetric: same frame in a wider window does not trigger", () => {
-    // Tight in 1280, but comfortable in 1600
     expect(isFullscreenPressure(1200, 850, 1280, 900, chromeH)).toBe(true);
     expect(isFullscreenPressure(1200, 850, 1600, 900, chromeH)).toBe(false);
   });
 
   it("responds to chromeH: taller chrome makes vertical pressure easier", () => {
     const outerH = 800;
-    // With small chrome, the gap is large enough
     expect(isFullscreenPressure(1200, outerH, 1280, 900, 20)).toBe(false);
-    // With tall chrome, the usable height shrinks and gap drops below threshold
     expect(isFullscreenPressure(1200, outerH, 1280, 900, 200)).toBe(true);
   });
 });
 
 // ---------------------------------------------------------------------------
-// clampPillPosition
+// clampDrawerMeasure
 // ---------------------------------------------------------------------------
 
-describe("clampPillPosition", () => {
-  const pillW = 160;
-  const pillH = 40;
+describe("clampDrawerMeasure", () => {
+  it("returns the desired measure untouched for left/right edges", () => {
+    expect(clampDrawerMeasure(400, 1280, 900, "right")).toBe(400);
+    expect(clampDrawerMeasure(400, 1280, 900, "left")).toBe(400);
+  });
+
+  it("returns the desired measure untouched for top/bottom edges", () => {
+    expect(clampDrawerMeasure(400, 1280, 900, "top")).toBe(400);
+    expect(clampDrawerMeasure(400, 1280, 900, "bottom")).toBe(400);
+  });
+
+  it("clamps left/right edges against windowW", () => {
+    expect(clampDrawerMeasure(2000, 1280, 900, "right")).toBe(1280);
+    expect(clampDrawerMeasure(2000, 1280, 900, "left")).toBe(1280);
+  });
+
+  it("clamps top/bottom edges against windowH", () => {
+    expect(clampDrawerMeasure(2000, 1280, 900, "top")).toBe(900);
+    expect(clampDrawerMeasure(2000, 1280, 900, "bottom")).toBe(900);
+  });
+
+  it("clamps negative values to zero", () => {
+    expect(clampDrawerMeasure(-200, 1280, 900, "right")).toBe(0);
+    expect(clampDrawerMeasure(-200, 1280, 900, "top")).toBe(0);
+  });
+
+  it("allows zero", () => {
+    expect(clampDrawerMeasure(0, 1280, 900, "left")).toBe(0);
+  });
+
+  it("allows edge-to-edge coverage for both axis types", () => {
+    expect(clampDrawerMeasure(1280, 1280, 900, "right")).toBe(1280);
+    expect(clampDrawerMeasure(900, 1280, 900, "bottom")).toBe(900);
+  });
+
+  it("never returns negative on a zero-size window", () => {
+    expect(clampDrawerMeasure(-50, 0, 0, "right")).toBe(0);
+    expect(clampDrawerMeasure(-50, 0, 0, "top")).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveTabPosition
+// ---------------------------------------------------------------------------
+
+describe("resolveTabPosition", () => {
   const winW = 1280;
   const winH = 900;
 
-  it("returns the same position when fully within bounds", () => {
-    const result = clampPillPosition(400, 500, pillW, pillH, winW, winH);
-    expect(result).toEqual({ top: 400, left: 500 });
+  it("places the tab at the start of the top edge at offset 0", () => {
+    const pos = resolveTabPosition("top", 0, TAB_SIZE, winW, winH);
+    expect(pos.top).toBe(0);
+    expect(pos.left).toBe(TAB_MARGIN);
   });
 
-  it("clamps to the top edge", () => {
-    const result = clampPillPosition(-100, 500, pillW, pillH, winW, winH);
-    expect(result.top).toBe(8);
+  it("places the tab at the end of the top edge at offset 1", () => {
+    const pos = resolveTabPosition("top", 1, TAB_SIZE, winW, winH);
+    expect(pos.top).toBe(0);
+    expect(pos.left).toBe(winW - TAB_SIZE - TAB_MARGIN);
   });
 
-  it("clamps to the bottom edge", () => {
-    const result = clampPillPosition(2000, 500, pillW, pillH, winW, winH);
-    expect(result.top).toBe(winH - pillH - 8);
+  it("places the tab at the midpoint of the bottom edge at offset 0.5", () => {
+    const pos = resolveTabPosition("bottom", 0.5, TAB_SIZE, winW, winH);
+    expect(pos.top).toBe(winH - TAB_SIZE);
+    const range = winW - TAB_SIZE - TAB_MARGIN * 2;
+    expect(pos.left).toBe(TAB_MARGIN + range * 0.5);
   });
 
-  it("clamps to the left edge", () => {
-    const result = clampPillPosition(400, -100, pillW, pillH, winW, winH);
-    expect(result.left).toBe(8);
+  it("places the tab at the start of the left edge at offset 0", () => {
+    const pos = resolveTabPosition("left", 0, TAB_SIZE, winW, winH);
+    expect(pos.left).toBe(0);
+    expect(pos.top).toBe(TAB_MARGIN);
   });
 
-  it("clamps to the right edge", () => {
-    const result = clampPillPosition(400, 2000, pillW, pillH, winW, winH);
-    expect(result.left).toBe(winW - pillW - 8);
+  it("places the tab at the end of the right edge at offset 1", () => {
+    const pos = resolveTabPosition("right", 1, TAB_SIZE, winW, winH);
+    expect(pos.left).toBe(winW - TAB_SIZE);
+    expect(pos.top).toBe(winH - TAB_SIZE - TAB_MARGIN);
   });
 
-  it("clamps all four edges simultaneously for an oversized pill", () => {
-    // Pill larger than the window: margin wins on all sides
-    const result = clampPillPosition(0, 0, 2000, 2000, 200, 200);
-    expect(result.top).toBe(8);
-    expect(result.left).toBe(8);
+  it("clamps offset below 0 to 0", () => {
+    const pos = resolveTabPosition("top", -5, TAB_SIZE, winW, winH);
+    expect(pos.left).toBe(TAB_MARGIN);
   });
 
-  it("clamps to corner when pill is pushed far off-screen", () => {
-    const result = clampPillPosition(-9999, -9999, pillW, pillH, winW, winH);
-    expect(result.top).toBe(8);
-    expect(result.left).toBe(8);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// clampDrawerWidth
-// ---------------------------------------------------------------------------
-
-describe("clampDrawerWidth", () => {
-  it("returns the desired width untouched", () => {
-    expect(clampDrawerWidth(400, 1280)).toBe(400);
+  it("clamps offset above 1 to 1", () => {
+    const pos = resolveTabPosition("top", 10, TAB_SIZE, winW, winH);
+    expect(pos.left).toBe(winW - TAB_SIZE - TAB_MARGIN);
   });
 
-  it("allows a drawer narrower than any prose measure", () => {
-    expect(clampDrawerWidth(100, 1280)).toBe(100);
-  });
-
-  it("allows the drawer to cover the window edge to edge", () => {
-    expect(clampDrawerWidth(1280, 1280)).toBe(1280);
-  });
-
-  it("allows the drawer to close down to nothing", () => {
-    expect(clampDrawerWidth(0, 1280)).toBe(0);
-  });
-
-  it("stops a drag past the left window edge at full width", () => {
-    expect(clampDrawerWidth(2000, 1280)).toBe(1280);
-  });
-
-  it("stops a drag past the right window edge at zero", () => {
-    expect(clampDrawerWidth(-200, 1280)).toBe(0);
-  });
-
-  it("never returns a negative width on a zero-width window", () => {
-    expect(clampDrawerWidth(-50, 0)).toBe(0);
+  it("handles a window smaller than the tab gracefully", () => {
+    const pos = resolveTabPosition("top", 0.5, TAB_SIZE, 20, 20);
+    expect(pos.top).toBe(0);
+    expect(pos.left).toBe(TAB_MARGIN);
   });
 });
 
 // ---------------------------------------------------------------------------
-// defaultPillPosition
+// edgeFromDragPosition
 // ---------------------------------------------------------------------------
 
-describe("defaultPillPosition", () => {
-  it("rests near the top left, clear of the TopBar reveal strip", () => {
-    const pos = defaultPillPosition(160, 40, 1280, 900);
-    expect(pos.left).toBe(40);
-    // Below the 8px reveal strip, so resting there never pulls the
-    // TopBar down
-    expect(pos.top).toBeGreaterThan(8);
-    expect(pos.top).toBe(10);
+describe("edgeFromDragPosition", () => {
+  const winW = 1280;
+  const winH = 900;
+
+  it("returns 'top' when the pointer is near the top edge", () => {
+    expect(edgeFromDragPosition(640, 5, winW, winH)).toBe("top");
   });
 
-  it("stays within bounds on a small window", () => {
-    const pos = defaultPillPosition(160, 40, 200, 100);
-    expect(pos.top).toBeGreaterThanOrEqual(8);
-    expect(pos.left).toBeGreaterThanOrEqual(8);
-    expect(pos.top + 40).toBeLessThanOrEqual(100 - 8);
-    expect(pos.left + 160).toBeLessThanOrEqual(200 - 8);
+  it("returns 'bottom' when the pointer is near the bottom edge", () => {
+    expect(edgeFromDragPosition(640, 895, winW, winH)).toBe("bottom");
+  });
+
+  it("returns 'left' when the pointer is near the left edge", () => {
+    expect(edgeFromDragPosition(5, 450, winW, winH)).toBe("left");
+  });
+
+  it("returns 'right' when the pointer is near the right edge", () => {
+    expect(edgeFromDragPosition(1275, 450, winW, winH)).toBe("right");
+  });
+
+  it("returns 'top' for the top-left corner (top and left tie, top wins by sort stability)", () => {
+    // At (0, 0), distance to top = 0, distance to left = 0.
+    // Sort is stable, so whichever appears first in the array wins.
+    const edge = edgeFromDragPosition(0, 0, winW, winH);
+    expect(edge).toBe("top");
+  });
+
+  it("picks the nearest edge from a center-ish point biased toward one side", () => {
+    // x=100, y=450: distances are top=450, bottom=450, left=100, right=1180
+    expect(edgeFromDragPosition(100, 450, winW, winH)).toBe("left");
   });
 });
 
@@ -244,12 +270,15 @@ describe("createFullscreenController", () => {
     return { geo, ctrl, teardown };
   }
 
-  it("starts inactive", () => {
+  it("starts inactive with default dock state", () => {
     const { ctrl, teardown } = setup();
     expect(ctrl.active).toBe(false);
     expect(ctrl.autoEntered).toBe(false);
     expect(ctrl.saved).toBeNull();
     expect(ctrl.drawerOpen).toBe(false);
+    expect(ctrl.dockEdge).toBe("right");
+    expect(ctrl.dockOffset).toBe(0.85);
+    expect(ctrl.drawerMeasure).toBe(DRAWER_DEFAULT_MEASURE);
     teardown();
   });
 
@@ -327,7 +356,6 @@ describe("createFullscreenController", () => {
     ctrl.enter(true, snapshot2);
     flushSync();
 
-    // Still has the first snapshot
     expect(ctrl.saved).toEqual(snapshot1);
     expect(ctrl.autoEntered).toBe(false);
     teardown();
@@ -351,7 +379,6 @@ describe("createFullscreenController", () => {
     ctrl.enter(false, snapshot);
     flushSync();
 
-    // Mutate geo to simulate the override period
     geo.setFootprint(800, 600);
     geo.setPosition(0, 0);
 
@@ -362,7 +389,6 @@ describe("createFullscreenController", () => {
     expect(ctrl.saved).toBeNull();
     expect(geo.footprintW).toBe(priorW);
     expect(geo.footprintH).toBe(priorH);
-    // Position is restored then clamped, so it should be close
     expect(geo.top).toBeCloseTo(priorTop, 0);
     expect(geo.left).toBeCloseTo(priorLeft, 0);
     teardown();
@@ -418,7 +444,6 @@ describe("createFullscreenController", () => {
     ctrl.enter(false, snapshot);
     flushSync();
 
-    // Mutate geo to a different size (simulating the live drag)
     geo.setFootprint(800, 600);
     geo.setPosition(50, 50);
 
@@ -427,7 +452,6 @@ describe("createFullscreenController", () => {
 
     expect(ctrl.active).toBe(false);
     expect(ctrl.saved).toBeNull();
-    // Geo keeps the mutated values, not restored to the snapshot
     expect(geo.footprintW).toBe(800);
     expect(geo.footprintH).toBe(600);
     expect(geo.top).toBe(50);
@@ -438,7 +462,6 @@ describe("createFullscreenController", () => {
   it("enter/exit round-trip restores exact geometry against a real createFrameGeometry", () => {
     const { ctrl, geo, teardown } = setup();
 
-    // Set up a known geometry
     geo.setFootprint(500, 700);
     geo.setPosition(100, 200);
     geo.reanchorBand();
@@ -463,7 +486,7 @@ describe("createFullscreenController", () => {
     teardown();
   });
 
-  it("setPillPos clamps to window bounds", () => {
+  it("setDock updates edge and offset", () => {
     const { ctrl, geo, teardown } = setup();
 
     const snapshot: SavedGeometry = {
@@ -476,12 +499,34 @@ describe("createFullscreenController", () => {
     ctrl.enter(false, snapshot);
     flushSync();
 
-    // Push pill off right and bottom
-    ctrl.setPillPos(9999, 9999, 160, 40);
+    ctrl.setDock("left", 0.75);
     flushSync();
 
-    expect(ctrl.pillPos.top).toBe(winSize.h - 40 - 8);
-    expect(ctrl.pillPos.left).toBe(winSize.w - 160 - 8);
+    expect(ctrl.dockEdge).toBe("left");
+    expect(ctrl.dockOffset).toBe(0.75);
+    teardown();
+  });
+
+  it("setDock clamps offset to [0, 1]", () => {
+    const { ctrl, geo, teardown } = setup();
+
+    const snapshot: SavedGeometry = {
+      footprintW: geo.footprintW,
+      footprintH: geo.footprintH,
+      top: geo.top,
+      left: geo.left,
+    };
+
+    ctrl.enter(false, snapshot);
+    flushSync();
+
+    ctrl.setDock("top", -5);
+    flushSync();
+    expect(ctrl.dockOffset).toBe(0);
+
+    ctrl.setDock("bottom", 99);
+    flushSync();
+    expect(ctrl.dockOffset).toBe(1);
     teardown();
   });
 
@@ -541,7 +586,7 @@ describe("createFullscreenController", () => {
 
     ctrl.enter(false, snapshot);
     ctrl.toggleDrawer();
-    ctrl.setDrawerW(0);
+    ctrl.setDrawerMeasure(0);
     ctrl.settleDrawer();
     flushSync();
     expect(ctrl.drawerOpen).toBe(false);
@@ -549,13 +594,11 @@ describe("createFullscreenController", () => {
     ctrl.openDrawer();
     flushSync();
     expect(ctrl.drawerOpen).toBe(true);
-    // The sliver it settled at would be unusable, so opening restores
-    // a default. Off screen, where the resize cannot be seen.
-    expect(ctrl.drawerW).toBe(DRAWER_DEFAULT_W);
+    expect(ctrl.drawerMeasure).toBe(DRAWER_DEFAULT_MEASURE);
     teardown();
   });
 
-  it("openDrawer keeps a width that was already usable", () => {
+  it("openDrawer keeps a measure that was already usable", () => {
     const { ctrl, geo, teardown } = setup();
 
     const snapshot: SavedGeometry = {
@@ -567,13 +610,13 @@ describe("createFullscreenController", () => {
 
     ctrl.enter(false, snapshot);
     ctrl.toggleDrawer();
-    ctrl.setDrawerW(500);
+    ctrl.setDrawerMeasure(500);
     ctrl.closeDrawer();
     flushSync();
 
     ctrl.openDrawer();
     flushSync();
-    expect(ctrl.drawerW).toBe(500);
+    expect(ctrl.drawerMeasure).toBe(500);
     teardown();
   });
 
@@ -590,16 +633,18 @@ describe("createFullscreenController", () => {
     ctrl.enter(false, snapshot);
     flushSync();
 
-    for (const w of [-500, 0, 1, DRAWER_SNAP_CLOSE_W - 1]) {
+    for (const m of [-500, 0, 1, DRAWER_SNAP_CLOSE_MEASURE - 1]) {
       ctrl.openDrawer();
-      ctrl.setDrawerW(w);
+      ctrl.setDrawerMeasure(m);
       ctrl.settleDrawer();
       flushSync();
       expect(ctrl.drawerOpen).toBe(false);
 
       ctrl.openDrawer();
       flushSync();
-      expect(ctrl.drawerW).toBeGreaterThanOrEqual(DRAWER_SNAP_CLOSE_W);
+      expect(ctrl.drawerMeasure).toBeGreaterThanOrEqual(
+        DRAWER_SNAP_CLOSE_MEASURE,
+      );
     }
     teardown();
   });
@@ -622,7 +667,7 @@ describe("createFullscreenController", () => {
     teardown();
   });
 
-  it("setDrawerW resizes freely inside the window", () => {
+  it("setDrawerMeasure resizes freely inside the window", () => {
     const { ctrl, geo, teardown } = setup();
 
     const snapshot: SavedGeometry = {
@@ -635,24 +680,21 @@ describe("createFullscreenController", () => {
     ctrl.enter(false, snapshot);
     flushSync();
 
-    // No floor at all: the width follows the drag anywhere
-    ctrl.setDrawerW(1);
+    ctrl.setDrawerMeasure(1);
     flushSync();
-    expect(ctrl.drawerW).toBe(1);
+    expect(ctrl.drawerMeasure).toBe(1);
 
-    // Past the left window edge stops at full width
-    ctrl.setDrawerW(9999);
+    ctrl.setDrawerMeasure(9999);
     flushSync();
-    expect(ctrl.drawerW).toBe(winSize.w);
+    expect(ctrl.drawerMeasure).toBe(winSize.w);
 
-    // Ordinary widths are untouched
-    ctrl.setDrawerW(400);
+    ctrl.setDrawerMeasure(400);
     flushSync();
-    expect(ctrl.drawerW).toBe(400);
+    expect(ctrl.drawerMeasure).toBe(400);
     teardown();
   });
 
-  it("setDrawerW never closes the drawer mid-drag", () => {
+  it("setDrawerMeasure never closes the drawer mid-drag", () => {
     const { ctrl, geo, teardown } = setup();
 
     const snapshot: SavedGeometry = {
@@ -666,19 +708,16 @@ describe("createFullscreenController", () => {
     ctrl.toggleDrawer();
     flushSync();
 
-    // Well under the threshold, and still open: the drawer follows the
-    // pointer wherever it goes.
-    ctrl.setDrawerW(10);
+    ctrl.setDrawerMeasure(10);
     flushSync();
     expect(ctrl.drawerOpen).toBe(true);
-    expect(ctrl.drawerW).toBe(10);
+    expect(ctrl.drawerMeasure).toBe(10);
 
-    // Dragged back out without ever releasing: nothing was decided.
-    ctrl.setDrawerW(420);
+    ctrl.setDrawerMeasure(420);
     ctrl.settleDrawer();
     flushSync();
     expect(ctrl.drawerOpen).toBe(true);
-    expect(ctrl.drawerW).toBe(420);
+    expect(ctrl.drawerMeasure).toBe(420);
     teardown();
   });
 
@@ -696,14 +735,12 @@ describe("createFullscreenController", () => {
     ctrl.toggleDrawer();
     flushSync();
 
-    ctrl.setDrawerW(DRAWER_SNAP_CLOSE_W - 1);
+    ctrl.setDrawerMeasure(DRAWER_SNAP_CLOSE_MEASURE - 1);
     ctrl.settleDrawer();
     flushSync();
     expect(ctrl.drawerOpen).toBe(false);
 
-    // The width is left where the drag ended, so the close animates
-    // from the size on screen instead of lurching on its way out.
-    expect(ctrl.drawerW).toBe(DRAWER_SNAP_CLOSE_W - 1);
+    expect(ctrl.drawerMeasure).toBe(DRAWER_SNAP_CLOSE_MEASURE - 1);
     teardown();
   });
 
@@ -719,14 +756,14 @@ describe("createFullscreenController", () => {
 
     ctrl.enter(false, snapshot);
     ctrl.toggleDrawer();
-    ctrl.setDrawerW(DRAWER_SNAP_CLOSE_W);
+    ctrl.setDrawerMeasure(DRAWER_SNAP_CLOSE_MEASURE);
     ctrl.settleDrawer();
     flushSync();
     expect(ctrl.drawerOpen).toBe(true);
     teardown();
   });
 
-  it("reset clears all state", () => {
+  it("reset clears all state to defaults", () => {
     const { ctrl, geo, teardown } = setup();
 
     const snapshot: SavedGeometry = {
@@ -739,7 +776,8 @@ describe("createFullscreenController", () => {
     ctrl.enter(true, snapshot);
     flushSync();
     ctrl.toggleDrawer();
-    ctrl.setDrawerW(500);
+    ctrl.setDrawerMeasure(500);
+    ctrl.setDock("left", 0.2);
     flushSync();
 
     ctrl.reset();
@@ -749,29 +787,9 @@ describe("createFullscreenController", () => {
     expect(ctrl.autoEntered).toBe(false);
     expect(ctrl.saved).toBeNull();
     expect(ctrl.drawerOpen).toBe(false);
-    expect(ctrl.drawerW).toBe(320);
-    teardown();
-  });
-
-  it("enter sets a top-left default pill position", () => {
-    const { ctrl, geo, teardown } = setup();
-
-    const snapshot: SavedGeometry = {
-      footprintW: geo.footprintW,
-      footprintH: geo.footprintH,
-      top: geo.top,
-      left: geo.left,
-    };
-
-    ctrl.enter(false, snapshot);
-    flushSync();
-
-    // Entry seeds the same resting place defaultPillPosition computes:
-    // near the top left, below the TopBar reveal strip.
-    expect(ctrl.pillPos).toEqual(
-      defaultPillPosition(160, 40, winSize.w, winSize.h),
-    );
-    expect(ctrl.pillPos.top).toBeGreaterThan(8);
+    expect(ctrl.drawerMeasure).toBe(DRAWER_DEFAULT_MEASURE);
+    expect(ctrl.dockEdge).toBe("right");
+    expect(ctrl.dockOffset).toBe(0.85);
     teardown();
   });
 });
