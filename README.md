@@ -296,78 +296,78 @@ CARE-Y is pre-alpha. This list reflects current plans, and ordering can shift.
   <tbody>
     <tr>
       <td valign="top">
-        <img src="https://img.shields.io/badge/-Encrypted case management-2DA44E?style=flat" alt="Encrypted case management"> - Tickets, case notes, and outgoing messages encrypted in the volunteer's browser; incoming texts encrypted the moment they arrive.
+        <img src="https://img.shields.io/badge/-Case%20management-2DA44E?style=flat" alt="Case management"> - Tickets, case notes, and outgoing messages all encrypted in the volunteer's browser. Incoming texts encrypted the moment they arrive.
         <br><br>
-        <img src="https://img.shields.io/badge/-Unified Case Thread-2DA44E?style=flat" alt="Unified Case Thread"> - Single volunteer timeline across SMS, email, portal, calls, and notes.
+        <img src="https://img.shields.io/badge/-Unified%20case%20thread-2DA44E?style=flat" alt="Unified case thread"> - Single volunteer timeline across SMS, email, portal, calls, and notes. Every entry stored encrypted and decrypted client-side for display.
         <br><br>
-        <img src="https://img.shields.io/badge/-Client communication-2DA44E?style=flat" alt="Client communication"> - Emails, SMS texts, phone calling, encrypted client-portal messages, and secure one-time message links.
+        <img src="https://img.shields.io/badge/-Client%20communication-2DA44E?style=flat" alt="Client communication"> - Emails, SMS texts, phone calling, encrypted client-portal messages, and secure one-time message links.
         <br><br>
-        <img src="https://img.shields.io/badge/-Encrypted telephony-2DA44E?style=flat" alt="Encrypted telephony"> - Calls and texts through the org's phone number, inbound texts encrypted on arrival, outbound through a stateless relay that zeros memory, provider-abstracted (Twilio).
+        <img src="https://img.shields.io/badge/-Telephony-2DA44E?style=flat" alt="Telephony"> - Calls and texts through the org's phone number, inbound texts encrypted on arrival, outbound through a stateless relay that zeros memory, provider-abstracted (Twilio).
         <br><br>
-        <img src="https://img.shields.io/badge/-Encrypted voicemail-2DA44E?style=flat" alt="Encrypted voicemail"> - Recordings encrypted and queued for volunteer review.
+        <img src="https://img.shields.io/badge/-Voicemail-2DA44E?style=flat" alt="Voicemail"> - Recordings encrypted and queued for volunteer review.
         <br><br>
-        <img src="https://img.shields.io/badge/-Automated ticket creation-2DA44E?style=flat" alt="Automated ticket creation"> - Cases open from inbound calls, texts, emails, and intake form submissions, each channel org-configurable.
+        <img src="https://img.shields.io/badge/-Automated%20ticket%20creation-2DA44E?style=flat" alt="Automated ticket creation"> - Cases open from inbound calls, texts, emails, and intake form submissions, each channel org-configurable.
       </td>
       <td valign="top">
-        <img src="https://img.shields.io/badge/-Encrypted intake forms-2DA44E?style=flat" alt="Encrypted intake forms"> - Client-facing forms with custom fields and conditional pages, submissions encrypted before storage.
+        <img src="https://img.shields.io/badge/-Intake%20forms-2DA44E?style=flat" alt="Intake forms"> - Client-facing forms with custom fields and conditional pages, submissions encrypted before storage.
         <br><br>
-        <img src="https://img.shields.io/badge/-Encrypted knowledge base-2DA44E?style=flat" alt="Encrypted knowledge base"> - Rich text articles, categories, voting, and search, all encrypted with the org key.
+        <img src="https://img.shields.io/badge/-Knowledge%20base-2DA44E?style=flat" alt="Knowledge base"> - Rich text articles, categories, voting, and search, all encrypted with the org key.
         <br><br>
-        <img src="https://img.shields.io/badge/-Queue routing-2DA44E?style=flat" alt="Queue routing"> - Tickets routed into org-defined queues with priority levels and assignment workflows.
+        <img src="https://img.shields.io/badge/-Queue%20routing-2DA44E?style=flat" alt="Queue routing"> - Tickets routed into org-defined queues with priority levels and assignment workflows.
         <br><br>
-        <img src="https://img.shields.io/badge/-Encrypted search-2DA44E?style=flat" alt="Encrypted search"> - Unified search across tickets, articles, and volunteers, run client-side over decrypted data.
+        <img src="https://img.shields.io/badge/-Search-2DA44E?style=flat" alt="Search"> - Unified search across tickets, articles, and volunteers. Decrypted and searched client-side.
         <br><br>
-        <img src="https://img.shields.io/badge/-Org customization-2DA44E?style=flat" alt="Org customization"> - Branding with automatic contrast enforcement, and custom terminology throughout.
+        <img src="https://img.shields.io/badge/-Org%20customization-2DA44E?style=flat" alt="Org customization"> - Branding with automatic contrast enforcement, and custom terminology throughout.
         <br><br>
-        <img src="https://img.shields.io/badge/-Multi method 2FA-2DA44E?style=flat" alt="Multi-method 2FA"> - Passkeys, TOTP, and backup codes, mandatory for accessing any encrypted data.
+        <img src="https://img.shields.io/badge/-Multi--method%202FA-2DA44E?style=flat" alt="Multi-method 2FA"> - Passkeys, TOTP, and backup codes, mandatory for accessing any encrypted data.
       </td>
       <td valign="top">
-        <img src="https://img.shields.io/badge/-Roles and permissions-2DA44E?style=flat" alt="Roles and permissions"> - Volunteer, Manager, and Admin roles with granular permissions and per-user key status.
+        <img src="https://img.shields.io/badge/-Roles%20and%20permissions-2DA44E?style=flat" alt="Roles and permissions"> - Volunteer, Manager, and Admin roles with granular permissions and per-user key status.
         <br><br>
         <img src="https://img.shields.io/badge/-Admin-2DA44E?style=flat" alt="Admin"> - Organization settings, people management, and communications configuration.
         <br><br>
-        <img src="https://img.shields.io/badge/-WCAG AA accessibility-2DA44E?style=flat" alt="WCAG AA accessibility"> - Automatic contrast enforcement, focus management, motion and contrast preferences, and screen reader support.
+        <img src="https://img.shields.io/badge/-WCAG%20AA%20accessibility-2DA44E?style=flat" alt="WCAG AA accessibility"> - Automatic contrast enforcement, focus management, motion and contrast preferences, and screen reader support.
         <br><br>
         <img src="https://img.shields.io/badge/-PWA-2DA44E?style=flat" alt="PWA"> - Installable with dark mode and offline asset caching, never caches encrypted content.
         <br><br>
         <img src="https://img.shields.io/badge/-i18n-2DA44E?style=flat" alt="i18n"> - English and Spanish via compile-time translations, adding a language requires only a JSON file.
       </td>
       <td valign="top">
-        <img src="https://img.shields.io/badge/-Production infrastructure-0969DA?style=flat" alt="Production infrastructure"> - Hardened servers, automated backups, encrypted data lifecycle, and deployment pipeline for the alpha launch.
+        <img src="https://img.shields.io/badge/-Production%20infrastructure-0969DA?style=flat" alt="Production infrastructure"> - Hardened servers, automated backups, encrypted data lifecycle, and deployment pipeline for the alpha launch.
         <br><br>
-        <img src="https://img.shields.io/badge/-Self hosting toolkit-0969DA?style=flat" alt="Self-hosting toolkit"> - Deployment tooling for orgs running their own single-tenant instance from the same codebase.
+        <img src="https://img.shields.io/badge/-Self--hosting%20toolkit-0969DA?style=flat" alt="Self-hosting toolkit"> - Deployment tooling for orgs running their own single-tenant instance from the same codebase.
         <br><br>
-        <img src="https://img.shields.io/badge/-Interactive handbook-0969DA?style=flat" alt="Interactive handbook"> - Runs the real application (frontend, server, and PostgreSQL via WebAssembly) entirely in the browser at <a href="https://handbook.care-y.org">handbook.care-y.org</a>. Volunteers use it for onboarding, and orgs considering the platform can operate it themselves before committing.
+        <img src="https://img.shields.io/badge/-Interactive%20handbook-0969DA?style=flat" alt="Interactive handbook"> - Runs the real application (frontend, server, and PostgreSQL via WebAssembly) entirely in the browser at <a href="https://handbook.care-y.org">handbook.care-y.org</a>. Volunteers use it for onboarding, and orgs considering the platform can operate it themselves before committing.
       </td>
       <td valign="top">
-        <img src="https://img.shields.io/badge/-Fund accounting-BF8700?style=flat" alt="Fund accounting"> - Encrypted fund tracking with balances on the dashboard and on each case. Donation platforms (Givebutter first) connect as live inflow sources. Donor data never enters CARE-Y.
+        <img src="https://img.shields.io/badge/-Fund%20accounting-BF8700?style=flat" alt="Fund accounting"> - Encrypted fund tracking with balances on the dashboard and on each case. Donation platforms (Givebutter first) connect as live inflow sources. Donor data never enters CARE-Y.
         <br><br>
-        <img src="https://img.shields.io/badge/-Direct aid delivery-BF8700?style=flat" alt="Direct aid delivery"> - Sending aid to clients from within a case through swappable providers with approval workflows. Recipient details encrypted like other case data.
+        <img src="https://img.shields.io/badge/-Direct%20aid%20delivery-BF8700?style=flat" alt="Direct aid delivery"> - Sending aid to clients from within a case through swappable providers with approval workflows. Recipient details encrypted like other case data.
         <br><br>
-        <img src="https://img.shields.io/badge/-Reproducible builds-BF8700?style=flat" alt="Reproducible builds"> - Verifiable client builds so deployments can be audited against published source.
+        <img src="https://img.shields.io/badge/-Reproducible%20builds-BF8700?style=flat" alt="Reproducible builds"> - Verifiable client builds so deployments can be audited against published source.
         <br><br>
-        <img src="https://img.shields.io/badge/-Tor hidden service-BF8700?style=flat" alt="Tor hidden service"> - Onion address access so volunteers and clients can connect without revealing that they use the service.
+        <img src="https://img.shields.io/badge/-Tor%20hidden%20service-BF8700?style=flat" alt="Tor hidden service"> - Onion address access so volunteers and clients can connect without revealing that they use the service.
       </td>
       <td valign="top">
-        <img src="https://img.shields.io/badge/-Ticket board view-6E7781?style=flat" alt="Ticket board view"> - A board style view for working tickets by status.
+        <img src="https://img.shields.io/badge/-Ticket%20board%20view-6E7781?style=flat" alt="Ticket board view"> - A board style view for working tickets by status.
         <br><br>
         <img src="https://img.shields.io/badge/-Pinning-6E7781?style=flat" alt="Pinning"> - Pin tickets and knowledge base articles for quick access, with per-volunteer ordering.
         <br><br>
-        <img src="https://img.shields.io/badge/-Shift scheduling-6E7781?style=flat" alt="Shift scheduling"> - Volunteer shift calendar with coverage tracking and rotation management.
+        <img src="https://img.shields.io/badge/-Shift%20scheduling-6E7781?style=flat" alt="Shift scheduling"> - Volunteer shift calendar with coverage tracking and rotation management.
         <br><br>
-        <img src="https://img.shields.io/badge/-Analytics and reports-6E7781?style=flat" alt="Analytics and reports"> - Aggregate reporting across cases, queues, and funds with encrypted data export and integrity verification.
+        <img src="https://img.shields.io/badge/-Analytics%20and%20reports-6E7781?style=flat" alt="Analytics and reports"> - Aggregate reporting across cases, queues, and funds with encrypted data export and integrity verification.
         <br><br>
-        <img src="https://img.shields.io/badge/-Guided walkthrough-6E7781?style=flat" alt="Guided walkthrough"> - Interactive onboarding tour and appearance preferences for new volunteers.
+        <img src="https://img.shields.io/badge/-Guided%20walkthrough-6E7781?style=flat" alt="Guided walkthrough"> - Interactive onboarding tour and appearance preferences for new volunteers.
         <br><br>
-        <img src="https://img.shields.io/badge/-Exposure system-6E7781?style=flat" alt="Exposure system"> - Security education through the volunteer's own session. Partially built, expanding to cover all protection layers.
+        <img src="https://img.shields.io/badge/-Exposure%20system-6E7781?style=flat" alt="Exposure system"> - Security education through the volunteer's own session. Partially built, expanding to cover all protection layers.
         <br><br>
-        <img src="https://img.shields.io/badge/-Self hosted voice-6E7781?style=flat" alt="Self-hosted voice"> - SignalWire integration to keep call audio off third-party servers.
+        <img src="https://img.shields.io/badge/-Self--hosted%20voice-6E7781?style=flat" alt="Self-hosted voice"> - SignalWire integration to keep call audio off third-party servers.
         <br><br>
-        <img src="https://img.shields.io/badge/-Video calling-6E7781?style=flat" alt="Video calling"> - Scheduled calls with end-to-end encrypted audio and video, self-hosted.
+        <img src="https://img.shields.io/badge/-Video%20calling-6E7781?style=flat" alt="Video calling"> - Scheduled calls with end-to-end encrypted audio and video, self-hosted.
         <br><br>
-        <img src="https://img.shields.io/badge/-Post quantum key layer-6E7781?style=flat" alt="Post-quantum key layer"> - ML-KEM-768 hybrid alongside the classical OPRF, so the system is secure if either holds.
+        <img src="https://img.shields.io/badge/-Post--quantum%20key%20layer-6E7781?style=flat" alt="Post-quantum key layer"> - ML-KEM-768 hybrid alongside the classical OPRF, so the system is secure if either holds.
         <br><br>
-        <img src="https://img.shields.io/badge/-Local first encrypted sync-6E7781?style=flat" alt="Local-first encrypted sync"> - Client works offline with encrypted local storage and syncs when connectivity returns. Org opt-in.
+        <img src="https://img.shields.io/badge/-Local--first%20encrypted%20sync-6E7781?style=flat" alt="Local-first encrypted sync"> - Client works offline with encrypted local storage and syncs when connectivity returns. Org opt-in.
       </td>
     </tr>
   </tbody>
