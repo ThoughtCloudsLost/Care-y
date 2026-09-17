@@ -13,16 +13,11 @@
     Ellipsis,
     Link2,
     Link2Off,
+    Search,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import {
-    SECTIONS,
-    getSection,
-    getSub,
-    type Section,
-    type SectionId,
-  } from "./scroll-sections.js";
-  import { DRAWER_DEFAULT_W } from "./fullscreen.svelte.js";
+  import { SECTIONS, type Section, type SectionId } from "./scroll-sections.js";
+  import { DRAWER_DEFAULT_MEASURE } from "./fullscreen.svelte.js";
   import { chromeFade } from "./chrome-fade.js";
   import {
     resolveStoryMessage,
@@ -33,9 +28,14 @@
   import type { DemoTopic } from "./bridge.js";
   import { GUIDES, guideIsReady, type GuideSlug } from "./guide-checklists.js";
   import { guideProgress } from "./guide-progress.svelte.js";
-  import { openGuide, openAggregation } from "./excursion.svelte.js";
+  import {
+    activeExcursion,
+    closeExcursion,
+    openGuide,
+    openAggregation,
+    openSearch,
+  } from "./excursion.svelte.js";
   import { PAGES, type AggregationPageId } from "./aggregation-pages.js";
-  import { searchHandbook, type SearchHit } from "./handbook-search.js";
 
   interface Props {
     /** null on the entry page, where no section is being shown yet. */
@@ -63,7 +63,7 @@
     exiting?: boolean;
     seenTopics: ReadonlySet<DemoTopic>;
     onSectionClick: (id: SectionId) => void;
-    /** Navigate to a specific sub-section (used by contents-panel search). */
+    /** Navigate to a specific sub-section. Reserved for future use. */
     onSubClick?: (sectionId: SectionId, subSlug: string) => void;
     onToggleDark: () => void;
     onRestart: () => void;
@@ -210,8 +210,6 @@
   });
 
   // ArrowUp/Down roving focus within a menu panel.
-  // When focus is in an input (the search field), let the input handle
-  // its own keyboard events so the roving logic does not fight it.
   function handleMenuKeydown(
     e: KeyboardEvent,
     panelRef: HTMLDivElement | undefined,
@@ -330,116 +328,21 @@
   // for the overflow menu. layoutWidth is the drawer width, so this
   // reads as "the drawer has been dragged narrower than it opens at".
   const forceTight: boolean = $derived(
-    layoutWidth !== null && layoutWidth < DRAWER_DEFAULT_W,
+    layoutWidth !== null && layoutWidth < DRAWER_DEFAULT_MEASURE,
   );
 
   // -----------------------------------------------------------------------
-  // Contents-panel search
+  // Search excursion
   // -----------------------------------------------------------------------
 
-  let contentsQuery = $state("");
-  let contentsDebouncedQuery = $state("");
-  let contentsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  $effect(() => {
-    const q = contentsQuery;
-    if (contentsDebounceTimer !== null) clearTimeout(contentsDebounceTimer);
-    contentsDebounceTimer = setTimeout(() => {
-      contentsDebouncedQuery = q;
-    }, 150);
-    return () => {
-      if (contentsDebounceTimer !== null) clearTimeout(contentsDebounceTimer);
-    };
-  });
-
-  const contentsSearchResults: readonly SearchHit[] = $derived(
-    contentsDebouncedQuery.trim().length > 0
-      ? searchHandbook(contentsDebouncedQuery, locale)
-      : [],
-  );
-
-  const contentsSearchActive: boolean = $derived(
-    contentsQuery.trim().length > 0,
-  );
-
-  let contentsSearchIdx = $state(-1);
-
-  // Reset active index when results change
-  $effect(() => {
-    void contentsSearchResults;
-    contentsSearchIdx = -1;
-  });
-
-  // Clear search when the panel closes
-  $effect(() => {
-    if (openMenu !== "contents") {
-      contentsQuery = "";
-      contentsDebouncedQuery = "";
-    }
-  });
-
-  function contentsSearchBreadcrumb(hit: SearchHit): string {
-    const section = getSection(hit.sectionId);
-    const sectionTitle =
-      section !== undefined
-        ? resolveStoryMessage(section.titleKey, locale)
-        : hit.sectionId;
-
-    if (hit.subSlug === null) return sectionTitle;
-
-    const subLookup = getSub(hit.sectionId, hit.subSlug);
-    const subHeading =
-      subLookup !== undefined
-        ? resolveStoryMessage(subLookup.sub.headingKey, locale)
-        : hit.subSlug;
-
-    return `${sectionTitle} › ${subHeading}`;
-  }
-
-  function activateSearchHit(hit: SearchHit): void {
-    if (hit.subSlug !== null && onSubClick !== undefined) {
-      onSubClick(hit.sectionId as SectionId, hit.subSlug);
+  function handleOpenSearch(): void {
+    // The header button toggles: a second press closes an open search.
+    if (activeExcursion()?.kind === "search") {
+      closeExcursion("user");
     } else {
-      onSectionClick(hit.sectionId as SectionId);
+      openSearch();
     }
     closeMenus();
-  }
-
-  function handleContentsSearchKeydown(e: KeyboardEvent): void {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      if (contentsSearchResults.length > 0) {
-        contentsSearchIdx =
-          contentsSearchIdx < contentsSearchResults.length - 1
-            ? contentsSearchIdx + 1
-            : 0;
-      }
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      if (contentsSearchResults.length > 0) {
-        contentsSearchIdx =
-          contentsSearchIdx > 0
-            ? contentsSearchIdx - 1
-            : contentsSearchResults.length - 1;
-      }
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (
-        contentsSearchIdx >= 0 &&
-        contentsSearchIdx < contentsSearchResults.length
-      ) {
-        const hit = contentsSearchResults[contentsSearchIdx];
-        if (hit !== undefined) activateSearchHit(hit);
-      }
-    } else if (e.key === "Escape") {
-      if (contentsQuery.length > 0) {
-        contentsQuery = "";
-        contentsDebouncedQuery = "";
-      } else {
-        closeMenus();
-        contentsTriggerRef?.focus();
-      }
-    }
   }
 </script>
 
@@ -448,6 +351,7 @@
   class:top-bar--narrow={forceNarrow}
   class:top-bar--phone={forcePhone}
   class:top-bar--tight={forceTight}
+  class:top-bar--docked={layoutWidth !== null}
   class:top-bar--exiting={exiting}
 >
   <div class="top-bar-inner">
@@ -527,128 +431,103 @@
           bind:this={contentsPanelRef}
           onkeydown={(e) => handleMenuKeydown(e, contentsPanelRef)}
         >
-          <div class="contents-search-box">
-            <input
-              class="contents-search-input"
-              type="search"
-              placeholder={m.demo_handbook_search_placeholder()}
-              bind:value={contentsQuery}
-              onkeydown={handleContentsSearchKeydown}
-              aria-label={m.demo_handbook_search_placeholder()}
-            />
+          <button
+            class="contents-item contents-search-row"
+            role="menuitem"
+            type="button"
+            onclick={handleOpenSearch}
+          >
+            <Search size={14} />
+            <span class="contents-item-label">
+              {m.demo_handbook_search_open()}
+            </span>
+          </button>
+          <div class="contents-header">
+            {m.demo_progress_explored({
+              seen: String(seen),
+              total: String(total),
+            })}
           </div>
-          {#if contentsSearchActive}
-            <div class="contents-search-status" aria-live="polite">
-              {#if contentsSearchResults.length > 0}
-                {m.demo_handbook_search_result_count({
-                  count: String(contentsSearchResults.length),
-                })}
-              {:else if contentsDebouncedQuery.trim().length > 0}
-                {m.demo_handbook_search_no_results()}
-              {/if}
+          {#each SECTIONS as section, i (section.id)}
+            {@const state = deriveSectionState(section, seenTopics)}
+            <button
+              class="contents-item"
+              class:contents-item-active={activeSection === section.id}
+              role="menuitemradio"
+              aria-checked={activeSection === section.id}
+              type="button"
+              onclick={() => selectSection(section.id)}
+            >
+              <span class="contents-index">{i + 1}</span>
+              <span class="contents-item-label">
+                {sectionLabel(section.titleKey)}
+              </span>
+              <span class="contents-count">
+                {#if state.complete}
+                  <Check size={12} class="contents-check" />
+                {:else if state.topicCount > 0}
+                  {state.seenCount}/{state.topicCount}
+                {/if}
+              </span>
+            </button>
+          {/each}
+          {#if visibleGuides.length > 0}
+            <div class="contents-header contents-header-guides">
+              {m.demo_guides_menu_label()}
             </div>
-            {#each contentsSearchResults as hit, i (hit.key + "#" + hit.lineIdx)}
+            {#each visibleGuides as guide (guide.slug)}
+              {@const gp = guideProgress(guide.slug)}
               <button
                 class="contents-item"
-                class:contents-item-active={i === contentsSearchIdx}
-                role="option"
-                aria-selected={i === contentsSearchIdx}
+                role="menuitem"
                 type="button"
-                disabled={hit.subSlug === null}
-                onclick={() => activateSearchHit(hit)}
+                onclick={() => selectGuide(guide.slug)}
               >
                 <span class="contents-item-label">
-                  <span class="contents-search-breadcrumb"
-                    >{contentsSearchBreadcrumb(hit)}</span
-                  >
-                  {#if hit.label !== null}
-                    <span class="contents-search-label">{hit.label}</span>
-                  {/if}
-                  <span class="contents-search-snippet">
-                    <span>{hit.snippet.before}</span>
-                    <strong>{hit.snippet.match}</strong>
-                    <span>{hit.snippet.after}</span>
+                  {guideTitle(guide.titleKey)}
+                </span>
+                {#if gp.done > 0}
+                  <span class="contents-count">
+                    {m.demo_guide_progress({
+                      done: String(gp.done),
+                      total: String(gp.total),
+                    })}
                   </span>
+                {/if}
+              </button>
+            {/each}
+          {/if}
+          {#if visibleAggPages.length > 0}
+            <div class="contents-header contents-header-guides">
+              {m.demo_agg_menu_label()}
+            </div>
+            {#each visibleAggPages as aggPage (aggPage.id)}
+              <button
+                class="contents-item"
+                role="menuitem"
+                type="button"
+                onclick={() => selectAggPage(aggPage.id)}
+              >
+                <span class="contents-item-label">
+                  {aggPageTitle(aggPage.titleKey)}
                 </span>
               </button>
             {/each}
-          {:else}
-            <div class="contents-header">
-              {m.demo_progress_explored({
-                seen: String(seen),
-                total: String(total),
-              })}
-            </div>
-            {#each SECTIONS as section, i (section.id)}
-              {@const state = deriveSectionState(section, seenTopics)}
-              <button
-                class="contents-item"
-                class:contents-item-active={activeSection === section.id}
-                role="menuitemradio"
-                aria-checked={activeSection === section.id}
-                type="button"
-                onclick={() => selectSection(section.id)}
-              >
-                <span class="contents-index">{i + 1}</span>
-                <span class="contents-item-label">
-                  {sectionLabel(section.titleKey)}
-                </span>
-                <span class="contents-count">
-                  {#if state.complete}
-                    <Check size={12} class="contents-check" />
-                  {:else if state.topicCount > 0}
-                    {state.seenCount}/{state.topicCount}
-                  {/if}
-                </span>
-              </button>
-            {/each}
-            {#if visibleGuides.length > 0}
-              <div class="contents-header contents-header-guides">
-                {m.demo_guides_menu_label()}
-              </div>
-              {#each visibleGuides as guide (guide.slug)}
-                {@const gp = guideProgress(guide.slug)}
-                <button
-                  class="contents-item"
-                  role="menuitem"
-                  type="button"
-                  onclick={() => selectGuide(guide.slug)}
-                >
-                  <span class="contents-item-label">
-                    {guideTitle(guide.titleKey)}
-                  </span>
-                  {#if gp.done > 0}
-                    <span class="contents-count">
-                      {m.demo_guide_progress({
-                        done: String(gp.done),
-                        total: String(gp.total),
-                      })}
-                    </span>
-                  {/if}
-                </button>
-              {/each}
-            {/if}
-            {#if visibleAggPages.length > 0}
-              <div class="contents-header contents-header-guides">
-                {m.demo_agg_menu_label()}
-              </div>
-              {#each visibleAggPages as aggPage (aggPage.id)}
-                <button
-                  class="contents-item"
-                  role="menuitem"
-                  type="button"
-                  onclick={() => selectAggPage(aggPage.id)}
-                >
-                  <span class="contents-item-label">
-                    {aggPageTitle(aggPage.titleKey)}
-                  </span>
-                </button>
-              {/each}
-            {/if}
           {/if}
         </div>
       {/if}
     </div>
+
+    <!-- Search button -->
+    <button
+      class="icon-btn search-btn"
+      onclick={handleOpenSearch}
+      aria-label={m.demo_handbook_search_open()}
+      title={m.demo_handbook_search_open()}
+      type="button"
+    >
+      <Search size={18} />
+    </button>
 
     <!-- Mode segmented control -->
     <div
@@ -691,6 +570,29 @@
       <Waypoints size={18} />
       <span class="flow-label">{m.demo_flow_toggle_short()}</span>
     </button>
+
+    <!-- GitHub link -->
+    <a
+      class="icon-btn github-btn"
+      href="https://github.com/ThoughtCloudsLost/Care-y"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={m.demo_github_link_label()}
+      title={m.demo_github_link_label()}
+    >
+      <!-- Lucide dropped brand icons, so the GitHub mark is inlined. -->
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path
+          d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
+        />
+      </svg>
+    </a>
 
     <!-- Overflow menu -->
     <div class="more-wrapper">
@@ -806,6 +708,29 @@
             <RotateCcw size={16} />
             <span>{m.demo_restart()}</span>
           </button>
+          <!-- Leaves the row for this menu on narrow bars and inside
+               the drawer, same tiering as the flow toggle. -->
+          <a
+            class="more-item more-github-item"
+            role="menuitem"
+            href="https://github.com/ThoughtCloudsLost/Care-y"
+            target="_blank"
+            rel="noopener noreferrer"
+            onclick={closeMenus}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
+              />
+            </svg>
+            <span>{m.demo_github_link_label()}</span>
+          </a>
         </div>
       {/if}
     </div>
@@ -1079,58 +1004,22 @@
   }
 
   /* -----------------------------------------------------------------------
-     Contents-panel search
+     Contents-panel search row
      ----------------------------------------------------------------------- */
 
-  .contents-search-box {
-    padding: 0.5rem 0.625rem;
+  .contents-search-row {
     border-bottom: 1px solid var(--hair);
+    color: var(--demo-accent, #0066cc);
+    font-weight: 500;
+    gap: 0.5rem;
   }
 
-  .contents-search-input {
-    width: 100%;
-    padding: 0.375rem 0.5rem;
-    border: 1px solid var(--hair-2, #ccc);
-    border-radius: 6px;
-    background: var(--raised, #fafafa);
-    font-size: var(--text-sm, 0.8125rem);
-    color: var(--ink, #1a1a1a);
-    outline: none;
-  }
+  /* -----------------------------------------------------------------------
+     GitHub link
+     ----------------------------------------------------------------------- */
 
-  .contents-search-input:focus {
-    border-color: var(--demo-accent, #0066cc);
-  }
-
-  .contents-search-input::placeholder {
-    color: var(--muted, #888);
-  }
-
-  .contents-search-status {
-    padding: 0.375rem 0.8125rem 0.25rem;
-    font-size: 0.6875rem;
-    color: var(--muted, #888);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .contents-search-breadcrumb {
-    display: block;
-    font-size: 0.6875rem;
-    color: var(--muted, #888);
-  }
-
-  .contents-search-label {
-    display: block;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--ink, #1a1a1a);
-  }
-
-  .contents-search-snippet {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--ink-2, #444);
-    overflow-wrap: break-word;
+  .github-btn {
+    text-decoration: none;
   }
 
   /* -----------------------------------------------------------------------
@@ -1264,7 +1153,8 @@
      and only surface in this menu below the narrow breakpoint. The flow
      toggle does the same one tier further down. */
   .more-mode-group,
-  .more-flow-item {
+  .more-flow-item,
+  .more-github-item {
     display: none;
   }
 
@@ -1284,6 +1174,14 @@
   @media (max-width: 899px) {
     .top-bar-left {
       display: none;
+    }
+
+    .github-btn {
+      display: none;
+    }
+
+    .more-github-item {
+      display: flex;
     }
 
     .flow-label {
@@ -1398,6 +1296,16 @@
     min-width: 0;
     width: auto;
     max-width: none;
+  }
+
+  .top-bar--narrow .github-btn,
+  .top-bar--docked .github-btn {
+    display: none;
+  }
+
+  .top-bar--narrow .more-github-item,
+  .top-bar--docked .more-github-item {
+    display: flex;
   }
 
   .top-bar--narrow .flow-label {

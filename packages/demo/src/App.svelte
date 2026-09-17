@@ -60,7 +60,6 @@
   import {
     createFullscreenController,
     isFullscreenPressure,
-    defaultPillPosition,
   } from "$demo/fullscreen.svelte.js";
   import type { SavedGeometry } from "$demo/peek-controller.svelte.js";
   import { chromeFade } from "$demo/chrome-fade.js";
@@ -90,12 +89,26 @@
     resetExcursion,
   } from "$demo/excursion.svelte.js";
   import {
+    buildAggregationSection,
+    buildSearchResultsSection,
+    distinctHitLabels,
+    type SyntheticSection,
+  } from "$demo/excursion-sections.js";
+  import { searchEntries } from "$demo/handbook-search.js";
+  import {
+    applySearchHighlights,
+    clearSearchHighlights,
+  } from "$demo/search-highlight.js";
+  import SearchDock from "$demo/SearchDock.svelte";
+  import EdgeTab from "$demo/EdgeTab.svelte";
+  import {
     isNavSuppressed,
     resetNavGuard,
   } from "$demo/nav-guard.svelte.js";
   import ReadingChip from "$demo/ReadingChip.svelte";
   import {
     chipTargetValue,
+    dismissChip,
     resetReadingChip,
   } from "$demo/reading-chip.svelte.js";
   import { resetGuideProgress } from "$demo/guide-progress.svelte.js";
@@ -184,14 +197,23 @@
   let stripHeight = $state(0);
 
   $effect(() => {
-    setTopChromeHeight(TOP_BAR_HEIGHT + bandFlowHeight + stripHeight);
+    setTopChromeHeight(
+      TOP_BAR_HEIGHT + bandFlowHeight + stripHeight + searchDockHeight,
+    );
+  });
+
+  // The excursion dock reserves chrome like the strip does; the bound
+  // height would otherwise linger after the dock unmounts.
+  let searchDockHeight = $state(0);
+  $effect(() => {
+    if (!storyExcursionOpen || fsActive) searchDockHeight = 0;
   });
 
   // bind:offsetHeight leaves its last value behind when the element is
   // removed, which would keep reserving chrome for a strip that is no
   // longer there once the rail takes over.
   $effect(() => {
-    if (entryVisible || showRail) stripHeight = 0;
+    if (entryVisible || showRail || storyExcursionOpen) stripHeight = 0;
   });
 
   function handleBandFlowHeight(px: number): void {
@@ -237,12 +259,110 @@
   const fsActive: boolean = $derived(fsCtrl.active);
   const excursionOpen: boolean = $derived(activeExcursion() !== null);
 
-  // Fixed pill size estimate (px): exit + drawer toggle + role badge,
-  // 44px buttons + 4px padding x2 + 2px border x2 = 52px tall. Clamping
-  // uses this estimate rather than measuring the DOM; the default dock
-  // is top-left, so only the far-right clamp edge feels any error.
-  const pillW = 220;
-  const pillH = 52;
+  // Locale: reactive $state owned here, passed down as prop. Declared
+  // before the excursion derivations below that read it.
+  let uiLocale = $state(getLocale());
+
+  // Story excursions (search, aggregations) render as synthetic
+  // sections through the normal story pipeline. Guides stay a panel:
+  // checkboxes are not flow primitives.
+  const guideExcursionOpen: boolean = $derived(
+    activeExcursion()?.kind === "guide",
+  );
+  const storyExcursionOpen: boolean = $derived(
+    excursionOpen && !guideExcursionOpen,
+  );
+
+  // Search query state feeding the search-results synthetic section.
+  // Debounced so the story is not relaid out on every keystroke.
+  let searchQuery = $state("");
+  let searchDebounced = $state("");
+  let searchFacet = $state<string | null>(null);
+  $effect(() => {
+    const value = searchQuery;
+    const handle = setTimeout(() => {
+      searchDebounced = value;
+    }, 150);
+    return () => clearTimeout(handle);
+  });
+  // Opening the search excursion seeds and resets the query state.
+  $effect(() => {
+    const exc = activeExcursion();
+    if (exc?.kind === "search") {
+      searchQuery = exc.initialQuery ?? "";
+      searchDebounced = exc.initialQuery ?? "";
+      searchFacet = null;
+    }
+  });
+
+  const searchHits = $derived(
+    activeExcursion()?.kind === "search"
+      ? searchEntries(searchDebounced, uiLocale, {
+          labels: searchFacet !== null ? [searchFacet] : undefined,
+        })
+      : [],
+  );
+  // Facets come from the unfiltered hit set so toggling one off is
+  // always possible.
+  const searchFacetLabels = $derived(
+    activeExcursion()?.kind === "search" && searchDebounced.trim().length > 0
+      ? distinctHitLabels(searchEntries(searchDebounced, uiLocale))
+      : [],
+  );
+
+  const excursionSynthetic: SyntheticSection | null = $derived.by(() => {
+    const exc = activeExcursion();
+    if (exc === null) return null;
+    if (exc.kind === "search") return buildSearchResultsSection(searchHits);
+    if (exc.kind === "aggregation")
+      return buildAggregationSection(exc.page, uiLocale);
+    return null;
+  });
+
+  // A story excursion replaces what the one story renders; a stale
+  // reading-chip target from before the swap must not survive it.
+  $effect(() => {
+    if (excursionOpen) dismissChip();
+  });
+
+  // Opening a story excursion in fullscreen needs the drawer: the
+  // search dock and results live there. Same pattern as the flow band.
+  $effect(() => {
+    if (storyExcursionOpen && fsActive && !fsCtrl.drawerOpen) {
+      fsCtrl.openDrawer();
+    }
+  });
+
+  // Match wash over the rendered results. Re-applied on DOM churn
+  // because virtualization mounts and unmounts result blocks as the
+  // reader scrolls; registration replaces wholesale, so re-running is
+  // idempotent. Cleared whenever search closes or the query empties.
+  // In fullscreen the story is unmounted; the drawer renders the prose
+  // instead, so the highlight root switches to its aside element.
+  let storyWrapperEl: HTMLElement | null = $state(null);
+  let drawerAsideEl: HTMLElement | null = $state(null);
+  const highlightRoot: HTMLElement | null = $derived(
+    fsActive ? drawerAsideEl : storyWrapperEl,
+  );
+  $effect(() => {
+    const isSearch = activeExcursion()?.kind === "search";
+    const query = searchDebounced;
+    const root = highlightRoot;
+    if (!isSearch || query.trim().length === 0 || root == null) {
+      clearSearchHighlights();
+      return;
+    }
+    applySearchHighlights(root, query);
+    const observer = new MutationObserver(() => {
+      applySearchHighlights(root, query);
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      clearSearchHighlights();
+    };
+  });
+
 
   /** Still captured from the clip's current frame at peek fire time. */
   let capturedStill: CapturedStill | null = $state(null);
@@ -802,6 +922,21 @@
     applyPreset(fittedDesktop.w, fittedDesktop.h);
   }
 
+  /** Exit fullscreen and land on the given preset size. */
+  function exitFsToPreset(w: number, h: number): void {
+    if (!fsActive) {
+      applyPreset(w, h);
+      return;
+    }
+    // Override the saved snapshot so exit restores to the preset.
+    const saved = fsCtrl.saved;
+    if (saved !== null) {
+      saved.footprintW = w;
+      saved.footprintH = h;
+    }
+    handleExitFullscreen();
+  }
+
   function handleShrinkGrow(): void {
     if (geo.shrunk) {
       const target = geo.grow();
@@ -901,9 +1036,9 @@
     () => isLinked() && !gestureActive && !peekActive,
     // Page scroll drives navigation only while the story is on screen
     // and interactive. It is unmounted in fullscreen, where the app owns
-    // scrolling, so nothing the page reports there is the visitor
-    // reading the story.
-    () => !entryVisible && !fsActive,
+    // scrolling, and a story excursion shows a synthetic section whose
+    // scroll positions mean nothing to the location store.
+    () => !entryVisible && !fsActive && !storyExcursionOpen,
     () => isLinked(),
   );
 
@@ -1138,6 +1273,17 @@
   }
 
   function handleSubClick(sectionId: SectionId, subSlug: string): void {
+    // Inside a story excursion, sub headings are real entries wearing
+    // prefixed slugs: resolve back to the real location, close the
+    // excursion, and navigate. Prose subs without a mapping are inert.
+    if (excursionSynthetic !== null) {
+      const real = excursionSynthetic.slugMap.get(subSlug);
+      if (real === undefined) return;
+      closeExcursion("user");
+      if (entryVisible) entryVisible = false;
+      scrollEngine.selectSub(real.sectionId, real.subSlug);
+      return;
+    }
     // While the entry page is visible, sub clicks are inert: the entry
     // page's slugs are not real login subs and must never reach the
     // location store.
@@ -1187,7 +1333,7 @@
   // Locale: reactive $state owned here, passed down as prop
   // -----------------------------------------------------------------------
 
-  let uiLocale = $state(getLocale());
+  // (uiLocale is declared above the excursion derivations that read it.)
 
   // -----------------------------------------------------------------------
   // Active section definition (one section per page)
@@ -1230,6 +1376,9 @@
   );
 
   const activeSectionDef: Section = $derived.by((): Section => {
+    // Story excursions swap what the one story renders without moving
+    // the location; closing remounts the real section via pageKey.
+    if (excursionSynthetic !== null) return excursionSynthetic.section;
     if (entryVisible) return ENTRY_SECTION;
     if (scrollEngine.activeSection === "coming-soon") {
       return comingSoonSection(comingSoonSlug);
@@ -1240,9 +1389,15 @@
     return found ?? SECTIONS[0] ?? ENTRY_SECTION;
   });
 
-  const pageKey: string = $derived(
-    entryVisible ? "entry" : scrollEngine.activeSection,
-  );
+  const pageKey: string = $derived.by((): string => {
+    // Constant per excursion (not per keystroke): the story rebuilds
+    // blocks reactively when the synthetic section changes; remounting
+    // would replay the entrance on every input.
+    const exc = activeExcursion();
+    if (exc?.kind === "search") return "search";
+    if (exc?.kind === "aggregation") return `agg:${exc.page}`;
+    return entryVisible ? "entry" : scrollEngine.activeSection;
+  });
 
   // -----------------------------------------------------------------------
   // Sub rail visibility
@@ -1628,12 +1783,6 @@
   /** Chrome fade duration in ms. */
   const CHROME_FADE_MS = 180;
 
-  /** The toolbar's pill state engages at fullscreen-animation start so
-   *  the bar-to-pill morph runs alongside the frame spring; fsActive
-   *  itself only flips at settle. */
-  const toolbarPill: boolean = $derived.by(
-    () => fsCtrl.active || fsAnimPhase === "enter-grow",
-  );
 
   /** The drawer defaults to open when the USER enters fullscreen
    *  (toolbar button or preset menu item). Automatic entries (mobile
@@ -1682,14 +1831,8 @@
    * resize drag swaps the flow between its two drawer presentations at
    * the threshold the same way a window resize swaps the page's.
    */
-  const drawerSeatsBand: boolean = $derived(fsCtrl.drawerW >= BAND_MIN_HOST_W);
+  const drawerSeatsBand: boolean = $derived(fsCtrl.drawerMeasure >= BAND_MIN_HOST_W);
 
-  /** Fullscreen pill position, using the controller value or a default. */
-  const fsPillPos = $derived(
-    fsCtrl.pillPos.top === 0 && fsCtrl.pillPos.left === 0
-      ? defaultPillPosition(pillW, pillH, windowW, windowH)
-      : fsCtrl.pillPos,
-  );
 
   /**
    * Programmatic fullscreen entry (button, menu, mobile default).
@@ -1942,16 +2085,13 @@
     }
   });
 
-  function handleFsToolbarMove(top: number, left: number): void {
-    fsCtrl.setPillPos(top, left, pillW, pillH);
-  }
 
   function handleFsToggleDrawer(): void {
     fsCtrl.toggleDrawer();
   }
 
-  function handleFsDrawerResize(width: number): void {
-    fsCtrl.setDrawerW(width);
+  function handleFsDrawerResize(measure: number): void {
+    fsCtrl.setDrawerMeasure(measure);
   }
 
   function handleFsDrawerClose(): void {
@@ -1975,6 +2115,10 @@
   }
 
   let drawerRef: HandbookDrawer | undefined = $state();
+
+  $effect(() => {
+    drawerAsideEl = drawerRef?.getRootEl() ?? null;
+  });
 
   // Drawer follow: when the active sub changes from any source (phone
   // bridge, TopBar section click, scroll-engine convergence) while the
@@ -2057,8 +2201,7 @@
     void windowH;
     if (!fsActive) return;
     untrack(() => {
-      fsCtrl.setPillPos(fsCtrl.pillPos.top, fsCtrl.pillPos.left, pillW, pillH);
-      fsCtrl.setDrawerW(fsCtrl.drawerW);
+      fsCtrl.setDrawerMeasure(fsCtrl.drawerMeasure);
     });
   });
 
@@ -2171,6 +2314,7 @@
     <div
       class="fs-topbar-container"
       class:fs-topbar-container--revealed={topBarRevealed}
+      class:fs-topbar-container--above-tab={fsCtrl.dockEdge === 'top'}
       aria-hidden={topBarRevealed ? undefined : "true"}
       inert={topBarRevealed ? undefined : true}
       onpointerenter={handleTopBarEnter}
@@ -2227,7 +2371,29 @@
        chrome rather than the story: it docks under the bar and reports
        its height, so everything that parks below the chrome (the story,
        the frame's spawn band) accounts for it. -->
-  {#if !entryVisible && !showRail && !fsActive}
+  <!-- Excursion dock: back affordance, and for search the input,
+       facets and count. The results render in the story below. -->
+  {#if storyExcursionOpen && !fsActive}
+    <div
+      class="strip-dock"
+      style="--wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
+      bind:offsetHeight={searchDockHeight}
+      transition:chromeFade
+    >
+      <SearchDock
+        showInput={activeExcursion()?.kind === "search"}
+        query={searchQuery}
+        resultCount={searchHits.length}
+        facetLabels={searchFacetLabels}
+        activeFacet={searchFacet}
+        onQueryInput={(v) => (searchQuery = v)}
+        onToggleFacet={(label) =>
+          (searchFacet = searchFacet === label ? null : label)}
+        onBack={() => closeExcursion("user")}
+      />
+    </div>
+  {/if}
+  {#if !entryVisible && !showRail && !fsActive && !storyExcursionOpen}
     <div
       class="strip-dock"
       style="--wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
@@ -2305,6 +2471,20 @@
   />
 {/snippet}
 
+{#snippet drawerSearchDock()}
+  <SearchDock
+    showInput={activeExcursion()?.kind === "search"}
+    query={searchQuery}
+    resultCount={searchHits.length}
+    facetLabels={searchFacetLabels}
+    activeFacet={searchFacet}
+    onQueryInput={(v) => (searchQuery = v)}
+    onToggleFacet={(label) =>
+      (searchFacet = searchFacet === label ? null : label)}
+    onBack={() => closeExcursion("user")}
+  />
+{/snippet}
+
 {#snippet excursionPanel()}
   <ExcursionSurface
     presentation="drawer"
@@ -2328,29 +2508,15 @@
   style:width="{fsActive ? windowW : geo.outerW}px"
   style:height="{fsActive ? windowH : geo.outerH}px"
 >
-  <!-- Single FrameToolbar instance: always rendered in simulate mode.
-       Props switch with toolbarPill, which turns on at animation START
-       (enter-grow) rather than at settle, so the bar-to-pill morph runs
-       alongside the frame spring and both land together. The element
-       survives the mode change, enabling the FLIP morph inside the
-       component.
-
-       Absent for the whole entry splash, hold and shrink both: the
-       splash is the app arriving, and controls for resizing it are not
-       part of that. It mounts once the frame has settled at its spawn
-       and fades itself in (see FrameToolbar's root). -->
-  {#if (showDesktopChrome || fsActive) && !splashActive}
+  <!-- FrameToolbar: windowed simulate mode only. Fullscreen uses
+       the EdgeTab component instead (rendered outside this layer). -->
+  {#if showDesktopChrome && !fsActive && !splashActive}
     <FrameToolbar
-      shrunk={toolbarPill ? false : geo.shrunk}
-      phoneActive={toolbarPill
-        ? false
-        : geo.footprintW === fittedPhone.w && geo.footprintH === fittedPhone.h}
-      desktopActive={toolbarPill
-        ? false
-        : geo.footprintW === fittedDesktop.w &&
-          geo.footprintH === fittedDesktop.h}
+      shrunk={geo.shrunk}
+      phoneActive={geo.footprintW === fittedPhone.w && geo.footprintH === fittedPhone.h}
+      desktopActive={geo.footprintW === fittedDesktop.w &&
+        geo.footprintH === fittedDesktop.h}
       {activeRole}
-      footprintW={toolbarPill ? 0 : geo.footprintW}
       onPhonePreset={handlePhonePreset}
       onDesktopPreset={handleDesktopPreset}
       onShrinkGrow={handleShrinkGrow}
@@ -2360,13 +2526,6 @@
       ondragstart={startDrag}
       ondragmove={onPointerMove}
       ondragend={onPointerUp}
-      fullscreen={toolbarPill}
-      pos={toolbarPill ? fsPillPos : null}
-      drawerOpen={toolbarPill ? fsCtrl.drawerOpen : false}
-      windowW={toolbarPill ? windowW : 0}
-      onSelfMove={handleFsToolbarMove}
-      onExitFullscreen={handleExitFullscreen}
-      onToggleDrawer={handleFsToggleDrawer}
     />
   {/if}
 
@@ -2533,6 +2692,21 @@
   {/if}
 </div>
 
+<!-- Edge tab: replaces the floating pill in fullscreen. Dockable to
+     any screen edge; click toggles the handbook drawer from that edge. -->
+{#if fsActive && !splashActive}
+  <EdgeTab
+    edge={fsCtrl.dockEdge}
+    offset={fsCtrl.dockOffset}
+    drawerOpen={fsCtrl.drawerOpen}
+    drawerMeasure={fsCtrl.drawerMeasure}
+    onToggleDrawer={handleFsToggleDrawer}
+    onDock={(edge, offset) => fsCtrl.setDock(edge, offset)}
+    onCloseDrawer={handleFsDrawerClose}
+    onOpenDrawer={handleFsDrawerOpen}
+  />
+{/if}
+
 {#if !recordMode && (!fsActive || fsAnimPhase === "exit-fade")}
   <!-- Unmounted in fullscreen rather than hidden. The app fills the
        window there and owns scrolling; leaving the story mounted below
@@ -2563,9 +2737,9 @@
     class="scroll-story"
     style="--top-chrome-offset: {stickyTopOffset()}px; --rail-w: {RAIL_WIDTH}px; --rail-gap: {RAIL_GAP}px; --wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
   >
-    <div class="flow-story-wrapper">
+    <div class="flow-story-wrapper" bind:this={storyWrapperEl}>
       {#key uiLocale}{#key pageKey}
-          <div class="section-view" class:section-view--railed={showRail} inert={excursionOpen || undefined}>
+          <div class="section-view" class:section-view--railed={showRail} inert={guideExcursionOpen || undefined}>
             {#if showRail}
               <SectionRail
                 section={activeSectionDef}
@@ -2604,8 +2778,10 @@
             </div>
           </div>
         {/key}{/key}
-      {#if excursionOpen}
-        <div class="excursion-overlay">
+      {#if guideExcursionOpen}
+        <div
+          style="position: fixed; z-index: 50; background: var(--paper); top: {stickyTopOffset()}px; bottom: 0; left: {columnContainerLeft() + columnRect().x}px; width: {columnRect().width}px"
+        >
           <ExcursionSurface
             presentation="column"
             locale={uiLocale}
@@ -2619,7 +2795,7 @@
   <!-- Next-section pill: fixed at bottom center, hidden during gestures
      and when there is no next section. Fullscreen has no page to pin it
      over, so it moves into the drawer footer instead (below). -->
-  {#if nextSectionDef !== null && !gestureActive && !peekActive}
+  {#if nextSectionDef !== null && !gestureActive && !peekActive && !excursionOpen}
     <div
       class="next-pill-container"
       style="left: {pillCenterX}px"
@@ -2650,7 +2826,8 @@
 {#if fsActive}
   <HandbookDrawer
     open={fsCtrl.drawerOpen}
-    width={fsCtrl.drawerW}
+    edge={fsCtrl.dockEdge}
+    measure={fsCtrl.drawerMeasure}
     section={activeSectionDef}
     activeSub={scrollEngine.activeSub}
     locale={uiLocale}
@@ -2663,7 +2840,8 @@
     onSettle={handleFsDrawerSettle}
     onScrollSub={handleDrawerScrollSub}
     band={flowBand.open && drawerSeatsBand ? flowDock : undefined}
-    takeover={excursionOpen ? excursionPanel : flowBand.open && !drawerSeatsBand ? flowPanel : undefined}
+    searchDock={storyExcursionOpen ? drawerSearchDock : undefined}
+    takeover={guideExcursionOpen ? excursionPanel : flowBand.open && !drawerSeatsBand ? flowPanel : undefined}
     bind:this={drawerRef}
   >
     {#snippet topbar()}
@@ -2686,7 +2864,7 @@
           onToggleMode={handleToggleMode}
           linked={isLinked()}
           onToggleLink={toggleLinked}
-          layoutWidth={fsCtrl.drawerW}
+          layoutWidth={fsCtrl.drawerMeasure}
           onHomeClick={handleShowEntry}
         />
       {/key}
@@ -2727,6 +2905,21 @@
           </button>
         </div>
       {/if}
+      <div class="drawer-toolbar-dock">
+        <FrameToolbar
+          shrunk={false}
+          phoneActive={false}
+          desktopActive={false}
+          {activeRole}
+          onPhonePreset={() => exitFsToPreset(fittedPhone.w, fittedPhone.h)}
+          onDesktopPreset={() => exitFsToPreset(fittedDesktop.w, fittedDesktop.h)}
+          onShrinkGrow={() => {}}
+          onRoleChange={handleRoleChange}
+          onClose={() => {}}
+          onFullscreen={handleExitFullscreen}
+          exitMode
+        />
+      </div>
     {/snippet}
   </HandbookDrawer>
 {/if}
@@ -2799,12 +2992,7 @@
     }
   }
 
-  .excursion-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 50;
-    background: var(--paper, #fff);
-  }
+  /* excursion-overlay geometry moved to inline style (reactive column tracking) */
 
   /* shared.css locks html/body scroll for the product app shell (only
      inner containers scroll on the phone). The scroll story needs the
@@ -2904,6 +3092,12 @@
     background: var(--paper);
   }
 
+  .drawer-toolbar-dock {
+    padding: 0.5rem;
+    border-top: 1px solid var(--hair);
+    background: var(--paper);
+  }
+
   .next-pill {
     display: inline-flex;
     align-items: center;
@@ -2991,6 +3185,10 @@
 
   .fs-topbar-container--revealed {
     transform: translateY(0);
+  }
+
+  .fs-topbar-container--above-tab.fs-topbar-container--revealed {
+    z-index: 131;
   }
 
   @media (prefers-reduced-motion: reduce) {

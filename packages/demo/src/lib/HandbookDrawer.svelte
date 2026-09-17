@@ -21,8 +21,9 @@
   } from "./flow-prepare.js";
   import FlowProse from "./FlowProse.svelte";
   import {
+    type DockEdge,
     DRAWER_MAX_MEASURE,
-    DRAWER_SNAP_CLOSE_W,
+    DRAWER_SNAP_CLOSE_MEASURE,
   } from "./fullscreen.svelte.js";
   import { READING_LINE_RATIO } from "./flow-geometry.svelte.js";
 
@@ -32,7 +33,9 @@
 
   interface Props {
     open: boolean;
-    width: number;
+    measure: number;
+    /** Which window edge the drawer docks to. */
+    edge?: DockEdge;
     /**
      * The resolved section definition to render, handed down rather
      * than re-resolved from SECTIONS here. The page shows sections that
@@ -50,7 +53,7 @@
     onClose: () => void;
     /** Reopen from the parked grip: click, drag, or ArrowLeft on it. */
     onOpen: () => void;
-    onResize: (width: number) => void;
+    onResize: (measure: number) => void;
     /** End of a resize gesture, where the snap-close decision is made. */
     onSettle: () => void;
     /** Called when the drawer's scroll position crosses a sub-heading. */
@@ -63,6 +66,13 @@
      * rather than covering it.
      */
     band?: Snippet;
+    /**
+     * Replaces the sub-section strip when a story excursion (search or
+     * aggregation) is active. The results render as the drawer's normal
+     * prose via the synthetic section; this slot seats the excursion's
+     * chrome (back button, search input, facets).
+     */
+    searchDock?: Snippet;
     /**
      * Covers the strip, prose, and footer when present, leaving the
      * docked TopBar (and the control that raised it) in place.
@@ -81,7 +91,8 @@
 
   let {
     open,
-    width,
+    measure,
+    edge = "right",
     section,
     activeSub,
     locale,
@@ -96,9 +107,12 @@
     topbar,
     strip,
     band,
+    searchDock,
     takeover,
     footer,
   }: Props = $props();
+
+  const isVerticalEdge: boolean = $derived(edge === "left" || edge === "right");
 
   // -----------------------------------------------------------------------
   // Entry slide
@@ -172,20 +186,27 @@
   let resizing = $state(false);
   let resizeRafId = 0;
   let pendingResizeX = 0;
+  let pendingResizeY = 0;
   let gestureStartX = 0;
+  let gestureStartY = 0;
   let gestureMoved = false;
 
   function flushResize(): void {
     resizeRafId = 0;
-    const next = window.innerWidth - pendingResizeX;
+    let next: number;
+    if (edge === "right") next = window.innerWidth - pendingResizeX;
+    else if (edge === "left") next = pendingResizeX;
+    else if (edge === "top") next = pendingResizeY;
+    else next = window.innerHeight - pendingResizeY;
 
-    // A gesture off the parked grip starts at roughly zero width. Hold
-    // the drawer back until the drag clears the threshold, so it never
-    // appears at a width that releasing would immediately close. Width
-    // first, then open: onOpen only restores a default when the stored
-    // width is unusable, and by then it is the dragged one.
+    // A gesture off the parked grip starts at roughly zero measure.
+    // Hold the drawer back until the drag clears the threshold, so it
+    // never appears at a measure that releasing would immediately
+    // close. Measure first, then open: onOpen only restores a default
+    // when the stored measure is unusable, and by then it is the
+    // dragged one.
     if (!open) {
-      if (next < DRAWER_SNAP_CLOSE_W) return;
+      if (next < DRAWER_SNAP_CLOSE_MEASURE) return;
       onResize(next);
       onOpen();
       return;
@@ -203,15 +224,18 @@
     target.setPointerCapture(e.pointerId);
     resizing = true;
     gestureStartX = e.clientX;
+    gestureStartY = e.clientY;
     gestureMoved = false;
   }
 
   function onResizePointerMove(e: PointerEvent): void {
     if (!resizing) return;
-    if (Math.abs(e.clientX - gestureStartX) > CLICK_SLOP_PX) {
-      gestureMoved = true;
-    }
+    const travel = isVerticalEdge
+      ? Math.abs(e.clientX - gestureStartX)
+      : Math.abs(e.clientY - gestureStartY);
+    if (travel > CLICK_SLOP_PX) gestureMoved = true;
     pendingResizeX = e.clientX;
+    pendingResizeY = e.clientY;
     if (resizeRafId === 0) {
       resizeRafId = requestAnimationFrame(flushResize);
     }
@@ -260,25 +284,49 @@
   function onResizeKeydown(e: KeyboardEvent): void {
     const step = 24;
 
-    // Parked: the grip is an open control, so widening or activating it
+    // Parked: the grip is an open control, so any arrow or activation
     // reopens rather than resizing a drawer nobody can see.
     if (!open) {
-      if (e.key === "ArrowLeft" || e.key === "Enter" || e.key === " ") {
+      if (
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight" ||
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "Enter" ||
+        e.key === " "
+      ) {
         e.preventDefault();
         onOpen();
       }
       return;
     }
 
+    // Grow/shrink keys depend on edge orientation.
+    let grow: string;
+    let shrink: string;
+    if (edge === "right") {
+      grow = "ArrowLeft";
+      shrink = "ArrowRight";
+    } else if (edge === "left") {
+      grow = "ArrowRight";
+      shrink = "ArrowLeft";
+    } else if (edge === "top") {
+      grow = "ArrowDown";
+      shrink = "ArrowUp";
+    } else {
+      grow = "ArrowUp";
+      shrink = "ArrowDown";
+    }
+
     // Each keypress is a complete gesture, so it settles immediately:
     // there is no release to wait for.
-    if (e.key === "ArrowLeft") {
+    if (e.key === grow) {
       e.preventDefault();
-      onResize(width + step);
+      onResize(measure + step);
       onSettle();
-    } else if (e.key === "ArrowRight") {
+    } else if (e.key === shrink) {
       e.preventDefault();
-      onResize(width - step);
+      onResize(measure - step);
       onSettle();
     }
   }
@@ -519,6 +567,12 @@
    * block sits at the reading line. Arms suppression so the scroll
    * listener does not re-fire onScrollSub for the programmatic move.
    */
+  let asideEl: HTMLElement | undefined = $state(undefined);
+
+  export function getRootEl(): HTMLElement | null {
+    return asideEl ?? null;
+  }
+
   export function scrollToSub(subSlug: string): void {
     if (layoutResult === null || contentEl == null) return;
 
@@ -575,17 +629,27 @@
 <aside
   class="handbook-drawer"
   class:handbook-drawer--open={open && entered}
-  style="width: {width}px;"
+  class:handbook-drawer--right={edge === "right"}
+  class:handbook-drawer--left={edge === "left"}
+  class:handbook-drawer--top={edge === "top"}
+  class:handbook-drawer--bottom={edge === "bottom"}
+  style={isVerticalEdge ? `width: ${measure}px` : `height: ${measure}px`}
   aria-label={m.demo_fs_drawer_close()}
+  bind:this={asideEl}
 >
-  <!-- Resize handle (left edge) with visible grip affordance. The
-       closed drawer parks with this handle still on screen, where it
-       doubles as the reopen control. -->
+  <!-- Resize handle on the interior-facing side, with a visible grip
+       affordance. The closed drawer parks with this handle still on
+       screen, where it doubles as the reopen control. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div
     class="drawer-resize-handle"
+    class:drawer-resize-handle--horizontal={!isVerticalEdge}
     role={open ? "separator" : "button"}
-    aria-orientation={open ? "vertical" : undefined}
+    aria-orientation={open
+      ? isVerticalEdge
+        ? "vertical"
+        : "horizontal"
+      : undefined}
     aria-label={open ? m.demo_fs_drawer_resize() : m.demo_fs_drawer_open()}
     tabindex={0}
     onpointerdown={onResizePointerDown}
@@ -596,7 +660,11 @@
     onclick={onResizeClick}
     onkeydown={onResizeKeydown}
   >
-    <span class="drawer-grip" aria-hidden="true"></span>
+    <span
+      class="drawer-grip"
+      class:drawer-grip--horizontal={!isVerticalEdge}
+      aria-hidden="true"
+    ></span>
   </div>
 
   <!-- TopBar docked at the top of the drawer when provided; the drawer
@@ -626,8 +694,13 @@
       inert={takeover !== undefined ? true : undefined}
       aria-hidden={takeover !== undefined ? "true" : undefined}
     >
-      <!-- Sub-section strip: horizontal nav for the active section's subs -->
-      {#if strip}
+      <!-- Excursion dock replaces the strip when a story excursion
+           (search, aggregation) is active in the drawer. -->
+      {#if searchDock}
+        <div class="drawer-strip-dock">
+          {@render searchDock()}
+        </div>
+      {:else if strip}
         <div class="drawer-strip-dock">
           {@render strip()}
         </div>
@@ -682,38 +755,20 @@
 </aside>
 
 <style>
-  /* Closed, the drawer parks with its 8px resize handle still on screen
-     rather than sliding fully away: a quiet rule down the window's right
-     edge that reopens on click and pulls the drawer back out on drag.
-     The shadow lightens to match, so a parked drawer reads as an edge
-     instead of a panel someone forgot to close. */
+  /* -----------------------------------------------------------------------
+     Base drawer: shared positioning, z-index, background, flex column.
+     Edge-specific insets, borders, shadows, and transforms live below.
+     ----------------------------------------------------------------------- */
+
   .handbook-drawer {
     position: fixed;
-    inset: 0 0 0 auto;
     z-index: 120;
     background: var(--paper);
-    border-left: 1px solid var(--hair);
-    box-shadow: -4px 0 12px color-mix(in srgb, var(--ink) 7%, transparent);
     display: flex;
     flex-direction: column;
-    transform: translateX(calc(100% - 8px));
     transition:
       transform 0.25s ease,
       box-shadow 0.25s ease;
-  }
-
-  .handbook-drawer--open {
-    transform: translateX(0);
-    box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
-  }
-
-  /* A drag can settle the drawer shut from any width, down to nothing,
-     and it keeps that width while parked. The floor holds the visible
-     strip at the same 8px however narrow it was left: the parked
-     transform is relative to the used width, so a floored drawer still
-     lands with exactly its handle on screen. */
-  .handbook-drawer:not(.handbook-drawer--open) {
-    min-width: 8px;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -722,19 +777,120 @@
     }
   }
 
+  /* -- Right edge (default) ---------------------------------------------- */
+
+  .handbook-drawer--right {
+    inset: 0 0 0 auto;
+    border-left: 1px solid var(--hair);
+    box-shadow: -4px 0 12px color-mix(in srgb, var(--ink) 7%, transparent);
+    transform: translateX(calc(100% - 8px));
+  }
+
+  .handbook-drawer--right.handbook-drawer--open {
+    transform: translateX(0);
+    box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
+  }
+
+  /* -- Left edge --------------------------------------------------------- */
+
+  .handbook-drawer--left {
+    inset: 0 auto 0 0;
+    border-right: 1px solid var(--hair);
+    box-shadow: 4px 0 12px color-mix(in srgb, var(--ink) 7%, transparent);
+    transform: translateX(calc(-100% + 8px));
+  }
+
+  .handbook-drawer--left.handbook-drawer--open {
+    transform: translateX(0);
+    box-shadow: 12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
+  }
+
+  /* -- Top edge ---------------------------------------------------------- */
+
+  .handbook-drawer--top {
+    inset: 0 0 auto 0;
+    border-bottom: 1px solid var(--hair);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--ink) 7%, transparent);
+    transform: translateY(calc(-100% + 8px));
+  }
+
+  .handbook-drawer--top.handbook-drawer--open {
+    transform: translateY(0);
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--ink) 14%, transparent);
+  }
+
+  /* -- Bottom edge ------------------------------------------------------- */
+
+  .handbook-drawer--bottom {
+    inset: auto 0 0 0;
+    border-top: 1px solid var(--hair);
+    box-shadow: 0 -4px 12px color-mix(in srgb, var(--ink) 7%, transparent);
+    transform: translateY(calc(100% - 8px));
+  }
+
+  .handbook-drawer--bottom.handbook-drawer--open {
+    transform: translateY(0);
+    box-shadow: 0 -12px 32px color-mix(in srgb, var(--ink) 14%, transparent);
+  }
+
+  /* -- Parked min dimension: keeps the 8px strip visible ---------------- */
+
+  .handbook-drawer--right:not(.handbook-drawer--open),
+  .handbook-drawer--left:not(.handbook-drawer--open) {
+    min-width: 8px;
+  }
+
+  .handbook-drawer--top:not(.handbook-drawer--open),
+  .handbook-drawer--bottom:not(.handbook-drawer--open) {
+    min-height: 8px;
+  }
+
   /* -----------------------------------------------------------------------
      Resize handle
      ----------------------------------------------------------------------- */
 
   .drawer-resize-handle {
     position: absolute;
+    z-index: 1;
+    background: transparent;
+    cursor: ew-resize;
+    touch-action: none;
+  }
+
+  /* Right edge: handle on left side */
+  .handbook-drawer--right .drawer-resize-handle {
     top: 0;
     left: 0;
     width: 8px;
     height: 100%;
-    cursor: ew-resize;
-    z-index: 1;
-    background: transparent;
+  }
+
+  /* Left edge: handle on right side */
+  .handbook-drawer--left .drawer-resize-handle {
+    top: 0;
+    right: 0;
+    left: auto;
+    width: 8px;
+    height: 100%;
+  }
+
+  /* Top edge: handle on bottom */
+  .handbook-drawer--top .drawer-resize-handle {
+    bottom: 0;
+    left: 0;
+    top: auto;
+    width: 100%;
+    height: 8px;
+    cursor: ns-resize;
+  }
+
+  /* Bottom edge: handle on top */
+  .handbook-drawer--bottom .drawer-resize-handle {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    cursor: ns-resize;
   }
 
   .drawer-resize-handle:hover {
@@ -746,7 +902,41 @@
     outline-offset: -2px;
   }
 
-  /* Vertical grip pill centered in the handle, visible drag affordance */
+  /* -- Parked handle: wider hit area, pointer cursor -------------------- */
+
+  .handbook-drawer--right:not(.handbook-drawer--open) .drawer-resize-handle {
+    left: -12px;
+    width: 20px;
+    cursor: pointer;
+  }
+
+  .handbook-drawer--left:not(.handbook-drawer--open) .drawer-resize-handle {
+    right: -12px;
+    left: auto;
+    width: 20px;
+    cursor: pointer;
+  }
+
+  .handbook-drawer--top:not(.handbook-drawer--open) .drawer-resize-handle {
+    bottom: -12px;
+    top: auto;
+    height: 20px;
+    width: 100%;
+    cursor: pointer;
+  }
+
+  .handbook-drawer--bottom:not(.handbook-drawer--open) .drawer-resize-handle {
+    top: -12px;
+    bottom: auto;
+    height: 20px;
+    width: 100%;
+    cursor: pointer;
+  }
+
+  /* -----------------------------------------------------------------------
+     Grip affordance
+     ----------------------------------------------------------------------- */
+
   .drawer-grip {
     position: absolute;
     top: 50%;
@@ -760,6 +950,12 @@
     pointer-events: none;
   }
 
+  /* Horizontal grip for top/bottom edges */
+  .drawer-grip--horizontal {
+    width: 40px;
+    height: 4px;
+  }
+
   .drawer-resize-handle:hover .drawer-grip {
     background: color-mix(in srgb, var(--ink) 28%, transparent);
   }
@@ -768,23 +964,40 @@
     background: color-mix(in srgb, var(--ink) 38%, transparent);
   }
 
-  /* Parked: the handle is the only part of the drawer on screen, so it
-     takes a hit area wider than its 8px strip (the extra reaches left
-     over the app and stays transparent) and a taller grip to be worth
-     finding. Click is the advertised way back in, hence the cursor. */
-  .handbook-drawer:not(.handbook-drawer--open) .drawer-resize-handle {
-    left: -12px;
-    width: 20px;
-    cursor: pointer;
-  }
+  /* -- Parked grip: larger for discoverability -------------------------- */
 
-  /* Pinned to the handle's right edge instead of its centre, so the
-     grip stays centred in the 8px that is actually visible. */
-  .handbook-drawer:not(.handbook-drawer--open) .drawer-grip {
+  /* Right edge: pinned to the handle's visible right 8px */
+  .handbook-drawer--right:not(.handbook-drawer--open) .drawer-grip {
     left: auto;
     right: 2px;
     height: 56px;
     transform: translateY(-50%);
+  }
+
+  /* Left edge: pinned to the handle's visible left 8px */
+  .handbook-drawer--left:not(.handbook-drawer--open) .drawer-grip {
+    right: auto;
+    left: 2px;
+    height: 56px;
+    transform: translateY(-50%);
+  }
+
+  /* Top edge: pinned to the handle's visible top 8px */
+  .handbook-drawer--top:not(.handbook-drawer--open) .drawer-grip {
+    bottom: auto;
+    top: 2px;
+    width: 56px;
+    height: 4px;
+    transform: translateX(-50%);
+  }
+
+  /* Bottom edge: pinned to the handle's visible bottom 8px */
+  .handbook-drawer--bottom:not(.handbook-drawer--open) .drawer-grip {
+    top: auto;
+    bottom: 2px;
+    width: 56px;
+    height: 4px;
+    transform: translateX(-50%);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -919,13 +1132,12 @@
     min-height: 0;
   }
 
-  /* Clipped at every width. The pill inside is nowrap, so its
+  /* Clipped at every measure. The pill inside is nowrap, so its
      min-content width outlives any narrow drawer, and centred overflow
-     would put half of it to the LEFT of the drawer box: on screen,
-     since the parked drawer's left edge is the window's right edge.
-     Nothing in this dock opens a popover, so clipping costs nothing.
-     .drawer-content needs no equivalent, its overflow-y: auto already
-     forces overflow-x to compute to auto. */
+     would escape the drawer box on screen. Nothing in this dock opens
+     a popover, so clipping costs nothing. .drawer-content needs no
+     equivalent since its overflow-y: auto already forces overflow-x
+     to compute to auto. */
   .drawer-footer-dock {
     flex-shrink: 0;
     overflow: hidden;
