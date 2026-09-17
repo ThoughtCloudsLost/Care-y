@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The floating toolbar above the simulator is also a drag handle, so you can grab it anywhere to reposition the frame. Phone and desktop preset buttons switch ..." |
+* | "In simulate mode, a toolbar above the frame lets you resize with phone or desktop presets, switch roles, and enter fullscreen. The toolbar is also a drag han..." |
 *
 * @param {Demo_Entry_Controls_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

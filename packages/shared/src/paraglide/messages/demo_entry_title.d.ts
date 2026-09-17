@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "How CARE-Y works" |
+* | "The CARE-Y handbook" |
 *
 * @param {Demo_Entry_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

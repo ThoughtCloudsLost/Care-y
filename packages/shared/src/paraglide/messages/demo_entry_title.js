@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Entry_TitleInputs */
 
 const en_demo_entry_title = /** @type {(inputs: Demo_Entry_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`How CARE-Y works`)
+	return /** @type {LocalizedString} */ (`The CARE-Y handbook`)
 };
 
 const es_demo_entry_title = /** @type {(inputs: Demo_Entry_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cómo funciona CARE-Y`)
+	return /** @type {LocalizedString} */ (`El manual de CARE-Y`)
 };
 
 /**
 * | output |
 * | --- |
-* | "How CARE-Y works" |
+* | "The CARE-Y handbook" |
 *
 * @param {Demo_Entry_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

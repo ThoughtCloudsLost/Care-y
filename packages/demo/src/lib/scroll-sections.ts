@@ -125,22 +125,34 @@ export const ENTRY_SECTION: Section = {
       bodyKey: "demo_entry_nav_body",
     },
     {
+      slug: "search",
+      topic: null,
+      headingKey: "demo_entry_search_heading",
+      bodyKey: "demo_entry_search_body",
+    },
+    {
       slug: "simulator-controls",
       topic: null,
       headingKey: "demo_entry_controls_heading",
       bodyKey: "demo_entry_controls_body",
     },
     {
-      slug: "data-flow",
+      slug: "viewing-modes",
       topic: null,
-      headingKey: "demo_entry_flow_heading",
-      bodyKey: "demo_entry_flow_body",
+      headingKey: "demo_entry_modes_heading",
+      bodyKey: "demo_entry_modes_body",
     },
     {
       slug: "role-switching",
       topic: null,
       headingKey: "demo_entry_roles_heading",
       bodyKey: "demo_entry_roles_body",
+    },
+    {
+      slug: "data-flow",
+      topic: null,
+      headingKey: "demo_entry_flow_heading",
+      bodyKey: "demo_entry_flow_body",
     },
   ],
 };
@@ -1988,6 +2000,21 @@ export function resolvePhoneCommand(
         routeSlug: subSlug,
         highlight: null,
       };
+    // Page-side excursion sections never become a location, so no
+    // phone command can be asked of them; an inert command keeps the
+    // switch exhaustive without giving them a screen.
+    case "search-results":
+    case "aggregation-view":
+      return {
+        feature: "other",
+        detail: null,
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic: null,
+        pulseDesktopOnly: false,
+        routeSlug: null,
+        highlight: null,
+      };
   }
 }
 
@@ -2079,6 +2106,11 @@ export function sectionMatchesPhone(
         subSlug !== null &&
         slugForRoute(routeId) === subSlug
       );
+    // Excursion sections are never a location, so no phone state can
+    // match them.
+    case "search-results":
+    case "aggregation-view":
+      return false;
   }
 }
 

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The circuit icon in the top bar opens the data flow panel, and every interaction in the simulator draws its path through screen, encryption, API, server, and..." |
+* | "The Data flow button in the top bar opens the data flow panel, and every interaction in the simulator traces its path through screen, encryption, API, server..." |
 *
 * @param {Demo_Entry_Flow_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

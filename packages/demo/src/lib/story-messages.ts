@@ -622,6 +622,8 @@ const lookup: Record<string, () => string> = {
   // Coming-soon placeholder
   demo_coming_soon_title: () => m.demo_coming_soon_title(),
   demo_coming_soon_desc: () => m.demo_coming_soon_desc(),
+  demo_search_results_title: () => m.demo_search_results_title(),
+  demo_search_results_desc: () => m.demo_search_results_desc(),
   demo_coming_soon_heading: () => m.demo_coming_soon_heading(),
   demo_coming_soon_body: () => m.demo_coming_soon_body(),
 
@@ -636,6 +638,10 @@ const lookup: Record<string, () => string> = {
   demo_entry_flow_body: () => m.demo_entry_flow_body(),
   demo_entry_roles_heading: () => m.demo_entry_roles_heading(),
   demo_entry_roles_body: () => m.demo_entry_roles_body(),
+  demo_entry_search_heading: () => m.demo_entry_search_heading(),
+  demo_entry_search_body: () => m.demo_entry_search_body(),
+  demo_entry_modes_heading: () => m.demo_entry_modes_heading(),
+  demo_entry_modes_body: () => m.demo_entry_modes_body(),
 };
 
 /**

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "CARE-Y is a call intake and case management system for mutual aid organizations serving at-risk populations. Both clients and volunteers face real danger if ..." |
+* | "CARE-Y is a call intake and case management system for mutual aid organizations serving populations that are at risk. Both clients and volunteers face real d..." |
 *
 * @param {Demo_Entry_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Entry_Flow_BodyInputs */
 
 const en_demo_entry_flow_body = /** @type {(inputs: Demo_Entry_Flow_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The circuit icon in the top bar opens the data flow panel, and every interaction in the simulator draws its path through screen, encryption, API, server, and database lanes, with each step showing direction, timing, and a payload preview. Where the handbook needs to simulate something the real app handles differently, a badge marks that step as scripted.`)
+	return /** @type {LocalizedString} */ (`The Data flow button in the top bar opens the data flow panel, and every interaction in the simulator traces its path through screen, encryption, API, server, and database lanes, with each step showing direction, timing, and a payload preview. Some operations like incoming calls or scheduled events cannot be triggered on demand in a browser, so the handbook scripts those interactions to demonstrate the feature. A badge marks each scripted step so you can tell it apart from the real path.`)
 };
 
 const es_demo_entry_flow_body = /** @type {(inputs: Demo_Entry_Flow_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El icono de circuito en la barra superior abre el panel de flujo de datos, y cada interacción en el simulador dibuja su recorrido a través de las líneas de pantalla, cifrado, API, servidor y base de datos, con cada paso mostrando dirección, duración y una vista previa del contenido. Donde el manual necesita simular algo que la aplicación real maneja de otra forma, una insignia marca ese paso como simulado.`)
+	return /** @type {LocalizedString} */ (`El icono de circuito en la barra superior abre el panel de flujo de datos, y cada interacción en el simulador traza su recorrido a través de las líneas de pantalla, cifrado, API, servidor y base de datos, con cada paso mostrando dirección, duración y una vista previa del contenido. Donde el manual simula algo que la aplicación real maneja de otra forma, una insignia marca ese paso como simulado.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The circuit icon in the top bar opens the data flow panel, and every interaction in the simulator draws its path through screen, encryption, API, server, and..." |
+* | "The Data flow button in the top bar opens the data flow panel, and every interaction in the simulator traces its path through screen, encryption, API, server..." |
 *
 * @param {Demo_Entry_Flow_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
