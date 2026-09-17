@@ -304,12 +304,12 @@ CARE-Y is pre-alpha. This list reflects current plans, and ordering can shift.
         <br><br>
         <a href="https://handbook.care-y.org/#admin-comms/provider"><img src="https://img.shields.io/badge/-Telephony-2DA44E?style=flat" alt="Telephony"></a> - Calls and texts through the org's phone number, inbound texts encrypted on arrival, outbound through a stateless relay that zeros memory, provider-abstracted (Twilio).
         <br><br>
-        <img src="https://img.shields.io/badge/-Voicemail-2DA44E?style=flat" alt="Voicemail"> - Recordings encrypted and queued for volunteer review.
+        <a href="https://handbook.care-y.org/#ticket-detail/voicemails"><img src="https://img.shields.io/badge/-Voicemail-2DA44E?style=flat" alt="Voicemail"></a> - Recordings encrypted and queued for volunteer review.
         <br><br>
-        <img src="https://img.shields.io/badge/-Automated%20ticket%20creation-2DA44E?style=flat" alt="Automated ticket creation"> - Cases open from inbound calls, texts, emails, and intake form submissions, each channel org-configurable.
+        <a href="https://handbook.care-y.org/#admin-comms/channel-policy"><img src="https://img.shields.io/badge/-Automated%20ticket%20creation-2DA44E?style=flat" alt="Automated ticket creation"></a> - Cases open from inbound calls, texts, emails, and intake form submissions, each channel org-configurable.
       </td>
       <td valign="top">
-        <img src="https://img.shields.io/badge/-Intake%20forms-2DA44E?style=flat" alt="Intake forms"> - Client-facing forms with custom fields and conditional pages, submissions encrypted before storage.
+        <a href="https://handbook.care-y.org/#admin-forms/builder"><img src="https://img.shields.io/badge/-Intake%20forms-2DA44E?style=flat" alt="Intake forms"></a> - Client-facing forms with custom fields and conditional pages, submissions encrypted before storage.
         <br><br>
         <a href="https://handbook.care-y.org/#library"><img src="https://img.shields.io/badge/-Knowledge%20base-2DA44E?style=flat" alt="Knowledge base"></a> - Rich text articles, categories, voting, and search, all encrypted with the org key.
         <br><br>
@@ -319,16 +319,16 @@ CARE-Y is pre-alpha. This list reflects current plans, and ordering can shift.
         <br><br>
         <a href="https://handbook.care-y.org/#admin-org/branding"><img src="https://img.shields.io/badge/-Org%20customization-2DA44E?style=flat" alt="Org customization"></a> - Branding with automatic contrast enforcement, and custom terminology throughout.
         <br><br>
-        <img src="https://img.shields.io/badge/-Multi--method%202FA-2DA44E?style=flat" alt="Multi-method 2FA"> - Passkeys, TOTP, and backup codes, mandatory for accessing any encrypted data.
+        <a href="https://handbook.care-y.org/#settings/two-factor"><img src="https://img.shields.io/badge/-Multi--method%202FA-2DA44E?style=flat" alt="Multi-method 2FA"></a> - Passkeys, TOTP, and backup codes, mandatory for accessing any encrypted data.
       </td>
       <td valign="top">
         <a href="https://handbook.care-y.org/#admin-people/roles"><img src="https://img.shields.io/badge/-Roles%20and%20permissions-2DA44E?style=flat" alt="Roles and permissions"></a> - Volunteer, Manager, and Admin roles with granular permissions and per-user key status.
         <br><br>
         <a href="https://handbook.care-y.org/#admin"><img src="https://img.shields.io/badge/-Admin-2DA44E?style=flat" alt="Admin"></a> - Organization settings, people management, and communications configuration.
         <br><br>
-        <img src="https://img.shields.io/badge/-WCAG%20AA%20accessibility-2DA44E?style=flat" alt="WCAG AA accessibility"> - Automatic contrast enforcement, focus management, motion and contrast preferences, and screen reader support.
+        <a href="https://handbook.care-y.org"><img src="https://img.shields.io/badge/-WCAG%20AA%20accessibility-2DA44E?style=flat" alt="WCAG AA accessibility"></a> - Automatic contrast enforcement, focus management, motion and contrast preferences, and screen reader support.
         <br><br>
-        <img src="https://img.shields.io/badge/-PWA-2DA44E?style=flat" alt="PWA"> - Installable with dark mode and offline asset caching, never caches encrypted content.
+        <a href="https://handbook.care-y.org"><img src="https://img.shields.io/badge/-PWA-2DA44E?style=flat" alt="PWA"></a> - Installable with dark mode and offline asset caching, never caches encrypted content.
         <br><br>
         <a href="https://handbook.care-y.org/#login/language"><img src="https://img.shields.io/badge/-i18n-2DA44E?style=flat" alt="i18n"></a> - English and Spanish via compile-time translations, adding a language requires only a JSON file.
       </td>
