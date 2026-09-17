@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Entry_Modes_BodyInputs */
 
 const en_demo_entry_modes_body = /** @type {(inputs: Demo_Entry_Modes_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Read and Simulate are toggled from the top bar. Read mode shows the handbook as a document with the simulator hidden but still running, and you can long press any screenshot to peek at the live app. Simulate mode shows the phone frame alongside the text on wide screens, and on narrow screens or when the frame fills the window it activates fullscreen, where the simulator fills the screen and the handbook moves into a resizable drawer with a book icon tab on the edge to open and reposition it.`)
+	return /** @type {LocalizedString} */ (`Read and Simulate are toggled from the top bar. Read mode shows the handbook as a document with the simulator hidden but still running. Simulate mode shows the phone frame alongside the text on wide screens, and on narrow screens or when the frame fills the window it activates fullscreen, where the simulator fills the screen and the handbook moves into a resizable drawer with a book icon tab on the edge to open and reposition it.`)
 };
 
 const es_demo_entry_modes_body = /** @type {(inputs: Demo_Entry_Modes_BodyInputs) => LocalizedString} */ () => {
@@ -16,7 +16,7 @@ const es_demo_entry_modes_body = /** @type {(inputs: Demo_Entry_Modes_BodyInputs
 /**
 * | output |
 * | --- |
-* | "Read and Simulate are toggled from the top bar. Read mode shows the handbook as a document with the simulator hidden but still running, and you can long pres..." |
+* | "Read and Simulate are toggled from the top bar. Read mode shows the handbook as a document with the simulator hidden but still running. Simulate mode shows t..." |
 *
 * @param {Demo_Entry_Modes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

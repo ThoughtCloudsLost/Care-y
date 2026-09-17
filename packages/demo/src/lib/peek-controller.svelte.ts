@@ -137,8 +137,8 @@ export interface ClipRect {
 }
 
 export interface SavedGeometry {
-  readonly footprintW: number;
-  readonly footprintH: number;
+  footprintW: number;
+  footprintH: number;
   readonly top: number;
   readonly left: number;
 }
