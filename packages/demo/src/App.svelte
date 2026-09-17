@@ -2132,6 +2132,7 @@
    *  effect sees no change and never nudges the drawer against the
    *  user's own in-flight scroll at a sub boundary. */
   function handleDrawerScrollSub(sectionId: SectionId, subSlug: string): void {
+    if (storyExcursionOpen) return;
     prevDrawerSection = sectionId;
     prevDrawerSub = subSlug;
     handleSubClick(sectionId, subSlug);
