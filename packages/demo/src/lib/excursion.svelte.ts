@@ -101,15 +101,12 @@ export function closeExcursion(_reason: "user" | "phone-tap" | "relink"): void {
 }
 
 /**
- * Close an aggregation or search on phone-origin navigation. Guides
- * are NOT closed by phone taps: the reader is deliberately unlinked
- * and working through steps, and closing would fight them.
+ * Close an aggregation on phone-origin navigation. Guides and search
+ * are NOT closed by phone taps: search deliberately unlinks so the
+ * reader can browse results without the phone fighting them.
  */
 export function closeOnPhoneNavigation(): void {
-  if (
-    excursion !== null &&
-    (excursion.kind === "aggregation" || excursion.kind === "search")
-  ) {
+  if (excursion !== null && excursion.kind === "aggregation") {
     excursion = null;
   }
 }
