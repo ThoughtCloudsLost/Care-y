@@ -693,6 +693,28 @@ describe("createFrameGeometry band rescale", () => {
     expect(geo.top).toBe(top1);
   });
 
+  it("restores the anchor geometry exactly when the chrome closes again", () => {
+    // Open a tall chrome (the frame shrinks, possibly to the joint
+    // floor), then close it. The band now matches the anchor, and the
+    // recompute with factor 1 must write the anchor geometry back; the
+    // old equality early-return left the frame stuck at shrunken size.
+    let chrome = TOP_BAR_HEIGHT;
+    const geo = createFrameGeometry(() => chrome);
+    const w0 = geo.footprintW;
+    const h0 = geo.footprintH;
+    const top0 = geo.top;
+
+    chrome = OPEN_CHROME;
+    geo.rescaleForBand();
+    expect(geo.footprintW).toBeLessThan(w0);
+
+    chrome = TOP_BAR_HEIGHT;
+    geo.rescaleForBand();
+    expect(geo.footprintW).toBe(w0);
+    expect(geo.footprintH).toBe(h0);
+    expect(geo.top).toBe(top0);
+  });
+
   it("reanchorBand makes the current geometry the new scaling basis", () => {
     let chrome = TOP_BAR_HEIGHT;
     const geo = createFrameGeometry(() => chrome);

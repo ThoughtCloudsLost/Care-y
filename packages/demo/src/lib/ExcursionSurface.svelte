@@ -1,9 +1,9 @@
 <script lang="ts">
   import { ArrowLeft } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { MAX_MEASURE } from "./flow-layout.js";
   import { activeExcursion, closeExcursion } from "./excursion.svelte.js";
   import GuideChecklist from "./GuideChecklist.svelte";
-  import AggregationView from "./AggregationView.svelte";
   import type { SectionId } from "./bridge.js";
 
   interface Props {
@@ -32,57 +32,45 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="excursion-surface"
-    class:excursion-surface--column={presentation === "column"}
     class:excursion-surface--drawer={presentation === "drawer"}
     onkeydown={handleKeydown}
   >
-    <div class="excursion-header">
+    <div class="excursion-content" style="max-width: {MAX_MEASURE}px">
       <button
         class="excursion-back"
         type="button"
         onclick={handleBack}
         aria-label={m.demo_excursion_back()}
       >
-        <ArrowLeft size={16} />
+        <ArrowLeft size={15} />
         <span>{m.demo_excursion_back()}</span>
       </button>
-    </div>
 
-    <div class="excursion-body">
       {#if excursion.kind === "guide"}
         <GuideChecklist slug={excursion.slug} {locale} {onNavigate} />
-      {:else}
-        <AggregationView pageId={excursion.page} {locale} {onNavigate} />
       {/if}
+      <!-- Search and aggregation excursions render as synthetic
+           sections through the story pipeline, never through this
+           panel (excursion-sections.ts). -->
     </div>
   </div>
 {/if}
 
 <style>
   .excursion-surface {
-    display: flex;
-    flex-direction: column;
+    overflow-y: auto;
+    height: 100%;
     background: var(--paper, #fff);
     color: var(--ink, #1a1a1a);
   }
 
-  .excursion-surface--column {
-    position: absolute;
-    inset: 0;
-  }
-
   .excursion-surface--drawer {
-    overflow-y: auto;
-    height: 100%;
     min-width: 200px;
   }
 
-  .excursion-header {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--hair, #ddd);
-    flex-shrink: 0;
+  .excursion-content {
+    margin: 0 auto;
+    padding: 24px;
   }
 
   .excursion-back {
@@ -91,19 +79,19 @@
     gap: 4px;
     background: none;
     border: none;
-    padding: 4px 8px;
-    font-size: 0.875rem;
-    color: var(--accent, #0066cc);
+    padding: 0;
+    font: 400 15px "Atkinson Hyperlegible Next";
+    color: var(--muted, #888);
     cursor: pointer;
-    border-radius: 4px;
+    margin-bottom: 12px;
   }
 
   .excursion-back:hover {
-    background: var(--hover, #f5f5f5);
+    color: var(--ink, #1a1a1a);
   }
 
-  .excursion-body {
-    flex: 1;
-    overflow-y: auto;
+  .excursion-back:focus-visible {
+    outline: 2px solid var(--demo-accent, #0066cc);
+    outline-offset: 2px;
   }
 </style>

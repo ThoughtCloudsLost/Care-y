@@ -92,7 +92,11 @@ export type SectionId =
   | "client-portal"
   | "client-account"
   | "client-share"
-  | "coming-soon";
+  | "coming-soon"
+  // Page-side synthetic sections for handbook excursions (search
+  // results, aggregation pages). Never a phone location.
+  | "search-results"
+  | "aggregation-view";
 
 /**
  * Who the phone is showing the product as.

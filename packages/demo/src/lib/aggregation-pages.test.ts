@@ -1,8 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { PAGES, getAggPage } from "./aggregation-pages.js";
-import { getCorpusEntry } from "./handbook-corpus.js";
+import { searchEntries, invalidateSearchIndex } from "./handbook-search.js";
+import { invalidateCorpusCache } from "./handbook-corpus.js";
 
 const LOCALE = "en";
+
+beforeEach(() => {
+  invalidateSearchIndex();
+  invalidateCorpusCache();
+});
 
 describe("aggregation-pages", () => {
   it("page ids are unique", () => {
@@ -10,65 +16,48 @@ describe("aggregation-pages", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("every stretches ref resolves via getCorpusEntry to an entry with a non-null label", () => {
+  it("every label on every page matches >= 1 EN entry", () => {
     for (const page of PAGES) {
-      for (const section of page.sections) {
-        if (section.kind !== "stretches") continue;
-        for (const ref of section.refs) {
-          const hashIdx = ref.indexOf("#");
-          expect(hashIdx, `ref "${ref}" missing # separator`).toBeGreaterThan(
-            0,
-          );
-
-          const key = ref.slice(0, hashIdx);
-          const lineIdx = Number(ref.slice(hashIdx + 1));
-          expect(
-            Number.isNaN(lineIdx),
-            `ref "${ref}" has non-numeric lineIdx`,
-          ).toBe(false);
-
-          const entry = getCorpusEntry(LOCALE, key, lineIdx);
-          expect(entry, `ref "${ref}" did not resolve`).not.toBeNull();
-          expect(
-            entry!.label,
-            `ref "${ref}" resolved but has null label`,
-          ).not.toBeNull();
-        }
+      for (const label of page.labels) {
+        const hits = searchEntries("", LOCALE, { labels: [label] });
+        expect(
+          hits.length,
+          `page "${page.id}" label "${label}" matched no entries`,
+        ).toBeGreaterThanOrEqual(1);
       }
     }
   });
 
-  it("who-sees contains exactly one matrix section", () => {
-    const whoSees = getAggPage("who-sees");
-    expect(whoSees).toBeDefined();
-    const matrixSections = whoSees!.sections.filter((s) => s.kind === "matrix");
-    expect(matrixSections.length).toBe(1);
-  });
-
-  it("every page titleKey and introKey follow naming convention", () => {
+  it("every page with labels returns non-empty entries in EN", () => {
     for (const page of PAGES) {
-      expect(page.titleKey).toBe(
-        `demo_agg_${page.id.replace(/-/g, "_")}_title`,
-      );
-      expect(page.introKey).toBe(
-        `demo_agg_${page.id.replace(/-/g, "_")}_intro`,
-      );
+      if (page.labels.length === 0) continue;
+      const hits = searchEntries("", LOCALE, {
+        labels: page.labels,
+        limit: 100,
+      });
+      expect(hits.length, `page "${page.id}" is empty`).toBeGreaterThan(0);
     }
   });
 
-  it("getAggPage returns the correct page for each id", () => {
+  it("pages without labels carry provisional prose keys", () => {
     for (const page of PAGES) {
-      const found = getAggPage(page.id);
-      expect(found).toBe(page);
+      expect(
+        page.labels.length + page.proseKeys.length,
+        `page "${page.id}" has neither labels nor prose keys`,
+      ).toBeGreaterThan(0);
     }
   });
 
-  it("searching contains exactly one search section", () => {
-    const searching = getAggPage("searching");
-    expect(searching).toBeDefined();
-    const searchSections = searching!.sections.filter(
-      (s) => s.kind === "search",
-    );
-    expect(searchSections.length).toBe(1);
+  it("key naming follows the demo_agg_<id> convention", () => {
+    for (const page of PAGES) {
+      const stem = `demo_agg_${page.id.replace(/-/g, "_")}`;
+      expect(page.titleKey).toBe(`${stem}_title`);
+      expect(page.introKey).toBe(`${stem}_intro`);
+    }
+  });
+
+  it("getAggPage looks up by id", () => {
+    expect(getAggPage("encryption")?.id).toBe("encryption");
+    expect(getAggPage("cannot-prove")?.proseKeys.length).toBeGreaterThan(0);
   });
 });

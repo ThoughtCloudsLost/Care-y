@@ -19,10 +19,7 @@
         {#each group.permissions as perm (perm)}
           {@const entry = PERMISSION_LABELS.get(perm)}
           {#if entry !== undefined}
-            <li
-              class="perm-row"
-              class:perm-row--locked={LOCKED_PERMISSIONS.has(perm)}
-            >
+            <li class="perm-row">
               <span class="perm-label">{entry.labelFn()}</span>
               {#if entry.hintFn !== null}
                 <span class="perm-hint">{entry.hintFn()}</span>
@@ -42,25 +39,19 @@
   .perm-matrix {
     display: flex;
     flex-direction: column;
-    gap: 16px;
   }
 
   .perm-group {
-    border: 1px solid var(--hair, #ddd);
-    border-radius: 8px;
-    overflow: hidden;
+    margin-bottom: 8px;
   }
 
   .perm-group-label {
-    margin: 0;
-    padding: 8px 12px;
-    font-size: 0.8125rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--muted, #888);
-    background: var(--raised, #fafafa);
-    border-bottom: 1px solid var(--hair, #ddd);
+    margin: 16px 0 0;
+    font: 700 18px "Atkinson Hyperlegible Next";
+    line-height: 24px;
+    color: var(--ink, #1a1a1a);
+    border-bottom: 1px solid var(--hair-2, #ccc);
+    padding-bottom: 6px;
   }
 
   .perm-list {
@@ -73,33 +64,26 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--hair, #ddd);
-    font-size: 0.875rem;
-    color: var(--ink, #1a1a1a);
-  }
-
-  .perm-row:last-child {
-    border-bottom: none;
-  }
-
-  .perm-row--locked {
-    opacity: 0.7;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--hair-2, #ccc);
   }
 
   .perm-label {
-    font-weight: 500;
+    font: 700 15px "Atkinson Hyperlegible Next";
+    line-height: 24px;
+    color: var(--ink, #1a1a1a);
   }
 
   .perm-hint {
-    font-size: 0.75rem;
-    color: var(--ink-muted, #666);
-    line-height: 1.4;
+    font: 400 15px "Atkinson Hyperlegible Next";
+    line-height: 24px;
+    color: var(--muted, #888);
   }
 
   .perm-locked {
-    font-size: 0.6875rem;
+    font: 400 15px "Atkinson Hyperlegible Next";
     font-style: italic;
-    color: var(--ink-muted, #666);
+    line-height: 24px;
+    color: var(--muted, #888);
   }
 </style>
