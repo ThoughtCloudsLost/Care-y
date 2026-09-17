@@ -279,7 +279,7 @@ CARE-Y is pre-alpha. This list reflects current plans, and ordering can shift.
 <table>
   <thead>
     <tr>
-  <th colspan="3">
+  <th colspan="2">
     <img src="https://img.shields.io/badge/Built-2DA44E?style=flat" alt="Built">
   </th>
   <th>
@@ -296,78 +296,48 @@ CARE-Y is pre-alpha. This list reflects current plans, and ordering can shift.
   <tbody>
     <tr>
       <td valign="top">
-        <a href="https://handbook.care-y.org/#tickets/decryption"><img src="https://img.shields.io/badge/-Case%20management-2DA44E?style=flat" alt="Case management"></a> - Tickets, case notes, and outgoing messages all encrypted in the volunteer's browser. Incoming texts encrypted the moment they arrive.
-        <br><br>
-        <a href="https://handbook.care-y.org/#ticket-detail/conversation"><img src="https://img.shields.io/badge/-Unified%20case%20thread-2DA44E?style=flat" alt="Unified case thread"></a> - Single volunteer timeline across SMS, email, portal, calls, and notes. Every entry stored encrypted and decrypted client-side for display.
-        <br><br>
-        <a href="#client-portal"><img src="https://img.shields.io/badge/-Client%20communication-2DA44E?style=flat" alt="Client communication"></a> - Emails, SMS texts, phone calling, encrypted client-portal messages, and secure one-time message links.
-        <br><br>
-        <a href="https://handbook.care-y.org/#admin-comms/provider"><img src="https://img.shields.io/badge/-Telephony-2DA44E?style=flat" alt="Telephony"></a> - Calls and texts through the org's phone number, inbound texts encrypted on arrival, outbound through a stateless relay that zeros memory, provider-abstracted (Twilio).
-        <br><br>
-        <a href="https://handbook.care-y.org/#ticket-detail/voicemails"><img src="https://img.shields.io/badge/-Voicemail-2DA44E?style=flat" alt="Voicemail"></a> - Recordings encrypted and queued for volunteer review.
-        <br><br>
-        <a href="https://handbook.care-y.org/#admin-comms/channel-policy"><img src="https://img.shields.io/badge/-Automated%20ticket%20creation-2DA44E?style=flat" alt="Automated ticket creation"></a> - Cases open from inbound calls, texts, emails, and intake form submissions, each channel org-configurable.
+        <details><summary><a href="https://handbook.care-y.org/#tickets/decryption"><img src="https://img.shields.io/badge/-Case%20management-2DA44E?style=flat" alt="Case management"></a></summary>Tickets, case notes, and outgoing messages all encrypted in the volunteer's browser. Incoming texts encrypted the moment they arrive.</details>
+        <details><summary><a href="https://handbook.care-y.org/#ticket-detail/conversation"><img src="https://img.shields.io/badge/-Unified%20case%20thread-2DA44E?style=flat" alt="Unified case thread"></a></summary>Single volunteer timeline across SMS, email, portal, calls, and notes. Every entry stored encrypted and decrypted client-side for display.</details>
+        <details><summary><a href="#client-portal"><img src="https://img.shields.io/badge/-Client%20communication-2DA44E?style=flat" alt="Client communication"></a></summary>Emails, SMS texts, phone calling, encrypted client-portal messages, and secure one-time message links.</details>
+        <details><summary><a href="https://handbook.care-y.org/#admin-comms/provider"><img src="https://img.shields.io/badge/-Telephony-2DA44E?style=flat" alt="Telephony"></a></summary>Calls and texts through the org's phone number, inbound texts encrypted on arrival, outbound through a stateless relay that zeros memory, provider-abstracted (Twilio).</details>
+        <details><summary><a href="https://handbook.care-y.org/#ticket-detail/voicemails"><img src="https://img.shields.io/badge/-Voicemail-2DA44E?style=flat" alt="Voicemail"></a></summary>Recordings encrypted and queued for volunteer review.</details>
+        <details><summary><a href="https://handbook.care-y.org/#admin-comms/channel-policy"><img src="https://img.shields.io/badge/-Automated%20ticket%20creation-2DA44E?style=flat" alt="Automated ticket creation"></a></summary>Cases open from inbound calls, texts, emails, and intake form submissions, each channel org-configurable.</details>
+        <details><summary><a href="https://handbook.care-y.org/#admin-forms/builder"><img src="https://img.shields.io/badge/-Intake%20forms-2DA44E?style=flat" alt="Intake forms"></a></summary>Client-facing forms with custom fields and conditional pages, submissions encrypted before storage.</details>
+        <details><summary><a href="https://handbook.care-y.org/#library"><img src="https://img.shields.io/badge/-Knowledge%20base-2DA44E?style=flat" alt="Knowledge base"></a></summary>Rich text articles, categories, voting, and search, all encrypted with the org key.</details>
+        <details><summary><a href="https://handbook.care-y.org/#admin-people/queues"><img src="https://img.shields.io/badge/-Queue%20routing-2DA44E?style=flat" alt="Queue routing"></a></summary>Tickets routed into org-defined queues with priority levels and assignment workflows.</details>
       </td>
       <td valign="top">
-        <a href="https://handbook.care-y.org/#admin-forms/builder"><img src="https://img.shields.io/badge/-Intake%20forms-2DA44E?style=flat" alt="Intake forms"></a> - Client-facing forms with custom fields and conditional pages, submissions encrypted before storage.
-        <br><br>
-        <a href="https://handbook.care-y.org/#library"><img src="https://img.shields.io/badge/-Knowledge%20base-2DA44E?style=flat" alt="Knowledge base"></a> - Rich text articles, categories, voting, and search, all encrypted with the org key.
-        <br><br>
-        <a href="https://handbook.care-y.org/#admin-people/queues"><img src="https://img.shields.io/badge/-Queue%20routing-2DA44E?style=flat" alt="Queue routing"></a> - Tickets routed into org-defined queues with priority levels and assignment workflows.
-        <br><br>
-        <a href="https://handbook.care-y.org/#search"><img src="https://img.shields.io/badge/-Search-2DA44E?style=flat" alt="Search"></a> - Unified search across tickets, articles, and volunteers. Decrypted and searched client-side.
-        <br><br>
-        <a href="https://handbook.care-y.org/#admin-org/branding"><img src="https://img.shields.io/badge/-Org%20customization-2DA44E?style=flat" alt="Org customization"></a> - Branding with automatic contrast enforcement, and custom terminology throughout.
-        <br><br>
-        <a href="https://handbook.care-y.org/#settings/two-factor"><img src="https://img.shields.io/badge/-Multi--method%202FA-2DA44E?style=flat" alt="Multi-method 2FA"></a> - Passkeys, TOTP, and backup codes, mandatory for accessing any encrypted data.
+        <details><summary><a href="https://handbook.care-y.org/#search"><img src="https://img.shields.io/badge/-Search-2DA44E?style=flat" alt="Search"></a></summary>Unified search across tickets, articles, and volunteers. Decrypted and searched client-side.</details>
+        <details><summary><a href="https://handbook.care-y.org/#admin-org/branding"><img src="https://img.shields.io/badge/-Org%20customization-2DA44E?style=flat" alt="Org customization"></a></summary>Branding with automatic contrast enforcement, and custom terminology throughout.</details>
+        <details><summary><a href="https://handbook.care-y.org/#settings/two-factor"><img src="https://img.shields.io/badge/-Multi--method%202FA-2DA44E?style=flat" alt="Multi-method 2FA"></a></summary>Passkeys, TOTP, and backup codes, mandatory for accessing any encrypted data.</details>
+        <details><summary><a href="https://handbook.care-y.org/#admin-people/roles"><img src="https://img.shields.io/badge/-Roles%20and%20permissions-2DA44E?style=flat" alt="Roles and permissions"></a></summary>Volunteer, Manager, and Admin roles with granular permissions and per-user key status.</details>
+        <details><summary><a href="https://handbook.care-y.org/#admin"><img src="https://img.shields.io/badge/-Admin-2DA44E?style=flat" alt="Admin"></a></summary>Organization settings, people management, and communications configuration.</details>
+        <details><summary><a href="https://handbook.care-y.org"><img src="https://img.shields.io/badge/-WCAG%20AA%20accessibility-2DA44E?style=flat" alt="WCAG AA accessibility"></a></summary>Automatic contrast enforcement, focus management, motion and contrast preferences, and screen reader support.</details>
+        <details><summary><a href="https://handbook.care-y.org"><img src="https://img.shields.io/badge/-PWA-2DA44E?style=flat" alt="PWA"></a></summary>Installable with dark mode and offline asset caching, never caches encrypted content.</details>
+        <details><summary><a href="https://handbook.care-y.org/#login/language"><img src="https://img.shields.io/badge/-i18n-2DA44E?style=flat" alt="i18n"></a></summary>English and Spanish via compile-time translations, adding a language requires only a JSON file.</details>
       </td>
       <td valign="top">
-        <a href="https://handbook.care-y.org/#admin-people/roles"><img src="https://img.shields.io/badge/-Roles%20and%20permissions-2DA44E?style=flat" alt="Roles and permissions"></a> - Volunteer, Manager, and Admin roles with granular permissions and per-user key status.
-        <br><br>
-        <a href="https://handbook.care-y.org/#admin"><img src="https://img.shields.io/badge/-Admin-2DA44E?style=flat" alt="Admin"></a> - Organization settings, people management, and communications configuration.
-        <br><br>
-        <a href="https://handbook.care-y.org"><img src="https://img.shields.io/badge/-WCAG%20AA%20accessibility-2DA44E?style=flat" alt="WCAG AA accessibility"></a> - Automatic contrast enforcement, focus management, motion and contrast preferences, and screen reader support.
-        <br><br>
-        <a href="https://handbook.care-y.org"><img src="https://img.shields.io/badge/-PWA-2DA44E?style=flat" alt="PWA"></a> - Installable with dark mode and offline asset caching, never caches encrypted content.
-        <br><br>
-        <a href="https://handbook.care-y.org/#login/language"><img src="https://img.shields.io/badge/-i18n-2DA44E?style=flat" alt="i18n"></a> - English and Spanish via compile-time translations, adding a language requires only a JSON file.
+        <details><summary><img src="https://img.shields.io/badge/-Production%20infrastructure-0969DA?style=flat" alt="Production infrastructure"></summary>Hardened servers, automated backups, encrypted data lifecycle, and deployment pipeline for the alpha launch.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Self--hosting%20toolkit-0969DA?style=flat" alt="Self-hosting toolkit"></summary>Deployment tooling for orgs running their own single-tenant instance from the same codebase.</details>
+        <details><summary><a href="https://handbook.care-y.org"><img src="https://img.shields.io/badge/-Interactive%20handbook-0969DA?style=flat" alt="Interactive handbook"></a></summary>Runs the real application (frontend, server, and PostgreSQL via WebAssembly) entirely in the browser. Volunteers use it for onboarding, and orgs considering the platform can operate it themselves before committing.</details>
       </td>
       <td valign="top">
-        <img src="https://img.shields.io/badge/-Production%20infrastructure-0969DA?style=flat" alt="Production infrastructure"> - Hardened servers, automated backups, encrypted data lifecycle, and deployment pipeline for the alpha launch.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Self--hosting%20toolkit-0969DA?style=flat" alt="Self-hosting toolkit"> - Deployment tooling for orgs running their own single-tenant instance from the same codebase.
-        <br><br>
-        <a href="https://handbook.care-y.org"><img src="https://img.shields.io/badge/-Interactive%20handbook-0969DA?style=flat" alt="Interactive handbook"></a> - Runs the real application (frontend, server, and PostgreSQL via WebAssembly) entirely in the browser. Volunteers use it for onboarding, and orgs considering the platform can operate it themselves before committing.
+        <details><summary><a href="#fund-accounting"><img src="https://img.shields.io/badge/-Fund%20accounting-BF8700?style=flat" alt="Fund accounting"></a></summary>Encrypted fund tracking with balances on the dashboard and on each case. Donation platforms (Givebutter first) connect as live inflow sources. Donor data never enters CARE-Y.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Direct%20aid%20delivery-BF8700?style=flat" alt="Direct aid delivery"></summary>Sending aid to clients from within a case through swappable providers with approval workflows. Recipient details encrypted like other case data.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Reproducible%20builds-BF8700?style=flat" alt="Reproducible builds"></summary>Verifiable client builds so deployments can be audited against published source.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Tor%20hidden%20service-BF8700?style=flat" alt="Tor hidden service"></summary>Onion address access so volunteers and clients can connect without revealing that they use the service.</details>
       </td>
       <td valign="top">
-        <a href="#fund-accounting"><img src="https://img.shields.io/badge/-Fund%20accounting-BF8700?style=flat" alt="Fund accounting"></a> - Encrypted fund tracking with balances on the dashboard and on each case. Donation platforms (Givebutter first) connect as live inflow sources. Donor data never enters CARE-Y.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Direct%20aid%20delivery-BF8700?style=flat" alt="Direct aid delivery"> - Sending aid to clients from within a case through swappable providers with approval workflows. Recipient details encrypted like other case data.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Reproducible%20builds-BF8700?style=flat" alt="Reproducible builds"> - Verifiable client builds so deployments can be audited against published source.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Tor%20hidden%20service-BF8700?style=flat" alt="Tor hidden service"> - Onion address access so volunteers and clients can connect without revealing that they use the service.
-      </td>
-      <td valign="top">
-        <img src="https://img.shields.io/badge/-Ticket%20board%20view-6E7781?style=flat" alt="Ticket board view"> - A board style view for working tickets by status.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Pinning-6E7781?style=flat" alt="Pinning"> - Pin tickets and knowledge base articles for quick access, with per-volunteer ordering.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Shift%20scheduling-6E7781?style=flat" alt="Shift scheduling"> - Volunteer shift calendar with coverage tracking and rotation management.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Analytics%20and%20reports-6E7781?style=flat" alt="Analytics and reports"> - Aggregate reporting across cases, queues, and funds with encrypted data export and integrity verification.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Guided%20walkthrough-6E7781?style=flat" alt="Guided walkthrough"> - Interactive onboarding tour and appearance preferences for new volunteers.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Exposure%20system-6E7781?style=flat" alt="Exposure system"> - Security education through the volunteer's own session. Partially built, expanding to cover all protection layers.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Self--hosted%20voice-6E7781?style=flat" alt="Self-hosted voice"> - SignalWire integration to keep call audio off third-party servers.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Video%20calling-6E7781?style=flat" alt="Video calling"> - Scheduled calls with end-to-end encrypted audio and video, self-hosted.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Post--quantum%20key%20layer-6E7781?style=flat" alt="Post-quantum key layer"> - ML-KEM-768 hybrid alongside the classical OPRF, so the system is secure if either holds.
-        <br><br>
-        <img src="https://img.shields.io/badge/-Local--first%20encrypted%20sync-6E7781?style=flat" alt="Local-first encrypted sync"> - Client works offline with encrypted local storage and syncs when connectivity returns. Org opt-in.
+        <details><summary><img src="https://img.shields.io/badge/-Ticket%20board%20view-6E7781?style=flat" alt="Ticket board view"></summary>A board style view for working tickets by status.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Pinning-6E7781?style=flat" alt="Pinning"></summary>Pin tickets and knowledge base articles for quick access, with per-volunteer ordering.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Shift%20scheduling-6E7781?style=flat" alt="Shift scheduling"></summary>Volunteer shift calendar with coverage tracking and rotation management.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Analytics%20and%20reports-6E7781?style=flat" alt="Analytics and reports"></summary>Aggregate reporting across cases, queues, and funds with encrypted data export and integrity verification.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Guided%20walkthrough-6E7781?style=flat" alt="Guided walkthrough"></summary>Interactive onboarding tour and appearance preferences for new volunteers.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Exposure%20system-6E7781?style=flat" alt="Exposure system"></summary>Security education through the volunteer's own session. Partially built, expanding to cover all protection layers.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Self--hosted%20voice-6E7781?style=flat" alt="Self-hosted voice"></summary>SignalWire integration to keep call audio off third-party servers.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Video%20calling-6E7781?style=flat" alt="Video calling"></summary>Scheduled calls with end-to-end encrypted audio and video, self-hosted.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Post--quantum%20key%20layer-6E7781?style=flat" alt="Post-quantum key layer"></summary>ML-KEM-768 hybrid alongside the classical OPRF, so the system is secure if either holds.</details>
+        <details><summary><img src="https://img.shields.io/badge/-Local--first%20encrypted%20sync-6E7781?style=flat" alt="Local-first encrypted sync"></summary>Client works offline with encrypted local storage and syncs when connectivity returns. Org opt-in.</details>
       </td>
     </tr>
   </tbody>
