@@ -750,8 +750,12 @@ export function createFrameGeometry(
     const bandTop = getChromeHeight();
     const bandH =
       (typeof window !== "undefined" ? window.innerHeight : 900) - bandTop;
-    if (bandTop === anchor.bandTop && bandH === anchor.bandH) return;
-
+    // No early return on a band that matches the anchor: the current
+    // footprint may still carry a prior band's scale (chrome opened,
+    // shrank the frame, then closed), and only the recompute below,
+    // with factor 1, writes the anchor geometry back. Skipping here is
+    // what used to leave the frame stuck at its shrunken size after a
+    // search dock or flow band closed.
     const scaled = computeBandRescale(anchor, bandTop, bandH);
     // computeBandRescale already holds the footprint at or above
     // MIN_FOOTPRINT jointly, so setFootprint's per-axis floor is inert

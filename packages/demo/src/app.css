@@ -28,3 +28,11 @@
    The client's fonts.css uses absolute /fonts/* URLs which break when
    the demo is served under a base path like /Care-y/. */
 @import "./styles/demo-fonts.css";
+
+/* Search-match wash inside the story's rendered results. Painted via
+   the CSS Custom Highlight API (search-highlight.ts), the same yellow
+   the prose highlighter uses, so a match reads as marked text rather
+   than as a control. */
+::highlight(handbook-search) {
+  background-color: rgba(255, 214, 10, 0.38);
+}

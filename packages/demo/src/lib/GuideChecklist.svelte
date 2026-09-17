@@ -34,7 +34,7 @@
 
 {#if guide !== undefined}
   <div class="guide-checklist">
-    <h3 class="guide-title">{displayTitle}</h3>
+    <h2 class="guide-title">{displayTitle}</h2>
 
     <p class="guide-progress">
       {m.demo_guide_progress({
@@ -59,7 +59,7 @@
               aria-label={bodyText ?? step.bodyKey}
               onchange={() => toggleStep(slug, idx)}
             />
-            <span class="guide-step-body">
+            <span class="guide-step-body" class:guide-step-body--done={done}>
               {bodyText ?? step.bodyKey}
             </span>
           </label>
@@ -84,51 +84,43 @@
 
 <style>
   .guide-checklist {
-    padding: 12px 16px;
+    /* No padding: ExcursionSurface content wrapper handles padding */
   }
 
   .guide-title {
-    margin: 0 0 4px;
-    font-size: 1rem;
-    font-weight: 600;
+    margin: 0 0 8px;
+    font: 700 24px "Atkinson Hyperlegible Next";
+    line-height: 32px;
     color: var(--ink, #1a1a1a);
   }
 
   .guide-progress {
-    margin: 0 0 8px;
-    font-size: 0.8125rem;
-    color: var(--ink-muted, #666);
+    margin: 0 0 4px;
+    font: 400 15px "Atkinson Hyperlegible Next";
+    line-height: 24px;
+    color: var(--muted, #888);
   }
 
   .guide-unlinked-note {
     margin: 0 0 12px;
-    font-size: 0.75rem;
-    font-style: italic;
-    color: var(--ink-muted, #666);
+    font: 400 15px "Atkinson Hyperlegible Next";
+    line-height: 24px;
+    color: var(--muted, #888);
   }
 
   .guide-steps {
     margin: 0;
-    padding: 0 0 0 20px;
-    list-style: none;
-    counter-reset: step;
+    padding: 0;
+    list-style: decimal;
+    padding-left: 24px;
   }
 
   .guide-step {
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    padding: 6px 0;
-    counter-increment: step;
-  }
-
-  .guide-step::before {
-    content: counter(step) ".";
-    flex-shrink: 0;
-    width: 20px;
-    font-size: 0.8125rem;
-    color: var(--ink-muted, #666);
-    text-align: right;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--hair-2, #ccc);
   }
 
   .guide-step-label {
@@ -137,35 +129,45 @@
     gap: 6px;
     flex: 1;
     cursor: pointer;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    color: var(--ink, #1a1a1a);
   }
 
   .guide-step-label input[type="checkbox"] {
     flex-shrink: 0;
-    margin-top: 2px;
+    margin-top: 3px;
     width: 16px;
     height: 16px;
+    accent-color: var(--demo-accent, #0066cc);
   }
 
   .guide-step-body {
     flex: 1;
+    font: 400 15px "Atkinson Hyperlegible Next";
+    line-height: 24px;
+    color: var(--ink-2, #444);
+  }
+
+  .guide-step-body--done {
+    color: var(--muted, #888);
+    text-decoration: line-through;
   }
 
   .guide-show-me {
     flex-shrink: 0;
     background: none;
-    border: 1px solid var(--hair, #ddd);
-    border-radius: 4px;
-    padding: 2px 8px;
-    font-size: 0.8125rem;
-    color: var(--accent, #0066cc);
+    border: none;
+    padding: 0;
+    font: 400 15px "Atkinson Hyperlegible Next";
+    line-height: 24px;
+    color: var(--muted, #888);
     cursor: pointer;
-    line-height: 1.4;
   }
 
   .guide-show-me:hover {
-    background: var(--hover, #f5f5f5);
+    color: var(--ink, #1a1a1a);
+  }
+
+  .guide-show-me:focus-visible {
+    outline: 2px solid var(--demo-accent, #0066cc);
+    outline-offset: 2px;
   }
 </style>

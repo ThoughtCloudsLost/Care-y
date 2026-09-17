@@ -128,13 +128,19 @@ export function buildBlocks(sects: Section[], loc: string): FlowBlock[] {
       kind: "section-title",
       text: resolveStoryMessage(section.titleKey, loc),
     } satisfies FlowTextBlock);
-    result.push({
-      id: `${section.id}--desc`,
-      sectionId: section.id,
-      subSlug: null,
-      kind: "section-desc",
-      text: resolveStoryMessage(section.descKey, loc),
-    } satisfies FlowTextBlock);
+    // A description splits on newlines into one block per paragraph,
+    // like bodies do. The first block keeps the historical `--desc` id.
+    const descParas = resolveStoryMessage(section.descKey, loc).split("\n");
+    for (let pi = 0; pi < descParas.length; pi++) {
+      result.push({
+        id: pi === 0 ? `${section.id}--desc` : `${section.id}--desc--p${pi}`,
+        sectionId: section.id,
+        subSlug: null,
+        kind: "section-desc",
+        text: descParas[pi] ?? "",
+        spaceBefore: pi > 0 ? PARA_SPACE : undefined,
+      } satisfies FlowTextBlock);
+    }
     // One tip per page, under the first section's description. The
     // indent reserves the gutter its icon is drawn in.
     if (sx === 0) {
