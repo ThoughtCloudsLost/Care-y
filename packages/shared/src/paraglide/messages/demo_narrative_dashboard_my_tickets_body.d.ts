@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "All open tickets currently assigned to the volunteer. This is the primary working list for day to day case management. **What appears here.** Every ticket wh..." |
+* | "All open tickets assigned to the current volunteer. This is the primary working list for day-to-day case management. The count next to the section heading re..." |
 *
 * @param {Demo_Narrative_Dashboard_My_Tickets_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

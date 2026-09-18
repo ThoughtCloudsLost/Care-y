@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Dashboard_On_Hold_BodyInputs */
 
 const en_demo_narrative_dashboard_on_hold_body = /** @type {(inputs: Demo_Narrative_Dashboard_On_Hold_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tickets that a volunteer has placed on hold. A ticket on hold is still open but temporarily set aside, usually because the volunteer is waiting for a response from the client or an external party.
-**Visibility.** This section only appears on the overview page when at least one ticket is on hold and is hidden otherwise, and like unassigned it starts collapsed.
-**Resuming.** When the volunteer is ready to return to a ticket on hold, they can change its status back to active from the ticket detail view. The ticket then moves back to the my tickets section.`)
+	return /** @type {LocalizedString} */ (`Tickets the current volunteer has placed on hold. These are still open but set aside, typically while waiting for a response from a client or an external party.
+**Resuming.** Changing a ticket's status back to active from the ticket detail view returns it to the main working list.
+**Visibility.** This section only appears when at least one ticket is on hold. Otherwise it is hidden.`)
 };
 
 const es_demo_narrative_dashboard_on_hold_body = /** @type {(inputs: Demo_Narrative_Dashboard_On_Hold_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tickets que un voluntario ha puesto en espera. Un ticket en espera sigue abierto pero temporalmente apartado, normalmente porque el voluntario está esperando una respuesta del cliente o de una parte externa.
-**Visibilidad.** Esta sección solo aparece en la página de resumen cuando al menos un ticket está en espera y se oculta de lo contrario, y al igual que sin asignar comienza colapsada.
-**Reanudar.** Cuando el voluntario está listo para volver a un ticket en espera, puede cambiar su estado a activo desde la vista detallada del ticket. El ticket entonces vuelve a la sección de mis tickets.`)
+	return /** @type {LocalizedString} */ (`Tickets que el voluntario actual ha puesto en espera. Siguen abiertos pero apartados, normalmente a la espera de una respuesta de un cliente o una parte externa.
+**Reanudar.** Cambiar el estado de un ticket a activo desde la vista detallada lo devuelve a la lista de trabajo principal.
+**Visibilidad.** Esta sección solo aparece cuando al menos un ticket está en espera. De lo contrario, se oculta.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Tickets that a volunteer has placed on hold. A ticket on hold is still open but temporarily set aside, usually because the volunteer is waiting for a respons..." |
+* | "Tickets the current volunteer has placed on hold. These are still open but set aside, typically while waiting for a response from a client or an external par..." |
 *
 * @param {Demo_Narrative_Dashboard_On_Hold_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

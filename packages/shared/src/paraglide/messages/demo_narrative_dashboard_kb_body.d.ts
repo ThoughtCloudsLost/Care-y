@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A preview of recently updated knowledge base articles on the overview page. Tapping an article navigates to the full article in the library. **Encryption.** ..." |
+* | "A preview of recently updated knowledge base articles. **Encryption.** Article titles are encrypted with the organization key. The server stores ciphertext a..." |
 *
 * @param {Demo_Narrative_Dashboard_Kb_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

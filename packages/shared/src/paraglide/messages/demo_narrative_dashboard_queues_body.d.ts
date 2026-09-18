@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Tickets are organized into queues defined by the organization. The overview page shows a card for each queue with live open and urgent counts. **Navigation.*..." |
+* | "One card per queue defined by the organization, showing live counts of open and urgent tickets. **Live counts.** Counts are real-time database queries, not c..." |
 *
 * @param {Demo_Narrative_Dashboard_Queues_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

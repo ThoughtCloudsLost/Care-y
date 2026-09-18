@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The view switcher in the page header changes how ticket lists on the overview page are displayed. **Available modes:** - **Table** presents tickets in a sort..." |
+* | "The view switcher in the page header changes how ticket lists on the overview are displayed. Four modes are available: table, rows, cards, and grid. **Persis..." |
 *
 * @param {Demo_Narrative_Dashboard_View_Switcher_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
