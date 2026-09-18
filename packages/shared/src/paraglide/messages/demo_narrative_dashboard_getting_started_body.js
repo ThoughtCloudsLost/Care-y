@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Dashboard_Getting_Started_BodyInputs */
 
 const en_demo_narrative_dashboard_getting_started_body = /** @type {(inputs: Demo_Narrative_Dashboard_Getting_Started_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Administrators see a setup checklist at the top of the overview until the organization is fully configured. Each row is a setup task that links directly to the admin page where it is completed.
-**Dismissal.** The card can be collapsed while working through it, and dismissed entirely once setup is done. Dismissal is recorded per organization, so it stays gone for every administrator.
-**Visibility.** Volunteers and managers never see this card because it requires the administrator role, which is why switching the handbook simulator to a different role hides it.`)
+	return /** @type {LocalizedString} */ (`A card at the top of the overview lists setup tasks, each linking to the relevant admin page.
+**Visibility.** The checklist is visible only to administrators. Volunteers and managers never see it.
+**Dismissal.** Once setup is complete, the checklist can be permanently dismissed. Dismissal is recorded at the organization level, so it applies to all administrators at once.`)
 };
 
 const es_demo_narrative_dashboard_getting_started_body = /** @type {(inputs: Demo_Narrative_Dashboard_Getting_Started_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los administradores ven una lista de configuración en la parte superior del resumen hasta que la organización esté completamente configurada. Cada fila es una tarea de configuración que enlaza directamente a la página de administración donde se completa.
-**Descarte.** La tarjeta puede colapsarse mientras se trabaja en ella, y descartarse por completo una vez terminada la configuración. El descarte se registra por organización, por lo que permanece oculta para todos los administradores.
-**Visibilidad.** Los voluntarios y gestores nunca ven esta tarjeta porque requiere el rol de administrador, por lo que cambiar el simulador del manual a un rol diferente la oculta.`)
+	return /** @type {LocalizedString} */ (`Una tarjeta en la parte superior del resumen lista las tareas de configuración, cada una enlazando a la página de administración correspondiente.
+**Visibilidad.** La lista solo es visible para las personas administradoras. Los voluntarios y gestores nunca la ven.
+**Descarte.** Una vez completada la configuración, la lista puede descartarse permanentemente. El descarte se registra a nivel de organización, por lo que se aplica a todas las personas administradoras a la vez.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Administrators see a setup checklist at the top of the overview until the organization is fully configured. Each row is a setup task that links directly to t..." |
+* | "A card at the top of the overview lists setup tasks, each linking to the relevant admin page. **Visibility.** The checklist is visible only to administrators..." |
 *
 * @param {Demo_Narrative_Dashboard_Getting_Started_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,25 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Case_Panel_BodyInputs */
 
 const en_demo_narrative_topic_case_panel_body = /** @type {(inputs: Demo_Narrative_Topic_Case_Panel_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tapping the client alias or the case button in the navigation bar opens a panel holding the full case record and every case level action.
-**Fields.** The panel shows the title, description, status, the client phone number, and the opened date, along with the notes and media attached to the case.
-**Actions.** From the panel a volunteer can call the client, assign the ticket, take it or release it, place it on hold, watch it to follow updates without being assigned, and close or reopen it.
-**Phone number.** Tapping the phone row offers copy and edit. If an edited number matches an existing client, a merge sheet opens to resolve the conflict.
+	return /** @type {LocalizedString} */ (`The case panel holds the full case record and every case level action. It opens from the client alias or the case button in the navigation bar.
+**Phone number.** If an edited number matches an existing client, a merge sheet opens to resolve the conflict.
 **Encryption.** Every change made from the panel is encrypted in the browser before it is sent, the same as edits made anywhere else in the app.`)
 };
 
 const es_demo_narrative_topic_case_panel_body = /** @type {(inputs: Demo_Narrative_Topic_Case_Panel_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tocar el alias del cliente o el botón de caso en la barra de navegación abre un panel con el registro completo del caso y todas las acciones a nivel de caso.
-**Campos.** El panel muestra el título, la descripción, el estado, el número de teléfono del cliente y la fecha de apertura, junto con las notas y los archivos adjuntos al caso.
-**Acciones.** Desde el panel un voluntario puede llamar al cliente, asignar el ticket, tomarlo o liberarlo, ponerlo en espera, observarlo para seguir actualizaciones sin estar asignado, y cerrarlo o reabrirlo.
-**Número de teléfono.** Tocar la fila de teléfono ofrece copiar y editar. Si un número editado coincide con un cliente existente, se abre una hoja de fusión para resolver el conflicto.
+	return /** @type {LocalizedString} */ (`El panel del caso contiene el registro completo del caso y todas las acciones a nivel de caso. Se abre desde el alias del cliente o el botón de caso en la barra de navegación.
+**Número de teléfono.** Si un número editado coincide con un cliente existente, se abre una hoja de fusión para resolver el conflicto.
 **Cifrado.** Cada cambio realizado desde el panel se cifra en el navegador antes de enviarse, igual que las ediciones hechas en cualquier otra parte de la aplicación.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Tapping the client alias or the case button in the navigation bar opens a panel holding the full case record and every case level action. **Fields.** The pan..." |
+* | "The case panel holds the full case record and every case level action. It opens from the client alias or the case button in the navigation bar. **Phone numbe..." |
 *
 * @param {Demo_Narrative_Topic_Case_Panel_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

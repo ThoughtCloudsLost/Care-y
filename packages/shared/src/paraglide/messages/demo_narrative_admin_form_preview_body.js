@@ -6,13 +6,13 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Form_Preview_BodyInputs */
 
 const en_demo_narrative_admin_form_preview_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Preview_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The preview renders the form using the same field renderer the public intake page uses, so what the user sees while editing is what the visitor sees when submitting. When the form has page breaks, the preview shows the same page structure the visitor moves through, with forward and back navigation between pages.
+	return /** @type {LocalizedString} */ (`The preview renders the form using the same field renderer the public intake page uses, so the editing view matches what the visitor sees when submitting. When the form has page breaks, the preview shows the same page structure the visitor moves through, with forward and back navigation between pages.
 **View modes.** The preview can show the active form, the confirmation after submission, and the closed message, and the confirmation and closed message each fall back to a default when the organization has not written one.
 **When it is empty.** A form with no fields yet shows an empty state in the preview.`)
 };
 
 const es_demo_narrative_admin_form_preview_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Preview_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La vista previa renderiza el formulario usando el mismo componente de campos que usa la página pública de admisión, de modo que lo que ve la persona usuaria mientras edita es lo que ve el visitante al enviar. Cuando el formulario tiene saltos de página, la vista previa muestra la misma estructura de páginas que recorre el visitante, con navegación hacia adelante y hacia atrás entre páginas.
+	return /** @type {LocalizedString} */ (`La vista previa renderiza el formulario usando el mismo componente de campos que usa la página pública de admisión, de modo que la vista de edición coincide con lo que ve el visitante al enviar. Cuando el formulario tiene saltos de página, la vista previa muestra la misma estructura de páginas que recorre el visitante, con navegación hacia adelante y hacia atrás entre páginas.
 **Modos de vista.** La vista previa puede mostrar el formulario activo, la confirmación después del envío y el mensaje de cierre, y la confirmación y el mensaje de cierre recurren a un valor predeterminado cuando la organización no ha escrito uno.
 **Cuando está vacío.** Un formulario sin campos muestra un estado vacío en la vista previa.`)
 };
@@ -20,7 +20,7 @@ const es_demo_narrative_admin_form_preview_body = /** @type {(inputs: Demo_Narra
 /**
 * | output |
 * | --- |
-* | "The preview renders the form using the same field renderer the public intake page uses, so what the user sees while editing is what the visitor sees when sub..." |
+* | "The preview renders the form using the same field renderer the public intake page uses, so the editing view matches what the visitor sees when submitting. Wh..." |
 *
 * @param {Demo_Narrative_Admin_Form_Preview_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

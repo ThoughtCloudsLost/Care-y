@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Global Search returns results from many different places in CARE-Y. **Tickets.** Matches on decrypted title, client alias, queue name, and assignee name. Ful..." |
+* | "**Tickets.** Matches on decrypted title, client alias, queue name, and assignee name. Full deep search also matches on message content within tickets. **Know..." |
 *
 * @param {Demo_Narrative_Search_Entities_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

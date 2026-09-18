@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Library_Attachments_BodyInputs */
 
 const en_demo_narrative_library_attachments_body = /** @type {(inputs: Demo_Narrative_Library_Attachments_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Articles can have file attachments. Images inserted inline in the article body appear within the text. Other file types appear as download chips below the article.
-**Encryption.** All attachments are encrypted with the organization key before storage. Volunteers download and decrypt attachments in the browser.
+	return /** @type {LocalizedString} */ (`Articles can have file attachments, both inline images and downloadable files.
+**Encryption.** All attachments are encrypted with the organization key before storage. The browser downloads and decrypts them locally.
 **Allowed types.** JPEG, PNG, GIF, WebP, and PDF files are accepted.`)
 };
 
 const es_demo_narrative_library_attachments_body = /** @type {(inputs: Demo_Narrative_Library_Attachments_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los artículos pueden tener archivos adjuntos. Las imágenes insertadas en el cuerpo del artículo aparecen dentro del texto. Otros tipos de archivo aparecen como fichas de descarga debajo del artículo.
-**Cifrado.** Todos los adjuntos se cifran con la clave de la organización antes de almacenarse. Los voluntarios descargan y descifran los adjuntos en el navegador.
+	return /** @type {LocalizedString} */ (`Los artículos pueden tener archivos adjuntos, tanto imágenes en línea como archivos descargables.
+**Cifrado.** Todos los adjuntos se cifran con la clave de la organización antes de almacenarse. El navegador los descarga y descifra localmente.
 **Tipos permitidos.** Se aceptan archivos JPEG, PNG, GIF, WebP y PDF.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Articles can have file attachments. Images inserted inline in the article body appear within the text. Other file types appear as download chips below the ar..." |
+* | "Articles can have file attachments, both inline images and downloadable files. **Encryption.** All attachments are encrypted with the organization key before..." |
 *
 * @param {Demo_Narrative_Library_Attachments_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

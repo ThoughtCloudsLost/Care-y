@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers can change their display name and username from this page. **Display name.** The display name is encrypted with the organization key in the browse..." |
+* | "**Display name.** The display name is encrypted with the organization key in the browser before being sent to the server. **Username.** The username is sent ..." |
 *
 * @param {Demo_Narrative_Settings_Identity_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

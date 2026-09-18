@@ -12,7 +12,6 @@ const en_demo_narrative_admin_role_permissions_body = /** @type {(inputs: Demo_N
 **Locked permissions.** Three permissions stay with the administrator role regardless of overrides and cannot be toggled away. They protect key management, role management, and infrastructure configuration, and the enforcement applies when permissions are written and when they are read, so a row inserted straight into the database granting one of them to another role has no effect.
 **Queue membership scope.** Adding a user to a queue grants them read access to every case in that queue, so the scope of granting the Manage queue membership permission is wider than it appears.
 **Intake response decryption.** The View intake responses permission controls who receives decryption keys when a form is submitted, and revoking it later does not take back keys already issued.
-**Not yet available.** Four permissions are declared but have no feature behind them yet, and granting one changes nothing until the feature is built.
 **Reset.** Resetting the matrix returns every permission to its shipped default after a confirmation dialog.
 **Permissions.** Changing the matrix requires the Manage roles permission.`)
 };
@@ -24,7 +23,6 @@ const es_demo_narrative_admin_role_permissions_body = /** @type {(inputs: Demo_N
 **Permisos bloqueados.** Tres permisos permanecen con el rol de administrador sin importar las anulaciones y no se pueden desactivar. Protegen la gestión de claves, la gestión de roles y la configuración de infraestructura, y la restricción se aplica tanto al escribir como al leer, de modo que una fila insertada manualmente en la base de datos otorgando uno de ellos a otro rol no tiene efecto.
 **Alcance de la membresía de colas.** Añadir a una persona usuaria a una cola le otorga acceso de lectura a todos los casos en ella, por lo que el alcance de otorgar el permiso Gestionar membresía de colas es más amplio de lo que aparenta.
 **Descifrado de respuestas de admisión.** El permiso Ver respuestas de admisión controla quién recibe claves de descifrado cuando se envía un formulario, y revocarlo después no retira claves ya emitidas.
-**Aún no disponible.** Cuatro permisos están declarados pero aún no tienen funcionalidad detrás, y otorgar uno no cambia nada hasta que la función se construya.
 **Restablecer.** Restablecer la matriz devuelve todos los permisos a sus valores predeterminados de fábrica tras un diálogo de confirmación.
 **Permisos.** Cambiar la matriz requiere el permiso Gestionar roles.`)
 };

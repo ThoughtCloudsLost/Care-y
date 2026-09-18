@@ -761,14 +761,32 @@ export const SECTIONS: readonly Section[] = [
     group: "org",
     subs: [
       {
-        slug: "hub",
+        slug: "hub-people",
         topic: null,
-        headingKey: "demo_narrative_admin_hub_heading",
-        bodyKey: "demo_narrative_admin_hub_body",
-        // Hub root (admin/+page.svelte:198). Its section ids come from
-        // GROUP_ORDER and vary with permissions, so the page as a
-        // whole is the region this sub narrates.
-        highlight: { selectors: [".admin-hub"] },
+        headingKey: "demo_narrative_admin_hub_people_heading",
+        bodyKey: "demo_narrative_admin_hub_people_body",
+        highlight: { section: "people" },
+      },
+      {
+        slug: "hub-comms",
+        topic: null,
+        headingKey: "demo_narrative_admin_hub_comms_heading",
+        bodyKey: "demo_narrative_admin_hub_comms_body",
+        highlight: { section: "communications" },
+      },
+      {
+        slug: "hub-org",
+        topic: null,
+        headingKey: "demo_narrative_admin_hub_org_heading",
+        bodyKey: "demo_narrative_admin_hub_org_body",
+        highlight: { section: "organization" },
+      },
+      {
+        slug: "hub-analytics",
+        topic: null,
+        headingKey: "demo_narrative_admin_hub_analytics_heading",
+        bodyKey: "demo_narrative_admin_hub_analytics_body",
+        highlight: { section: "analytics" },
       },
     ],
   },

@@ -24,11 +24,11 @@ describe("handbook-corpus", () => {
   });
 
   it("a known key/line resolves with the expected label", () => {
-    // demo_narrative_topic_case_fold_body line 2 starts with **Encryption.**
+    // demo_narrative_topic_case_fold_body line 1 starts with **Encryption.**
     const entry = getCorpusEntry(
       LOCALE,
       "demo_narrative_topic_case_fold_body",
-      2,
+      1,
     );
     expect(entry).not.toBeNull();
     expect(entry!.label).toBe("Encryption.");

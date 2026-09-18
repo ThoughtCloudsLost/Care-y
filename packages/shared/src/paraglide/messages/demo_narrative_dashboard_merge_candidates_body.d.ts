@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When the system finds two client records that may refer to the same person, it surfaces them in a merge candidates section on the dashboard. Each candidate p..." |
+* | "When the system finds two client records that may belong to the same person, they appear here as merge candidates. Each pair shows two client aliases with a ..." |
 *
 * @param {Demo_Narrative_Dashboard_Merge_Candidates_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The shift card shows the volunteer's current or upcoming shift. **During a shift,** the card displays start and end times and a countdown to the end of the s..." |
+* | "The shift card shows the current or upcoming shift for the signed-in volunteer. **During a shift.** The card displays start and end times, a countdown, and t..." |
 *
 * @param {Demo_Narrative_Dashboard_Shift_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

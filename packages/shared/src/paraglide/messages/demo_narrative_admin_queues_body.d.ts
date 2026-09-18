@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Queues control how tickets are organized and routed. Creating queues, assigning users to them, and configuring their sort order and appearance all happen fro..." |
+* | "Queues control how tickets are organized and routed. **Lifecycle.** Deleting a queue prompts for another queue to receive its tickets, so nothing is orphaned..." |
 *
 * @param {Demo_Narrative_Admin_Queues_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

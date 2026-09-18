@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Articles can have file attachments. Images inserted inline in the article body appear within the text. Other file types appear as download chips below the ar..." |
+* | "Articles can have file attachments, both inline images and downloadable files. **Encryption.** All attachments are encrypted with the organization key before..." |
 *
 * @param {Demo_Narrative_Library_Attachments_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

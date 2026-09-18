@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The settings page lets volunteers update their profile, manage their password and encryption keys, configure appearance, and enroll in two factor authenticat..." |
+* | "Profile, password and encryption key management, appearance, and two factor authentication enrollment." |
 *
 * @param {Demo_Section_Settings_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Login_DescInputs */
 
 const en_demo_section_login_desc = /** @type {(inputs: Demo_Section_Login_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The login screen is where the browser turns a password into the encryption keys that make organization data readable. Everything in this section is a step in that transaction or a defense on it, and the screen draws its name, logo, and colors from the organization's branding.`)
+	return /** @type {LocalizedString} */ (`How credentials protect case data before it reaches the server.`)
 };
 
 const es_demo_section_login_desc = /** @type {(inputs: Demo_Section_Login_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pantalla de inicio de sesión es donde el navegador transforma una contraseña en las claves de cifrado que hacen legibles los datos de la organización. Todo en esta sección es un paso de esa operación o una defensa sobre ella, y la pantalla toma su nombre, logotipo y colores de la marca de la organización.`)
+	return /** @type {LocalizedString} */ (`Cómo las credenciales protegen los datos de los casos antes de que lleguen al servidor.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The login screen is where the browser turns a password into the encryption keys that make organization data readable. Everything in this section is a step in..." |
+* | "How credentials protect case data before it reaches the server." |
 *
 * @param {Demo_Section_Login_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

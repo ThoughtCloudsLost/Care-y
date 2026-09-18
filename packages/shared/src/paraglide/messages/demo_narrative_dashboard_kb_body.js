@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Dashboard_Kb_BodyInputs */
 
 const en_demo_narrative_dashboard_kb_body = /** @type {(inputs: Demo_Narrative_Dashboard_Kb_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A preview of recently updated knowledge base articles on the overview page. Tapping an article navigates to the full article in the library.
-**Encryption.** Article titles are encrypted with the organization key before storage. The server stores ciphertext and the browser decrypts titles locally for display. A database breach would not reveal what articles the organization has written or what they contain.
-**When the library is empty,** the section displays a notice instead of a list.`)
+	return /** @type {LocalizedString} */ (`A preview of recently updated knowledge base articles.
+**Encryption.** Article titles are encrypted with the organization key. The server stores ciphertext and cannot read them. The browser decrypts titles locally.
+**When it is empty.** If the library contains no articles, this section displays a notice instead.`)
 };
 
 const es_demo_narrative_dashboard_kb_body = /** @type {(inputs: Demo_Narrative_Dashboard_Kb_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una vista previa de los artículos de la base de conocimiento actualizados recientemente en la página de resumen. Tocar un artículo navega al artículo completo en la biblioteca.
-**Cifrado.** Los títulos de los artículos están cifrados con la clave de la organización antes de almacenarse. El servidor almacena texto cifrado y el navegador descifra los títulos localmente para mostrarlos. Una brecha en la base de datos no revelaría qué artículos ha escrito la organización ni qué contienen.
-**Cuando la biblioteca está vacía,** la sección muestra un aviso en lugar de una lista.`)
+	return /** @type {LocalizedString} */ (`Una vista previa de los artículos de la base de conocimiento actualizados recientemente.
+**Cifrado.** Los títulos de los artículos están cifrados con la clave de la organización. El servidor almacena texto cifrado y no puede leerlos. El navegador descifra los títulos localmente.
+**Cuando está vacío.** Si la biblioteca no contiene artículos, esta sección muestra un aviso en su lugar.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "A preview of recently updated knowledge base articles on the overview page. Tapping an article navigates to the full article in the library. **Encryption.** ..." |
+* | "A preview of recently updated knowledge base articles. **Encryption.** Article titles are encrypted with the organization key. The server stores ciphertext a..." |
 *
 * @param {Demo_Narrative_Dashboard_Kb_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -302,8 +302,22 @@ const lookup: Record<string, () => string> = {
   demo_section_admin_comms_desc: () => m.demo_section_admin_comms_desc(),
   demo_section_admin_org_title: () => m.demo_section_admin_org_title(),
   demo_section_admin_org_desc: () => m.demo_section_admin_org_desc(),
-  demo_narrative_admin_hub_heading: () => m.demo_narrative_admin_hub_heading(),
-  demo_narrative_admin_hub_body: () => m.demo_narrative_admin_hub_body(),
+  demo_narrative_admin_hub_people_heading: () =>
+    m.demo_narrative_admin_hub_people_heading(),
+  demo_narrative_admin_hub_people_body: () =>
+    m.demo_narrative_admin_hub_people_body(),
+  demo_narrative_admin_hub_comms_heading: () =>
+    m.demo_narrative_admin_hub_comms_heading(),
+  demo_narrative_admin_hub_comms_body: () =>
+    m.demo_narrative_admin_hub_comms_body(),
+  demo_narrative_admin_hub_org_heading: () =>
+    m.demo_narrative_admin_hub_org_heading(),
+  demo_narrative_admin_hub_org_body: () =>
+    m.demo_narrative_admin_hub_org_body(),
+  demo_narrative_admin_hub_analytics_heading: () =>
+    m.demo_narrative_admin_hub_analytics_heading(),
+  demo_narrative_admin_hub_analytics_body: () =>
+    m.demo_narrative_admin_hub_analytics_body(),
   demo_narrative_admin_people_heading: () =>
     m.demo_narrative_admin_people_heading(),
   demo_narrative_admin_people_body: () => m.demo_narrative_admin_people_body(),

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Open tickets that have not been assigned to any volunteer. These are waiting to be picked up. **Claiming a ticket.** Volunteers can assign an unassigned tick..." |
+* | "Open tickets not yet assigned to anyone. Once assigned, a ticket moves to the assignee's working list. **If counts differ.** The count in the section heading..." |
 *
 * @param {Demo_Narrative_Dashboard_Unassigned_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

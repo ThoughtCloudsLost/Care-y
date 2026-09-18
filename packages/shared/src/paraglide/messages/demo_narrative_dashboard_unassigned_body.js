@@ -6,23 +6,19 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Dashboard_Unassigned_BodyInputs */
 
 const en_demo_narrative_dashboard_unassigned_body = /** @type {(inputs: Demo_Narrative_Dashboard_Unassigned_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Open tickets that have not been assigned to any volunteer. These are waiting to be picked up.
-**Claiming a ticket.** Volunteers can assign an unassigned ticket to themselves directly from this list using a quick action, or from the ticket detail view. Once assigned, the ticket moves from this section to the assignee's my tickets section.
-**Count.** The count shown may differ from the number of tickets visible in the list because the overview fetches a limited page of tickets while the count reflects the full total, so the list may show fewer rows than the number in the heading.
-**Collapsed by default.** This section starts collapsed to keep the overview focused on assigned work, and the section button row or the section header expands it.`)
+	return /** @type {LocalizedString} */ (`Open tickets not yet assigned to anyone. Once assigned, a ticket moves to the assignee's working list.
+**If counts differ.** The count in the section heading reflects the full total, while the visible rows may be fewer because the overview fetches a limited page of results.`)
 };
 
 const es_demo_narrative_dashboard_unassigned_body = /** @type {(inputs: Demo_Narrative_Dashboard_Unassigned_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tickets abiertos que no han sido asignados a ningún voluntario. Están esperando a ser tomados.
-**Tomar un ticket.** Los voluntarios pueden asignarse un ticket sin asignar directamente desde está lista usando una acción rápida, o desde la vista detallada del ticket. Una vez asignado, el ticket pasa de esta sección a la sección de mis tickets del asignado.
-**Conteo.** El conteo mostrado puede diferir del número de tickets visibles en la lista porque el resumen obtiene una página limitada de tickets mientras el conteo refleja el total completo, así que la lista puede mostrar menos filas que el número en el encabezado.
-**Colapsado por defecto.** Esta sección comienza colapsada para mantener el resumen enfocado en el trabajo asignado, y la fila de botones de sección o el encabezado de sección la expande.`)
+	return /** @type {LocalizedString} */ (`Tickets abiertos aún sin asignar a nadie. Una vez asignado, un ticket pasa a la lista de trabajo de la persona asignada.
+**Si los conteos difieren.** El conteo en el encabezado de la sección refleja el total completo, mientras que las filas visibles pueden ser menos porque el resumen obtiene una página limitada de resultados.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Open tickets that have not been assigned to any volunteer. These are waiting to be picked up. **Claiming a ticket.** Volunteers can assign an unassigned tick..." |
+* | "Open tickets not yet assigned to anyone. Once assigned, a ticket moves to the assignee's working list. **If counts differ.** The count in the section heading..." |
 *
 * @param {Demo_Narrative_Dashboard_Unassigned_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

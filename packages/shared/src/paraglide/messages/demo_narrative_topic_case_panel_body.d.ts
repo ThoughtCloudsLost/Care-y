@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Tapping the client alias or the case button in the navigation bar opens a panel holding the full case record and every case level action. **Fields.** The pan..." |
+* | "The case panel holds the full case record and every case level action. It opens from the client alias or the case button in the navigation bar. **Phone numbe..." |
 *
 * @param {Demo_Narrative_Topic_Case_Panel_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

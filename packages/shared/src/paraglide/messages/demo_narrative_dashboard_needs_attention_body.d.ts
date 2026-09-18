@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A per volunteer ticket list filtered to cases that need immediate action from that specific volunteer. Each volunteer sees only their own tickets that qualif..." |
+* | "A per-volunteer list of tickets needing immediate action. **What qualifies.** A ticket appears here when it is open, not on hold, marked urgent or high prior..." |
 *
 * @param {Demo_Narrative_Dashboard_Needs_Attention_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

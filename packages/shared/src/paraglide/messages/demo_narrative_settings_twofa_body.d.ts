@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers can enroll in any of the supported second factor methods from this page. **Available methods.** Passkeys (platform authenticators and cross platfo..." |
+* | "All supported second factor methods are enrolled from this page. **Available methods.** Passkeys (platform authenticators and cross platform security keys), ..." |
 *
 * @param {Demo_Narrative_Settings_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

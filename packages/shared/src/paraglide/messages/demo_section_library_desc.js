@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Library_DescInputs */
 
 const en_demo_section_library_desc = /** @type {(inputs: Demo_Section_Library_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The library is a shared knowledge base for the organization. Volunteers browse articles, read detailed entries with attachments and votes, and write new content in the rich text editor. Article titles and bodies are encrypted with the organization key before storage.`)
+	return /** @type {LocalizedString} */ (`A shared knowledge base for the organization. Article titles and bodies are encrypted with the organization key before storage.`)
 };
 
 const es_demo_section_library_desc = /** @type {(inputs: Demo_Section_Library_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La biblioteca es una base de conocimiento compartida para la organización. Los voluntarios navegan artículos, leen entradas detalladas con adjuntos y votos, y escriben nuevo contenido en el editor de texto enriquecido. Los títulos y cuerpos de los artículos se cifran con la clave de la organización antes de almacenarse.`)
+	return /** @type {LocalizedString} */ (`Una base de conocimiento compartida para la organización. Los títulos y cuerpos de los artículos se cifran con la clave de la organización antes de almacenarse.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The library is a shared knowledge base for the organization. Volunteers browse articles, read detailed entries with attachments and votes, and write new cont..." |
+* | "A shared knowledge base for the organization. Article titles and bodies are encrypted with the organization key before storage." |
 *
 * @param {Demo_Section_Library_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

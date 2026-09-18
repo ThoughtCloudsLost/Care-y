@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Dashboard_Activity_BodyInputs */
 
 const en_demo_narrative_dashboard_activity_body = /** @type {(inputs: Demo_Narrative_Dashboard_Activity_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A chronological list of recent events scoped to the queues the volunteer can access, so two volunteers with different queue memberships see different feeds. Events include new tickets, status changes, and assignments.
-**Encryption.** The client alias and queue name in each event are encrypted with the organization key. They only appear as readable text after the browser decrypts them at display time. Structural metadata like the event type, ticket ID, and timestamp are not encrypted because the server needs them to sort and filter the feed.
-**What this means for volunteers.** The activity feed gives a quick overview of recent activity in the volunteer's queues without needing to open individual items, and tapping an event navigates to the relevant one.`)
+	return /** @type {LocalizedString} */ (`A chronological list of recent events: new tickets, status changes, and assignments.
+**Visibility.** The feed is scoped to queues the current volunteer can access. Volunteers with different queue memberships see different activity feeds.
+**Encryption.** Client aliases and queue names in each event are encrypted with the organization key and decrypted in the browser at display time. Structural metadata (event type, ticket ID, timestamp) is not encrypted because the server needs it to sort and filter results.`)
 };
 
 const es_demo_narrative_dashboard_activity_body = /** @type {(inputs: Demo_Narrative_Dashboard_Activity_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una lista cronológica de eventos recientes limitada a las colas a las que el voluntario tiene acceso, de modo que dos voluntarios con diferentes membresías de colas ven feeds distintos. Los eventos incluyen nuevos tickets, cambios de estado y asignaciones.
-**Cifrado.** El alias del cliente y el nombre de la cola en cada evento están cifrados con la clave de la organización. Solo aparecen como texto legible después de que el navegador los descifra. Los metadatos estructurales como el tipo de evento, el ID del ticket y la marca de tiempo no están cifrados porque el servidor los necesita para ordenar y filtrar el feed.
-**Lo que esto significa para los voluntarios.** El feed de actividad ofrece una visión rápida de la actividad reciente en las colas del voluntario sin necesidad de abrir tickets individuales, y tocar un evento navega al elemento correspondiente.`)
+	return /** @type {LocalizedString} */ (`Una lista cronológica de eventos recientes: nuevos tickets, cambios de estado y asignaciones.
+**Visibilidad.** El feed está limitado a las colas a las que el voluntario actual tiene acceso. Voluntarios con diferentes membresías de colas ven feeds distintos.
+**Cifrado.** Los alias de clientes y los nombres de colas en cada evento están cifrados con la clave de la organización y se descifran en el navegador. Los metadatos estructurales (tipo de evento, ID del ticket, marca de tiempo) no están cifrados porque el servidor los necesita para ordenar y filtrar resultados.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "A chronological list of recent events scoped to the queues the volunteer can access, so two volunteers with different queue memberships see different feeds. ..." |
+* | "A chronological list of recent events: new tickets, status changes, and assignments. **Visibility.** The feed is scoped to queues the current volunteer can a..." |
 *
 * @param {Demo_Narrative_Dashboard_Activity_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Select mode lets volunteers pick multiple tickets for batch actions. Tap the select button in the toolbar to enter selection mode, then tap tickets to add th..." |
+* | "Select mode allows picking multiple tickets for batch actions. **Available actions.** The bulk action bar appears above the ticket list with options that app..." |
 *
 * @param {Demo_Narrative_Topic_Select_Mode_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A share link lets a volunteer send a single use readable message to someone outside the system. The content is encrypted under a fresh random key that lives ..." |
+* | "A single use readable message sent to someone outside the system. The content is encrypted under a fresh random key that lives only in the URL fragment, and ..." |
 *
 * @param {Demo_Section_Client_Share_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

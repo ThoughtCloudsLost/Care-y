@@ -75,9 +75,7 @@ const PAGES: readonly AggPageDef[] = [
     titleKey: "demo_agg_searching_title",
     introKey: "demo_agg_searching_intro",
     labels: [
-      "Before typing.",
       "Result groups.",
-      "Navigation.",
       "Instant results.",
       "Full deep search.",
       "Coverage indicator.",
