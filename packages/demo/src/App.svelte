@@ -125,7 +125,6 @@
     columnContainerWidth,
   } from "$demo/flow-column.svelte.js";
 
-
   // -----------------------------------------------------------------------
   // Dark mode with localStorage persistence
   // -----------------------------------------------------------------------
