@@ -633,7 +633,9 @@
   class:handbook-drawer--left={edge === "left"}
   class:handbook-drawer--top={edge === "top"}
   class:handbook-drawer--bottom={edge === "bottom"}
-  style={isVerticalEdge ? `width: ${measure}px` : `height: ${measure}px`}
+  style={isVerticalEdge
+    ? `width: ${String(measure)}px`
+    : `height: ${String(measure)}px`}
   aria-label={m.demo_fs_drawer_close()}
   bind:this={asideEl}
 >

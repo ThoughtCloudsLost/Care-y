@@ -6,14 +6,14 @@
  * for reactive tracking so the UI re-renders when a step is toggled.
  */
 
-import { SvelteSet } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { GUIDES, type GuideSlug } from "./guide-checklists.js";
 
 // -----------------------------------------------------------------------
 // Reactive state
 // -----------------------------------------------------------------------
 
-const progressMap = new Map<GuideSlug, SvelteSet<number>>();
+const progressMap = new SvelteMap<GuideSlug, SvelteSet<number>>();
 
 // -----------------------------------------------------------------------
 // Internal
@@ -50,7 +50,7 @@ export function toggleStep(slug: GuideSlug, idx: number): void {
 /** Whether a specific step is marked done. */
 export function isStepDone(slug: GuideSlug, idx: number): boolean {
   const set = progressMap.get(slug);
-  return set !== undefined && set.has(idx);
+  return set?.has(idx) === true;
 }
 
 /** Done/total counts for a guide. */

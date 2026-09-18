@@ -113,16 +113,16 @@
   // the drawer's exterior edge rather than the viewport edge.
   const pos = $derived.by(() => {
     if (!drawerOpen || dragging) return basePos;
-    const m = drawerMeasure;
+    const dm = drawerMeasure;
     switch (activeEdge) {
       case "right":
-        return { top: basePos.top, left: basePos.left - m };
+        return { top: basePos.top, left: basePos.left - dm };
       case "left":
-        return { top: basePos.top, left: basePos.left + m };
+        return { top: basePos.top, left: basePos.left + dm };
       case "top":
-        return { top: basePos.top + m, left: basePos.left };
+        return { top: basePos.top + dm, left: basePos.left };
       case "bottom":
-        return { top: basePos.top - m, left: basePos.left };
+        return { top: basePos.top - dm, left: basePos.left };
     }
   });
 
@@ -139,7 +139,7 @@
   }
 
   function handlePointerMove(e: PointerEvent): void {
-    if (!btnRef?.hasPointerCapture(e.pointerId)) return;
+    if (btnRef?.hasPointerCapture(e.pointerId) !== true) return;
 
     pendCx = e.clientX;
     pendCy = e.clientY;
@@ -166,7 +166,7 @@
   }
 
   function handlePointerUp(e: PointerEvent): void {
-    if (!btnRef?.hasPointerCapture(e.pointerId)) return;
+    if (btnRef?.hasPointerCapture(e.pointerId) !== true) return;
     btnRef.releasePointerCapture(e.pointerId);
 
     if (dragRaf !== 0) {
@@ -199,28 +199,31 @@
   // Keyboard navigation
   // -----------------------------------------------------------------------
 
-  const ADJACENT: Record<
+  const ADJACENT = new Map<
     DockEdge,
     { along: [string, string]; cross: [DockEdge, DockEdge] }
-  > = {
-    right: { along: ["ArrowUp", "ArrowDown"], cross: ["left", "right"] },
-    left: { along: ["ArrowUp", "ArrowDown"], cross: ["right", "left"] },
-    top: { along: ["ArrowLeft", "ArrowRight"], cross: ["bottom", "top"] },
-    bottom: { along: ["ArrowLeft", "ArrowRight"], cross: ["top", "bottom"] },
-  };
+  >([
+    ["right", { along: ["ArrowUp", "ArrowDown"], cross: ["left", "right"] }],
+    ["left", { along: ["ArrowUp", "ArrowDown"], cross: ["right", "left"] }],
+    ["top", { along: ["ArrowLeft", "ArrowRight"], cross: ["bottom", "top"] }],
+    [
+      "bottom",
+      { along: ["ArrowLeft", "ArrowRight"], cross: ["top", "bottom"] },
+    ],
+  ]);
 
   /** Opposite edge for cross-edge jumps. */
-  const OPPOSITE: Record<DockEdge, DockEdge> = {
-    right: "left",
-    left: "right",
-    top: "bottom",
-    bottom: "top",
-  };
+  const OPPOSITE = new Map<DockEdge, DockEdge>([
+    ["right", "left"],
+    ["left", "right"],
+    ["top", "bottom"],
+    ["bottom", "top"],
+  ]);
 
   function handleKeydown(e: KeyboardEvent): void {
     const step = 0.1;
-    const map = ADJACENT[edge];
-    if (!map) return;
+    const map = ADJACENT.get(edge);
+    if (map === undefined) return;
 
     const [backward, forward] = map.along;
 
@@ -247,7 +250,10 @@
       (edge === "bottom" && e.key === "ArrowUp")
     ) {
       e.preventDefault();
-      onDock(OPPOSITE[edge], 0.5);
+      const opposite = OPPOSITE.get(edge);
+      if (opposite !== undefined) {
+        onDock(opposite, 0.5);
+      }
     }
   }
 </script>

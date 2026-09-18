@@ -85,9 +85,9 @@ export interface DirtyTrackerHandle {
 }
 
 export interface DirtyTrackerOptions {
-  onChange(dirty: boolean): void;
+  onChange: (dirty: boolean) => void;
   /** Override the default submit-like predicate for testing. */
-  isSubmitLike?(el: Element): boolean;
+  isSubmitLike?: (el: Element) => boolean;
 }
 
 /**

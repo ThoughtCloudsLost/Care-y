@@ -146,7 +146,9 @@ export function edgeFromDragPosition(
     ["right", windowW - x],
   ];
   distances.sort((a, b) => a[1] - b[1]);
-  return distances[0]![0];
+  const closest = distances[0];
+  if (closest === undefined) return "right";
+  return closest[0];
 }
 
 // -----------------------------------------------------------------------

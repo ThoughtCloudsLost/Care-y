@@ -12,7 +12,6 @@ import {
   TAB_SIZE,
   TAB_MARGIN,
   type FullscreenController,
-  type DockEdge,
 } from "./fullscreen.svelte.js";
 import {
   createFrameGeometry,
