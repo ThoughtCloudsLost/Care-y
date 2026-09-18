@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Settings_Appearance_BodyInputs */
 
 const en_demo_narrative_settings_appearance_body = /** @type {(inputs: Demo_Narrative_Settings_Appearance_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Volunteers can toggle between light and dark color schemes. The preference is saved locally on the device and is not sent to the server, and a refresh app entry below the scheme toggle reloads the app in place.`)
+	return /** @type {LocalizedString} */ (`Light and dark color schemes are available. The preference is saved locally on the device and is not sent to the server.`)
 };
 
 const es_demo_narrative_settings_appearance_body = /** @type {(inputs: Demo_Narrative_Settings_Appearance_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los voluntarios pueden alternar entre esquemas de color claro y oscuro. La preferencia se guarda localmente en el dispositivo y no se envía al servidor, y una entrada de actualizar aplicación debajo del selector de esquema recarga la aplicación en su lugar.`)
+	return /** @type {LocalizedString} */ (`Esquemas de color claro y oscuro disponibles. La preferencia se guarda localmente en el dispositivo y no se envía al servidor.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Volunteers can toggle between light and dark color schemes. The preference is saved locally on the device and is not sent to the server, and a refresh app en..." |
+* | "Light and dark color schemes are available. The preference is saved locally on the device and is not sent to the server." |
 *
 * @param {Demo_Narrative_Settings_Appearance_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

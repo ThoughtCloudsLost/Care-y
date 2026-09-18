@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The admin hub is the landing page for organization management, showing only the destinations the user's permissions include." |
+* | "The landing page for organization management. Each destination requires a specific permission, and the hub shows only the destinations the current permission..." |
 *
 * @param {Demo_Section_Admin_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

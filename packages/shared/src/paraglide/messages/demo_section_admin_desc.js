@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_DescInputs */
 
 const en_demo_section_admin_desc = /** @type {(inputs: Demo_Section_Admin_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The admin hub is the landing page for organization management, showing only the destinations the user's permissions include.`)
+	return /** @type {LocalizedString} */ (`The landing page for organization management. Each destination requires a specific permission, and the hub shows only the destinations the current permission set includes. Since the permission matrix is configurable, two users with the same role title may see different destinations. Live counts on each destination double as health signals, switching to a warning style when a threshold is crossed.`)
 };
 
 const es_demo_section_admin_desc = /** @type {(inputs: Demo_Section_Admin_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El centro de administración es la página de inicio de la gestión de la organización, mostrando solo los destinos que los permisos de la persona usuaria incluyen.`)
+	return /** @type {LocalizedString} */ (`La página de inicio para la gestión de la organización. Cada destino requiere un permiso específico, y el centro muestra solo los destinos que el conjunto de permisos actual incluye. Como la matriz de permisos es configurable, dos personas con el mismo título de rol pueden ver destinos diferentes. Los conteos en vivo de cada destino funcionan como señales de salud, cambiando a estilo de advertencia cuando se cruza un umbral.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The admin hub is the landing page for organization management, showing only the destinations the user's permissions include." |
+* | "The landing page for organization management. Each destination requires a specific permission, and the hub shows only the destinations the current permission..." |
 *
 * @param {Demo_Section_Admin_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
