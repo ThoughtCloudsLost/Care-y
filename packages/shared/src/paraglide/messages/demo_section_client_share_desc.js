@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Client_Share_DescInputs */
 
 const en_demo_section_client_share_desc = /** @type {(inputs: Demo_Section_Client_Share_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A share link lets a volunteer send a single use readable message to someone outside the system. The content is encrypted under a fresh random key that lives only in the URL fragment, and the link expires after one open or after its time window closes.`)
+	return /** @type {LocalizedString} */ (`A single use readable message sent to someone outside the system. The content is encrypted under a fresh random key that lives only in the URL fragment, and the link expires after one open or after its time window closes.`)
 };
 
 const es_demo_section_client_share_desc = /** @type {(inputs: Demo_Section_Client_Share_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un enlace compartido permite que un voluntario envíe un mensaje legible de un solo uso a alguien fuera del sistema. El contenido se cifra con una clave aleatoria nueva que vive solo en el fragmento de la URL, y el enlace expira después de abrirse una vez o después de que se cierre su ventana de tiempo.`)
+	return /** @type {LocalizedString} */ (`Un mensaje legible de un solo uso enviado a alguien fuera del sistema. El contenido se cifra con una clave aleatoria nueva que vive solo en el fragmento de la URL, y el enlace expira después de abrirse una vez o después de que se cierre su ventana de tiempo.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "A share link lets a volunteer send a single use readable message to someone outside the system. The content is encrypted under a fresh random key that lives ..." |
+* | "A single use readable message sent to someone outside the system. The content is encrypted under a fresh random key that lives only in the URL fragment, and ..." |
 *
 * @param {Demo_Section_Client_Share_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

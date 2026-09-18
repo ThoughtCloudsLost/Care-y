@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The ticket detail view is where volunteers read messages, reply, take notes, and manage a case. Every field shown here was decrypted locally by the volunteer..." |
+* | "Every field shown here is decrypted locally by the browser. The server stores and relays ciphertext without access to the content. The view has two modes: a ..." |
 *
 * @param {Demo_Section_Ticket_Detail_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
