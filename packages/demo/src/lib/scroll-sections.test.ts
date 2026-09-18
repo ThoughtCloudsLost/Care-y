@@ -146,10 +146,10 @@ describe("parseHash", () => {
     });
   });
 
-  it("parses admin/hub sub", () => {
-    expect(parseHash("#admin/hub")).toEqual({
+  it("parses admin/hub-people sub", () => {
+    expect(parseHash("#admin/hub-people")).toEqual({
       sectionId: "admin",
-      subSlug: "hub",
+      subSlug: "hub-people",
     });
   });
 
@@ -950,9 +950,9 @@ describe("SECTIONS taxonomy", () => {
     expect(library?.subs).toHaveLength(8);
   });
 
-  it("admin has 1 sub (the hub)", () => {
+  it("admin has 4 subs (one per hub group)", () => {
     const admin = SECTIONS.find((s) => s.id === "admin");
-    expect(admin?.subs).toHaveLength(1);
+    expect(admin?.subs).toHaveLength(4);
   });
 
   it("admin-people has 7 subs", () => {
@@ -1562,7 +1562,6 @@ describe("highlight coverage", () => {
       ["library", "browse"],
       ["library", "detail"],
       ["library", "attachments"],
-      ["admin", "hub"],
       ["schedule", "intro"],
     ] as const;
 

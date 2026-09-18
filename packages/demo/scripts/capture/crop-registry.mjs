@@ -319,7 +319,19 @@ export const CROP_REGISTRY = {
   },
 
   // -- admin --
-  "admin/hub": {
+  "admin/hub-people": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin/hub-comms": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin/hub-org": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin/hub-analytics": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
