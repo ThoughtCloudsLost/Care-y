@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Quick_Actions_BodyInputs */
 
 const en_demo_narrative_topic_quick_actions_body = /** @type {(inputs: Demo_Narrative_Topic_Quick_Actions_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Quick actions let volunteers perform common operations on a ticket without opening it. Swipe a ticket row to access them.
+	return /** @type {LocalizedString} */ (`Common operations on a ticket without opening it, accessed by swiping a ticket row.
 **Swipe directions.** Swipe right to reply. Swipe left to assign or place a ticket on hold. A short swipe peeks the action tray, and a longer swipe fires the action directly.
 **Available actions.** Reply, assign, and hold. The specific actions shown depend on the ticket's current state and the volunteer's permissions.
 **Cards view.** In cards view the same actions also appear as a visible button row on each card, so no swipe is needed to reach them.
@@ -14,8 +14,8 @@ const en_demo_narrative_topic_quick_actions_body = /** @type {(inputs: Demo_Narr
 };
 
 const es_demo_narrative_topic_quick_actions_body = /** @type {(inputs: Demo_Narrative_Topic_Quick_Actions_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las acciones rápidas permiten a los voluntarios realizar operaciones comunes en un ticket sin abrirlo. Desliza una fila de ticket para acceder a ellas.
-**Direcciones de deslizamiento.** Desliza a la derecha para responder. Desliza a la izquierda para asignar o poner un ticket en espera. Un deslizamiento corto muestra la bandeja de acciones, y un deslizamiento más largo ejecuta la acción directamente.
+	return /** @type {LocalizedString} */ (`Operaciones comunes en un ticket sin abrirlo, accesibles deslizando una fila de ticket.
+**Direcciones de deslizamiento.** Deslizar a la derecha para responder. Deslizar a la izquierda para asignar o poner un ticket en espera. Un deslizamiento corto muestra la bandeja de acciones, y un deslizamiento más largo ejecuta la acción directamente.
 **Acciones disponibles.** Responder, asignar y poner en espera. Las acciones específicas mostradas dependen del estado actual del ticket y los permisos del voluntario.
 **Vista de tarjetas.** En la vista de tarjetas las mismas acciones también aparecen como una fila de botones visibles en cada tarjeta, por lo que no se necesita deslizar para acceder a ellas.
 **Cifrado.** Las acciones que modifican datos del ticket cifran los cambios en el navegador antes de enviarlos al servidor.`)
@@ -24,7 +24,7 @@ const es_demo_narrative_topic_quick_actions_body = /** @type {(inputs: Demo_Narr
 /**
 * | output |
 * | --- |
-* | "Quick actions let volunteers perform common operations on a ticket without opening it. Swipe a ticket row to access them. **Swipe directions.** Swipe right t..." |
+* | "Common operations on a ticket without opening it, accessed by swiping a ticket row. **Swipe directions.** Swipe right to reply. Swipe left to assign or place..." |
 *
 * @param {Demo_Narrative_Topic_Quick_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

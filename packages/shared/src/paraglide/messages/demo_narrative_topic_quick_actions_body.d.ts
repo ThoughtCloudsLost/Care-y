@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Quick actions let volunteers perform common operations on a ticket without opening it. Swipe a ticket row to access them. **Swipe directions.** Swipe right t..." |
+* | "Common operations on a ticket without opening it, accessed by swiping a ticket row. **Swipe directions.** Swipe right to reply. Swipe left to assign or place..." |
 *
 * @param {Demo_Narrative_Topic_Quick_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

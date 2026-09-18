@@ -7,14 +7,12 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 const en_demo_narrative_topic_unread_badges_body = /** @type {(inputs: Demo_Narrative_Topic_Unread_Badges_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Each ticket in the list shows an unread count when it has messages the volunteer has not yet read. The count reflects new messages since the volunteer last viewed that ticket.
-**How read state works.** Each volunteer has an encrypted read cursor per ticket that records how far they have read. A cursor row is created on first open, so the server can see which tickets a volunteer has visited, but the cursor value itself is opaque ciphertext the server cannot read.
-**Pinned rows.** Tickets with unread messages can be pinned to the top of the list using the new replies first toggle, so the most recently active cases are always visible without scrolling.`)
+**How read state works.** Each volunteer has an encrypted read cursor per ticket that records how far they have read. A cursor row is created on first open, so the server can see which tickets a volunteer has visited, but the cursor value itself is opaque ciphertext the server cannot read.`)
 };
 
 const es_demo_narrative_topic_unread_badges_body = /** @type {(inputs: Demo_Narrative_Topic_Unread_Badges_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Cada ticket en la lista muestra un conteo de no leídos cuando tiene mensajes que el voluntario aún no ha visto. El conteo refleja los nuevos mensajes desde la última vez que el voluntario vio ese ticket.
-**Cómo funciona el estado de lectura.** Cada voluntario tiene un cursor de lectura cifrado por ticket que registra hasta dónde ha leído. Se crea una fila de cursor en la primera apertura, así que el servidor puede ver qué tickets ha visitado un voluntario, pero el valor del cursor en sí es texto cifrado opaco que el servidor no puede leer.
-**Filas fijadas.** Los tickets con mensajes no leídos pueden fijarse en la parte superior de la lista usando el interruptor de nuevas respuestas primero, para que los casos más recientemente activos siempre sean visibles sin desplazarse.`)
+**Cómo funciona el estado de lectura.** Cada voluntario tiene un cursor de lectura cifrado por ticket que registra hasta dónde ha leído. Se crea una fila de cursor en la primera apertura, así que el servidor puede ver qué tickets ha visitado un voluntario, pero el valor del cursor en sí es texto cifrado opaco que el servidor no puede leer.`)
 };
 
 /**
