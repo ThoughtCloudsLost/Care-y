@@ -126,7 +126,7 @@
   } from "$demo/flow-column.svelte.js";
 
   /** Intentional no-op for disabled toolbar callbacks in fullscreen. */
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional placeholder for disabled toolbar callbacks
   function noop(): void {}
 
   // -----------------------------------------------------------------------
@@ -2115,8 +2115,8 @@
 
   let drawerRef: HandbookDrawer | undefined = $state();
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   $effect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Svelte component export typed at source but eslint infers any
     drawerAsideEl = drawerRef?.getRootEl() ?? null;
   });
 
