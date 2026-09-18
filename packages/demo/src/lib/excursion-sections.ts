@@ -16,7 +16,7 @@
  */
 
 import type { Section, SubSection } from "./scroll-sections.js";
-import { getSection, getSub } from "./scroll-sections.js";
+import { getSub } from "./scroll-sections.js";
 import { searchEntries, type EntryHit } from "./handbook-search.js";
 import { resolveOptionalStoryMessage } from "./story-messages.js";
 import { getAggPage, type AggregationPageId } from "./aggregation-pages.js";

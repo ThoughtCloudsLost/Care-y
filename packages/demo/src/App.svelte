@@ -60,6 +60,7 @@
   import {
     createFullscreenController,
     isFullscreenPressure,
+    type DockEdge,
   } from "$demo/fullscreen.svelte.js";
   import type { SavedGeometry } from "$demo/peek-controller.svelte.js";
   import { chromeFade } from "$demo/chrome-fade.js";
@@ -123,6 +124,10 @@
     columnContainerLeft,
     columnContainerWidth,
   } from "$demo/flow-column.svelte.js";
+
+  /** Intentional no-op for disabled toolbar callbacks in fullscreen. */
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  function noop(): void {}
 
   // -----------------------------------------------------------------------
   // Dark mode with localStorage persistence
@@ -341,6 +346,7 @@
   // In fullscreen the story is unmounted; the drawer renders the prose
   // instead, so the highlight root switches to its aside element.
   let storyWrapperEl: HTMLElement | null = $state(null);
+  // eslint-disable-next-line svelte/prefer-writable-derived -- $derived can't forward-reference drawerRef (declared later)
   let drawerAsideEl: HTMLElement | null = $state(null);
   const highlightRoot: HTMLElement | null = $derived(
     fsActive ? drawerAsideEl : storyWrapperEl,
@@ -2109,6 +2115,7 @@
 
   let drawerRef: HandbookDrawer | undefined = $state();
 
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   $effect(() => {
     drawerAsideEl = drawerRef?.getRootEl() ?? null;
   });
@@ -2380,9 +2387,12 @@
         resultCount={searchHits.length}
         facetLabels={searchFacetLabels}
         activeFacet={searchFacet}
-        onQueryInput={(v) => (searchQuery = v)}
-        onToggleFacet={(label) =>
-          (searchFacet = searchFacet === label ? null : label)}
+        onQueryInput={(v: string) => {
+          searchQuery = v;
+        }}
+        onToggleFacet={(label: string) => {
+          searchFacet = searchFacet === label ? null : label;
+        }}
         onBack={() => closeExcursion("user")}
       />
     </div>
@@ -2472,9 +2482,12 @@
     resultCount={searchHits.length}
     facetLabels={searchFacetLabels}
     activeFacet={searchFacet}
-    onQueryInput={(v) => (searchQuery = v)}
-    onToggleFacet={(label) =>
-      (searchFacet = searchFacet === label ? null : label)}
+    onQueryInput={(v: string) => {
+      searchQuery = v;
+    }}
+    onToggleFacet={(label: string) => {
+      searchFacet = searchFacet === label ? null : label;
+    }}
     onBack={() => closeExcursion("user")}
   />
 {/snippet}
@@ -2696,7 +2709,7 @@
     drawerOpen={fsCtrl.drawerOpen}
     drawerMeasure={fsCtrl.drawerMeasure}
     onToggleDrawer={handleFsToggleDrawer}
-    onDock={(edge, offset) => fsCtrl.setDock(edge, offset)}
+    onDock={(e: DockEdge, o: number) => fsCtrl.setDock(e, o)}
     onCloseDrawer={handleFsDrawerClose}
     onOpenDrawer={handleFsDrawerOpen}
   />
@@ -2918,9 +2931,9 @@
           onPhonePreset={() => exitFsToPreset(fittedPhone.w, fittedPhone.h)}
           onDesktopPreset={() =>
             exitFsToPreset(fittedDesktop.w, fittedDesktop.h)}
-          onShrinkGrow={() => {}}
+          onShrinkGrow={noop}
           onRoleChange={handleRoleChange}
-          onClose={() => {}}
+          onClose={noop}
           onFullscreen={handleExitFullscreen}
           exitMode
         />

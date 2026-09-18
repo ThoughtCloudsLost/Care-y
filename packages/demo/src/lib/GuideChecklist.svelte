@@ -26,7 +26,7 @@
   );
 
   const displayTitle: string = $derived(
-    title !== null ? title : import.meta.env.DEV ? slug : "",
+    title ?? (import.meta.env.DEV ? slug : ""),
   );
 
   const progress = $derived(guideProgress(slug));

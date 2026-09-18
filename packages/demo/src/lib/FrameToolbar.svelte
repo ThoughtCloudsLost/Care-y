@@ -141,6 +141,7 @@
   let barInnerW = $state(0);
 
   $effect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- bind:this sets barEl after mount
     if (barEl == null) return;
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {

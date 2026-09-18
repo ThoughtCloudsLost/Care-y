@@ -88,7 +88,7 @@
     exiting = false,
     seenTopics,
     onSectionClick,
-    onSubClick,
+    onSubClick: _onSubClick,
     onToggleDark,
     onRestart,
     onLocaleChange,
