@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "You sign in with a username and password. Your username is a login name, not an email address. You or your admin choose it when your account is created. **Ho..." |
+* | "Sign-in requires a username and password. The username is a login identifier, not an email address, chosen at account creation by the user or an admin. **How..." |
 *
 * @param {Demo_Narrative_Topic_Credentials_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

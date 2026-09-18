@@ -6,8 +6,8 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_Sms_BodyInputs */
 
 const en_demo_narrative_topic_twofa_sms_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Sms_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A six-digit code is sent by text message to your enrolled phone number. It expires after five minutes and is deleted after three incorrect attempts.
-**What the server holds.** Like email, your phone number is stored under operational encryption so the server can reach it.
+	return /** @type {LocalizedString} */ (`A six-digit code is sent by text message to the enrolled phone number. It expires after five minutes and is deleted after three incorrect attempts.
+**What the server holds.** Like email, the phone number is stored under operational encryption so the server can reach it.
 **Security tradeoff.** SMS carries additional exposure: carriers can be targeted through social engineering, and the telephony provider handles the message in cleartext. Of the available methods, SMS provides the least protection. It is offered as a convenience fallback when stronger options are not practical.`)
 };
 
@@ -20,7 +20,7 @@ const es_demo_narrative_topic_twofa_sms_body = /** @type {(inputs: Demo_Narrativ
 /**
 * | output |
 * | --- |
-* | "A six-digit code is sent by text message to your enrolled phone number. It expires after five minutes and is deleted after three incorrect attempts. **What t..." |
+* | "A six-digit code is sent by text message to the enrolled phone number. It expires after five minutes and is deleted after three incorrect attempts. **What th..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Sms_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

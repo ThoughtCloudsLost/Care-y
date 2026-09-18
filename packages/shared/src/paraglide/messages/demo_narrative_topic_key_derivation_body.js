@@ -6,10 +6,10 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Key_Derivation_BodyInputs */
 
 const en_demo_narrative_topic_key_derivation_body = /** @type {(inputs: Demo_Narrative_Topic_Key_Derivation_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Your password is the starting point, but it is not the key. The browser runs an Argon2id derivation (tuned to use 64 MB of memory across four passes) to transform your password into raw key material. This derivation happens entirely in your browser, and the server never sees its input or output.
-**How it works.** The derived material then passes through a threshold protocol involving two servers located in separate legal jurisdictions. Your browser blinds its input before sending it, and unblinds the result after both servers respond. Neither server sees your password, your derived key, or what the other server contributed. Each server holds one share, and a single share is mathematically useless on its own.
-**Encryption.** The combined output produces your personal keypair and the key that unwraps your organization's shared encryption key. Only after this process completes can your browser decrypt case data.
-**Privacy.** This design means that compromising one server, or compelling disclosure in one jurisdiction, yields nothing. An attacker would need both servers, access in both legal jurisdictions, your password, and your second factor. Shares are refreshed on a schedule, so a captured share expires even if never detected.`)
+	return /** @type {LocalizedString} */ (`The password is the starting point, but it is not the key. The browser runs an Argon2id derivation (tuned to use 64 MB of memory across four passes) to transform the password into raw key material. This derivation happens entirely in the browser, and the server never sees its input or output.
+**How it works.** The derived material then passes through a threshold protocol involving two servers located in separate legal jurisdictions. The browser blinds its input before sending it, and unblinds the result after both servers respond. Neither server sees the password, the derived key, or what the other server contributed. Each server holds one share, and a single share is mathematically useless on its own.
+**Encryption.** The combined output produces a personal keypair and the key that unwraps the organization's shared encryption key. Only after this process completes can the browser decrypt case data.
+**Privacy.** This design means that compromising one server, or compelling disclosure in one jurisdiction, yields nothing. An attacker would need both servers, access in both legal jurisdictions, the password, and the second factor. Shares are refreshed on a schedule, so a captured share expires even if never detected.`)
 };
 
 const es_demo_narrative_topic_key_derivation_body = /** @type {(inputs: Demo_Narrative_Topic_Key_Derivation_BodyInputs) => LocalizedString} */ () => {
@@ -22,7 +22,7 @@ const es_demo_narrative_topic_key_derivation_body = /** @type {(inputs: Demo_Nar
 /**
 * | output |
 * | --- |
-* | "Your password is the starting point, but it is not the key. The browser runs an Argon2id derivation (tuned to use 64 MB of memory across four passes) to tran..." |
+* | "The password is the starting point, but it is not the key. The browser runs an Argon2id derivation (tuned to use 64 MB of memory across four passes) to trans..." |
 *
 * @param {Demo_Narrative_Topic_Key_Derivation_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

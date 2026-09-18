@@ -6,13 +6,13 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_Totp_BodyInputs */
 
 const en_demo_narrative_topic_twofa_totp_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Totp_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`An authenticator app generates a six-digit code that changes every 30 seconds. The code is computed from a shared secret and the current time, so it works without a network connection. You can use any standard authenticator app.
-**How it works.** To enroll, scan a QR code with your app. After that, enter the current code at sign-in. The server accepts a 90-second window to account for slight clock drift. Each code can only be used once within its window, which prevents replay if someone observes it.`)
+	return /** @type {LocalizedString} */ (`An authenticator app generates a six-digit code that changes every 30 seconds. The code is computed from a shared secret and the current time, so it works without a network connection. Any standard authenticator app is supported.
+**How it works.** Enrollment presents a QR code containing the shared secret. At sign-in, the current code is entered. The server accepts a 90-second window to account for slight clock drift. Each code can only be used once within its window, which prevents replay if someone observes it.`)
 };
 
 const es_demo_narrative_topic_twofa_totp_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Totp_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una aplicación de autenticación genera un código de seis dígitos que cambia cada 30 segundos. El código se calcula a partir de un secreto compartido y la hora actual, por lo que funciona sin conexión de red. Se puede usar cualquier aplicación de autenticación estándar.
-**Cómo funciona.** Para inscribirse, escanee un código QR con la aplicación. Después, introduzca el código vigente en cada inicio de sesión. El servidor acepta una ventana de 90 segundos para compensar pequeñas diferencias de reloj. Cada código solo puede usarse una vez dentro de su ventana, lo que impide la reutilización si alguien lo observa.`)
+	return /** @type {LocalizedString} */ (`Una aplicación de autenticación genera un código de seis dígitos que cambia cada 30 segundos. El código se calcula a partir de un secreto compartido y la hora actual, por lo que funciona sin conexión de red. Se admite cualquier aplicación de autenticación estándar.
+**Cómo funciona.** La inscripción presenta un código QR con el secreto compartido. En cada inicio de sesión se introduce el código vigente. El servidor acepta una ventana de 90 segundos para compensar pequeñas diferencias de reloj. Cada código solo puede usarse una vez dentro de su ventana, lo que impide la reutilización si alguien lo observa.`)
 };
 
 /**

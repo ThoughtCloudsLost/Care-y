@@ -6,9 +6,9 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_Passkey_BodyInputs */
 
 const en_demo_narrative_topic_twofa_passkey_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Passkey_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A passkey turns your device into the second factor. No code to type, nothing to intercept.
-Two forms are supported: a device credential protected by your screen lock (fingerprint, face, or PIN) and a physical security key. In both cases, your device holds a private key that never leaves it. The server stores only the public half and cannot produce a valid signature on its own.
-**How it works.** At sign-in, the server sends a one-time challenge. Your device signs it, the server verifies the signature, and the challenge is discarded. The signature is bound to both the challenge and the site's origin, so a credential captured on a lookalike domain is worthless here.`)
+	return /** @type {LocalizedString} */ (`A passkey turns the device into the second factor. No code to type, nothing to intercept.
+Two forms are supported: a device credential protected by the screen lock (fingerprint, face, or PIN) and a physical security key. In both cases, the device holds a private key that never leaves it. The server stores only the public half and cannot produce a valid signature on its own.
+**How it works.** At sign-in, the server sends a one-time challenge. The device signs it, the server verifies the signature, and the challenge is discarded. The signature is bound to both the challenge and the site's origin, so a credential captured on a lookalike domain is worthless here.`)
 };
 
 const es_demo_narrative_topic_twofa_passkey_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Passkey_BodyInputs) => LocalizedString} */ () => {
@@ -20,7 +20,7 @@ Se admiten dos formas: una credencial del dispositivo protegida por su bloqueo d
 /**
 * | output |
 * | --- |
-* | "A passkey turns your device into the second factor. No code to type, nothing to intercept. Two forms are supported: a device credential protected by your scr..." |
+* | "A passkey turns the device into the second factor. No code to type, nothing to intercept. Two forms are supported: a device credential protected by the scree..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Passkey_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "If you have push notifications enabled, a sign-in attempt sends an approval prompt to your device. Tap to approve and the sign-in completes. No code is invol..." |
+* | "When push notifications are enabled, a sign-in attempt sends an approval prompt to the device. Approving completes the sign-in. No code is involved. Each pro..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Push_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

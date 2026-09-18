@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When you enroll your first second-factor method, the system generates eight one-time backup codes. Each code works exactly once. **What the server holds.** T..." |
+* | "At first enrollment of any second-factor method, the system generates eight one-time backup codes. Each code works exactly once. **What the server holds.** T..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Backup_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

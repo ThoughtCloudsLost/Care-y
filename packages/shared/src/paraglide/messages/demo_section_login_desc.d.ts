@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "How your credentials protect case data before it reaches the server." |
+* | "How credentials protect case data before it reaches the server." |
 *
 * @param {Demo_Section_Login_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

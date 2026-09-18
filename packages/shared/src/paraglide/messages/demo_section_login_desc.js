@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Login_DescInputs */
 
 const en_demo_section_login_desc = /** @type {(inputs: Demo_Section_Login_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`How your credentials protect case data before it reaches the server.`)
+	return /** @type {LocalizedString} */ (`How credentials protect case data before it reaches the server.`)
 };
 
 const es_demo_section_login_desc = /** @type {(inputs: Demo_Section_Login_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cómo sus credenciales protegen los datos de los casos antes de que lleguen al servidor.`)
+	return /** @type {LocalizedString} */ (`Cómo las credenciales protegen los datos de los casos antes de que lleguen al servidor.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "How your credentials protect case data before it reaches the server." |
+* | "How credentials protect case data before it reaches the server." |
 *
 * @param {Demo_Section_Login_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

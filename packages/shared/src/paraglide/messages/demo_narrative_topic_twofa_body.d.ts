@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A password alone is not enough to access case data. Every sign-in also requires a second factor to confirm your identity through a separate channel. Five met..." |
+* | "A password alone is not enough to access case data. Every sign-in also requires a second factor to confirm identity through a separate channel. Five methods ..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
