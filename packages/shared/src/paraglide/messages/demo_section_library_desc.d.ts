@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The library is a shared knowledge base for the organization. Volunteers browse articles, read detailed entries with attachments and votes, and write new cont..." |
+* | "A shared knowledge base for the organization. Article titles and bodies are encrypted with the organization key before storage." |
 *
 * @param {Demo_Section_Library_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

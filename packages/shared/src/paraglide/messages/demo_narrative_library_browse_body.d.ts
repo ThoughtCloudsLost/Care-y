@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The library lists all published articles grouped by category. Each article shows a decrypted title and excerpt, and both land scrambled and resolve into read..." |
+* | "The library lists all published articles grouped by category. Each article shows a decrypted title and excerpt. Both are stored as ciphertext on the server a..." |
 *
 * @param {Demo_Narrative_Library_Browse_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
