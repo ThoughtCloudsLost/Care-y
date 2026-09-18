@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Sign in is username plus password. The username is a login name, not an email address, and it is chosen by the person accepting an invitation or set by an ad..." |
+* | "You sign in with a username and password. Your username is a login name, not an email address. You or your admin choose it when your account is created. **Ho..." |
 *
 * @param {Demo_Narrative_Topic_Credentials_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

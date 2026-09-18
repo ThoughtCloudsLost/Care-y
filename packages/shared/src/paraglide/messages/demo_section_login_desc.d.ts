@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The login screen is where the browser turns a password into the encryption keys that make organization data readable. Everything in this section is a step in..." |
+* | "How your credentials protect case data before it reaches the server." |
 *
 * @param {Demo_Section_Login_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

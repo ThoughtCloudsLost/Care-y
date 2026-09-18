@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The server sends a six digit code to the email address on file. The code expires after 5 minutes, and the server deletes it after 3 wrong entries or on accep..." |
+* | "A six-digit code is sent to the email address on file. It expires after five minutes and is deleted after three incorrect attempts. **What the server holds.*..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Email_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

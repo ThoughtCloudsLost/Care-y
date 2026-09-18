@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A second factor is required alongside the password, and any request for encrypted content is refused on a session that has not cleared its second factor. The..." |
+* | "A password alone is not enough to access case data. Every sign-in also requires a second factor to confirm your identity through a separate channel. Five met..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
