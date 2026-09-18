@@ -125,9 +125,6 @@
     columnContainerWidth,
   } from "$demo/flow-column.svelte.js";
 
-  /** Intentional no-op for disabled toolbar callbacks in fullscreen. */
-  // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional placeholder for disabled toolbar callbacks
-  function noop(): void {}
 
   // -----------------------------------------------------------------------
   // Dark mode with localStorage persistence
@@ -346,7 +343,7 @@
   // In fullscreen the story is unmounted; the drawer renders the prose
   // instead, so the highlight root switches to its aside element.
   let storyWrapperEl: HTMLElement | null = $state(null);
-  // eslint-disable-next-line svelte/prefer-writable-derived -- $derived can't forward-reference drawerRef (declared later)
+  // eslint-disable-next-line svelte/prefer-writable-derived -- $derived can't forward-reference drawerRef (declared at line ~2112)
   let drawerAsideEl: HTMLElement | null = $state(null);
   const highlightRoot: HTMLElement | null = $derived(
     fsActive ? drawerAsideEl : storyWrapperEl,
@@ -2116,7 +2113,7 @@
   let drawerRef: HandbookDrawer | undefined = $state();
 
   $effect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Svelte component export typed at source but eslint infers any
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- eslint can't type-check Svelte component exports; getRootEl() returns HTMLElement | null
     drawerAsideEl = drawerRef?.getRootEl() ?? null;
   });
 
@@ -2931,9 +2928,9 @@
           onPhonePreset={() => exitFsToPreset(fittedPhone.w, fittedPhone.h)}
           onDesktopPreset={() =>
             exitFsToPreset(fittedDesktop.w, fittedDesktop.h)}
-          onShrinkGrow={noop}
+          onShrinkGrow={() => undefined}
           onRoleChange={handleRoleChange}
-          onClose={noop}
+          onClose={() => undefined}
           onFullscreen={handleExitFullscreen}
           exitMode
         />
