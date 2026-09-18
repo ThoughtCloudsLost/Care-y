@@ -2115,7 +2115,7 @@
   "demo_section_client_privacy_title": "Aviso de privacidad",
   "demo_section_client_privacy_desc": "La página de aviso de privacidad explica qué datos recopila la organización, durante cuánto tiempo se retienen y qué protecciones de cifrado se aplican.",
   "demo_section_client_portal_title": "Portal seguro",
-  "demo_section_client_portal_desc": "El portal seguro permite que una persona que envió un formulario de admisión continúe la conversación con la organización. El acceso llega a través de un enlace enviado por un voluntario, y la credencial que desbloquea el portal vive solo en el fragmento de la URL, que el navegador nunca envía al servidor.",
+  "demo_section_client_portal_desc": "El portal seguro permite que un cliente continúe la conversación con la organización. El acceso llega a través de un enlace enviado por un voluntario, y la credencial que desbloquea el portal vive solo en el fragmento de la URL, que el navegador nunca envía al servidor.",
   "demo_section_client_account_title": "Cuenta de cliente",
   "demo_section_client_account_desc": "Una cuenta de cliente otorga a una persona que regresa acceso duradero a su hilo de conversación sin necesitar un nuevo enlace cada vez. La cuenta usa un nombre de usuario y contraseña que derivan claves de cifrado a través del mismo proceso de derivación que se usa en la página de inicio de sesión de voluntarios.",
   "demo_section_client_share_title": "Enlace compartido",
