@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The disclosure handle under the ticket header folds the case fields away to give the conversation more room and brings them back when needed. **What folds.**..." |
+* | "The case fields below the header can be folded away. The title, status, and priority stay visible in the header above. **Encryption.** The description is enc..." |
 *
 * @param {Demo_Narrative_Topic_Case_Fold_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

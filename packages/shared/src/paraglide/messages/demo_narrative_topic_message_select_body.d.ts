@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The select button in the toolbar switches the thread into selection mode. Tapping messages adds them to the selection, and a select all option grabs the enti..." |
+* | "Selection mode allows picking messages from the thread individually or all at once. **Copy.** The selection bar copies the decrypted text of every selected m..." |
 *
 * @param {Demo_Narrative_Topic_Message_Select_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
