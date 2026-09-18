@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The magnifier in the navigation bar opens the global search field, and results appear in a sheet below as you type. **Before typing.** The sheet shows recent..." |
+* | "The search sheet shows recent searches and strips of recently viewed tickets and articles. **Result groups.** Results group by type, and the group matching t..." |
 *
 * @param {Demo_Narrative_Search_Overlay_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
