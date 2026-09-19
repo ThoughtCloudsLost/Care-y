@@ -40,6 +40,7 @@
   import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { setAdminOrgKeyPolling } from "$lib/crypto/admin-org-key-poll.svelte.js";
   import { wrapOrgKeyForPending } from "$lib/crypto/org-key-wrap.js";
+  import { resealSweep } from "$lib/crypto/reseal-sweep.svelte.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -80,7 +81,12 @@
     const bridge = getCryptoBridge();
     const orgKeyManager = getOrgKeyManager();
 
-    setOrgDecryptCache(new OrgDecryptCache(orgKeyManager, bridge));
+    const orgCache = new OrgDecryptCache(orgKeyManager, bridge);
+    orgCache.staleReadSink = (reports) => {
+      if (!canManageKeys) return;
+      resealSweep.reportStaleReads(bridge, reports);
+    };
+    setOrgDecryptCache(orgCache);
     setTicketDecryptCache(new TicketDecryptCache(bridge));
 
     const followUpCache = new FollowUpDecryptCache(bridge);

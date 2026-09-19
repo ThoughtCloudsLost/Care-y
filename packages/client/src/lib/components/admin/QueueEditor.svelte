@@ -96,14 +96,15 @@
         initialIcon = undefined;
       } else {
         const id = queueId ?? "";
+        const qOrigin = { table: "queues" as const, id };
         decryptedName =
-          orgCache.decrypt(`queue:${id}`, queueEncryptedName) ?? "";
+          orgCache.decrypt(`queue:${id}`, queueEncryptedName, qOrigin) ?? "";
         initialEscalation = queueEscalateDays;
         // Resolve through the appearance helper so unknown or legacy
         // (null) tokens land on the canonical defaults in the form.
         const appearance = resolveQueueAppearance(
-          orgCache.decrypt(`queue-color:${id}`, queueEncryptedColor),
-          orgCache.decrypt(`queue-icon:${id}`, queueEncryptedIcon),
+          orgCache.decrypt(`queue-color:${id}`, queueEncryptedColor, qOrigin),
+          orgCache.decrypt(`queue-icon:${id}`, queueEncryptedIcon, qOrigin),
         );
         initialColor = appearance.colorId;
         initialIcon = appearance.iconId;

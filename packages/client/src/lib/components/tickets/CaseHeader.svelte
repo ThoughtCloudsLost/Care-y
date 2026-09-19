@@ -100,7 +100,10 @@
 
   const queueName = $derived(
     ticket != null
-      ? orgCache.decrypt(`queue:${ticket.queueId}`, ticket.encryptedQueueName)
+      ? orgCache.decrypt(`queue:${ticket.queueId}`, ticket.encryptedQueueName, {
+          table: "queues",
+          id: ticket.queueId,
+        })
       : null,
   );
 
@@ -127,6 +130,7 @@
       orgCache.decrypt(
         `assignee:${ticket.assignedTo}`,
         ticket.assignedDisplayName,
+        { table: "users", id: ticket.assignedTo },
       ) ?? null
     );
   });

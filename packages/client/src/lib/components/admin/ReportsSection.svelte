@@ -87,7 +87,10 @@
     queueId: string,
     encryptedName: string,
   ): string | null {
-    return orgCache.decrypt(`queue:${queueId}`, encryptedName);
+    return orgCache.decrypt(`queue:${queueId}`, encryptedName, {
+      table: "queues",
+      id: queueId,
+    });
   }
 
   const isLoading = $derived(

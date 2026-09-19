@@ -189,7 +189,12 @@
     if (id === undefined || !noteTypesQuery?.data) return undefined;
     const nt = noteTypesQuery.data.types.find((t) => t.id === id);
     if (!nt) return undefined;
-    return orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? undefined;
+    return (
+      orgCache.decrypt(nt.id + ":name", nt.encryptedName, {
+        table: "note_types",
+        id: nt.id,
+      }) ?? undefined
+    );
   }
 
   function resolveNoteTypeIconSlug(
@@ -199,7 +204,12 @@
     if (id === undefined || !noteTypesQuery?.data) return undefined;
     const nt = noteTypesQuery.data.types.find((t) => t.id === id);
     if (!nt) return undefined;
-    return orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon) ?? undefined;
+    return (
+      orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon, {
+        table: "note_types",
+        id: nt.id,
+      }) ?? undefined
+    );
   }
 
   $effect(() => {

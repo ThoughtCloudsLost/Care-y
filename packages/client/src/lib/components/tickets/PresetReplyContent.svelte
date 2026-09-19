@@ -51,13 +51,19 @@
 {:else}
   <List>
     {#each presets as preset (preset.id)}
+      {@const presetOrigin = {
+        table: "preset_replies" as const,
+        id: preset.id,
+      }}
       {@const presetTitle = orgCache.decrypt(
         `preset:${preset.id}:title`,
         preset.encryptedTitle,
+        presetOrigin,
       )}
       {@const presetBody = orgCache.decrypt(
         `preset:${preset.id}:body`,
         preset.encryptedBody,
+        presetOrigin,
       )}
       <ListItem
         onclick={() => {

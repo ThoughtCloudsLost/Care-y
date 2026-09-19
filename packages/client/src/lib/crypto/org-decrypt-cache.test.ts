@@ -352,6 +352,117 @@ describe("OrgDecryptCache", () => {
     });
   });
 
+  describe("staleReadSink", () => {
+    it("reports successes with origin and generation to the sink via decrypt", async () => {
+      const sinkReports: {
+        origin: { table: string; id: string | number };
+        generation: number;
+      }[] = [];
+      cache.staleReadSink = (reports) => {
+        sinkReports.push(...reports);
+      };
+
+      bridge.orgDecryptBatch.mockResolvedValueOnce([
+        { cacheKey: "sink-1", plaintext: "decrypted:sink-1", generation: 2 },
+      ]);
+
+      cache.decrypt("sink-1", fakeData("test"), {
+        table: "queues" as const,
+        id: "q1",
+      });
+      await cache.whenSettled();
+
+      expect(sinkReports).toHaveLength(1);
+      expect(sinkReports[0]?.origin).toEqual({ table: "queues", id: "q1" });
+      expect(sinkReports[0]?.generation).toBe(2);
+    });
+
+    it("does not report when no origin is provided", async () => {
+      const sinkReports: unknown[] = [];
+      cache.staleReadSink = (reports) => {
+        sinkReports.push(...reports);
+      };
+
+      cache.decrypt("no-origin-1", fakeData("test"));
+      await cache.whenSettled();
+
+      expect(sinkReports).toHaveLength(0);
+    });
+
+    it("does not report failures to the sink", async () => {
+      const sinkReports: unknown[] = [];
+      cache.staleReadSink = (reports) => {
+        sinkReports.push(...reports);
+      };
+
+      bridge.orgDecryptBatch.mockResolvedValueOnce([
+        { cacheKey: "fail-sink", plaintext: null, generation: null },
+      ]);
+
+      cache.decrypt("fail-sink", fakeData("bad"), {
+        table: "queues" as const,
+        id: "q-fail",
+      });
+      await cache.whenSettled();
+
+      expect(sinkReports).toHaveLength(0);
+    });
+
+    it("sink errors do not break caching", async () => {
+      cache.staleReadSink = () => {
+        throw new Error("sink exploded");
+      };
+
+      bridge.orgDecryptBatch.mockResolvedValueOnce([
+        { cacheKey: "sink-err", plaintext: "ok-value", generation: 1 },
+      ]);
+
+      cache.decrypt("sink-err", fakeData("test"), {
+        table: "queues" as const,
+        id: "q-err",
+      });
+      await cache.whenSettled();
+
+      // Value should still be cached despite sink throwing
+      expect(cache.get("sink-err")).toBe("ok-value");
+    });
+
+    it("reports successes with origin via decryptAsync", async () => {
+      const sinkReports: {
+        origin: { table: string; id: string | number };
+        generation: number;
+      }[] = [];
+      cache.staleReadSink = (reports) => {
+        sinkReports.push(...reports);
+      };
+
+      bridge.orgDecryptBatch.mockResolvedValueOnce([
+        {
+          cacheKey: "async-sink-1",
+          plaintext: "decrypted:async-sink-1",
+          generation: 3,
+        },
+      ]);
+
+      await cache.decryptAsync("async-sink-1", fakeData("test"), {
+        table: "kb_items" as const,
+        id: 42,
+      });
+
+      expect(sinkReports).toHaveLength(1);
+      expect(sinkReports[0]?.origin).toEqual({ table: "kb_items", id: 42 });
+      expect(sinkReports[0]?.generation).toBe(3);
+    });
+
+    it("does not invoke sink when sink is null", async () => {
+      // staleReadSink defaults to null; no crash expected
+      cache.decrypt("null-sink", fakeData("test"));
+      await cache.whenSettled();
+
+      expect(cache.get("null-sink")).toBe("decrypted:null-sink");
+    });
+  });
+
   describe("cache registry", () => {
     it("registers with cacheRegistry on construction", () => {
       expect(cacheRegistry.registered).toContain("OrgDecryptCache");

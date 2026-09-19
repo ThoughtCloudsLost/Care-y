@@ -484,8 +484,8 @@
           const kw = isKeyWrap(keyWrap) ? keyWrap : null;
           return ticketCache.decryptTitle(id, kw, encryptedTitle);
         },
-        orgDecrypt: (cacheKey, ciphertext) => {
-          return orgCache.decrypt(cacheKey, ciphertext) ?? null;
+        orgDecrypt: (cacheKey, ciphertext, origin) => {
+          return orgCache.decrypt(cacheKey, ciphertext, origin) ?? null;
         },
         currentUserId: () => currentUserIdGetter(),
         getPreviewFollowUps: (ticketId) => previewLoader.get(ticketId),
@@ -536,8 +536,8 @@
           createKbSearchProvider({
             fetchPage: async (cursor) =>
               kbRouter.listItems.query({ limit: 100, cursor }),
-            decryptOrg: async (cacheKey, ciphertext) => {
-              return orgCache.decryptAsync(cacheKey, ciphertext);
+            decryptOrg: async (cacheKey, ciphertext, origin) => {
+              return orgCache.decryptAsync(cacheKey, ciphertext, origin);
             },
             ensureCategoriesLoaded: async () => {
               await queryClient.query({
@@ -556,6 +556,7 @@
               return orgCache.decrypt(
                 `kb-cat:${categoryId}`,
                 cat.encryptedName,
+                { table: "kb_categories", id: categoryId },
               );
             },
             resolveAuthorName: (userId) => {
@@ -573,6 +574,7 @@
               return orgCache.decrypt(
                 `volunteer:${vol.id}`,
                 vol.encryptedDisplayName,
+                { table: "users", id: userId },
               );
             },
             fetchBodies: async (itemIds) =>
@@ -594,7 +596,10 @@
                 staleTime: "static",
               }),
             decryptDisplayName: (userId, ciphertext) => {
-              return orgCache.decrypt(`user:${userId}`, ciphertext);
+              return orgCache.decrypt(`user:${userId}`, ciphertext, {
+                table: "users",
+                id: userId,
+              });
             },
             currentUserId: () => currentUserIdGetter(),
           }),

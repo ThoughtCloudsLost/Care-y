@@ -327,6 +327,7 @@ export function createKeysRouter(deps?: KeysRouterDeps) {
           table: input.table,
           limit: input.limit,
           excludeIds: input.excludeIds,
+          onlyIds: input.onlyIds,
         });
         return {
           currentGeneration: result.currentGeneration,

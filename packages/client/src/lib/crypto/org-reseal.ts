@@ -104,6 +104,196 @@ const BATCH_SIZE = 40;
 // remaining rows stay counted by resealStatus and resume on next login.
 const EXCLUDE_IDS_CAP = 500;
 
+// ── Per-batch helper ───────────────────────────────────────────────
+
+interface BatchResult {
+  resealed: number;
+  skipped: number;
+  reindexed: number;
+  batchSkippedIds: (string | number)[];
+}
+
+/**
+ * Process one batch of pending rows: build worker items, call
+ * orgResealBatch, assemble per-row submission data, submit resealed
+ * rows and alias index hashes. Shared by resealTables and
+ * resealRowsById so both paths produce identical server mutations.
+ */
+async function processResealBatch(
+  deps: ResealDeps,
+  table: ResealTableName,
+  rows: readonly { id: string | number; columns: Record<string, string> }[],
+  currentGeneration: number,
+): Promise<BatchResult> {
+  const { bridge } = deps;
+
+  // Build worker items (alias index only for clients)
+  const workerItems: {
+    cacheKey: string;
+    ciphertext: string;
+    index?: "alias" | "phone" | "email";
+  }[] = [];
+
+  const rowIdToColumns = new Map<
+    string | number,
+    { colName: string; cacheKey: string }[]
+  >();
+
+  for (const row of rows) {
+    const entries: { colName: string; cacheKey: string }[] = [];
+    for (const [colName, ciphertext] of Object.entries(row.columns)) {
+      const cacheKey = `${String(row.id)}::${colName}`;
+      const item: {
+        cacheKey: string;
+        ciphertext: string;
+        index?: "alias" | "phone" | "email";
+      } = { cacheKey, ciphertext };
+
+      // Only alias index is computed during reseal. Phone and email
+      // indexes rebuild via the viewer-plaintext path exclusively.
+      if (table === "clients" && colName === "encrypted_alias") {
+        item.index = "alias";
+      }
+
+      workerItems.push(item);
+      entries.push({ colName, cacheKey });
+    }
+    rowIdToColumns.set(row.id, entries);
+  }
+
+  // Send to worker
+  const workerResults = await bridge.orgResealBatch(workerItems);
+
+  // Build a lookup from cacheKey to worker result
+  const resultByCacheKey = new Map<
+    string,
+    {
+      resealed: string | null;
+      fromGeneration: number | null;
+      indexHash: string | null;
+    }
+  >();
+  for (const r of workerResults) {
+    resultByCacheKey.set(r.cacheKey, r);
+  }
+
+  // Assemble per-row submission data
+  const rowsToSubmit: {
+    id: string | number;
+    columns: Record<string, string>;
+  }[] = [];
+  const batchSkippedIds: (string | number)[] = [];
+
+  // Collect alias index hashes from this batch
+  const aliasHashes: { id: string | number; hash: string }[] = [];
+
+  for (const row of rows) {
+    const entries = rowIdToColumns.get(row.id);
+    if (!entries) continue;
+
+    let anyUndecryptable = false;
+
+    for (const entry of entries) {
+      const wr = resultByCacheKey.get(entry.cacheKey);
+      if (!wr || (wr.resealed === null && wr.fromGeneration === null)) {
+        anyUndecryptable = true;
+        break;
+      }
+    }
+
+    if (anyUndecryptable) {
+      // A column of this row failed to decrypt. Skip the WHOLE row.
+      // Partial submission would bump the stamp while a column stays
+      // old-sealed, hiding it from the sweep forever.
+      batchSkippedIds.push(row.id);
+      continue;
+    }
+
+    // Build column map for this row
+    const columns: Record<string, string> = {};
+    for (const entry of entries) {
+      const wr = resultByCacheKey.get(entry.cacheKey);
+      if (!wr) continue;
+
+      if (wr.resealed !== null) {
+        columns[entry.colName] = wr.resealed;
+      } else if (wr.fromGeneration === currentGeneration) {
+        // Already sealed under current generation. Submit the
+        // original fetched ciphertext unchanged so the stamp bump
+        // is honest.
+        const originalCt = row.columns[entry.colName];
+        if (originalCt !== undefined) {
+          columns[entry.colName] = originalCt;
+        }
+      }
+
+      // Collect alias index hashes for submission
+      if (
+        wr.indexHash !== null &&
+        entry.colName === "encrypted_alias" &&
+        table === "clients"
+      ) {
+        aliasHashes.push({ id: row.id, hash: wr.indexHash });
+      }
+    }
+
+    if (Object.keys(columns).length > 0) {
+      rowsToSubmit.push({ id: row.id, columns });
+    }
+  }
+
+  let resealed = 0;
+  let skipped = 0;
+  let reindexed = 0;
+
+  // Submit resealed rows
+  if (rowsToSubmit.length > 0) {
+    const result = await trpc.keys.resealRows.mutate({
+      table,
+      rows: rowsToSubmit,
+      skippedIds: batchSkippedIds,
+    });
+    resealed += result.resealed;
+    skipped += result.skipped;
+  } else if (batchSkippedIds.length > 0) {
+    // All rows in this batch were skipped, but we still need to
+    // tell the server so the audit trail is honest.
+    // The server requires at least one row, so just record skips.
+    skipped += batchSkippedIds.length;
+  }
+
+  // Submit alias index hashes, pre-filtered to only pending ids.
+  // Uses onlyIds to ask the server which of this batch's ids are
+  // still index-pending. The server rejects the whole batch on
+  // any conflict, so we cannot submit without checking.
+  if (aliasHashes.length > 0) {
+    const batchRowIds = aliasHashes.map((h) => h.id);
+    const pendingCheck = await trpc.keys.reindexPending.query({
+      table: "clients",
+      limit: 100,
+      excludeIds: [],
+      onlyIds: batchRowIds,
+    });
+    const pendingIdSet = new Set(pendingCheck.rows.map((r) => r.id));
+
+    const pendingAliases = aliasHashes.filter((h) => pendingIdSet.has(h.id));
+    const skippedAliasIds = aliasHashes
+      .filter((h) => !pendingIdSet.has(h.id))
+      .map((h) => h.id);
+
+    if (pendingAliases.length > 0) {
+      const reindexResult = await trpc.keys.reindexRows.mutate({
+        table: "clients",
+        rows: pendingAliases,
+        skippedIds: skippedAliasIds,
+      });
+      reindexed += reindexResult.reindexed;
+    }
+  }
+
+  return { resealed, skipped, reindexed, batchSkippedIds };
+}
+
 // ── Reseal tables ──────────────────────────────────────────────────
 
 /**
@@ -119,8 +309,6 @@ export async function resealTables(
   tables: readonly ResealTableName[],
   onProgress?: (p: ResealProgress) => void,
 ): Promise<{ resealed: number; skipped: number; reindexed: number }> {
-  const { bridge } = deps;
-
   // Fetch totals per table for progress reporting
   const status = await trpc.keys.resealStatus.query();
   const pendingByTable = new Map<string, number>();
@@ -151,177 +339,74 @@ export async function resealTables(
 
       if (pending.rows.length === 0) break;
 
-      const currentGeneration = pending.currentGeneration;
+      const batch = await processResealBatch(
+        deps,
+        table,
+        pending.rows,
+        pending.currentGeneration,
+      );
 
-      // Build worker items (alias index only for clients)
-      const workerItems: {
-        cacheKey: string;
-        ciphertext: string;
-        index?: "alias" | "phone" | "email";
-      }[] = [];
-
-      const rowIdToColumns = new Map<
-        string | number,
-        { colName: string; cacheKey: string }[]
-      >();
-
-      for (const row of pending.rows) {
-        const entries: { colName: string; cacheKey: string }[] = [];
-        for (const [colName, ciphertext] of Object.entries(row.columns)) {
-          const cacheKey = `${String(row.id)}::${colName}`;
-          const item: {
-            cacheKey: string;
-            ciphertext: string;
-            index?: "alias" | "phone" | "email";
-          } = { cacheKey, ciphertext };
-
-          // Only alias index is computed during reseal. Phone and email
-          // indexes rebuild via the viewer-plaintext path exclusively.
-          if (table === "clients" && colName === "encrypted_alias") {
-            item.index = "alias";
-          }
-
-          workerItems.push(item);
-          entries.push({ colName, cacheKey });
-        }
-        rowIdToColumns.set(row.id, entries);
-      }
-
-      // Send to worker
-      const workerResults = await bridge.orgResealBatch(workerItems);
-
-      // Build a lookup from cacheKey to worker result
-      const resultByCacheKey = new Map<
-        string,
-        {
-          resealed: string | null;
-          fromGeneration: number | null;
-          indexHash: string | null;
-        }
-      >();
-      for (const r of workerResults) {
-        resultByCacheKey.set(r.cacheKey, r);
-      }
-
-      // Assemble per-row submission data
-      const rowsToSubmit: {
-        id: string | number;
-        columns: Record<string, string>;
-      }[] = [];
-      const batchSkippedIds: (string | number)[] = [];
-
-      // Collect alias index hashes from this batch
-      const aliasHashes: { id: string | number; hash: string }[] = [];
-
-      for (const row of pending.rows) {
-        const entries = rowIdToColumns.get(row.id);
-        if (!entries) continue;
-
-        let anyUndecryptable = false;
-
-        for (const entry of entries) {
-          const wr = resultByCacheKey.get(entry.cacheKey);
-          if (!wr || (wr.resealed === null && wr.fromGeneration === null)) {
-            anyUndecryptable = true;
-            break;
-          }
-        }
-
-        if (anyUndecryptable) {
-          // A column of this row failed to decrypt. Skip the WHOLE row.
-          // Partial submission would bump the stamp while a column stays
-          // old-sealed, hiding it from the sweep forever.
-          batchSkippedIds.push(row.id);
-          continue;
-        }
-
-        // Build column map for this row
-        const columns: Record<string, string> = {};
-        for (const entry of entries) {
-          const wr = resultByCacheKey.get(entry.cacheKey);
-          if (!wr) continue;
-
-          if (wr.resealed !== null) {
-            columns[entry.colName] = wr.resealed;
-          } else if (wr.fromGeneration === currentGeneration) {
-            // Already sealed under current generation. Submit the
-            // original fetched ciphertext unchanged so the stamp bump
-            // is honest.
-            const originalCt = row.columns[entry.colName];
-            if (originalCt !== undefined) {
-              columns[entry.colName] = originalCt;
-            }
-          }
-
-          // Collect alias index hashes for submission
-          if (
-            wr.indexHash !== null &&
-            entry.colName === "encrypted_alias" &&
-            table === "clients"
-          ) {
-            aliasHashes.push({ id: row.id, hash: wr.indexHash });
-          }
-        }
-
-        if (Object.keys(columns).length > 0) {
-          rowsToSubmit.push({ id: row.id, columns });
-        }
-      }
-
-      // Submit resealed rows
-      if (rowsToSubmit.length > 0) {
-        const result = await trpc.keys.resealRows.mutate({
-          table,
-          rows: rowsToSubmit,
-          skippedIds: batchSkippedIds,
-        });
-        totalResealed += result.resealed;
-        totalSkipped += result.skipped;
-      } else if (batchSkippedIds.length > 0) {
-        // All rows in this batch were skipped, but we still need to
-        // tell the server so the audit trail is honest.
-        // The server requires at least one row, so just record skips.
-        totalSkipped += batchSkippedIds.length;
-      }
-
-      // Submit alias index hashes, pre-filtered to only pending ids.
-      // Uses onlyIds to ask the server which of this batch's ids are
-      // still index-pending. The server rejects the whole batch on
-      // any conflict, so we cannot submit without checking.
-      if (aliasHashes.length > 0) {
-        const batchRowIds = aliasHashes.map((h) => h.id);
-        const pendingCheck = await trpc.keys.reindexPending.query({
-          table: "clients",
-          limit: 100,
-          excludeIds: [],
-          onlyIds: batchRowIds,
-        });
-        const pendingIdSet = new Set(pendingCheck.rows.map((r) => r.id));
-
-        const pendingAliases = aliasHashes.filter((h) =>
-          pendingIdSet.has(h.id),
-        );
-        const skippedAliasIds = aliasHashes
-          .filter((h) => !pendingIdSet.has(h.id))
-          .map((h) => h.id);
-
-        if (pendingAliases.length > 0) {
-          const reindexResult = await trpc.keys.reindexRows.mutate({
-            table: "clients",
-            rows: pendingAliases,
-            skippedIds: skippedAliasIds,
-          });
-          totalReindexed += reindexResult.reindexed;
-        }
-      }
+      totalResealed += batch.resealed;
+      totalSkipped += batch.skipped;
+      totalReindexed += batch.reindexed;
 
       // Accumulate skipped ids so the next fetch excludes them
-      skippedIds.push(...batchSkippedIds);
+      skippedIds.push(...batch.batchSkippedIds);
 
       done += pending.rows.length;
       onProgress?.({ table, done, total });
       await deps.pace?.();
     }
+  }
+
+  return {
+    resealed: totalResealed,
+    skipped: totalSkipped,
+    reindexed: totalReindexed,
+  };
+}
+
+// ── Targeted reseal by id ─────────────────────────────────────────
+
+/**
+ * Re-encrypt specific rows identified by their ids. Used by the
+ * read-path write-back to reseal rows that a stale-generation decrypt
+ * reported. Chunks ids into groups of at most BATCH_SIZE and fetches
+ * each chunk via resealPending with onlyIds. Rows already resealed
+ * elsewhere come back empty (a harmless no-op).
+ */
+export async function resealRowsById(
+  deps: ResealDeps,
+  table: ResealTableName,
+  ids: readonly (string | number)[],
+): Promise<{ resealed: number; skipped: number; reindexed: number }> {
+  let totalResealed = 0;
+  let totalSkipped = 0;
+  let totalReindexed = 0;
+
+  for (let offset = 0; offset < ids.length; offset += BATCH_SIZE) {
+    const chunk = ids.slice(offset, offset + BATCH_SIZE);
+
+    const pending = await trpc.keys.resealPending.query({
+      table,
+      limit: chunk.length,
+      excludeIds: [],
+      onlyIds: chunk,
+    });
+
+    if (pending.rows.length > 0) {
+      const batch = await processResealBatch(
+        deps,
+        table,
+        pending.rows,
+        pending.currentGeneration,
+      );
+      totalResealed += batch.resealed;
+      totalSkipped += batch.skipped;
+      totalReindexed += batch.reindexed;
+    }
+
+    await deps.pace?.();
   }
 
   return {

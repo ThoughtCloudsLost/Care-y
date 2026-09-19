@@ -32,6 +32,7 @@
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
   import type { NavbarAction } from "$lib/shell/types";
+  import type { ResealOrigin } from "$lib/crypto/org-decrypt-cache.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
   import { Button } from "konsta/svelte";
   import { UserPlus, Pause, ChevronsUp, FolderInput } from "@lucide/svelte";
@@ -177,6 +178,7 @@
         clientAlias: orgCache.decrypt(
           `client-alias:${t.clientId}`,
           t.encryptedClientAlias,
+          { table: "clients", id: t.clientId },
         ),
       })),
     getPreviewFollowUps: (id) => previewLoader.get(id),
@@ -420,8 +422,16 @@
     return map;
   });
 
-  function orgDecryptByKey(cacheKey: string): string | null {
-    return orgCache.decrypt(cacheKey, orgCipherByKey.get(cacheKey) ?? null);
+  function orgDecryptByKey(
+    cacheKey: string,
+    _ciphertext: string | null,
+    origin?: ResealOrigin,
+  ): string | null {
+    return orgCache.decrypt(
+      cacheKey,
+      orgCipherByKey.get(cacheKey) ?? null,
+      origin,
+    );
   }
 
   // Queue color/icon resolved from the queues list (also feeds the filter
@@ -632,7 +642,10 @@
   function assignedSortName(t: TicketRecord): string | null {
     if (t.assignedTo === null) return null;
     if (t.assignedTo === currentUserId) return m.dashboard_assigned_you();
-    return orgCache.decrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName);
+    return orgCache.decrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName, {
+      table: "users",
+      id: t.assignedTo,
+    });
   }
 
   function toSortable(t: TicketRecord): TicketRecord & {
@@ -652,6 +665,7 @@
       clientAlias: orgCache.decrypt(
         `client-alias:${t.clientId}`,
         t.encryptedClientAlias,
+        { table: "clients", id: t.clientId },
       ),
       assigneeName: assignedSortName(t),
     };
@@ -1068,7 +1082,7 @@
   const queueOptions = $derived(
     (queuesQuery.data ?? []).map((q) => ({
       value: q.id,
-      label: `${orgCache.decrypt(`queue:${q.id}`, q.encryptedName) ?? "..."} (${q.openCount})`,
+      label: `${orgCache.decrypt(`queue:${q.id}`, q.encryptedName, { table: "queues", id: q.id }) ?? "..."} (${q.openCount})`,
     })),
   );
 

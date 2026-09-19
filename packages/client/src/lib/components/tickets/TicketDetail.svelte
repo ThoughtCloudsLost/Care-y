@@ -348,13 +348,23 @@
   function resolveNoteTypeName(noteTypeId: string | null): string | undefined {
     const nt = resolveNoteType(noteTypeId);
     if (!nt) return undefined;
-    return orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? undefined;
+    return (
+      orgCache.decrypt(nt.id + ":name", nt.encryptedName, {
+        table: "note_types",
+        id: nt.id,
+      }) ?? undefined
+    );
   }
 
   function resolveNoteTypeIcon(noteTypeId: string | null): string | undefined {
     const nt = resolveNoteType(noteTypeId);
     if (!nt) return undefined;
-    return orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon) ?? undefined;
+    return (
+      orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon, {
+        table: "note_types",
+        id: nt.id,
+      }) ?? undefined
+    );
   }
 
   function resolveNoteIconForTimeline(
@@ -373,6 +383,7 @@
       orgCache.decrypt(
         `client-alias:${ticket.clientId}`,
         ticket.encryptedClientAlias,
+        { table: "clients", id: ticket.clientId },
       ) ?? "..."
     );
   });

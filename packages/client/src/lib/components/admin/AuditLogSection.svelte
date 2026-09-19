@@ -66,7 +66,10 @@
   function actorResult(row: AuditRow): DecryptResult {
     const ciphertext = actorNames.get(row.actorId) ?? null;
     if (ciphertext === null) return LOADING;
-    const raw = orgCache.decrypt(`assignee:${row.actorId}`, ciphertext);
+    const raw = orgCache.decrypt(`assignee:${row.actorId}`, ciphertext, {
+      table: "users",
+      id: row.actorId,
+    });
     return resolveOrgDecrypt(raw, orgCache.isFailed(`assignee:${row.actorId}`));
   }
 

@@ -64,6 +64,7 @@
       const name = orgCache.decrypt(
         `volunteer:${vol.id}`,
         vol.encryptedDisplayName,
+        { table: "users", id: vol.id },
       );
       if (name === null) continue;
       if (query === "" || name.toLowerCase().startsWith(query)) {

@@ -13,6 +13,7 @@ import {
   type TicketLikeRecord,
 } from "$lib/tickets/ticket-card-props.js";
 import { DECRYPT_ERROR_SENTINEL } from "$lib/crypto/async-decrypt-cache.js";
+import type { ResealOrigin } from "$lib/crypto/org-decrypt-cache.js";
 import TicketSearchResult from "$lib/components/search/TicketSearchResult.svelte";
 import Ticket from "$lib/components/icons/Ticket.svelte";
 import * as m from "$lib/paraglide/messages.js";
@@ -66,6 +67,7 @@ export interface TicketSearchProviderDeps {
   readonly orgDecrypt: (
     cacheKey: string,
     ciphertext: string | null,
+    origin?: ResealOrigin,
   ) => string | null;
   /** Viewer id for the shared core's self-assignment ("You") check. */
   readonly currentUserId: () => string | undefined;

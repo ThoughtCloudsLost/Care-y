@@ -65,6 +65,7 @@
       const name = orgCache.decrypt(
         `volunteer:${vol.id}`,
         vol.encryptedDisplayName,
+        { table: "users", id: vol.id },
       );
       results.push({ id: vol.id, displayName: name });
     }

@@ -39,6 +39,9 @@ const mockResealBrandingClasses = vi
 const mockReindexViewerTables = vi
   .fn()
   .mockResolvedValue({ reindexed: 0, indexPendingTables: [] });
+const mockResealRowsById = vi
+  .fn()
+  .mockResolvedValue({ resealed: 0, skipped: 0, reindexed: 0 });
 
 vi.mock("./org-reseal.js", async (importOriginal) => {
   const real = await importOriginal<typeof ResealNS>();
@@ -48,6 +51,7 @@ vi.mock("./org-reseal.js", async (importOriginal) => {
     resealBlobTables: mockResealBlobTables,
     resealBrandingClasses: mockResealBrandingClasses,
     reindexViewerTables: mockReindexViewerTables,
+    resealRowsById: mockResealRowsById,
   };
 });
 
@@ -94,6 +98,11 @@ describe("resealSweep", () => {
     mockReindexViewerTables.mockResolvedValue({
       reindexed: 0,
       indexPendingTables: [],
+    });
+    mockResealRowsById.mockResolvedValue({
+      resealed: 0,
+      skipped: 0,
+      reindexed: 0,
     });
 
     const mod = await import("./reseal-sweep.svelte.js");
@@ -193,5 +202,167 @@ describe("resealSweep", () => {
 
     expect(resealSweep.running).toBe(false);
     expect(resealSweep.lastError).toBe("network timeout");
+  });
+
+  describe("reportStaleReads", () => {
+    it("drops reports with generation >= currentGeneration", async () => {
+      const bridge = createMockBridge();
+
+      // Prime the currentGeneration by running checkAndResume
+      mockResealStatus.mockResolvedValue(statusWithPending(0, 0));
+      await resealSweep.checkAndResume(bridge);
+
+      // currentGeneration is 2; report generation 2 and 3 (should be dropped)
+      resealSweep.reportStaleReads(bridge, [
+        { origin: { table: "queues", id: "q1" }, generation: 2 },
+        { origin: { table: "queues", id: "q2" }, generation: 3 },
+      ]);
+
+      // Allow any microtasks to settle
+      await vi.waitFor(() => {
+        expect(mockResealRowsById).not.toHaveBeenCalled();
+      });
+    });
+
+    it("drains stale reports via resealRowsById grouped by table", async () => {
+      const bridge = createMockBridge();
+
+      // Prime generation
+      mockResealStatus.mockResolvedValue(statusWithPending(0, 0));
+      await resealSweep.checkAndResume(bridge);
+      mockResealStatus.mockClear();
+      mockResealStatus.mockResolvedValue(statusWithPending(0, 0));
+
+      mockResealRowsById.mockResolvedValue({
+        resealed: 1,
+        skipped: 0,
+        reindexed: 0,
+      });
+
+      // Report stale reads (generation 1 < currentGeneration 2)
+      resealSweep.reportStaleReads(bridge, [
+        { origin: { table: "queues", id: "q1" }, generation: 1 },
+        { origin: { table: "kb_items", id: "kb1" }, generation: 1 },
+      ]);
+
+      // Wait for drain to call resealRowsById
+      await vi.waitFor(() => {
+        expect(mockResealRowsById).toHaveBeenCalled();
+      });
+
+      // Both tables should have been drained (possibly in separate calls)
+      const tables = mockResealRowsById.mock.calls.map(
+        (call) => (call as [unknown, string])[1],
+      );
+      expect(tables).toContain("queues");
+      expect(tables).toContain("kb_items");
+    });
+
+    it("deduplicates rows by table::id", async () => {
+      const bridge = createMockBridge();
+
+      // Prime generation
+      mockResealStatus.mockResolvedValue(statusWithPending(0, 0));
+      await resealSweep.checkAndResume(bridge);
+      mockResealStatus.mockClear();
+      mockResealStatus.mockResolvedValue(statusWithPending(0, 0));
+
+      mockResealRowsById.mockResolvedValue({
+        resealed: 1,
+        skipped: 0,
+        reindexed: 0,
+      });
+
+      // Report the same origin twice
+      resealSweep.reportStaleReads(bridge, [
+        { origin: { table: "queues", id: "q1" }, generation: 1 },
+        { origin: { table: "queues", id: "q1" }, generation: 1 },
+      ]);
+
+      await vi.waitFor(() => {
+        expect(mockResealRowsById).toHaveBeenCalled();
+      });
+
+      // resealRowsById should receive only one id
+      const call = mockResealRowsById.mock.calls[0] as [
+        unknown,
+        string,
+        (string | number)[],
+      ];
+      expect(call[2]).toEqual(["q1"]);
+    });
+
+    it("defers drain while running (full sweep active)", async () => {
+      const bridge = createMockBridge();
+
+      // Make the sweep hang
+      let resolveHang: (() => void) | undefined;
+      mockResealTables.mockImplementationOnce(
+        () =>
+          new Promise<{ resealed: number; skipped: number; reindexed: number }>(
+            (resolve) => {
+              resolveHang = () => {
+                resolve({ resealed: 0, skipped: 0, reindexed: 0 });
+              };
+            },
+          ),
+      );
+
+      mockResealStatus.mockResolvedValue(statusWithPending(5, 0));
+
+      const startPromise = resealSweep.start(bridge);
+
+      await vi.waitFor(() => {
+        expect(mockResealTables).toHaveBeenCalled();
+      });
+
+      // While running, report a stale read
+      resealSweep.reportStaleReads(bridge, [
+        { origin: { table: "queues", id: "q-deferred" }, generation: 1 },
+      ]);
+
+      // resealRowsById should NOT have been called while running
+      expect(mockResealRowsById).not.toHaveBeenCalled();
+
+      // Release the sweep
+      mockResealStatus.mockResolvedValue(statusWithPending(0, 0));
+      resolveHang!();
+      await startPromise;
+
+      // After sweep ends, the deferred queue should drain
+      await vi.waitFor(() => {
+        expect(mockResealRowsById).toHaveBeenCalled();
+      });
+
+      const call = mockResealRowsById.mock.calls[0] as [
+        unknown,
+        string,
+        (string | number)[],
+      ];
+      expect(call[2]).toContain("q-deferred");
+    });
+
+    it("records errors quietly without rejecting", async () => {
+      const bridge = createMockBridge();
+
+      // Prime generation
+      mockResealStatus.mockResolvedValue(statusWithPending(0, 0));
+      await resealSweep.checkAndResume(bridge);
+      mockResealStatus.mockClear();
+      mockResealStatus.mockResolvedValue(statusWithPending(0, 0));
+
+      mockResealRowsById.mockRejectedValueOnce(new Error("drain failure"));
+
+      resealSweep.reportStaleReads(bridge, [
+        { origin: { table: "queues", id: "q-err" }, generation: 1 },
+      ]);
+
+      await vi.waitFor(() => {
+        expect(resealSweep.lastError).toBe("drain failure");
+      });
+
+      // Should not have thrown
+      expect(resealSweep.running).toBe(false);
+    });
   });
 });

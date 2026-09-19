@@ -40,7 +40,9 @@ export function resolveVolunteerName(
   const vol = volunteerMap.get(userId);
   if (!vol) return undefined;
   return (
-    orgCache.decrypt(`volunteer:${vol.id}`, vol.encryptedDisplayName) ??
-    undefined
+    orgCache.decrypt(`volunteer:${vol.id}`, vol.encryptedDisplayName, {
+      table: "users",
+      id: vol.id,
+    }) ?? undefined
   );
 }

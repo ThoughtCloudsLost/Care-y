@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type {
   resealTables as ResealTablesFn,
+  resealRowsById as ResealRowsByIdFn,
   reindexViewerTables as ReindexViewerTablesFn,
   resealBlobTables as ResealBlobTablesFn,
   resealBrandingClasses as ResealBrandingClassesFn,
@@ -136,6 +137,7 @@ function defaultStatus(): {
 
 describe("org-reseal", () => {
   let resealTables: typeof ResealTablesFn;
+  let resealRowsById: typeof ResealRowsByIdFn;
   let reindexViewerTables: typeof ReindexViewerTablesFn;
   let resealBlobTables: typeof ResealBlobTablesFn;
   let resealBrandingClasses: typeof ResealBrandingClassesFn;
@@ -170,6 +172,7 @@ describe("org-reseal", () => {
 
     const mod = await import("./org-reseal.js");
     resealTables = mod.resealTables;
+    resealRowsById = mod.resealRowsById;
     reindexViewerTables = mod.reindexViewerTables;
     resealBlobTables = mod.resealBlobTables;
     resealBrandingClasses = mod.resealBrandingClasses;
@@ -1056,6 +1059,129 @@ describe("org-reseal", () => {
 
       // Asset skipped because branding crypto fails without libsodium
       expect(result.skipped).toBe(1);
+    });
+  });
+
+  describe("resealRowsById", () => {
+    it("passes onlyIds to resealPending and processes rows identically", async () => {
+      const bridge = createMockBridge();
+
+      mockResealPending.mockResolvedValueOnce({
+        currentGeneration: 2,
+        rows: [
+          { id: "r1", columns: { encrypted_name: "ct1" } },
+          { id: "r2", columns: { encrypted_name: "ct2" } },
+        ],
+      });
+
+      bridge.orgResealBatch.mockResolvedValueOnce([
+        {
+          cacheKey: "r1::encrypted_name",
+          resealed: "new-ct1",
+          fromGeneration: 1,
+          indexHash: null,
+        },
+        {
+          cacheKey: "r2::encrypted_name",
+          resealed: "new-ct2",
+          fromGeneration: 1,
+          indexHash: null,
+        },
+      ]);
+
+      mockResealRows.mockResolvedValue({ resealed: 2, skipped: 0 });
+
+      const result = await resealRowsById(
+        { bridge: asBridge(bridge) },
+        "queues",
+        ["r1", "r2"],
+      );
+
+      expect(result.resealed).toBe(2);
+      expect(result.skipped).toBe(0);
+
+      // Verify onlyIds was passed to resealPending
+      const call = mockResealPending.mock.calls[0] as [
+        { table: string; onlyIds: (string | number)[] },
+      ];
+      expect(call[0].onlyIds).toEqual(["r1", "r2"]);
+      expect(call[0].table).toBe("queues");
+    });
+
+    it("chunks ids over 40 into multiple fetches", async () => {
+      const bridge = createMockBridge();
+      const pace = vi.fn((): Promise<void> => Promise.resolve());
+
+      // Build 60 ids (chunks: 40, 20)
+      const ids = Array.from({ length: 60 }, (_, i) => `id-${String(i)}`);
+
+      // First chunk (40 ids): no rows returned
+      mockResealPending
+        .mockResolvedValueOnce({ currentGeneration: 2, rows: [] })
+        .mockResolvedValueOnce({ currentGeneration: 2, rows: [] });
+
+      await resealRowsById({ bridge: asBridge(bridge), pace }, "queues", ids);
+
+      // Should have called resealPending twice (two chunks)
+      expect(mockResealPending).toHaveBeenCalledTimes(2);
+
+      const firstCall = mockResealPending.mock.calls[0] as [
+        { onlyIds: (string | number)[] },
+      ];
+      const secondCall = mockResealPending.mock.calls[1] as [
+        { onlyIds: (string | number)[] },
+      ];
+      expect(firstCall[0].onlyIds).toHaveLength(40);
+      expect(secondCall[0].onlyIds).toHaveLength(20);
+
+      // pace called between chunks
+      expect(pace).toHaveBeenCalledTimes(2);
+    });
+
+    it("handles rows already resealed elsewhere (empty response)", async () => {
+      const bridge = createMockBridge();
+
+      mockResealPending.mockResolvedValueOnce({
+        currentGeneration: 2,
+        rows: [],
+      });
+
+      const result = await resealRowsById(
+        { bridge: asBridge(bridge) },
+        "kb_items",
+        ["gone-1", "gone-2"],
+      );
+
+      expect(result.resealed).toBe(0);
+      expect(result.skipped).toBe(0);
+      expect(mockResealRows).not.toHaveBeenCalled();
+    });
+
+    it("skips undecryptable rows identically to resealTables", async () => {
+      const bridge = createMockBridge();
+
+      mockResealPending.mockResolvedValueOnce({
+        currentGeneration: 2,
+        rows: [{ id: "bad-1", columns: { col: "ct" } }],
+      });
+
+      bridge.orgResealBatch.mockResolvedValueOnce([
+        {
+          cacheKey: "bad-1::col",
+          resealed: null,
+          fromGeneration: null,
+          indexHash: null,
+        },
+      ]);
+
+      const result = await resealRowsById(
+        { bridge: asBridge(bridge) },
+        "queues",
+        ["bad-1"],
+      );
+
+      expect(result.skipped).toBe(1);
+      expect(result.resealed).toBe(0);
     });
   });
 });

@@ -185,7 +185,10 @@
     userId: string,
     encryptedBase64: string,
   ): string | null {
-    return orgCache.decrypt(`user:${userId}`, encryptedBase64);
+    return orgCache.decrypt(`user:${userId}`, encryptedBase64, {
+      table: "users",
+      id: userId,
+    });
   }
 
   // Identifiers are org-key sealed like display names (ADR-052). Decrypted
@@ -194,7 +197,10 @@
     userId: string,
     encryptedBase64: string,
   ): Promise<string | null> {
-    return orgCache.decryptAsync(`user-ident:${userId}`, encryptedBase64);
+    return orgCache.decryptAsync(`user-ident:${userId}`, encryptedBase64, {
+      table: "users",
+      id: userId,
+    });
   }
 
   // ── Client-side filtering + sorting ──
@@ -742,8 +748,10 @@
           {:else}
             {#each queuesQuery.data ?? [] as queue (queue.id)}
               {@const queueName =
-                orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName) ??
-                m.common_loading()}
+                orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName, {
+                  table: "queues",
+                  id: queue.id,
+                }) ?? m.common_loading()}
               <ListItem title={queueName}>
                 {#snippet after()}
                   <Toggle

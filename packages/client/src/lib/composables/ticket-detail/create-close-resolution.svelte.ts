@@ -77,6 +77,7 @@ export function createCloseResolution(
       ? (config.orgCache.decrypt(
           currentNoteType.id + ":name",
           currentNoteType.encryptedName,
+          { table: "note_types", id: currentNoteType.id },
         ) ?? "")
       : "",
   );
@@ -86,6 +87,7 @@ export function createCloseResolution(
       ? (config.orgCache.decrypt(
           currentNoteType.id + ":icon",
           currentNoteType.encryptedIcon,
+          { table: "note_types", id: currentNoteType.id },
         ) ?? null)
       : null,
   );

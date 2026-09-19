@@ -891,6 +891,133 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgResealService", () => {
       expect(result.rows[0]!.columns).not.toHaveProperty("encrypted_color");
       expect(result.rows[0]!.columns).not.toHaveProperty("encrypted_icon");
     });
+
+    it("onlyIds restricts results to the given ids", async () => {
+      const q1 = await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      const q2 = await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 2,
+          org_key_generation: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 3,
+          org_key_generation: 1,
+        })
+        .execute();
+
+      const result = await service.resealPending({
+        table: "queues",
+        limit: 40,
+        excludeIds: [],
+        onlyIds: [q1.id, q2.id],
+      });
+
+      expect(result.rows).toHaveLength(2);
+      const ids = result.rows.map((r) => r.id);
+      expect(ids).toContain(q1.id);
+      expect(ids).toContain(q2.id);
+    });
+
+    it("onlyIds does not return current-stamp rows", async () => {
+      const pending = await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      const current = await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 2,
+          org_key_generation: 2,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      const result = await service.resealPending({
+        table: "queues",
+        limit: 40,
+        excludeIds: [],
+        onlyIds: [pending.id, current.id],
+      });
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]!.id).toBe(pending.id);
+    });
+
+    it("onlyIds combined with excludeIds: exclude wins", async () => {
+      const q1 = await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      const q2 = await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 2,
+          org_key_generation: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      const result = await service.resealPending({
+        table: "queues",
+        limit: 40,
+        excludeIds: [q1.id],
+        onlyIds: [q1.id, q2.id],
+      });
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]!.id).toBe(q2.id);
+    });
+
+    it("empty onlyIds returns nothing", async () => {
+      await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .execute();
+
+      const result = await service.resealPending({
+        table: "queues",
+        limit: 40,
+        excludeIds: [],
+        onlyIds: [],
+      });
+
+      expect(result.rows).toHaveLength(0);
+    });
   });
 
   // -----------------------------------------------------------------------

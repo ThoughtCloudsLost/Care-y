@@ -357,7 +357,10 @@
   // Decrypt queue names
   function getQueueName(queue: { id: string; encryptedName: string }): string {
     return (
-      orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName) ?? queue.id
+      orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName, {
+        table: "queues",
+        id: queue.id,
+      }) ?? queue.id
     );
   }
 
@@ -404,7 +407,11 @@
     return volunteersQuery.data.map(
       (v: { id: string; encryptedDisplayName: string }) => ({
         id: v.id,
-        name: orgCache.decrypt(`vol:${v.id}`, v.encryptedDisplayName) ?? v.id,
+        name:
+          orgCache.decrypt(`vol:${v.id}`, v.encryptedDisplayName, {
+            table: "users",
+            id: v.id,
+          }) ?? v.id,
       }),
     );
   });

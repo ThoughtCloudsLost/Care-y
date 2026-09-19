@@ -64,6 +64,7 @@
     const raw = orgCache.decrypt(
       `client-alias:${row.clientId}`,
       row.encryptedClientAlias,
+      { table: "clients", id: row.clientId },
     );
     return resolveOrgDecrypt(
       raw,

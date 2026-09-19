@@ -75,8 +75,10 @@
     return raw.map((r) => ({
       ...r,
       alias:
-        orgCache.decrypt(`client-alias:${r.id}`, r.encryptedAlias) ??
-        r.id.slice(0, 8),
+        orgCache.decrypt(`client-alias:${r.id}`, r.encryptedAlias, {
+          table: "clients",
+          id: r.id,
+        }) ?? r.id.slice(0, 8),
     }));
   }
 
@@ -110,10 +112,10 @@
     }
     if (data.found) {
       data.alias =
-        orgCache.decrypt(
-          `client-alias:${data.clientId}`,
-          data.encryptedAlias,
-        ) ?? data.clientId.slice(0, 8);
+        orgCache.decrypt(`client-alias:${data.clientId}`, data.encryptedAlias, {
+          table: "clients",
+          id: data.clientId,
+        }) ?? data.clientId.slice(0, 8);
     }
     return data;
   }

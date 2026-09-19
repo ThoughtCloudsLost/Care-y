@@ -196,11 +196,19 @@ const pendingExcludeIds = z
   .max(500)
   .default([]);
 
-/** Input for fetching old-stamped rows that need org-key resealing. */
+/**
+ * Input for fetching old-stamped rows that need org-key resealing.
+ * `onlyIds` restricts the result to the given rows; the read-path
+ * write-back uses it to reseal exactly the rows a stale decrypt reported.
+ */
 export const resealPendingSchema = z.object({
   table: resealTableNameSchema,
   limit: z.number().int().min(1).max(100).default(40),
   excludeIds: pendingExcludeIds,
+  onlyIds: z
+    .array(z.union([z.string(), z.number().int()]))
+    .max(100)
+    .optional(),
 });
 
 export type ResealPendingInput = z.infer<typeof resealPendingSchema>;

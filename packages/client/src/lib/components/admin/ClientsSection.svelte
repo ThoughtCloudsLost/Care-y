@@ -95,7 +95,14 @@
   // ---------------------------------------------------------------------------
 
   function decryptAlias(client: ClientListItem): string | null {
-    return orgCache.decrypt(`client-alias:${client.id}`, client.encryptedAlias);
+    return orgCache.decrypt(
+      `client-alias:${client.id}`,
+      client.encryptedAlias,
+      {
+        table: "clients",
+        id: client.id,
+      },
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -230,8 +237,10 @@
     if (sheetClientId === null) return null;
     const detail = clientDetailQuery.data;
     const alias = detail
-      ? (orgCache.decrypt(`client-alias:${detail.id}`, detail.encryptedAlias) ??
-        "")
+      ? (orgCache.decrypt(`client-alias:${detail.id}`, detail.encryptedAlias, {
+          table: "clients",
+          id: detail.id,
+        }) ?? "")
       : "";
     return { id: sheetClientId, alias };
   });
@@ -276,7 +285,14 @@
   const detailDecryptedAlias = $derived.by((): string | null => {
     const detail = clientDetailQuery.data;
     if (!detail) return null;
-    return orgCache.decrypt(`client-alias:${detail.id}`, detail.encryptedAlias);
+    return orgCache.decrypt(
+      `client-alias:${detail.id}`,
+      detail.encryptedAlias,
+      {
+        table: "clients",
+        id: detail.id,
+      },
+    );
   });
 
   // When detail data loads and alias decrypts, seed the edit field.
@@ -351,6 +367,7 @@
       : orgCache.decrypt(
           `client-alias:${phoneConflict.conflictingClientId}`,
           phoneConflict.conflictingClientEncryptedAlias,
+          { table: "clients", id: phoneConflict.conflictingClientId },
         ),
   );
 

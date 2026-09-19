@@ -80,6 +80,7 @@ interface ResealTableSpec {
     currentGen: number,
     limit: number,
     excludeIds: readonly (string | number)[],
+    onlyIds: readonly (string | number)[] | undefined,
   ): Promise<ResealPendingRow[]>;
   resealRow(
     tx: Transaction<TenantDatabase>,
@@ -106,7 +107,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("queues")
         .select(["id", "encrypted_name", "encrypted_color", "encrypted_icon"])
@@ -118,6 +120,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => queueIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => queueIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -164,7 +173,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("note_types")
         .select([
@@ -181,6 +191,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => noteTypeIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => noteTypeIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -226,7 +243,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("kb_categories")
         .select(["id", "encrypted_name", "encrypted_description"])
@@ -238,6 +256,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => kbCategoryIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => kbCategoryIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -279,7 +304,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("kb_items")
         .select([
@@ -296,6 +322,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => kbItemIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => kbItemIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -341,7 +374,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("kb_attachments")
         .select(["id", "encrypted_filename"])
@@ -353,6 +387,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => kbAttachmentIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => kbAttachmentIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -389,7 +430,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("preset_replies")
         .select(["id", "encrypted_title", "encrypted_body"])
@@ -401,6 +443,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => presetReplyIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => presetReplyIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -441,7 +490,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("clients")
         .select(["id", "encrypted_alias"])
@@ -453,6 +503,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => clientIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => clientIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -493,7 +550,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("users")
         .select([
@@ -510,6 +568,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => userIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => userIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -555,7 +620,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("sessions")
         .select(["id", "encrypted_ip_address", "encrypted_user_agent"])
@@ -567,6 +633,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => sessionIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => sessionIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -607,7 +680,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("org_config")
         .select(["id", "encrypted_terminology"])
@@ -619,6 +693,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => orgConfigIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => orgConfigIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -655,7 +736,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("merge_candidate_dismissals")
         .select(["id", "encrypted_dismissals"])
@@ -668,6 +750,14 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => Number(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        // merge_candidate_dismissals.id is a plain number, no branded schema
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => Number(v)),
         );
       }
       const rows = await q.execute();
@@ -706,7 +796,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("consultants")
         .select(["id", "encrypted_phone"])
@@ -718,6 +809,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => consultantIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => consultantIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -754,7 +852,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("phone_blocklist")
         .select(["id", "encrypted_number"])
@@ -766,6 +865,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => phoneBlocklistIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => phoneBlocklistIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -802,7 +908,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("invite_tokens")
         .select(["id", "encrypted_token", "encrypted_email"])
@@ -814,6 +921,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => inviteTokenIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => inviteTokenIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -855,7 +969,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("voicemail_quarantine")
         .select(["id", "encrypted_caller_number", "encrypted_called_number"])
@@ -867,6 +982,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => voicemailQuarantineIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => voicemailQuarantineIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -908,7 +1030,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("phones")
         .select(["id", "encrypted_number"])
@@ -920,6 +1043,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => phoneIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => phoneIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -956,8 +1086,9 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
       // intake_key_wraps keys on ticket_id, not id
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("intake_key_wraps")
         .select(["ticket_id", "wrapped_tk"])
@@ -969,6 +1100,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "ticket_id",
           "not in",
           excludeIds.map((v) => ticketIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "ticket_id",
+          "in",
+          onlyIds.map((v) => ticketIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -1006,8 +1144,9 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
       // portal_reply_key_wraps keys on followup_id, not id
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("portal_reply_key_wraps")
         .select(["followup_id", "wrapped_tk"])
@@ -1019,6 +1158,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "followup_id",
           "not in",
           excludeIds.map((v) => followupIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "followup_id",
+          "in",
+          onlyIds.map((v) => followupIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -1056,7 +1202,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("intake_forms")
         .select(["id", "encrypted_form_meta"])
@@ -1068,6 +1215,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => intakeFormIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => intakeFormIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -1104,7 +1258,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("intake_form_fields")
         .select(["id", "encrypted_label", "encrypted_config"])
@@ -1116,6 +1271,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => intakeFormFieldIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => intakeFormFieldIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -1156,7 +1318,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
         .executeTakeFirstOrThrow();
       return toCount(r);
     },
-    fetchPending: async (db, gen, limit, excludeIds) => {
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("client_merge_events")
         .select(["id", "snapshot"])
@@ -1168,6 +1331,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           "id",
           "not in",
           excludeIds.map((v) => clientMergeEventIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => clientMergeEventIdSchema.parse(v)),
         );
       }
       const rows = await q.execute();
@@ -1690,6 +1860,7 @@ export interface ResealPendingInput {
   readonly table: ResealTableName;
   readonly limit: number;
   readonly excludeIds: readonly (string | number)[];
+  readonly onlyIds?: readonly (string | number)[];
 }
 
 export interface ResealPendingResult {
@@ -1803,6 +1974,7 @@ export function createOrgResealService(
         currentGen,
         input.limit,
         input.excludeIds,
+        input.onlyIds,
       );
       return { currentGeneration: currentGen, rows };
     },

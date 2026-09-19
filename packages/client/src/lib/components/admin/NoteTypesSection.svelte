@@ -255,13 +255,20 @@
     encryptedDescription: string | null;
   }): void {
     editingType = { id: nt.id, escalationTargets: nt.escalationTargets };
-    editName = orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? "";
+    const ntOrigin = { table: "note_types" as const, id: nt.id };
+    editName =
+      orgCache.decrypt(nt.id + ":name", nt.encryptedName, ntOrigin) ?? "";
     editIcon =
-      orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon) ?? "sticky-note";
+      orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon, ntOrigin) ??
+      "sticky-note";
     editDescription =
       nt.encryptedDescription === null
         ? ""
-        : (orgCache.decrypt(nt.id + ":desc", nt.encryptedDescription) ?? "");
+        : (orgCache.decrypt(
+            nt.id + ":desc",
+            nt.encryptedDescription,
+            ntOrigin,
+          ) ?? "");
     editEscalateAdmin = nt.escalationTargets.some(
       (t) => t.type === "role" && t.value === "admin",
     );
@@ -382,8 +389,9 @@
       <p class="section-desc">{m.admin_note_types_description(withTerms())}</p>
       <h4 class="fut-group-label">{m.admin_note_types_group_configurable()}</h4>
       {#each noteTypesQuery.data as nt (nt.id)}
+        {@const ntOrigin = { table: "note_types" as const, id: nt.id }}
         {@const Icon = resolveNoteTypeIcon(
-          orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon),
+          orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon, ntOrigin),
         )}
         {@const gating = roleGatingSummary(nt.minViewRole, nt.minCreateRole)}
         <button
@@ -397,7 +405,11 @@
             <span class="fut-row-text">
               <span class="fut-row-name">
                 <DecryptPlaceholder
-                  content={orgCache.decrypt(nt.id + ":name", nt.encryptedName)}
+                  content={orgCache.decrypt(
+                    nt.id + ":name",
+                    nt.encryptedName,
+                    ntOrigin,
+                  )}
                   length={12}
                 />
                 {#if !nt.isActive}
@@ -415,6 +427,7 @@
                 {@const desc = orgCache.decrypt(
                   nt.id + ":desc",
                   nt.encryptedDescription,
+                  ntOrigin,
                 )}
                 {#if desc}
                   <span class="fut-row-desc">{desc}</span>

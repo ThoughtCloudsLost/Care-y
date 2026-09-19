@@ -337,6 +337,7 @@
         clientAlias: orgCache.decrypt(
           `client-alias:${t.clientId}`,
           t.encryptedClientAlias,
+          { table: "clients", id: t.clientId },
         ),
       })),
     getPreviewFollowUps: (id) => previewLoader.get(id),
@@ -412,8 +413,12 @@
       clientAlias: orgCache.decrypt(
         `client-alias:${a.clientId}`,
         a.encryptedClientAlias,
+        { table: "clients", id: a.clientId },
       ),
-      queueName: orgCache.decrypt(`queue:${a.queueId}`, a.encryptedQueueName),
+      queueName: orgCache.decrypt(`queue:${a.queueId}`, a.encryptedQueueName, {
+        table: "queues",
+        id: a.queueId,
+      }),
     })),
   );
 
@@ -421,14 +426,20 @@
     (kbQuery.data ?? []).map((item) => ({
       ...item,
       decryptedTitle:
-        orgCache.decrypt(`kb:${item.id}`, item.encryptedTitle) ?? undefined,
+        orgCache.decrypt(`kb:${item.id}`, item.encryptedTitle, {
+          table: "kb_items",
+          id: item.id,
+        }) ?? undefined,
     })),
   );
 
   const queueProps = $derived(
     (queuesQuery.data ?? []).map((q) => ({
       id: q.id,
-      name: orgCache.decrypt(`queue:${q.id}`, q.encryptedName),
+      name: orgCache.decrypt(`queue:${q.id}`, q.encryptedName, {
+        table: "queues",
+        id: q.id,
+      }),
       openCount: Number(q.openCount),
       urgentCount: Number(q.urgentCount),
       appearance: decryptQueueAppearance(orgCache, q),
@@ -466,8 +477,12 @@
 
   const cardMapper = $derived(
     createCardPropsMapper({
-      orgDecrypt: (cacheKey) =>
-        orgCache.decrypt(cacheKey, orgCipherByKey.get(cacheKey) ?? null),
+      orgDecrypt: (cacheKey, _ciphertext, origin) =>
+        orgCache.decrypt(
+          cacheKey,
+          orgCipherByKey.get(cacheKey) ?? null,
+          origin,
+        ),
       queueAppearance: (queueId) => queueAppearanceById.get(queueId),
       decryptTitle: (ticketId) => {
         const t = ticketById.get(ticketId);
@@ -579,6 +594,7 @@
     return orgCache.decrypt(
       `client-alias:${clientId}`,
       ticket.encryptedClientAlias,
+      { table: "clients", id: clientId },
     );
   }
 

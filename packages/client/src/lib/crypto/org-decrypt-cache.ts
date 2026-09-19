@@ -18,6 +18,13 @@ import { DECRYPT_ERROR_SENTINEL } from "./async-decrypt-cache.js";
 import { cacheRegistry } from "./cache-registry.js";
 import type { OrgKeyManager } from "./org-key.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import type { ResealTableName } from "@care-y/shared";
+
+/** Identifies a specific row for targeted reseal after a stale-generation read. */
+export interface ResealOrigin {
+  readonly table: ResealTableName;
+  readonly id: string | number;
+}
 
 export class OrgDecryptCache {
   private readonly cache = cacheRegistry.createMap<string, string>(
@@ -26,7 +33,22 @@ export class OrgDecryptCache {
   private readonly manager: OrgKeyManager;
   private readonly bridge: CryptoBridge;
   private readonly pending = new Set<string>();
-  private readonly batchQueue = new Map<string, string>();
+  private readonly batchQueue = new Map<
+    string,
+    { ciphertext: string; origin?: ResealOrigin }
+  >();
+
+  /**
+   * Sink invoked after a batch decrypt with per-item origin and generation.
+   * The cache reports ALL successes that carried an origin; the sink
+   * filters to stale generations. A throwing sink must never affect
+   * decryption.
+   */
+  staleReadSink:
+    | ((
+        reports: readonly { origin: ResealOrigin; generation: number }[],
+      ) => void)
+    | null = null;
   private batchScheduled = false;
   private settledResolvers: (() => void)[] = [];
   private readonly retryCount = new Map<string, number>();
@@ -49,7 +71,11 @@ export class OrgDecryptCache {
    * @param id   Unique key for caching (e.g., kb item ID, user ID)
    * @param data Encrypted ciphertext as base64 string
    */
-  decrypt(id: string, data: string | null): string | null {
+  decrypt(
+    id: string,
+    data: string | null,
+    origin?: ResealOrigin,
+  ): string | null {
     if (data === null || data === "") return null;
 
     const cached = this.cache.get(id);
@@ -62,7 +88,7 @@ export class OrgDecryptCache {
     if (!this.manager.isLoaded) return null;
 
     this.pending.add(id);
-    this.batchQueue.set(id, data);
+    this.batchQueue.set(id, { ciphertext: data, origin });
     this.scheduleBatch();
 
     return null;
@@ -106,7 +132,11 @@ export class OrgDecryptCache {
    * Use this in async functions like KB search `loadAll()` where the caller
    * needs the value immediately and won't re-run on cache updates.
    */
-  async decryptAsync(id: string, data: string | null): Promise<string | null> {
+  async decryptAsync(
+    id: string,
+    data: string | null,
+    origin?: ResealOrigin,
+  ): Promise<string | null> {
     if (data === null || data === "") return null;
 
     const cached = this.cache.get(id);
@@ -124,6 +154,9 @@ export class OrgDecryptCache {
       if (result?.plaintext !== null && result?.plaintext !== undefined) {
         // care-y-ignore-next-line no-plaintext-db-write -- SvelteMap in-memory cache, not a DB write
         this.cache.set(id, result.plaintext);
+        if (origin != null && result.generation != null) {
+          this.invokeSink([{ origin, generation: result.generation }]);
+        }
         return result.plaintext;
       }
       // care-y-ignore-next-line no-plaintext-db-write -- SvelteMap in-memory cache, not a DB write
@@ -165,9 +198,14 @@ export class OrgDecryptCache {
   private async flushBatch(): Promise<void> {
     this.batchScheduled = false;
 
-    const items = Array.from(this.batchQueue.entries()).map(
-      ([cacheKey, ciphertext]) => ({ cacheKey, ciphertext }),
-    );
+    const queued = Array.from(this.batchQueue.entries());
+    const originByKey = new Map<string, ResealOrigin>();
+    const items = queued.map(([cacheKey, entry]) => {
+      if (entry.origin != null) {
+        originByKey.set(cacheKey, entry.origin);
+      }
+      return { cacheKey, ciphertext: entry.ciphertext };
+    });
     this.batchQueue.clear();
 
     if (items.length === 0) {
@@ -178,17 +216,25 @@ export class OrgDecryptCache {
     try {
       const results = await this.bridge.orgDecryptBatch(items);
 
-      for (const { cacheKey, plaintext } of results) {
+      const staleReports: { origin: ResealOrigin; generation: number }[] = [];
+
+      for (const { cacheKey, plaintext, generation } of results) {
         this.pending.delete(cacheKey);
         this.retryCount.delete(cacheKey);
         if (plaintext !== null) {
           // care-y-ignore-next-line no-plaintext-db-write -- SvelteMap in-memory cache, not a DB write
           untrack(() => this.cache.set(cacheKey, plaintext));
+          const origin = originByKey.get(cacheKey);
+          if (origin != null && generation != null) {
+            staleReports.push({ origin, generation });
+          }
         } else {
           // care-y-ignore-next-line no-plaintext-db-write -- SvelteMap in-memory cache, not a DB write
           untrack(() => this.cache.set(cacheKey, DECRYPT_ERROR_SENTINEL));
         }
       }
+
+      this.invokeSink(staleReports);
     } catch {
       for (const { cacheKey } of items) {
         const count = (this.retryCount.get(cacheKey) ?? 0) + 1;
@@ -205,6 +251,18 @@ export class OrgDecryptCache {
     }
 
     this.resolveSettled();
+  }
+
+  /** Invoke the stale-read sink if set and reports are non-empty. Swallows errors. */
+  private invokeSink(
+    reports: readonly { origin: ResealOrigin; generation: number }[],
+  ): void {
+    if (reports.length === 0 || this.staleReadSink == null) return;
+    try {
+      this.staleReadSink(reports);
+    } catch {
+      // Sink failures must never affect decryption.
+    }
   }
 
   private resolveSettled(): void {

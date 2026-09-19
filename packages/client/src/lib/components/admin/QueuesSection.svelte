@@ -88,15 +88,20 @@
 
   function decryptQueueName(queue: QueueRecord): string {
     return (
-      orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName) ??
-      queue.id.slice(0, 8)
+      orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName, {
+        table: "queues",
+        id: queue.id,
+      }) ?? queue.id.slice(0, 8)
     );
   }
 
   function decryptUserName(userId: string): string | null {
     const user = userMap.get(userId);
     if (!user) return null;
-    return orgCache.decrypt(`user:${userId}`, user.encryptedDisplayName);
+    return orgCache.decrypt(`user:${userId}`, user.encryptedDisplayName, {
+      table: "users",
+      id: userId,
+    });
   }
 
   // ── Queue members via createQueries (one query per queue) ──

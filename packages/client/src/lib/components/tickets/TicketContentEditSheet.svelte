@@ -80,8 +80,10 @@
       // Same fallback the timeline and the picker sheet use, so an
       // undecryptable queue reads the same wherever it appears.
       name:
-        orgCache.decrypt(`queue:${q.id}`, q.encryptedName) ??
-        m.ticket_system_queue_fallback(withTerms()),
+        orgCache.decrypt(`queue:${q.id}`, q.encryptedName, {
+          table: "queues",
+          id: q.id,
+        }) ?? m.ticket_system_queue_fallback(withTerms()),
       appearance: decryptQueueAppearance(orgCache, q),
     })),
   );
