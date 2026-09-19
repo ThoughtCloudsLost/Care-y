@@ -90,6 +90,9 @@ export interface ResealSummary {
 
 export interface ResealDeps {
   readonly bridge: CryptoBridge;
+  /** Awaited between batches so background sweeps yield to the UI.
+   *  The inline rotation pass omits it. */
+  readonly pace?: () => Promise<void>;
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -317,6 +320,7 @@ export async function resealTables(
 
       done += pending.rows.length;
       onProgress?.({ table, done, total });
+      await deps.pace?.();
     }
   }
 
@@ -419,6 +423,7 @@ export async function reindexViewerTables(
       skippedIds.push(...batchSkippedIds);
       done += result.rows.length;
       onProgress?.({ table: "phones (index)", done, total });
+      await deps.pace?.();
     }
   }
 
@@ -485,6 +490,7 @@ export async function reindexViewerTables(
       skippedIds.push(...batchSkippedIds);
       done += result.rows.length;
       onProgress?.({ table: "emails (index)", done, total });
+      await deps.pace?.();
     }
   }
 
@@ -562,6 +568,7 @@ export async function reindexViewerTables(
       skippedIds.push(...batchSkippedIds);
       done += result.rows.length;
       onProgress?.({ table: "clients (index)", done, total });
+      await deps.pace?.();
     }
   }
 
@@ -706,6 +713,7 @@ export async function resealBlobTables(
 
       done += pending.rows.length;
       onProgress?.({ table, done, total });
+      await deps.pace?.();
     }
   }
 
@@ -857,6 +865,7 @@ export async function resealBrandingClasses(
       skippedIds.push(...batchSkippedIds);
       done += pending.rows.length;
       onProgress?.({ table: `${table} (branding)`, done, total });
+      await deps.pace?.();
     }
   }
 
@@ -921,6 +930,7 @@ export async function resealBrandingClasses(
         done: assetDone,
         total: formAssets.length,
       });
+      await deps.pace?.();
     }
   }
 

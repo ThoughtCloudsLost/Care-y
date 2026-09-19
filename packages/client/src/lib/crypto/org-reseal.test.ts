@@ -490,6 +490,57 @@ describe("org-reseal", () => {
       expect(secondCall[0].excludeIds).toContain("bad-row");
     });
 
+    it("awaits deps.pace between batches when provided", async () => {
+      const bridge = createMockBridge();
+      const paceCalls: number[] = [];
+      let paceCallCount = 0;
+
+      const pace = vi.fn(async (): Promise<void> => {
+        paceCallCount++;
+        paceCalls.push(paceCallCount);
+      });
+
+      // Two batches for one table: first returns rows, second returns empty
+      mockResealPending
+        .mockResolvedValueOnce({
+          currentGeneration: 2,
+          rows: [{ id: "r1", columns: { encrypted_name: "ct1" } }],
+        })
+        .mockResolvedValueOnce({
+          currentGeneration: 2,
+          rows: [{ id: "r2", columns: { encrypted_name: "ct2" } }],
+        })
+        .mockResolvedValueOnce({
+          currentGeneration: 2,
+          rows: [],
+        });
+
+      bridge.orgResealBatch
+        .mockResolvedValueOnce([
+          {
+            cacheKey: "r1::encrypted_name",
+            resealed: "new-ct1",
+            fromGeneration: 1,
+            indexHash: null,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            cacheKey: "r2::encrypted_name",
+            resealed: "new-ct2",
+            fromGeneration: 1,
+            indexHash: null,
+          },
+        ]);
+
+      mockResealRows.mockResolvedValue({ resealed: 1, skipped: 0 });
+
+      await resealTables({ bridge: asBridge(bridge), pace }, ["queues"]);
+
+      // pace should have been called once per batch (2 batches)
+      expect(pace).toHaveBeenCalledTimes(2);
+    });
+
     it("stops the loop when skipped ids reach the excludeIds cap", async () => {
       const bridge = createMockBridge();
 

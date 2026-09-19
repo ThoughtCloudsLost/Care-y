@@ -27,6 +27,7 @@
     RED_TIER_TABLES,
     type ResealProgress,
   } from "$lib/crypto/org-reseal.js";
+  import { resealSweep } from "$lib/crypto/reseal-sweep.svelte.js";
 
   // "resealing" runs after the server swap has already succeeded. If the
   // browser dies anywhere in that phase nothing is lost: the generation
@@ -187,6 +188,10 @@
         await runInlineReseal();
 
         rotationPhase = "done";
+
+        // Red tier ran inline; trailing tier continues under the shell banner.
+        void resealSweep.checkAndResume(bridge);
+
         haptic();
         toastStore.show(m.admin_key_rotated());
         announceToLiveRegion("assertive", m.admin_key_rotated());

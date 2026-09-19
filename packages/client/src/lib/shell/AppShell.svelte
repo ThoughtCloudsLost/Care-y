@@ -59,6 +59,8 @@
   import DesktopSidebar from "./DesktopSidebar.svelte";
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte";
   import { kbSavedFilterStore } from "$lib/stores/kb-saved-filters.svelte";
+  import { resealSweep } from "$lib/crypto/reseal-sweep.svelte.js";
+  import Register from "$lib/components/Register.svelte";
   import { providePTR } from "./ptr-context.svelte.js";
   import { splitNavbar } from "$lib/stores/split-navbar.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
@@ -105,6 +107,7 @@
     getTicketDecryptCache,
     getOrgDecryptCache,
     getCryptoBridge,
+    getOrgKeyManager,
     getCurrentUserId,
     getCurrentUserRoleId,
     getCurrentPermissions,
@@ -944,6 +947,32 @@
     };
   });
 
+  // ── Trailing-tier reseal auto-resume (MANAGE_KEYS only) ──────────────
+  // getOrgKeyManager is a Svelte context getter; safe to call here since
+  // AppShell always renders inside the (app) layout.
+  const _orgKeyMgr = browser ? getOrgKeyManager() : null;
+
+  $effect(() => {
+    if (!browser || _orgKeyMgr == null) return;
+    if (!_orgKeyMgr.isLoaded) return;
+    if (!currentPermissions.has(Permission.MANAGE_KEYS)) return;
+    const bridge = getCryptoBridge();
+    void resealSweep.autoResumeOnce(bridge);
+  });
+
+  // ── Device-local saved-filter name reseal (all users) ──────────────
+  let _filterResealDone = false;
+
+  $effect(() => {
+    if (!browser || _orgKeyMgr == null) return;
+    if (!_orgKeyMgr.isLoaded) return;
+    if (_filterResealDone) return;
+    _filterResealDone = true;
+    const bridge = getCryptoBridge();
+    void savedFilterStore.resealNames(bridge);
+    void kbSavedFilterStore.resealNames(bridge);
+  });
+
   // ── iOS arc indicator helpers ────────────────────────────────────────
 
   const ARC_R = 11; // SVG circle radius
@@ -1174,6 +1203,17 @@
         </div>
       {/if}
     {/snippet}
+
+    {#if resealSweep.running}
+      <div class="reseal-banner" data-testid="reseal-banner">
+        <Register kind="note" role="status">
+          {m.reseal_banner_progress({
+            done: String(resealSweep.done),
+            total: String(resealSweep.total),
+          })}
+        </Register>
+      </div>
+    {/if}
 
     {@render children()}
 
@@ -1560,6 +1600,17 @@
     .ptr-releasing .ptr-spinner {
       animation: none;
     }
+  }
+
+  /* ── Reseal banner ─────────────────────────────────────────────── */
+
+  .reseal-banner {
+    position: sticky;
+    top: var(--navbar-h, 0px);
+    z-index: 5;
+    margin-bottom: var(--space-xs);
+    background: var(--paper, inherit);
+    padding: 0 var(--space-md);
   }
 
   /* Search sheet: fill from bottom up to the Navbar */

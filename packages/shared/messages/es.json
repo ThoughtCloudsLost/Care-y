@@ -3271,5 +3271,9 @@
   "demo_github_link_label": "Ver codigo fuente en GitHub",
   "demo_handbook_search_open": "Buscar en el manual",
   "demo_search_results_title": "Resultados de la búsqueda",
-  "demo_search_results_desc": "Las entradas que coinciden, mostradas tal como se leen en el manual."
+  "demo_search_results_desc": "Las entradas que coinciden, mostradas tal como se leen en el manual.",
+  "reseal_banner_progress": "Finalizando la actualización de claves: {done} de {total} elementos. Puedes seguir trabajando; deja la aplicación abierta si puedes.",
+  "admin_keys_reseal_ok": "Todos los registros usan la clave actual.",
+  "admin_keys_reseal_pending": "{count} registros pendientes de recifrado.",
+  "admin_keys_reseal_resume": "Reanudar"
 }

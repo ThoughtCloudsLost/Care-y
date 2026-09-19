@@ -7,7 +7,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 const en_demo_narrative_topic_twofa_email_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Email_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`A six-digit code is sent to the email address on file. It expires after five minutes and is deleted after three incorrect attempts.
-**What the server holds.** The email address is stored under the server's operational encryption rather than end-to-end encryption. This is a deliberate exception: the server must be able to read the address in order to send the code.
+**What the server holds.** The email address is stored under the server's operational encryption rather than end-to-end encryption. This is a deliberate exception: the server must be able to read the address to send the code.
 **Security tradeoff.** The security of this method matches the security of the mailbox.`)
 };
 
