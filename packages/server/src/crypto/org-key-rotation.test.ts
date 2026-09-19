@@ -278,5 +278,42 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgKeyRotationService", () => {
         .execute();
       expect(wrapRows).toHaveLength(0);
     });
+
+    it("rotation leaves org-sealed rows untouched", async () => {
+      // Rotation writes the new generation row and updates org_config,
+      // but must not touch any existing org-sealed ciphertext. The
+      // reseal sweep handles re-encryption separately.
+      const originalCiphertext = crypto.randomBytes(16);
+
+      const queue = await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: originalCiphertext,
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      await service.rotateOrgKey(makeRotationInput({ newGeneration: 2 }));
+
+      // The queue row's ciphertext and generation stamp must be byte-for-byte unchanged
+      const row = await testDb.db
+        .selectFrom("queues")
+        .select(["encrypted_name", "org_key_generation"])
+        .where("id", "=", queue.id)
+        .executeTakeFirstOrThrow();
+
+      expect(row.org_key_generation).toBe(1);
+      expect(Buffer.compare(row.encrypted_name, originalCiphertext)).toBe(0);
+
+      // The new generation row was inserted
+      const genRows = await testDb.db
+        .selectFrom("org_key_generations")
+        .selectAll()
+        .execute();
+      expect(genRows).toHaveLength(1);
+      expect(genRows[0]!.generation).toBe(2);
+    });
   });
 });

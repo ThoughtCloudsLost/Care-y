@@ -1298,6 +1298,96 @@ describe("crypto-core org key generation chain", () => {
     sodium.memzero(gen2Secret);
     sodium.memzero(gen3Secret);
   });
+
+  it("old secret alone cannot decrypt post-rotation ciphertext", async () => {
+    const sodium = requireSodium();
+    const gen1Secret = sodium.randombytes_buf(32);
+    const gen3Secret = sodium.randombytes_buf(32);
+
+    const gen3Pub = sodium.crypto_scalarmult_base(gen3Secret);
+
+    // Load ONLY generation 1 (no chain, no awareness of gen3)
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(gen1Secret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_600,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
+    });
+    sinkMessages = [];
+
+    // Seal a blob under the gen-3 public key (post-rotation ciphertext)
+    const postRotationCt = sodium.crypto_box_seal(
+      new TextEncoder().encode("post-rotation data"),
+      gen3Pub,
+    );
+
+    // orgDecrypt must fail: gen1 secret cannot open gen3 ciphertext
+    const resp = await dispatchAndWait({
+      type: "orgDecrypt",
+      id: 10_601,
+      ciphertext: encode(postRotationCt),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen3Secret);
+  });
+
+  it("decrypts a blob sealed under an older generation than its row stamp", async () => {
+    // Intake race skew: an intake page racing a rotation submits gen-N
+    // ciphertext that the server stamps N+1. The stamp is tolerated skew;
+    // the chain try-open is authoritative and never consults it.
+    const sodium = requireSodium();
+    const { currentSecret, gen1Secret, gen2Secret, chain } =
+      buildThreeGenerationChain(sodium);
+
+    const gen2Pub = sodium.crypto_scalarmult_base(gen2Secret);
+
+    // Seal content under gen2's public key (simulating intake race)
+    const plaintext = new TextEncoder().encode("intake race payload");
+    const gen2Ciphertext = sodium.crypto_box_seal(plaintext, gen2Pub);
+
+    // Load the full 3-generation chain as current
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(currentSecret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_700,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 3,
+      chain,
+    });
+    sinkMessages = [];
+
+    // The worker never sees row stamps; it tries all generations in
+    // the chain. A blob sealed under gen2 must decrypt via chain walk
+    // regardless of what the server stamped the row as.
+    const decResp = (await dispatchAndWait({
+      type: "orgDecrypt",
+      id: 10_701,
+      ciphertext: encode(gen2Ciphertext),
+    })) as OrgDecryptResponse;
+
+    expect(decResp.ok).toBe(true);
+    expect(new TextDecoder().decode(decode(decResp.plaintext))).toBe(
+      "intake race payload",
+    );
+
+    sodium.memzero(currentSecret);
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+  });
 });
 
 describe("crypto-core unwrapTk", () => {
@@ -5252,6 +5342,116 @@ describe("crypto-core detectMergeCandidates", () => {
     expect(resp.candidates).toHaveLength(0);
 
     sodium.memzero(tk);
+  });
+
+  it("merge scan finds the duplicate pair after rotation re-derives hashes", async () => {
+    const sodium = requireSodium();
+
+    // --- Session 1: login with gen1 as current, derive a phone hash ---
+    const gen1Secret = sodium.randombytes_buf(32);
+    const gen1Pub = sodium.crypto_scalarmult_base(gen1Secret);
+
+    const volPub1 = decode(volPublicStr) as RistrettoPoint;
+    const wrap1 = eciesEncrypt(gen1Secret, volPub1);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 8200,
+      ephemeralPoint: encode(wrap1.ephemeralPoint),
+      nonce: encode(wrap1.nonce),
+      wrappedOrgKey: encode(wrap1.ciphertext),
+      currentGeneration: 1,
+      chain: [],
+    });
+    sinkMessages = [];
+
+    const staleHash = await phoneMatchHashVia("+12125550200", 8201);
+
+    // --- Reset state (simulate logout) ---
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const salt2 = sodium.randombytes_buf(16);
+    const result2 = await loginFlow("merge-gen-rotate-pw", salt2);
+    sinkMessages = [];
+
+    // --- Session 2: login with gen3 current + full chain ---
+    const gen2Secret = sodium.randombytes_buf(32);
+    const gen3Secret = sodium.randombytes_buf(32);
+    const seal2 = sealPrevGeneration(gen1Secret, gen2Secret);
+    const seal3 = sealPrevGeneration(gen2Secret, gen3Secret);
+    const gen2Pub = sodium.crypto_scalarmult_base(gen2Secret);
+    const gen3Pub = sodium.crypto_scalarmult_base(gen3Secret);
+
+    const chain = [
+      {
+        generation: 3,
+        publicKey: encode(gen3Pub),
+        prevSecretCt: encode(seal3.ciphertext),
+        prevNonce: encode(seal3.nonce),
+      },
+      {
+        generation: 2,
+        publicKey: encode(gen2Pub),
+        prevSecretCt: encode(seal2.ciphertext),
+        prevNonce: encode(seal2.nonce),
+      },
+      {
+        generation: 1,
+        publicKey: encode(gen1Pub),
+        prevSecretCt: null,
+        prevNonce: null,
+      },
+    ];
+
+    const volPub2 = decode(result2.volPublic) as RistrettoPoint;
+    const wrap2 = eciesEncrypt(gen3Secret, volPub2);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 8210,
+      ephemeralPoint: encode(wrap2.ephemeralPoint),
+      nonce: encode(wrap2.nonce),
+      wrappedOrgKey: encode(wrap2.ciphertext),
+      currentGeneration: 3,
+      chain,
+    });
+    sinkMessages = [];
+
+    const freshHash = await phoneMatchHashVia("+12125550200", 8211);
+
+    // Stale hashes go dark: different org secret produces a different hash,
+    // so a stale hash can never false-match against a current one.
+    expect(freshHash).not.toBe(staleHash);
+
+    // Two clients whose hashes were both derived under the current (gen-3)
+    // secret are detected as merge candidates.
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8212,
+      clients: [
+        {
+          clientId: "client-rotated-a",
+          phoneMatchHash: freshHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "client-rotated-b",
+          phoneMatchHash: freshHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(1);
+    expect(resp.candidates[0]!.matchKind).toBe("phone");
+
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+    sodium.memzero(gen3Secret);
   });
 });
 

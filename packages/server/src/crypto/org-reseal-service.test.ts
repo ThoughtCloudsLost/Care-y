@@ -15,7 +15,9 @@ import type {
   EmailId,
   EmailHash,
   KeyGeneration,
+  ResealTableName,
 } from "@care-y/shared";
+import { RESEAL_TABLE_NAMES } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("OrgResealService", () => {
   let testDb: TestDb;
@@ -290,6 +292,39 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgResealService", () => {
 
       expect(row1.org_key_generation).toBe(1);
       expect(Buffer.compare(row1.encrypted_name, oldCiphertext)).toBe(0);
+    });
+
+    it("rejects a table name outside the closed enum with ValidationError", async () => {
+      const queue = await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      await expect(
+        service.resealRows({
+          table: "not_a_table" as ResealTableName,
+          rows: [
+            {
+              id: queue.id,
+              columns: { encrypted_name: crypto.randomBytes(16) },
+            },
+          ],
+          skippedIds: [],
+        }),
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("resealStatus returns one counts row per RESEAL_TABLE_NAMES entry", async () => {
+      const status = await service.resealStatus();
+
+      const tableNames = status.tables.map((t) => t.table).sort();
+      const expected = [...RESEAL_TABLE_NAMES].sort();
+      expect(tableNames).toEqual(expected);
     });
 
     it("throws ValidationError for unknown column name", async () => {
@@ -1016,6 +1051,30 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgResealService", () => {
         onlyIds: [],
       });
 
+      expect(result.rows).toHaveLength(0);
+    });
+
+    it("does not return rows already stamped at the current generation even if their ciphertext is older", async () => {
+      // Intake race: the intake page was encrypting under gen-N while the
+      // server just rotated to N+1 and stamped the row as N+1. Such rows
+      // are deliberately invisible to the sweep and stay readable via the
+      // chain try-open on the client.
+      await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 1,
+          org_key_generation: 2, // stamped at current generation
+        })
+        .execute();
+
+      const result = await service.resealPending({
+        table: "queues",
+        limit: 40,
+        excludeIds: [],
+      });
+
+      expect(result.currentGeneration).toBe(2);
       expect(result.rows).toHaveLength(0);
     });
   });

@@ -204,6 +204,54 @@ describe("resealSweep", () => {
     expect(resealSweep.lastError).toBe("network timeout");
   });
 
+  it("resumes after a mid-sweep failure and converges to zero", async () => {
+    const bridge = createMockBridge();
+
+    // First pass: engine rejects mid-way, leaving pending work behind
+    mockResealStatus.mockResolvedValue(statusWithPending(5, 0));
+    mockResealTables.mockRejectedValueOnce(new Error("mid-sweep crash"));
+
+    await resealSweep.start(bridge);
+
+    expect(resealSweep.running).toBe(false);
+    expect(resealSweep.lastError).toBe("mid-sweep crash");
+    // pendingTotal keeps its last-known value on failure; the crashed
+    // run never completed a status round trip, so it is still null.
+    expect(resealSweep.pendingTotal).toBeNull();
+
+    // Simulate next login: vi.resetModules + re-import (fresh singleton)
+    vi.resetModules();
+
+    // Re-apply mocks: engine now succeeds, status reports zero after the run
+    mockResealTables.mockResolvedValue({
+      resealed: 0,
+      skipped: 0,
+      reindexed: 0,
+    });
+    mockResealBlobTables.mockResolvedValue({ resealed: 0, skipped: 0 });
+    mockResealBrandingClasses.mockResolvedValue({ resealed: 0, skipped: 0 });
+    mockReindexViewerTables.mockResolvedValue({
+      reindexed: 0,
+      indexPendingTables: [],
+    });
+
+    // checkAndResume queries status first (pending > 0), then start queries
+    // it again internally, then a final status after the run shows zero.
+    mockResealStatus
+      .mockResolvedValueOnce(statusWithPending(3, 0))
+      .mockResolvedValueOnce(statusWithPending(3, 0))
+      .mockResolvedValueOnce(statusWithPending(0, 0));
+
+    const mod2 = await import("./reseal-sweep.svelte.js");
+    const freshSweep = mod2.resealSweep;
+
+    await freshSweep.checkAndResume(bridge);
+
+    // The engine ran on the fresh singleton
+    expect(mockResealTables).toHaveBeenCalled();
+    expect(freshSweep.pendingTotal).toBe(0);
+  });
+
   describe("reportStaleReads", () => {
     it("drops reports with generation >= currentGeneration", async () => {
       const bridge = createMockBridge();
