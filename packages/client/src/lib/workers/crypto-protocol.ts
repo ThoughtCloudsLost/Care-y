@@ -256,6 +256,8 @@ export interface OrgResealBatchRequest {
   readonly items: readonly {
     readonly cacheKey: string;
     readonly ciphertext: string;
+    /** When set, compute a blind-index hash from the decrypted plaintext. */
+    readonly index?: "alias" | "phone" | "email";
   }[];
 }
 
@@ -931,6 +933,8 @@ export interface OrgResealBatchResponse extends SuccessBase {
     readonly resealed: string | null;
     /** Which generation opened the original ciphertext, or null on failure. */
     readonly fromGeneration: number | null;
+    /** Blind-index hash of the plaintext, or null when not requested, on decrypt failure, or when the normalizer returns null. */
+    readonly indexHash: string | null;
   }[];
 }
 

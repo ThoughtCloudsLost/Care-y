@@ -638,6 +638,7 @@ const appRouter = createAppRouter({
     totpReplayCache,
   },
   oprfDeps: { oprfService },
+  keysDeps: { fieldEncryptor: encryptor, blobStore },
   orgService,
   providerFactory,
   // Both take no deps. Previously mounted by omission; stated now so the

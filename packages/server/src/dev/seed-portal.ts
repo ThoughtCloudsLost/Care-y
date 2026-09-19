@@ -1069,6 +1069,13 @@ async function seedForms(
 }> {
   const { fields, queueOptionKeys } = buildCustomFormFields(routingQueueIds);
 
+  // Same source the other dev seeders use for the stamp (seed-quarantine.ts)
+  const genRow = await deps.tDb
+    .selectFrom("org_config")
+    .select("current_key_generation")
+    .executeTakeFirstOrThrow();
+  const orgKeyGeneration = genRow.current_key_generation;
+
   const customSlug = "ask-for-help";
   const custom = await deps.intakeFormService.saveForm(
     deps.tDb,
@@ -1103,6 +1110,7 @@ async function seedForms(
         ...encryptSeedField(f, deps.orgPublicKey),
       })),
     },
+    orgKeyGeneration,
   );
 
   const closedFields = buildClosedFormFields();
@@ -1141,6 +1149,7 @@ async function seedForms(
         ...encryptSeedField(f, deps.orgPublicKey),
       })),
     },
+    orgKeyGeneration,
   );
 
   const customFormId = intakeFormIdSchema.parse(custom.formId);

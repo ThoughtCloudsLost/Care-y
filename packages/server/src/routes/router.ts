@@ -13,7 +13,7 @@ import {
   type TwoFactorRouterDeps,
 } from "./two-factor.js";
 import { createOprfRouter, type OprfRouterDeps } from "./oprf.js";
-import { createKeysRouter } from "./keys.js";
+import { createKeysRouter, type KeysRouterDeps } from "./keys.js";
 import {
   createTelephonyAdminRouter,
   type TelephonyAdminRouterDeps,
@@ -96,6 +96,12 @@ export interface OptionalRouterDeps {
   readonly intakeFormDeps: IntakeFormRouterDeps | null;
   readonly clientPortalDeps: ClientPortalRouterDeps | null;
   readonly devDeps: DevRouterDeps | null;
+  /**
+   * The keys router always mounts; these deps only enable its reseal
+   * fetch endpoints (OPS field decryption, blob store access). Null
+   * leaves those endpoints degraded, not absent.
+   */
+  readonly keysDeps: KeysRouterDeps | null;
 }
 
 export interface RouterDeps extends OptionalRouterDeps {
@@ -113,7 +119,7 @@ export function createAppRouter(deps: RouterDeps) {
   const orgRouter = createOrgRouter(deps.orgService);
   const twoFactorRouter = createTwoFactorRouter(deps.twoFactorDeps);
   const oprfRouter = createOprfRouter(deps.oprfDeps);
-  const keysRouter = createKeysRouter();
+  const keysRouter = createKeysRouter(deps.keysDeps ?? undefined);
   const profileRouter = createProfileRouter(deps.profileDeps);
 
   return router({

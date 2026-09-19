@@ -717,4 +717,305 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgResealService", () => {
       expect(result.skipped).toBe(2);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // resealPending
+  // -----------------------------------------------------------------------
+
+  describe("resealPending", () => {
+    it("returns only old-stamped rows", async () => {
+      // Insert two queues: one at generation 1 (pending), one at 2 (current).
+      await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .execute();
+
+      await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 2,
+          org_key_generation: 2,
+        })
+        .execute();
+
+      const result = await service.resealPending({
+        table: "queues",
+        limit: 40,
+        excludeIds: [],
+      });
+
+      expect(result.currentGeneration).toBe(2);
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]!.columns).toHaveProperty("encrypted_name");
+    });
+
+    it("respects limit", async () => {
+      await testDb.db
+        .insertInto("queues")
+        .values([
+          {
+            encrypted_name: crypto.randomBytes(16),
+            sort_order: 1,
+            org_key_generation: 1,
+          },
+          {
+            encrypted_name: crypto.randomBytes(16),
+            sort_order: 2,
+            org_key_generation: 1,
+          },
+          {
+            encrypted_name: crypto.randomBytes(16),
+            sort_order: 3,
+            org_key_generation: 1,
+          },
+        ])
+        .execute();
+
+      const result = await service.resealPending({
+        table: "queues",
+        limit: 2,
+        excludeIds: [],
+      });
+
+      expect(result.rows).toHaveLength(2);
+    });
+
+    it("excludes specified ids", async () => {
+      const q1 = await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 2,
+          org_key_generation: 1,
+        })
+        .execute();
+
+      const result = await service.resealPending({
+        table: "queues",
+        limit: 40,
+        excludeIds: [q1.id],
+      });
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]!.id).not.toBe(q1.id);
+    });
+
+    it("intake_key_wraps keys on ticket_id", async () => {
+      const phoneRow = await insertPhone(phoneVals());
+
+      const clientRow = await insertClient(clientVals(phoneRow.id));
+
+      const queueRow = await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 99,
+          org_key_generation: 2,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      const ticketRow = await testDb.db
+        .insertInto("tickets")
+        .values({
+          client_id: clientRow.id,
+          queue_id: queueRow.id,
+          encrypted_title: crypto.randomBytes(16),
+          encrypted_description: crypto.randomBytes(16),
+          key_generation: crypto.randomUUID() as KeyGeneration,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      const wrappedTk = crypto.randomBytes(64);
+      await testDb.db
+        .insertInto("intake_key_wraps")
+        .values({
+          ticket_id: ticketRow.id,
+          wrapped_tk: wrappedTk,
+          org_key_generation: 1,
+        })
+        .execute();
+
+      const result = await service.resealPending({
+        table: "intake_key_wraps",
+        limit: 40,
+        excludeIds: [],
+      });
+
+      expect(result.rows).toHaveLength(1);
+      // id is the ticket_id, not an autoincrement id
+      expect(result.rows[0]!.id).toBe(ticketRow.id);
+      expect(result.rows[0]!.columns).toHaveProperty("wrapped_tk");
+      expect(
+        Buffer.compare(result.rows[0]!.columns.wrapped_tk!, wrappedTk),
+      ).toBe(0);
+    });
+
+    it("omits null ciphertext columns from the returned record", async () => {
+      // queues.encrypted_color and encrypted_icon are nullable
+      await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          encrypted_color: null,
+          encrypted_icon: null,
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .execute();
+
+      const result = await service.resealPending({
+        table: "queues",
+        limit: 40,
+        excludeIds: [],
+      });
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]!.columns).toHaveProperty("encrypted_name");
+      expect(result.rows[0]!.columns).not.toHaveProperty("encrypted_color");
+      expect(result.rows[0]!.columns).not.toHaveProperty("encrypted_icon");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // reindexPending
+  // -----------------------------------------------------------------------
+
+  describe("reindexPending", () => {
+    it("clients index fetch returns encryptedAlias", async () => {
+      const phone = await insertPhone(phoneVals());
+      const alias = crypto.randomBytes(16);
+      await insertClient(
+        clientVals(phone.id, {
+          encrypted_alias: alias,
+          index_key_generation: 1,
+        }),
+      );
+
+      const result = await service.reindexPending({
+        table: "clients",
+        limit: 40,
+        excludeIds: [],
+        piiUnmasked: false,
+      });
+
+      expect(result.currentGeneration).toBe(2);
+      expect(result.rows).toHaveLength(1);
+      const row = result.rows[0]!;
+      expect("encryptedAlias" in row).toBe(true);
+      if ("encryptedAlias" in row) {
+        expect(Buffer.isBuffer(row.encryptedAlias)).toBe(true);
+        expect(Buffer.compare(row.encryptedAlias!, alias)).toBe(0);
+      }
+    });
+
+    it("phones index fetch returns empty when piiUnmasked is false", async () => {
+      await insertPhoneNoReturn(phoneVals({ index_key_generation: 1 }));
+
+      const result = await service.reindexPending({
+        table: "phones",
+        limit: 40,
+        excludeIds: [],
+        piiUnmasked: false,
+      });
+
+      expect(result.rows).toHaveLength(0);
+    });
+
+    it("emails index fetch returns empty when piiUnmasked is false", async () => {
+      await insertEmail(emailVals({ index_key_generation: 1 }));
+
+      const result = await service.reindexPending({
+        table: "emails",
+        limit: 40,
+        excludeIds: [],
+        piiUnmasked: false,
+      });
+
+      expect(result.rows).toHaveLength(0);
+    });
+
+    it("clients index fetch respects limit and excludeIds", async () => {
+      const phone = await insertPhone(phoneVals());
+      const c1 = await insertClient(
+        clientVals(phone.id, { index_key_generation: 1 }),
+      );
+      await insertClient(clientVals(phone.id, { index_key_generation: 1 }));
+      await insertClient(clientVals(phone.id, { index_key_generation: 1 }));
+
+      // Limit to 1
+      const limited = await service.reindexPending({
+        table: "clients",
+        limit: 1,
+        excludeIds: [],
+        piiUnmasked: false,
+      });
+      expect(limited.rows).toHaveLength(1);
+
+      // Exclude c1
+      const excluded = await service.reindexPending({
+        table: "clients",
+        limit: 40,
+        excludeIds: [c1.id],
+        piiUnmasked: false,
+      });
+      expect(excluded.rows).toHaveLength(2);
+      for (const row of excluded.rows) {
+        expect(row.id).not.toBe(c1.id);
+      }
+    });
+
+    it("clients index fetch with onlyIds returns only pending rows among them", async () => {
+      const phone = await insertPhone(phoneVals());
+      const pending = await insertClient(
+        clientVals(phone.id, { index_key_generation: 1 }),
+      );
+      const current = await insertClient(
+        clientVals(phone.id, { index_key_generation: 2 }),
+      );
+      await insertClient(clientVals(phone.id, { index_key_generation: 1 }));
+
+      const result = await service.reindexPending({
+        table: "clients",
+        limit: 40,
+        excludeIds: [],
+        piiUnmasked: false,
+        onlyIds: [pending.id, current.id],
+      });
+
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0]!.id).toBe(pending.id);
+    });
+
+    it("clients index fetch with empty onlyIds returns nothing", async () => {
+      const phone = await insertPhone(phoneVals());
+      await insertClient(clientVals(phone.id, { index_key_generation: 1 }));
+
+      const result = await service.reindexPending({
+        table: "clients",
+        limit: 40,
+        excludeIds: [],
+        piiUnmasked: false,
+        onlyIds: [],
+      });
+
+      expect(result.rows).toHaveLength(0);
+    });
+  });
 });

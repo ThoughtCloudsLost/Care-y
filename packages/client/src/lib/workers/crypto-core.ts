@@ -1626,6 +1626,51 @@ function handleOrgEncrypt(req: OrgEncryptRequest, sink: Sink): void {
   }
 }
 
+// ── Shared blind-index hash helpers ─────────────────────────────────
+// Used by both standalone hash handlers and the reseal batch handler
+// to avoid duplicating normalization + HMAC + hex logic.
+
+function computeAliasHash(alias: string): string {
+  const sodium = requireSodium();
+  const key = ensureAliasIndexKey();
+  const normalized = normalizeAlias(alias);
+  const hmac = sodium.crypto_auth_hmacsha512(
+    textEncoder.encode(normalized),
+    key,
+  );
+  const hex = Array.from(hmac, (b) => b.toString(16).padStart(2, "0")).join("");
+  sodium.memzero(hmac);
+  return hex;
+}
+
+function computePhoneMatchHash(phone: string): string | null {
+  const normalized = normalizeContactPhone(phone);
+  if (normalized == null) return null;
+  const sodium = requireSodium();
+  const key = ensurePhoneMatchIndexKey();
+  const hmac = sodium.crypto_auth_hmacsha512(
+    textEncoder.encode(normalized),
+    key,
+  );
+  const hex = Array.from(hmac, (b) => b.toString(16).padStart(2, "0")).join("");
+  sodium.memzero(hmac);
+  return hex;
+}
+
+function computeEmailMatchHash(email: string): string | null {
+  const normalized = normalizeContactEmail(email);
+  if (normalized == null) return null;
+  const sodium = requireSodium();
+  const key = ensureEmailMatchIndexKey();
+  const hmac = sodium.crypto_auth_hmacsha512(
+    textEncoder.encode(normalized),
+    key,
+  );
+  const hex = Array.from(hmac, (b) => b.toString(16).padStart(2, "0")).join("");
+  sodium.memzero(hmac);
+  return hex;
+}
+
 function ensureAliasIndexKey(): Uint8Array {
   if (aliasIndexKey) return aliasIndexKey;
   const secret = assertPresent(orgSecret, "orgSecret");
@@ -1636,24 +1681,13 @@ function ensureAliasIndexKey(): Uint8Array {
 function handleAliasHash(req: AliasHashRequest, sink: Sink): void {
   if (!requireOrgKeyed(sink, req.id, "aliasHash")) return;
 
-  const sodium = requireSodium();
-  const key = ensureAliasIndexKey();
-  const normalized = normalizeAlias(req.alias);
-  const hmac = sodium.crypto_auth_hmacsha512(
-    textEncoder.encode(normalized),
-    key,
-  );
-
-  // Convert to lowercase hex
-  const hex = Array.from(hmac, (b) => b.toString(16).padStart(2, "0")).join("");
-
-  sodium.memzero(hmac);
+  const hash = computeAliasHash(req.alias);
 
   const msg: WorkerResponse = {
     id: req.id,
     ok: true,
     type: "aliasHash",
-    hash: hex,
+    hash,
   };
   sink(msg);
 }
@@ -1668,34 +1702,13 @@ function ensurePhoneMatchIndexKey(): Uint8Array {
 function handlePhoneMatchHash(req: PhoneMatchHashRequest, sink: Sink): void {
   if (!requireOrgKeyed(sink, req.id, "phoneMatchHash")) return;
 
-  const normalized = normalizeContactPhone(req.phone);
-  if (normalized == null) {
-    const msg: WorkerResponse = {
-      id: req.id,
-      ok: true,
-      type: "phoneMatchHash",
-      hash: null,
-    };
-    sink(msg);
-    return;
-  }
-
-  const sodium = requireSodium();
-  const key = ensurePhoneMatchIndexKey();
-  const hmac = sodium.crypto_auth_hmacsha512(
-    textEncoder.encode(normalized),
-    key,
-  );
-
-  const hex = Array.from(hmac, (b) => b.toString(16).padStart(2, "0")).join("");
-
-  sodium.memzero(hmac);
+  const hash = computePhoneMatchHash(req.phone);
 
   const msg: WorkerResponse = {
     id: req.id,
     ok: true,
     type: "phoneMatchHash",
-    hash: hex,
+    hash,
   };
   sink(msg);
 }
@@ -1710,34 +1723,13 @@ function ensureEmailMatchIndexKey(): Uint8Array {
 function handleEmailMatchHash(req: EmailMatchHashRequest, sink: Sink): void {
   if (!requireOrgKeyed(sink, req.id, "emailMatchHash")) return;
 
-  const normalized = normalizeContactEmail(req.email);
-  if (normalized == null) {
-    const msg: WorkerResponse = {
-      id: req.id,
-      ok: true,
-      type: "emailMatchHash",
-      hash: null,
-    };
-    sink(msg);
-    return;
-  }
-
-  const sodium = requireSodium();
-  const key = ensureEmailMatchIndexKey();
-  const hmac = sodium.crypto_auth_hmacsha512(
-    textEncoder.encode(normalized),
-    key,
-  );
-
-  const hex = Array.from(hmac, (b) => b.toString(16).padStart(2, "0")).join("");
-
-  sodium.memzero(hmac);
+  const hash = computeEmailMatchHash(req.email);
 
   const msg: WorkerResponse = {
     id: req.id,
     ok: true,
     type: "emailMatchHash",
-    hash: hex,
+    hash,
   };
   sink(msg);
 }
@@ -1821,20 +1813,41 @@ function handleOrgResealBatch(req: OrgResealBatchRequest, sink: Sink): void {
     cacheKey: string;
     resealed: string | null;
     fromGeneration: number | null;
+    indexHash: string | null;
   }[] = req.items.map((item) => {
     const ciphertext = decode(item.ciphertext);
     const result = tryOrgDecryptAllGenerations(ciphertext, sodium);
     if (!result) {
-      return { cacheKey: item.cacheKey, resealed: null, fromGeneration: null };
+      return {
+        cacheKey: item.cacheKey,
+        resealed: null,
+        fromGeneration: null,
+        indexHash: null,
+      };
     }
 
     try {
+      // Compute index hash before checking generation: a row can be
+      // reseal-current but index-pending.
+      let indexHash: string | null = null;
+      if (item.index) {
+        const text = textDecoder.decode(result.plainBytes);
+        if (item.index === "alias") {
+          indexHash = computeAliasHash(text);
+        } else if (item.index === "phone") {
+          indexHash = computePhoneMatchHash(text);
+        } else {
+          indexHash = computeEmailMatchHash(text);
+        }
+      }
+
       if (result.generation === currentGeneration) {
-        // Already sealed under the current key; nothing to do
+        // Already sealed under the current key; nothing to reseal
         return {
           cacheKey: item.cacheKey,
           resealed: null,
           fromGeneration: currentGeneration,
+          indexHash,
         };
       }
 
@@ -1844,6 +1857,7 @@ function handleOrgResealBatch(req: OrgResealBatchRequest, sink: Sink): void {
         cacheKey: item.cacheKey,
         resealed: encode(resealed),
         fromGeneration: result.generation,
+        indexHash,
       };
     } finally {
       sodium.memzero(result.plainBytes);

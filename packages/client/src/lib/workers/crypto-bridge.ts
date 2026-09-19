@@ -815,14 +815,21 @@ export class CryptoBridge {
    * Batch re-seal org-encrypted items under the current generation's public key.
    * Items already sealed under the current generation return resealed: null.
    * Failed items return both fields null.
+   * When `index` is set on an item, the worker computes the corresponding
+   * blind-index hash from the decrypted plaintext (before the reseal check).
    */
   async orgResealBatch(
-    items: readonly { cacheKey: string; ciphertext: string }[],
+    items: readonly {
+      cacheKey: string;
+      ciphertext: string;
+      index?: "alias" | "phone" | "email";
+    }[],
   ): Promise<
     readonly {
       cacheKey: string;
       resealed: string | null;
       fromGeneration: number | null;
+      indexHash: string | null;
     }[]
   > {
     const resp = expectResponse(

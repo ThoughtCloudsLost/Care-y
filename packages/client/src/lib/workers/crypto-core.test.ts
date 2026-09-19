@@ -1017,6 +1017,7 @@ describe("crypto-core org key generation chain", () => {
     expect(oldResult?.cacheKey).toBe("old-item");
     expect(oldResult?.fromGeneration).toBe(1);
     expect(oldResult?.resealed).not.toBeNull();
+    expect(oldResult?.indexHash).toBeNull();
 
     // The resealed ciphertext opens under the current keypair
     const resealedPlain = sodium.crypto_box_seal_open(
@@ -1032,6 +1033,124 @@ describe("crypto-core org key generation chain", () => {
     expect(curResult?.cacheKey).toBe("current-item");
     expect(curResult?.fromGeneration).toBe(3);
     expect(curResult?.resealed).toBeNull();
+    expect(curResult?.indexHash).toBeNull();
+
+    sodium.memzero(currentSecret);
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+  });
+
+  it("orgResealBatch computes indexHash for old-gen and current-gen items", async () => {
+    const sodium = requireSodium();
+    const { currentSecret, gen1Secret, gen2Secret, chain } =
+      buildThreeGenerationChain(sodium);
+
+    const gen1Pub = sodium.crypto_scalarmult_base(gen1Secret);
+    const gen3Pub = sodium.crypto_scalarmult_base(currentSecret);
+
+    // Seal an alias under gen1 (old) and one under gen3 (current)
+    const oldAliasCt = sodium.crypto_box_seal(
+      new TextEncoder().encode("Jane Doe"),
+      gen1Pub,
+    );
+    const currentAliasCt = sodium.crypto_box_seal(
+      new TextEncoder().encode("John Smith"),
+      gen3Pub,
+    );
+
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(currentSecret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_350,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 3,
+      chain,
+    });
+    sinkMessages = [];
+
+    const resealResp = (await dispatchAndWait({
+      type: "orgResealBatch",
+      id: 10_351,
+      items: [
+        {
+          cacheKey: "old-alias",
+          ciphertext: encode(oldAliasCt),
+          index: "alias",
+        },
+        {
+          cacheKey: "current-alias",
+          ciphertext: encode(currentAliasCt),
+          index: "alias",
+        },
+      ],
+    })) as OrgResealBatchResponse;
+
+    expect(resealResp.ok).toBe(true);
+
+    // Both items produce a non-null indexHash (alias always normalizes)
+    const oldResult = resealResp.results[0];
+    expect(oldResult?.indexHash).toMatch(/^[0-9a-f]{128}$/);
+    expect(oldResult?.fromGeneration).toBe(1);
+    expect(oldResult?.resealed).not.toBeNull();
+
+    const curResult = resealResp.results[1];
+    expect(curResult?.indexHash).toMatch(/^[0-9a-f]{128}$/);
+    expect(curResult?.fromGeneration).toBe(3);
+    expect(curResult?.resealed).toBeNull();
+
+    // The two different aliases produce different hashes
+    expect(oldResult?.indexHash).not.toBe(curResult?.indexHash);
+
+    sodium.memzero(currentSecret);
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+  });
+
+  it("orgResealBatch returns indexHash null for undecryptable items", async () => {
+    const sodium = requireSodium();
+    const { currentSecret, gen1Secret, gen2Secret, chain } =
+      buildThreeGenerationChain(sodium);
+
+    // Seal under a completely unrelated key
+    const unrelatedSecret = sodium.randombytes_buf(32);
+    const unrelatedPub = sodium.crypto_scalarmult_base(unrelatedSecret);
+    const garbageCt = sodium.crypto_box_seal(
+      new TextEncoder().encode("unreachable"),
+      unrelatedPub,
+    );
+    sodium.memzero(unrelatedSecret);
+
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(currentSecret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_360,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 3,
+      chain,
+    });
+    sinkMessages = [];
+
+    const resealResp = (await dispatchAndWait({
+      type: "orgResealBatch",
+      id: 10_361,
+      items: [
+        { cacheKey: "garbage", ciphertext: encode(garbageCt), index: "alias" },
+      ],
+    })) as OrgResealBatchResponse;
+
+    expect(resealResp.ok).toBe(true);
+    const result = resealResp.results[0];
+    expect(result?.resealed).toBeNull();
+    expect(result?.fromGeneration).toBeNull();
+    expect(result?.indexHash).toBeNull();
 
     sodium.memzero(currentSecret);
     sodium.memzero(gen1Secret);
