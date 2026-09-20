@@ -1,0 +1,16 @@
+/**
+* | output |
+* | --- |
+* | "The telephony relay" |
+*
+* @param {Demo_Narrative_Deepdive_Telephony_Relay_HeadingInputs} inputs
+* @param {{ locale?: "en" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const demo_narrative_deepdive_telephony_relay_heading: ((inputs?: Demo_Narrative_Deepdive_Telephony_Relay_HeadingInputs, options?: {
+    locale?: "en" | "es";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Narrative_Deepdive_Telephony_Relay_HeadingInputs, {
+    locale?: "en" | "es";
+}, {}>;
+export type LocalizedString = import("../runtime.js").LocalizedString;
+export type Demo_Narrative_Deepdive_Telephony_Relay_HeadingInputs = {};

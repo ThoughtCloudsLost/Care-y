@@ -93,6 +93,9 @@ export type SectionId =
   | "client-account"
   | "client-share"
   | "coming-soon"
+  // Deep-dive reference articles linked from entry-page prose.
+  // No product route; the phone stays on its current screen.
+  | "deep-dive"
   // Page-side synthetic sections for handbook excursions (search
   // results, aggregation pages). Never a phone location.
   | "search-results"

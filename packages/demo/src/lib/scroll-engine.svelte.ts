@@ -725,6 +725,36 @@ export function createScrollEngine(
   }
 
   // -----------------------------------------------------------------------
+  // Runtime hash navigation
+  //
+  // FlowProse link buttons set window.location.hash to navigate to a
+  // different section/sub (e.g. #deep-dive/what-is-care-y). initFromHash
+  // only runs once on first load. This listener picks up hash changes
+  // that happen after the engine is running and drives the same
+  // navigation path.
+  // -----------------------------------------------------------------------
+
+  function onHashChange(): void {
+    const parsed = parseHash(window.location.hash);
+    if (parsed === null) return;
+
+    // Already showing this location: nothing to do.
+    if (parsed.sectionId === activeSection && parsed.subSlug === activeSub) {
+      return;
+    }
+
+    if (!getUserLinked()) {
+      localNavigate(parsed.sectionId, parsed.subSlug);
+      return;
+    }
+    if (!getLinked()) return;
+
+    getBridge()?.setLocation(parsed.sectionId, parsed.subSlug, "deep-link");
+  }
+
+  window.addEventListener("hashchange", onHashChange);
+
+  // -----------------------------------------------------------------------
   // Relink reconciliation: whichever side moved last during the
   // unlink wins (relinkDecision). Watched as an effect because the
   // link choice is external $state the engine only reads.
@@ -845,6 +875,7 @@ export function createScrollEngine(
     clearTimeout(suppressionTimeout);
     clearTimeout(layoutShiftTimeout);
     window.removeEventListener("scroll", noteUserScroll);
+    window.removeEventListener("hashchange", onHashChange);
   }
 
   return {

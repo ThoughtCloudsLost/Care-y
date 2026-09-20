@@ -1,0 +1,61 @@
+/* eslint-disable */
+import { getLocale, experimentalStaticLocale } from '../runtime.js';
+
+/** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
+
+/** @typedef {{}} Demo_Narrative_Deepdive_What_Is_Care_Y_BodyInputs */
+
+const en_demo_narrative_deepdive_what_is_care_y_body = /** @type {(inputs: Demo_Narrative_Deepdive_What_Is_Care_Y_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`CARE-Y is a call intake and case management system for mutual aid organizations whose clients would be in danger if their identity or their case became known. The people staffing the organization are exposed the same way, so the system is built so that a seized server tells an attacker neither who asked for help nor who answered. [[#overview #encryption]]
+Organizations use it to take calls, texts and emails, keep a case record per client, route work through queues, look up resources in an internal library, and reach clients back on whichever channel is safe for them. The interface is a mobile-first web app that installs to a phone home screen or runs in a desktop browser. [[#overview]]
+Client data is encrypted in the user's own browser before it reaches the server, and the server stores ciphertext it has no key for. That protection is a consequence of where the keys live rather than a policy the operator promises to honor. The user's password, stretched in the browser and hardened through a key derivation protocol, is what produces those keys, and nothing derived from it is stored anywhere. [How encryption works](#deep-dive/how-encryption-works) explains the full model, and [How keys are derived](#deep-dive/how-keys-are-derived) covers the derivation. [[#overview #encryption #keys]]
+Encryption cannot protect a device that is already compromised, and a browser extension or malware that can read the screen can read decrypted case content. Some facts stay readable to the server because the server has to route work with them. A case exists, it was created at a time, it sits in a queue, it carries a priority, and someone is assigned to it. An attacker with the database learns the shape and rhythm of the organization's work without learning a single client's name or a word of any message. [The trust boundary](#deep-dive/the-trust-boundary) names each of those facts. [[#overview #metadata #trust-boundary]]
+Clients reach the organization through whichever channel fits their situation, and the channels differ in how much protection each can offer. A regular text message is readable by the phone carrier and by the telephony provider, and an encrypted channel in the client's browser is not. [The portal channel lifecycle](#deep-dive/portal-channel-lifecycle) explains the tiers and what each one protects, and [The telephony relay](#deep-dive/the-telephony-relay) explains what happens to a text or a call on its way through. [[#overview #portal #telephony]]
+**How the tiers divide.** Three encryption tiers carry three classes of data, with a fourth class left public by intent. [[#encryption #keys #server-holds]]
+- The PII tier covers cases, messages, case notes and client records, protected by per-case symmetric keys that are wrapped to each authorized user's public key. [[#encryption #keys]]
+- The non-PII tier covers shared organization material such as library articles, queue names, note types and configuration, protected by one organization keypair whose private half is wrapped to each user. [[#encryption #keys]]
+- The operational tier covers what the server itself must act on without a person present, such as telephony credentials, SMTP configuration and session records, encrypted under a server-side key from the secrets file. [[#encryption #server-holds]]
+- Intake page branding is public, derived from the organization public key so any visitor's browser can render it. [[#encryption #privacy]]
+**Deployment shape.** One codebase serves a multi-tenant hosted deployment and a self-hosted single-tenant one. Each organization gets its own PostgreSQL schema, and cross-organization queries are structurally unavailable at the SQL layer because every query is scoped through a Kysely schema transformation rather than through a session variable. Self-hosted deployments bring their own telephony account. Hosting for the hosted deployment is a Hetzner VPS in the EU with full-disk encryption behind a reverse proxy. [[#overview #server-holds]]
+**Contributor map.** The monorepo splits into five packages, and anyone adding a field to any of them decides which of the tiers above it belongs to before choosing a column type. [[#overview #client-data]]
+- \`packages/client\` is the SvelteKit app for users, admins and the client-facing portal. [[#overview]]
+- \`packages/server\` is the tRPC API with authentication, webhooks and relay endpoints. [[#overview]]
+- \`packages/crypto\` is the isomorphic encryption library both sides share. [[#overview #encryption]]
+- \`packages/shared\` holds types, Zod schemas and permission enums. [[#overview]]
+- \`packages/demo\` is this handbook, running the real client and server against an in-browser PostgreSQL build. [[#overview]]`)
+};
+
+const es_demo_narrative_deepdive_what_is_care_y_body = /** @type {(inputs: Demo_Narrative_Deepdive_What_Is_Care_Y_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`CARE-Y es un sistema de recepción de llamadas y gestión de casos para organizaciones de ayuda mutua cuyos clientes correrían peligro si se conociera su identidad o su caso. Las personas que atienden la organización quedan expuestas de la misma forma, así que el sistema está construido de modo que un servidor incautado no le diga a un atacante ni quién pidió ayuda ni quién respondió. [[#overview #encryption]]
+Las organizaciones lo usan para atender llamadas, mensajes de texto y correos, mantener un expediente de caso por cliente, encaminar el trabajo a través de colas, consultar recursos en una biblioteca interna y responder a los clientes por el canal que sea seguro para ellos. La interfaz es una aplicación web pensada primero para móvil, que se instala en la pantalla de inicio del teléfono o funciona en un navegador de escritorio. [[#overview]]
+Los datos del cliente se cifran en el propio navegador de la persona usuaria antes de llegar al servidor, y el servidor almacena texto cifrado para el que no tiene ninguna clave. Esa protección es consecuencia de dónde viven las claves y no una política que el operador promete cumplir. La contraseña de la persona usuaria, estirada en el navegador y endurecida mediante un protocolo de derivación de claves, es lo que produce esas claves, y nada derivado de ella se almacena en ningún sitio. [Cómo funciona el cifrado](#deep-dive/how-encryption-works) explica el modelo completo, y [Cómo se derivan las claves](#deep-dive/how-keys-are-derived) cubre la derivación. [[#overview #encryption #keys]]
+El cifrado no puede proteger un dispositivo que ya está comprometido, y una extensión de navegador o un programa malicioso que pueda leer la pantalla puede leer el contenido descifrado del caso. Algunos hechos siguen siendo legibles para el servidor porque el servidor tiene que encaminar el trabajo con ellos. Un caso existe, se creó en un momento dado, está en una cola, lleva una prioridad y alguien está asignado a él. Un atacante con la base de datos aprende la forma y el ritmo del trabajo de la organización sin aprender el nombre de un solo cliente ni una palabra de ningún mensaje. [La frontera de confianza](#deep-dive/the-trust-boundary) nombra cada uno de esos hechos. [[#overview #metadata #trust-boundary]]
+Los clientes contactan con la organización por el canal que encaje con su situación, y los canales difieren en cuánta protección puede ofrecer cada uno. Un mensaje de texto normal es legible por la compañía telefónica y por el proveedor de telefonía, y un canal cifrado en el navegador del cliente no lo es. [El ciclo de vida del canal del portal](#deep-dive/portal-channel-lifecycle) explica los niveles y qué protege cada uno, y [El relay de telefonía](#deep-dive/the-telephony-relay) explica qué le ocurre a un mensaje de texto o a una llamada de camino. [[#overview #portal #telephony]]
+**Cómo se dividen los niveles.** Tres niveles de cifrado llevan tres clases de datos, y una cuarta clase queda pública de forma intencionada. [[#encryption #keys #server-holds]]
+- El nivel de datos personales cubre casos, mensajes, notas de caso y registros de clientes, protegidos por claves simétricas por caso que se envuelven con la clave pública de cada persona usuaria autorizada. [[#encryption #keys]]
+- El nivel sin datos personales cubre el material compartido de la organización, como artículos de la biblioteca, nombres de cola, tipos de nota y configuración, protegido por un único par de claves de la organización cuya mitad privada se envuelve para cada persona usuaria. [[#encryption #keys]]
+- El nivel operativo cubre aquello sobre lo que el servidor mismo debe actuar sin una persona presente, como las credenciales de telefonía, la configuración de SMTP y los registros de sesión, cifrado bajo una clave del lado del servidor tomada del archivo de secretos. [[#encryption #server-holds]]
+- La identidad visual de la página de ingreso es pública, derivada de la clave pública de la organización para que el navegador de cualquier visitante pueda mostrarla. [[#encryption #privacy]]
+**Forma del despliegue.** Un mismo código base sirve a un despliegue alojado multiinquilino y a uno autoalojado de un solo inquilino. Cada organización recibe su propio esquema de PostgreSQL, y las consultas entre organizaciones no están disponibles estructuralmente en la capa SQL porque cada consulta se limita mediante una transformación de esquema de Kysely y no mediante una variable de sesión. Los despliegues autoalojados traen su propia cuenta de telefonía. El alojamiento del despliegue alojado es un VPS de Hetzner en la UE con cifrado de disco completo detrás de un proxy inverso. [[#overview #server-holds]]
+**Mapa para quien contribuye.** El monorepo se divide en cinco paquetes, y quien añada un campo a cualquiera de ellos decide a cuál de los niveles anteriores pertenece antes de elegir un tipo de columna. [[#overview #client-data]]
+- \`packages/client\` es la aplicación SvelteKit para personas usuarias, personas administradoras y el portal de cara al cliente. [[#overview]]
+- \`packages/server\` es la API tRPC con autenticación, webhooks y endpoints de relay. [[#overview]]
+- \`packages/crypto\` es la biblioteca de cifrado isomórfica que ambos lados comparten. [[#overview #encryption]]
+- \`packages/shared\` contiene tipos, esquemas Zod y enumeraciones de permisos. [[#overview]]
+- \`packages/demo\` es este manual, que ejecuta el cliente y el servidor reales contra una compilación de PostgreSQL en el navegador. [[#overview]]`)
+};
+
+/**
+* | output |
+* | --- |
+* | "CARE-Y is a call intake and case management system for mutual aid organizations whose clients would be in danger if their identity or their case became known..." |
+*
+* @param {Demo_Narrative_Deepdive_What_Is_Care_Y_BodyInputs} inputs
+* @param {{ locale?: "en" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const demo_narrative_deepdive_what_is_care_y_body = /** @type {((inputs?: Demo_Narrative_Deepdive_What_Is_Care_Y_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Deepdive_What_Is_Care_Y_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "es") return es_demo_narrative_deepdive_what_is_care_y_body(inputs)
+	return en_demo_narrative_deepdive_what_is_care_y_body(inputs)
+});
