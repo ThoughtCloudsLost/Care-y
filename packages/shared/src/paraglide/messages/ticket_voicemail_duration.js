@@ -13,17 +13,22 @@ const es_ticket_voicemail_duration = /** @type {(inputs: Ticket_Voicemail_Durati
 	return /** @type {LocalizedString} */ (`${i?.duration} segundos`)
 };
 
+const en_xa2_ticket_voicemail_duration = /** @type {(inputs: Ticket_Voicemail_DurationInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.duration} sècònds •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{duration} seconds" |
 *
 * @param {Ticket_Voicemail_DurationInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_voicemail_duration = /** @type {((inputs: Ticket_Voicemail_DurationInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Voicemail_DurationInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const ticket_voicemail_duration = /** @type {((inputs: Ticket_Voicemail_DurationInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Voicemail_DurationInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_voicemail_duration(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_voicemail_duration(inputs)
 	return en_ticket_voicemail_duration(inputs)
 });

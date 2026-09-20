@@ -4,13 +4,13 @@
 * | "The decisions you make during setup affect the security of every volunteer and client in your org." |
 *
 * @param {Onboarding_Briefing_Choices_IntroInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const onboarding_briefing_choices_intro: ((inputs?: Onboarding_Briefing_Choices_IntroInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Onboarding_Briefing_Choices_IntroInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Onboarding_Briefing_Choices_IntroInputs = {};

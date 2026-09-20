@@ -13,17 +13,22 @@ const es_intake_forms_config_condition_add_rule = /** @type {(inputs: Intake_For
 	return /** @type {LocalizedString} */ (`Agregar condición`)
 };
 
+const en_xa2_intake_forms_config_condition_add_rule = /** @type {(inputs: Intake_Forms_Config_Condition_Add_RuleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àdd còndìtìòn ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Add condition" |
 *
 * @param {Intake_Forms_Config_Condition_Add_RuleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_config_condition_add_rule = /** @type {((inputs?: Intake_Forms_Config_Condition_Add_RuleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Condition_Add_RuleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_config_condition_add_rule = /** @type {((inputs?: Intake_Forms_Config_Condition_Add_RuleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Condition_Add_RuleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_config_condition_add_rule(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_config_condition_add_rule(inputs)
 	return en_intake_forms_config_condition_add_rule(inputs)
 });

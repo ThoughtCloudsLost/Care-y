@@ -17,17 +17,24 @@ const es_demo_narrative_settings_consultant_phone_body = /** @type {(inputs: Dem
 **Cifrado.** El número de teléfono de consultor se sella con la clave pública de la organización para que el servidor no pueda leerlo en reposo. Cuando el usuario activa los avisos por SMS, se almacena una segunda copia con una clave operativa legible por el servidor para que pueda enviar esos avisos sin necesidad de un navegador, y desactivar los avisos elimina esa segunda copia.`)
 };
 
+const en_xa2_demo_narrative_settings_consultant_phone_body = /** @type {(inputs: Demo_Narrative_Settings_Consultant_Phone_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦À ùsèr whò tàkès càlls fròm à pèrsònàl phònè càn règìstèr ìt thròùgh à thrèè stèp vèrìfìcàtìòn flòw thàt cònfìrms thè nùmbèr bèfòrè àctìvàtìng ìt.
+ •••••••••••••••••••••••••••••••••••••••••••••**Rèmòvìng. •••** Rèmòvìng à vèrìfìèd nùmbèr rèvèrts thè ùsèr tò càll hàndlìng thròùgh thè bròwsèr sòftphònè ònly, ànd thè chàngè tàkès èffèct ìmmèdìàtèly.
+ ••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Thè cònsùltànt phònè nùmbèr ìs sèàlèd tò thè òrgànìzàtìòn's pùblìc kèy sò thè sèrvèr cànnòt rèàd ìt àt rèst. Whèn thè ùsèr òpts ìntò SMS nòtìfìcàtìòn pìngs, à sècònd còpy ìs stòrèd ùndèr à sèrvèr rèàdàblè òpèràtìònàl kèy sò thè sèrvèr càn sènd thòsè pìngs wìthòùt à bròwsèr prèsènt, ànd dìsàblìng pìngs dèlètès thàt sècònd còpy. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "A user who takes calls from a personal phone can register it through a three step verification flow that confirms the number before activating it. **Removing..." |
 *
 * @param {Demo_Narrative_Settings_Consultant_Phone_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_settings_consultant_phone_body = /** @type {((inputs?: Demo_Narrative_Settings_Consultant_Phone_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Settings_Consultant_Phone_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_settings_consultant_phone_body = /** @type {((inputs?: Demo_Narrative_Settings_Consultant_Phone_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Settings_Consultant_Phone_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_settings_consultant_phone_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_settings_consultant_phone_body(inputs)
 	return en_demo_narrative_settings_consultant_phone_body(inputs)
 });

@@ -7,11 +7,11 @@ export type Mergecandidates_Shared_Line1Inputs = {};
 * | "Shared line" |
 *
 * @param {Mergecandidates_Shared_Line1Inputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 declare const mergecandidates_shared_line1: ((inputs?: Mergecandidates_Shared_Line1Inputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Mergecandidates_Shared_Line1Inputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;

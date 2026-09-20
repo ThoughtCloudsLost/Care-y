@@ -4,13 +4,13 @@
 * | "Hasn't signed in yet" |
 *
 * @param {Admin_Users_Key_No_KeysInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_users_key_no_keys: ((inputs?: Admin_Users_Key_No_KeysInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Users_Key_No_KeysInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Users_Key_No_KeysInputs = {};

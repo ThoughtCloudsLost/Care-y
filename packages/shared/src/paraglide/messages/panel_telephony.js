@@ -13,17 +13,22 @@ const es_panel_telephony = /** @type {(inputs: Panel_TelephonyInputs) => Localiz
 	return /** @type {LocalizedString} */ (`Telefonía`)
 };
 
+const en_xa2_panel_telephony = /** @type {(inputs: Panel_TelephonyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tèlèphòny •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Telephony" |
 *
 * @param {Panel_TelephonyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const panel_telephony = /** @type {((inputs?: Panel_TelephonyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_TelephonyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const panel_telephony = /** @type {((inputs?: Panel_TelephonyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_TelephonyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_panel_telephony(inputs)
+	if (locale === "en-XA") return en_xa2_panel_telephony(inputs)
 	return en_panel_telephony(inputs)
 });

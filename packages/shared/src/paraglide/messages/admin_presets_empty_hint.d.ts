@@ -4,13 +4,13 @@
 * | "Tap Add reply to create one." |
 *
 * @param {Admin_Presets_Empty_HintInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_presets_empty_hint: ((inputs?: Admin_Presets_Empty_HintInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Presets_Empty_HintInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Presets_Empty_HintInputs = {};

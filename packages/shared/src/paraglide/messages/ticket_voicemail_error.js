@@ -13,17 +13,22 @@ const es_ticket_voicemail_error = /** @type {(inputs: Ticket_Voicemail_ErrorInpu
 	return /** @type {LocalizedString} */ (`No se pudo cargar el mensaje de voz.`)
 };
 
+const en_xa2_ticket_voicemail_error = /** @type {(inputs: Ticket_Voicemail_ErrorInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Còùld nòt lòàd vòìcèmàìl. ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Could not load voicemail." |
 *
 * @param {Ticket_Voicemail_ErrorInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_voicemail_error = /** @type {((inputs?: Ticket_Voicemail_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Voicemail_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const ticket_voicemail_error = /** @type {((inputs?: Ticket_Voicemail_ErrorInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Voicemail_ErrorInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_voicemail_error(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_voicemail_error(inputs)
 	return en_ticket_voicemail_error(inputs)
 });

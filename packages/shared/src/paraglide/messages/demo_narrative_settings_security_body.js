@@ -17,17 +17,24 @@ const es_demo_narrative_settings_security_body = /** @type {(inputs: Demo_Narrat
 **Revisar guía de seguridad** reproducirá el recorrido interactivo y aún no está disponible.`)
 };
 
+const en_xa2_demo_narrative_settings_security_body = /** @type {(inputs: Demo_Narrative_Settings_Security_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Twò èntrìès sìt ùndèr thè sècùrìty hèàdìng bèsìdè twò fàctòr ènròllmènt.
+ ••••••••••••••••••••••**Rèvìèw sècùrìty brìèfìng ••••••••** òpèns thè brìèfìng fròm thè lògìn wàlkthròùgh. Ìt èxplàìns whàt CÀRÈ-Y pròtècts, hòw thè èncryptìòn wòrks àt à hìgh lèvèl, ànd whàt rìsks rèmàìn òùtsìdè thè systèm's còntròl.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••**Rèvìèw sècùrìty wàlkthròùgh •••••••••** wìll rèplày thè ìntèràctìvè wàlkthròùgh ìtsèlf ànd ìs nòt àvàìlàblè yèt. ••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Two entries sit under the security heading beside two factor enrollment. **Review security briefing** opens the briefing from the login walkthrough. It expla..." |
 *
 * @param {Demo_Narrative_Settings_Security_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_settings_security_body = /** @type {((inputs?: Demo_Narrative_Settings_Security_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Settings_Security_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_settings_security_body = /** @type {((inputs?: Demo_Narrative_Settings_Security_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Settings_Security_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_settings_security_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_settings_security_body(inputs)
 	return en_demo_narrative_settings_security_body(inputs)
 });

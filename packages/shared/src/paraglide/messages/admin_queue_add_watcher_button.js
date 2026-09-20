@@ -13,17 +13,22 @@ const es_admin_queue_add_watcher_button = /** @type {(inputs: Admin_Queue_Add_Wa
 	return /** @type {LocalizedString} */ (`Agregar observador`)
 };
 
+const en_xa2_admin_queue_add_watcher_button = /** @type {(inputs: Admin_Queue_Add_Watcher_ButtonInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àdd wàtchèr ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Add watcher" |
 *
 * @param {Admin_Queue_Add_Watcher_ButtonInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_queue_add_watcher_button = /** @type {((inputs?: Admin_Queue_Add_Watcher_ButtonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_Add_Watcher_ButtonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_queue_add_watcher_button = /** @type {((inputs?: Admin_Queue_Add_Watcher_ButtonInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_Add_Watcher_ButtonInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_queue_add_watcher_button(inputs)
+	if (locale === "en-XA") return en_xa2_admin_queue_add_watcher_button(inputs)
 	return en_admin_queue_add_watcher_button(inputs)
 });

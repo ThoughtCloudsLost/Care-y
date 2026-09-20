@@ -13,17 +13,22 @@ const es_intake_forms_config_priority_low = /** @type {(inputs: Intake_Forms_Con
 	return /** @type {LocalizedString} */ (`Baja`)
 };
 
+const en_xa2_intake_forms_config_priority_low = /** @type {(inputs: Intake_Forms_Config_Priority_LowInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Lòw •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Low" |
 *
 * @param {Intake_Forms_Config_Priority_LowInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_config_priority_low = /** @type {((inputs?: Intake_Forms_Config_Priority_LowInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Priority_LowInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_config_priority_low = /** @type {((inputs?: Intake_Forms_Config_Priority_LowInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Priority_LowInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_config_priority_low(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_config_priority_low(inputs)
 	return en_intake_forms_config_priority_low(inputs)
 });

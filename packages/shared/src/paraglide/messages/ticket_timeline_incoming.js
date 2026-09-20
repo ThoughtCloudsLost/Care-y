@@ -13,17 +13,22 @@ const es_ticket_timeline_incoming = /** @type {(inputs: Ticket_Timeline_Incoming
 	return /** @type {LocalizedString} */ (`${i?.count} entrantes`)
 };
 
+const en_xa2_ticket_timeline_incoming = /** @type {(inputs: Ticket_Timeline_IncomingInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count} ìncòmìng •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} incoming" |
 *
 * @param {Ticket_Timeline_IncomingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_timeline_incoming = /** @type {((inputs: Ticket_Timeline_IncomingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Timeline_IncomingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const ticket_timeline_incoming = /** @type {((inputs: Ticket_Timeline_IncomingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Timeline_IncomingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_timeline_incoming(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_timeline_incoming(inputs)
 	return en_ticket_timeline_incoming(inputs)
 });

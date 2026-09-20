@@ -13,17 +13,22 @@ const es_twofa_sms_phone_placeholder = /** @type {(inputs: Twofa_Sms_Phone_Place
 	return /** @type {LocalizedString} */ (`+1 (555) 000-0000`)
 };
 
+const en_xa2_twofa_sms_phone_placeholder = /** @type {(inputs: Twofa_Sms_Phone_PlaceholderInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦+1 (555) 000-0000 ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "+1 (555) 000-0000" |
 *
 * @param {Twofa_Sms_Phone_PlaceholderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const twofa_sms_phone_placeholder = /** @type {((inputs?: Twofa_Sms_Phone_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Sms_Phone_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const twofa_sms_phone_placeholder = /** @type {((inputs?: Twofa_Sms_Phone_PlaceholderInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Sms_Phone_PlaceholderInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_twofa_sms_phone_placeholder(inputs)
+	if (locale === "en-XA") return en_xa2_twofa_sms_phone_placeholder(inputs)
 	return en_twofa_sms_phone_placeholder(inputs)
 });

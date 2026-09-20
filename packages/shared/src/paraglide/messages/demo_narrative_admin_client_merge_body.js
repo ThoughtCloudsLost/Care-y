@@ -19,17 +19,25 @@ const es_demo_narrative_admin_client_merge_body = /** @type {(inputs: Demo_Narra
 **Permisos.** La herramienta de fusión requiere el permiso Fusionar clientes, que es independiente del permiso Ver clientes necesario para ver la lista de clientes.`)
 };
 
+const en_xa2_demo_narrative_admin_client_merge_body = /** @type {(inputs: Demo_Narrative_Admin_Client_Merge_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè sàmè pèrsòn càn ènd ùp às twò clìènt rècòrds, ùsùàlly àftèr càllìng fròm à nèw nùmbèr, ànd thè mèrgè tòòl rèsòlvès thìs fròm thè clìènt dètàìl shèèt.
+ •••••••••••••••••••••••••••••••••••••••••••••••**Whàt à mèrgè dòès. ••••••** Thè clìènt mèrgè mòvès thè dùplìcàtè's tìckèts tò thè sùrvìvìng rècòrd sò thè càsè hìstòry rèàds às ònè clìènt.
+ ••••••••••••••••••••••••••••••••••**Hìstòry ànd ùndò. ••••••** Èvèry mèrgè ìs rècòrdèd ìn à hìstòry thàt càn bè rèvìèwèd làtèr, ànd à mèrgè càn bè ùndònè tò rèstòrè thè sèpàràtèd rècòrds. Lòckìng à rècòrd àgàìnst mèrgès prèvènts fùtùrè cònsòlìdàtìòn whèn thè sèpàràtìòn ìs ìntèntìònàl.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Thè mèrgè tòòl rèqùìrès thè Mèrgè clìènts pèrmìssìòn, whìch ìs sèpàràtè fròm thè Vìèw clìènts pèrmìssìòn nèèdèd tò sèè thè clìènt lìst. •••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The same person can end up as two client records, usually after calling from a new number, and the merge tool resolves this from the client detail sheet. **W..." |
 *
 * @param {Demo_Narrative_Admin_Client_Merge_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_client_merge_body = /** @type {((inputs?: Demo_Narrative_Admin_Client_Merge_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Client_Merge_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_client_merge_body = /** @type {((inputs?: Demo_Narrative_Admin_Client_Merge_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Client_Merge_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_client_merge_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_client_merge_body(inputs)
 	return en_demo_narrative_admin_client_merge_body(inputs)
 });

@@ -13,17 +13,22 @@ const es_register_careful = /** @type {(inputs: Register_CarefulInputs) => Local
 	return /** @type {LocalizedString} */ (`Cuidado`)
 };
 
+const en_xa2_register_careful = /** @type {(inputs: Register_CarefulInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Càrèfùl •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Careful" |
 *
 * @param {Register_CarefulInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const register_careful = /** @type {((inputs?: Register_CarefulInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Register_CarefulInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const register_careful = /** @type {((inputs?: Register_CarefulInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Register_CarefulInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_register_careful(inputs)
+	if (locale === "en-XA") return en_xa2_register_careful(inputs)
 	return en_register_careful(inputs)
 });

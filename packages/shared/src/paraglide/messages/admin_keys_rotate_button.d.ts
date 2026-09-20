@@ -4,13 +4,13 @@
 * | "Rotate Org Key" |
 *
 * @param {Admin_Keys_Rotate_ButtonInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_keys_rotate_button: ((inputs?: Admin_Keys_Rotate_ButtonInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Keys_Rotate_ButtonInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Keys_Rotate_ButtonInputs = {};

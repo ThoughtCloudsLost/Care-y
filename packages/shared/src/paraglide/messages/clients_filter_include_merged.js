@@ -13,17 +13,22 @@ const es_clients_filter_include_merged = /** @type {(inputs: Clients_Filter_Incl
 	return /** @type {LocalizedString} */ (`Incluir fusionados`)
 };
 
+const en_xa2_clients_filter_include_merged = /** @type {(inputs: Clients_Filter_Include_MergedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ìnclùdè mèrgèd •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Include merged" |
 *
 * @param {Clients_Filter_Include_MergedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const clients_filter_include_merged = /** @type {((inputs?: Clients_Filter_Include_MergedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Clients_Filter_Include_MergedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const clients_filter_include_merged = /** @type {((inputs?: Clients_Filter_Include_MergedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Clients_Filter_Include_MergedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_clients_filter_include_merged(inputs)
+	if (locale === "en-XA") return en_xa2_clients_filter_include_merged(inputs)
 	return en_clients_filter_include_merged(inputs)
 });

@@ -13,17 +13,22 @@ const es_hub_quarantine_subtitle = /** @type {(inputs: Hub_Quarantine_SubtitleIn
 	return /** @type {LocalizedString} */ (`Mensajes de voz que no se pudieron enrutar automáticamente`)
 };
 
+const en_xa2_hub_quarantine_subtitle = /** @type {(inputs: Hub_Quarantine_SubtitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vòìcèmàìls thàt còùld nòt bè ròùtèd àùtòmàtìcàlly •••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Voicemails that could not be routed automatically" |
 *
 * @param {Hub_Quarantine_SubtitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const hub_quarantine_subtitle = /** @type {((inputs?: Hub_Quarantine_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Quarantine_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const hub_quarantine_subtitle = /** @type {((inputs?: Hub_Quarantine_SubtitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Quarantine_SubtitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_hub_quarantine_subtitle(inputs)
+	if (locale === "en-XA") return en_xa2_hub_quarantine_subtitle(inputs)
 	return en_hub_quarantine_subtitle(inputs)
 });

@@ -13,17 +13,22 @@ const es_ticket_date_today = /** @type {(inputs: Ticket_Date_TodayInputs) => Loc
 	return /** @type {LocalizedString} */ (`Hoy`)
 };
 
+const en_xa2_ticket_date_today = /** @type {(inputs: Ticket_Date_TodayInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tòdày ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Today" |
 *
 * @param {Ticket_Date_TodayInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_date_today = /** @type {((inputs?: Ticket_Date_TodayInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Date_TodayInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const ticket_date_today = /** @type {((inputs?: Ticket_Date_TodayInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Date_TodayInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_date_today(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_date_today(inputs)
 	return en_ticket_date_today(inputs)
 });

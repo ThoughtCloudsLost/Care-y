@@ -13,17 +13,22 @@ const es_ticket_queue_sheet_title = /** @type {(inputs: Ticket_Queue_Sheet_Title
 	return /** @type {LocalizedString} */ (`Cambiar ${i?.queue}`)
 };
 
+const en_xa2_ticket_queue_sheet_title = /** @type {(inputs: Ticket_Queue_Sheet_TitleInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Chàngè  •••${i?.queue}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Change {queue}" |
 *
 * @param {Ticket_Queue_Sheet_TitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_queue_sheet_title = /** @type {((inputs: Ticket_Queue_Sheet_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Queue_Sheet_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const ticket_queue_sheet_title = /** @type {((inputs: Ticket_Queue_Sheet_TitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Queue_Sheet_TitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_queue_sheet_title(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_queue_sheet_title(inputs)
 	return en_ticket_queue_sheet_title(inputs)
 });

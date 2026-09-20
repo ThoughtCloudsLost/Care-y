@@ -4,13 +4,13 @@
 * | "The intake form is the public entry point for people seeking help. Every organization has a built-in default form, and administrators can publish custom form..." |
 *
 * @param {Demo_Section_Client_Intake_DescInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const demo_section_client_intake_desc: ((inputs?: Demo_Section_Client_Intake_DescInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Section_Client_Intake_DescInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Demo_Section_Client_Intake_DescInputs = {};

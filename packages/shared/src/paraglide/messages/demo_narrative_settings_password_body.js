@@ -17,17 +17,24 @@ const es_demo_narrative_settings_password_body = /** @type {(inputs: Demo_Narrat
 **Lo que ve el servidor.** El servidor nunca ve el texto plano de la nueva clave privada. Recibe solo el material de claves re-envuelto, que está cifrado y solo puede descifrarlo el voluntario.`)
 };
 
+const en_xa2_demo_narrative_settings_password_body = /** @type {(inputs: Demo_Narrative_Settings_Password_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Chàngìng à pàsswòrd rùns thè fùll kèy dèrìvàtìòn pìpèlìnè. Thè bròwsèr pròcèssès thè pàsswòrd thròùgh Àrgòn2ìd, pèrfòrms thè ÒPRF èxchàngè wìth thè thrèshòld sèrvèrs, ànd rè-wràps thè cryptògràphìc kèys.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt hàppèns dùrìng à pàsswòrd chàngè. ••••••••••••** Thè bròwsèr dèrìvès nèw èncryptìòn kèys fròm thè nèw pàsswòrd, thèn rè-wràps thè òrgànìzàtìòn kèy ànd èvèry tìckèt kèy thè vòlùntèèr hàs àccèss tò ùndèr thè nèw kèys. Thìs mèàns thè vòlùntèèr's èncryptèd dàtà rèmàìns àccèssìblè wìthòùt rè-èncryptìng thè dàtà ìtsèlf. Thè òld pàsswòrd ìs vèrìfìèd, thè nèw pàsswòrd ìs hàshèd, àll kèy wràps àrè ròtàtèd, ànd òthèr àctìvè sèssìòns àrè tèrmìnàtèd, àll ìn à sìnglè àtòmìc sèrvèr càll.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt thè sèrvèr sèès. •••••••** Thè sèrvèr nèvèr sèès thè plàìntèxt òf thè nèw prìvàtè kèy. Ìt rècèìvès ònly thè rè-wràppèd kèy màtèrìàl, whìch ìs èncryptèd ànd ònly dècryptàblè by thè vòlùntèèr. ••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Changing a password runs the full key derivation pipeline. The browser processes the password through Argon2id, performs the OPRF exchange with the threshold..." |
 *
 * @param {Demo_Narrative_Settings_Password_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_settings_password_body = /** @type {((inputs?: Demo_Narrative_Settings_Password_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Settings_Password_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_settings_password_body = /** @type {((inputs?: Demo_Narrative_Settings_Password_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Settings_Password_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_settings_password_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_settings_password_body(inputs)
 	return en_demo_narrative_settings_password_body(inputs)
 });

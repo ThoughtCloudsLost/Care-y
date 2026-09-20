@@ -13,17 +13,22 @@ const es_admin_keys_org_key_missing = /** @type {(inputs: Admin_Keys_Org_Key_Mis
 	return /** @type {LocalizedString} */ (`Clave de la organización no configurada`)
 };
 
+const en_xa2_admin_keys_org_key_missing = /** @type {(inputs: Admin_Keys_Org_Key_MissingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Òrgànìzàtìòn kèy nòt cònfìgùrèd ••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Organization key not configured" |
 *
 * @param {Admin_Keys_Org_Key_MissingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_keys_org_key_missing = /** @type {((inputs?: Admin_Keys_Org_Key_MissingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Keys_Org_Key_MissingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_keys_org_key_missing = /** @type {((inputs?: Admin_Keys_Org_Key_MissingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Keys_Org_Key_MissingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_keys_org_key_missing(inputs)
+	if (locale === "en-XA") return en_xa2_admin_keys_org_key_missing(inputs)
 	return en_admin_keys_org_key_missing(inputs)
 });

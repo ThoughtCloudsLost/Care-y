@@ -15,17 +15,23 @@ const es_demo_narrative_dashboard_unassigned_body = /** @type {(inputs: Demo_Nar
 **Si los conteos difieren.** El conteo en el encabezado de la sección refleja el total completo, mientras que las filas visibles pueden ser menos porque el resumen obtiene una página limitada de resultados.`)
 };
 
+const en_xa2_demo_narrative_dashboard_unassigned_body = /** @type {(inputs: Demo_Narrative_Dashboard_Unassigned_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Òpèn tìckèts nòt yèt àssìgnèd tò ànyònè. Òncè àssìgnèd, à tìckèt mòvès tò thè àssìgnèè's wòrkìng lìst.
+ •••••••••••••••••••••••••••••••**Ìf còùnts dìffèr. ••••••** Thè còùnt ìn thè sèctìòn hèàdìng rèflècts thè fùll tòtàl, whìlè thè vìsìblè ròws mày bè fèwèr bècàùsè thè òvèrvìèw fètchès à lìmìtèd pàgè òf rèsùlts. •••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Open tickets not yet assigned to anyone. Once assigned, a ticket moves to the assignee's working list. **If counts differ.** The count in the section heading..." |
 *
 * @param {Demo_Narrative_Dashboard_Unassigned_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_dashboard_unassigned_body = /** @type {((inputs?: Demo_Narrative_Dashboard_Unassigned_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Dashboard_Unassigned_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_dashboard_unassigned_body = /** @type {((inputs?: Demo_Narrative_Dashboard_Unassigned_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Dashboard_Unassigned_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_dashboard_unassigned_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_dashboard_unassigned_body(inputs)
 	return en_demo_narrative_dashboard_unassigned_body(inputs)
 });

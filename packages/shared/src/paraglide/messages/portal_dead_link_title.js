@@ -13,17 +13,22 @@ const es_portal_dead_link_title = /** @type {(inputs: Portal_Dead_Link_TitleInpu
 	return /** @type {LocalizedString} */ (`Enlace caducado`)
 };
 
+const en_xa2_portal_dead_link_title = /** @type {(inputs: Portal_Dead_Link_TitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èxpìrèd lìnk ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Expired link" |
 *
 * @param {Portal_Dead_Link_TitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const portal_dead_link_title = /** @type {((inputs?: Portal_Dead_Link_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Dead_Link_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const portal_dead_link_title = /** @type {((inputs?: Portal_Dead_Link_TitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Dead_Link_TitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_portal_dead_link_title(inputs)
+	if (locale === "en-XA") return en_xa2_portal_dead_link_title(inputs)
 	return en_portal_dead_link_title(inputs)
 });

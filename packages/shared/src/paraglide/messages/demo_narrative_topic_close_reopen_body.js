@@ -17,17 +17,24 @@ const es_demo_narrative_topic_close_reopen_body = /** @type {(inputs: Demo_Narra
 **Reabrir.** Un ticket cerrado se puede reabrir si el caso necesita más atención. Reabrir restaura el ticket a estado activo y reaparece en las listas de trabajo del voluntario.`)
 };
 
+const en_xa2_demo_narrative_topic_close_reopen_body = /** @type {(inputs: Demo_Narrative_Topic_Close_Reopen_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vòlùntèèrs càn clòsè à tìckèt whèn thè càsè ìs rèsòlvèd.
+ ••••••••••••••••••**Rèsòlùtìòn nòtès. ••••••** Whèn clòsìng, thè systèm chècks whìch nòtè typès àrè màrkèd às rèqùìrèd òn clòsè. Ìf àny àrè, thè vòlùntèèr ìs stèppèd thròùgh thèm ònè àt à tìmè. Èàch stèp càn bè skìppèd. Ìf nò nòtè typès rèqùìrè nòtès àt clòsè, thè tìckèt clòsès ìmmèdìàtèly wìth nò pròmpt. Rèsòlùtìòn nòtès àrè èncryptèd wìth thè pèr tìckèt kèy bèfòrè stòràgè.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Rèòpènìng. •••** À clòsèd tìckèt càn bè rèòpènèd ìf thè càsè nèèds fùrthèr àttèntìòn. Rèòpènìng rèstòrès thè tìckèt tò àctìvè stàtùs ànd ìt rèàppèàrs ìn thè vòlùntèèr's wòrkìng lìsts. •••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Volunteers can close a ticket when the case is resolved. **Resolution notes.** When closing, the system checks which note types are marked as required on clo..." |
 *
 * @param {Demo_Narrative_Topic_Close_Reopen_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_close_reopen_body = /** @type {((inputs?: Demo_Narrative_Topic_Close_Reopen_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Close_Reopen_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_close_reopen_body = /** @type {((inputs?: Demo_Narrative_Topic_Close_Reopen_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Close_Reopen_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_close_reopen_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_close_reopen_body(inputs)
 	return en_demo_narrative_topic_close_reopen_body(inputs)
 });

@@ -4,13 +4,13 @@
 * | "Add field" |
 *
 * @param {Intake_Forms_Add_FieldInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const intake_forms_add_field: ((inputs?: Intake_Forms_Add_FieldInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Intake_Forms_Add_FieldInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Intake_Forms_Add_FieldInputs = {};

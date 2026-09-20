@@ -13,17 +13,22 @@ const es_intake_error_number_min = /** @type {(inputs: Intake_Error_Number_MinIn
 	return /** @type {LocalizedString} */ (`El valor debe ser al menos ${i?.min}.`)
 };
 
+const en_xa2_intake_error_number_min = /** @type {(inputs: Intake_Error_Number_MinInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Vàlùè mùst bè àt lèàst  •••••••${i?.min}. •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Value must be at least {min}." |
 *
 * @param {Intake_Error_Number_MinInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_error_number_min = /** @type {((inputs: Intake_Error_Number_MinInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Error_Number_MinInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const intake_error_number_min = /** @type {((inputs: Intake_Error_Number_MinInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Error_Number_MinInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_error_number_min(inputs)
+	if (locale === "en-XA") return en_xa2_intake_error_number_min(inputs)
 	return en_intake_error_number_min(inputs)
 });

@@ -13,17 +13,22 @@ const es_roles_group_case_record = /** @type {(inputs: Roles_Group_Case_RecordIn
 	return /** @type {LocalizedString} */ (`El expediente del caso`)
 };
 
+const en_xa2_roles_group_case_record = /** @type {(inputs: Roles_Group_Case_RecordInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè càsè rècòrd •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The case record" |
 *
 * @param {Roles_Group_Case_RecordInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const roles_group_case_record = /** @type {((inputs?: Roles_Group_Case_RecordInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_Group_Case_RecordInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const roles_group_case_record = /** @type {((inputs?: Roles_Group_Case_RecordInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_Group_Case_RecordInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_roles_group_case_record(inputs)
+	if (locale === "en-XA") return en_xa2_roles_group_case_record(inputs)
 	return en_roles_group_case_record(inputs)
 });

@@ -13,17 +13,22 @@ const es_consultant_phone_invalid = /** @type {(inputs: Consultant_Phone_Invalid
 	return /** @type {LocalizedString} */ (`Ingresa un número como +1 555 000 1234`)
 };
 
+const en_xa2_consultant_phone_invalid = /** @type {(inputs: Consultant_Phone_InvalidInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èntèr à nùmbèr lìkè +1 555 000 1234 •••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Enter a number like +1 555 000 1234" |
 *
 * @param {Consultant_Phone_InvalidInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const consultant_phone_invalid = /** @type {((inputs?: Consultant_Phone_InvalidInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_InvalidInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const consultant_phone_invalid = /** @type {((inputs?: Consultant_Phone_InvalidInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_InvalidInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_consultant_phone_invalid(inputs)
+	if (locale === "en-XA") return en_xa2_consultant_phone_invalid(inputs)
 	return en_consultant_phone_invalid(inputs)
 });

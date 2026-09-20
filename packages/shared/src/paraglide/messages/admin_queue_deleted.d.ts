@@ -4,13 +4,13 @@
 * | "{Queue} deleted" |
 *
 * @param {Admin_Queue_DeletedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_queue_deleted: ((inputs: Admin_Queue_DeletedInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Queue_DeletedInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Queue_DeletedInputs = {

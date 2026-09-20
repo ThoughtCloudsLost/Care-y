@@ -13,17 +13,22 @@ const es_vol_link_replay_tour = /** @type {(inputs: Vol_Link_Replay_TourInputs) 
 	return /** @type {LocalizedString} */ (`Repetir Tour de la App`)
 };
 
+const en_xa2_vol_link_replay_tour = /** @type {(inputs: Vol_Link_Replay_TourInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèplày Àpp Tòùr •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Replay App Tour" |
 *
 * @param {Vol_Link_Replay_TourInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const vol_link_replay_tour = /** @type {((inputs?: Vol_Link_Replay_TourInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Link_Replay_TourInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const vol_link_replay_tour = /** @type {((inputs?: Vol_Link_Replay_TourInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Link_Replay_TourInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_vol_link_replay_tour(inputs)
+	if (locale === "en-XA") return en_xa2_vol_link_replay_tour(inputs)
 	return en_vol_link_replay_tour(inputs)
 });

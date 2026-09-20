@@ -13,17 +13,22 @@ const es_admin_telephony_system_messages = /** @type {(inputs: Admin_Telephony_S
 	return /** @type {LocalizedString} */ (`Textos automáticos`)
 };
 
+const en_xa2_admin_telephony_system_messages = /** @type {(inputs: Admin_Telephony_System_MessagesInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àùtòmàtèd tèxts •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Automated texts" |
 *
 * @param {Admin_Telephony_System_MessagesInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_telephony_system_messages = /** @type {((inputs?: Admin_Telephony_System_MessagesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_System_MessagesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_telephony_system_messages = /** @type {((inputs?: Admin_Telephony_System_MessagesInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_System_MessagesInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_telephony_system_messages(inputs)
+	if (locale === "en-XA") return en_xa2_admin_telephony_system_messages(inputs)
 	return en_admin_telephony_system_messages(inputs)
 });

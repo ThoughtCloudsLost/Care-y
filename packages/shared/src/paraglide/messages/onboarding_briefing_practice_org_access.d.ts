@@ -4,13 +4,13 @@
 * | "Any logged-in volunteer in your org" |
 *
 * @param {Onboarding_Briefing_Practice_Org_AccessInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const onboarding_briefing_practice_org_access: ((inputs?: Onboarding_Briefing_Practice_Org_AccessInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Onboarding_Briefing_Practice_Org_AccessInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Onboarding_Briefing_Practice_Org_AccessInputs = {};

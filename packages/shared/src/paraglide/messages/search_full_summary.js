@@ -13,17 +13,22 @@ const es_search_full_summary = /** @type {(inputs: Search_Full_SummaryInputs) =>
 	return /** @type {LocalizedString} */ (`Se encontraron ${i?.found} resultados en ${i?.total} elementos`)
 };
 
+const en_xa2_search_full_summary = /** @type {(inputs: Search_Full_SummaryInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Fòùnd  ••${i?.found} rèsùlts àcròss  •••••${i?.total} ìtèms ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Found {found} results across {total} items" |
 *
 * @param {Search_Full_SummaryInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const search_full_summary = /** @type {((inputs: Search_Full_SummaryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Full_SummaryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const search_full_summary = /** @type {((inputs: Search_Full_SummaryInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Full_SummaryInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_search_full_summary(inputs)
+	if (locale === "en-XA") return en_xa2_search_full_summary(inputs)
 	return en_search_full_summary(inputs)
 });

@@ -17,17 +17,24 @@ const es_demo_narrative_topic_compose_actions_body = /** @type {(inputs: Demo_Na
 **Adjuntos.** Los archivos adjuntos a un ticket se cifran con la clave por ticket usando XChaCha20-Poly1305 y se almacenan como datos binarios cifrados. El servidor no puede descifrar los adjuntos almacenados.`)
 };
 
+const en_xa2_demo_narrative_topic_compose_actions_body = /** @type {(inputs: Demo_Narrative_Topic_Compose_Actions_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè còmpòsè mènù lìsts thè àvàìlàblè àctìòns fòr à tìckèt. Thè èntrìès thàt àppèàr dèpènd òn thè clìènt's còntàct mèthòds ànd thè vòlùntèèr's pèrmìssìòns.
+ •••••••••••••••••••••••••••••••••••••••••••••••**Èmàìl. ••** Thè èmàìl còmpòsè shèèt shòws à plàìntèxt wàrnìng bànnèr bècàùsè thè mèssàgè lèàvès thè systèm ùnèncryptèd, ùnlìkè ìn-àpp mèssàgès thàt stày sèàlèd ènd tò ènd.
+ •••••••••••••••••••••••••••••••••••••••••••••••••**Àttàchmènts. ••••** Fìlès àttàchèd tò à tìckèt àrè èncryptèd wìth thè pèr tìckèt kèy ùsìng XChàChà20-Pòly1305 ànd stòrèd às èncryptèd bìnàry dàtà. Thè sèrvèr cànnòt dècrypt stòrèd àttàchmènts. ••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The compose menu lists the available actions for a ticket. The entries that appear depend on the client's contact methods and the volunteer's permissions. **..." |
 *
 * @param {Demo_Narrative_Topic_Compose_Actions_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_compose_actions_body = /** @type {((inputs?: Demo_Narrative_Topic_Compose_Actions_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Compose_Actions_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_compose_actions_body = /** @type {((inputs?: Demo_Narrative_Topic_Compose_Actions_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Compose_Actions_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_compose_actions_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_compose_actions_body(inputs)
 	return en_demo_narrative_topic_compose_actions_body(inputs)
 });

@@ -13,17 +13,22 @@ const es_tickets_create_shortcut = /** @type {(inputs: Tickets_Create_ShortcutIn
 	return /** @type {LocalizedString} */ (`Guardar filtro`)
 };
 
+const en_xa2_tickets_create_shortcut = /** @type {(inputs: Tickets_Create_ShortcutInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sàvè fìltèr shòrtcùt ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Save filter shortcut" |
 *
 * @param {Tickets_Create_ShortcutInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const tickets_create_shortcut = /** @type {((inputs?: Tickets_Create_ShortcutInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Create_ShortcutInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const tickets_create_shortcut = /** @type {((inputs?: Tickets_Create_ShortcutInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Create_ShortcutInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_tickets_create_shortcut(inputs)
+	if (locale === "en-XA") return en_xa2_tickets_create_shortcut(inputs)
 	return en_tickets_create_shortcut(inputs)
 });

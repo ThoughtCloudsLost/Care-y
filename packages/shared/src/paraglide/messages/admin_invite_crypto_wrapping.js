@@ -13,17 +13,22 @@ const es_admin_invite_crypto_wrapping = /** @type {(inputs: Admin_Invite_Crypto_
 	return /** @type {LocalizedString} */ (`Distribuyendo clave de la organización...`)
 };
 
+const en_xa2_admin_invite_crypto_wrapping = /** @type {(inputs: Admin_Invite_Crypto_WrappingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Dìstrìbùtìng òrgànìzàtìòn kèy... ••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Distributing organization key..." |
 *
 * @param {Admin_Invite_Crypto_WrappingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_invite_crypto_wrapping = /** @type {((inputs?: Admin_Invite_Crypto_WrappingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Crypto_WrappingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_invite_crypto_wrapping = /** @type {((inputs?: Admin_Invite_Crypto_WrappingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Crypto_WrappingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_invite_crypto_wrapping(inputs)
+	if (locale === "en-XA") return en_xa2_admin_invite_crypto_wrapping(inputs)
 	return en_admin_invite_crypto_wrapping(inputs)
 });

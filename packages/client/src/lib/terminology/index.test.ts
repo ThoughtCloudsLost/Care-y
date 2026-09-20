@@ -5,10 +5,11 @@ import {
   type TerminologyConfig,
 } from "@care-y/shared";
 import { resolveLabels } from "./index.js";
+import { asFixedLocale } from "$lib/locale/reader-locale.js";
 
 describe("resolveLabels", () => {
   it("returns defaults when config is null", () => {
-    const labels = resolveLabels(null, "en");
+    const labels = resolveLabels(null, asFixedLocale("en"));
     expect(labels).toEqual(TERMINOLOGY_DEFAULTS_EN);
   });
 
@@ -20,7 +21,7 @@ describe("resolveLabels", () => {
         volunteers: "advocates",
       },
     };
-    const labels = resolveLabels(config, "en");
+    const labels = resolveLabels(config, asFixedLocale("en"));
     expect(labels.volunteer).toBe("advocate");
     expect(labels.volunteers).toBe("advocates");
     expect(labels.client).toBe("client");
@@ -34,12 +35,12 @@ describe("resolveLabels", () => {
         volunteers: "helpers",
       },
     };
-    const labels = resolveLabels(config, "es");
+    const labels = resolveLabels(config, asFixedLocale("es"));
     expect(labels).toEqual(TERMINOLOGY_DEFAULTS.es);
   });
 
   it("falls back to TERMINOLOGY_DEFAULTS_EN for unknown language with null config", () => {
-    const labels = resolveLabels(null, "fr");
+    const labels = resolveLabels(null, asFixedLocale("fr"));
     expect(labels).toEqual(TERMINOLOGY_DEFAULTS_EN);
   });
 
@@ -47,12 +48,12 @@ describe("resolveLabels", () => {
     const config: TerminologyConfig = {
       en: { ...TERMINOLOGY_DEFAULTS_EN },
     };
-    const labels = resolveLabels(config, "fr");
+    const labels = resolveLabels(config, asFixedLocale("fr"));
     expect(labels).toEqual(TERMINOLOGY_DEFAULTS_EN);
   });
 
   it("returns Spanish defaults when requesting es with null config", () => {
-    const labels = resolveLabels(null, "es");
+    const labels = resolveLabels(null, asFixedLocale("es"));
     expect(labels.volunteer).toBe("voluntario");
     expect(labels.client).toBe("cliente");
   });
@@ -73,7 +74,7 @@ describe("resolveLabels", () => {
         knowledgeBase: "handbook",
       },
     };
-    const labels = resolveLabels(config, "en");
+    const labels = resolveLabels(config, asFixedLocale("en"));
     expect(labels.volunteer).toBe("staff");
     expect(labels.volunteers).toBe("staff members");
     expect(labels.client).toBe("survivor");

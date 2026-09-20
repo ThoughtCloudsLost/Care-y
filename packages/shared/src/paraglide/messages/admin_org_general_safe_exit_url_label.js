@@ -13,17 +13,22 @@ const es_admin_org_general_safe_exit_url_label = /** @type {(inputs: Admin_Org_G
 	return /** @type {LocalizedString} */ (`URL de salida rápida`)
 };
 
+const en_xa2_admin_org_general_safe_exit_url_label = /** @type {(inputs: Admin_Org_General_Safe_Exit_Url_LabelInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Qùìck-èxìt ÙRL •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Quick-exit URL" |
 *
 * @param {Admin_Org_General_Safe_Exit_Url_LabelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_org_general_safe_exit_url_label = /** @type {((inputs?: Admin_Org_General_Safe_Exit_Url_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Org_General_Safe_Exit_Url_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_org_general_safe_exit_url_label = /** @type {((inputs?: Admin_Org_General_Safe_Exit_Url_LabelInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Org_General_Safe_Exit_Url_LabelInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_org_general_safe_exit_url_label(inputs)
+	if (locale === "en-XA") return en_xa2_admin_org_general_safe_exit_url_label(inputs)
 	return en_admin_org_general_safe_exit_url_label(inputs)
 });

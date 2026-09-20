@@ -13,17 +13,22 @@ const es_panel_group_organization = /** @type {(inputs: Panel_Group_Organization
 	return /** @type {LocalizedString} */ (`Organización`)
 };
 
+const en_xa2_panel_group_organization = /** @type {(inputs: Panel_Group_OrganizationInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Òrgànìzàtìòn ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Organization" |
 *
 * @param {Panel_Group_OrganizationInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const panel_group_organization = /** @type {((inputs?: Panel_Group_OrganizationInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_Group_OrganizationInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const panel_group_organization = /** @type {((inputs?: Panel_Group_OrganizationInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_Group_OrganizationInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_panel_group_organization(inputs)
+	if (locale === "en-XA") return en_xa2_panel_group_organization(inputs)
 	return en_panel_group_organization(inputs)
 });

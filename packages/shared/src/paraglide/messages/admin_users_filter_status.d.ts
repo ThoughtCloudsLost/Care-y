@@ -4,13 +4,13 @@
 * | "Status" |
 *
 * @param {Admin_Users_Filter_StatusInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_users_filter_status: ((inputs?: Admin_Users_Filter_StatusInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Users_Filter_StatusInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Users_Filter_StatusInputs = {};

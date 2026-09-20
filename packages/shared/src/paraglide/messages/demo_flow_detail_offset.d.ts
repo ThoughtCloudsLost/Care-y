@@ -4,13 +4,13 @@
 * | "+{ms} ms" |
 *
 * @param {Demo_Flow_Detail_OffsetInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const demo_flow_detail_offset: ((inputs: Demo_Flow_Detail_OffsetInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Flow_Detail_OffsetInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Demo_Flow_Detail_OffsetInputs = {

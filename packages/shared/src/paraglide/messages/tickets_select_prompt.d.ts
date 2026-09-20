@@ -4,13 +4,13 @@
 * | "Select a ticket to view" |
 *
 * @param {Tickets_Select_PromptInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const tickets_select_prompt: ((inputs?: Tickets_Select_PromptInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Tickets_Select_PromptInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Tickets_Select_PromptInputs = {};

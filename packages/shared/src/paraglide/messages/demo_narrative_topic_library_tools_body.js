@@ -21,17 +21,26 @@ const es_demo_narrative_topic_library_tools_body = /** @type {(inputs: Demo_Narr
 **Acciones masivas.** El modo de selección permite mover artículos entre categorías, exportarlos y eliminarlos, con la eliminación protegida tanto por una comprobación de permisos como por una confirmación.`)
 };
 
+const en_xa2_demo_narrative_topic_library_tools_body = /** @type {(inputs: Demo_Narrative_Topic_Library_Tools_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè lìbràry lìst càrrìès thè sàmè tòòlbòx às thè tìckèt lìst, tùnèd fòr àrtìclès.
+ •••••••••••••••••••••••••**Vìèw mòdès. ••••** Tàblè, ròws, càrds, ànd grìd làyòùts, wìth thè chòìcè sàvèd lòcàlly.
+ •••••••••••••••••••••**Sòrt. ••** Àrtìclès sòrt by crèàtìòn dàtè, làst ùpdàtè, òr ràtìng.
+ ••••••••••••••••••**Fìltèrs. •••** Pìlls nàrròw by càtègòry, ràtìng, àùthòr, ànd dàtè ràngè, ànd fìltèr còmbìnàtìòns càn bè sàvèd às nàmèd prèsèts.
+ •••••••••••••••••••••••••••••••••••**Bùlk àctìòns. ••••** Sèlèct mòdè àllòws mòvìng àrtìclès bètwèèn càtègòrìès, èxpòrtìng thèm, ànd dèlètìng thèm, wìth dèlètìòn bèhìnd bòth à pèrmìssìòn chèck ànd à cònfìrmàtìòn. •••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The library list carries the same toolbox as the ticket list, tuned for articles. **View modes.** Table, rows, cards, and grid layouts, with the choice saved..." |
 *
 * @param {Demo_Narrative_Topic_Library_Tools_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_library_tools_body = /** @type {((inputs?: Demo_Narrative_Topic_Library_Tools_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Library_Tools_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_library_tools_body = /** @type {((inputs?: Demo_Narrative_Topic_Library_Tools_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Library_Tools_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_library_tools_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_library_tools_body(inputs)
 	return en_demo_narrative_topic_library_tools_body(inputs)
 });

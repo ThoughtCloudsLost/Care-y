@@ -13,17 +13,22 @@ const es_settings_password_step_fetch = /** @type {(inputs: Settings_Password_St
 	return /** @type {LocalizedString} */ (`Cargando datos de cifrado`)
 };
 
+const en_xa2_settings_password_step_fetch = /** @type {(inputs: Settings_Password_Step_FetchInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Lòàdìng èncryptìòn dàtà •••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Loading encryption data" |
 *
 * @param {Settings_Password_Step_FetchInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const settings_password_step_fetch = /** @type {((inputs?: Settings_Password_Step_FetchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Password_Step_FetchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const settings_password_step_fetch = /** @type {((inputs?: Settings_Password_Step_FetchInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Password_Step_FetchInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_settings_password_step_fetch(inputs)
+	if (locale === "en-XA") return en_xa2_settings_password_step_fetch(inputs)
 	return en_settings_password_step_fetch(inputs)
 });

@@ -13,17 +13,22 @@ const es_admin_invite_password_hint = /** @type {(inputs: Admin_Invite_Password_
 	return /** @type {LocalizedString} */ (`Comparta de forma segura con el ${i?.volunteer}. Debe cambiarla después del primer inicio de sesión.`)
 };
 
+const en_xa2_admin_invite_password_hint = /** @type {(inputs: Admin_Invite_Password_HintInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Shàrè sècùrèly wìth thè  ••••••••${i?.volunteer}. Thèy shòùld chàngè ìt àftèr fìrst lògìn. •••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Share securely with the {volunteer}. They should change it after first login." |
 *
 * @param {Admin_Invite_Password_HintInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_invite_password_hint = /** @type {((inputs: Admin_Invite_Password_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Password_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const admin_invite_password_hint = /** @type {((inputs: Admin_Invite_Password_HintInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Password_HintInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_invite_password_hint(inputs)
+	if (locale === "en-XA") return en_xa2_admin_invite_password_hint(inputs)
 	return en_admin_invite_password_hint(inputs)
 });

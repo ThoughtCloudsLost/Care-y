@@ -13,17 +13,22 @@ const es_create_new_shift = /** @type {(inputs: Create_New_ShiftInputs) => Local
 	return /** @type {LocalizedString} */ (`Nuevo Turno`)
 };
 
+const en_xa2_create_new_shift = /** @type {(inputs: Create_New_ShiftInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nèw Shìft •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "New Shift" |
 *
 * @param {Create_New_ShiftInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const create_new_shift = /** @type {((inputs?: Create_New_ShiftInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Create_New_ShiftInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const create_new_shift = /** @type {((inputs?: Create_New_ShiftInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Create_New_ShiftInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_create_new_shift(inputs)
+	if (locale === "en-XA") return en_xa2_create_new_shift(inputs)
 	return en_create_new_shift(inputs)
 });

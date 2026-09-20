@@ -4,13 +4,13 @@
 * | "After you submit, you will receive a link. Open it any time to read replies or add more information. Anyone who has the link can read and add to this convers..." |
 *
 * @param {Intake_Continuation_Expanded_TextInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const intake_continuation_expanded_text: ((inputs?: Intake_Continuation_Expanded_TextInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Intake_Continuation_Expanded_TextInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Intake_Continuation_Expanded_TextInputs = {};

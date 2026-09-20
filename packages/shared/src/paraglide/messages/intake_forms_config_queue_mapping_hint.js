@@ -13,17 +13,22 @@ const es_intake_forms_config_queue_mapping_hint = /** @type {(inputs: Intake_For
 	return /** @type {LocalizedString} */ (`Elija una cola de destino para cada opción.`)
 };
 
+const en_xa2_intake_forms_config_queue_mapping_hint = /** @type {(inputs: Intake_Forms_Config_Queue_Mapping_HintInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Chòòsè à dèstìnàtìòn qùèùè fòr èàch òptìòn. •••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Choose a destination queue for each option." |
 *
 * @param {Intake_Forms_Config_Queue_Mapping_HintInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_config_queue_mapping_hint = /** @type {((inputs?: Intake_Forms_Config_Queue_Mapping_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Queue_Mapping_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_config_queue_mapping_hint = /** @type {((inputs?: Intake_Forms_Config_Queue_Mapping_HintInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Queue_Mapping_HintInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_config_queue_mapping_hint(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_config_queue_mapping_hint(inputs)
 	return en_intake_forms_config_queue_mapping_hint(inputs)
 });

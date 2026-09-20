@@ -13,17 +13,22 @@ const es_reaction_acknowledge = /** @type {(inputs: Reaction_AcknowledgeInputs) 
 	return /** @type {LocalizedString} */ (`Reconocer`)
 };
 
+const en_xa2_reaction_acknowledge = /** @type {(inputs: Reaction_AcknowledgeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àcknòwlèdgè ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Acknowledge" |
 *
 * @param {Reaction_AcknowledgeInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const reaction_acknowledge = /** @type {((inputs?: Reaction_AcknowledgeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Reaction_AcknowledgeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const reaction_acknowledge = /** @type {((inputs?: Reaction_AcknowledgeInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Reaction_AcknowledgeInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_reaction_acknowledge(inputs)
+	if (locale === "en-XA") return en_xa2_reaction_acknowledge(inputs)
 	return en_reaction_acknowledge(inputs)
 });

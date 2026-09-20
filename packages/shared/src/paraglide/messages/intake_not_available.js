@@ -13,17 +13,22 @@ const es_intake_not_available = /** @type {(inputs: Intake_Not_AvailableInputs) 
 	return /** @type {LocalizedString} */ (`Este formulario no está disponible. Si necesitas ayuda, comunícate directamente con la organización.`)
 };
 
+const en_xa2_intake_not_available = /** @type {(inputs: Intake_Not_AvailableInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìs fòrm ìs nòt àvàìlàblè. Ìf yòù nèèd hèlp, còntàct thè òrgànìzàtìòn dìrèctly. ••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This form is not available. If you need help, contact the organization directly." |
 *
 * @param {Intake_Not_AvailableInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_not_available = /** @type {((inputs?: Intake_Not_AvailableInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Not_AvailableInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_not_available = /** @type {((inputs?: Intake_Not_AvailableInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Not_AvailableInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_not_available(inputs)
+	if (locale === "en-XA") return en_xa2_intake_not_available(inputs)
 	return en_intake_not_available(inputs)
 });

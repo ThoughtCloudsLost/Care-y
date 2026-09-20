@@ -7,11 +7,11 @@ export type Mergecandidates_Match_Phone1Inputs = {};
 * | "Same phone number" |
 *
 * @param {Mergecandidates_Match_Phone1Inputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 declare const mergecandidates_match_phone1: ((inputs?: Mergecandidates_Match_Phone1Inputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Mergecandidates_Match_Phone1Inputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;

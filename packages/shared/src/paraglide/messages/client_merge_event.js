@@ -13,17 +13,22 @@ const es_client_merge_event = /** @type {(inputs: Client_Merge_EventInputs) => L
 	return /** @type {LocalizedString} */ (`${i?.alias} fusionado aquí`)
 };
 
+const en_xa2_client_merge_event = /** @type {(inputs: Client_Merge_EventInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.alias} mèrgèd hèrè ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{alias} merged here" |
 *
 * @param {Client_Merge_EventInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const client_merge_event = /** @type {((inputs: Client_Merge_EventInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Merge_EventInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const client_merge_event = /** @type {((inputs: Client_Merge_EventInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Merge_EventInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_client_merge_event(inputs)
+	if (locale === "en-XA") return en_xa2_client_merge_event(inputs)
 	return en_client_merge_event(inputs)
 });

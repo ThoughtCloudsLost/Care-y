@@ -13,17 +13,22 @@ const es_onboarding_firstlogin_confirm_password = /** @type {(inputs: Onboarding
 	return /** @type {LocalizedString} */ (`Confirmar contraseña`)
 };
 
+const en_xa2_onboarding_firstlogin_confirm_password = /** @type {(inputs: Onboarding_Firstlogin_Confirm_PasswordInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Cònfìrm Pàsswòrd •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Confirm Password" |
 *
 * @param {Onboarding_Firstlogin_Confirm_PasswordInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_firstlogin_confirm_password = /** @type {((inputs?: Onboarding_Firstlogin_Confirm_PasswordInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Firstlogin_Confirm_PasswordInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_firstlogin_confirm_password = /** @type {((inputs?: Onboarding_Firstlogin_Confirm_PasswordInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Firstlogin_Confirm_PasswordInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_firstlogin_confirm_password(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_firstlogin_confirm_password(inputs)
 	return en_onboarding_firstlogin_confirm_password(inputs)
 });

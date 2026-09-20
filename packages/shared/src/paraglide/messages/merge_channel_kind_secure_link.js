@@ -13,17 +13,22 @@ const es_merge_channel_kind_secure_link = /** @type {(inputs: Merge_Channel_Kind
 	return /** @type {LocalizedString} */ (`Enlace seguro`)
 };
 
+const en_xa2_merge_channel_kind_secure_link = /** @type {(inputs: Merge_Channel_Kind_Secure_LinkInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sècùrè Lìnk ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Secure Link" |
 *
 * @param {Merge_Channel_Kind_Secure_LinkInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const merge_channel_kind_secure_link = /** @type {((inputs?: Merge_Channel_Kind_Secure_LinkInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Merge_Channel_Kind_Secure_LinkInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const merge_channel_kind_secure_link = /** @type {((inputs?: Merge_Channel_Kind_Secure_LinkInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Merge_Channel_Kind_Secure_LinkInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_merge_channel_kind_secure_link(inputs)
+	if (locale === "en-XA") return en_xa2_merge_channel_kind_secure_link(inputs)
 	return en_merge_channel_kind_secure_link(inputs)
 });

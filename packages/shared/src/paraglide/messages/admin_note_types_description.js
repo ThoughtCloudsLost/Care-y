@@ -13,17 +13,22 @@ const es_admin_note_types_description = /** @type {(inputs: Admin_Note_Types_Des
 	return /** @type {LocalizedString} */ (`Categorías para notas de seguimiento en ${i?.tickets}. Cada tipo puede requerir escalamiento, restringir visibilidad por rol o ser obligatorio al cerrar un ${i?.ticket}.`)
 };
 
+const en_xa2_admin_note_types_description = /** @type {(inputs: Admin_Note_Types_DescriptionInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Càtègòrìès fòr fòllòw-ùp nòtès òn  •••••••••••${i?.tickets}. Èàch typè càn rèqùìrè èscàlàtìòn, rèstrìct vìsìbìlìty by ròlè, òr bè màrkèd às rèqùìrèd whèn clòsìng à  ••••••••••••••••••••••••••••••••${i?.ticket}. •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Categories for follow-up notes on {tickets}. Each type can require escalation, restrict visibility by role, or be marked as required when closing a {ticket}." |
 *
 * @param {Admin_Note_Types_DescriptionInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_note_types_description = /** @type {((inputs: Admin_Note_Types_DescriptionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Note_Types_DescriptionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const admin_note_types_description = /** @type {((inputs: Admin_Note_Types_DescriptionInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Note_Types_DescriptionInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_note_types_description(inputs)
+	if (locale === "en-XA") return en_xa2_admin_note_types_description(inputs)
 	return en_admin_note_types_description(inputs)
 });

@@ -404,6 +404,28 @@ describe("TerminologySection", () => {
     });
   });
 
+  it("shows both EN and ES columns in the summary card", () => {
+    renderWithData();
+    const langTags = document.querySelectorAll(".term-lang-tag");
+    const tagTexts = Array.from(langTags).map((el) => el.textContent);
+    // Each of the 6 groups has an EN and an ES tag
+    const enCount = tagTexts.filter((t) => t === "English").length;
+    const esCount = tagTexts.filter((t) => t === "Spanish").length;
+    // 6 term groups, each with an EN and ES column
+    expect(enCount).toBe(6);
+    expect(esCount).toBe(6);
+  });
+
+  it("shows default term values for both languages in the card", () => {
+    renderWithData();
+    const values = document.querySelectorAll(".term-value");
+    const texts = Array.from(values).map((el) => el.textContent.trim());
+    // EN defaults include "Volunteer / Volunteers"
+    expect(texts.some((t) => t.includes("Volunteer"))).toBe(true);
+    // ES defaults include "Voluntario / Voluntarios"
+    expect(texts.some((t) => t.includes("Voluntario"))).toBe(true);
+  });
+
   it("displays edit button in card view", () => {
     renderWithData();
     expect(

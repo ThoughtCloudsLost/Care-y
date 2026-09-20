@@ -13,17 +13,22 @@ const es_intake_avail_timezone_search = /** @type {(inputs: Intake_Avail_Timezon
 	return /** @type {LocalizedString} */ (`Buscar zonas horarias...`)
 };
 
+const en_xa2_intake_avail_timezone_search = /** @type {(inputs: Intake_Avail_Timezone_SearchInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèàrch tìmèzònès... ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Search timezones..." |
 *
 * @param {Intake_Avail_Timezone_SearchInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_avail_timezone_search = /** @type {((inputs?: Intake_Avail_Timezone_SearchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Timezone_SearchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_avail_timezone_search = /** @type {((inputs?: Intake_Avail_Timezone_SearchInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Timezone_SearchInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_avail_timezone_search(inputs)
+	if (locale === "en-XA") return en_xa2_intake_avail_timezone_search(inputs)
 	return en_intake_avail_timezone_search(inputs)
 });

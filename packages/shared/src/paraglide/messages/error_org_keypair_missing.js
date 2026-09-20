@@ -13,17 +13,22 @@ const es_error_org_keypair_missing = /** @type {(inputs: Error_Org_Keypair_Missi
 	return /** @type {LocalizedString} */ (`La configuración de la organización está incompleta. Por favor, reinicie el proceso de configuración.`)
 };
 
+const en_xa2_error_org_keypair_missing = /** @type {(inputs: Error_Org_Keypair_MissingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Òrgànìzàtìòn sètùp ìs ìncòmplètè. Plèàsè rèstàrt thè sètùp pròcèss. •••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Organization setup is incomplete. Please restart the setup process." |
 *
 * @param {Error_Org_Keypair_MissingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_org_keypair_missing = /** @type {((inputs?: Error_Org_Keypair_MissingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Org_Keypair_MissingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_org_keypair_missing = /** @type {((inputs?: Error_Org_Keypair_MissingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Org_Keypair_MissingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_org_keypair_missing(inputs)
+	if (locale === "en-XA") return en_xa2_error_org_keypair_missing(inputs)
 	return en_error_org_keypair_missing(inputs)
 });

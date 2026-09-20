@@ -13,17 +13,22 @@ const es_onboarding_reauth_message = /** @type {(inputs: Onboarding_Reauth_Messa
 	return /** @type {LocalizedString} */ (`Inicia sesión de nuevo para desbloquear tus claves y continuar la configuración.`)
 };
 
+const en_xa2_onboarding_reauth_message = /** @type {(inputs: Onboarding_Reauth_MessageInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sìgn bàck ìn tò ùnlòck yòùr kèys ànd còntìnùè sètùp. ••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Sign back in to unlock your keys and continue setup." |
 *
 * @param {Onboarding_Reauth_MessageInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_reauth_message = /** @type {((inputs?: Onboarding_Reauth_MessageInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Reauth_MessageInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_reauth_message = /** @type {((inputs?: Onboarding_Reauth_MessageInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Reauth_MessageInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_reauth_message(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_reauth_message(inputs)
 	return en_onboarding_reauth_message(inputs)
 });

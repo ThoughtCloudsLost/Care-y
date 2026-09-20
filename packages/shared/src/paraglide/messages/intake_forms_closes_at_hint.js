@@ -13,17 +13,22 @@ const es_intake_forms_closes_at_hint = /** @type {(inputs: Intake_Forms_Closes_A
 	return /** @type {LocalizedString} */ (`Tras esta fecha y hora, el formulario dejará de aceptar envíos.`)
 };
 
+const en_xa2_intake_forms_closes_at_hint = /** @type {(inputs: Intake_Forms_Closes_At_HintInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àftèr thìs dàtè ànd tìmè, thè fòrm wìll stòp àccèptìng sùbmìssìòns. •••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "After this date and time, the form will stop accepting submissions." |
 *
 * @param {Intake_Forms_Closes_At_HintInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_closes_at_hint = /** @type {((inputs?: Intake_Forms_Closes_At_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Closes_At_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_closes_at_hint = /** @type {((inputs?: Intake_Forms_Closes_At_HintInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Closes_At_HintInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_closes_at_hint(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_closes_at_hint(inputs)
 	return en_intake_forms_closes_at_hint(inputs)
 });

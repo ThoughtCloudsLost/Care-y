@@ -13,17 +13,22 @@ const es_ticket_meta_followup_count_one = /** @type {(inputs: Ticket_Meta_Follow
 	return /** @type {LocalizedString} */ (`${i?.count} seguimiento`)
 };
 
+const en_xa2_ticket_meta_followup_count_one = /** @type {(inputs: Ticket_Meta_Followup_Count_OneInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count} fòllòw-ùp •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} follow-up" |
 *
 * @param {Ticket_Meta_Followup_Count_OneInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_meta_followup_count_one = /** @type {((inputs: Ticket_Meta_Followup_Count_OneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Meta_Followup_Count_OneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const ticket_meta_followup_count_one = /** @type {((inputs: Ticket_Meta_Followup_Count_OneInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Meta_Followup_Count_OneInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_meta_followup_count_one(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_meta_followup_count_one(inputs)
 	return en_ticket_meta_followup_count_one(inputs)
 });

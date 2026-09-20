@@ -13,17 +13,22 @@ const es_view_switcher_kanban = /** @type {(inputs: View_Switcher_KanbanInputs) 
 	return /** @type {LocalizedString} */ (`Tablero kanban`)
 };
 
+const en_xa2_view_switcher_kanban = /** @type {(inputs: View_Switcher_KanbanInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Kànbàn bòàrd ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Kanban board" |
 *
 * @param {View_Switcher_KanbanInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const view_switcher_kanban = /** @type {((inputs?: View_Switcher_KanbanInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<View_Switcher_KanbanInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const view_switcher_kanban = /** @type {((inputs?: View_Switcher_KanbanInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<View_Switcher_KanbanInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_view_switcher_kanban(inputs)
+	if (locale === "en-XA") return en_xa2_view_switcher_kanban(inputs)
 	return en_view_switcher_kanban(inputs)
 });

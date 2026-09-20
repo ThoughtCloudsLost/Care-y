@@ -13,17 +13,22 @@ const es_library_editor_italic = /** @type {(inputs: Library_Editor_ItalicInputs
 	return /** @type {LocalizedString} */ (`Cursiva`)
 };
 
+const en_xa2_library_editor_italic = /** @type {(inputs: Library_Editor_ItalicInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ìtàlìc ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Italic" |
 *
 * @param {Library_Editor_ItalicInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_editor_italic = /** @type {((inputs?: Library_Editor_ItalicInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_ItalicInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_editor_italic = /** @type {((inputs?: Library_Editor_ItalicInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_ItalicInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_editor_italic(inputs)
+	if (locale === "en-XA") return en_xa2_library_editor_italic(inputs)
 	return en_library_editor_italic(inputs)
 });

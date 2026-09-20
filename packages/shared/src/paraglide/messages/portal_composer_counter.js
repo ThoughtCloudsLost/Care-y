@@ -13,17 +13,22 @@ const es_portal_composer_counter = /** @type {(inputs: Portal_Composer_CounterIn
 	return /** @type {LocalizedString} */ (`${i?.count} / ${i?.max}`)
 };
 
+const en_xa2_portal_composer_counter = /** @type {(inputs: Portal_Composer_CounterInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count} /  •${i?.max}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} / {max}" |
 *
 * @param {Portal_Composer_CounterInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const portal_composer_counter = /** @type {((inputs: Portal_Composer_CounterInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Composer_CounterInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const portal_composer_counter = /** @type {((inputs: Portal_Composer_CounterInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Composer_CounterInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_portal_composer_counter(inputs)
+	if (locale === "en-XA") return en_xa2_portal_composer_counter(inputs)
 	return en_portal_composer_counter(inputs)
 });

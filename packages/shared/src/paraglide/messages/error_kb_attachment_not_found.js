@@ -13,17 +13,22 @@ const es_error_kb_attachment_not_found = /** @type {(inputs: Error_Kb_Attachment
 	return /** @type {LocalizedString} */ (`Archivo adjunto no encontrado.`)
 };
 
+const en_xa2_error_kb_attachment_not_found = /** @type {(inputs: Error_Kb_Attachment_Not_FoundInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àttàchmènt nòt fòùnd. •••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Attachment not found." |
 *
 * @param {Error_Kb_Attachment_Not_FoundInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_kb_attachment_not_found = /** @type {((inputs?: Error_Kb_Attachment_Not_FoundInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Kb_Attachment_Not_FoundInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_kb_attachment_not_found = /** @type {((inputs?: Error_Kb_Attachment_Not_FoundInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Kb_Attachment_Not_FoundInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_kb_attachment_not_found(inputs)
+	if (locale === "en-XA") return en_xa2_error_kb_attachment_not_found(inputs)
 	return en_error_kb_attachment_not_found(inputs)
 });

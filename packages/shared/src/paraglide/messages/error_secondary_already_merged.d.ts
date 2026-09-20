@@ -4,13 +4,13 @@
 * | "Secondary {client} is already merged." |
 *
 * @param {Error_Secondary_Already_MergedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const error_secondary_already_merged: ((inputs: Error_Secondary_Already_MergedInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Error_Secondary_Already_MergedInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Error_Secondary_Already_MergedInputs = {

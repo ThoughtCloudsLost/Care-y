@@ -13,17 +13,22 @@ const es_hub_intake_forms_subtitle = /** @type {(inputs: Hub_Intake_Forms_Subtit
 	return /** @type {LocalizedString} */ (`Personaliza los campos de la página pública de admisión`)
 };
 
+const en_xa2_hub_intake_forms_subtitle = /** @type {(inputs: Hub_Intake_Forms_SubtitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Cùstòmìzè thè pùblìc ìntàkè pàgè fìèlds ••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Customize the public intake page fields" |
 *
 * @param {Hub_Intake_Forms_SubtitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const hub_intake_forms_subtitle = /** @type {((inputs?: Hub_Intake_Forms_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Intake_Forms_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const hub_intake_forms_subtitle = /** @type {((inputs?: Hub_Intake_Forms_SubtitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Intake_Forms_SubtitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_hub_intake_forms_subtitle(inputs)
+	if (locale === "en-XA") return en_xa2_hub_intake_forms_subtitle(inputs)
 	return en_hub_intake_forms_subtitle(inputs)
 });

@@ -13,17 +13,22 @@ const es_library_schedule_coming_soon = /** @type {(inputs: Library_Schedule_Com
 	return /** @type {LocalizedString} */ (`El horario estará disponible pronto.`)
 };
 
+const en_xa2_library_schedule_coming_soon = /** @type {(inputs: Library_Schedule_Coming_SoonInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Schèdùlè ìs còmìng sòòn. ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Schedule is coming soon." |
 *
 * @param {Library_Schedule_Coming_SoonInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_schedule_coming_soon = /** @type {((inputs?: Library_Schedule_Coming_SoonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Schedule_Coming_SoonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_schedule_coming_soon = /** @type {((inputs?: Library_Schedule_Coming_SoonInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Schedule_Coming_SoonInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_schedule_coming_soon(inputs)
+	if (locale === "en-XA") return en_xa2_library_schedule_coming_soon(inputs)
 	return en_library_schedule_coming_soon(inputs)
 });

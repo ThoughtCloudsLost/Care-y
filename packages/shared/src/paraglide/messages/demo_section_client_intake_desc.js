@@ -13,17 +13,22 @@ const es_demo_section_client_intake_desc = /** @type {(inputs: Demo_Section_Clie
 	return /** @type {LocalizedString} */ (`El formulario de admisión es el punto de entrada público para las personas que buscan ayuda. Toda organización tiene un formulario predeterminado, y los administradores pueden publicar formularios personalizados que lo reemplacen con sus propios campos, y todo lo que el visitante escribe se cifra en el navegador antes de salir del dispositivo.`)
 };
 
+const en_xa2_demo_section_client_intake_desc = /** @type {(inputs: Demo_Section_Client_Intake_DescInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè ìntàkè fòrm ìs thè pùblìc èntry pòìnt fòr pèòplè sèèkìng hèlp. Èvèry òrgànìzàtìòn hàs à bùìlt-ìn dèfàùlt fòrm, ànd àdmìnìstràtòrs càn pùblìsh cùstòm fòrms thàt rèplàcè ìt wìth thèìr òwn fìèlds, ànd èvèrythìng thè vìsìtòr typès ìs èncryptèd ìn thè bròwsèr bèfòrè ìt lèàvès thè dèvìcè. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The intake form is the public entry point for people seeking help. Every organization has a built-in default form, and administrators can publish custom form..." |
 *
 * @param {Demo_Section_Client_Intake_DescInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_section_client_intake_desc = /** @type {((inputs?: Demo_Section_Client_Intake_DescInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Section_Client_Intake_DescInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_section_client_intake_desc = /** @type {((inputs?: Demo_Section_Client_Intake_DescInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Section_Client_Intake_DescInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_section_client_intake_desc(inputs)
+	if (locale === "en-XA") return en_xa2_demo_section_client_intake_desc(inputs)
 	return en_demo_section_client_intake_desc(inputs)
 });

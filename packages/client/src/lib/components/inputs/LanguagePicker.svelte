@@ -14,6 +14,9 @@
     ["en", "English"],
     ["es", "Español"],
   ]);
+
+  // Only offer user-facing locales (excludes dev-only pseudolocales like en-XA).
+  const userLocales = locales.filter((l) => NATIVE_NAMES.has(l));
 </script>
 
 <div class="language-picker" data-testid="shell-language">
@@ -28,7 +31,7 @@
     }}
     aria-label={m.language_picker_label()}
   >
-    {#each locales as loc (loc)}
+    {#each userLocales as loc (loc)}
       <option value={loc}>{NATIVE_NAMES.get(loc) ?? loc}</option>
     {/each}
   </select>

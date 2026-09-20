@@ -4,13 +4,13 @@
 * | "New ticket" |
 *
 * @param {Demo_Topic_New_TicketInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const demo_topic_new_ticket: ((inputs?: Demo_Topic_New_TicketInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Topic_New_TicketInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Demo_Topic_New_TicketInputs = {};

@@ -21,17 +21,26 @@ const es_demo_narrative_topic_share_link_body = /** @type {(inputs: Demo_Narrati
 **Registro del caso.** Después de enviar, un mensaje de enlace compartido aparece en el hilo del ticket con una línea de estado debajo mostrando si el enlace ha sido abierto.`)
 };
 
+const en_xa2_demo_narrative_topic_share_link_body = /** @type {(inputs: Demo_Narrative_Topic_Share_Link_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè shàrè lìnk shèèt lèts à vòlùntèèr còmpòsè à mèssàgè ànd sènd ìt às à sìnglè ùsè lìnk tò sòmèònè òùtsìdè thè systèm.
+ ••••••••••••••••••••••••••••••••••••**Còmpòsìng. •••** Thè shèèt hàs à tèxt fìèld fòr thè còntènt. À chàràctèr lìmìt ìs ènfòrcèd wìth à vìsìblè còùntèr nèàr thè càp.
+ ••••••••••••••••••••••••••••••••••**Dèlìvèry. •••** Whèn thè clìènt hàs à phònè nùmbèr òn fìlè ànd SMS ìs ènàblèd fòr thè òrgànìzàtìòn, thè shèèt sènds thè lìnk by tèxt thròùgh thè òrgànìzàtìòn's phònè lìnè. Òthèrwìsè, thè shèèt còpìès thè lìnk tò thè clìpbòàrd sò thè vòlùntèèr càn dèlìvèr ìt ànòthèr wày.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Thè còntènt ìs èncryptèd ùndèr à frèsh ràndòm kèy, ànd thàt kèy ìs plàcèd ìn thè ÙRL fràgmènt sò thè sèrvèr nèvèr sèès ìt. À còpy òf thè còntènt ìs àlsò èncryptèd ùndèr thè tìckèt kèy ànd stòrèd às à fòllòw-ùp òn thè tìckèt, sò thè cònvèrsàtìòn rècòrd stàys còmplètè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Càsè rècòrd. ••••** Àftèr sèndìng, à shàrè lìnk mèssàgè àppèàrs ìn thè tìckèt thrèàd wìth à stàtùs lìnè bèlòw ìt shòwìng whèthèr thè lìnk hàs bèèn òpènèd. •••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The share link sheet lets a volunteer compose a message and send it as a single use link to someone outside the system. **Composing.** The sheet has a text f..." |
 *
 * @param {Demo_Narrative_Topic_Share_Link_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_share_link_body = /** @type {((inputs?: Demo_Narrative_Topic_Share_Link_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Share_Link_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_share_link_body = /** @type {((inputs?: Demo_Narrative_Topic_Share_Link_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Share_Link_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_share_link_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_share_link_body(inputs)
 	return en_demo_narrative_topic_share_link_body(inputs)
 });

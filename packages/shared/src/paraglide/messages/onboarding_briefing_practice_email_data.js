@@ -13,17 +13,22 @@ const es_onboarding_briefing_practice_email_data = /** @type {(inputs: Onboardin
 	return /** @type {LocalizedString} */ (`Correos de voluntarios (solo si optaron por recibirlos)`)
 };
 
+const en_xa2_onboarding_briefing_practice_email_data = /** @type {(inputs: Onboarding_Briefing_Practice_Email_DataInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vòlùntèèr èmàìl àddrèssès (òpt-ìn ònly) ••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Volunteer email addresses (opt-in only)" |
 *
 * @param {Onboarding_Briefing_Practice_Email_DataInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_briefing_practice_email_data = /** @type {((inputs?: Onboarding_Briefing_Practice_Email_DataInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Practice_Email_DataInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_briefing_practice_email_data = /** @type {((inputs?: Onboarding_Briefing_Practice_Email_DataInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Practice_Email_DataInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_briefing_practice_email_data(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_briefing_practice_email_data(inputs)
 	return en_onboarding_briefing_practice_email_data(inputs)
 });

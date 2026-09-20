@@ -21,17 +21,26 @@ const es_demo_narrative_admin_audit_log_body = /** @type {(inputs: Demo_Narrativ
 **Permisos.** El permiso Ver reportes y estadísticas controla el acceso a la página de registros, y el permiso Leer el registro de auditoría controla la pestaña de auditoría dentro de ella. Leer el registro de auditoría es un valor predeterminado de gestor.`)
 };
 
+const en_xa2_demo_narrative_admin_audit_log_body = /** @type {(inputs: Demo_Narrative_Admin_Audit_Log_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè àùdìt lòg rècòrds 47 èvènt typès spànnìng thè fùll ràngè òf àdmìnìstràtìvè ànd lìfècyclè àctìòns àcròss thè òrgànìzàtìòn.
+ ••••••••••••••••••••••••••••••••••••••**Whàt thè sèrvèr hòlds. •••••••** Thè àùdìt sèrvìcè àccèpts ònly àppènds wìth nò ùpdàtè òr dèlètè pàth ànd stòrès ìdèntìfìèrs ònly, nèvèr nàmès, phònè nùmbèrs, òr tìckèt còntènt. Thè àctòr's dìsplày nàmè ìs rèsòlvèd fròm àn ìdèntìfìèr ànd dècryptèd ìn thè bròwsèr wìth thè òrgànìzàtìòn kèy.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Fìltèrs. •••** Fìltèr sèlèctìòns fòr èvènt typè, àctòr, ànd dàtè ràngè àrè sènt tò thè sèrvèr às qùèry pàràmètèrs.
+ •••••••••••••••••••••••••••••••**Pèrsìstèncè. ••••** Àùdìt èntrìès àrè èxèmpt fròm thè dàtà rètèntìòn pòlìcy bècàùsè thèy sèrvè às thè òrgànìzàtìòn's òpèràtìònàl rècòrd.
+ ••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Thè Vìèw rèpòrts pèrmìssìòn gàtès thè lògs pàgè, ànd thè Vìèw àùdìt lòg pèrmìssìòn gàtès thè àùdìt tàb wìthìn ìt. Vìèw àùdìt lòg ìs à dèfàùlt mànàgèr pèrmìssìòn. •••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The audit log records 47 event types spanning the full range of administrative and lifecycle actions across the organization. **What the server holds.** The ..." |
 *
 * @param {Demo_Narrative_Admin_Audit_Log_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_audit_log_body = /** @type {((inputs?: Demo_Narrative_Admin_Audit_Log_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Audit_Log_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_audit_log_body = /** @type {((inputs?: Demo_Narrative_Admin_Audit_Log_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Audit_Log_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_audit_log_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_audit_log_body(inputs)
 	return en_demo_narrative_admin_audit_log_body(inputs)
 });

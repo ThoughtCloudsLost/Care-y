@@ -13,17 +13,22 @@ const es_portal_you = /** @type {(inputs: Portal_YouInputs) => LocalizedString} 
 	return /** @type {LocalizedString} */ (`Tú`)
 };
 
+const en_xa2_portal_you = /** @type {(inputs: Portal_YouInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Yòù •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "You" |
 *
 * @param {Portal_YouInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const portal_you = /** @type {((inputs?: Portal_YouInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_YouInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const portal_you = /** @type {((inputs?: Portal_YouInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_YouInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_portal_you(inputs)
+	if (locale === "en-XA") return en_xa2_portal_you(inputs)
 	return en_portal_you(inputs)
 });

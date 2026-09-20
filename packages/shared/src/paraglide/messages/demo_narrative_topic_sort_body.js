@@ -19,17 +19,25 @@ const es_demo_narrative_topic_sort_body = /** @type {(inputs: Demo_Narrative_Top
 **Nuevas respuestas primero.** Un interruptor en las opciones de orden fija los tickets con respuestas no leídas en la parte superior de la lista, independientemente del orden principal. El estado de lectura está cifrado por voluntario, por lo que el servidor no puede ordenar por él y este ordenamiento ocurre completamente en el navegador.`)
 };
 
+const en_xa2_demo_narrative_topic_sort_body = /** @type {(inputs: Demo_Narrative_Topic_Sort_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sòrt òptìòns rèòrdèr thè tìckèt lìst by prìòrìty, dàtè, làst àctìvìty, qùèùè, stàtùs, clìènt, òr mèssàgè còùnt.
+ ••••••••••••••••••••••••••••••••••**Sèrvèr sìdè fìèlds. ••••••** Prìòrìty, dàtè, làst àctìvìty, qùèùè, ànd mèssàgè còùnt àrè sòrtèd òn thè sèrvèr ùsìng plàìntèxt mètàdàtà còlùmns. Thè sèrvèr rètùrns ròws ìn thè rèqùèstèd òrdèr wìthòùt àccèssìng èncryptèd còntènt.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Clìènt sìdè fìèlds. ••••••** Clìènt ìs sòrtèd ìn thè bròwsèr bècàùsè thè àlìàs ìs èncryptèd ànd ònly rèàdàblè òn thè dèvìcè, ànd stàtùs ìs sòrtèd ìn thè bròwsèr bècàùsè thè dìsplày stàtùs (nèw vs àctìvè) ìs dèrìvèd lòcàlly fròm thè mèssàgè còùnt. Tìtlè ànd àssìgnèè àrè àlsò sòrtàblè by tàppìng thè còlùmn hèàdèrs ìn tàblè vìèw, whèrè thè bròwsèr sòrts thè dècryptèd vàlùès lòcàlly.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Nèw rèplìès fìrst. ••••••** À tògglè ìn thè sòrt òptìòns pìns tìckèts wìth ùnrèàd rèplìès tò thè tòp òf thè lìst, règàrdlèss òf thè prìmàry sòrt òrdèr. Rèàd stàtè ìs èncryptèd pèr vòlùntèèr, sò thè sèrvèr cànnòt sòrt by ìt ànd thìs sòrt hàppèns èntìrèly ìn thè bròwsèr. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Sort options reorder the ticket list by priority, date, last activity, queue, status, client, or message count. **Server side fields.** Priority, date, last ..." |
 *
 * @param {Demo_Narrative_Topic_Sort_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_sort_body = /** @type {((inputs?: Demo_Narrative_Topic_Sort_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Sort_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_sort_body = /** @type {((inputs?: Demo_Narrative_Topic_Sort_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Sort_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_sort_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_sort_body(inputs)
 	return en_demo_narrative_topic_sort_body(inputs)
 });

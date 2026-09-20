@@ -7,11 +7,11 @@ export type Mergecandidates_Match_Email1Inputs = {};
 * | "Same email address" |
 *
 * @param {Mergecandidates_Match_Email1Inputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 declare const mergecandidates_match_email1: ((inputs?: Mergecandidates_Match_Email1Inputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Mergecandidates_Match_Email1Inputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;

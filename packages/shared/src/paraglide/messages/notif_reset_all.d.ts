@@ -4,13 +4,13 @@
 * | "Reset all to defaults" |
 *
 * @param {Notif_Reset_AllInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const notif_reset_all: ((inputs?: Notif_Reset_AllInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Notif_Reset_AllInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Notif_Reset_AllInputs = {};

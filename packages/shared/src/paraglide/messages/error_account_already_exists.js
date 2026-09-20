@@ -13,17 +13,22 @@ const es_error_account_already_exists = /** @type {(inputs: Error_Account_Alread
 	return /** @type {LocalizedString} */ (`Ya existe una cuenta con este usuario de inicio de sesión.`)
 };
 
+const en_xa2_error_account_already_exists = /** @type {(inputs: Error_Account_Already_ExistsInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àn àccòùnt wìth thìs lògìn ùsèrnàmè àlrèàdy èxìsts. ••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "An account with this login username already exists." |
 *
 * @param {Error_Account_Already_ExistsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_account_already_exists = /** @type {((inputs?: Error_Account_Already_ExistsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Account_Already_ExistsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_account_already_exists = /** @type {((inputs?: Error_Account_Already_ExistsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Account_Already_ExistsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_account_already_exists(inputs)
+	if (locale === "en-XA") return en_xa2_error_account_already_exists(inputs)
 	return en_error_account_already_exists(inputs)
 });

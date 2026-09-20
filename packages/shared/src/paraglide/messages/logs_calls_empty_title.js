@@ -13,17 +13,22 @@ const es_logs_calls_empty_title = /** @type {(inputs: Logs_Calls_Empty_TitleInpu
 	return /** @type {LocalizedString} */ (`No se encontraron llamadas`)
 };
 
+const en_xa2_logs_calls_empty_title = /** @type {(inputs: Logs_Calls_Empty_TitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nò càlls fòùnd •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "No calls found" |
 *
 * @param {Logs_Calls_Empty_TitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const logs_calls_empty_title = /** @type {((inputs?: Logs_Calls_Empty_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Logs_Calls_Empty_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const logs_calls_empty_title = /** @type {((inputs?: Logs_Calls_Empty_TitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Logs_Calls_Empty_TitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_logs_calls_empty_title(inputs)
+	if (locale === "en-XA") return en_xa2_logs_calls_empty_title(inputs)
 	return en_logs_calls_empty_title(inputs)
 });

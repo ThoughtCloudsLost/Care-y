@@ -13,17 +13,22 @@ const es_demo_conversation_typing = /** @type {(inputs: Demo_Conversation_Typing
 	return /** @type {LocalizedString} */ (`Enviando una respuesta`)
 };
 
+const en_xa2_demo_conversation_typing = /** @type {(inputs: Demo_Conversation_TypingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèndìng à rèply •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Sending a reply" |
 *
 * @param {Demo_Conversation_TypingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_conversation_typing = /** @type {((inputs?: Demo_Conversation_TypingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Conversation_TypingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_conversation_typing = /** @type {((inputs?: Demo_Conversation_TypingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Conversation_TypingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_conversation_typing(inputs)
+	if (locale === "en-XA") return en_xa2_demo_conversation_typing(inputs)
 	return en_demo_conversation_typing(inputs)
 });

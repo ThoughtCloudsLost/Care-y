@@ -13,18 +13,23 @@ const es_mergecandidates_match_phone1 = /** @type {(inputs: Mergecandidates_Matc
 	return /** @type {LocalizedString} */ (`Mismo número de teléfono`)
 };
 
+const en_xa2_mergecandidates_match_phone1 = /** @type {(inputs: Mergecandidates_Match_Phone1Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sàmè phònè nùmbèr ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Same phone number" |
 *
 * @param {Mergecandidates_Match_Phone1Inputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-const mergecandidates_match_phone1 = /** @type {((inputs?: Mergecandidates_Match_Phone1Inputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mergecandidates_Match_Phone1Inputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+const mergecandidates_match_phone1 = /** @type {((inputs?: Mergecandidates_Match_Phone1Inputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mergecandidates_Match_Phone1Inputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_mergecandidates_match_phone1(inputs)
+	if (locale === "en-XA") return en_xa2_mergecandidates_match_phone1(inputs)
 	return en_mergecandidates_match_phone1(inputs)
 });
 export { mergecandidates_match_phone1 as "mergeCandidates_match_phone" }

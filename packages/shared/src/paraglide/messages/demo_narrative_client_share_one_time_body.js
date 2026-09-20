@@ -19,17 +19,25 @@ const es_demo_narrative_client_share_one_time_body = /** @type {(inputs: Demo_Na
 **Por qué importa el uso único.** El acceso de un solo uso significa que si el enlace es interceptado después de que el lector previsto lo ha abierto, el interceptor encuentra solo el estado de consumido y el texto cifrado ya no está en el servidor en lugar de simplemente ser inaccesible. No protege contra la interceptación antes de que el lector lo abra.`)
 };
 
+const en_xa2_demo_narrative_client_share_one_time_body = /** @type {(inputs: Demo_Narrative_Client_Share_One_Time_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èàch shàrè lìnk wòrks ònly òncè. Àftèr thè còntènt hàs bèèn shòwn, thè sèrvèr dèlètès thè cìphèrtèxt ìn thè sàmè trànsàctìòn thàt rècòrds thè òpèn, sò thè èncryptèd còntènt nò lòngèr èxìsts òn thè sèrvèr àt àll.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èxpìry. •••** Shàrè lìnks càrry à 72 hòùr tìmè wìndòw, ànd à dàìly clèànùp dèlètès èxpìrèd èntrìès. Ìf thè lìnk ìs nòt òpènèd bèfòrè thè wìndòw clòsès, thè pàgè shòws àn èxpìrèd stàtè ìnstèàd.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whèn ìt ìs èmpty. ••••••** Bèyònd thè sùccèss càsè, thè pàgè dìstìngùìshès fòùr ènd stàtès. Àn àlrèàdy òpènèd stàtè mèàns thè lìnk hàs bèèn cònsùmèd, whèthèr by thè ìntèndèd rèàdèr rètùrnìng òr by sòmèònè èlsè. Àn èxpìrèd stàtè mèàns thè tìmè wìndòw clòsèd. À nòt fòùnd stàtè còvèrs bòth à clèànèd ùp lìnk ànd àn ÌD thàt nèvèr èxìstèd, sò pròbìng à shàrè ÌD rèvèàls nòthìng. Àn ìncòmplètè lìnk stàtè còvèrs à trùncàtèd òr còrrùptèd ÙRL, whìch ìs thè lìkèlìèst rèàl fàìlùrè sìncè thèsè lìnks àrrìvè by SMS ànd thè mèssàgè mày bè splìt, ànd thè pàgè àsks thè rèàdèr tò chèck thèy òpènèd thè còmplètè lìnk.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Why sìnglè ùsè màttèrs. •••••••** Sìnglè ùsè àccèss mèàns thàt ìf thè lìnk ìs ìntèrcèptèd àftèr thè ìntèndèd rèàdèr hàs òpènèd ìt, thè ìntèrcèptòr fìnds ònly thè cònsùmèd stàtè ànd thè cìphèrtèxt ìs gònè fròm thè sèrvèr ràthèr thàn mèrèly ìnàccèssìblè. Ìt dòès nòt pròtèct àgàìnst ìntèrcèptìòn bèfòrè thè rèàdèr òpèns ìt. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Each share link works only once. After the content has been shown, the server deletes the ciphertext in the same transaction that records the open, so the en..." |
 *
 * @param {Demo_Narrative_Client_Share_One_Time_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_client_share_one_time_body = /** @type {((inputs?: Demo_Narrative_Client_Share_One_Time_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Share_One_Time_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_client_share_one_time_body = /** @type {((inputs?: Demo_Narrative_Client_Share_One_Time_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Share_One_Time_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_client_share_one_time_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_client_share_one_time_body(inputs)
 	return en_demo_narrative_client_share_one_time_body(inputs)
 });

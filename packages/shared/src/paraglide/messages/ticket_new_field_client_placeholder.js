@@ -13,17 +13,22 @@ const es_ticket_new_field_client_placeholder = /** @type {(inputs: Ticket_New_Fi
 	return /** @type {LocalizedString} */ (`Buscar por alias o teléfono`)
 };
 
+const en_xa2_ticket_new_field_client_placeholder = /** @type {(inputs: Ticket_New_Field_Client_PlaceholderInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèàrch by àlìàs òr phònè ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Search by alias or phone" |
 *
 * @param {Ticket_New_Field_Client_PlaceholderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_new_field_client_placeholder = /** @type {((inputs?: Ticket_New_Field_Client_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_Field_Client_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const ticket_new_field_client_placeholder = /** @type {((inputs?: Ticket_New_Field_Client_PlaceholderInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_Field_Client_PlaceholderInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_new_field_client_placeholder(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_new_field_client_placeholder(inputs)
 	return en_ticket_new_field_client_placeholder(inputs)
 });

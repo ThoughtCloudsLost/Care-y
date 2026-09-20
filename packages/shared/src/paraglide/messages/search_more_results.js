@@ -13,17 +13,22 @@ const es_search_more_results = /** @type {(inputs: Search_More_ResultsInputs) =>
 	return /** @type {LocalizedString} */ (`${i?.count} más`)
 };
 
+const en_xa2_search_more_results = /** @type {(inputs: Search_More_ResultsInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count} mòrè ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} more" |
 *
 * @param {Search_More_ResultsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const search_more_results = /** @type {((inputs: Search_More_ResultsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_More_ResultsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const search_more_results = /** @type {((inputs: Search_More_ResultsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_More_ResultsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_search_more_results(inputs)
+	if (locale === "en-XA") return en_xa2_search_more_results(inputs)
 	return en_search_more_results(inputs)
 });

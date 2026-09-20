@@ -13,17 +13,22 @@ const es_panel_logout = /** @type {(inputs: Panel_LogoutInputs) => LocalizedStri
 	return /** @type {LocalizedString} */ (`Cerrar sesión`)
 };
 
+const en_xa2_panel_logout = /** @type {(inputs: Panel_LogoutInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Lòg òùt •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Log out" |
 *
 * @param {Panel_LogoutInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const panel_logout = /** @type {((inputs?: Panel_LogoutInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_LogoutInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const panel_logout = /** @type {((inputs?: Panel_LogoutInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_LogoutInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_panel_logout(inputs)
+	if (locale === "en-XA") return en_xa2_panel_logout(inputs)
 	return en_panel_logout(inputs)
 });

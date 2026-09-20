@@ -13,17 +13,22 @@ const es_demo_fs_pill_label = /** @type {(inputs: Demo_Fs_Pill_LabelInputs) => L
 	return /** @type {LocalizedString} */ (`Controles del simulador`)
 };
 
+const en_xa2_demo_fs_pill_label = /** @type {(inputs: Demo_Fs_Pill_LabelInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sìmùlàtòr còntròls ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Simulator controls" |
 *
 * @param {Demo_Fs_Pill_LabelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_fs_pill_label = /** @type {((inputs?: Demo_Fs_Pill_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Fs_Pill_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_fs_pill_label = /** @type {((inputs?: Demo_Fs_Pill_LabelInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Fs_Pill_LabelInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_fs_pill_label(inputs)
+	if (locale === "en-XA") return en_xa2_demo_fs_pill_label(inputs)
 	return en_demo_fs_pill_label(inputs)
 });

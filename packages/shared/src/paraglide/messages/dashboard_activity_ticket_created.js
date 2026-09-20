@@ -13,17 +13,22 @@ const es_dashboard_activity_ticket_created = /** @type {(inputs: Dashboard_Activ
 	return /** @type {LocalizedString} */ (`${i?.Ticket} nuevo`)
 };
 
+const en_xa2_dashboard_activity_ticket_created = /** @type {(inputs: Dashboard_Activity_Ticket_CreatedInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Nèw  ••${i?.ticket}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "New {ticket}" |
 *
 * @param {Dashboard_Activity_Ticket_CreatedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const dashboard_activity_ticket_created = /** @type {((inputs: Dashboard_Activity_Ticket_CreatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Activity_Ticket_CreatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const dashboard_activity_ticket_created = /** @type {((inputs: Dashboard_Activity_Ticket_CreatedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Activity_Ticket_CreatedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_dashboard_activity_ticket_created(inputs)
+	if (locale === "en-XA") return en_xa2_dashboard_activity_ticket_created(inputs)
 	return en_dashboard_activity_ticket_created(inputs)
 });

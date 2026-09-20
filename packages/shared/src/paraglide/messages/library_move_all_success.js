@@ -13,17 +13,22 @@ const es_library_move_all_success = /** @type {(inputs: Library_Move_All_Success
 	return /** @type {LocalizedString} */ (`Se movieron ${i?.count} artículos`)
 };
 
+const en_xa2_library_move_all_success = /** @type {(inputs: Library_Move_All_SuccessInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Mòvèd  ••${i?.count} àrtìclès •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Moved {count} articles" |
 *
 * @param {Library_Move_All_SuccessInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_move_all_success = /** @type {((inputs: Library_Move_All_SuccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Move_All_SuccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const library_move_all_success = /** @type {((inputs: Library_Move_All_SuccessInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Move_All_SuccessInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_move_all_success(inputs)
+	if (locale === "en-XA") return en_xa2_library_move_all_success(inputs)
 	return en_library_move_all_success(inputs)
 });

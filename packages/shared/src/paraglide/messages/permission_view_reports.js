@@ -13,17 +13,22 @@ const es_permission_view_reports = /** @type {(inputs: Permission_View_ReportsIn
 	return /** @type {LocalizedString} */ (`Ver reportes`)
 };
 
+const en_xa2_permission_view_reports = /** @type {(inputs: Permission_View_ReportsInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vìèw rèpòrts ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "View reports" |
 *
 * @param {Permission_View_ReportsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const permission_view_reports = /** @type {((inputs?: Permission_View_ReportsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_View_ReportsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const permission_view_reports = /** @type {((inputs?: Permission_View_ReportsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_View_ReportsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_permission_view_reports(inputs)
+	if (locale === "en-XA") return en_xa2_permission_view_reports(inputs)
 	return en_permission_view_reports(inputs)
 });

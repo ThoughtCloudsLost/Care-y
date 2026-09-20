@@ -13,17 +13,22 @@ const es_portal_passphrase_error_already_set = /** @type {(inputs: Portal_Passph
 	return /** @type {LocalizedString} */ (`Ya se ha agregado una contraseña a este enlace.`)
 };
 
+const en_xa2_portal_passphrase_error_already_set = /** @type {(inputs: Portal_Passphrase_Error_Already_SetInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦À pàsswòrd hàs àlrèàdy bèèn àddèd tò thìs lìnk. •••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "A password has already been added to this link." |
 *
 * @param {Portal_Passphrase_Error_Already_SetInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const portal_passphrase_error_already_set = /** @type {((inputs?: Portal_Passphrase_Error_Already_SetInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_Error_Already_SetInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const portal_passphrase_error_already_set = /** @type {((inputs?: Portal_Passphrase_Error_Already_SetInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_Error_Already_SetInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_portal_passphrase_error_already_set(inputs)
+	if (locale === "en-XA") return en_xa2_portal_passphrase_error_already_set(inputs)
 	return en_portal_passphrase_error_already_set(inputs)
 });

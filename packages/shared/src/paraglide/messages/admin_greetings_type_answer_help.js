@@ -13,17 +13,22 @@ const es_admin_greetings_type_answer_help = /** @type {(inputs: Admin_Greetings_
 	return /** @type {LocalizedString} */ (`Es lo que escuchan las personas cuando se conectan por primera vez.`)
 };
 
+const en_xa2_admin_greetings_type_answer_help = /** @type {(inputs: Admin_Greetings_Type_Answer_HelpInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìs ìs whàt càllèrs hèàr whèn thèy fìrst cònnèct. •••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This is what callers hear when they first connect." |
 *
 * @param {Admin_Greetings_Type_Answer_HelpInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_greetings_type_answer_help = /** @type {((inputs?: Admin_Greetings_Type_Answer_HelpInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Type_Answer_HelpInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_greetings_type_answer_help = /** @type {((inputs?: Admin_Greetings_Type_Answer_HelpInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Type_Answer_HelpInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_greetings_type_answer_help(inputs)
+	if (locale === "en-XA") return en_xa2_admin_greetings_type_answer_help(inputs)
 	return en_admin_greetings_type_answer_help(inputs)
 });

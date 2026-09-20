@@ -13,17 +13,22 @@ const es_admin_reports_by_queue = /** @type {(inputs: Admin_Reports_By_QueueInpu
 	return /** @type {LocalizedString} */ (`Por ${i?.queue}`)
 };
 
+const en_xa2_admin_reports_by_queue = /** @type {(inputs: Admin_Reports_By_QueueInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦By  •${i?.queue}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "By {queue}" |
 *
 * @param {Admin_Reports_By_QueueInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_reports_by_queue = /** @type {((inputs: Admin_Reports_By_QueueInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Reports_By_QueueInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const admin_reports_by_queue = /** @type {((inputs: Admin_Reports_By_QueueInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Reports_By_QueueInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_reports_by_queue(inputs)
+	if (locale === "en-XA") return en_xa2_admin_reports_by_queue(inputs)
 	return en_admin_reports_by_queue(inputs)
 });

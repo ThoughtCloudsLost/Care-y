@@ -13,17 +13,22 @@ const es_admin_tab_reports = /** @type {(inputs: Admin_Tab_ReportsInputs) => Loc
 	return /** @type {LocalizedString} */ (`Informes`)
 };
 
+const en_xa2_admin_tab_reports = /** @type {(inputs: Admin_Tab_ReportsInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèpòrts •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Reports" |
 *
 * @param {Admin_Tab_ReportsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_tab_reports = /** @type {((inputs?: Admin_Tab_ReportsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Tab_ReportsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_tab_reports = /** @type {((inputs?: Admin_Tab_ReportsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Tab_ReportsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_tab_reports(inputs)
+	if (locale === "en-XA") return en_xa2_admin_tab_reports(inputs)
 	return en_admin_tab_reports(inputs)
 });

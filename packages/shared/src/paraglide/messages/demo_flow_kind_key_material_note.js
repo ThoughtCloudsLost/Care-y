@@ -13,17 +13,22 @@ const es_demo_flow_kind_key_material_note = /** @type {(inputs: Demo_Flow_Kind_K
 	return /** @type {LocalizedString} */ (`Clave criptográfica o secreto derivado. Nunca se almacena, solo se mantiene en memoria durante la sesión.`)
 };
 
+const en_xa2_demo_flow_kind_key_material_note = /** @type {(inputs: Demo_Flow_Kind_Key_Material_NoteInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Cryptògràphìc kèy òr dèrìvèd sècrèt. Nèvèr stòrèd, hèld ìn mèmòry fòr thè sèssìòn ònly. •••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Cryptographic key or derived secret. Never stored, held in memory for the session only." |
 *
 * @param {Demo_Flow_Kind_Key_Material_NoteInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_flow_kind_key_material_note = /** @type {((inputs?: Demo_Flow_Kind_Key_Material_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Kind_Key_Material_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_flow_kind_key_material_note = /** @type {((inputs?: Demo_Flow_Kind_Key_Material_NoteInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Kind_Key_Material_NoteInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_flow_kind_key_material_note(inputs)
+	if (locale === "en-XA") return en_xa2_demo_flow_kind_key_material_note(inputs)
 	return en_demo_flow_kind_key_material_note(inputs)
 });

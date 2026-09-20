@@ -13,17 +13,22 @@ const es_admin_branding_card_no_text = /** @type {(inputs: Admin_Branding_Card_N
 	return /** @type {LocalizedString} */ (`No se ha establecido texto de bienvenida`)
 };
 
+const en_xa2_admin_branding_card_no_text = /** @type {(inputs: Admin_Branding_Card_No_TextInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nò wèlcòmè tèxt sèt ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "No welcome text set" |
 *
 * @param {Admin_Branding_Card_No_TextInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_branding_card_no_text = /** @type {((inputs?: Admin_Branding_Card_No_TextInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Card_No_TextInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_branding_card_no_text = /** @type {((inputs?: Admin_Branding_Card_No_TextInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Card_No_TextInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_branding_card_no_text(inputs)
+	if (locale === "en-XA") return en_xa2_admin_branding_card_no_text(inputs)
 	return en_admin_branding_card_no_text(inputs)
 });

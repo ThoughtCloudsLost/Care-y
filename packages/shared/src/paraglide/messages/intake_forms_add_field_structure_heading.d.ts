@@ -4,13 +4,13 @@
 * | "Structure" |
 *
 * @param {Intake_Forms_Add_Field_Structure_HeadingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const intake_forms_add_field_structure_heading: ((inputs?: Intake_Forms_Add_Field_Structure_HeadingInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Intake_Forms_Add_Field_Structure_HeadingInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Intake_Forms_Add_Field_Structure_HeadingInputs = {};

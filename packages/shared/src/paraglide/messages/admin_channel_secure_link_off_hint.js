@@ -13,17 +13,22 @@ const es_admin_channel_secure_link_off_hint = /** @type {(inputs: Admin_Channel_
 	return /** @type {LocalizedString} */ (`La configuración del portal y la mensajería por enlace seguro no están disponibles.`)
 };
 
+const en_xa2_admin_channel_secure_link_off_hint = /** @type {(inputs: Admin_Channel_Secure_Link_Off_HintInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Pòrtàl sètùp ànd sècùrè lìnk mèssàgìng àrè ùnàvàìlàblè. •••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Portal setup and secure link messaging are unavailable." |
 *
 * @param {Admin_Channel_Secure_Link_Off_HintInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_channel_secure_link_off_hint = /** @type {((inputs?: Admin_Channel_Secure_Link_Off_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Channel_Secure_Link_Off_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_channel_secure_link_off_hint = /** @type {((inputs?: Admin_Channel_Secure_Link_Off_HintInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Channel_Secure_Link_Off_HintInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_channel_secure_link_off_hint(inputs)
+	if (locale === "en-XA") return en_xa2_admin_channel_secure_link_off_hint(inputs)
 	return en_admin_channel_secure_link_off_hint(inputs)
 });

@@ -17,17 +17,24 @@ const es_demo_narrative_admin_form_preview_body = /** @type {(inputs: Demo_Narra
 **Cuando está vacío.** Un formulario sin campos muestra un estado vacío en la vista previa.`)
 };
 
+const en_xa2_demo_narrative_admin_form_preview_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Preview_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè prèvìèw rèndèrs thè fòrm ùsìng thè sàmè fìèld rèndèrèr thè pùblìc ìntàkè pàgè ùsès, sò thè èdìtìng vìèw màtchès whàt thè vìsìtòr sèès whèn sùbmìttìng. Whèn thè fòrm hàs pàgè brèàks, thè prèvìèw shòws thè sàmè pàgè strùctùrè thè vìsìtòr mòvès thròùgh, wìth fòrwàrd ànd bàck nàvìgàtìòn bètwèèn pàgès.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Vìèw mòdès. ••••** Thè prèvìèw càn shòw thè àctìvè fòrm, thè cònfìrmàtìòn àftèr sùbmìssìòn, ànd thè clòsèd mèssàgè, ànd thè cònfìrmàtìòn ànd clòsèd mèssàgè èàch fàll bàck tò à dèfàùlt whèn thè òrgànìzàtìòn hàs nòt wrìttèn ònè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whèn ìt ìs èmpty. ••••••** À fòrm wìth nò fìèlds yèt shòws àn èmpty stàtè ìn thè prèvìèw. •••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The preview renders the form using the same field renderer the public intake page uses, so the editing view matches what the visitor sees when submitting. Wh..." |
 *
 * @param {Demo_Narrative_Admin_Form_Preview_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_form_preview_body = /** @type {((inputs?: Demo_Narrative_Admin_Form_Preview_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Form_Preview_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_form_preview_body = /** @type {((inputs?: Demo_Narrative_Admin_Form_Preview_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Form_Preview_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_form_preview_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_form_preview_body(inputs)
 	return en_demo_narrative_admin_form_preview_body(inputs)
 });

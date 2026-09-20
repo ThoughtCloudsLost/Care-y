@@ -17,17 +17,24 @@ const es_demo_narrative_topic_list_search_body = /** @type {(inputs: Demo_Narrat
 **Relación con la búsqueda global.** Esta búsqueda se mantiene en la lista de tickets y recorre las coincidencias en su lugar. La búsqueda global en la barra de navegación, descrita en su propia sección, busca en tickets, artículos y voluntarios a la vez, y como toda búsqueda en CARE-Y los términos nunca salen del dispositivo.`)
 };
 
+const en_xa2_demo_narrative_topic_list_search_body = /** @type {(inputs: Demo_Narrative_Topic_List_Search_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè màgnìfìèr nèxt tò thè fìltèr pìlls ìn thè tòòlbàr òpèns à sèàrch ròw fòr thè tìckèt lìst. Typìng màtchès àgàìnst thè tìckèts thè bròwsèr hàs àlrèàdy dècryptèd, ànd nàvìgàtìòn bùttòns stèp thròùgh thè màtchès ìn òrdèr.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Dèèp sèàrch. ••••** Whèn thè lòàdèd tìckèts pròdùcè nò màtch, thè sèàrch òffèrs tò fètch ànd dècrypt thè rèmàìnìng tìckèts ànd sèàrch thòsè às wèll. À prògrèss ìndìcàtòr shòws hòw màny hàvè bèèn còvèrèd òùt òf thè tòtàl.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Rèlàtìònshìp tò glòbàl sèàrch. •••••••••** Thìs sèàrch stàys òn thè tìckèt lìst ànd wàlks thròùgh màtchès ìn plàcè. Thè glòbàl sèàrch ìn thè nàvìgàtìòn bàr, dèscrìbèd ìn ìts òwn sèctìòn, sèàrchès àcròss tìckèts, àrtìclès, ànd vòlùntèèrs àt òncè, ànd lìkè èvèry sèàrch ìn CÀRÈ-Y thè tèrms nèvèr lèàvè thè dèvìcè. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The magnifier next to the filter pills in the toolbar opens a search row for the ticket list. Typing matches against the tickets the browser has already decr..." |
 *
 * @param {Demo_Narrative_Topic_List_Search_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_list_search_body = /** @type {((inputs?: Demo_Narrative_Topic_List_Search_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_List_Search_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_list_search_body = /** @type {((inputs?: Demo_Narrative_Topic_List_Search_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_List_Search_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_list_search_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_list_search_body(inputs)
 	return en_demo_narrative_topic_list_search_body(inputs)
 });

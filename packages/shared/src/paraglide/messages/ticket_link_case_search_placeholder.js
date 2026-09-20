@@ -13,17 +13,22 @@ const es_ticket_link_case_search_placeholder = /** @type {(inputs: Ticket_Link_C
 	return /** @type {LocalizedString} */ (`Buscar ${i?.tickets}...`)
 };
 
+const en_xa2_ticket_link_case_search_placeholder = /** @type {(inputs: Ticket_Link_Case_Search_PlaceholderInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Sèàrch  •••${i?.tickets}... •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Search {tickets}..." |
 *
 * @param {Ticket_Link_Case_Search_PlaceholderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_link_case_search_placeholder = /** @type {((inputs: Ticket_Link_Case_Search_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Link_Case_Search_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const ticket_link_case_search_placeholder = /** @type {((inputs: Ticket_Link_Case_Search_PlaceholderInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Link_Case_Search_PlaceholderInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_link_case_search_placeholder(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_link_case_search_placeholder(inputs)
 	return en_ticket_link_case_search_placeholder(inputs)
 });

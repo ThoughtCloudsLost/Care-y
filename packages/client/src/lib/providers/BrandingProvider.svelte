@@ -45,6 +45,7 @@
     readCachedTerminology,
     cacheTerminology,
   } from "$lib/terminology/index.js";
+  import { getReaderLocale } from "$lib/locale/reader-locale.js";
 
   import type { Snippet } from "svelte";
 
@@ -67,9 +68,7 @@
   // Initialize terminology from cache immediately
   if (browser) {
     const cachedConfig = readCachedTerminology();
-    const storedLang = localStorage.getItem("care-y-default-lang");
-    const lang = storedLang ?? (document.documentElement.lang || "en");
-    terminologyLabels = resolveLabels(cachedConfig, lang);
+    terminologyLabels = resolveLabels(cachedConfig, getReaderLocale());
   }
 
   setTerminology(() => terminologyLabels);
@@ -132,9 +131,7 @@
           const result = terminologyConfigSchema.safeParse(parsed);
           if (result.success) {
             cacheTerminology(result.data);
-            const storedLang = localStorage.getItem("care-y-default-lang");
-            const lang = storedLang ?? (document.documentElement.lang || "en");
-            terminologyLabels = resolveLabels(result.data, lang);
+            terminologyLabels = resolveLabels(result.data, getReaderLocale());
           }
         } catch {
           // Malformed terminology JSON; keep defaults

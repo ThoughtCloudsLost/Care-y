@@ -13,17 +13,22 @@ const es_intake_forms_description_placeholder = /** @type {(inputs: Intake_Forms
 	return /** @type {LocalizedString} */ (`Se muestra sobre el formulario en lugar del texto introductorio predeterminado.`)
 };
 
+const en_xa2_intake_forms_description_placeholder = /** @type {(inputs: Intake_Forms_Description_PlaceholderInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Shòwn àbòvè thè fòrm ìnstèàd òf thè dèfàùlt ìntrò tèxt. •••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Shown above the form instead of the default intro text." |
 *
 * @param {Intake_Forms_Description_PlaceholderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_description_placeholder = /** @type {((inputs?: Intake_Forms_Description_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Description_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_description_placeholder = /** @type {((inputs?: Intake_Forms_Description_PlaceholderInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Description_PlaceholderInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_description_placeholder(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_description_placeholder(inputs)
 	return en_intake_forms_description_placeholder(inputs)
 });

@@ -739,6 +739,7 @@ export {
 // --- Intake form schemas ---
 export {
   FORM_LOCALES,
+  isFormLocale,
   BASE_LOCALE,
   localizedTextSchema,
   resolveLocalized,
@@ -1024,3 +1025,12 @@ export {
   newClientAccountId,
   newKeyGeneration,
 } from "./ids.js";
+
+// --- Branded locale types ---
+export {
+  mintReaderLocale,
+  mintFixedLocale,
+  type ReaderLocale,
+  type FixedLocale,
+  type DisplayLocale,
+} from "./locale-brands.js";

@@ -13,17 +13,22 @@ const es_demo_entry_flow_body = /** @type {(inputs: Demo_Entry_Flow_BodyInputs) 
 	return /** @type {LocalizedString} */ (`El icono de circuito en la barra superior abre el panel de flujo de datos, y cada interacción en el simulador traza su recorrido a través de las líneas de pantalla, cifrado, API, servidor y base de datos, con cada paso mostrando dirección, duración y una vista previa del contenido. Donde el manual simula algo que la aplicación real maneja de otra forma, una insignia marca ese paso como simulado.`)
 };
 
+const en_xa2_demo_entry_flow_body = /** @type {(inputs: Demo_Entry_Flow_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè Dàtà flòw bùttòn ìn thè tòp bàr òpèns thè dàtà flòw pànèl, ànd èvèry ìntèràctìòn ìn thè sìmùlàtòr tràcès ìts pàth thròùgh scrèèn, èncryptìòn, ÀPÌ, sèrvèr, ànd dàtàbàsè lànès, wìth èàch stèp shòwìng dìrèctìòn, tìmìng, ànd à pàylòàd prèvìèw. Sòmè òpèràtìòns lìkè ìncòmìng càlls òr schèdùlèd èvènts cànnòt bè trìggèrèd òn dèmànd ìn à bròwsèr, sò thè hàndbòòk scrìpts thòsè ìntèràctìòns tò dèmònstràtè thè fèàtùrè. À bàdgè màrks èàch scrìptèd stèp sò yòù càn tèll ìt àpàrt fròm thè rèàl pàth. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The Data flow button in the top bar opens the data flow panel, and every interaction in the simulator traces its path through screen, encryption, API, server..." |
 *
 * @param {Demo_Entry_Flow_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_entry_flow_body = /** @type {((inputs?: Demo_Entry_Flow_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Entry_Flow_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_entry_flow_body = /** @type {((inputs?: Demo_Entry_Flow_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Entry_Flow_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_entry_flow_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_entry_flow_body(inputs)
 	return en_demo_entry_flow_body(inputs)
 });

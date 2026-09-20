@@ -57,6 +57,8 @@ const ALWAYS_ACCENTED = [
   "facil", // fácil
   "quien", // quién (interrogative; the corpus only uses it in questions)
   "linea", // línea
+  "ingles", // inglés
+  "espanol", // español
 ] as const;
 
 /**

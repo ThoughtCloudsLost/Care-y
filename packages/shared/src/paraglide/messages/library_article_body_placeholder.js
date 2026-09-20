@@ -13,17 +13,22 @@ const es_library_article_body_placeholder = /** @type {(inputs: Library_Article_
 	return /** @type {LocalizedString} */ (`Comienza a escribir tu artículo...`)
 };
 
+const en_xa2_library_article_body_placeholder = /** @type {(inputs: Library_Article_Body_PlaceholderInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Stàrt wrìtìng yòùr àrtìclè... •••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Start writing your article..." |
 *
 * @param {Library_Article_Body_PlaceholderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_article_body_placeholder = /** @type {((inputs?: Library_Article_Body_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Article_Body_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_article_body_placeholder = /** @type {((inputs?: Library_Article_Body_PlaceholderInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Article_Body_PlaceholderInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_article_body_placeholder(inputs)
+	if (locale === "en-XA") return en_xa2_library_article_body_placeholder(inputs)
 	return en_library_article_body_placeholder(inputs)
 });

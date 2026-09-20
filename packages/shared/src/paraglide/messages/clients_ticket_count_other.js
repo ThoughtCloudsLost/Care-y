@@ -13,17 +13,22 @@ const es_clients_ticket_count_other = /** @type {(inputs: Clients_Ticket_Count_O
 	return /** @type {LocalizedString} */ (`${i?.count} ${i?.tickets}`)
 };
 
+const en_xa2_clients_ticket_count_other = /** @type {(inputs: Clients_Ticket_Count_OtherInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count}  •${i?.tickets}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} {tickets}" |
 *
 * @param {Clients_Ticket_Count_OtherInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const clients_ticket_count_other = /** @type {((inputs: Clients_Ticket_Count_OtherInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Clients_Ticket_Count_OtherInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const clients_ticket_count_other = /** @type {((inputs: Clients_Ticket_Count_OtherInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Clients_Ticket_Count_OtherInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_clients_ticket_count_other(inputs)
+	if (locale === "en-XA") return en_xa2_clients_ticket_count_other(inputs)
 	return en_clients_ticket_count_other(inputs)
 });

@@ -13,17 +13,22 @@ const es_intake_privacy_transfer_body = /** @type {(inputs: Intake_Privacy_Trans
 	return /** @type {LocalizedString} */ (`Si usas el servicio telefónico, tu número de teléfono es procesado por Twilio, que opera en Estados Unidos. Esta transferencia esta cubierta por Clausulas Contractuales Tipo. Tus envíos cifrados por la web permanecen en el servidor europeo y nunca se envian a terceros.`)
 };
 
+const en_xa2_intake_privacy_transfer_body = /** @type {(inputs: Intake_Privacy_Transfer_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ìf yòù ùsè thè phònè sèrvìcè, yòùr phònè nùmbèr ìs pròcèssèd by Twìlìò, whìch òpèràtès ìn thè Ùnìtèd Stàtès. Thìs trànsfèr ìs còvèrèd by Stàndàrd Còntràctùàl Clàùsès. Yòùr èncryptèd wèb sùbmìssìòns stày òn thè Èùròpèàn sèrvèr ànd àrè nèvèr sènt tò à thìrd pàrty. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "If you use the phone service, your phone number is processed by Twilio, which operates in the United States. This transfer is covered by Standard Contractual..." |
 *
 * @param {Intake_Privacy_Transfer_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_privacy_transfer_body = /** @type {((inputs?: Intake_Privacy_Transfer_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Privacy_Transfer_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_privacy_transfer_body = /** @type {((inputs?: Intake_Privacy_Transfer_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Privacy_Transfer_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_privacy_transfer_body(inputs)
+	if (locale === "en-XA") return en_xa2_intake_privacy_transfer_body(inputs)
 	return en_intake_privacy_transfer_body(inputs)
 });

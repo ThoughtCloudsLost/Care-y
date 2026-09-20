@@ -13,17 +13,22 @@ const es_error_sole_wrap_holder = /** @type {(inputs: Error_Sole_Wrap_HolderInpu
 	return /** @type {LocalizedString} */ (`Este usuario es el único poseedor de la clave de uno o más casos. Desactivar destruiría permanentemente el acceso a esos datos.`)
 };
 
+const en_xa2_error_sole_wrap_holder = /** @type {(inputs: Error_Sole_Wrap_HolderInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìs ùsèr ìs thè sòlè kèy hòldèr fòr ònè òr mòrè tìckèts. Dèàctìvàtìng wòùld pèrmànèntly dèstròy àccèss tò thàt dàtà. ••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This user is the sole key holder for one or more tickets. Deactivating would permanently destroy access to that data." |
 *
 * @param {Error_Sole_Wrap_HolderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_sole_wrap_holder = /** @type {((inputs?: Error_Sole_Wrap_HolderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Sole_Wrap_HolderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_sole_wrap_holder = /** @type {((inputs?: Error_Sole_Wrap_HolderInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Sole_Wrap_HolderInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_sole_wrap_holder(inputs)
+	if (locale === "en-XA") return en_xa2_error_sole_wrap_holder(inputs)
 	return en_error_sole_wrap_holder(inputs)
 });

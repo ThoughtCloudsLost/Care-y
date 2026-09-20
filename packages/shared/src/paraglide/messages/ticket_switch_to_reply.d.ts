@@ -4,13 +4,13 @@
 * | "Switch to reply mode" |
 *
 * @param {Ticket_Switch_To_ReplyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const ticket_switch_to_reply: ((inputs?: Ticket_Switch_To_ReplyInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Ticket_Switch_To_ReplyInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Ticket_Switch_To_ReplyInputs = {};

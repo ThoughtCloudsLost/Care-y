@@ -13,17 +13,22 @@ const es_client_delete_error = /** @type {(inputs: Client_Delete_ErrorInputs) =>
 	return /** @type {LocalizedString} */ (`No se pudo eliminar al ${i?.client}.`)
 };
 
+const en_xa2_client_delete_error = /** @type {(inputs: Client_Delete_ErrorInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Còùld nòt dèlètè  ••••••${i?.client}. •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Could not delete {client}." |
 *
 * @param {Client_Delete_ErrorInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const client_delete_error = /** @type {((inputs: Client_Delete_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Delete_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const client_delete_error = /** @type {((inputs: Client_Delete_ErrorInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Delete_ErrorInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_client_delete_error(inputs)
+	if (locale === "en-XA") return en_xa2_client_delete_error(inputs)
 	return en_client_delete_error(inputs)
 });

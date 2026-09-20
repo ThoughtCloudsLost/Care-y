@@ -13,17 +13,22 @@ const es_library_edit = /** @type {(inputs: Library_EditInputs) => LocalizedStri
 	return /** @type {LocalizedString} */ (`Editar`)
 };
 
+const en_xa2_library_edit = /** @type {(inputs: Library_EditInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èdìt ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Edit" |
 *
 * @param {Library_EditInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_edit = /** @type {((inputs?: Library_EditInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_EditInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_edit = /** @type {((inputs?: Library_EditInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_EditInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_edit(inputs)
+	if (locale === "en-XA") return en_xa2_library_edit(inputs)
 	return en_library_edit(inputs)
 });

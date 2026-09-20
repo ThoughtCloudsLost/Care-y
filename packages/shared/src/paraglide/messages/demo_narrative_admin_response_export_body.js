@@ -17,17 +17,24 @@ const es_demo_narrative_admin_response_export_body = /** @type {(inputs: Demo_Na
 **Auditoría.** Se registra un evento de auditoría con el identificador del formulario y el conteo de filas exportadas antes de ofrecer el archivo. El registro es de mejor esfuerzo y no bloquea la descarga, de modo que el registro de auditoría es constancia de la exportación, no una condición para ella.`)
 };
 
+const en_xa2_demo_narrative_admin_response_export_body = /** @type {(inputs: Demo_Narrative_Admin_Response_Export_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè èxpòrt bùttòn òpèns à dìàlòg fòr dòwnlòàdìng thè cùrrènt fòrm's rèspònsès às à CSV fìlè. Thè CSV ìs àssèmblèd èntìrèly ìn thè bròwsèr fròm rèspònsès thàt hàvè àlrèàdy bèèn dècryptèd, ànd nò plàìntèxt lèàvès thè dèvìcè dùrìng thè èxpòrt. Rèspònsès thàt còùld nòt bè dècryptèd àrè skìppèd ràthèr thàn èxpòrtèd blànk, ànd thè dìàlòg nàmès bòth thè nùmbèr òf ròws thàt wìll bè ìnclùdèd ànd thè nùmbèr thàt wìll bè lèft òùt.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Sècùrìty tràdèòff. ••••••** Thè dìàlòg wàrns thàt thè èxpòrtèd fìlè còntàìns pèrsònàlly ìdèntìfìàblè ìnfòrmàtìòn ìn plàìntèxt. Èvèrythìng thè systèm dòès tò kèèp ànswèrs èncryptèd ènds àt thè mòmènt sòmèònè èxpòrts thèm, ànd thè èxpòrt bùttòn ìs dìsàblèd whìlè àny rèspònsè ìs stìll dècryptìng sò à pàrtìàl èxpòrt cànnòt hàppèn by àccìdènt.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Àùdìt. ••** Àn àùdìt èvènt rècòrdìng thè fòrm ìdèntìfìèr ànd thè còùnt òf èxpòrtèd ròws ìs wrìttèn bèfòrè thè fìlè ìs òffèrèd. Thè rècòrd ìs bèst èffòrt ànd dòès nòt blòck thè dòwnlòàd, sò thè àùdìt lòg ìs à rècòrd òf thè èxpòrt ràthèr thàn à gàtè òn ìt. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The export button opens a dialog for downloading the current form's responses as a CSV file. The CSV is assembled entirely in the browser from responses that..." |
 *
 * @param {Demo_Narrative_Admin_Response_Export_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_response_export_body = /** @type {((inputs?: Demo_Narrative_Admin_Response_Export_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Response_Export_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_response_export_body = /** @type {((inputs?: Demo_Narrative_Admin_Response_Export_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Response_Export_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_response_export_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_response_export_body(inputs)
 	return en_demo_narrative_admin_response_export_body(inputs)
 });

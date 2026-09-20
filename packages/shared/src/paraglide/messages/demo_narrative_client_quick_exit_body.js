@@ -21,17 +21,26 @@ const es_demo_narrative_client_quick_exit_body = /** @type {(inputs: Demo_Narrat
 **En la demostración.** En un servidor CARE-Y en funcionamiento el control navega al sitio seguro de inmediato. En la demostración se intercepta la navegación para que el teléfono integrado permanezca en la página, y el panel de flujo de datos registra la activación en su lugar.`)
 };
 
+const en_xa2_demo_narrative_client_quick_exit_body = /** @type {(inputs: Demo_Narrative_Client_Quick_Exit_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè qùìck èxìt còntròl àppèàrs òn èvèry clìènt pàgè, fròm thè ìntàkè fòrm thròùgh thè pòrtàl ànd àccòùnt tò shàrè lìnks. Ìt ìs àn ìcòn wìth nò vìsìblè tèxt làbèl, bècàùsè thè wòrd "èxìt" òn scrèèn còùld dràw àttèntìòn òn à shàrèd òr mònìtòrèd dèvìcè.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Hòw ìt wòrks. ••••** Tàppìng thè còntròl òr prèssìng Èscàpè ànywhèrè òn thè pàgè rùns à fìxèd sèqùèncè. Thè bròwsèr tàb's tìtlè ìs blànkèd sò thè tàb strìp dòès nòt shòw thè òrgànìzàtìòn's nàmè, àll èncryptìòn kèys hèld ìn mèmòry àrè zèròèd, ànd thè bròwsèr nàvìgàtès tò à nèùtràl sìtè thè òrgànìzàtìòn cònfìgùrès ìn ìts sèttìngs. Thè nàvìgàtìòn rèplàcès thè cùrrènt hìstòry èntry sò thè clìènt pàgè dòès nòt àppèàr bèhìnd thè bàck bùttòn. Èscàpè tàkès prècèdèncè òvèr clòsìng àny òpèn pànèl òr shèèt, bècàùsè lèàvìng fàst ìs thè pùrpòsè òf thè còntròl ànd thè nàvìgàtìòn tèàrs thè pàgè dòwn èìthèr wày. Òn thè àccòùnt pàgè, qùìck èxìt àlsò ènds thè sèrvèr sìdè sèssìòn sò thè còòkìè cànnòt bè rèùsèd.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Sàfèty nèt. ••••** Qùìck èxìt zèròès kèys àùtòmàtìcàlly whèn à tàb ìs clòsèd òr thè vìsìtòr nàvìgàtès àwày bèfòrè ùsìng thè còntròl. Òn thè àccòùnt pàgè à 15 mìnùtè ìdlè tìmèr thàt wàrns àt thè tèn mìnùtè màrk rètùrns tò thè sìgn ìn fòrm.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Sècùrìty tràdèòff. ••••••** Thè àccòùnt pàgè's sèssìòn còòkìè hàs à 24 hòùr èxpìry. Whèn qùìck èxìt fìrès ìt ènds thè sèrvèr sèssìòn, bùt thè òthèr wàys òf lèàvìng thè pàgè dò nòt rèàch thè sèrvèr, sò thè sèssìòn stàys àlìvè ùntìl ìt èxpìrès òn ìts òwn.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Ìn thè dèmò. ••••** Òn à rùnnìng CÀRÈ-Y sèrvèr thè còntròl nàvìgàtès tò thè sàfè ÙRL ìmmèdìàtèly. Ìn thè dèmò thè nàvìgàtìòn ìs ìntèrcèptèd sò thè èmbèddèd phònè stàys òn thè pàgè, ànd thè dàtà flòw pànèl rècòrds thè àctìvàtìòn ìnstèàd. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The quick exit control appears on every client page, from the intake form through the portal and account to share links. It is an icon with no visible text l..." |
 *
 * @param {Demo_Narrative_Client_Quick_Exit_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_client_quick_exit_body = /** @type {((inputs?: Demo_Narrative_Client_Quick_Exit_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Quick_Exit_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_client_quick_exit_body = /** @type {((inputs?: Demo_Narrative_Client_Quick_Exit_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Quick_Exit_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_client_quick_exit_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_client_quick_exit_body(inputs)
 	return en_demo_narrative_client_quick_exit_body(inputs)
 });

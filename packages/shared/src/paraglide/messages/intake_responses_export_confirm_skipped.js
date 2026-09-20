@@ -13,17 +13,22 @@ const es_intake_responses_export_confirm_skipped = /** @type {(inputs: Intake_Re
 	return /** @type {LocalizedString} */ (`${i?.skippedCount} respuestas no se pudieron descifrar y no se incluiran.`)
 };
 
+const en_xa2_intake_responses_export_confirm_skipped = /** @type {(inputs: Intake_Responses_Export_Confirm_SkippedInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.skippedCount} rèspònsès còùld nòt bè dècryptèd ànd wìll nòt bè ìnclùdèd. ••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{skippedCount} responses could not be decrypted and will not be included." |
 *
 * @param {Intake_Responses_Export_Confirm_SkippedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_responses_export_confirm_skipped = /** @type {((inputs: Intake_Responses_Export_Confirm_SkippedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Responses_Export_Confirm_SkippedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const intake_responses_export_confirm_skipped = /** @type {((inputs: Intake_Responses_Export_Confirm_SkippedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Responses_Export_Confirm_SkippedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_responses_export_confirm_skipped(inputs)
+	if (locale === "en-XA") return en_xa2_intake_responses_export_confirm_skipped(inputs)
 	return en_intake_responses_export_confirm_skipped(inputs)
 });

@@ -13,17 +13,22 @@ const es_demo_section_client_account_desc = /** @type {(inputs: Demo_Section_Cli
 	return /** @type {LocalizedString} */ (`Una cuenta de cliente otorga a una persona que regresa acceso duradero a su hilo de conversación sin necesitar un nuevo enlace cada vez. La cuenta usa un nombre de usuario y contraseña que derivan claves de cifrado a través del mismo proceso de derivación que se usa en la página de inicio de sesión de voluntarios.`)
 };
 
+const en_xa2_demo_section_client_account_desc = /** @type {(inputs: Demo_Section_Client_Account_DescInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦À clìènt àccòùnt gìvès à rètùrnìng pèrsòn dùràblè àccèss tò thèìr cònvèrsàtìòn thrèàd wìthòùt nèèdìng à nèw lìnk èàch tìmè. Thè àccòùnt ùsès à ùsèrnàmè ànd pàsswòrd thàt dèrìvè èncryptìòn kèys thròùgh thè sàmè kèy dèrìvàtìòn pìpèlìnè vòlùntèèrs ùsè òn thè sìgn ìn pàgè. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "A client account gives a returning person durable access to their conversation thread without needing a new link each time. The account uses a username and p..." |
 *
 * @param {Demo_Section_Client_Account_DescInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_section_client_account_desc = /** @type {((inputs?: Demo_Section_Client_Account_DescInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Section_Client_Account_DescInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_section_client_account_desc = /** @type {((inputs?: Demo_Section_Client_Account_DescInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Section_Client_Account_DescInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_section_client_account_desc(inputs)
+	if (locale === "en-XA") return en_xa2_demo_section_client_account_desc(inputs)
 	return en_demo_section_client_account_desc(inputs)
 });

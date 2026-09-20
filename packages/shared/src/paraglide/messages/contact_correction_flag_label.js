@@ -13,17 +13,22 @@ const es_contact_correction_flag_label = /** @type {(inputs: Contact_Correction_
 	return /** @type {LocalizedString} */ (`Corrección de contacto, verifica antes de contactar`)
 };
 
+const en_xa2_contact_correction_flag_label = /** @type {(inputs: Contact_Correction_Flag_LabelInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Còntàct còrrèctìòn, vèrìfy bèfòrè còntàctìng ••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Contact correction, verify before contacting" |
 *
 * @param {Contact_Correction_Flag_LabelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const contact_correction_flag_label = /** @type {((inputs?: Contact_Correction_Flag_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Contact_Correction_Flag_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const contact_correction_flag_label = /** @type {((inputs?: Contact_Correction_Flag_LabelInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Contact_Correction_Flag_LabelInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_contact_correction_flag_label(inputs)
+	if (locale === "en-XA") return en_xa2_contact_correction_flag_label(inputs)
 	return en_contact_correction_flag_label(inputs)
 });

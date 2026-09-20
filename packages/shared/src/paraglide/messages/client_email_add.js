@@ -13,17 +13,22 @@ const es_client_email_add = /** @type {(inputs: Client_Email_AddInputs) => Local
 	return /** @type {LocalizedString} */ (`Añadir correo`)
 };
 
+const en_xa2_client_email_add = /** @type {(inputs: Client_Email_AddInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àdd èmàìl •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Add email" |
 *
 * @param {Client_Email_AddInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const client_email_add = /** @type {((inputs?: Client_Email_AddInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Email_AddInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const client_email_add = /** @type {((inputs?: Client_Email_AddInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Email_AddInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_client_email_add(inputs)
+	if (locale === "en-XA") return en_xa2_client_email_add(inputs)
 	return en_client_email_add(inputs)
 });

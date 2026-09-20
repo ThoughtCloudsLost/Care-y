@@ -23,17 +23,27 @@ const es_demo_narrative_admin_note_types_body = /** @type {(inputs: Demo_Narrati
 **Permisos.** Configurar tipos de nota requiere el permiso Definir los tipos de notas que se pueden escribir.`)
 };
 
+const en_xa2_demo_narrative_admin_note_types_body = /** @type {(inputs: Demo_Narrative_Admin_Note_Types_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè nòtè typès sèctìòn hòlds twò gròùps. Thè fìrst ìs thè cònfìgùràblè typès thè òrgànìzàtìòn dèfìnès, èàch càrryìng à nàmè, ìcòn, ànd òptìònàl dèscrìptìòn èncryptèd ùndèr thè òrgànìzàtìòn kèy, ànd thè sècònd ìs à sèt òf èìght systèm typès lìstèd wìth thèìr dèscrìptìòns.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èscàlàtìòn. ••••** Èàch cònfìgùràblè typè hàs thrèè ìndèpèndènt èscàlàtìòn tògglès thàt còntròl whò ìs nòtìfìèd whèn à nòtè òf thàt typè ìs wrìttèn, plùs à tògglè thàt màkès thè typè rèqùìrèd whèn clòsìng à tìckèt.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Dèfàùlts. •••** Thè fòùr typès sèèdèd wìth à nèw òrgànìzàtìòn àrè òrdìnàry cònfìgùràblè typès thè òrgànìzàtìòn càn èdìt òr rèmòvè. Còmmènt ìs sèt às thè dèfàùlt, ànd Rèsòlùtìòn ìs rèqùìrèd whèn clòsìng à tìckèt. Sàfèty Còncèrn ànd Rèqùèst bòth èscàlàtè tò àdmìnìstràtòrs, mànàgèrs, ànd èvèryònè wìth àccèss tò thè tìckèt, whìlè Còmmènt ànd Rèsòlùtìòn nòtìfy ònly thòsè wìth tìckèt àccèss.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Vìsìbìlìty. ••••** Èàch typè sèts à mìnìmùm ròlè fòr vìèwìng ànd à mìnìmùm ròlè fòr crèàtìng, sò àn òrgànìzàtìòn càn rèstrìct sènsìtìvè nòtè càtègòrìès tò mànàgèrs òr àdmìnìstràtòrs.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrsìstèncè. ••••** Rètìrìng à typè dòès nòt dèlètè ìt, ànd à typè cànnòt bè dèàctìvàtèd whìlè ìt ìs sèt às thè òrgànìzàtìòn dèfàùlt.
+ •••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Cònfìgùrìng nòtè typès rèqùìrès thè Mànàgè nòtè typès pèrmìssìòn. ••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The note types section holds two groups. The first is the configurable types the organization defines, each carrying a name, icon, and optional description e..." |
 *
 * @param {Demo_Narrative_Admin_Note_Types_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_note_types_body = /** @type {((inputs?: Demo_Narrative_Admin_Note_Types_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Note_Types_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_note_types_body = /** @type {((inputs?: Demo_Narrative_Admin_Note_Types_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Note_Types_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_note_types_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_note_types_body(inputs)
 	return en_demo_narrative_admin_note_types_body(inputs)
 });

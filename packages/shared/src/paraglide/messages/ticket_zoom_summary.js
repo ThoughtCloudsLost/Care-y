@@ -13,17 +13,22 @@ const es_ticket_zoom_summary = /** @type {(inputs: Ticket_Zoom_SummaryInputs) =>
 	return /** @type {LocalizedString} */ (`${i?.count} mensajes en ${i?.days} días, más reciente ${i?.recency}`)
 };
 
+const en_xa2_ticket_zoom_summary = /** @type {(inputs: Ticket_Zoom_SummaryInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count} mèssàgès òvèr  •••••${i?.days} dàys, mòst rècènt  ••••••${i?.recency}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} messages over {days} days, most recent {recency}" |
 *
 * @param {Ticket_Zoom_SummaryInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_zoom_summary = /** @type {((inputs: Ticket_Zoom_SummaryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Zoom_SummaryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const ticket_zoom_summary = /** @type {((inputs: Ticket_Zoom_SummaryInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Zoom_SummaryInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_zoom_summary(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_zoom_summary(inputs)
 	return en_ticket_zoom_summary(inputs)
 });

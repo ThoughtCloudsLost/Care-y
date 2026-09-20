@@ -13,17 +13,22 @@ const es_ticket_new_divider = /** @type {(inputs: Ticket_New_DividerInputs) => L
 	return /** @type {LocalizedString} */ (`Nuevo`)
 };
 
+const en_xa2_ticket_new_divider = /** @type {(inputs: Ticket_New_DividerInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nèw •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "New" |
 *
 * @param {Ticket_New_DividerInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_new_divider = /** @type {((inputs?: Ticket_New_DividerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_DividerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const ticket_new_divider = /** @type {((inputs?: Ticket_New_DividerInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_DividerInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_new_divider(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_new_divider(inputs)
 	return en_ticket_new_divider(inputs)
 });

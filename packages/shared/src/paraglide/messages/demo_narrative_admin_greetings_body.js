@@ -21,17 +21,26 @@ const es_demo_narrative_admin_greetings_body = /** @type {(inputs: Demo_Narrativ
 **Permisos.** Escribir o actualizar saludos requiere el permiso Escribir saludos de llamada.`)
 };
 
+const en_xa2_demo_narrative_admin_greetings_body = /** @type {(inputs: Demo_Narrative_Admin_Greetings_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Grèètìngs àrè whàt càllèrs hèàr whèn thèy rèàch à phònè lìnè. Fìvè grèètìng typès èàch sèrvè à dìffèrènt pòìnt ìn thè càll flòw, còvèrìng thè ìnìtìàl ànswèr, à làngùàgè pròmpt, à nèw clìènt grèètìng, àn èxìstìng clìènt grèètìng, ànd thè stàff mènù.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Fòrmàts. •••** Èàch grèètìng càn bè tèxt rèndèrèd às spèèch by thè tèlèphòny pròvìdèr, òr à rècòrdèd àùdìò fìlè, ànd àùdìò rècòrdìngs àrè nòt fètchàblè wìthòùt àùthèntìcàtìòn.
+ •••••••••••••••••••••••••••••••••••••••••••••••••**Sècùrìty tràdèòff. ••••••** Grèètìng àùdìò ìs stòrèd às plàìntèxt ràthèr thàn èncryptèd, bècàùsè èvèry càllèr hèàrs ìt ànd ìt còntàìns nò prìvàtè ìnfòrmàtìòn. Thìs ìs thè sàmè trèàtmènt thè pròdùct gìvès tò bràndìng ànd òthèr òùtwàrd fàcìng còntènt.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Grèètìngs by lìnè. ••••••** Èàch phònè lìnè càn hàvè ìts òwn sèt òf grèètìngs fòr èàch typè.
+ ••••••••••••••••••••**Pèrmìssìòns. ••••** Wrìtìng òr ùpdàtìng grèètìngs rèqùìrès thè Wrìtè càll grèètìngs pèrmìssìòn. •••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Greetings are what callers hear when they reach a phone line. Five greeting types each serve a different point in the call flow, covering the initial answer,..." |
 *
 * @param {Demo_Narrative_Admin_Greetings_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_greetings_body = /** @type {((inputs?: Demo_Narrative_Admin_Greetings_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Greetings_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_greetings_body = /** @type {((inputs?: Demo_Narrative_Admin_Greetings_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Greetings_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_greetings_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_greetings_body(inputs)
 	return en_demo_narrative_admin_greetings_body(inputs)
 });

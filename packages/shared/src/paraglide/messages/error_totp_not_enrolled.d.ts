@@ -4,13 +4,13 @@
 * | "Authenticator app is not set up." |
 *
 * @param {Error_Totp_Not_EnrolledInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const error_totp_not_enrolled: ((inputs?: Error_Totp_Not_EnrolledInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Error_Totp_Not_EnrolledInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Error_Totp_Not_EnrolledInputs = {};

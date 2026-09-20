@@ -13,17 +13,22 @@ const es_intake_forms_deactivated = /** @type {(inputs: Intake_Forms_Deactivated
 	return /** @type {LocalizedString} */ (`Formulario desactivado`)
 };
 
+const en_xa2_intake_forms_deactivated = /** @type {(inputs: Intake_Forms_DeactivatedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Fòrm dèàctìvàtèd •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Form deactivated" |
 *
 * @param {Intake_Forms_DeactivatedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_deactivated = /** @type {((inputs?: Intake_Forms_DeactivatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_DeactivatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_deactivated = /** @type {((inputs?: Intake_Forms_DeactivatedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_DeactivatedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_deactivated(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_deactivated(inputs)
 	return en_intake_forms_deactivated(inputs)
 });

@@ -13,17 +13,22 @@ const es_ticket_action_watch = /** @type {(inputs: Ticket_Action_WatchInputs) =>
 	return /** @type {LocalizedString} */ (`Observar`)
 };
 
+const en_xa2_ticket_action_watch = /** @type {(inputs: Ticket_Action_WatchInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Wàtch ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Watch" |
 *
 * @param {Ticket_Action_WatchInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_action_watch = /** @type {((inputs?: Ticket_Action_WatchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Action_WatchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const ticket_action_watch = /** @type {((inputs?: Ticket_Action_WatchInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Action_WatchInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_action_watch(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_action_watch(inputs)
 	return en_ticket_action_watch(inputs)
 });

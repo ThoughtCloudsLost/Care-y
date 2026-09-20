@@ -13,17 +13,22 @@ const es_library_editor_strikethrough = /** @type {(inputs: Library_Editor_Strik
 	return /** @type {LocalizedString} */ (`Tachado`)
 };
 
+const en_xa2_library_editor_strikethrough = /** @type {(inputs: Library_Editor_StrikethroughInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Strìkèthròùgh ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Strikethrough" |
 *
 * @param {Library_Editor_StrikethroughInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_editor_strikethrough = /** @type {((inputs?: Library_Editor_StrikethroughInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_StrikethroughInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_editor_strikethrough = /** @type {((inputs?: Library_Editor_StrikethroughInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_StrikethroughInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_editor_strikethrough(inputs)
+	if (locale === "en-XA") return en_xa2_library_editor_strikethrough(inputs)
 	return en_library_editor_strikethrough(inputs)
 });

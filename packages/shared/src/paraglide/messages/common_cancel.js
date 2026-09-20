@@ -13,17 +13,22 @@ const es_common_cancel = /** @type {(inputs: Common_CancelInputs) => LocalizedSt
 	return /** @type {LocalizedString} */ (`Cancelar`)
 };
 
+const en_xa2_common_cancel = /** @type {(inputs: Common_CancelInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Càncèl ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Cancel" |
 *
 * @param {Common_CancelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const common_cancel = /** @type {((inputs?: Common_CancelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Common_CancelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const common_cancel = /** @type {((inputs?: Common_CancelInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Common_CancelInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_common_cancel(inputs)
+	if (locale === "en-XA") return en_xa2_common_cancel(inputs)
 	return en_common_cancel(inputs)
 });

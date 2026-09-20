@@ -13,18 +13,23 @@ const es_mergecandidates_coverage_notice1 = /** @type {(inputs: Mergecandidates_
 	return /** @type {LocalizedString} */ (`Este análisis cubre solo los clientes cuyos tickets puedes descifrar. Otros voluntarios pueden ver resultados diferentes.`)
 };
 
+const en_xa2_mergecandidates_coverage_notice1 = /** @type {(inputs: Mergecandidates_Coverage_Notice1Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìs scàn còvèrs ònly clìènts whòsè tìckèts yòù càn dècrypt. Òthèr vòlùntèèrs mày sèè dìffèrènt rèsùlts. ••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This scan covers only clients whose tickets you can decrypt. Other volunteers may see different results." |
 *
 * @param {Mergecandidates_Coverage_Notice1Inputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-const mergecandidates_coverage_notice1 = /** @type {((inputs?: Mergecandidates_Coverage_Notice1Inputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mergecandidates_Coverage_Notice1Inputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+const mergecandidates_coverage_notice1 = /** @type {((inputs?: Mergecandidates_Coverage_Notice1Inputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mergecandidates_Coverage_Notice1Inputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_mergecandidates_coverage_notice1(inputs)
+	if (locale === "en-XA") return en_xa2_mergecandidates_coverage_notice1(inputs)
 	return en_mergecandidates_coverage_notice1(inputs)
 });
 export { mergecandidates_coverage_notice1 as "mergeCandidates_coverage_notice" }

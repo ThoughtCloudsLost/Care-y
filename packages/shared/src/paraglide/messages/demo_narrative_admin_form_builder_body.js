@@ -19,17 +19,25 @@ const es_demo_narrative_admin_form_builder_body = /** @type {(inputs: Demo_Narra
 **Cifrado.** Las etiquetas de campo, la configuración y los metadatos del formulario se cifran con una clave derivada de la clave pública de la organización, de modo que la página de admisión puede leer el formulario sin cuenta mientras que un volcado de base de datos permanece opaco.`)
 };
 
+const en_xa2_demo_narrative_admin_form_builder_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Builder_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè fòrm èdìtòr sàvès às à whòlè, sò chàngès tò fìèlds àccùmùlàtè ùntìl thè ùsèr sàvès thè fòrm.
+ ••••••••••••••••••••••••••••••**Rèmòvìng. •••** Rèmòvìng à fìèld ìs ìmmèdìàtè ànd hàs nò cònfìrmàtìòn, bùt thè rèmòvàl ìs nòt pèrsìstèd ùntìl thè fòrm ìs sàvèd.
+ •••••••••••••••••••••••••••••••••••**Fìèld typès. ••••** Nìnè typès àrè àvàìlàblè, splìt bètwèèn sèvèn thàt còllèct ànswèrs ànd twò strùctùràl èlèmènts thàt dò nòt. Thè strùctùràl pàìr, pàgè brèàk ànd rìch tèxt, còntròls làyòùt ònly, ànd à rìch tèxt ròw shòws à prèvìèw òf ìts bòdy ìn plàcè òf à làbèl.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Fìèld làbèls, cònfìgùràtìòn, ànd fòrm mètàdàtà àrè èncryptèd ùndèr à kèy dèrìvèd fròm thè òrgànìzàtìòn's pùblìc kèy, sò thè ìntàkè pàgè càn rèàd thè fòrm wìthòùt àn àccòùnt whìlè à dàtàbàsè dùmp stàys òpàqùè. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The form editor saves as a whole, so changes to fields accumulate until the user saves the form. **Removing.** Removing a field is immediate and has no confi..." |
 *
 * @param {Demo_Narrative_Admin_Form_Builder_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_form_builder_body = /** @type {((inputs?: Demo_Narrative_Admin_Form_Builder_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Form_Builder_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_form_builder_body = /** @type {((inputs?: Demo_Narrative_Admin_Form_Builder_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Form_Builder_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_form_builder_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_form_builder_body(inputs)
 	return en_demo_narrative_admin_form_builder_body(inputs)
 });

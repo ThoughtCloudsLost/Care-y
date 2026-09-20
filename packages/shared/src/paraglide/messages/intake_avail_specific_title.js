@@ -13,17 +13,22 @@ const es_intake_avail_specific_title = /** @type {(inputs: Intake_Avail_Specific
 	return /** @type {LocalizedString} */ (`Fechas específicas`)
 };
 
+const en_xa2_intake_avail_specific_title = /** @type {(inputs: Intake_Avail_Specific_TitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Spècìfìc dàtès •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Specific dates" |
 *
 * @param {Intake_Avail_Specific_TitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_avail_specific_title = /** @type {((inputs?: Intake_Avail_Specific_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Specific_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_avail_specific_title = /** @type {((inputs?: Intake_Avail_Specific_TitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Specific_TitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_avail_specific_title(inputs)
+	if (locale === "en-XA") return en_xa2_intake_avail_specific_title(inputs)
 	return en_intake_avail_specific_title(inputs)
 });

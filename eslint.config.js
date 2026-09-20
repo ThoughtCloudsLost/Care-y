@@ -512,6 +512,9 @@ export default tseslint.config(
       "packages/*/src/**/*.test.ts",
       "packages/server/src/test-utils.ts",
       "packages/shared/src/ids.ts",
+      // Locale brands mint the same way ids do: one internal cast in the
+      // designated factories, no casts at call sites.
+      "packages/shared/src/locale-brands.ts",
       "e2e/**/*.ts",
       // Designated mint sites for keyed digests and tokens (ADR-074).
       // Each module wraps a generic hash/tokenize call and casts once

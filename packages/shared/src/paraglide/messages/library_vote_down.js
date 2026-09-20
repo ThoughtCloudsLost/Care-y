@@ -13,17 +13,22 @@ const es_library_vote_down = /** @type {(inputs: Library_Vote_DownInputs) => Loc
 	return /** @type {LocalizedString} */ (`No útil`)
 };
 
+const en_xa2_library_vote_down = /** @type {(inputs: Library_Vote_DownInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nòt hèlpfùl ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Not helpful" |
 *
 * @param {Library_Vote_DownInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_vote_down = /** @type {((inputs?: Library_Vote_DownInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Vote_DownInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_vote_down = /** @type {((inputs?: Library_Vote_DownInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Vote_DownInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_vote_down(inputs)
+	if (locale === "en-XA") return en_xa2_library_vote_down(inputs)
 	return en_library_vote_down(inputs)
 });

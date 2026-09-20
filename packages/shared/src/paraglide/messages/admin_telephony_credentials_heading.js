@@ -13,17 +13,22 @@ const es_admin_telephony_credentials_heading = /** @type {(inputs: Admin_Telepho
 	return /** @type {LocalizedString} */ (`Actualizar credenciales de ${i?.provider}`)
 };
 
+const en_xa2_admin_telephony_credentials_heading = /** @type {(inputs: Admin_Telephony_Credentials_HeadingInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Ùpdàtè  •••${i?.provider} crèdèntìàls ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Update {provider} credentials" |
 *
 * @param {Admin_Telephony_Credentials_HeadingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_telephony_credentials_heading = /** @type {((inputs: Admin_Telephony_Credentials_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Credentials_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const admin_telephony_credentials_heading = /** @type {((inputs: Admin_Telephony_Credentials_HeadingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Credentials_HeadingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_telephony_credentials_heading(inputs)
+	if (locale === "en-XA") return en_xa2_admin_telephony_credentials_heading(inputs)
 	return en_admin_telephony_credentials_heading(inputs)
 });

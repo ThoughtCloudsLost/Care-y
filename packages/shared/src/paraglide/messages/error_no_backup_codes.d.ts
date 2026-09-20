@@ -4,13 +4,13 @@
 * | "No backup codes available." |
 *
 * @param {Error_No_Backup_CodesInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const error_no_backup_codes: ((inputs?: Error_No_Backup_CodesInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Error_No_Backup_CodesInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Error_No_Backup_CodesInputs = {};

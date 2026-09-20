@@ -13,17 +13,22 @@ const es_onboarding_telephony_byot_description = /** @type {(inputs: Onboarding_
 	return /** @type {LocalizedString} */ (`Traiga sus propias credenciales de Twilio. Usted administra la cuenta y los números.`)
 };
 
+const en_xa2_onboarding_telephony_byot_description = /** @type {(inputs: Onboarding_Telephony_Byot_DescriptionInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Brìng yòùr òwn Twìlìò crèdèntìàls. Yòù mànàgè thè àccòùnt ànd phònè nùmbèrs. •••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Bring your own Twilio credentials. You manage the account and phone numbers." |
 *
 * @param {Onboarding_Telephony_Byot_DescriptionInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_telephony_byot_description = /** @type {((inputs?: Onboarding_Telephony_Byot_DescriptionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Telephony_Byot_DescriptionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_telephony_byot_description = /** @type {((inputs?: Onboarding_Telephony_Byot_DescriptionInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Telephony_Byot_DescriptionInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_telephony_byot_description(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_telephony_byot_description(inputs)
 	return en_onboarding_telephony_byot_description(inputs)
 });

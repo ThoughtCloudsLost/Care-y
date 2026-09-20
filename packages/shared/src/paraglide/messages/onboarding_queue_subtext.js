@@ -13,17 +13,22 @@ const es_onboarding_queue_subtext = /** @type {(inputs: Onboarding_Queue_Subtext
 	return /** @type {LocalizedString} */ (`Las ${i?.queues} organizan los casos entrantes por tema o equipo.`)
 };
 
+const en_xa2_onboarding_queue_subtext = /** @type {(inputs: Onboarding_Queue_SubtextInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.Queues} òrgànìzè ìncòmìng càsès by tòpìc òr tèàm. •••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{Queues} organize incoming cases by topic or team." |
 *
 * @param {Onboarding_Queue_SubtextInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_queue_subtext = /** @type {((inputs: Onboarding_Queue_SubtextInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Queue_SubtextInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const onboarding_queue_subtext = /** @type {((inputs: Onboarding_Queue_SubtextInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Queue_SubtextInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_queue_subtext(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_queue_subtext(inputs)
 	return en_onboarding_queue_subtext(inputs)
 });

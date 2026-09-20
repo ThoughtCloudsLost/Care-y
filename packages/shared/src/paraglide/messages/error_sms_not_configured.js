@@ -13,17 +13,22 @@ const es_error_sms_not_configured = /** @type {(inputs: Error_Sms_Not_Configured
 	return /** @type {LocalizedString} */ (`SMS no está disponible. La telefonía no está configurada.`)
 };
 
+const en_xa2_error_sms_not_configured = /** @type {(inputs: Error_Sms_Not_ConfiguredInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦SMS ìs nòt àvàìlàblè. Tèlèphòny ìs nòt cònfìgùrèd. •••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "SMS is not available. Telephony is not configured." |
 *
 * @param {Error_Sms_Not_ConfiguredInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_sms_not_configured = /** @type {((inputs?: Error_Sms_Not_ConfiguredInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Sms_Not_ConfiguredInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_sms_not_configured = /** @type {((inputs?: Error_Sms_Not_ConfiguredInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Sms_Not_ConfiguredInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_sms_not_configured(inputs)
+	if (locale === "en-XA") return en_xa2_error_sms_not_configured(inputs)
 	return en_error_sms_not_configured(inputs)
 });

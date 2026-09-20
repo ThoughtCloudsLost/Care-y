@@ -17,17 +17,24 @@ const es_demo_narrative_admin_form_responses_body = /** @type {(inputs: Demo_Nar
 **Permisos.** Ver las respuestas de admisión requiere el permiso Leer respuestas de ingreso de todas las colas, que es un valor predeterminado de administrador y lleva una nota de confianza porque otorga descifrado en todas las colas.`)
 };
 
+const en_xa2_demo_narrative_admin_form_responses_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Responses_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sùbmìttèd ìntàkè fòrms àppèàr às càrds ìn thè rèspònsè vìèwèr. À fìèld whòsè dèfìnìtìòn hàs sìncè bèèn rèmòvèd fròm thè fòrm shòws à màrkèr ànd ìts ràw kèy ràthèr thàn dìsàppèàrìng, sò nò sùbmìssìòn dàtà ìs sìlèntly lòst.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Rèspònsè fìèlds àrè èncryptèd àt sùbmìssìòn tìmè ànd dècryptèd ìn thè bròwsèr. Whèn thè bròwsèr dècrypts à rèspònsè ànd fìnds thàt òthèr ùsèrs hàvè nò wràppèd còpy òf thè kèy, ìt mìnts wràps fòr thèm ìn thè bàckgròùnd wìthòùt blòckìng thè vìèwèr.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Vìèwìng ìntàkè rèspònsès rèqùìrès thè Vìèw ìntàkè rèspònsès pèrmìssìòn, whìch ìs àn àdmìnìstràtòr dèfàùlt ànd càrrìès à trùst nòtè bècàùsè ìt grànts dècryptìòn àcròss qùèùès. •••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Submitted intake forms appear as cards in the response viewer. A field whose definition has since been removed from the form shows a marker and its raw key r..." |
 *
 * @param {Demo_Narrative_Admin_Form_Responses_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_form_responses_body = /** @type {((inputs?: Demo_Narrative_Admin_Form_Responses_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Form_Responses_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_form_responses_body = /** @type {((inputs?: Demo_Narrative_Admin_Form_Responses_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Form_Responses_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_form_responses_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_form_responses_body(inputs)
 	return en_demo_narrative_admin_form_responses_body(inputs)
 });

@@ -13,17 +13,22 @@ const es_library_article_saved = /** @type {(inputs: Library_Article_SavedInputs
 	return /** @type {LocalizedString} */ (`Artículo guardado`)
 };
 
+const en_xa2_library_article_saved = /** @type {(inputs: Library_Article_SavedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àrtìclè sàvèd ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Article saved" |
 *
 * @param {Library_Article_SavedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_article_saved = /** @type {((inputs?: Library_Article_SavedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Article_SavedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_article_saved = /** @type {((inputs?: Library_Article_SavedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Article_SavedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_article_saved(inputs)
+	if (locale === "en-XA") return en_xa2_library_article_saved(inputs)
 	return en_library_article_saved(inputs)
 });

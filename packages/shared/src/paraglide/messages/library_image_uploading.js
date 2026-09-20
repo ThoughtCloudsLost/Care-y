@@ -13,17 +13,22 @@ const es_library_image_uploading = /** @type {(inputs: Library_Image_UploadingIn
 	return /** @type {LocalizedString} */ (`Subiendo imagen...`)
 };
 
+const en_xa2_library_image_uploading = /** @type {(inputs: Library_Image_UploadingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ùplòàdìng ìmàgè... ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Uploading image..." |
 *
 * @param {Library_Image_UploadingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_image_uploading = /** @type {((inputs?: Library_Image_UploadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Image_UploadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_image_uploading = /** @type {((inputs?: Library_Image_UploadingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Image_UploadingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_image_uploading(inputs)
+	if (locale === "en-XA") return en_xa2_library_image_uploading(inputs)
 	return en_library_image_uploading(inputs)
 });

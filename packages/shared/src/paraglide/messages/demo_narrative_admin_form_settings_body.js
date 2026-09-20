@@ -21,17 +21,26 @@ const es_demo_narrative_admin_form_settings_body = /** @type {(inputs: Demo_Narr
 **Enlace para compartir.** La URL pública se produce a partir del slug del formulario y no requiere cuenta para acceder, y no existe hasta que el formulario se ha guardado.`)
 };
 
+const en_xa2_demo_narrative_admin_form_settings_body = /** @type {(inputs: Demo_Narrative_Admin_Form_Settings_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè sèttìngs blòck còntròls thè fòrm's ìdèntìty ànd bèhàvìòr.
+ •••••••••••••••••••**Whàt thè sèrvèr hòlds. •••••••** Thè fòrm nàmè ànd pùblìc slùg àrè stòrèd às plàìntèxt òn thè sèrvèr bècàùsè thèy càrry nò sènsìtìvè còntènt, whìlè thè bànnèr ìmàgè ìs èncryptèd ùndèr à kèy dèrìvèd fròm thè òrgànìzàtìòn's pùblìc kèy bèfòrè ùplòàd.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Hòw ìt wòrks. ••••** Ònly ònè fòrm càn hòld thè dèfàùlt àt à tìmè, ànd thè dèfàùlt ìs whàt wèb ìntàkè sèrvès àt thè bàsè ÙRL whèn nò slùg ìs spècìfìèd. Thè dèstìnàtìòn qùèùè dètèrmìnès whìch qùèùè rècèìvès tìckèts crèàtèd thròùgh thìs fòrm.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Clòsìng dàtè. ••••** Whèn thè clòsìng dàtè pàssès, thè vìsìtòr sèès thè clòsèd mèssàgè, whìch fàlls bàck tò à dèfàùlt ìf thè òrgànìzàtìòn hàs nòt wrìttèn ònè. Lèàvìng thè dàtè blànk mèàns thè fòrm stàys òpèn ìndèfìnìtèly.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Shàrè lìnk. ••••** Thè pùblìc ÙRL ìs pròdùcèd fròm thè fòrm's slùg ànd rèqùìrès nò àccòùnt tò rèàch, ànd ìt dòès nòt èxìst ùntìl thè fòrm hàs bèèn sàvèd. •••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The settings block controls the form's identity and behavior. **What the server holds.** The form name and public slug are stored as plaintext on the server ..." |
 *
 * @param {Demo_Narrative_Admin_Form_Settings_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_form_settings_body = /** @type {((inputs?: Demo_Narrative_Admin_Form_Settings_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Form_Settings_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_form_settings_body = /** @type {((inputs?: Demo_Narrative_Admin_Form_Settings_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Form_Settings_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_form_settings_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_form_settings_body(inputs)
 	return en_demo_narrative_admin_form_settings_body(inputs)
 });

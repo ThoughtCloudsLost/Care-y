@@ -4,13 +4,13 @@
 * | "A password alone can be guessed, leaked, or stolen through a fake login page. Two factor authentication adds a second check that makes stolen passwords usele..." |
 *
 * @param {Onboarding_Briefing_Choice_2fa_WhyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const onboarding_briefing_choice_2fa_why: ((inputs?: Onboarding_Briefing_Choice_2fa_WhyInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Onboarding_Briefing_Choice_2fa_WhyInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Onboarding_Briefing_Choice_2fa_WhyInputs = {};

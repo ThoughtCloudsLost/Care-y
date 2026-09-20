@@ -13,17 +13,22 @@ const es_revoke_reply_token_confirm_body = /** @type {(inputs: Revoke_Reply_Toke
 	return /** @type {LocalizedString} */ (`El cliente ya no podrá responder a los correos de este caso. Se creará un token nuevo en el próximo correo saliente.`)
 };
 
+const en_xa2_revoke_reply_token_confirm_body = /** @type {(inputs: Revoke_Reply_Token_Confirm_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè clìènt wìll nò lòngèr bè àblè tò rèply tò èmàìls fòr thìs tìckèt. À nèw tòkèn wìll bè crèàtèd òn thè nèxt òùtbòùnd èmàìl. ••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The client will no longer be able to reply to emails for this ticket. A new token will be created on the next outbound email." |
 *
 * @param {Revoke_Reply_Token_Confirm_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const revoke_reply_token_confirm_body = /** @type {((inputs?: Revoke_Reply_Token_Confirm_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Revoke_Reply_Token_Confirm_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const revoke_reply_token_confirm_body = /** @type {((inputs?: Revoke_Reply_Token_Confirm_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Revoke_Reply_Token_Confirm_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_revoke_reply_token_confirm_body(inputs)
+	if (locale === "en-XA") return en_xa2_revoke_reply_token_confirm_body(inputs)
 	return en_revoke_reply_token_confirm_body(inputs)
 });

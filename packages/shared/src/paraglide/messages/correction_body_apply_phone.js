@@ -13,17 +13,22 @@ const es_correction_body_apply_phone = /** @type {(inputs: Correction_Body_Apply
 	return /** @type {LocalizedString} */ (`Aplicar número de teléfono`)
 };
 
+const en_xa2_correction_body_apply_phone = /** @type {(inputs: Correction_Body_Apply_PhoneInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àpply phònè nùmbèr ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Apply phone number" |
 *
 * @param {Correction_Body_Apply_PhoneInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const correction_body_apply_phone = /** @type {((inputs?: Correction_Body_Apply_PhoneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Correction_Body_Apply_PhoneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const correction_body_apply_phone = /** @type {((inputs?: Correction_Body_Apply_PhoneInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Correction_Body_Apply_PhoneInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_correction_body_apply_phone(inputs)
+	if (locale === "en-XA") return en_xa2_correction_body_apply_phone(inputs)
 	return en_correction_body_apply_phone(inputs)
 });

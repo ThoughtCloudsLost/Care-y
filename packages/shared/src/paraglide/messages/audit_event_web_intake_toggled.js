@@ -13,17 +13,22 @@ const es_audit_event_web_intake_toggled = /** @type {(inputs: Audit_Event_Web_In
 	return /** @type {LocalizedString} */ (`Recepción en línea activada o desactivada`)
 };
 
+const en_xa2_audit_event_web_intake_toggled = /** @type {(inputs: Audit_Event_Web_Intake_ToggledInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Wèb ìntàkè tògglèd ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Web intake toggled" |
 *
 * @param {Audit_Event_Web_Intake_ToggledInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const audit_event_web_intake_toggled = /** @type {((inputs?: Audit_Event_Web_Intake_ToggledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Audit_Event_Web_Intake_ToggledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const audit_event_web_intake_toggled = /** @type {((inputs?: Audit_Event_Web_Intake_ToggledInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Audit_Event_Web_Intake_ToggledInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_audit_event_web_intake_toggled(inputs)
+	if (locale === "en-XA") return en_xa2_audit_event_web_intake_toggled(inputs)
 	return en_audit_event_web_intake_toggled(inputs)
 });

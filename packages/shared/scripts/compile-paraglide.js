@@ -2,6 +2,16 @@ import { compile } from "@inlang/paraglide-js";
 import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import { existsSync, globSync, rmSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Generate the en-XA pseudolocale from en.json before compiling.
+// The import runs the script as a side effect.
+const __scriptDir = dirname(fileURLToPath(import.meta.url));
+execSync(
+  `node ${resolve(__scriptDir, "generate-pseudolocale.js")} ${resolve(__scriptDir, "../messages")}`,
+  { stdio: "inherit" },
+);
 
 // Paraglide's writeOutput collects file writes with Promise.allSettled and
 // never inspects the rejections, so under kernel file-table pressure

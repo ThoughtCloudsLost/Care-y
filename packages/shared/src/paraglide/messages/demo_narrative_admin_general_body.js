@@ -19,17 +19,25 @@ const es_demo_narrative_admin_general_body = /** @type {(inputs: Demo_Narrative_
 **Permisos.** Editar la información general requiere el permiso Cambiar como se presenta la organización.`)
 };
 
+const en_xa2_demo_narrative_admin_general_body = /** @type {(inputs: Demo_Narrative_Admin_General_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè gènèràl ìnfò sèctìòn hòlds thè òrgànìzàtìòn nàmè, còùntry còdè, dèfàùlt ìntèrfàcè làngùàgè, ànd pòrtàl sàfè èxìt ÙRL, ànd àll fòùr àrè stòrèd às plàìntèxt.
+ ••••••••••••••••••••••••••••••••••••••••••••••••**Sàfè èxìt ÙRL. •••••** Thè sèrvèr vàlìdàtès thè ÙRL schèmè òn rèàd às wèll às òn wrìtè, bècàùsè thè vàlùè bècòmès thè dèstìnàtìòn òf à nàvìgàtìòn thàt rèplàcès thè pàgè òn thè clìènt qùìck èxìt pàth. À stòrèd vàlùè thàt fàìls vàlìdàtìòn fàlls bàck tò thè clìènt dèfàùlt.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrsìstèncè. ••••** Chàngìng thè òrgànìzàtìòn nàmè àlsò ùpdàtès thè bràndìng dìsplày nàmè sò thè twò stày cònsìstènt.
+ ••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Èdìtìng gènèràl ìnfò rèqùìrès thè Mànàgè òrgànìzàtìòn ìdèntìty pèrmìssìòn. •••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The general info section holds the organization name, country code, default interface language, and portal safe exit URL, and all four are stored as plaintex..." |
 *
 * @param {Demo_Narrative_Admin_General_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_general_body = /** @type {((inputs?: Demo_Narrative_Admin_General_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_General_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_general_body = /** @type {((inputs?: Demo_Narrative_Admin_General_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_General_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_general_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_general_body(inputs)
 	return en_demo_narrative_admin_general_body(inputs)
 });

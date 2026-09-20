@@ -13,17 +13,22 @@ const es_panel_analytics_deep = /** @type {(inputs: Panel_Analytics_DeepInputs) 
 	return /** @type {LocalizedString} */ (`Estudios`)
 };
 
+const en_xa2_panel_analytics_deep = /** @type {(inputs: Panel_Analytics_DeepInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèsèàrch •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Research" |
 *
 * @param {Panel_Analytics_DeepInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const panel_analytics_deep = /** @type {((inputs?: Panel_Analytics_DeepInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_Analytics_DeepInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const panel_analytics_deep = /** @type {((inputs?: Panel_Analytics_DeepInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_Analytics_DeepInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_panel_analytics_deep(inputs)
+	if (locale === "en-XA") return en_xa2_panel_analytics_deep(inputs)
 	return en_panel_analytics_deep(inputs)
 });

@@ -7,11 +7,11 @@ export type Mergecandidates_Coverage_Notice1Inputs = {};
 * | "This scan covers only clients whose tickets you can decrypt. Other volunteers may see different results." |
 *
 * @param {Mergecandidates_Coverage_Notice1Inputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 declare const mergecandidates_coverage_notice1: ((inputs?: Mergecandidates_Coverage_Notice1Inputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Mergecandidates_Coverage_Notice1Inputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;

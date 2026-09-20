@@ -13,17 +13,22 @@ const es_intake_forms_banner_upload_failed = /** @type {(inputs: Intake_Forms_Ba
 	return /** @type {LocalizedString} */ (`Error al subir la portada.`)
 };
 
+const en_xa2_intake_forms_banner_upload_failed = /** @type {(inputs: Intake_Forms_Banner_Upload_FailedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Bànnèr ùplòàd fàìlèd. •••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Banner upload failed." |
 *
 * @param {Intake_Forms_Banner_Upload_FailedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_banner_upload_failed = /** @type {((inputs?: Intake_Forms_Banner_Upload_FailedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Banner_Upload_FailedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_banner_upload_failed = /** @type {((inputs?: Intake_Forms_Banner_Upload_FailedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Banner_Upload_FailedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_banner_upload_failed(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_banner_upload_failed(inputs)
 	return en_intake_forms_banner_upload_failed(inputs)
 });

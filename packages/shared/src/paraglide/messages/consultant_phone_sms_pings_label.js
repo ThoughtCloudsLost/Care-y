@@ -13,17 +13,22 @@ const es_consultant_phone_sms_pings_label = /** @type {(inputs: Consultant_Phone
 	return /** @type {LocalizedString} */ (`Enviarme notificaciones por SMS`)
 };
 
+const en_xa2_consultant_phone_sms_pings_label = /** @type {(inputs: Consultant_Phone_Sms_Pings_LabelInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tèxt mè nòtìfìcàtìòn pìngs ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Text me notification pings" |
 *
 * @param {Consultant_Phone_Sms_Pings_LabelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const consultant_phone_sms_pings_label = /** @type {((inputs?: Consultant_Phone_Sms_Pings_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Sms_Pings_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const consultant_phone_sms_pings_label = /** @type {((inputs?: Consultant_Phone_Sms_Pings_LabelInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Sms_Pings_LabelInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_consultant_phone_sms_pings_label(inputs)
+	if (locale === "en-XA") return en_xa2_consultant_phone_sms_pings_label(inputs)
 	return en_consultant_phone_sms_pings_label(inputs)
 });

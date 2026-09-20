@@ -13,17 +13,22 @@ const es_ticket_new_field_title = /** @type {(inputs: Ticket_New_Field_TitleInpu
 	return /** @type {LocalizedString} */ (`Título`)
 };
 
+const en_xa2_ticket_new_field_title = /** @type {(inputs: Ticket_New_Field_TitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tìtlè ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Title" |
 *
 * @param {Ticket_New_Field_TitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_new_field_title = /** @type {((inputs?: Ticket_New_Field_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_Field_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const ticket_new_field_title = /** @type {((inputs?: Ticket_New_Field_TitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_Field_TitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_new_field_title(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_new_field_title(inputs)
 	return en_ticket_new_field_title(inputs)
 });

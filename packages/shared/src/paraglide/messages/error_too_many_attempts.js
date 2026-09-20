@@ -13,17 +13,22 @@ const es_error_too_many_attempts = /** @type {(inputs: Error_Too_Many_AttemptsIn
 	return /** @type {LocalizedString} */ (`Demasiados intentos. Solicita un código nuevo.`)
 };
 
+const en_xa2_error_too_many_attempts = /** @type {(inputs: Error_Too_Many_AttemptsInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tòò màny àttèmpts. Plèàsè rèqùèst à nèw còdè. ••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Too many attempts. Please request a new code." |
 *
 * @param {Error_Too_Many_AttemptsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_too_many_attempts = /** @type {((inputs?: Error_Too_Many_AttemptsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Too_Many_AttemptsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_too_many_attempts = /** @type {((inputs?: Error_Too_Many_AttemptsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Too_Many_AttemptsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_too_many_attempts(inputs)
+	if (locale === "en-XA") return en_xa2_error_too_many_attempts(inputs)
 	return en_error_too_many_attempts(inputs)
 });

@@ -13,17 +13,22 @@ const es_intake_forms_preview_empty_subtitle = /** @type {(inputs: Intake_Forms_
 	return /** @type {LocalizedString} */ (`Agrega campos para ver cómo se verá el formulario para los clientes.`)
 };
 
+const en_xa2_intake_forms_preview_empty_subtitle = /** @type {(inputs: Intake_Forms_Preview_Empty_SubtitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àdd fìèlds tò sèè hòw thè fòrm wìll lòòk tò clìènts. ••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Add fields to see how the form will look to clients." |
 *
 * @param {Intake_Forms_Preview_Empty_SubtitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_preview_empty_subtitle = /** @type {((inputs?: Intake_Forms_Preview_Empty_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Preview_Empty_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_preview_empty_subtitle = /** @type {((inputs?: Intake_Forms_Preview_Empty_SubtitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Preview_Empty_SubtitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_preview_empty_subtitle(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_preview_empty_subtitle(inputs)
 	return en_intake_forms_preview_empty_subtitle(inputs)
 });

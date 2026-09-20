@@ -13,17 +13,22 @@ const es_followup_type_contact_correction = /** @type {(inputs: Followup_Type_Co
 	return /** @type {LocalizedString} */ (`Corrección de contacto`)
 };
 
+const en_xa2_followup_type_contact_correction = /** @type {(inputs: Followup_Type_Contact_CorrectionInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Còntàct còrrèctìòn ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Contact correction" |
 *
 * @param {Followup_Type_Contact_CorrectionInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const followup_type_contact_correction = /** @type {((inputs?: Followup_Type_Contact_CorrectionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Contact_CorrectionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const followup_type_contact_correction = /** @type {((inputs?: Followup_Type_Contact_CorrectionInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Contact_CorrectionInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_followup_type_contact_correction(inputs)
+	if (locale === "en-XA") return en_xa2_followup_type_contact_correction(inputs)
 	return en_followup_type_contact_correction(inputs)
 });

@@ -13,17 +13,22 @@ const es_account_change_reset_warning = /** @type {(inputs: Account_Change_Reset
 	return /** @type {LocalizedString} */ (`Si alguna vez olvidas tu contraseña y se restablece, tu historial de mensajes se pierde. Cambiarla aquí conserva todo.`)
 };
 
+const en_xa2_account_change_reset_warning = /** @type {(inputs: Account_Change_Reset_WarningInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ìf yòù èvèr fòrgèt yòùr pàsswòrd ànd ìt gèts rèsèt, yòùr mèssàgè hìstòry ìs lòst. Chàngìng ìt hèrè kèèps èvèrythìng. •••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "If you ever forget your password and it gets reset, your message history is lost. Changing it here keeps everything." |
 *
 * @param {Account_Change_Reset_WarningInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const account_change_reset_warning = /** @type {((inputs?: Account_Change_Reset_WarningInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Change_Reset_WarningInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const account_change_reset_warning = /** @type {((inputs?: Account_Change_Reset_WarningInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Change_Reset_WarningInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_account_change_reset_warning(inputs)
+	if (locale === "en-XA") return en_xa2_account_change_reset_warning(inputs)
 	return en_account_change_reset_warning(inputs)
 });

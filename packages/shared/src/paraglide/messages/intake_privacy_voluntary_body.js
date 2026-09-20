@@ -13,17 +13,22 @@ const es_intake_privacy_voluntary_body = /** @type {(inputs: Intake_Privacy_Volu
 	return /** @type {LocalizedString} */ (`Proporcionar tu información es voluntario. Si decides no compartir datos de contacto, la organización no podrá comunicarse contigo, pero puedes volver a consultar por tu cuenta.`)
 };
 
+const en_xa2_intake_privacy_voluntary_body = /** @type {(inputs: Intake_Privacy_Voluntary_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Pròvìdìng yòùr ìnfòrmàtìòn ìs vòlùntàry. Ìf yòù chòòsè nòt tò shàrè còntàct dètàìls, thè òrgànìzàtìòn wìll nòt bè àblè tò rèàch òùt tò yòù, bùt yòù càn chèck bàck òn yòùr òwn. •••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Providing your information is voluntary. If you choose not to share contact details, the organization will not be able to reach out to you, but you can check..." |
 *
 * @param {Intake_Privacy_Voluntary_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_privacy_voluntary_body = /** @type {((inputs?: Intake_Privacy_Voluntary_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Privacy_Voluntary_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_privacy_voluntary_body = /** @type {((inputs?: Intake_Privacy_Voluntary_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Privacy_Voluntary_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_privacy_voluntary_body(inputs)
+	if (locale === "en-XA") return en_xa2_intake_privacy_voluntary_body(inputs)
 	return en_intake_privacy_voluntary_body(inputs)
 });

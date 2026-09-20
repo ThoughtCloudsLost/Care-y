@@ -13,17 +13,22 @@ const es_admin_quarantine_dismiss_confirm = /** @type {(inputs: Admin_Quarantine
 	return /** @type {LocalizedString} */ (`¿Esto eliminará permanentemente la grabación. Está seguro?`)
 };
 
+const en_xa2_admin_quarantine_dismiss_confirm = /** @type {(inputs: Admin_Quarantine_Dismiss_ConfirmInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìs wìll pèrmànèntly dèlètè thè rècòrdìng. Àrè yòù sùrè? ••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This will permanently delete the recording. Are you sure?" |
 *
 * @param {Admin_Quarantine_Dismiss_ConfirmInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_quarantine_dismiss_confirm = /** @type {((inputs?: Admin_Quarantine_Dismiss_ConfirmInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Quarantine_Dismiss_ConfirmInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_quarantine_dismiss_confirm = /** @type {((inputs?: Admin_Quarantine_Dismiss_ConfirmInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Quarantine_Dismiss_ConfirmInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_quarantine_dismiss_confirm(inputs)
+	if (locale === "en-XA") return en_xa2_admin_quarantine_dismiss_confirm(inputs)
 	return en_admin_quarantine_dismiss_confirm(inputs)
 });

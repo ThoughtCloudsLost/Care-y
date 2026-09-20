@@ -4,13 +4,13 @@
 * | "No {queues} assigned" |
 *
 * @param {Dashboard_Queues_No_QueuesInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const dashboard_queues_no_queues: ((inputs: Dashboard_Queues_No_QueuesInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Dashboard_Queues_No_QueuesInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Dashboard_Queues_No_QueuesInputs = {

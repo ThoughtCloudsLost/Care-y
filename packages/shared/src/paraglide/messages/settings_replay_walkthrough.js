@@ -13,17 +13,22 @@ const es_settings_replay_walkthrough = /** @type {(inputs: Settings_Replay_Walkt
 	return /** @type {LocalizedString} */ (`Revisar guía de seguridad`)
 };
 
+const en_xa2_settings_replay_walkthrough = /** @type {(inputs: Settings_Replay_WalkthroughInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèvìèw sècùrìty wàlkthròùgh •••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Review security walkthrough" |
 *
 * @param {Settings_Replay_WalkthroughInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const settings_replay_walkthrough = /** @type {((inputs?: Settings_Replay_WalkthroughInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Replay_WalkthroughInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const settings_replay_walkthrough = /** @type {((inputs?: Settings_Replay_WalkthroughInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Replay_WalkthroughInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_settings_replay_walkthrough(inputs)
+	if (locale === "en-XA") return en_xa2_settings_replay_walkthrough(inputs)
 	return en_settings_replay_walkthrough(inputs)
 });

@@ -13,17 +13,22 @@ const es_admin_escrow_step_education_analogy = /** @type {(inputs: Admin_Escrow_
 	return /** @type {LocalizedString} */ (`Piense en ello como una clave maestra de respaldo, protegida por una frase de contraseña que usted elija.`)
 };
 
+const en_xa2_admin_escrow_step_education_analogy = /** @type {(inputs: Admin_Escrow_Step_Education_AnalogyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìnk òf ìt às à màstèr bàckùp kèy, pròtèctèd by à pàssphràsè yòù chòòsè. ••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Think of it as a master backup key, protected by a passphrase you choose." |
 *
 * @param {Admin_Escrow_Step_Education_AnalogyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_escrow_step_education_analogy = /** @type {((inputs?: Admin_Escrow_Step_Education_AnalogyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Escrow_Step_Education_AnalogyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_escrow_step_education_analogy = /** @type {((inputs?: Admin_Escrow_Step_Education_AnalogyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Escrow_Step_Education_AnalogyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_escrow_step_education_analogy(inputs)
+	if (locale === "en-XA") return en_xa2_admin_escrow_step_education_analogy(inputs)
 	return en_admin_escrow_step_education_analogy(inputs)
 });

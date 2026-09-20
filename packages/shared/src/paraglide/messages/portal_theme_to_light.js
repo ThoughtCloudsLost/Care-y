@@ -13,17 +13,22 @@ const es_portal_theme_to_light = /** @type {(inputs: Portal_Theme_To_LightInputs
 	return /** @type {LocalizedString} */ (`Cambiar a modo claro`)
 };
 
+const en_xa2_portal_theme_to_light = /** @type {(inputs: Portal_Theme_To_LightInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Swìtch tò lìght mòdè ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Switch to light mode" |
 *
 * @param {Portal_Theme_To_LightInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const portal_theme_to_light = /** @type {((inputs?: Portal_Theme_To_LightInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Theme_To_LightInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const portal_theme_to_light = /** @type {((inputs?: Portal_Theme_To_LightInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Theme_To_LightInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_portal_theme_to_light(inputs)
+	if (locale === "en-XA") return en_xa2_portal_theme_to_light(inputs)
 	return en_portal_theme_to_light(inputs)
 });

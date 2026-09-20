@@ -19,17 +19,25 @@ const es_demo_narrative_topic_credentials_body = /** @type {(inputs: Demo_Narrat
 **Si falla.** No existe recuperación de contraseña ni enlace de restablecimiento. La persona administradora no puede ver ni establecer la contraseña de otra cuenta. Una contraseña perdida significa que la cuenta desaparece, pero los casos no se ven afectados porque la clave de cada caso se envuelve individualmente por persona usuaria. Las demás personas conservan el acceso a los mismos datos.`)
 };
 
+const en_xa2_demo_narrative_topic_credentials_body = /** @type {(inputs: Demo_Narrative_Topic_Credentials_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sìgn-ìn rèqùìrès à ùsèrnàmè ànd pàsswòrd. Thè ùsèrnàmè ìs à lògìn ìdèntìfìèr, nòt àn èmàìl àddrèss, chòsèn àt àccòùnt crèàtìòn by thè ùsèr òr àn àdmìn.
+ ••••••••••••••••••••••••••••••••••••••••••••••**Hòw ìt wòrks. ••••** Thè pàsswòrd sèrvès twò pùrpòsès. Ònè còpy ìs chèckèd àgàìnst thè sèrvèr tò cònfìrm ìdèntìty. Thè sèrvèr stòrès ònly à ònè-wày hàsh, nèvèr thè pàsswòrd ìtsèlf. À sèpàràtè còpy stàys ìn thè bròwsèr ànd fèèds à kèy-dèrìvàtìòn pròcèss thàt ùnlòcks thè òrgànìzàtìòn's èncryptèd dàtà. Thè sèrvèr nèvèr sèès thìs sècònd còpy ànd cànnòt ìnflùèncè hòw ìt wòrks. Thè dèrìvàtìòn pàràmètèrs àrè fìxèd ìn thè bròwsèr's còdè, sò à còmpròmìsèd sèrvèr cànnòt wèàkèn thèm.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Thè èncryptìòn kèys pròdùcèd fròm thè pàsswòrd èxìst ònly ìn bròwsèr mèmòry. Thèy àrè èràsèd whèn thè tàb clòsès. Thèy àrè nèvèr stòrèd òn thè sèrvèr, nèvèr wrìttèn tò dìsk, ànd nèvèr trànsmìttèd. Ìf sòmèònè gàìns àccèss tò thè sèrvèr, thèrè àrè nò kèys tò fìnd.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Ìf ìt fàìls. ••••** Thèrè ìs nò pàsswòrd rèsèt ànd nò rècòvèry lìnk. Àdmìns cànnòt sèt òr sèè ànòthèr àccòùnt's pàsswòrd. À lòst pàsswòrd mèàns thè àccòùnt ìs gònè, bùt càsès àrè ùnàffèctèd bècàùsè èàch càsè kèy ìs wràppèd ìndìvìdùàlly pèr ùsèr. Èvèryònè èlsè kèèps àccèss tò thè sàmè dàtà. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Sign-in requires a username and password. The username is a login identifier, not an email address, chosen at account creation by the user or an admin. **How..." |
 *
 * @param {Demo_Narrative_Topic_Credentials_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_credentials_body = /** @type {((inputs?: Demo_Narrative_Topic_Credentials_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Credentials_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_credentials_body = /** @type {((inputs?: Demo_Narrative_Topic_Credentials_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Credentials_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_credentials_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_credentials_body(inputs)
 	return en_demo_narrative_topic_credentials_body(inputs)
 });

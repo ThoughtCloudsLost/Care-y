@@ -13,17 +13,22 @@ const es_intake_forms_config_required_true = /** @type {(inputs: Intake_Forms_Co
 	return /** @type {LocalizedString} */ (`Debe estar marcada`)
 };
 
+const en_xa2_intake_forms_config_required_true = /** @type {(inputs: Intake_Forms_Config_Required_TrueInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Mùst bè chèckèd •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Must be checked" |
 *
 * @param {Intake_Forms_Config_Required_TrueInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_config_required_true = /** @type {((inputs?: Intake_Forms_Config_Required_TrueInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Required_TrueInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_config_required_true = /** @type {((inputs?: Intake_Forms_Config_Required_TrueInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Required_TrueInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_config_required_true(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_config_required_true(inputs)
 	return en_intake_forms_config_required_true(inputs)
 });

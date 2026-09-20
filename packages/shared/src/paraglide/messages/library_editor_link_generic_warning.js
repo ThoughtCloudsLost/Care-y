@@ -13,17 +13,22 @@ const es_library_editor_link_generic_warning = /** @type {(inputs: Library_Edito
 	return /** @type {LocalizedString} */ (`"${i?.text}" no es descriptivo para usuarios de lectores de pantalla. Usa texto que describa a dónde lleva el enlace.`)
 };
 
+const en_xa2_library_editor_link_generic_warning = /** @type {(inputs: Library_Editor_Link_Generic_WarningInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦" •${i?.text}" ìs nòt dèscrìptìvè fòr scrèèn rèàdèr ùsèrs. Ùsè tèxt thàt dèscrìbès whèrè thè lìnk gòès. •••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "\"{text}\" is not descriptive for screen reader users. Use text that describes where the link goes." |
 *
 * @param {Library_Editor_Link_Generic_WarningInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_editor_link_generic_warning = /** @type {((inputs: Library_Editor_Link_Generic_WarningInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_Link_Generic_WarningInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const library_editor_link_generic_warning = /** @type {((inputs: Library_Editor_Link_Generic_WarningInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_Link_Generic_WarningInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_editor_link_generic_warning(inputs)
+	if (locale === "en-XA") return en_xa2_library_editor_link_generic_warning(inputs)
 	return en_library_editor_link_generic_warning(inputs)
 });

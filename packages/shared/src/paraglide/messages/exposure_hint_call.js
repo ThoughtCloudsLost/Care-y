@@ -13,17 +13,22 @@ const es_exposure_hint_call = /** @type {(inputs: Exposure_Hint_CallInputs) => L
 	return /** @type {LocalizedString} */ (`Esta llamada pasa por tu proveedor de telefonía. Pueden escuchar la llamada. Mantiene los detalles sensibles en el chat cifrado.`)
 };
 
+const en_xa2_exposure_hint_call = /** @type {(inputs: Exposure_Hint_CallInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìs càll ròùtès thròùgh yòùr phònè pròvìdèr. Thèy càn hèàr thè càll. Kèèp sènsìtìvè dètàìls ìn thè èncryptèd chàt. •••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This call routes through your phone provider. They can hear the call. Keep sensitive details in the encrypted chat." |
 *
 * @param {Exposure_Hint_CallInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const exposure_hint_call = /** @type {((inputs?: Exposure_Hint_CallInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Exposure_Hint_CallInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const exposure_hint_call = /** @type {((inputs?: Exposure_Hint_CallInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Exposure_Hint_CallInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_exposure_hint_call(inputs)
+	if (locale === "en-XA") return en_xa2_exposure_hint_call(inputs)
 	return en_exposure_hint_call(inputs)
 });

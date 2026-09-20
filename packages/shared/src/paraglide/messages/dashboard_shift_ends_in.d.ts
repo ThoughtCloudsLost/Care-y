@@ -4,13 +4,13 @@
 * | "Ends in {time} ({start} - {end})" |
 *
 * @param {Dashboard_Shift_Ends_InInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const dashboard_shift_ends_in: ((inputs: Dashboard_Shift_Ends_InInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Dashboard_Shift_Ends_InInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Dashboard_Shift_Ends_InInputs = {

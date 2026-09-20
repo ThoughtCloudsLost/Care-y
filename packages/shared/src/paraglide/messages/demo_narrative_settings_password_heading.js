@@ -13,17 +13,22 @@ const es_demo_narrative_settings_password_heading = /** @type {(inputs: Demo_Nar
 	return /** @type {LocalizedString} */ (`Contraseña y re-envolvimiento de claves`)
 };
 
+const en_xa2_demo_narrative_settings_password_heading = /** @type {(inputs: Demo_Narrative_Settings_Password_HeadingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Pàsswòrd ànd kèy rè-wràp ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Password and key re-wrap" |
 *
 * @param {Demo_Narrative_Settings_Password_HeadingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_settings_password_heading = /** @type {((inputs?: Demo_Narrative_Settings_Password_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Settings_Password_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_settings_password_heading = /** @type {((inputs?: Demo_Narrative_Settings_Password_HeadingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Settings_Password_HeadingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_settings_password_heading(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_settings_password_heading(inputs)
 	return en_demo_narrative_settings_password_heading(inputs)
 });

@@ -13,17 +13,22 @@ const es_demo_flow_seam_oprf_evaluator = /** @type {(inputs: Demo_Flow_Seam_Oprf
 	return /** @type {LocalizedString} */ (`El manual ejecuta un evaluador OPRF de un solo escalar en el navegador. En producción la clave OPRF se reparte entre dos servidores en jurisdicciones distintas, y ninguno puede evaluarla por su cuenta.`)
 };
 
+const en_xa2_demo_flow_seam_oprf_evaluator = /** @type {(inputs: Demo_Flow_Seam_Oprf_EvaluatorInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè hàndbòòk rùns à sìnglè scàlàr ÒPRF èvàlùàtòr ìn thè bròwsèr. Ìn pròdùctìòn thè ÒPRF kèy ìs splìt àcròss twò sèrvèrs ìn sèpàràtè jùrìsdìctìòns, ànd nèìthèr ònè càn èvàlùàtè òn ìts òwn. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The handbook runs a single scalar OPRF evaluator in the browser. In production the OPRF key is split across two servers in separate jurisdictions, and neithe..." |
 *
 * @param {Demo_Flow_Seam_Oprf_EvaluatorInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_flow_seam_oprf_evaluator = /** @type {((inputs?: Demo_Flow_Seam_Oprf_EvaluatorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Seam_Oprf_EvaluatorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_flow_seam_oprf_evaluator = /** @type {((inputs?: Demo_Flow_Seam_Oprf_EvaluatorInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Seam_Oprf_EvaluatorInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_flow_seam_oprf_evaluator(inputs)
+	if (locale === "en-XA") return en_xa2_demo_flow_seam_oprf_evaluator(inputs)
 	return en_demo_flow_seam_oprf_evaluator(inputs)
 });

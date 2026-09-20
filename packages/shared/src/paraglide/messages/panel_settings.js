@@ -13,17 +13,22 @@ const es_panel_settings = /** @type {(inputs: Panel_SettingsInputs) => Localized
 	return /** @type {LocalizedString} */ (`Configuración`)
 };
 
+const en_xa2_panel_settings = /** @type {(inputs: Panel_SettingsInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèttìngs •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Settings" |
 *
 * @param {Panel_SettingsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const panel_settings = /** @type {((inputs?: Panel_SettingsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_SettingsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const panel_settings = /** @type {((inputs?: Panel_SettingsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_SettingsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_panel_settings(inputs)
+	if (locale === "en-XA") return en_xa2_panel_settings(inputs)
 	return en_panel_settings(inputs)
 });

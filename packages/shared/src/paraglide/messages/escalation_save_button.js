@@ -13,17 +13,22 @@ const es_escalation_save_button = /** @type {(inputs: Escalation_Save_ButtonInpu
 	return /** @type {LocalizedString} */ (`Guardar`)
 };
 
+const en_xa2_escalation_save_button = /** @type {(inputs: Escalation_Save_ButtonInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sàvè ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Save" |
 *
 * @param {Escalation_Save_ButtonInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const escalation_save_button = /** @type {((inputs?: Escalation_Save_ButtonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Save_ButtonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const escalation_save_button = /** @type {((inputs?: Escalation_Save_ButtonInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Save_ButtonInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_escalation_save_button(inputs)
+	if (locale === "en-XA") return en_xa2_escalation_save_button(inputs)
 	return en_escalation_save_button(inputs)
 });

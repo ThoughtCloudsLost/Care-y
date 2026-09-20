@@ -13,17 +13,22 @@ const es_intake_submitting = /** @type {(inputs: Intake_SubmittingInputs) => Loc
 	return /** @type {LocalizedString} */ (`Enviando...`)
 };
 
+const en_xa2_intake_submitting = /** @type {(inputs: Intake_SubmittingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèndìng... •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Sending..." |
 *
 * @param {Intake_SubmittingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_submitting = /** @type {((inputs?: Intake_SubmittingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_SubmittingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_submitting = /** @type {((inputs?: Intake_SubmittingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_SubmittingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_submitting(inputs)
+	if (locale === "en-XA") return en_xa2_intake_submitting(inputs)
 	return en_intake_submitting(inputs)
 });

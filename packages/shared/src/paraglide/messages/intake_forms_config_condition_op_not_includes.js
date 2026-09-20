@@ -13,17 +13,22 @@ const es_intake_forms_config_condition_op_not_includes = /** @type {(inputs: Int
 	return /** @type {LocalizedString} */ (`no incluye`)
 };
 
+const en_xa2_intake_forms_config_condition_op_not_includes = /** @type {(inputs: Intake_Forms_Config_Condition_Op_Not_IncludesInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦dòès nòt ìnclùdè •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "does not include" |
 *
 * @param {Intake_Forms_Config_Condition_Op_Not_IncludesInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_config_condition_op_not_includes = /** @type {((inputs?: Intake_Forms_Config_Condition_Op_Not_IncludesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Condition_Op_Not_IncludesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_config_condition_op_not_includes = /** @type {((inputs?: Intake_Forms_Config_Condition_Op_Not_IncludesInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Condition_Op_Not_IncludesInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_config_condition_op_not_includes(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_config_condition_op_not_includes(inputs)
 	return en_intake_forms_config_condition_op_not_includes(inputs)
 });

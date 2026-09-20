@@ -17,17 +17,24 @@ const es_demo_narrative_admin_response_key_not_held_body = /** @type {(inputs: D
 **Si falla.** Un estado distinto aparece cuando existe material de clave para la persona usuaria pero el descifrado no tuvo éxito, y puede que no haya nada que hacer ante ninguno de los dos estados. Cada uno lleva su propio glifo y explicación para que la persona usuaria pueda distinguir cuál aplica.`)
 };
 
+const en_xa2_demo_narrative_admin_response_key_not_held_body = /** @type {(inputs: Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Whèn à rèspònsè wàs èncryptèd ùndèr à kèy thè ùsèr dòès nòt hòld, thè rèspònsè ròw shòws thè sùbmìssìòn tìmè bùt nòt thè fìèld vàlùès, sò thè ùsèr càn sèè thàt à rèspònsè èxìsts wìthòùt bèìng àblè tò rèàd ìt.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Hòw ìt wòrks. ••••** Whèn thè fìrst ùsèr òpèns à tìckèt crèàtèd fròm àn ìntàkè fòrm, thè systèm dìstrìbùtès thè dècryptìòn kèy tò èvèry àctìvè ùsèr whò hàs à pùblìshèd kèy ànd bèlòngs tò èìthèr thè dèstìnàtìòn qùèùè òr hòlds thè Vìèw ìntàkè rèspònsès pèrmìssìòn. À ùsèr òùtsìdè thàt sèt àt cònvèrsìòn tìmè hàs nò còpy òf thè kèy ànd cànnòt dècrypt thè rèspònsè fìèlds.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Ìf ìt fàìls. ••••** À sèpàràtè stàtè àppèàrs whèn kèy màtèrìàl èxìsts fòr thè ùsèr bùt dècryptìòn dìd nòt sùccèèd, ànd thèrè mày bè nòthìng thè ùsèr càn dò àbòùt èìthèr stàtè. Èàch càrrìès ìts òwn glyph ànd èxplànàtìòn sò thè ùsèr càn tèll whìch sìtùàtìòn àpplìès. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "When a response was encrypted under a key the user does not hold, the response row shows the submission time but not the field values, so the user can see th..." |
 *
 * @param {Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_response_key_not_held_body = /** @type {((inputs?: Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_response_key_not_held_body = /** @type {((inputs?: Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_response_key_not_held_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_response_key_not_held_body(inputs)
 	return en_demo_narrative_admin_response_key_not_held_body(inputs)
 });

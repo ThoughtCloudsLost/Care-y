@@ -13,17 +13,22 @@ const es_settings_display_name_current = /** @type {(inputs: Settings_Display_Na
 	return /** @type {LocalizedString} */ (`Nombre actual`)
 };
 
+const en_xa2_settings_display_name_current = /** @type {(inputs: Settings_Display_Name_CurrentInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Cùrrènt nàmè ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Current name" |
 *
 * @param {Settings_Display_Name_CurrentInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const settings_display_name_current = /** @type {((inputs?: Settings_Display_Name_CurrentInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Display_Name_CurrentInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const settings_display_name_current = /** @type {((inputs?: Settings_Display_Name_CurrentInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_Display_Name_CurrentInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_settings_display_name_current(inputs)
+	if (locale === "en-XA") return en_xa2_settings_display_name_current(inputs)
 	return en_settings_display_name_current(inputs)
 });

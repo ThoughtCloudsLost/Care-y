@@ -13,17 +13,22 @@ const es_demo_narrative_admin_hub_org_heading = /** @type {(inputs: Demo_Narrati
 	return /** @type {LocalizedString} */ (`Organización`)
 };
 
+const en_xa2_demo_narrative_admin_hub_org_heading = /** @type {(inputs: Demo_Narrative_Admin_Hub_Org_HeadingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Òrgànìzàtìòn ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Organization" |
 *
 * @param {Demo_Narrative_Admin_Hub_Org_HeadingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_hub_org_heading = /** @type {((inputs?: Demo_Narrative_Admin_Hub_Org_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Hub_Org_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_hub_org_heading = /** @type {((inputs?: Demo_Narrative_Admin_Hub_Org_HeadingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Hub_Org_HeadingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_hub_org_heading(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_hub_org_heading(inputs)
 	return en_demo_narrative_admin_hub_org_heading(inputs)
 });

@@ -17,17 +17,24 @@ const es_demo_narrative_topic_split_view_body = /** @type {(inputs: Demo_Narrati
 **Pantalla completa.** Tocar dos veces un ticket o hacer clic en el icono de expandir en el panel de detalle del ticket lo abre a pantalla completa incluso mientras la vista dividida está activa.`)
 };
 
+const en_xa2_demo_narrative_topic_split_view_body = /** @type {(inputs: Demo_Narrative_Topic_Split_View_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Òn wìdèr scrèèns, thè tìckèt lìst sùppòrts à splìt vìèw whèrè thè lìst ànd à tìckèt dètàìl pànè sìt sìdè by sìdè. Sèlèctìng à tìckèt fròm thè lìst òpèns ìts dètàìl ìn thè rìght pànè wìthòùt nàvìgàtìng àwày fròm thè lìst.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whèn ìt àppèàrs. •••••** Thè splìt vìèw àctìvàtès àùtòmàtìcàlly whèn thè scrèèn ìs wìdè ènòùgh. Òn mòbìlè òr nàrròw wìndòws, tàppìng à tìckèt nàvìgàtès tò à fùll scrèèn dètàìl vìèw ìnstèàd.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••**Fùll scrèèn. ••••** Dòùblè tàppìng à tìckèt òr clìckìng thè èxpànd ìcòn ìn thè tìckèt dètàìl pànè òpèns ìt fùll scrèèn èvèn whìlè thè splìt vìèw ìs àctìvè. •••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "On wider screens, the ticket list supports a split view where the list and a ticket detail pane sit side by side. Selecting a ticket from the list opens its ..." |
 *
 * @param {Demo_Narrative_Topic_Split_View_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_split_view_body = /** @type {((inputs?: Demo_Narrative_Topic_Split_View_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Split_View_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_split_view_body = /** @type {((inputs?: Demo_Narrative_Topic_Split_View_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Split_View_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_split_view_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_split_view_body(inputs)
 	return en_demo_narrative_topic_split_view_body(inputs)
 });

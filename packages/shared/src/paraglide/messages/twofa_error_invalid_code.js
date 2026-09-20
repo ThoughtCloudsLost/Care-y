@@ -13,17 +13,22 @@ const es_twofa_error_invalid_code = /** @type {(inputs: Twofa_Error_Invalid_Code
 	return /** @type {LocalizedString} */ (`Código no válido. Intenta de nuevo.`)
 };
 
+const en_xa2_twofa_error_invalid_code = /** @type {(inputs: Twofa_Error_Invalid_CodeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ìnvàlìd còdè. Try àgàìn. ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Invalid code. Try again." |
 *
 * @param {Twofa_Error_Invalid_CodeInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const twofa_error_invalid_code = /** @type {((inputs?: Twofa_Error_Invalid_CodeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Error_Invalid_CodeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const twofa_error_invalid_code = /** @type {((inputs?: Twofa_Error_Invalid_CodeInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Error_Invalid_CodeInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_twofa_error_invalid_code(inputs)
+	if (locale === "en-XA") return en_xa2_twofa_error_invalid_code(inputs)
 	return en_twofa_error_invalid_code(inputs)
 });

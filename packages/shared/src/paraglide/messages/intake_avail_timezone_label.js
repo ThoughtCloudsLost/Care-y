@@ -13,17 +13,22 @@ const es_intake_avail_timezone_label = /** @type {(inputs: Intake_Avail_Timezone
 	return /** @type {LocalizedString} */ (`Zona horaria: ${i?.timezone}`)
 };
 
+const en_xa2_intake_avail_timezone_label = /** @type {(inputs: Intake_Avail_Timezone_LabelInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Tìmèzònè:  •••${i?.timezone}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Timezone: {timezone}" |
 *
 * @param {Intake_Avail_Timezone_LabelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_avail_timezone_label = /** @type {((inputs: Intake_Avail_Timezone_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Timezone_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const intake_avail_timezone_label = /** @type {((inputs: Intake_Avail_Timezone_LabelInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Timezone_LabelInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_avail_timezone_label(inputs)
+	if (locale === "en-XA") return en_xa2_intake_avail_timezone_label(inputs)
 	return en_intake_avail_timezone_label(inputs)
 });

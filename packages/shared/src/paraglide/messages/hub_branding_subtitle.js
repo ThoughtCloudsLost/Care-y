@@ -13,17 +13,22 @@ const es_hub_branding_subtitle = /** @type {(inputs: Hub_Branding_SubtitleInputs
 	return /** @type {LocalizedString} */ (`Nombre, colores y tema de la organización`)
 };
 
+const en_xa2_hub_branding_subtitle = /** @type {(inputs: Hub_Branding_SubtitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Òrgànìzàtìòn nàmè, còlòrs, ànd thèmè •••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Organization name, colors, and theme" |
 *
 * @param {Hub_Branding_SubtitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const hub_branding_subtitle = /** @type {((inputs?: Hub_Branding_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Branding_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const hub_branding_subtitle = /** @type {((inputs?: Hub_Branding_SubtitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Branding_SubtitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_hub_branding_subtitle(inputs)
+	if (locale === "en-XA") return en_xa2_hub_branding_subtitle(inputs)
 	return en_hub_branding_subtitle(inputs)
 });

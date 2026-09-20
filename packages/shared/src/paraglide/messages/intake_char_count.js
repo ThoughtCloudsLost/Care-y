@@ -13,17 +13,22 @@ const es_intake_char_count = /** @type {(inputs: Intake_Char_CountInputs) => Loc
 	return /** @type {LocalizedString} */ (`${i?.count} / ${i?.max}`)
 };
 
+const en_xa2_intake_char_count = /** @type {(inputs: Intake_Char_CountInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count} /  •${i?.max}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} / {max}" |
 *
 * @param {Intake_Char_CountInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_char_count = /** @type {((inputs: Intake_Char_CountInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Char_CountInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const intake_char_count = /** @type {((inputs: Intake_Char_CountInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Char_CountInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_char_count(inputs)
+	if (locale === "en-XA") return en_xa2_intake_char_count(inputs)
 	return en_intake_char_count(inputs)
 });

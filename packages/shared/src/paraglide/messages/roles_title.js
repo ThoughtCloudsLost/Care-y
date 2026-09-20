@@ -13,17 +13,22 @@ const es_roles_title = /** @type {(inputs: Roles_TitleInputs) => LocalizedString
 	return /** @type {LocalizedString} */ (`Roles`)
 };
 
+const en_xa2_roles_title = /** @type {(inputs: Roles_TitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ròlès ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Roles" |
 *
 * @param {Roles_TitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const roles_title = /** @type {((inputs?: Roles_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const roles_title = /** @type {((inputs?: Roles_TitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_TitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_roles_title(inputs)
+	if (locale === "en-XA") return en_xa2_roles_title(inputs)
 	return en_roles_title(inputs)
 });

@@ -19,17 +19,25 @@ const es_demo_narrative_topic_filters_body = /** @type {(inputs: Demo_Narrative_
 **Filtro de no leídos.** Un filtro dedicado muestra solo los tickets con mensajes no leídos. Combinado con la opción de nuevas respuestas primero, esto da a los voluntarios una vista enfocada de los casos que necesitan atención.`)
 };
 
+const en_xa2_demo_narrative_topic_filters_body = /** @type {(inputs: Demo_Narrative_Topic_Filters_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Fìltèr pìlls nàrròw thè tìckèt lìst by stàtùs, qùèùè, prìòrìty, àssìgnèè, òn hòld stàtè, dàtè ràngè, òr ùnrèàd stàtè. Mùltìplè fìltèrs càn bè àctìvè àt òncè.
+ ••••••••••••••••••••••••••••••••••••••••••••••••**Sèrvèr sìdè fìltèrs. ••••••** Qùèùè, prìòrìty, àssìgnèè, òn hòld stàtè, ànd dàtè ràngè àrè èvàlùàtèd òn thè sèrvèr ùsìng plàìntèxt mètàdàtà còlùmns, ànd thè sèrvèr rètùrns màtchìng ròws wìthòùt àccèssìng èncryptèd tìckèt còntènt. Thè sèrvèr fìltèrs òn thè ràw stàtùs còlùmn (òpèn òr clòsèd), whìlè thè nèw ànd àctìvè dìstìnctìòn ìs dèrìvèd ìn thè bròwsèr fròm thè mèssàgè còùnt.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Clìènt sìdè fìltèrs. ••••••** Ùnrèàd ànd nèèds àttèntìòn fìltèrs rùn ìn thè bròwsèr bècàùsè rèàd stàtè ìs pèr vòlùntèèr ànd nòt qùèryàblè by thè sèrvèr.
+ ••••••••••••••••••••••••••••••••••••••**Ùnrèàd fìltèr. •••••** À dèdìcàtèd fìltèr shòws ònly tìckèts wìth ùnrèàd mèssàgès. Còmbìnèd wìth thè nèw rèplìès fìrst sòrt òptìòn, thìs gìvès vòlùntèèrs à fòcùsèd vìèw òf càsès thàt nèèd àttèntìòn. •••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Filter pills narrow the ticket list by status, queue, priority, assignee, on hold state, date range, or unread state. Multiple filters can be active at once...." |
 *
 * @param {Demo_Narrative_Topic_Filters_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_filters_body = /** @type {((inputs?: Demo_Narrative_Topic_Filters_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Filters_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_filters_body = /** @type {((inputs?: Demo_Narrative_Topic_Filters_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Filters_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_filters_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_filters_body(inputs)
 	return en_demo_narrative_topic_filters_body(inputs)
 });

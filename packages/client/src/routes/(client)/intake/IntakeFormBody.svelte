@@ -50,7 +50,7 @@
     resolveLocalized,
     isDataFieldType,
     BASE_LOCALE,
-    FORM_LOCALES,
+    isFormLocale,
     newTicketId,
     newFollowupId,
     type LocalizedText,
@@ -103,7 +103,7 @@
    */
   const visitorLocale: FormLocale = $derived.by((): FormLocale => {
     const raw = getLocale();
-    return FORM_LOCALES.includes(raw) ? raw : BASE_LOCALE;
+    return isFormLocale(raw) ? raw : BASE_LOCALE;
   });
 
   // ---- Default form definition ----

@@ -13,17 +13,22 @@ const es_onboarding_briefing_intro = /** @type {(inputs: Onboarding_Briefing_Int
 	return /** @type {LocalizedString} */ (`CARE-Y cifra todo en el navegador del voluntario antes de que llegue al servidor. El servidor almacena solo datos ilegibles. Descifrar requiere la contraseña del voluntario más la verificación de dos servidores separados en distintos paises. Ningún servidor individual tiene información suficiente para descifrar nada.`)
 };
 
+const en_xa2_onboarding_briefing_intro = /** @type {(inputs: Onboarding_Briefing_IntroInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦CÀRÈ-Y èncrypts èvèrythìng ìn thè vòlùntèèr's bròwsèr bèfòrè ìt rèàchès thè sèrvèr. Thè sèrvèr stòrès ònly scràmblèd dàtà ìt cànnòt rèàd. Dècryptìòn rèqùìrès thè vòlùntèèr's pàsswòrd plùs vèrìfìcàtìòn fròm twò sèpàràtè sèrvèrs ìn dìffèrènt còùntrìès. Nò sìnglè sèrvèr hòlds ènòùgh ìnfòrmàtìòn tò dècrypt ànythìng. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "CARE-Y encrypts everything in the volunteer's browser before it reaches the server. The server stores only scrambled data it cannot read. Decryption requires..." |
 *
 * @param {Onboarding_Briefing_IntroInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_briefing_intro = /** @type {((inputs?: Onboarding_Briefing_IntroInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_IntroInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_briefing_intro = /** @type {((inputs?: Onboarding_Briefing_IntroInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_IntroInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_briefing_intro(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_briefing_intro(inputs)
 	return en_onboarding_briefing_intro(inputs)
 });

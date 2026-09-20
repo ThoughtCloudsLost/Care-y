@@ -13,17 +13,22 @@ const es_tickets_select_mode = /** @type {(inputs: Tickets_Select_ModeInputs) =>
 	return /** @type {LocalizedString} */ (`Seleccionar`)
 };
 
+const en_xa2_tickets_select_mode = /** @type {(inputs: Tickets_Select_ModeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèlèct ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Select" |
 *
 * @param {Tickets_Select_ModeInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const tickets_select_mode = /** @type {((inputs?: Tickets_Select_ModeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Select_ModeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const tickets_select_mode = /** @type {((inputs?: Tickets_Select_ModeInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Select_ModeInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_tickets_select_mode(inputs)
+	if (locale === "en-XA") return en_xa2_tickets_select_mode(inputs)
 	return en_tickets_select_mode(inputs)
 });

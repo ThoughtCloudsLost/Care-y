@@ -13,17 +13,22 @@ const es_onboarding_organization_subtext = /** @type {(inputs: Onboarding_Organi
 	return /** @type {LocalizedString} */ (`Configure la identidad, marca, terminología y políticas de su organización. Solo el nombre es obligatorio. Todo lo demas se puede configurar después.`)
 };
 
+const en_xa2_onboarding_organization_subtext = /** @type {(inputs: Onboarding_Organization_SubtextInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèt ùp yòùr òrgànìzàtìòn's ìdèntìty, bràndìng, tèrmìnòlògy, ànd pòlìcìès. Ònly thè òrgànìzàtìòn nàmè ìs rèqùìrèd. Èvèrythìng èlsè càn bè cònfìgùrèd làtèr. •••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Set up your organization's identity, branding, terminology, and policies. Only the organization name is required. Everything else can be configured later." |
 *
 * @param {Onboarding_Organization_SubtextInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_organization_subtext = /** @type {((inputs?: Onboarding_Organization_SubtextInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Organization_SubtextInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_organization_subtext = /** @type {((inputs?: Onboarding_Organization_SubtextInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Organization_SubtextInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_organization_subtext(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_organization_subtext(inputs)
 	return en_onboarding_organization_subtext(inputs)
 });

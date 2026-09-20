@@ -13,17 +13,22 @@ const es_library_search_results_count_other = /** @type {(inputs: Library_Search
 	return /** @type {LocalizedString} */ (`${i?.count} resultados`)
 };
 
+const en_xa2_library_search_results_count_other = /** @type {(inputs: Library_Search_Results_Count_OtherInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count} rèsùlts •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} results" |
 *
 * @param {Library_Search_Results_Count_OtherInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_search_results_count_other = /** @type {((inputs: Library_Search_Results_Count_OtherInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Search_Results_Count_OtherInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const library_search_results_count_other = /** @type {((inputs: Library_Search_Results_Count_OtherInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Search_Results_Count_OtherInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_search_results_count_other(inputs)
+	if (locale === "en-XA") return en_xa2_library_search_results_count_other(inputs)
 	return en_library_search_results_count_other(inputs)
 });

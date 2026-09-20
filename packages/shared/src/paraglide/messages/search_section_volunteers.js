@@ -13,17 +13,22 @@ const es_search_section_volunteers = /** @type {(inputs: Search_Section_Voluntee
 	return /** @type {LocalizedString} */ (`${i?.Volunteers}`)
 };
 
+const en_xa2_search_section_volunteers = /** @type {(inputs: Search_Section_VolunteersInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.Volunteers}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{Volunteers}" |
 *
 * @param {Search_Section_VolunteersInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const search_section_volunteers = /** @type {((inputs: Search_Section_VolunteersInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Section_VolunteersInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const search_section_volunteers = /** @type {((inputs: Search_Section_VolunteersInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Section_VolunteersInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_search_section_volunteers(inputs)
+	if (locale === "en-XA") return en_xa2_search_section_volunteers(inputs)
 	return en_search_section_volunteers(inputs)
 });

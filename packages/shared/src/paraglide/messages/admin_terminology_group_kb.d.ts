@@ -4,13 +4,13 @@
 * | "Reference library" |
 *
 * @param {Admin_Terminology_Group_KbInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_terminology_group_kb: ((inputs?: Admin_Terminology_Group_KbInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Terminology_Group_KbInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Terminology_Group_KbInputs = {};

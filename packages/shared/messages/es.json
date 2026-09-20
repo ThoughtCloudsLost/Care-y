@@ -2888,7 +2888,7 @@
   "intake_forms_field_type_date_desc": "Selector de fecha",
   "intake_field_unknown_type": "Este tipo de campo no es compatible con su versión del formulario.",
   "intake_forms_locale_heading": "Idioma de edición",
-  "intake_forms_locale_optional_hint": "Las traducciones son opcionales. Los campos sin traducción muestran el texto en ingles.",
+  "intake_forms_locale_optional_hint": "Las traducciones son opcionales. Los campos sin traducción muestran el texto en inglés.",
   "intake_forms_slug_error_length": "El enlace debe tener entre 2 y 80 caracteres.",
   "intake_forms_slug_error_format": "Solo letras minúsculas, dígitos y guiones simples. Debe comenzar y terminar con una letra o digito.",
   "intake_forms_discard_title": "Cambios sin guardar",

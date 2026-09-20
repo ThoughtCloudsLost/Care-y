@@ -13,17 +13,22 @@ const es_onboarding_reauth_twofa_message = /** @type {(inputs: Onboarding_Reauth
 	return /** @type {LocalizedString} */ (`Verifique su identidad para continuar la configuración.`)
 };
 
+const en_xa2_onboarding_reauth_twofa_message = /** @type {(inputs: Onboarding_Reauth_Twofa_MessageInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vèrìfy yòùr ìdèntìty tò còntìnùè sètùp. ••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Verify your identity to continue setup." |
 *
 * @param {Onboarding_Reauth_Twofa_MessageInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_reauth_twofa_message = /** @type {((inputs?: Onboarding_Reauth_Twofa_MessageInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Reauth_Twofa_MessageInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_reauth_twofa_message = /** @type {((inputs?: Onboarding_Reauth_Twofa_MessageInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Reauth_Twofa_MessageInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_reauth_twofa_message(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_reauth_twofa_message(inputs)
 	return en_onboarding_reauth_twofa_message(inputs)
 });

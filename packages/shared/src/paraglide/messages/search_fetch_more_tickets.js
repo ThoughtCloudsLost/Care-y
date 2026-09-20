@@ -13,17 +13,22 @@ const es_search_fetch_more_tickets = /** @type {(inputs: Search_Fetch_More_Ticke
 	return /** @type {LocalizedString} */ (`Buscar en los otros ${i?.count} ${i?.tickets}`)
 };
 
+const en_xa2_search_fetch_more_tickets = /** @type {(inputs: Search_Fetch_More_TicketsInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Sèàrch thè òthèr  ••••••${i?.count}  •${i?.tickets}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Search the other {count} {tickets}" |
 *
 * @param {Search_Fetch_More_TicketsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const search_fetch_more_tickets = /** @type {((inputs: Search_Fetch_More_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Fetch_More_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const search_fetch_more_tickets = /** @type {((inputs: Search_Fetch_More_TicketsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Fetch_More_TicketsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_search_fetch_more_tickets(inputs)
+	if (locale === "en-XA") return en_xa2_search_fetch_more_tickets(inputs)
 	return en_search_fetch_more_tickets(inputs)
 });

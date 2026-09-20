@@ -15,17 +15,23 @@ const es_demo_narrative_topic_library_categories_body = /** @type {(inputs: Demo
 **Permisos.** Solo los administradores pueden crear, renombrar o eliminar categorías, mientras que todos los voluntarios pueden navegar los artículos dentro de cualquier categoría.`)
 };
 
+const en_xa2_demo_narrative_topic_library_categories_body = /** @type {(inputs: Demo_Narrative_Topic_Library_Categories_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àdmìnìstràtòrs òrgànìzè thè knòwlèdgè lìbràry ìntò càtègòrìès. Èàch càtègòry nàmè ìs èncryptèd wìth thè òrgànìzàtìòn kèy bèfòrè stòràgè, sò à dàtàbàsè brèàch rèvèàls nò càtègòry nàmès.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Ònly àdmìnìstràtòrs càn crèàtè, rènàmè, òr dèlètè càtègòrìès, whìlè àll vòlùntèèrs càn bròwsè àrtìclès wìthìn àny càtègòry. ••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Administrators organize the knowledge library into categories. Each category name is encrypted with the organization key before storage, so a database breach..." |
 *
 * @param {Demo_Narrative_Topic_Library_Categories_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_library_categories_body = /** @type {((inputs?: Demo_Narrative_Topic_Library_Categories_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Library_Categories_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_library_categories_body = /** @type {((inputs?: Demo_Narrative_Topic_Library_Categories_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Library_Categories_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_library_categories_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_library_categories_body(inputs)
 	return en_demo_narrative_topic_library_categories_body(inputs)
 });

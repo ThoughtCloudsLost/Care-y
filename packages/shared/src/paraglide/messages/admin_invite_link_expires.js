@@ -13,17 +13,22 @@ const es_admin_invite_link_expires = /** @type {(inputs: Admin_Invite_Link_Expir
 	return /** @type {LocalizedString} */ (`Expira ${i?.expiresAt}`)
 };
 
+const en_xa2_admin_invite_link_expires = /** @type {(inputs: Admin_Invite_Link_ExpiresInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Èxpìrès  •••${i?.expiresAt}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Expires {expiresAt}" |
 *
 * @param {Admin_Invite_Link_ExpiresInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_invite_link_expires = /** @type {((inputs: Admin_Invite_Link_ExpiresInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Link_ExpiresInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const admin_invite_link_expires = /** @type {((inputs: Admin_Invite_Link_ExpiresInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Link_ExpiresInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_invite_link_expires(inputs)
+	if (locale === "en-XA") return en_xa2_admin_invite_link_expires(inputs)
 	return en_admin_invite_link_expires(inputs)
 });

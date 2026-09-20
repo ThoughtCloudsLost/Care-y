@@ -13,17 +13,22 @@ const es_error_form_has_responses = /** @type {(inputs: Error_Form_Has_Responses
 	return /** @type {LocalizedString} */ (`Este formulario tiene respuestas y no se puede eliminar. Desactívalo en su lugar.`)
 };
 
+const en_xa2_error_form_has_responses = /** @type {(inputs: Error_Form_Has_ResponsesInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìs fòrm hàs sùbmìssìòns ànd cànnòt bè dèlètèd. Dèàctìvàtè ìt ìnstèàd. ••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This form has submissions and cannot be deleted. Deactivate it instead." |
 *
 * @param {Error_Form_Has_ResponsesInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_form_has_responses = /** @type {((inputs?: Error_Form_Has_ResponsesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Form_Has_ResponsesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_form_has_responses = /** @type {((inputs?: Error_Form_Has_ResponsesInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Form_Has_ResponsesInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_form_has_responses(inputs)
+	if (locale === "en-XA") return en_xa2_error_form_has_responses(inputs)
 	return en_error_form_has_responses(inputs)
 });

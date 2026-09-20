@@ -4,13 +4,13 @@
 * | "Color scheme" |
 *
 * @param {Settings_Color_SchemeInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const settings_color_scheme: ((inputs?: Settings_Color_SchemeInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Settings_Color_SchemeInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Settings_Color_SchemeInputs = {};

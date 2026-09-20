@@ -13,17 +13,22 @@ const es_getting_started_kb = /** @type {(inputs: Getting_Started_KbInputs) => L
 	return /** @type {LocalizedString} */ (`Agregar artículos a la ${i?.knowledgeBase}`)
 };
 
+const en_xa2_getting_started_kb = /** @type {(inputs: Getting_Started_KbInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Àdd  ••${i?.knowledgeBase} àrtìclès •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Add {knowledgeBase} articles" |
 *
 * @param {Getting_Started_KbInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const getting_started_kb = /** @type {((inputs: Getting_Started_KbInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Getting_Started_KbInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const getting_started_kb = /** @type {((inputs: Getting_Started_KbInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Getting_Started_KbInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_getting_started_kb(inputs)
+	if (locale === "en-XA") return en_xa2_getting_started_kb(inputs)
 	return en_getting_started_kb(inputs)
 });

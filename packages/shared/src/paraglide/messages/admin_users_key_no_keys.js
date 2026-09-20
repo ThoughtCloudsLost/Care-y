@@ -13,17 +13,22 @@ const es_admin_users_key_no_keys = /** @type {(inputs: Admin_Users_Key_No_KeysIn
 	return /** @type {LocalizedString} */ (`Aún no ha iniciado sesión`)
 };
 
+const en_xa2_admin_users_key_no_keys = /** @type {(inputs: Admin_Users_Key_No_KeysInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Hàsn't sìgnèd ìn yèt ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Hasn't signed in yet" |
 *
 * @param {Admin_Users_Key_No_KeysInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_users_key_no_keys = /** @type {((inputs?: Admin_Users_Key_No_KeysInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Users_Key_No_KeysInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_users_key_no_keys = /** @type {((inputs?: Admin_Users_Key_No_KeysInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Users_Key_No_KeysInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_users_key_no_keys(inputs)
+	if (locale === "en-XA") return en_xa2_admin_users_key_no_keys(inputs)
 	return en_admin_users_key_no_keys(inputs)
 });

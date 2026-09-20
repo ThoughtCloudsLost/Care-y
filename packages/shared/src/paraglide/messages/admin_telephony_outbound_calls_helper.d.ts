@@ -4,13 +4,13 @@
 * | "The number {clients} see when a {volunteer} calls them" |
 *
 * @param {Admin_Telephony_Outbound_Calls_HelperInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_telephony_outbound_calls_helper: ((inputs: Admin_Telephony_Outbound_Calls_HelperInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Telephony_Outbound_Calls_HelperInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Telephony_Outbound_Calls_HelperInputs = {

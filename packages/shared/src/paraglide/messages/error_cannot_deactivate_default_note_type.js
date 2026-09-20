@@ -13,17 +13,22 @@ const es_error_cannot_deactivate_default_note_type = /** @type {(inputs: Error_C
 	return /** @type {LocalizedString} */ (`El tipo de nota predeterminado no se puede desactivar.`)
 };
 
+const en_xa2_error_cannot_deactivate_default_note_type = /** @type {(inputs: Error_Cannot_Deactivate_Default_Note_TypeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè dèfàùlt nòtè typè cànnòt bè dèàctìvàtèd. ••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The default note type cannot be deactivated." |
 *
 * @param {Error_Cannot_Deactivate_Default_Note_TypeInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_cannot_deactivate_default_note_type = /** @type {((inputs?: Error_Cannot_Deactivate_Default_Note_TypeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Cannot_Deactivate_Default_Note_TypeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_cannot_deactivate_default_note_type = /** @type {((inputs?: Error_Cannot_Deactivate_Default_Note_TypeInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Cannot_Deactivate_Default_Note_TypeInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_cannot_deactivate_default_note_type(inputs)
+	if (locale === "en-XA") return en_xa2_error_cannot_deactivate_default_note_type(inputs)
 	return en_error_cannot_deactivate_default_note_type(inputs)
 });

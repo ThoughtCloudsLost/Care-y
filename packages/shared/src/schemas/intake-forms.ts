@@ -29,6 +29,16 @@ export type FormLocale = (typeof FORM_LOCALES)[number];
 /** The locale used as fallback when a requested locale has no translation. */
 export const BASE_LOCALE: FormLocale = "en";
 
+/**
+ * Narrows any locale tag to a form locale. The app's runtime locale set
+ * can be wider than the form builder's (the build-time pseudolocale is
+ * never a form authoring language), so callers resolving the visitor
+ * locale go through this guard and fall back to BASE_LOCALE.
+ */
+export function isFormLocale(value: string): value is FormLocale {
+  return (FORM_LOCALES as readonly string[]).includes(value);
+}
+
 // ---------------------------------------------------------------------------
 // Localized text (base-locale fallback)
 // ---------------------------------------------------------------------------

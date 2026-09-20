@@ -13,17 +13,22 @@ const es_ticket_private_note_author_fallback = /** @type {(inputs: Ticket_Privat
 	return /** @type {LocalizedString} */ (`Nota`)
 };
 
+const en_xa2_ticket_private_note_author_fallback = /** @type {(inputs: Ticket_Private_Note_Author_FallbackInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nòtè ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Note" |
 *
 * @param {Ticket_Private_Note_Author_FallbackInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_private_note_author_fallback = /** @type {((inputs?: Ticket_Private_Note_Author_FallbackInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Private_Note_Author_FallbackInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const ticket_private_note_author_fallback = /** @type {((inputs?: Ticket_Private_Note_Author_FallbackInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Private_Note_Author_FallbackInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_private_note_author_fallback(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_private_note_author_fallback(inputs)
 	return en_ticket_private_note_author_fallback(inputs)
 });

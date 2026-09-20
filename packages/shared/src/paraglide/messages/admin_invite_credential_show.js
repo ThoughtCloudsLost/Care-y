@@ -13,17 +13,22 @@ const es_admin_invite_credential_show = /** @type {(inputs: Admin_Invite_Credent
 	return /** @type {LocalizedString} */ (`Mostrar`)
 };
 
+const en_xa2_admin_invite_credential_show = /** @type {(inputs: Admin_Invite_Credential_ShowInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Shòw ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Show" |
 *
 * @param {Admin_Invite_Credential_ShowInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_invite_credential_show = /** @type {((inputs?: Admin_Invite_Credential_ShowInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Credential_ShowInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_invite_credential_show = /** @type {((inputs?: Admin_Invite_Credential_ShowInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Credential_ShowInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_invite_credential_show(inputs)
+	if (locale === "en-XA") return en_xa2_admin_invite_credential_show(inputs)
 	return en_admin_invite_credential_show(inputs)
 });

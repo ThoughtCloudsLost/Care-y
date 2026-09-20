@@ -13,17 +13,22 @@ const es_kanban_coming_soon_body = /** @type {(inputs: Kanban_Coming_Soon_BodyIn
 	return /** @type {LocalizedString} */ (`La gestión de tickets con arrastrar y soltar está en camino.`)
 };
 
+const en_xa2_kanban_coming_soon_body = /** @type {(inputs: Kanban_Coming_Soon_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Dràg-ànd-dròp tìckèt mànàgèmènt ìs òn thè wày. ••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Drag-and-drop ticket management is on the way." |
 *
 * @param {Kanban_Coming_Soon_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const kanban_coming_soon_body = /** @type {((inputs?: Kanban_Coming_Soon_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Kanban_Coming_Soon_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const kanban_coming_soon_body = /** @type {((inputs?: Kanban_Coming_Soon_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Kanban_Coming_Soon_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_kanban_coming_soon_body(inputs)
+	if (locale === "en-XA") return en_xa2_kanban_coming_soon_body(inputs)
 	return en_kanban_coming_soon_body(inputs)
 });

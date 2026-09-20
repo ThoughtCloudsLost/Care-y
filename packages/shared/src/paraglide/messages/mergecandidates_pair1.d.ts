@@ -10,11 +10,11 @@ export type Mergecandidates_Pair1Inputs = {
 * | "{aliasA} / {aliasB}" |
 *
 * @param {Mergecandidates_Pair1Inputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 declare const mergecandidates_pair1: ((inputs: Mergecandidates_Pair1Inputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Mergecandidates_Pair1Inputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;

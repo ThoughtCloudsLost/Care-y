@@ -13,17 +13,22 @@ const es_error_request_rate_limited = /** @type {(inputs: Error_Request_Rate_Lim
 	return /** @type {LocalizedString} */ (`Demasiadas solicitudes. Inténtalo más tarde.`)
 };
 
+const en_xa2_error_request_rate_limited = /** @type {(inputs: Error_Request_Rate_LimitedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tòò màny rèqùèsts. Try àgàìn làtèr. •••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Too many requests. Try again later." |
 *
 * @param {Error_Request_Rate_LimitedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_request_rate_limited = /** @type {((inputs?: Error_Request_Rate_LimitedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Request_Rate_LimitedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_request_rate_limited = /** @type {((inputs?: Error_Request_Rate_LimitedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Request_Rate_LimitedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_request_rate_limited(inputs)
+	if (locale === "en-XA") return en_xa2_error_request_rate_limited(inputs)
 	return en_error_request_rate_limited(inputs)
 });

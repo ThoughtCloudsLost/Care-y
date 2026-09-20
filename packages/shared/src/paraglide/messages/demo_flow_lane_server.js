@@ -13,17 +13,22 @@ const es_demo_flow_lane_server = /** @type {(inputs: Demo_Flow_Lane_ServerInputs
 	return /** @type {LocalizedString} */ (`Servidor`)
 };
 
+const en_xa2_demo_flow_lane_server = /** @type {(inputs: Demo_Flow_Lane_ServerInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèrvèr ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Server" |
 *
 * @param {Demo_Flow_Lane_ServerInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_flow_lane_server = /** @type {((inputs?: Demo_Flow_Lane_ServerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Lane_ServerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_flow_lane_server = /** @type {((inputs?: Demo_Flow_Lane_ServerInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Lane_ServerInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_flow_lane_server(inputs)
+	if (locale === "en-XA") return en_xa2_demo_flow_lane_server(inputs)
 	return en_demo_flow_lane_server(inputs)
 });

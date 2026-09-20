@@ -13,17 +13,22 @@ const es_library_editor_alt_text_placeholder = /** @type {(inputs: Library_Edito
 	return /** @type {LocalizedString} */ (`Descripción para lectores de pantalla`)
 };
 
+const en_xa2_library_editor_alt_text_placeholder = /** @type {(inputs: Library_Editor_Alt_Text_PlaceholderInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Dèscrìptìòn fòr scrèèn rèàdèrs •••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Description for screen readers" |
 *
 * @param {Library_Editor_Alt_Text_PlaceholderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_editor_alt_text_placeholder = /** @type {((inputs?: Library_Editor_Alt_Text_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_Alt_Text_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_editor_alt_text_placeholder = /** @type {((inputs?: Library_Editor_Alt_Text_PlaceholderInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_Alt_Text_PlaceholderInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_editor_alt_text_placeholder(inputs)
+	if (locale === "en-XA") return en_xa2_library_editor_alt_text_placeholder(inputs)
 	return en_library_editor_alt_text_placeholder(inputs)
 });

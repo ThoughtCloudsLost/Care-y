@@ -13,17 +13,22 @@ const es_dashboard_section_on_hold = /** @type {(inputs: Dashboard_Section_On_Ho
 	return /** @type {LocalizedString} */ (`En espera`)
 };
 
+const en_xa2_dashboard_section_on_hold = /** @type {(inputs: Dashboard_Section_On_HoldInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Òn Hòld •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "On Hold" |
 *
 * @param {Dashboard_Section_On_HoldInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const dashboard_section_on_hold = /** @type {((inputs?: Dashboard_Section_On_HoldInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Section_On_HoldInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const dashboard_section_on_hold = /** @type {((inputs?: Dashboard_Section_On_HoldInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Section_On_HoldInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_dashboard_section_on_hold(inputs)
+	if (locale === "en-XA") return en_xa2_dashboard_section_on_hold(inputs)
 	return en_dashboard_section_on_hold(inputs)
 });

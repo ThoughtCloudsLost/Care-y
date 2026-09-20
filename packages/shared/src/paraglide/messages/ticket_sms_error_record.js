@@ -13,17 +13,22 @@ const es_ticket_sms_error_record = /** @type {(inputs: Ticket_Sms_Error_RecordIn
 	return /** @type {LocalizedString} */ (`El SMS se entregó, pero no se pudo guardar en el hilo. Toca para reintentar.`)
 };
 
+const en_xa2_ticket_sms_error_record = /** @type {(inputs: Ticket_Sms_Error_RecordInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦SMS wàs dèlìvèrèd, bùt sàvìng ìt tò thè thrèàd fàìlèd. Tàp tò rètry sàvìng. •••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "SMS was delivered, but saving it to the thread failed. Tap to retry saving." |
 *
 * @param {Ticket_Sms_Error_RecordInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_sms_error_record = /** @type {((inputs?: Ticket_Sms_Error_RecordInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Sms_Error_RecordInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const ticket_sms_error_record = /** @type {((inputs?: Ticket_Sms_Error_RecordInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Sms_Error_RecordInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_sms_error_record(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_sms_error_record(inputs)
 	return en_ticket_sms_error_record(inputs)
 });

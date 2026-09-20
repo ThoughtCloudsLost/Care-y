@@ -13,17 +13,22 @@ const es_library_selected = /** @type {(inputs: Library_SelectedInputs) => Local
 	return /** @type {LocalizedString} */ (`${i?.count} seleccionados`)
 };
 
+const en_xa2_library_selected = /** @type {(inputs: Library_SelectedInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count} sèlèctèd •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} selected" |
 *
 * @param {Library_SelectedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_selected = /** @type {((inputs: Library_SelectedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_SelectedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const library_selected = /** @type {((inputs: Library_SelectedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_SelectedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_selected(inputs)
+	if (locale === "en-XA") return en_xa2_library_selected(inputs)
 	return en_library_selected(inputs)
 });

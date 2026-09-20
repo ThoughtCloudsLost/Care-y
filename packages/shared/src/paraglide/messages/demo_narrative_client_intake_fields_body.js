@@ -21,17 +21,26 @@ const es_demo_narrative_client_intake_fields_body = /** @type {(inputs: Demo_Nar
 **Indicador de privacidad.** Los campos que llevan un rol semántico muestran un indicador por campo en el formulario de admisión. Un campo cuyo rol es exclusivo del navegador muestra que la respuesta está cifrada y el servidor no puede leerla, y un campo que lleva un rol de enrutamiento muestra que la respuesta está cifrada pero la selección del visitante comparte una señal derivada con el servidor, porque el navegador resuelve la opción seleccionada a un valor de cola, prioridad o escalamiento y envía esa señal derivada en claro mientras el texto de la respuesta permanece cifrado. Los campos sin rol semántico no muestran ningún indicador.`)
 };
 
+const en_xa2_demo_narrative_client_intake_fields_body = /** @type {(inputs: Demo_Narrative_Client_Intake_Fields_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Whèn thè òrgànìzàtìòn hàs pùblìshèd à cùstòm ìntàkè fòrm, thè ìntàkè pàgè shòws ìts cònfìgùrèd fìèlds ìnstèàd òf thè bùìlt-ìn dèfàùlt.
+ •••••••••••••••••••••••••••••••••••••••••**Còndìtìònàl fìèlds. ••••••** Thè sèrvèr nèvèr rècèìvès àn ànswèr thè vìsìtòr dìd nòt sèè, bècàùsè à fìèld wìth à vìsìbìlìty còndìtìòn stàys hìddèn ùntìl thè còntròllìng fìèld hàs thè rèqùìrèd vàlùè, ànd hìddèn fìèlds àrè èxclùdèd fròm bòth thè èncryptèd rèspònsè ànd thè tìckèt tèxt.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pàgìng. •••** Whèn thè fòrm hàs pàgè brèàks thè nèxt bùttòn vàlìdàtès thè cùrrènt pàgè's vìsìblè fìèlds bèfòrè àdvàncìng, ànd thè sùbmìt bùttòn àppèàrs ònly òn thè fìnàl pàgè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Ònly sòmèònè whò hòlds thè òrgànìzàtìòn's prìvàtè kèy càn rèàd à sùbmìttèd ànswèr, bècàùsè thè ìntàkè fòrm gènèràtès à frèsh symmètrìc còntènt kèy fòr èàch sùbmìssìòn, èncrypts èvèry fìèld vàlùè wìth thàt kèy, ànd sèàls thè còntènt kèy tò thè òrgànìzàtìòn's pùblìc kèy. Fìèld làbèls ànd hèlp tèxt àrè èncryptèd ùndèr à kèy àny vìsìtòr's bròwsèr càn dèrìvè fròm pùblìcly àvàìlàblè ìnfòrmàtìòn, whìch pròtècts thèm ìn à dàtàbàsè dùmp bùt nòt àgàìnst à lìvè sèrvèr.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Prìvàcy ìndìcàtòr. ••••••** Fìèlds thàt càrry à sèmàntìc ròlè shòw à pèr-fìèld ìndìcàtòr òn thè ìntàkè fòrm. À fìèld whòsè ròlè ìs bròwsèr-ònly shòws thàt thè ànswèr ìs èncryptèd ànd thè sèrvèr cànnòt rèàd ìt, ànd à fìèld thàt càrrìès à ròùtìng ròlè shòws thàt thè ànswèr ìs èncryptèd bùt thè vìsìtòr's sèlèctìòn shàrès à dèrìvèd sìgnàl wìth thè sèrvèr, bècàùsè thè bròwsèr rèsòlvès thè sèlèctèd òptìòn tò à qùèùè, prìòrìty, òr èscàlàtìòn vàlùè ànd sènds thàt dèrìvèd sìgnàl ìn thè clèàr whìlè thè ànswèr tèxt stàys èncryptèd. Fìèlds wìth nò sèmàntìc ròlè shòw nò ìndìcàtòr àt àll. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "When the organization has published a custom intake form, the intake page shows its configured fields instead of the built-in default. **Conditional fields.*..." |
 *
 * @param {Demo_Narrative_Client_Intake_Fields_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_client_intake_fields_body = /** @type {((inputs?: Demo_Narrative_Client_Intake_Fields_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Intake_Fields_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_client_intake_fields_body = /** @type {((inputs?: Demo_Narrative_Client_Intake_Fields_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Intake_Fields_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_client_intake_fields_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_client_intake_fields_body(inputs)
 	return en_demo_narrative_client_intake_fields_body(inputs)
 });

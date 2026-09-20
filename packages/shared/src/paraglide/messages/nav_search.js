@@ -13,17 +13,22 @@ const es_nav_search = /** @type {(inputs: Nav_SearchInputs) => LocalizedString} 
 	return /** @type {LocalizedString} */ (`Buscar`)
 };
 
+const en_xa2_nav_search = /** @type {(inputs: Nav_SearchInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèàrch ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Search" |
 *
 * @param {Nav_SearchInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const nav_search = /** @type {((inputs?: Nav_SearchInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Nav_SearchInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const nav_search = /** @type {((inputs?: Nav_SearchInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Nav_SearchInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_nav_search(inputs)
+	if (locale === "en-XA") return en_xa2_nav_search(inputs)
 	return en_nav_search(inputs)
 });

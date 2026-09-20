@@ -13,17 +13,22 @@ const es_followup_type_assignment_change = /** @type {(inputs: Followup_Type_Ass
 	return /** @type {LocalizedString} */ (`Asignaciones`)
 };
 
+const en_xa2_followup_type_assignment_change = /** @type {(inputs: Followup_Type_Assignment_ChangeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àssìgnmènts ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Assignments" |
 *
 * @param {Followup_Type_Assignment_ChangeInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const followup_type_assignment_change = /** @type {((inputs?: Followup_Type_Assignment_ChangeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Assignment_ChangeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const followup_type_assignment_change = /** @type {((inputs?: Followup_Type_Assignment_ChangeInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Assignment_ChangeInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_followup_type_assignment_change(inputs)
+	if (locale === "en-XA") return en_xa2_followup_type_assignment_change(inputs)
 	return en_followup_type_assignment_change(inputs)
 });

@@ -13,17 +13,22 @@ const es_mgr_link_reports = /** @type {(inputs: Mgr_Link_ReportsInputs) => Local
 	return /** @type {LocalizedString} */ (`Ver Reportes`)
 };
 
+const en_xa2_mgr_link_reports = /** @type {(inputs: Mgr_Link_ReportsInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vìèw Rèpòrts ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "View Reports" |
 *
 * @param {Mgr_Link_ReportsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const mgr_link_reports = /** @type {((inputs?: Mgr_Link_ReportsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Link_ReportsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const mgr_link_reports = /** @type {((inputs?: Mgr_Link_ReportsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Link_ReportsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_mgr_link_reports(inputs)
+	if (locale === "en-XA") return en_xa2_mgr_link_reports(inputs)
 	return en_mgr_link_reports(inputs)
 });
