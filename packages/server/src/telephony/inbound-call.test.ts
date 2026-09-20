@@ -4,7 +4,10 @@ import { handleInboundCall } from "./inbound-call.js";
 import type { InboundCallDeps } from "./inbound-call.js";
 import type { IncomingCallData, VoiceInstruction } from "./provider.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
-import type { BlindIndexer } from "../crypto/field-encryptor.js";
+import type {
+  FieldEncryptor,
+  BlindIndexer,
+} from "../crypto/field-encryptor.js";
 import type { PhoneRepository } from "./models/phone-repo.js";
 import type { ClientRepository } from "./models/client-repo.js";
 import type { GreetingRepository } from "./models/greeting-repo.js";
@@ -36,6 +39,17 @@ function createMockSealedBox(): SealedBoxEncryptor {
     generation: 1,
     seal: vi.fn((s: string) => Buffer.from(`sealed:${s}`)),
     sealBuffer: vi.fn((b: Buffer) => Buffer.from(`sealed:${b.toString()}`)),
+  };
+}
+
+function createMockFieldEncryptor(): FieldEncryptor {
+  return {
+    encrypt: vi.fn((s: string) => Buffer.from(`ops:${s}`)),
+    encryptBuffer: vi.fn((b: Buffer) => Buffer.from(`ops:${b.toString()}`)),
+    decrypt: vi.fn((b: Buffer) => b.toString().replace("ops:", "")),
+    decryptToBuffer: vi.fn((b: Buffer) =>
+      Buffer.from(b.toString().replace("ops:", "")),
+    ),
   };
 }
 
@@ -149,6 +163,7 @@ function mockTenantDbWithPolicy(
 function makeDeps(overrides?: Partial<InboundCallDeps>): InboundCallDeps {
   return {
     sealedBox: createMockSealedBox(),
+    fieldEncryptor: createMockFieldEncryptor(),
     indexer: createMockIndexer(),
     phoneRepo: createMockPhoneRepo(),
     clientRepo: createMockClientRepo(),
@@ -541,13 +556,15 @@ describe("handleInboundCall", () => {
 
   it("zeros phone buffer after encryption in DTMF path", async () => {
     let capturedBuffer: Buffer | null = null;
-    vi.mocked(deps.sealedBox.sealBuffer).mockImplementation((b: Buffer) => {
-      // Capture the live reference so we can inspect it after the handler's
-      // finally block has run. At this point the buffer still holds plaintext.
-      capturedBuffer = b;
-      expect(b.toString("utf-8")).toBe("+15551234567");
-      return Buffer.from("sealed");
-    });
+    vi.mocked(deps.fieldEncryptor.encryptBuffer).mockImplementation(
+      (b: Buffer) => {
+        // Capture the live reference so we can inspect it after the handler's
+        // finally block has run. At this point the buffer still holds plaintext.
+        capturedBuffer = b;
+        expect(b.toString("utf-8")).toBe("+15551234567");
+        return Buffer.from("ops-encrypted");
+      },
+    );
 
     const body: Record<string, string> = { Digits: "1" };
     await handleInboundCall(callData, body, deps);

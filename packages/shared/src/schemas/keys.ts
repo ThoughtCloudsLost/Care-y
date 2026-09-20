@@ -102,6 +102,11 @@ export const adminBootstrapUserKeysSchema = z.object({
  * The server's RESEAL_TABLES map keys must be exactly this set, enforced
  * by the type system via satisfies Record<ResealTableName, ...>.
  */
+/**
+ * phones is intentionally absent: its only org-sealed column
+ * (encrypted_number) converged to OPS tier per ADR-005/069/096.
+ * The phone_match_hash index sweep (INDEX_TABLE_NAMES) is unaffected.
+ */
 export const RESEAL_TABLE_NAMES = [
   "queues",
   "note_types",
@@ -118,7 +123,6 @@ export const RESEAL_TABLE_NAMES = [
   "phone_blocklist",
   "invite_tokens",
   "voicemail_quarantine",
-  "phones",
   "intake_key_wraps",
   "portal_reply_key_wraps",
   "intake_forms",

@@ -1014,6 +1014,7 @@ const webhookDispatch = createWebhookDispatch({
   tenantDb,
   providerFactory,
   indexer,
+  fieldEncryptor: encryptor,
   blobStore,
   jobQueue,
   webhookBaseUrl: env.WEBHOOK_BASE_URL,

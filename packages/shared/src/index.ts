@@ -4,6 +4,14 @@
 /** Placeholder constant to verify cross-package imports work. */
 export const PACKAGE_NAME = "@care-y/shared" as const;
 
+// --- Encryption tier manifest ---
+export {
+  COLUMN_TIER_MANIFEST,
+  getOrgTierTables,
+  type EncryptionTier,
+  type ColumnTierEntry,
+} from "./crypto/column-tiers.js";
+
 // --- Authentication schemas ---
 export {
   RESERVED_SLUGS,

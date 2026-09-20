@@ -34,8 +34,10 @@ import {
   createTestDb,
   createTestQueue,
   createTestTicketFixture,
+  noopEncryptor,
   seedOrgPublicKey,
   testBlindIndexer,
+  testFieldEncryptor,
   testUnseal,
   TestSetupError,
   type TestDb,
@@ -177,6 +179,7 @@ describe("webhook-dispatch (unit)", () => {
       tenantDb: rejectAllTenantDb(),
       providerFactory: stubProviderFactory(),
       indexer: testBlindIndexer,
+      fieldEncryptor: noopEncryptor,
       blobStore: createMemoryBlobStore(),
       jobQueue: createMockJobQueue(),
       webhookBaseUrl: WEBHOOK_BASE_URL,
@@ -356,6 +359,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         tenantDb: tenantDbFactory,
         providerFactory: stubProviderFactory(setup?.provider),
         indexer: testBlindIndexer,
+        fieldEncryptor: testFieldEncryptor,
         blobStore: setup?.blobStore ?? createMemoryBlobStore(),
         jobQueue: setup?.jobQueue ?? createMockJobQueue(),
         webhookBaseUrl: WEBHOOK_BASE_URL,
@@ -510,7 +514,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .selectAll()
           .where("phone_hash", "=", hash)
           .executeTakeFirstOrThrow();
-        // Stored number is sealed for the org key holder, never plaintext.
+        // Stored number is OPS-encrypted per ADR-005/069/096, never plaintext.
         expect(phoneRow.encrypted_number.toString("utf-8")).not.toContain(
           "+15550000022",
         );

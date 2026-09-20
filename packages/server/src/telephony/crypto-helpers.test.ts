@@ -1,14 +1,20 @@
 /**
- * Unit tests for telephony crypto helpers (sealString, sealBufferAndZero).
+ * Unit tests for telephony crypto helpers (sealString, sealBufferAndZero,
+ * encryptString).
  *
  * Verifies the encrypt-and-zero contract: plaintext Buffers are zeroed
- * in the finally block regardless of whether sealBuffer succeeds or throws.
- * Uses a minimal SealedBoxEncryptor stub (no real key material).
+ * in the finally block regardless of whether the encrypt call succeeds
+ * or throws. Uses minimal stubs (no real key material).
  */
 
 import { describe, it, expect } from "vitest";
-import { sealString, sealBufferAndZero } from "./crypto-helpers.js";
+import {
+  sealString,
+  sealBufferAndZero,
+  encryptString,
+} from "./crypto-helpers.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 
 /** Minimal stub that returns the input bytes prefixed with a tag. */
 function createStubEncryptor(): SealedBoxEncryptor {
@@ -127,6 +133,86 @@ describe("crypto-helpers", () => {
 
       expect(Buffer.isBuffer(result)).toBe(true);
       expect(input.length).toBe(0);
+    });
+  });
+
+  describe("encryptString", () => {
+    /** Minimal FieldEncryptor stub that prefixes input with "ops:". */
+    function createStubFieldEncryptor(): FieldEncryptor {
+      return {
+        encrypt(plaintext: string): Buffer {
+          return Buffer.from(`ops:${plaintext}`);
+        },
+        encryptBuffer(data: Buffer): Buffer {
+          return Buffer.concat([Buffer.from("ops:"), data]);
+        },
+        decrypt(ciphertext: Buffer): string {
+          return ciphertext.toString().replace("ops:", "");
+        },
+        decryptToBuffer(ciphertext: Buffer): Buffer {
+          return Buffer.from(ciphertext.toString().replace("ops:", ""));
+        },
+      };
+    }
+
+    it("returns the encrypted Buffer from encryptBuffer", () => {
+      const enc = createStubFieldEncryptor();
+      const result = encryptString(enc, "hello");
+
+      expect(Buffer.isBuffer(result)).toBe(true);
+      expect(result.toString()).toBe("ops:hello");
+    });
+
+    it("zeros the intermediate plaintext Buffer after successful encrypt", () => {
+      const captured: Buffer[] = [];
+      const enc: FieldEncryptor = {
+        encrypt(plaintext: string): Buffer {
+          return Buffer.from(`ops:${plaintext}`);
+        },
+        encryptBuffer(data: Buffer): Buffer {
+          captured.push(data);
+          return Buffer.concat([Buffer.from("ops:"), Buffer.from(data)]);
+        },
+        decrypt(ciphertext: Buffer): string {
+          return ciphertext.toString();
+        },
+        decryptToBuffer(ciphertext: Buffer): Buffer {
+          return Buffer.from(ciphertext);
+        },
+      };
+
+      encryptString(enc, "secret-text");
+
+      expect(captured).toHaveLength(1);
+      const original = captured[0] as Buffer;
+      expect(original.every((b) => b === 0)).toBe(true);
+    });
+
+    it("zeros the intermediate plaintext Buffer even when encryptBuffer throws", () => {
+      const captured: Buffer[] = [];
+      const enc: FieldEncryptor = {
+        encrypt(): Buffer {
+          throw new Error("unused");
+        },
+        encryptBuffer(data: Buffer): Buffer {
+          captured.push(data);
+          throw new Error("encryptBuffer failure");
+        },
+        decrypt(): string {
+          throw new Error("unused");
+        },
+        decryptToBuffer(): Buffer {
+          throw new Error("unused");
+        },
+      };
+
+      expect(() => encryptString(enc, "secret-text")).toThrow(
+        "encryptBuffer failure",
+      );
+
+      expect(captured).toHaveLength(1);
+      const original = captured[0] as Buffer;
+      expect(original.every((b) => b === 0)).toBe(true);
     });
   });
 });

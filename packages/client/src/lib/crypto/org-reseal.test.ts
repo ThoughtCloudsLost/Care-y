@@ -123,7 +123,7 @@ function defaultStatus(): {
     currentGeneration: 2,
     tables: [
       { table: "clients", pending: 2 },
-      { table: "phones", pending: 1 },
+      { table: "consultants", pending: 1 },
     ],
     indexTables: [
       { table: "clients", pending: 2 },
@@ -181,13 +181,14 @@ describe("org-reseal", () => {
   });
 
   describe("table list constants", () => {
-    it("RED_TIER_TABLES excludes branding-key and blob-carrying tables", () => {
+    it("RED_TIER_TABLES excludes branding-key, blob-carrying, and OPS-tier tables", () => {
       expect(RED_TIER_TABLES).not.toContain("intake_forms");
       expect(RED_TIER_TABLES).not.toContain("intake_form_fields");
       expect(RED_TIER_TABLES).not.toContain("voicemail_quarantine");
+      // phones.encrypted_number converged to OPS tier (ADR-005/069/096)
+      expect(RED_TIER_TABLES).not.toContain("phones");
       expect(RED_TIER_TABLES).toContain("intake_key_wraps");
       expect(RED_TIER_TABLES).toContain("clients");
-      expect(RED_TIER_TABLES).toContain("phones");
     });
 
     it("TRAILING_TIER_TABLES excludes branding-key, blob-carrying, and red-tier tables", () => {
@@ -219,10 +220,10 @@ describe("org-reseal", () => {
           currentGeneration: 2,
           rows: [],
         })
-        // Second table: phones, one batch of 1 row
+        // Second table: consultants, one batch of 1 row
         .mockResolvedValueOnce({
           currentGeneration: 2,
-          rows: [{ id: "p1", columns: { encrypted_number: "ct3" } }],
+          rows: [{ id: "v1", columns: { encrypted_display_name: "ct3" } }],
         })
         .mockResolvedValueOnce({
           currentGeneration: 2,
@@ -246,7 +247,7 @@ describe("org-reseal", () => {
         ])
         .mockResolvedValueOnce([
           {
-            cacheKey: "p1::encrypted_number",
+            cacheKey: "v1::encrypted_display_name",
             resealed: "new-ct3",
             fromGeneration: 1,
             indexHash: null,
@@ -268,60 +269,26 @@ describe("org-reseal", () => {
 
       const result = await resealTables(
         { bridge: asBridge(bridge) },
-        ["clients", "phones"],
+        ["clients", "consultants"],
         (p) => progressCalls.push({ ...p }),
       );
 
       // Verify resealRows was called for both tables
       expect(mockResealRows).toHaveBeenCalledTimes(2);
 
-      // Verify reindexRows was called for clients only (no phone index during reseal)
+      // Verify reindexRows was called for clients only
       const reindexCalls = mockReindexRows.mock.calls as Array<
         [{ table: string }]
       >;
       const reindexTables = reindexCalls.map((c) => c[0].table);
       expect(reindexTables).toContain("clients");
-      expect(reindexTables).not.toContain("phones");
+      expect(reindexTables).not.toContain("consultants");
 
       // Verify progress was reported
       expect(progressCalls.length).toBeGreaterThan(0);
       expect(progressCalls[0]?.table).toBe("clients");
 
       expect(result.resealed).toBeGreaterThan(0);
-    });
-
-    it("does not request phone index during reseal", async () => {
-      const bridge = createMockBridge();
-
-      mockResealPending
-        .mockResolvedValueOnce({
-          currentGeneration: 2,
-          rows: [{ id: "p1", columns: { encrypted_number: "ct3" } }],
-        })
-        .mockResolvedValueOnce({
-          currentGeneration: 2,
-          rows: [],
-        });
-
-      bridge.orgResealBatch.mockResolvedValueOnce([
-        {
-          cacheKey: "p1::encrypted_number",
-          resealed: "new-ct3",
-          fromGeneration: 1,
-          indexHash: null,
-        },
-      ]);
-
-      mockResealRows.mockResolvedValue({ resealed: 1, skipped: 0 });
-
-      await resealTables({ bridge: asBridge(bridge) }, ["phones"]);
-
-      // The worker item should NOT have index: "phone"
-      const workerCall = bridge.orgResealBatch.mock.calls[0];
-      expect(workerCall?.[0][0]?.index).toBeUndefined();
-
-      // reindexRows should not be called at all for phones
-      expect(mockReindexRows).not.toHaveBeenCalled();
     });
 
     it("submits original ciphertext for already-current columns", async () => {

@@ -3,14 +3,18 @@
  * flow (language selection, returning-caller shortcut, or voicemail), and
  * returns VoiceInstruction[] for the provider to render as TwiML.
  *
- * Phone numbers are hashed (blind index) for lookup and sealed-box encrypted
- * for storage. Plaintext is zeroed immediately after encryption (via crypto-helpers).
+ * Phone numbers are hashed (blind index) for lookup and OPS-tier encrypted
+ * (FieldEncryptor, ADR-005/069/096) for storage. Plaintext is zeroed
+ * immediately after encryption (via crypto-helpers).
  */
 
 import type { Kysely } from "kysely";
 import type { IncomingCallData, VoiceInstruction } from "./provider.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
-import type { BlindIndexer } from "../crypto/field-encryptor.js";
+import type {
+  FieldEncryptor,
+  BlindIndexer,
+} from "../crypto/field-encryptor.js";
 import type { PhoneRepository } from "./models/phone-repo.js";
 import type { ClientRepository } from "./models/client-repo.js";
 import type { GreetingRepository } from "./models/greeting-repo.js";
@@ -23,13 +27,14 @@ import {
   resolveLocaleFromDtmf,
 } from "./ivr.js";
 import type { PlayableGreeting } from "./ivr.js";
-import { sealString } from "./crypto-helpers.js";
+import { encryptString } from "./crypto-helpers.js";
 import type { CallTracker } from "./call-tracker.js";
 import { blobKeySchema } from "@care-y/shared";
 import type { OrgId, OrgSchema, StoredProviderId } from "@care-y/shared";
 
 export interface InboundCallDeps {
   readonly sealedBox: SealedBoxEncryptor;
+  readonly fieldEncryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
   readonly phoneRepo: PhoneRepository;
   readonly clientRepo: ClientRepository;
@@ -81,7 +86,7 @@ export async function handleInboundCall(
   deps: InboundCallDeps,
 ): Promise<readonly VoiceInstruction[]> {
   const {
-    sealedBox,
+    fieldEncryptor,
     indexer,
     phoneRepo,
     clientRepo,
@@ -115,7 +120,7 @@ export async function handleInboundCall(
   if (digits !== undefined) {
     const locale = resolveLocaleFromDtmf(digits) ?? defaultLocale;
 
-    const encryptedNumber = sealString(sealedBox, callData.from);
+    const encryptedNumber = encryptString(fieldEncryptor, callData.from);
     const { client, phone } = await clientRepo.findOrCreateByPhoneHash(
       phoneHash,
       encryptedNumber,
