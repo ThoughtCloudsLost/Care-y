@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Set how long personal information is kept" |
+* | "Manage retention" |
 *
 * @param {Permission_Manage_RetentionInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

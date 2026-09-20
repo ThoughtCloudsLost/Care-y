@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Four of these have nothing behind them yet: Link cases together, Set who is notified about a queue, Manage saved replies, and Delete client records. They are..." |
+* | "View own shifts has nothing behind it yet. It is listed so its name stays settled, but granting it changes nothing until shift scheduling is built." |
 *
 * @param {Permission_Not_Yet_Built_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

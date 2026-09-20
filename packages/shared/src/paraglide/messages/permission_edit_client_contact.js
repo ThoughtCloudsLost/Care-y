@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Edit_Client_ContactInputs */
 
 const en_permission_edit_client_contact = /** @type {(inputs: Permission_Edit_Client_ContactInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Change contact details for any client`)
+	return /** @type {LocalizedString} */ (`Edit client contact`)
 };
 
 const es_permission_edit_client_contact = /** @type {(inputs: Permission_Edit_Client_ContactInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambiar datos de contacto de cualquier cliente`)
+	return /** @type {LocalizedString} */ (`Editar contacto del cliente`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Change contact details for any client" |
+* | "Edit client contact" |
 *
 * @param {Permission_Edit_Client_ContactInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

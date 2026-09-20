@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Read the audit log" |
+* | "View audit log" |
 *
 * @param {Permission_View_Audit_LogInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

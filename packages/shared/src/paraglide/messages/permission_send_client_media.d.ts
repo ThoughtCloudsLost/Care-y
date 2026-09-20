@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Send files to clients" |
+* | "Send client media" |
 *
 * @param {Permission_Send_Client_MediaInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

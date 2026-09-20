@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Write_Call_GreetingsInputs */
 
 const en_permission_write_call_greetings = /** @type {(inputs: Permission_Write_Call_GreetingsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Record what callers hear`)
+	return /** @type {LocalizedString} */ (`Write call greetings`)
 };
 
 const es_permission_write_call_greetings = /** @type {(inputs: Permission_Write_Call_GreetingsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Grabar lo que escuchan las personas que llaman`)
+	return /** @type {LocalizedString} */ (`Escribir saludos de llamada`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Record what callers hear" |
+* | "Write call greetings" |
 *
 * @param {Permission_Write_Call_GreetingsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

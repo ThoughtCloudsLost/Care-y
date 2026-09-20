@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Message_Clients_In_PortalInputs */
 
 const en_permission_message_clients_in_portal = /** @type {(inputs: Permission_Message_Clients_In_PortalInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Message clients in the secure portal`)
+	return /** @type {LocalizedString} */ (`Message clients in portal`)
 };
 
 const es_permission_message_clients_in_portal = /** @type {(inputs: Permission_Message_Clients_In_PortalInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Enviar mensajes a clientes en el portal seguro`)
+	return /** @type {LocalizedString} */ (`Enviar mensajes en el portal`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Message clients in the secure portal" |
+* | "Message clients in portal" |
 *
 * @param {Permission_Message_Clients_In_PortalInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

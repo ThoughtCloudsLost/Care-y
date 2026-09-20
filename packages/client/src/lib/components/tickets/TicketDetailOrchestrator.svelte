@@ -80,6 +80,7 @@
   import TicketDetailOverlays from "$lib/components/tickets/TicketDetailOverlays.svelte";
   import EmailComposeSheet from "$lib/components/tickets/EmailComposeSheet.svelte";
   import OutboundMessageEditSheet from "$lib/components/tickets/OutboundMessageEditSheet.svelte";
+  import LinkCaseSheet from "$lib/components/tickets/LinkCaseSheet.svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys, ticketsKeys, consultantKeys } from "$lib/query/keys";
   import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
@@ -402,6 +403,7 @@
   let mergeConflictClientId = $state<string | null>(null);
   let mergeConflictAlias = $state<string | null>(null);
   let timelineActive = $state(false);
+  let linkCaseSheetOpen = $state(false);
   let revokeTokenDialogOpen = $state(false);
   let revokeTokenPending = $state(false);
 
@@ -451,6 +453,19 @@
 
   // Filtered follow-ups (bound from TicketDetail for select mode copy).
   let filteredFollowUps = $state<FollowUpList | undefined>(undefined);
+
+  // --- Linked cases (dependency) query for exclude list ---
+
+  const depsQuery = createQuery(() => ({
+    queryKey: ticketKeys.dependencies(ticketId),
+    queryFn: async () => ticketRouter.listDependencies.query({ ticketId }),
+  }));
+
+  const linkedTicketIds = $derived(
+    (depsQuery.data ?? []).map(
+      (d: { dependsOnTicketId: string }) => d.dependsOnTicketId,
+    ),
+  );
 
   // --- Shared context (used by composables and page wiring) ---
 
@@ -813,6 +828,10 @@
     onrevokeReplyToken: () => {
       closePanel();
       revokeTokenDialogOpen = true;
+    },
+    onlinkcases: () => {
+      closePanel();
+      linkCaseSheetOpen = true;
     },
   });
 
@@ -1499,6 +1518,15 @@
     </DialogButton>
   {/snippet}
 </ShellDialog>
+
+<LinkCaseSheet
+  opened={linkCaseSheetOpen}
+  {ticketId}
+  excludeIds={linkedTicketIds}
+  ondismiss={() => {
+    linkCaseSheetOpen = false;
+  }}
+/>
 
 <style>
   .ticket-detail-page {

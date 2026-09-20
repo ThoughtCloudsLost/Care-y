@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Roles_Group_Running_OrgInputs */
 
 const en_roles_group_running_org = /** @type {(inputs: Roles_Group_Running_OrgInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Running the organisation`)
+	return /** @type {LocalizedString} */ (`Running the organization`)
 };
 
 const es_roles_group_running_org = /** @type {(inputs: Roles_Group_Running_OrgInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Administrar la organizacion`)
+	return /** @type {LocalizedString} */ (`Administrar la organización`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Running the organisation" |
+* | "Running the organization" |
 *
 * @param {Roles_Group_Running_OrgInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

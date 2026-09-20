@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Set up escalation rules" |
+* | "Manage escalation" |
 *
 * @param {Permission_Manage_EscalationInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

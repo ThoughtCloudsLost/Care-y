@@ -10,7 +10,7 @@ const en_ticket_panel_no_notes = /** @type {(inputs: Ticket_Panel_No_NotesInputs
 };
 
 const es_ticket_panel_no_notes = /** @type {(inputs: Ticket_Panel_No_NotesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sin notas internas todavia.`)
+	return /** @type {LocalizedString} */ (`Sin notas internas todavía.`)
 };
 
 /**

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Delete_Knowledge_Base_ArticlesInputs */
 
 const en_permission_delete_knowledge_base_articles = /** @type {(inputs: Permission_Delete_Knowledge_Base_ArticlesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Delete articles`)
+	return /** @type {LocalizedString} */ (`Delete knowledge base articles`)
 };
 
 const es_permission_delete_knowledge_base_articles = /** @type {(inputs: Permission_Delete_Knowledge_Base_ArticlesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Eliminar articulos`)
+	return /** @type {LocalizedString} */ (`Eliminar artículos de la base de conocimiento`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Delete articles" |
+* | "Delete knowledge base articles" |
 *
 * @param {Permission_Delete_Knowledge_Base_ArticlesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

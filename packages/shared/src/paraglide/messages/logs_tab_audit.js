@@ -10,7 +10,7 @@ const en_logs_tab_audit = /** @type {(inputs: Logs_Tab_AuditInputs) => Localized
 };
 
 const es_logs_tab_audit = /** @type {(inputs: Logs_Tab_AuditInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Auditoria`)
+	return /** @type {LocalizedString} */ (`Auditoría`)
 };
 
 /**

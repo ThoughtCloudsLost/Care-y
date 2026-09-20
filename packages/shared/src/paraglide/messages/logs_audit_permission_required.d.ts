@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The audit log requires the View Audit Log permission." |
+* | "The audit log requires the View audit log permission." |
 *
 * @param {Logs_Audit_Permission_RequiredInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

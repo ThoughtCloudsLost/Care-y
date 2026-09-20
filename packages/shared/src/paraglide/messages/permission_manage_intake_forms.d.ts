@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Build public intake forms" |
+* | "Manage intake forms" |
 *
 * @param {Permission_Manage_Intake_FormsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

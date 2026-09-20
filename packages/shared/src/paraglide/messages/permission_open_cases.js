@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Open_CasesInputs */
 
 const en_permission_open_cases = /** @type {(inputs: Permission_Open_CasesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Open a new case`)
+	return /** @type {LocalizedString} */ (`Open cases`)
 };
 
 const es_permission_open_cases = /** @type {(inputs: Permission_Open_CasesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Abrir un caso nuevo`)
+	return /** @type {LocalizedString} */ (`Abrir casos`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Open a new case" |
+* | "Open cases" |
 *
 * @param {Permission_Open_CasesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

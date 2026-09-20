@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Delete_ClientsInputs */
 
 const en_permission_delete_clients = /** @type {(inputs: Permission_Delete_ClientsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Delete client records`)
+	return /** @type {LocalizedString} */ (`Delete clients`)
 };
 
 const es_permission_delete_clients = /** @type {(inputs: Permission_Delete_ClientsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Eliminar registros de clientes`)
+	return /** @type {LocalizedString} */ (`Eliminar clientes`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Delete client records" |
+* | "Delete clients" |
 *
 * @param {Permission_Delete_ClientsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Assign cases to other people" |
+* | "Assign cases" |
 *
 * @param {Permission_Assign_CasesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

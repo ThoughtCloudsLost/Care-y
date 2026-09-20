@@ -10,7 +10,7 @@ const en_consultant_phone_error_rate_limited = /** @type {(inputs: Consultant_Ph
 };
 
 const es_consultant_phone_error_rate_limited = /** @type {(inputs: Consultant_Phone_Error_Rate_LimitedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Demasiados codigos enviados. Intenta más tarde.`)
+	return /** @type {LocalizedString} */ (`Demasiados códigos enviados. Intenta más tarde.`)
 };
 
 /**

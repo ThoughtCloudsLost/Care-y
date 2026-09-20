@@ -7,6 +7,7 @@
     Ban,
     Mic,
     MessageSquare,
+    MessageSquareDashed,
     PhoneMissed,
     ToggleRight,
   } from "@lucide/svelte";
@@ -20,6 +21,7 @@
   import GreetingsSection from "$lib/components/admin/GreetingsSection.svelte";
   import SmsTemplatesSection from "$lib/components/admin/SmsTemplatesSection.svelte";
   import QuarantineSection from "$lib/components/admin/QuarantineSection.svelte";
+  import PresetsSection from "$lib/components/admin/PresetsSection.svelte";
 
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
@@ -66,6 +68,13 @@
       icon: PhoneMissed,
       permission: Permission.MANAGE_INFRASTRUCTURE,
       component: QuarantineSection,
+    },
+    {
+      id: "presets",
+      label: m.admin_tab_presets,
+      icon: MessageSquareDashed,
+      permission: Permission.MANAGE_PRESETS,
+      component: PresetsSection,
     },
   ];
 

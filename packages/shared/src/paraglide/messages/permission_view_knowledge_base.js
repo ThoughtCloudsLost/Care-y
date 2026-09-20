@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_View_Knowledge_BaseInputs */
 
 const en_permission_view_knowledge_base = /** @type {(inputs: Permission_View_Knowledge_BaseInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Read the knowledge base`)
+	return /** @type {LocalizedString} */ (`View knowledge base`)
 };
 
 const es_permission_view_knowledge_base = /** @type {(inputs: Permission_View_Knowledge_BaseInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Leer la base de conocimiento`)
+	return /** @type {LocalizedString} */ (`Ver base de conocimiento`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Read the knowledge base" |
+* | "View knowledge base" |
 *
 * @param {Permission_View_Knowledge_BaseInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

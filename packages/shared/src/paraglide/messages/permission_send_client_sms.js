@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Send_Client_SmsInputs */
 
 const en_permission_send_client_sms = /** @type {(inputs: Permission_Send_Client_SmsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Send text messages to clients`)
+	return /** @type {LocalizedString} */ (`Send client SMS`)
 };
 
 const es_permission_send_client_sms = /** @type {(inputs: Permission_Send_Client_SmsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Enviar mensajes de texto a clientes`)
+	return /** @type {LocalizedString} */ (`Enviar SMS al cliente`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Send text messages to clients" |
+* | "Send client SMS" |
 *
 * @param {Permission_Send_Client_SmsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

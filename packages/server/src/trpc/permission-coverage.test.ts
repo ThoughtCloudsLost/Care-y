@@ -45,7 +45,6 @@ import type { ProcedureMeta } from "./trpc.js";
  * there and not here.
  */
 const NOT_ENFORCED_ANYWHERE: readonly Permission[] = [
-  Permission.DELETE_CLIENTS,
   Permission.VIEW_OWN_SHIFTS,
 ];
 

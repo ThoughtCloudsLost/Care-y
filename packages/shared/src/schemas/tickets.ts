@@ -232,6 +232,11 @@ export const addDependencyInputSchema = z.object({
 });
 export type AddDependencyInput = z.infer<typeof addDependencyInputSchema>;
 
+export const deleteClientInputSchema = z.object({
+  clientId: clientIdSchema,
+});
+export type DeleteClientInput = z.infer<typeof deleteClientInputSchema>;
+
 export const mergeClientsInputSchema = z.object({
   primaryClientId: clientIdSchema,
   secondaryClientId: clientIdSchema,

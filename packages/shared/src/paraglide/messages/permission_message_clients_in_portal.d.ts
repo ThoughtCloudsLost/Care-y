@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Message clients in the secure portal" |
+* | "Message clients in portal" |
 *
 * @param {Permission_Message_Clients_In_PortalInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

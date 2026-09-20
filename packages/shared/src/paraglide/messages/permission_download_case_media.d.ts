@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Download recordings and files" |
+* | "Download case media" |
 *
 * @param {Permission_Download_Case_MediaInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

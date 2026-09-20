@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Write and edit articles" |
+* | "Edit knowledge base" |
 *
 * @param {Permission_Edit_Knowledge_BaseInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

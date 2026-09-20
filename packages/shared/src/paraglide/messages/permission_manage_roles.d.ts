@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Set what each role can do" |
+* | "Manage roles" |
 *
 * @param {Permission_Manage_RolesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_Voicemail_QuarantineInputs */
 
 const en_permission_manage_voicemail_quarantine = /** @type {(inputs: Permission_Manage_Voicemail_QuarantineInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Handle held-back voicemail`)
+	return /** @type {LocalizedString} */ (`Manage voicemail quarantine`)
 };
 
 const es_permission_manage_voicemail_quarantine = /** @type {(inputs: Permission_Manage_Voicemail_QuarantineInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Gestionar correos de voz retenidos`)
+	return /** @type {LocalizedString} */ (`Gestionar cuarentena de correo de voz`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Handle held-back voicemail" |
+* | "Manage voicemail quarantine" |
 *
 * @param {Permission_Manage_Voicemail_QuarantineInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

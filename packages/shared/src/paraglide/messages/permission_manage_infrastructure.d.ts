@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Configure the phone and messaging service" |
+* | "Manage infrastructure" |
 *
 * @param {Permission_Manage_InfrastructureInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

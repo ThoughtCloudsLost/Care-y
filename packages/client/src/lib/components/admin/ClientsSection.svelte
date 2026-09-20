@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { Block, List, ListInput, ListItem, Preloader } from "konsta/svelte";
+  import {
+    Block,
+    DialogButton,
+    List,
+    ListInput,
+    ListItem,
+    Preloader,
+  } from "konsta/svelte";
   import {
     createQuery,
     createMutation,
@@ -13,11 +20,13 @@
     Mail,
     HeartHandshake,
     Save,
+    Trash,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { clientKeys, ticketsKeys } from "$lib/query/keys.js";
+  import { Permission } from "@care-y/shared";
   import { ErrorCode } from "@care-y/shared";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -37,7 +46,13 @@
   import EmailEditSheet from "$lib/components/clients/EmailEditSheet.svelte";
   import MergeSheet from "$lib/components/clients/MergeSheet.svelte";
   import { SvelteSet } from "svelte/reactivity";
-  import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
+  import {
+    getOrgKeyManager,
+    getOrgDecryptCache,
+    getCurrentPermissions,
+  } from "$lib/crypto/context.js";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import { LOADING, type DecryptResult } from "$lib/crypto/decrypt-result.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
 
@@ -89,6 +104,10 @@
   const queryClient = useQueryClient();
   const orgKeyManager = getOrgKeyManager();
   const orgCache = getOrgDecryptCache();
+  const permissionsGetter = getCurrentPermissions();
+  const canDeleteClients = $derived(
+    permissionsGetter().has(Permission.DELETE_CLIENTS),
+  );
 
   // ---------------------------------------------------------------------------
   // Alias decryption helper
@@ -544,6 +563,65 @@
   // Use DecryptPlaceholder with LOADING status. A future enhancement could wire
   // TicketDecryptCache here if the key wraps become available.
   const ticketTitleResult: DecryptResult = LOADING;
+
+  // ---------------------------------------------------------------------------
+  // Client deletion
+  // ---------------------------------------------------------------------------
+
+  let deleteDialogOpen = $state(false);
+  let deleteTargetId = $state<string | null>(null);
+  let deleteTargetAlias = $state<string>("");
+  let deleteTargetTicketCount = $state(0);
+
+  function openDeleteConfirm(): void {
+    if (sheetClientId === null) return;
+    const detail = clientDetailQuery.data;
+    if (detail === undefined) return;
+    deleteTargetId = sheetClientId;
+    deleteTargetAlias = detailDecryptedAlias ?? "";
+    deleteTargetTicketCount = detail.ticketCount;
+    deleteDialogOpen = true;
+  }
+
+  function closeDeleteConfirm(): void {
+    deleteDialogOpen = false;
+    deleteTargetId = null;
+  }
+
+  function deleteConfirmBody(): string {
+    const count = deleteTargetTicketCount;
+    if (count === 0) {
+      return m.client_delete_confirm_body_zero(withTerms());
+    }
+    if (count === 1) {
+      return m.client_delete_confirm_body_one({
+        ...withTerms(),
+        count: String(count),
+      });
+    }
+    return m.client_delete_confirm_body_other({
+      ...withTerms(),
+      count: String(count),
+    });
+  }
+
+  const deleteClientMutation = createMutation(() => ({
+    mutationFn: async (clientId: string) =>
+      clientsRouter.deleteClient.mutate({ clientId }),
+    onSuccess: () => {
+      haptic();
+      closeDeleteConfirm();
+      closeSheet();
+      void queryClient.invalidateQueries({ queryKey: clientKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ticketsKeys.all });
+      const msg = m.client_deleted_toast(withTerms());
+      toastStore.show(msg);
+      announceToLiveRegion("assertive", msg);
+    },
+    onError: () => {
+      toastStore.show(m.client_delete_error(withTerms()));
+    },
+  }));
 </script>
 
 <div class="clients-section pb-20">
@@ -827,9 +905,48 @@
           </List>
         </div>
       {/if}
+
+      <!-- Delete client action (gated on DELETE_CLIENTS) -->
+      {#if canDeleteClients}
+        <div class="detail-section delete-section">
+          <button
+            type="button"
+            class="delete-client-btn touch-feedback"
+            onclick={openDeleteConfirm}
+          >
+            <Trash size={14} aria-hidden="true" />
+            {m.client_delete_action(withTerms())}
+          </button>
+        </div>
+      {/if}
     {/if}
   </div>
 </ShellSheet>
+
+<ShellDialog
+  opened={deleteDialogOpen}
+  ondismiss={closeDeleteConfirm}
+  title={m.client_delete_confirm_title(withTerms())}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">{deleteConfirmBody()}</p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={closeDeleteConfirm}>
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton
+      class={DIALOG_DESTRUCTIVE_CLASS}
+      onclick={() => {
+        if (deleteTargetId !== null) {
+          deleteClientMutation.mutate(deleteTargetId);
+        }
+      }}
+    >
+      {deleteClientMutation.isPending ? m.common_loading() : m.common_delete()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <EmailEditSheet
   opened={emailSheetOpened}
@@ -953,5 +1070,26 @@
     gap: 0.25rem;
     font-size: var(--text-xs);
     color: var(--muted);
+  }
+
+  .delete-section {
+    margin-top: var(--space-lg);
+    border-top: 1px solid var(--hair);
+    padding-top: var(--space-lg);
+  }
+
+  .delete-client-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--danger);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem 0;
+    min-height: 44px;
+    border-radius: 0.25rem;
   }
 </style>

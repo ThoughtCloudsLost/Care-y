@@ -10,7 +10,7 @@ const en_demo_narrative_admin_form_settings_heading = /** @type {(inputs: Demo_N
 };
 
 const es_demo_narrative_admin_form_settings_heading = /** @type {(inputs: Demo_Narrative_Admin_Form_Settings_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configuracion del formulario`)
+	return /** @type {LocalizedString} */ (`Configuración del formulario`)
 };
 
 /**

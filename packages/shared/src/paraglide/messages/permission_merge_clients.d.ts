@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Merge duplicate client records" |
+* | "Merge clients" |
 *
 * @param {Permission_Merge_ClientsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

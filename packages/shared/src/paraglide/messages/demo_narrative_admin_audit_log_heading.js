@@ -10,7 +10,7 @@ const en_demo_narrative_admin_audit_log_heading = /** @type {(inputs: Demo_Narra
 };
 
 const es_demo_narrative_admin_audit_log_heading = /** @type {(inputs: Demo_Narrative_Admin_Audit_Log_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Registro de auditoria`)
+	return /** @type {LocalizedString} */ (`Registro de auditoría`)
 };
 
 /**

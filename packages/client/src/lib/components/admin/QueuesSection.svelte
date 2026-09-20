@@ -21,7 +21,10 @@
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys, queueKeys } from "$lib/query/keys.js";
-  import { getOrgDecryptCache } from "$lib/crypto/context.js";
+  import {
+    getOrgDecryptCache,
+    getCurrentPermissions,
+  } from "$lib/crypto/context.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { getCollator } from "$lib/utils/collator.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -33,11 +36,12 @@
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
   import { decryptQueueAppearance } from "$lib/utils/queue-appearance.js";
-  import { ErrorCode } from "@care-y/shared";
+  import { ErrorCode, Permission } from "@care-y/shared";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import { queueFilterStore } from "$lib/stores/queue-filters.svelte.js";
   import QueueMemberPicker from "./QueueMemberPicker.svelte";
+  import QueueWatcherPicker from "./QueueWatcherPicker.svelte";
   import QueueEditor from "./QueueEditor.svelte";
 
   interface QueuesSectionProps {
@@ -51,6 +55,11 @@
   const orgRouter = trpc.org;
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
+  const permissionsGetter = getCurrentPermissions();
+  const permissions = $derived(permissionsGetter());
+  const canManageWatchers = $derived(
+    permissions.has(Permission.MANAGE_QUEUE_NOTIFICATIONS),
+  );
 
   // ── Queries ──
 
@@ -127,6 +136,52 @@
     }
     return { members, loading };
   });
+
+  // ── Queue watchers via createQueries (one query per queue) ──
+
+  const watcherResults = createQueries(() => ({
+    queries: canManageWatchers
+      ? (queuesQuery.data ?? []).map((q) => ({
+          queryKey: queueKeys.watchers(q.id),
+          queryFn: async () =>
+            ticketRouter.listQueueWatchers.query({ queueId: q.id }),
+        }))
+      : [],
+  }));
+
+  const watcherData = $derived.by(() => {
+    const queues = queuesQuery.data ?? [];
+    const watchers = new SvelteMap<string, readonly string[]>();
+    const loading = new SvelteMap<string, boolean>();
+    if (!canManageWatchers) return { watchers, loading };
+    const results = watcherResults;
+    let idx = 0;
+    for (const q of queues) {
+      const result = results[idx++];
+      if (result?.data) watchers.set(q.id, result.data);
+      loading.set(q.id, result?.isLoading ?? true);
+    }
+    return { watchers, loading };
+  });
+
+  const removeWatcherMutation = createMutation(() => ({
+    mutationFn: async (input: { queueId: string; userId: string }) =>
+      ticketRouter.removeQueueWatcher.mutate(input),
+    onSuccess: (
+      _data: unknown,
+      variables: { queueId: string; userId: string },
+    ) => {
+      haptic();
+      toastStore.show(m.admin_queue_watcher_removed());
+      announceToLiveRegion("polite", m.admin_queue_watcher_removed());
+      void queryClient.invalidateQueries({
+        queryKey: queueKeys.watchers(variables.queueId),
+      });
+    },
+    onError: () => {
+      toastStore.show(m.error_generic());
+    },
+  }));
 
   // ── Expandable sections (expanded by default) ──
 
@@ -317,6 +372,26 @@
 
   function handlePickerDismiss(): void {
     pickerOpened = false;
+  }
+
+  // ── Watcher picker ──
+
+  let watcherPickerOpened = $state(false);
+  let watcherPickerQueueId = $state("");
+  const watcherPickerWatcherSet: ReadonlySet<string> = $derived(
+    new Set(watcherData.watchers.get(watcherPickerQueueId) ?? []),
+  );
+  const watcherPickerMemberSet: ReadonlySet<string> = $derived(
+    new Set(memberData.members.get(watcherPickerQueueId) ?? []),
+  );
+
+  function openWatcherPicker(queueId: string): void {
+    watcherPickerQueueId = queueId;
+    watcherPickerOpened = true;
+  }
+
+  function handleWatcherPickerDismiss(): void {
+    watcherPickerOpened = false;
   }
 
   // ── Edit handler (QueueEditor wires into this) ──
@@ -605,6 +680,66 @@
                   {/if}
                 {/if}
               </div>
+
+              <!-- Watcher section (notification-only, no read access) -->
+              {#if canManageWatchers}
+                {@const queueWatchers =
+                  watcherData.watchers.get(queue.id) ?? []}
+                {@const watchersLoading =
+                  watcherData.loading.get(queue.id) ?? true}
+                <div
+                  class="watcher-section"
+                  role="region"
+                  aria-label={m.admin_queue_watchers_title()}
+                >
+                  <h4 class="watcher-heading">
+                    {m.admin_queue_watchers_title()}
+                  </h4>
+                  <p class="watcher-hint">
+                    {m.admin_queue_watchers_hint(withTerms())}
+                  </p>
+                  {#if watchersLoading}
+                    <div class="member-loading">
+                      <span class="text-sm text-[--muted]">...</span>
+                    </div>
+                  {:else}
+                    <div class="member-chips">
+                      {#each queueWatchers as watcherId (watcherId)}
+                        {@const watcherName = decryptUserName(watcherId)}
+                        <Chip outline class="member-chip">
+                          <DecryptPlaceholder
+                            content={watcherName}
+                            length={10}
+                          />
+                          <button
+                            class="chip-remove"
+                            aria-label={m.admin_queue_remove_watcher({
+                              name: watcherName ?? watcherId.slice(0, 8),
+                            })}
+                            onclick={() =>
+                              removeWatcherMutation.mutate({
+                                queueId: queue.id,
+                                userId: watcherId,
+                              })}
+                          >
+                            <X size={14} aria-hidden="true" />
+                          </button>
+                        </Chip>
+                      {/each}
+                    </div>
+
+                    <SoftButton onclick={() => openWatcherPicker(queue.id)}>
+                      {m.admin_queue_add_watcher_button()}
+                    </SoftButton>
+
+                    {#if queueWatchers.length === 0}
+                      <p class="no-members">
+                        {m.admin_queue_no_watchers()}
+                      </p>
+                    {/if}
+                  {/if}
+                </div>
+              {/if}
             {/if}
           </div>
         </Card>
@@ -688,6 +823,17 @@
   currentMemberIds={pickerMemberSet}
   ondismiss={handlePickerDismiss}
 />
+
+<!-- Watcher picker sheet -->
+{#if canManageWatchers}
+  <QueueWatcherPicker
+    opened={watcherPickerOpened}
+    queueId={watcherPickerQueueId}
+    currentWatcherIds={watcherPickerWatcherSet}
+    currentMemberIds={watcherPickerMemberSet}
+    ondismiss={handleWatcherPickerDismiss}
+  />
+{/if}
 
 <!-- Queue editor sheet (create / edit) -->
 <QueueEditor
@@ -857,6 +1003,31 @@
     font-size: var(--text-sm);
     color: var(--muted);
     padding: var(--space-sm) 0;
+  }
+
+  /* ── Watcher section ── */
+  .watcher-section {
+    border-top: 1px solid color-mix(in srgb, var(--muted) 20%, transparent);
+    padding: var(--space-md) var(--card-pad-x) var(--card-pad-y);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .watcher-heading {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .watcher-hint {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.4;
   }
 
   /* ── Reassignment sheet ── */

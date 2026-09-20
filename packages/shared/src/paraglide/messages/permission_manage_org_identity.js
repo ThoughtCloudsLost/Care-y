@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_Org_IdentityInputs */
 
 const en_permission_manage_org_identity = /** @type {(inputs: Permission_Manage_Org_IdentityInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Change how the organisation presents itself`)
+	return /** @type {LocalizedString} */ (`Manage org identity`)
 };
 
 const es_permission_manage_org_identity = /** @type {(inputs: Permission_Manage_Org_IdentityInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambiar como se presenta la organizacion`)
+	return /** @type {LocalizedString} */ (`Gestionar identidad de la organización`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Change how the organisation presents itself" |
+* | "Manage org identity" |
 *
 * @param {Permission_Manage_Org_IdentityInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

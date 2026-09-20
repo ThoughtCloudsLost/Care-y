@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Edit the case summary" |
+* | "Edit case summary" |
 *
 * @param {Permission_Edit_Case_SummaryInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

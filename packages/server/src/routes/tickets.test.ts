@@ -1324,6 +1324,31 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(after).toBeUndefined();
       });
 
+      it("lists queue watchers via listQueueWatchers", async () => {
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const watcherUser = await createTestUser(tenantDb);
+        const queue = await createTestQueue(tenantDb);
+        const caller = createAuthedCaller(admin);
+
+        const before = await caller.tickets.listQueueWatchers({
+          queueId: queue.id,
+        });
+        expect(before).toEqual([]);
+
+        await caller.tickets.addQueueWatcher({
+          queueId: queue.id,
+          userId: watcherUser.id,
+        });
+
+        const after = await caller.tickets.listQueueWatchers({
+          queueId: queue.id,
+        });
+        expect(after).toContain(watcherUser.id);
+        expect(after).toHaveLength(1);
+      });
+
       it("tracks queue membership across the admin endpoints", async () => {
         const admin = await createTestUser(tenantDb, {
           overrides: { role_id: RoleId.ADMIN },

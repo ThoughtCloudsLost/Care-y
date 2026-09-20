@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Edit_Client_AliasInputs */
 
 const en_permission_edit_client_alias = /** @type {(inputs: Permission_Edit_Client_AliasInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Rename a client`)
+	return /** @type {LocalizedString} */ (`Edit client alias`)
 };
 
 const es_permission_edit_client_alias = /** @type {(inputs: Permission_Edit_Client_AliasInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambiar el alias de un cliente`)
+	return /** @type {LocalizedString} */ (`Editar alias del cliente`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Rename a client" |
+* | "Edit client alias" |
 *
 * @param {Permission_Edit_Client_AliasInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

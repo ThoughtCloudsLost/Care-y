@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Delete client records" |
+* | "Delete clients" |
 *
 * @param {Permission_Delete_ClientsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

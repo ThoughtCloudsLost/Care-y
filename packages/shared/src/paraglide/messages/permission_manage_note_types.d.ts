@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Define the kinds of notes people can write" |
+* | "Manage note types" |
 *
 * @param {Permission_Manage_Note_TypesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

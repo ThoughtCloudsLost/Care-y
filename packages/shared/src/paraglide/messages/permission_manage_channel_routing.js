@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_Channel_RoutingInputs */
 
 const en_permission_manage_channel_routing = /** @type {(inputs: Permission_Manage_Channel_RoutingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Decide where incoming contacts land`)
+	return /** @type {LocalizedString} */ (`Manage channel routing`)
 };
 
 const es_permission_manage_channel_routing = /** @type {(inputs: Permission_Manage_Channel_RoutingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Decidir adonde llegan los contactos entrantes`)
+	return /** @type {LocalizedString} */ (`Gestionar enrutamiento de canales`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Decide where incoming contacts land" |
+* | "Manage channel routing" |
 *
 * @param {Permission_Manage_Channel_RoutingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

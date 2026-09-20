@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Add and remove queue members" |
+* | "Manage queue membership" |
 *
 * @param {Permission_Manage_Queue_MembershipInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

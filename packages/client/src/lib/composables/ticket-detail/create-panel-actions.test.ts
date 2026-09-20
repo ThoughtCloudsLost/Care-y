@@ -40,6 +40,7 @@ describe("createPanelActions", () => {
   let onnotifications: Mock;
   let onsharelink: Mock;
   let onrevokeReplyToken: Mock;
+  let onlinkcases: Mock;
   let toastStore: { show: Mock; current: null; dismiss: Mock };
 
   beforeEach(() => {
@@ -60,6 +61,7 @@ describe("createPanelActions", () => {
     onnotifications = vi.fn();
     onsharelink = vi.fn();
     onrevokeReplyToken = vi.fn();
+    onlinkcases = vi.fn();
     toastStore = { show: vi.fn(), current: null, dismiss: vi.fn() };
   });
 
@@ -84,6 +86,7 @@ describe("createPanelActions", () => {
       onnotifications,
       onsharelink,
       onrevokeReplyToken,
+      onlinkcases,
     });
   }
 
@@ -186,6 +189,11 @@ describe("createPanelActions", () => {
   it("dispatches revokeReplyToken to onrevokeReplyToken callback", () => {
     make().dispatch("revokeReplyToken");
     expect(onrevokeReplyToken).toHaveBeenCalledOnce();
+  });
+
+  it("dispatches linkCases to onlinkcases callback", () => {
+    make().dispatch("linkCases");
+    expect(onlinkcases).toHaveBeenCalledOnce();
   });
 
   it("cancel is a no-op", () => {

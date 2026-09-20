@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Send_Client_MediaInputs */
 
 const en_permission_send_client_media = /** @type {(inputs: Permission_Send_Client_MediaInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Send files to clients`)
+	return /** @type {LocalizedString} */ (`Send client media`)
 };
 
 const es_permission_send_client_media = /** @type {(inputs: Permission_Send_Client_MediaInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Enviar archivos a clientes`)
+	return /** @type {LocalizedString} */ (`Enviar archivos al cliente`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Send files to clients" |
+* | "Send client media" |
 *
 * @param {Permission_Send_Client_MediaInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

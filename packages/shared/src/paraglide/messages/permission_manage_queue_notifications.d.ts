@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Set who is notified about a queue" |
+* | "Manage queue notifications" |
 *
 * @param {Permission_Manage_Queue_NotificationsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Change how the organisation presents itself" |
+* | "Manage org identity" |
 *
 * @param {Permission_Manage_Org_IdentityInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

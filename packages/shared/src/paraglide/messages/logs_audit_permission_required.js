@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Logs_Audit_Permission_RequiredInputs */
 
 const en_logs_audit_permission_required = /** @type {(inputs: Logs_Audit_Permission_RequiredInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The audit log requires the View Audit Log permission.`)
+	return /** @type {LocalizedString} */ (`The audit log requires the View audit log permission.`)
 };
 
 const es_logs_audit_permission_required = /** @type {(inputs: Logs_Audit_Permission_RequiredInputs) => LocalizedString} */ () => {
@@ -16,7 +16,7 @@ const es_logs_audit_permission_required = /** @type {(inputs: Logs_Audit_Permiss
 /**
 * | output |
 * | --- |
-* | "The audit log requires the View Audit Log permission." |
+* | "The audit log requires the View audit log permission." |
 *
 * @param {Logs_Audit_Permission_RequiredInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

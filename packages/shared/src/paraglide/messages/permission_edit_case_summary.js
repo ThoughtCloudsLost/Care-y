@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Edit_Case_SummaryInputs */
 
 const en_permission_edit_case_summary = /** @type {(inputs: Permission_Edit_Case_SummaryInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Edit the case summary`)
+	return /** @type {LocalizedString} */ (`Edit case summary`)
 };
 
 const es_permission_edit_case_summary = /** @type {(inputs: Permission_Edit_Case_SummaryInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Editar el resumen del caso`)
+	return /** @type {LocalizedString} */ (`Editar resumen del caso`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Edit the case summary" |
+* | "Edit case summary" |
 *
 * @param {Permission_Edit_Case_SummaryInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

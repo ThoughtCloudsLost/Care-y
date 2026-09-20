@@ -55,6 +55,7 @@
   import PanelNotesSection from "./PanelNotesSection.svelte";
   import PanelMediaSection from "./PanelMediaSection.svelte";
   import PortalTierSection from "./PortalTierSection.svelte";
+  import LinkedCasesSection from "./LinkedCasesSection.svelte";
   import { onKeyActivate, labelToggleInput } from "$lib/utils/a11y.js";
   import { enabledTicketId } from "$lib/tickets/queries.js";
   import type { TicketAction } from "$lib/tickets/types.js";
@@ -304,6 +305,8 @@
   </List>
 
   <PanelNotesSection {ticketId} {keyWrap} {onnotetap} />
+
+  <LinkedCasesSection {ticketId} onlink={() => onaction("linkCases")} />
 
   <PortalTierSection
     {ticketId}

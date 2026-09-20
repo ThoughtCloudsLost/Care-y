@@ -10,7 +10,7 @@ const en_intake_privacy_sharing_title = /** @type {(inputs: Intake_Privacy_Shari
 };
 
 const es_intake_privacy_sharing_title = /** @type {(inputs: Intake_Privacy_Sharing_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Con quien compartimos tus datos`)
+	return /** @type {LocalizedString} */ (`Con quién compartimos tus datos`)
 };
 
 /**

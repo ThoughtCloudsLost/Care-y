@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_KeysInputs */
 
 const en_permission_manage_keys = /** @type {(inputs: Permission_Manage_KeysInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Look after the encryption keys`)
+	return /** @type {LocalizedString} */ (`Manage keys`)
 };
 
 const es_permission_manage_keys = /** @type {(inputs: Permission_Manage_KeysInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cuidar las claves de cifrado`)
+	return /** @type {LocalizedString} */ (`Gestionar claves`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Look after the encryption keys" |
+* | "Manage keys" |
 *
 * @param {Permission_Manage_KeysInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1798,6 +1798,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
+    listQueueWatchers: manageQueueNotificationsProcedure
+      .input(z.object({ queueId: queueIdSchema }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createWatchersSvc(ctx.org.tenantDb, access);
+          return svc.getQueueWatchers(input.queueId);
+        }),
+      ),
+
     // --- Queue Assignments ---
     addQueueMember: manageQueueMembershipProcedure
       .input(queueAssignmentInputSchema)

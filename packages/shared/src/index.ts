@@ -292,6 +292,7 @@ export {
   createPresetReplyInputSchema,
   updatePresetReplyInputSchema,
   addDependencyInputSchema,
+  deleteClientInputSchema,
   mergeClientsInputSchema,
   undoMergeInputSchema,
   uploadAttachmentInputSchema,

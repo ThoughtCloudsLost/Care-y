@@ -185,6 +185,7 @@ import { ensureRecurringJob } from "./jobs/ensure-recurring.js";
 import {
   registerPiiRetentionHandler,
   PII_RETENTION_QUEUE,
+  purgeClient,
 } from "./jobs/pii-retention.js";
 import {
   registerOutboxDrainHandler,
@@ -847,6 +848,27 @@ const appRouter = createAppRouter({
     },
     createDismissalSvc: (tDb) => createDismissalService(tDb),
     createMergeScanSvc: (tDb) => createMergeScanService(tDb),
+    async purgeClientAndAudit(tDb, clientId, orgId, actorId) {
+      const result = await tDb
+        .transaction()
+        .execute(async (trx) =>
+          purgeClient(trx, clientId, blobStore, jobQueue, orgId),
+        );
+      const auditSvc = createAuditService(tDb);
+      void auditSvc.log({
+        eventType: "client_deleted",
+        actorId,
+        metadata: {
+          ticketsPurged: result.ticketsPurged,
+          blobsDeleted: result.blobsDeleted,
+          logDeletionsEnqueued: result.logDeletionsEnqueued,
+        },
+      });
+      return {
+        ticketsPurged: result.ticketsPurged,
+        blobsDeleted: result.blobsDeleted,
+      };
+    },
   },
   devDeps: env.NODE_ENV !== "production" ? { blobStore } : null,
 });

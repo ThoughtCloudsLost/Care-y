@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_View_Client_PiiInputs */
 
 const en_permission_view_client_pii = /** @type {(inputs: Permission_View_Client_PiiInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`See full contact details`)
+	return /** @type {LocalizedString} */ (`View client PII`)
 };
 
 const es_permission_view_client_pii = /** @type {(inputs: Permission_View_Client_PiiInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ver datos de contacto completos`)
+	return /** @type {LocalizedString} */ (`Ver datos personales del cliente`)
 };
 
 /**
 * | output |
 * | --- |
-* | "See full contact details" |
+* | "View client PII" |
 *
 * @param {Permission_View_Client_PiiInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

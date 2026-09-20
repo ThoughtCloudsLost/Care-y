@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Set up a client's secure portal" |
+* | "Manage portal channel" |
 *
 * @param {Permission_Manage_Portal_ChannelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Assign_CasesInputs */
 
 const en_permission_assign_cases = /** @type {(inputs: Permission_Assign_CasesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Assign cases to other people`)
+	return /** @type {LocalizedString} */ (`Assign cases`)
 };
 
 const es_permission_assign_cases = /** @type {(inputs: Permission_Assign_CasesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Asignar casos a otras personas`)
+	return /** @type {LocalizedString} */ (`Asignar casos`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Assign cases to other people" |
+* | "Assign cases" |
 *
 * @param {Permission_Assign_CasesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -21,8 +21,11 @@ import {
   mockReq,
   mockRes,
   expectTrpcError,
+  createMemoryBlobStore,
+  createMockJobQueue,
   type TestDb,
 } from "../test-utils.js";
+import { purgeClient } from "../jobs/pii-retention.js";
 import { RoleId, type RoleIdValue } from "@care-y/shared";
 import type {
   SessionId,
@@ -122,6 +125,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // Dependency wiring
     // -----------------------------------------------------------------------
 
+    const blobStore = createMemoryBlobStore();
+    const { jobQueue } = createMockJobQueue();
+
     function buildClientDeps(): ClientRouterDeps {
       return {
         createClientSvc: (db, orgId) =>
@@ -153,6 +159,27 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
         createDismissalSvc: (db) => createDismissalService(db),
         createMergeScanSvc: (db) => createMergeScanService(db),
+        async purgeClientAndAudit(db, clientId, orgId, actorId) {
+          const result = await db
+            .transaction()
+            .execute(async (trx) =>
+              purgeClient(trx, clientId, blobStore, jobQueue, orgId),
+            );
+          const auditSvc = createAuditService(db);
+          void auditSvc.log({
+            eventType: "client_deleted",
+            actorId,
+            metadata: {
+              ticketsPurged: result.ticketsPurged,
+              blobsDeleted: result.blobsDeleted,
+              logDeletionsEnqueued: result.logDeletionsEnqueued,
+            },
+          });
+          return {
+            ticketsPurged: result.ticketsPurged,
+            blobsDeleted: result.blobsDeleted,
+          };
+        },
       };
     }
 
@@ -1595,6 +1622,116 @@ describe.skipIf(!process.env.DATABASE_URL)(
           clientId: fixture.clientId,
         });
         expect(after.shared).toBe(true);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.deleteClient
+    // -----------------------------------------------------------------------
+
+    describe("deleteClient", () => {
+      it("rejects volunteer (no DELETE_CLIENTS permission)", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const volunteer = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+        const caller = createAuthedCaller(volunteer);
+
+        await expectTrpcError(
+          caller.clients.deleteClient({ clientId: fixture.clientId }),
+          "FORBIDDEN",
+        );
+      });
+
+      it("allows manager (DELETE_CLIENTS is manager-default)", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        const result = await caller.clients.deleteClient({
+          clientId: fixture.clientId,
+        });
+        expect(result.ticketsPurged).toBe(0);
+      });
+
+      it("deletes a client with no tickets and returns zero counts", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        const result = await caller.clients.deleteClient({
+          clientId: fixture.clientId,
+        });
+
+        expect(result.ticketsPurged).toBe(0);
+        expect(result.blobsDeleted).toBe(0);
+
+        // Verify client no longer exists
+        await expectTrpcError(
+          caller.clients.get({ clientId: fixture.clientId }),
+          "NOT_FOUND",
+        );
+      });
+
+      it("deletes a client and cascades through their tickets", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+
+        // Create a ticket for the client so the cascade has something to purge.
+        // care-y-ignore-next-line no-plaintext-db-write -- test fixture: encrypted_title is test ciphertext
+        await tenantDb
+          .insertInto("tickets")
+          .values({
+            client_id: fixture.clientId,
+            queue_id: fixture.queueId,
+            encrypted_title: testSealedBox.sealBuffer(
+              Buffer.from("test ticket"),
+            ),
+            encrypted_description: testSealedBox.sealBuffer(Buffer.from("")),
+            key_generation: crypto.randomUUID() as KeyGeneration,
+          })
+          .execute();
+
+        const caller = createAuthedCaller(admin);
+        const result = await caller.clients.deleteClient({
+          clientId: fixture.clientId,
+        });
+
+        expect(result.ticketsPurged).toBe(1);
+
+        // Verify client is gone
+        await expectTrpcError(
+          caller.clients.get({ clientId: fixture.clientId }),
+          "NOT_FOUND",
+        );
+
+        // Verify no tickets remain for this client
+        const remainingTickets = await tenantDb
+          .selectFrom("tickets")
+          .select("id")
+          .where("client_id", "=", fixture.clientId)
+          .execute();
+        expect(remainingTickets).toHaveLength(0);
+      });
+
+      it("throws NOT_FOUND for non-existent client", async () => {
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        await expectTrpcError(
+          caller.clients.deleteClient({
+            clientId: "00000000-0000-0000-0000-000000000000" as ClientId,
+          }),
+          "NOT_FOUND",
+        );
       });
     });
   },

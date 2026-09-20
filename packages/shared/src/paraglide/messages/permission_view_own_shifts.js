@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_View_Own_ShiftsInputs */
 
 const en_permission_view_own_shifts = /** @type {(inputs: Permission_View_Own_ShiftsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`See your own shifts`)
+	return /** @type {LocalizedString} */ (`View own shifts`)
 };
 
 const es_permission_view_own_shifts = /** @type {(inputs: Permission_View_Own_ShiftsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ver tus propios turnos`)
+	return /** @type {LocalizedString} */ (`Ver turnos propios`)
 };
 
 /**
 * | output |
 * | --- |
-* | "See your own shifts" |
+* | "View own shifts" |
 *
 * @param {Permission_View_Own_ShiftsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_RetentionInputs */
 
 const en_permission_manage_retention = /** @type {(inputs: Permission_Manage_RetentionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Set how long personal information is kept`)
+	return /** @type {LocalizedString} */ (`Manage retention`)
 };
 
 const es_permission_manage_retention = /** @type {(inputs: Permission_Manage_RetentionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Definir cuanto tiempo se conservan los datos personales`)
+	return /** @type {LocalizedString} */ (`Gestionar retención`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Set how long personal information is kept" |
+* | "Manage retention" |
 *
 * @param {Permission_Manage_RetentionInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

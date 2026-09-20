@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Delete articles" |
+* | "Delete knowledge base articles" |
 *
 * @param {Permission_Delete_Knowledge_Base_ArticlesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Delete_Others_NotesInputs */
 
 const en_permission_delete_others_notes = /** @type {(inputs: Permission_Delete_Others_NotesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Delete other people's notes`)
+	return /** @type {LocalizedString} */ (`Delete others' notes`)
 };
 
 const es_permission_delete_others_notes = /** @type {(inputs: Permission_Delete_Others_NotesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Eliminar notas de otras personas`)
+	return /** @type {LocalizedString} */ (`Eliminar notas de otros`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Delete other people's notes" |
+* | "Delete others' notes" |
 *
 * @param {Permission_Delete_Others_NotesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Handle held-back voicemail" |
+* | "Manage voicemail quarantine" |
 *
 * @param {Permission_Manage_Voicemail_QuarantineInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

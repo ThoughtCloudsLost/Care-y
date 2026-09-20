@@ -10,7 +10,7 @@ const en_demo_github_link_label = /** @type {(inputs: Demo_Github_Link_LabelInpu
 };
 
 const es_demo_github_link_label = /** @type {(inputs: Demo_Github_Link_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ver codigo fuente en GitHub`)
+	return /** @type {LocalizedString} */ (`Ver código fuente en GitHub`)
 };
 
 /**

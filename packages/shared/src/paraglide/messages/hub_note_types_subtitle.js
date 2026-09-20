@@ -10,7 +10,7 @@ const en_hub_note_types_subtitle = /** @type {(inputs: Hub_Note_Types_SubtitleIn
 };
 
 const es_hub_note_types_subtitle = /** @type {(inputs: Hub_Note_Types_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Categorias de notas, enrutamiento de escalamiento y tipos de eventos del sistema`)
+	return /** @type {LocalizedString} */ (`Categorías de notas, enrutamiento de escalamiento y tipos de eventos del sistema`)
 };
 
 /**

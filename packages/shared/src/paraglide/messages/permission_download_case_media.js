@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Download_Case_MediaInputs */
 
 const en_permission_download_case_media = /** @type {(inputs: Permission_Download_Case_MediaInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Download recordings and files`)
+	return /** @type {LocalizedString} */ (`Download case media`)
 };
 
 const es_permission_download_case_media = /** @type {(inputs: Permission_Download_Case_MediaInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Descargar grabaciones y archivos`)
+	return /** @type {LocalizedString} */ (`Descargar archivos del caso`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Download recordings and files" |
+* | "Download case media" |
 *
 * @param {Permission_Download_Case_MediaInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

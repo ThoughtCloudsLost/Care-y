@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_EscalationInputs */
 
 const en_permission_manage_escalation = /** @type {(inputs: Permission_Manage_EscalationInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Set up escalation rules`)
+	return /** @type {LocalizedString} */ (`Manage escalation`)
 };
 
 const es_permission_manage_escalation = /** @type {(inputs: Permission_Manage_EscalationInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configurar reglas de escalamiento`)
+	return /** @type {LocalizedString} */ (`Gestionar escalamiento`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Set up escalation rules" |
+* | "Manage escalation" |
 *
 * @param {Permission_Manage_EscalationInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

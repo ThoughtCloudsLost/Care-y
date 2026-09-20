@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Delete other people's notes" |
+* | "Delete others' notes" |
 *
 * @param {Permission_Delete_Others_NotesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

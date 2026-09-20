@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Send emails to clients" |
+* | "Send client email" |
 *
 * @param {Permission_Send_Client_EmailInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

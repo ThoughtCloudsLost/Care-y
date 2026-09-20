@@ -10,7 +10,7 @@ const en_admin_note_types_description = /** @type {(inputs: Admin_Note_Types_Des
 };
 
 const es_admin_note_types_description = /** @type {(inputs: Admin_Note_Types_DescriptionInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Categorias para notas de seguimiento en ${i?.tickets}. Cada tipo puede requerir escalamiento, restringir visibilidad por rol o ser obligatorio al cerrar un ${i?.ticket}.`)
+	return /** @type {LocalizedString} */ (`Categorías para notas de seguimiento en ${i?.tickets}. Cada tipo puede requerir escalamiento, restringir visibilidad por rol o ser obligatorio al cerrar un ${i?.ticket}.`)
 };
 
 /**

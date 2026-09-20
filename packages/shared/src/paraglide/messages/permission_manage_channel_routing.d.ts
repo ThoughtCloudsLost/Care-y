@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Decide where incoming contacts land" |
+* | "Manage channel routing" |
 *
 * @param {Permission_Manage_Channel_RoutingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -10,7 +10,7 @@ const en_permission_view_intake_responses_hint = /** @type {(inputs: Permission_
 };
 
 const es_permission_view_intake_responses_hint = /** @type {(inputs: Permission_View_Intake_Responses_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Al otorgar este permiso se decide quien recibe las claves de descifrado cuando se envia un formulario. Revocarlo despues no retira las claves ya entregadas.`)
+	return /** @type {LocalizedString} */ (`Al otorgar este permiso se decide quién recibe las claves de descifrado cuando se envía un formulario. Revocarlo después no retira las claves ya entregadas.`)
 };
 
 /**

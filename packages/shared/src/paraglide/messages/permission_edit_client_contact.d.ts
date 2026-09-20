@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Change contact details for any client" |
+* | "Edit client contact" |
 *
 * @param {Permission_Edit_Client_ContactInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

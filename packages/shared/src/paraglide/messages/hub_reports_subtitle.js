@@ -10,7 +10,7 @@ const en_hub_reports_subtitle = /** @type {(inputs: Hub_Reports_SubtitleInputs) 
 };
 
 const es_hub_reports_subtitle = /** @type {(inputs: Hub_Reports_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Estadisticas de uso e informes de actividad`)
+	return /** @type {LocalizedString} */ (`Estadísticas de uso e informes de actividad`)
 };
 
 /**

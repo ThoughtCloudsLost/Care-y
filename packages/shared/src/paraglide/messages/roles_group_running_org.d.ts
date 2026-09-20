@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Running the organisation" |
+* | "Running the organization" |
 *
 * @param {Roles_Group_Running_OrgInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

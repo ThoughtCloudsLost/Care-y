@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Read intake submissions from every queue" |
+* | "View intake responses" |
 *
 * @param {Permission_View_Intake_ResponsesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "See full contact details" |
+* | "View client PII" |
 *
 * @param {Permission_View_Client_PiiInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

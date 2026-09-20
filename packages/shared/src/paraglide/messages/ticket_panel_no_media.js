@@ -10,7 +10,7 @@ const en_ticket_panel_no_media = /** @type {(inputs: Ticket_Panel_No_MediaInputs
 };
 
 const es_ticket_panel_no_media = /** @type {(inputs: Ticket_Panel_No_MediaInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sin adjuntos todavia.`)
+	return /** @type {LocalizedString} */ (`Sin adjuntos todavía.`)
 };
 
 /**

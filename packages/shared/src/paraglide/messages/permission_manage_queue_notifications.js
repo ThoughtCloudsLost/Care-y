@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_Queue_NotificationsInputs */
 
 const en_permission_manage_queue_notifications = /** @type {(inputs: Permission_Manage_Queue_NotificationsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Set who is notified about a queue`)
+	return /** @type {LocalizedString} */ (`Manage queue notifications`)
 };
 
 const es_permission_manage_queue_notifications = /** @type {(inputs: Permission_Manage_Queue_NotificationsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Definir quien recibe notificaciones de una cola`)
+	return /** @type {LocalizedString} */ (`Gestionar notificaciones de colas`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Set who is notified about a queue" |
+* | "Manage queue notifications" |
 *
 * @param {Permission_Manage_Queue_NotificationsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

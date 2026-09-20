@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Record what callers hear" |
+* | "Write call greetings" |
 *
 * @param {Permission_Write_Call_GreetingsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

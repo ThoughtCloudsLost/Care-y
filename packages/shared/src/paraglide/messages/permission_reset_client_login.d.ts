@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Reset a client's portal login" |
+* | "Reset client login" |
 *
 * @param {Permission_Reset_Client_LoginInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Write automatic text replies" |
+* | "Write automatic replies" |
 *
 * @param {Permission_Write_Automatic_RepliesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

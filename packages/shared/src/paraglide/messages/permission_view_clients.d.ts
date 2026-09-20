@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "View client records" |
+* | "View clients" |
 *
 * @param {Permission_View_ClientsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

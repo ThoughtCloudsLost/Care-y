@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Rename a client" |
+* | "Edit client alias" |
 *
 * @param {Permission_Edit_Client_AliasInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -10,7 +10,7 @@ const en_vol_queues_empty = /** @type {(inputs: Vol_Queues_EmptyInputs) => Local
 };
 
 const es_vol_queues_empty = /** @type {(inputs: Vol_Queues_EmptyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No tienes colas asignadas todavia.`)
+	return /** @type {LocalizedString} */ (`No tienes colas asignadas todavía.`)
 };
 
 /**

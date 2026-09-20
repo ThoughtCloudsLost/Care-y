@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_col_access = /** @type {(inputs: Onboardin
 };
 
 const es_onboarding_briefing_practice_col_access = /** @type {(inputs: Onboarding_Briefing_Practice_Col_AccessInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Quien puede leerlo`)
+	return /** @type {LocalizedString} */ (`Quién puede leerlo`)
 };
 
 /**

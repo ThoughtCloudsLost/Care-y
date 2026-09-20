@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_View_Audit_LogInputs */
 
 const en_permission_view_audit_log = /** @type {(inputs: Permission_View_Audit_LogInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Read the audit log`)
+	return /** @type {LocalizedString} */ (`View audit log`)
 };
 
 const es_permission_view_audit_log = /** @type {(inputs: Permission_View_Audit_LogInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Leer el registro de auditoria`)
+	return /** @type {LocalizedString} */ (`Ver registro de auditoría`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Read the audit log" |
+* | "View audit log" |
 *
 * @param {Permission_View_Audit_LogInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

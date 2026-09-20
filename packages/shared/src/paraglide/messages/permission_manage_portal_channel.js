@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_Portal_ChannelInputs */
 
 const en_permission_manage_portal_channel = /** @type {(inputs: Permission_Manage_Portal_ChannelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Set up a client's secure portal`)
+	return /** @type {LocalizedString} */ (`Manage portal channel`)
 };
 
 const es_permission_manage_portal_channel = /** @type {(inputs: Permission_Manage_Portal_ChannelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configurar el portal seguro de un cliente`)
+	return /** @type {LocalizedString} */ (`Gestionar canal del portal`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Set up a client's secure portal" |
+* | "Manage portal channel" |
 *
 * @param {Permission_Manage_Portal_ChannelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

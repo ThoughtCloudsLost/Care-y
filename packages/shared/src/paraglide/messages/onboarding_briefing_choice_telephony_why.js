@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_telephony_why = /** @type {(inputs: Onboardi
 };
 
 const es_onboarding_briefing_choice_telephony_why = /** @type {(inputs: Onboarding_Briefing_Choice_Telephony_WhyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Si alguien accede a los registros de tu proveedor telefónico, podria ver quien llamo a quien, cuando y por cuánto tiempo. Un proveedor gestionado guarda estos registros. Una configuración auto-alojada los mantiene en tus propios servidores.`)
+	return /** @type {LocalizedString} */ (`Si alguien accede a los registros de tu proveedor telefónico, podría ver quién llamó a quién, cuándo y por cuánto tiempo. Un proveedor gestionado guarda estos registros. Una configuración auto-alojada los mantiene en tus propios servidores.`)
 };
 
 /**

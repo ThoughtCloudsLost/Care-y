@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Manage saved replies" |
+* | "Manage presets" |
 *
 * @param {Permission_Manage_PresetsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

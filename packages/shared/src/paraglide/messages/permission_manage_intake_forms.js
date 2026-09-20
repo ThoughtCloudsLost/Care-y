@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_Intake_FormsInputs */
 
 const en_permission_manage_intake_forms = /** @type {(inputs: Permission_Manage_Intake_FormsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Build public intake forms`)
+	return /** @type {LocalizedString} */ (`Manage intake forms`)
 };
 
 const es_permission_manage_intake_forms = /** @type {(inputs: Permission_Manage_Intake_FormsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Crear formularios de ingreso publicos`)
+	return /** @type {LocalizedString} */ (`Gestionar formularios de ingreso`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Build public intake forms" |
+* | "Manage intake forms" |
 *
 * @param {Permission_Manage_Intake_FormsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

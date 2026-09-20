@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Link cases together" |
+* | "Link cases" |
 *
 * @param {Permission_Link_CasesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

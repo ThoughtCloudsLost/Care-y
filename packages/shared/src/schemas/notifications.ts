@@ -142,6 +142,7 @@ export const auditEventTypeSchema = z.enum([
   "org_key_reseal",
   "org_key_reindex",
   "pii_retention_purge",
+  "client_deleted",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 

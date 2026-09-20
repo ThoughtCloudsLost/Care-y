@@ -159,6 +159,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   hub_call_log_subtitle: () => "Browse call and voicemail history",
   panel_audit_log: () => "Audit Log",
   hub_audit_log_subtitle: () => "Review system activity and change history",
+  panel_presets: () => "Saved Replies",
+  hub_presets_subtitle: () => "Reusable reply templates for composing messages",
 }));
 
 vi.mock(
@@ -208,6 +210,7 @@ beforeEach(() => {
     Permission.MANAGE_VOICEMAIL_QUARANTINE,
     Permission.VIEW_AUDIT_LOG,
     Permission.VIEW_REPORTS,
+    Permission.MANAGE_PRESETS,
   );
   mockHubStatusData = undefined;
   mockProvisionedPhones = undefined;
@@ -282,6 +285,17 @@ describe("Admin hub page", () => {
       setPermissions(Permission.MANAGE_QUEUES);
       renderPage();
 
+      expect(mockGoto).not.toHaveBeenCalled();
+    });
+
+    it("shows Saved Replies tile when user has MANAGE_PRESETS", () => {
+      setPermissions(Permission.MANAGE_PRESETS);
+      renderPage();
+
+      expect(screen.getByText("Saved Replies")).toBeTruthy();
+      expect(
+        screen.getByText("Reusable reply templates for composing messages"),
+      ).toBeTruthy();
       expect(mockGoto).not.toHaveBeenCalled();
     });
   });

@@ -10,7 +10,7 @@ const en_intake_privacy_who_title = /** @type {(inputs: Intake_Privacy_Who_Title
 };
 
 const es_intake_privacy_who_title = /** @type {(inputs: Intake_Privacy_Who_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Quien recopila tus datos`)
+	return /** @type {LocalizedString} */ (`Quién recopila tus datos`)
 };
 
 /**

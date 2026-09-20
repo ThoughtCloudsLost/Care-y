@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Merge_ClientsInputs */
 
 const en_permission_merge_clients = /** @type {(inputs: Permission_Merge_ClientsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Merge duplicate client records`)
+	return /** @type {LocalizedString} */ (`Merge clients`)
 };
 
 const es_permission_merge_clients = /** @type {(inputs: Permission_Merge_ClientsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Fusionar registros de clientes duplicados`)
+	return /** @type {LocalizedString} */ (`Fusionar clientes`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Merge duplicate client records" |
+* | "Merge clients" |
 *
 * @param {Permission_Merge_ClientsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

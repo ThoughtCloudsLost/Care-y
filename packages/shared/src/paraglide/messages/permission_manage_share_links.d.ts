@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Create share links" |
+* | "Manage share links" |
 *
 * @param {Permission_Manage_Share_LinksInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

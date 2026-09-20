@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Send text messages to clients" |
+* | "Send client SMS" |
 *
 * @param {Permission_Send_Client_SmsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

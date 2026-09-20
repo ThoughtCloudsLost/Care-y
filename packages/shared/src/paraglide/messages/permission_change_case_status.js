@@ -10,7 +10,7 @@ const en_permission_change_case_status = /** @type {(inputs: Permission_Change_C
 };
 
 const es_permission_change_case_status = /** @type {(inputs: Permission_Change_Case_StatusInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambiar el estado del caso`)
+	return /** @type {LocalizedString} */ (`Cambiar estado del caso`)
 };
 
 /**

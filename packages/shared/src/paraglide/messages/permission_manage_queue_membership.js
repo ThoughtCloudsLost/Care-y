@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_Queue_MembershipInputs */
 
 const en_permission_manage_queue_membership = /** @type {(inputs: Permission_Manage_Queue_MembershipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Add and remove queue members`)
+	return /** @type {LocalizedString} */ (`Manage queue membership`)
 };
 
 const es_permission_manage_queue_membership = /** @type {(inputs: Permission_Manage_Queue_MembershipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Agregar y quitar miembros de una cola`)
+	return /** @type {LocalizedString} */ (`Gestionar membresía de colas`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Add and remove queue members" |
+* | "Manage queue membership" |
 *
 * @param {Permission_Manage_Queue_MembershipInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

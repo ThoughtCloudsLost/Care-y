@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Open a new case" |
+* | "Open cases" |
 *
 * @param {Permission_Open_CasesInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

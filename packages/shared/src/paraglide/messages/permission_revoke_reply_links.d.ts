@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Revoke a reply link" |
+* | "Revoke reply links" |
 *
 * @param {Permission_Revoke_Reply_LinksInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
