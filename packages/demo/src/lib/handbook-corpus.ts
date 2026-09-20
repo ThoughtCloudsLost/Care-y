@@ -14,6 +14,7 @@ import { resolveStoryMessage } from "./story-messages.js";
 import {
   hasFlowMarkup,
   parseFlowMarkup,
+  extractTags,
   unitText,
   type MarkupUnit,
 } from "./flow-markup.js";
@@ -30,6 +31,8 @@ export interface CorpusEntry {
   readonly label: string | null;
   readonly plainText: string;
   readonly units: readonly MarkupUnit[];
+  /** Invisible search tags extracted from `[[#tag]]` blocks. */
+  readonly tags: readonly string[];
   /** True when this entry comes from ENTRY_SECTION (shares "login" id). */
   readonly isEntry: boolean;
 }
@@ -110,8 +113,12 @@ function addKeyEntries(
   resolved: string,
   isEntry: boolean,
 ): void {
-  if (hasFlowMarkup(resolved)) {
-    const units = parseFlowMarkup(resolved);
+  // Strip search tags before parsing markup. Tags accumulate across
+  // all units of a key into one array per CorpusEntry.
+  const { cleaned, tags: keyTags } = extractTags(resolved);
+
+  if (hasFlowMarkup(cleaned)) {
+    const units = parseFlowMarkup(cleaned);
     for (let i = 0; i < units.length; i++) {
       const unit = units.at(i);
       if (unit === undefined) continue;
@@ -124,6 +131,7 @@ function addKeyEntries(
         label,
         plainText,
         units: [unit],
+        tags: keyTags,
         isEntry,
       });
     }
@@ -132,7 +140,7 @@ function addKeyEntries(
     const singleUnit: MarkupUnit = {
       kind: "paragraph",
       marker: null,
-      runs: [{ text: resolved, bold: false }],
+      runs: [{ text: cleaned, bold: false }],
     };
     out.push({
       sectionId,
@@ -140,8 +148,9 @@ function addKeyEntries(
       key,
       lineIdx: 0,
       label: null,
-      plainText: resolved,
+      plainText: cleaned,
       units: [singleUnit],
+      tags: keyTags,
       isEntry,
     });
   }

@@ -7,7 +7,7 @@
  */
 
 import type { SectionId } from "./scroll-sections.js";
-import type { MarkupRun } from "./flow-markup.js";
+import type { MarkupRun, MarkupLink } from "./flow-markup.js";
 
 // -----------------------------------------------------------------------
 // Public types
@@ -88,6 +88,8 @@ export interface FlowLineFragment {
   readonly bold: boolean;
   readonly dx: number;
   readonly width: number;
+  /** Hash-fragment link target, when this fragment is an entry link. */
+  readonly link?: MarkupLink;
 }
 
 export interface FlowLine {

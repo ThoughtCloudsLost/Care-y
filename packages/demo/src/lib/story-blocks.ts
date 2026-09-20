@@ -14,7 +14,7 @@ import { resolveStoryMessage } from "./story-messages.js";
 import {
   hasFlowMarkup,
   parseFlowMarkup,
-  unitHasBold,
+  unitHasRichContent,
   unitText,
 } from "./flow-markup.js";
 import { hasClip, getClip } from "./clip-registry.js";
@@ -199,7 +199,7 @@ export function buildBlocks(sects: Section[], loc: string): FlowBlock[] {
             subSlug: sub.slug,
             kind: "sub-body",
             text: unitText(unit),
-            runs: unitHasBold(unit) ? unit.runs : undefined,
+            runs: unitHasRichContent(unit) ? unit.runs : undefined,
             indent: isListItem ? LIST_INDENT : undefined,
             marker: unit.marker ?? undefined,
             spaceBefore:

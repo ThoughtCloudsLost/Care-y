@@ -1,6 +1,6 @@
 /**
- * Full-text handbook search. Normalizes the corpus, builds the index,
- * and runs ranked entry-level search across the demo handbook.
+ * Full-text handbook search. Covers normalization, index construction,
+ * and ranked entry-level search across the demo handbook corpus.
  *
  * Results are whole sub-entries (heading + body), not line fragments:
  * the search surface renders matches exactly as the handbook renders
@@ -20,12 +20,14 @@ import type { SectionId } from "./bridge.js";
 // -----------------------------------------------------------------------
 
 /** One matched sub-entry. The entry appears once no matter how many of
- *  its lines matched; `labels` lists the seam labels it carries. */
+ *  its lines matched; `labels` lists the seam labels it carries and
+ *  `tags` lists the invisible search tags from `[[#tag]]` blocks. */
 export interface EntryHit {
   readonly sectionId: SectionId;
   readonly subSlug: string;
   readonly score: number;
   readonly labels: readonly string[];
+  readonly tags: readonly string[];
 }
 
 // -----------------------------------------------------------------------
@@ -52,6 +54,8 @@ interface IndexEntry {
   readonly headingNorm: string;
   readonly labelNorm: string;
   readonly bodyNorm: string;
+  /** Joined normalized tags, space-separated, for text scoring. */
+  readonly tagsNorm: string;
   /** Taxonomy order: lower = earlier in the handbook. */
   readonly order: number;
 }
@@ -101,6 +105,7 @@ export function buildSearchIndex(locale: string): readonly IndexEntry[] {
       headingNorm: normalize(heading),
       labelNorm: normalize(c.label ?? ""),
       bodyNorm: normalize(c.plainText),
+      tagsNorm: normalize(c.tags.join(" ")),
       order,
     });
   }
@@ -121,6 +126,7 @@ export function invalidateSearchIndex(): void {
 /** Score weights per field where a token matches. */
 const HEADING_WEIGHT = 3;
 const LABEL_WEIGHT = 2;
+const TAG_WEIGHT = 2;
 const BODY_WEIGHT = 1;
 
 const DEFAULT_LIMIT = 20;
@@ -131,6 +137,9 @@ export interface SearchOptions {
   /** When provided, only entries carrying one of these seam labels on
    *  at least one line are included. */
   readonly labels?: readonly string[];
+  /** When provided, only entries carrying at least one of these tags
+   *  are included. Works identically to label filtering. */
+  readonly tags?: readonly string[];
 }
 
 /** Aggregation bucket for one sub-entry while scoring. */
@@ -139,6 +148,7 @@ interface EntryBucket {
   readonly subSlug: string;
   readonly lines: IndexEntry[];
   readonly labels: string[];
+  readonly tags: string[];
   order: number;
 }
 
@@ -164,6 +174,7 @@ export function searchEntries(
 ): readonly EntryHit[] {
   const limit = options?.limit ?? DEFAULT_LIMIT;
   const labelFilter = options?.labels ?? null;
+  const tagFilter = options?.tags ?? null;
 
   const trimmed = query.trim();
   const tokens =
@@ -173,8 +184,10 @@ export function searchEntries(
           .filter((t) => t.length > 0)
       : [];
 
-  // No query and no label filter means no results.
-  if (tokens.length === 0 && labelFilter === null) return [];
+  // No query and no filter means no results.
+  if (tokens.length === 0 && labelFilter === null && tagFilter === null) {
+    return [];
+  }
 
   // Group the line index into per-sub buckets, taxonomy order.
   const index = buildSearchIndex(locale);
@@ -190,6 +203,7 @@ export function searchEntries(
         subSlug: line.corpus.subSlug,
         lines: [],
         labels: [],
+        tags: [],
         order: line.order,
       };
       buckets.set(key, bucket);
@@ -201,6 +215,11 @@ export function searchEntries(
     ) {
       bucket.labels.push(line.corpus.label);
     }
+    for (const tag of line.corpus.tags) {
+      if (!bucket.tags.includes(tag)) {
+        bucket.tags.push(tag);
+      }
+    }
   }
 
   const scored: { bucket: EntryBucket; score: number }[] = [];
@@ -208,6 +227,10 @@ export function searchEntries(
   for (const bucket of buckets.values()) {
     if (labelFilter !== null) {
       const carries = bucket.labels.some((l) => labelFilter.includes(l));
+      if (!carries) continue;
+    }
+    if (tagFilter !== null) {
+      const carries = bucket.tags.some((t) => tagFilter.includes(t));
       if (!carries) continue;
     }
 
@@ -219,7 +242,7 @@ export function searchEntries(
     let allMatch = true;
     let score = 0;
     // The heading is shared by every line of the bucket, so it scores
-    // once per token; labels and body lines score per occurrence line.
+    // once per token; labels, tags, and body lines score per occurrence.
     const headingNorm = bucket.lines[0]?.headingNorm ?? "";
     for (const token of tokens) {
       let tokenFound = false;
@@ -230,6 +253,10 @@ export function searchEntries(
       for (const line of bucket.lines) {
         if (line.labelNorm.includes(token)) {
           score += LABEL_WEIGHT;
+          tokenFound = true;
+        }
+        if (line.tagsNorm.includes(token)) {
+          score += TAG_WEIGHT;
           tokenFound = true;
         }
         if (line.bodyNorm.includes(token)) {
@@ -255,5 +282,6 @@ export function searchEntries(
     subSlug: bucket.subSlug,
     score,
     labels: bucket.labels,
+    tags: bucket.tags,
   }));
 }

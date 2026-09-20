@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   buildSearchResultsSection,
   buildAggregationSection,
-  distinctHitLabels,
+  distinctHitFacets,
 } from "./excursion-sections.js";
 import { searchEntries, invalidateSearchIndex } from "./handbook-search.js";
 import { invalidateCorpusCache } from "./handbook-corpus.js";
@@ -74,16 +74,26 @@ describe("buildAggregationSection", () => {
   });
 });
 
-describe("distinctHitLabels", () => {
+describe("distinctHitFacets", () => {
   it("returns first-seen distinct labels across hits", () => {
     const hits = searchEntries("", LOCALE, {
       labels: ["Encryption.", "Privacy."],
       limit: 100,
     });
-    const labels = distinctHitLabels(hits);
+    const labels = distinctHitFacets(hits);
     expect(new Set(labels).size).toBe(labels.length);
     expect(labels.includes("Encryption.") || labels.includes("Privacy.")).toBe(
       true,
     );
+  });
+
+  it("returns deduped facets containing carried labels", () => {
+    const hits = searchEntries("", LOCALE, {
+      labels: ["Encryption."],
+      limit: 100,
+    });
+    const facets = distinctHitFacets(hits);
+    expect(new Set(facets).size).toBe(facets.length);
+    expect(facets).toContain("Encryption.");
   });
 });

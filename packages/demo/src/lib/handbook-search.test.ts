@@ -148,4 +148,33 @@ describe("searchEntries", () => {
     // The EN cache was not clobbered by the ES build.
     expect(searchEntries("encryption", EN).length).toBe(en.length);
   });
+
+  it("every hit carries a tags array", () => {
+    const hits = searchEntries("encryption", EN);
+    for (const hit of hits) {
+      expect(Array.isArray(hit.tags)).toBe(true);
+    }
+  });
+
+  it("empty query with tags filter returns matching entries", () => {
+    // No entries carry tags yet (no tags in the corpus source), so
+    // this should return empty. The filter path is exercised: if tags
+    // were present, only entries carrying at least one would survive.
+    const hits = searchEntries("", EN, {
+      tags: ["nonexistent-tag"],
+      limit: 100,
+    });
+    expect(hits).toEqual([]);
+  });
+
+  it("mixed label+tag filter narrows to entries carrying both", () => {
+    // With tags: ["nonexistent-tag"], no entry can pass, even if it
+    // carries the label.
+    const hits = searchEntries("", EN, {
+      labels: ["Encryption."],
+      tags: ["nonexistent-tag"],
+      limit: 100,
+    });
+    expect(hits).toEqual([]);
+  });
 });

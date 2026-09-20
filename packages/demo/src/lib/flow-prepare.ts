@@ -54,6 +54,8 @@ export interface RichHandle {
   readonly handle: PreparedRichInline;
   /** Bold flag per rich-inline item, indexed by fragment itemIndex. */
   readonly bold: readonly boolean[];
+  /** Link target per rich-inline item, indexed by fragment itemIndex. */
+  readonly links: readonly ({ readonly target: string } | undefined)[];
 }
 
 export type BlockHandle = PlainHandle | RichHandle;
@@ -123,6 +125,9 @@ export function prepareBlockHandles(
           })),
         ),
         bold: block.runs.map((r) => r.bold),
+        links: block.runs.map((r) =>
+          r.link !== undefined ? { target: r.link.target } : undefined,
+        ),
       });
     } else {
       handles.set(i, {
@@ -174,11 +179,13 @@ export function fillRichLine(
   let text = "";
   for (const frag of line.fragments) {
     dx += frag.gapBefore;
+    const linkEntry = entry.links.at(frag.itemIndex);
     fragments.push({
       text: frag.text,
       bold: entry.bold.at(frag.itemIndex) ?? false,
       dx,
       width: frag.occupiedWidth,
+      ...(linkEntry !== undefined ? { link: linkEntry } : {}),
     });
     dx += frag.occupiedWidth;
     text += frag.text;
