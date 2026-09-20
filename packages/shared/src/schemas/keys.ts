@@ -128,6 +128,7 @@ export const RESEAL_TABLE_NAMES = [
   "intake_forms",
   "intake_form_fields",
   "client_merge_events",
+  "saved_filters",
 ] as const;
 
 export type ResealTableName = (typeof RESEAL_TABLE_NAMES)[number];

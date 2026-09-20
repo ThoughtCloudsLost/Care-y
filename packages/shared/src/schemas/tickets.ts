@@ -28,6 +28,7 @@ import {
   recordingIdSchema,
   keyGenerationSchema,
   presetReplyIdSchema,
+  savedFilterIdSchema,
   clientMergeEventIdSchema,
   channelSecretSchema,
 } from "../ids.js";
@@ -484,6 +485,27 @@ export const savedFilterRecordSchema = z.object({
   createdAt: z.iso.datetime(),
 });
 export type SavedFilterRecord = z.infer<typeof savedFilterRecordSchema>;
+
+// ---------------------------------------------------------------------------
+// Shared saved filters (server-stored, org-key-sealed)
+// ---------------------------------------------------------------------------
+
+/** Input for sharing a saved filter (creating a server-side record). */
+export const shareSavedFilterInputSchema = z.object({
+  encryptedName: base64String("encryptedName"),
+  encryptedState: base64String("encryptedState"),
+  color: savedFilterColorSchema,
+  icon: z.string().min(1).max(50),
+});
+export type ShareSavedFilterInput = z.infer<typeof shareSavedFilterInputSchema>;
+
+/** Input for unsharing (deleting) a saved filter. */
+export const unshareSavedFilterInputSchema = z.object({
+  filterId: savedFilterIdSchema,
+});
+export type UnshareSavedFilterInput = z.infer<
+  typeof unshareSavedFilterInputSchema
+>;
 
 export const ticketActionSchema = z.enum([
   "call",

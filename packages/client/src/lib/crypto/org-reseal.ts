@@ -71,6 +71,7 @@ export const TRAILING_TIER_TABLES: readonly ResealTableName[] = [
   "org_config",
   "merge_candidate_dismissals",
   "client_merge_events",
+  "saved_filters",
 ] as const;
 
 // ── Progress callback ──────────────────────────────────────────────

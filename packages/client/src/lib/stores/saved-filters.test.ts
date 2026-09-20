@@ -1,6 +1,32 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+import type * as TrpcNS from "$lib/trpc/index.js";
+
+// Mock trpc before importing the store.
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
+  trpc: {
+    savedFilters: {
+      list: { query: vi.fn().mockResolvedValue({ filters: [] }) },
+      share: {
+        mutate: vi.fn().mockResolvedValue({
+          filter: {
+            id: "server-id-1",
+            ownerId: "user-1",
+            encryptedName: "c2VydmVyLW5hbWU=",
+            encryptedState: "c2VydmVyLXN0YXRl",
+            color: "blue",
+            icon: "tag",
+            createdAt: new Date().toISOString(),
+          },
+        }),
+      },
+      unshare: { mutate: vi.fn().mockResolvedValue({ success: true }) },
+    },
+  },
+}));
+
 describe("savedFilterStore", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -64,8 +90,8 @@ describe("savedFilterStore", () => {
     });
   });
 
-  describe("remove", () => {
-    it("removes a saved filter by ID", async () => {
+  describe("remove (local)", () => {
+    it("removes a local filter by ID", async () => {
       const store = await getStore();
       const record = makeSavedFilter();
       store.add(record);
@@ -87,16 +113,16 @@ describe("savedFilterStore", () => {
     });
   });
 
-  describe("toggleShare", () => {
-    it("toggles the shared flag", async () => {
+  describe("toggleShare without context", () => {
+    it("is a no-op when setContext has not been called", async () => {
       const store = await getStore();
       const record = makeSavedFilter({ shared: false });
       store.add(record);
 
+      // No setContext call, so toggleShare cannot reach the server.
       store.toggleShare(record.id);
-      expect(store.filters[0]?.shared).toBe(true);
 
-      store.toggleShare(record.id);
+      // Filter stays local and unchanged.
       expect(store.filters[0]?.shared).toBe(false);
     });
   });
@@ -147,7 +173,7 @@ describe("savedFilterStore", () => {
       const record = makeSavedFilter({
         color: "purple" as const,
         icon: "shield",
-        shared: true,
+        shared: false,
       });
 
       // Save via one store instance.
@@ -163,12 +189,63 @@ describe("savedFilterStore", () => {
       expect(loaded.encryptedName).toBe(record.encryptedName);
       expect(loaded.color).toBe("purple");
       expect(loaded.icon).toBe("shield");
-      expect(loaded.shared).toBe(true);
+      expect(loaded.shared).toBe(false);
 
       // Filter state roundtrips.
       const state = JSON.parse(loaded.state) as Record<string, unknown>;
       expect(state.statuses).toEqual(["new", "active"]);
       expect(state.sortField).toBe("date");
+    });
+  });
+
+  describe("merge", () => {
+    it("merges local and shared filters into one list", async () => {
+      const store = await getStore();
+      const localRecord = makeSavedFilter({ id: "local-1" });
+      store.add(localRecord);
+
+      // Simulate loadShared populating shared filters.
+      // We mock the trpc call and provide a decryptText-capable org key manager.
+      const mockOrgKeyMgr = {
+        isLoaded: true,
+        decryptText: vi.fn().mockResolvedValue(
+          JSON.stringify({
+            statuses: ["closed"],
+            queueIds: [],
+            priorities: [],
+            assigneeId: null,
+            dateFrom: null,
+            dateTo: null,
+            sortField: "date",
+            sortDirection: "asc",
+          }),
+        ),
+        encryptText: vi.fn(),
+      };
+
+      // Mock the list query to return one shared filter.
+      const { trpc } = await import("$lib/trpc/index.js");
+      vi.mocked(trpc.savedFilters!.list.query).mockResolvedValueOnce({
+        filters: [
+          {
+            id: "server-1",
+            ownerId: "user-2",
+            encryptedName: "c2hhcmVk",
+            encryptedState: "c2hhcmVk",
+            color: "red",
+            icon: "star",
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- test mock, not production code
+      await store.loadShared(mockOrgKeyMgr as never);
+
+      expect(store.count).toBe(2);
+      expect(store.filters[0]?.id).toBe("local-1");
+      expect(store.filters[1]?.id).toBe("server-1");
+      expect(store.filters[1]?.shared).toBe(true);
     });
   });
 });

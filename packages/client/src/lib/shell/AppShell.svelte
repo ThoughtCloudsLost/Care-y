@@ -987,6 +987,21 @@
     void kbSavedFilterStore.resealNames(bridge);
   });
 
+  // ── Shared saved-filter fetch (all users with VIEW_CASES) ──────────
+  let _sharedFiltersLoaded = false;
+
+  $effect(() => {
+    if (!browser || _orgKeyMgr == null) return;
+    if (!_orgKeyMgr.isLoaded) return;
+    if (_sharedFiltersLoaded) return;
+    _sharedFiltersLoaded = true;
+    const userId = getCurrentUserId()();
+    if (userId != null) {
+      savedFilterStore.setContext(userId, _orgKeyMgr);
+    }
+    void savedFilterStore.loadShared(_orgKeyMgr);
+  });
+
   // ── iOS arc indicator helpers ────────────────────────────────────────
 
   const ARC_R = 11; // SVG circle radius

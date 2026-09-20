@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ Tickets: NonNullable<unknown>, tickets: NonNullable<unknown> }} Admin_Retention_Inactive_DescriptionInputs */
 
 const en_admin_retention_inactive_description = /** @type {(inputs: Admin_Retention_Inactive_DescriptionInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Automatic deletion is off. ${i?.Tickets}, messages, and caller personal information are kept until manually deleted.`)
+	return /** @type {LocalizedString} */ (`Automatic deletion is off. ${i?.Tickets} and caller personal information are kept until manually deleted.`)
 };
 
 const es_admin_retention_inactive_description = /** @type {(inputs: Admin_Retention_Inactive_DescriptionInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`La eliminación automática está desactivada. Los ${i?.tickets}, mensajes e información personal de los llamantes se conservan hasta que se eliminen manualmente.`)
+	return /** @type {LocalizedString} */ (`La eliminación automática está desactivada. Los ${i?.tickets} y la información personal de los llamantes se conservan hasta que se eliminen manualmente.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Automatic deletion is off. {Tickets}, messages, and caller personal information are kept until manually deleted." |
+* | "Automatic deletion is off. {Tickets} and caller personal information are kept until manually deleted." |
 *
 * @param {Admin_Retention_Inactive_DescriptionInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

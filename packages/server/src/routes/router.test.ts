@@ -56,6 +56,7 @@ const DECLINABLE = [
   "intakeForms",
   "clientPortal",
   "dev",
+  "savedFilters",
 ];
 
 describe("createAppRouter mounting", () => {
@@ -87,10 +88,12 @@ describe("createAppRouter mounting", () => {
       ...baseDeps(),
       consultant: true,
       reports: true,
+      savedFilters: true,
     });
 
     expect(mounted).toContain("consultant");
     expect(mounted).toContain("reports");
+    expect(mounted).toContain("savedFilters");
   });
 
   it("exposes no dev surface when devDeps is declined", () => {

@@ -59,6 +59,7 @@ import {
   createClientPortalRouter,
   type ClientPortalRouterDeps,
 } from "./client-portal.js";
+import { createSavedFiltersRouter } from "./saved-filters.js";
 
 function healthCheck(): { status: "ok" } {
   return { status: "ok" };
@@ -96,6 +97,8 @@ export interface OptionalRouterDeps {
   readonly intakeFormDeps: IntakeFormRouterDeps | null;
   readonly clientPortalDeps: ClientPortalRouterDeps | null;
   readonly devDeps: DevRouterDeps | null;
+  /** Takes no deps, so a boolean is the only thing there is to state. */
+  readonly savedFilters: boolean;
   /**
    * The keys router always mounts; these deps only enable its reseal
    * fetch endpoints (OPS field decryption, blob store access). Null
@@ -179,5 +182,6 @@ export function createAppRouter(deps: RouterDeps) {
       ? { clientPortal: createClientPortalRouter(deps.clientPortalDeps) }
       : {}),
     ...(deps.devDeps !== null ? { dev: createDevRouter(deps.devDeps) } : {}),
+    ...(deps.savedFilters ? { savedFilters: createSavedFiltersRouter() } : {}),
   });
 }

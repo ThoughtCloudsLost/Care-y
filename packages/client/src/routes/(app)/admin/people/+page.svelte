@@ -342,6 +342,7 @@
     onapply: noop,
     ondelete: noop,
     ontoggleshare: noop,
+    currentUserId: null,
   };
 
   const queueFilterPillsConfig: FilterPillsConfig = $derived({
@@ -404,6 +405,7 @@
     onapply: noop,
     ondelete: noop,
     ontoggleshare: noop,
+    currentUserId: null,
   };
 
   // ── Client filter pill definitions ──
@@ -515,6 +517,7 @@
     onapply: noop,
     ondelete: noop,
     ontoggleshare: noop,
+    currentUserId: null,
   };
 
   function noop(): void {

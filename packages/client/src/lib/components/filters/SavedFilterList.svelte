@@ -19,9 +19,17 @@
     onapply: (record: SavedFilterRecord) => void;
     ondelete: (id: string) => void;
     ontoggleshare: (id: string) => void;
+    currentUserId: string | null;
   }
 
-  let { filters, count, onapply, ondelete, ontoggleshare }: Props = $props();
+  let {
+    filters,
+    count,
+    onapply,
+    ondelete,
+    ontoggleshare,
+    currentUserId,
+  }: Props = $props();
 
   const orgCache = getOrgDecryptCache();
 
@@ -87,6 +95,14 @@
       ? filters.find((f) => f.id === actionSheetFilterId)
       : undefined,
   );
+
+  /** True when the current user owns the active record (or it is local). */
+  const isOwner = $derived(
+    activeRecord != null &&
+      (currentUserId == null ||
+        activeRecord.ownerId === currentUserId ||
+        activeRecord.ownerId === ""),
+  );
 </script>
 
 {#if count > 0}
@@ -146,17 +162,19 @@
       {@const name = decryptName(activeRecord)}
       <ActionsLabel>{name ?? m.saved_filter_decrypting()}</ActionsLabel>
     {/if}
-    <ActionsButton onclick={handleToggleShare}>
-      {activeRecord?.shared === true
-        ? m.saved_filter_unshare()
-        : m.saved_filter_share()}
-    </ActionsButton>
-    <ActionsButton
-      colors={{ textIos: "text-red-500", textMaterial: "text-red-500" }}
-      onclick={handleDelete}
-    >
-      {m.saved_filter_delete()}
-    </ActionsButton>
+    {#if isOwner}
+      <ActionsButton onclick={handleToggleShare}>
+        {activeRecord?.shared === true
+          ? m.saved_filter_unshare()
+          : m.saved_filter_share()}
+      </ActionsButton>
+      <ActionsButton
+        colors={{ textIos: "text-red-500", textMaterial: "text-red-500" }}
+        onclick={handleDelete}
+      >
+        {m.saved_filter_delete()}
+      </ActionsButton>
+    {/if}
   </ActionsGroup>
   <ActionsGroup>
     <ActionsButton bold onclick={closeActionSheet}>

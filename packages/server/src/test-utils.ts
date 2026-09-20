@@ -1192,6 +1192,7 @@ export const NO_OPTIONAL_ROUTERS: OptionalRouterDeps = {
   intakeFormDeps: null,
   clientPortalDeps: null,
   devDeps: null,
+  savedFilters: false,
   keysDeps: null,
 };
 
@@ -1234,6 +1235,7 @@ export const ALL_OPTIONAL_ROUTERS: OptionalRouterDeps = {
   intakeFormDeps: everyDepPresent(),
   clientPortalDeps: everyDepPresent(),
   devDeps: everyDepPresent(),
+  savedFilters: true,
   keysDeps: everyDepPresent(),
 };
 

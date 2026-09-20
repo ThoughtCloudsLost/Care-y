@@ -3,20 +3,20 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{ Tickets: NonNullable<unknown>, days: NonNullable<unknown>, tickets: NonNullable<unknown> }} Admin_Retention_Set_BodyInputs */
+/** @typedef {{ tickets: NonNullable<unknown>, days: NonNullable<unknown> }} Admin_Retention_Set_BodyInputs */
 
 const en_admin_retention_set_body = /** @type {(inputs: Admin_Retention_Set_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.Tickets}, messages, and caller personal information older than ${i?.days} days will be permanently and automatically deleted. This cannot be undone. Deleted data cannot be recovered, even with the escrow file.`)
+	return /** @type {LocalizedString} */ (`Closed ${i?.tickets} with no activity for more than ${i?.days} days will be permanently deleted, along with their messages, files, and caller personal information. People with open ${i?.tickets} are not affected. This cannot be undone. Deleted data cannot be recovered, even with the escrow file.`)
 };
 
 const es_admin_retention_set_body = /** @type {(inputs: Admin_Retention_Set_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Los ${i?.tickets}, mensajes e información personal de los llamantes con más de ${i?.days} días se eliminaran permanente y automáticamente. Esto no se puede deshacer. Los datos eliminados no se pueden recuperar, ni siquiera con el archivo de custodia.`)
+	return /** @type {LocalizedString} */ (`Los ${i?.tickets} cerrados sin actividad durante más de ${i?.days} días se eliminarán permanentemente, junto con sus mensajes, archivos e información personal de los llamantes. Las personas con ${i?.tickets} abiertos no se ven afectadas. Esto no se puede deshacer. Los datos eliminados no se pueden recuperar, ni siquiera con el archivo de custodia.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "{Tickets}, messages, and caller personal information older than {days} days will be permanently and automatically deleted. This cannot be undone. Deleted dat..." |
+* | "Closed {tickets} with no activity for more than {days} days will be permanently deleted, along with their messages, files, and caller personal information. P..." |
 *
 * @param {Admin_Retention_Set_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

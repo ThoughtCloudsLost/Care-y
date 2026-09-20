@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Automatic deletion is off. {Tickets}, messages, and caller personal information are kept until manually deleted." |
+* | "Automatic deletion is off. {Tickets} and caller personal information are kept until manually deleted." |
 *
 * @param {Admin_Retention_Inactive_DescriptionInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

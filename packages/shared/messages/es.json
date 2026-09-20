@@ -139,6 +139,8 @@
   "error_cannot_deactivate_self": "No puedes desactivar tu propia cuenta.",
   "error_cannot_deactivate_last_admin": "No se puede desactivar al último administrador.",
   "error_username_already_taken": "Este usuario de inicio de sesión ya está en uso.",
+  "error_saved_filter_not_found": "Ese filtro compartido ya no existe.",
+  "error_saved_filter_not_owner": "Solo la persona que compartió un filtro puede modificarlo.",
   "error_only_admins_can_assign_roles": "Solo los administradores pueden asignar roles no predeterminados.",
   "error_login_rate_limited": "Demasiados intentos de inicio de sesión. Inténtalo más tarde.",
   "error_request_rate_limited": "Demasiadas solicitudes. Inténtalo más tarde.",

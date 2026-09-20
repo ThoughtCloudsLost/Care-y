@@ -651,6 +651,7 @@ const appRouter = createAppRouter({
   // full set of mounted routers is readable from this one call.
   consultant: true,
   reports: true,
+  savedFilters: true,
   telephonyAdminDeps: {
     configService: telephonyConfigService,
     webhookBaseUrl: env.WEBHOOK_BASE_URL,

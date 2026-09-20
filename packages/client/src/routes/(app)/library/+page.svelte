@@ -545,6 +545,7 @@
     onapply: dispatch.handleSavedFilterApply,
     ondelete: dispatch.handleSavedFilterDelete,
     ontoggleshare: dispatch.handleSavedFilterToggleShare,
+    currentUserId: currentUserId ?? null,
   });
 
   // --- Filter pill definitions ---
