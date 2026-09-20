@@ -432,9 +432,13 @@ export function createAuthService(
   }
 
   async function setPiiRetentionDays(days: number | null): Promise<void> {
+    // Treat 0 or negative as null (no retention policy). The Zod schema
+    // already enforces min(1) for non-null values at the route boundary,
+    // but this guard defends the write path regardless of caller.
+    const sanitized = days != null && days > 0 ? days : null;
     await db
       .updateTable("org_config")
-      .set({ pii_retention_days: days })
+      .set({ pii_retention_days: sanitized })
       .execute();
   }
 

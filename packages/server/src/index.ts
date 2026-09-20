@@ -183,6 +183,10 @@ import {
 } from "./jobs/escalation-checker.js";
 import { ensureRecurringJob } from "./jobs/ensure-recurring.js";
 import {
+  registerPiiRetentionHandler,
+  PII_RETENTION_QUEUE,
+} from "./jobs/pii-retention.js";
+import {
   registerOutboxDrainHandler,
   OUTBOX_DRAIN_QUEUE,
 } from "./jobs/notification-outbox-drain.js";
@@ -967,6 +971,11 @@ registerPortalExpiryHandler(jobQueue, async () => {
 
 registerShareCleanupHandler(jobQueue, tenantDb, listActiveOrgSchemas);
 
+registerPiiRetentionHandler(jobQueue, tenantDb, blobStore, async () => {
+  const orgs = await listActiveOrgSchemasWithSlugs();
+  return orgs.map((o) => ({ id: o.id, schema: o.schema }));
+});
+
 // Notification outbox drain: polls tenant outbox tables for durable
 // intake notification dispatch (~5 second interval).
 registerOutboxDrainHandler(jobQueue, {
@@ -1002,6 +1011,7 @@ await ensureRecurringJob(db, jobQueue, MEDIA_CLEANUP_QUEUE);
 await ensureRecurringJob(db, jobQueue, PORTAL_EXPIRY_QUEUE);
 await ensureRecurringJob(db, jobQueue, SHARE_CLEANUP_QUEUE);
 await ensureRecurringJob(db, jobQueue, OUTBOX_DRAIN_QUEUE);
+await ensureRecurringJob(db, jobQueue, PII_RETENTION_QUEUE);
 jobQueue.start();
 console.log("Job queue started");
 
