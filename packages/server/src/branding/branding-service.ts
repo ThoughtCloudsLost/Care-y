@@ -44,7 +44,10 @@ export interface BrandingService {
   getBranding(): Promise<BrandingData>;
   getPublicBranding(): Promise<PublicBrandingData>;
   iconBlobKey(size: IconSize): Promise<BlobKey | null>;
-  saveBrandingField(input: SaveBrandingFieldInput): Promise<void>;
+  saveBrandingField(
+    input: SaveBrandingFieldInput,
+    orgKeyGeneration?: number,
+  ): Promise<void>;
   uploadIcons(
     store: BlobStore,
     orgSchema: OrgSchema,
@@ -135,7 +138,10 @@ export function createBrandingService(
       return config.icon_maskable_blob_key;
     },
 
-    async saveBrandingField(input: SaveBrandingFieldInput): Promise<void> {
+    async saveBrandingField(
+      input: SaveBrandingFieldInput,
+      orgKeyGeneration?: number,
+    ): Promise<void> {
       let update: Partial<
         Pick<
           OrgConfigTable,
@@ -196,6 +202,9 @@ export function createBrandingService(
           // stores but never interprets these bytes.
           update = {
             encrypted_terminology: Buffer.from(input.value, "base64"),
+            ...(orgKeyGeneration !== undefined
+              ? { org_key_generation: orgKeyGeneration }
+              : {}),
           };
           break;
       }

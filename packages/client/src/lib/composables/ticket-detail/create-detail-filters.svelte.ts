@@ -117,7 +117,10 @@ export function createDetailFilters(
     (config.getNoteTypes() ?? []).map((nt) => ({
       value: `note_type:${nt.id}`,
       label:
-        config.orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? "...",
+        config.orgCache.decrypt(nt.id + ":name", nt.encryptedName, {
+          table: "note_types",
+          id: nt.id,
+        }) ?? "...",
     })),
   );
 
@@ -144,6 +147,7 @@ export function createDetailFilters(
       const name = config.orgCache.decrypt(
         `volunteer:${participant.volunteerId}`,
         participant.encryptedDisplayName,
+        { table: "users", id: participant.volunteerId },
       );
       const currentUserId = config.getCurrentUserId();
       const label =

@@ -300,6 +300,7 @@ export async function createIntakeTicket(
         encrypted_alias: sealedAlias,
         alias_hash: null,
         phone_id: null,
+        org_key_generation: deps.sealedBox.generation,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
@@ -335,11 +336,16 @@ export async function createIntakeTicket(
     }
 
     // 4. Interim org-key wrap (algorithm defaults to "sealed-box-org-v1")
+    // A submission racing a rotation may carry a blob sealed under
+    // generation N with a stamp of N+1; that skew is accepted because
+    // the wrap chain still decrypts it (the volunteer holds both keys
+    // during the rotation window).
     await trx
       .insertInto("intake_key_wraps")
       .values({
         ticket_id: input.ticketId,
         wrapped_tk: input.wrappedTk,
+        org_key_generation: deps.sealedBox.generation,
       })
       .executeTakeFirstOrThrow();
 

@@ -65,13 +65,16 @@ export function decryptQueueAppearance(
   orgCache: OrgDecryptCache,
   queue: QueueAppearanceSource,
 ): QueueAppearance {
+  const queueOrigin = { table: "queues" as const, id: queue.id };
   const colorId = orgCache.decrypt(
     `queue-color:${queue.id}`,
     queue.encryptedColor,
+    queueOrigin,
   );
   const iconId = orgCache.decrypt(
     `queue-icon:${queue.id}`,
     queue.encryptedIcon,
+    queueOrigin,
   );
   return resolveQueueAppearance(colorId, iconId);
 }

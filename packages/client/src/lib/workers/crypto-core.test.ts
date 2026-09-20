@@ -35,6 +35,7 @@ import {
   fileKeySlot,
   filenameSlot,
   decodeFileKeyPayload,
+  sealPrevGeneration,
   INTAKE_RESPONSE_SLOT,
   type Ciphertext,
   type Nonce,
@@ -76,6 +77,8 @@ import type {
   UnwrapIntakeTkResponse,
   EmailMatchHashResponse,
   DetectMergeCandidatesResponse,
+  OrgResealBatchResponse,
+  GetOrgPublicKeyResponse,
 } from "./crypto-protocol.js";
 import {
   createDispatcher,
@@ -682,6 +685,8 @@ describe("crypto-core org key operations", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     })) as UnwrapOrgKeyResponse;
 
     expect(resp.ok).toBe(true);
@@ -742,7 +747,9 @@ describe("crypto-core org key operations", () => {
     expect(resp.ok).toBe(true);
     expect(resp.results).toHaveLength(2);
     expect(resp.results[0]?.plaintext).toBe("alice");
+    expect(resp.results[0]?.generation).toBe(1);
     expect(resp.results[1]?.plaintext).toBe("bob");
+    expect(resp.results[1]?.generation).toBe(1);
   });
 
   it("rejects org operations when org key is not loaded", async () => {
@@ -779,6 +786,607 @@ describe("crypto-core org key operations", () => {
     });
 
     expect(resp.ok).toBe(true);
+  });
+});
+
+// ── Multi-generation org key tests ─────────────────────────────────
+
+describe("crypto-core org key generation chain", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("org-gen-chain-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  /**
+   * Build a 3-generation chain: gen1 (oldest), gen2, gen3 (current).
+   * Returns the current secret (gen3), the chain links, and all three
+   * secrets for assertion purposes. The caller must zero all secrets.
+   */
+  function buildThreeGenerationChain(
+    sodium: ReturnType<typeof requireSodium>,
+  ): {
+    currentSecret: Uint8Array;
+    gen1Secret: Uint8Array;
+    gen2Secret: Uint8Array;
+    gen3Secret: Uint8Array;
+    chain: {
+      generation: number;
+      publicKey: string;
+      prevSecretCt: string | null;
+      prevNonce: string | null;
+    }[];
+  } {
+    const gen1Secret = sodium.randombytes_buf(32);
+    const gen2Secret = sodium.randombytes_buf(32);
+    const gen3Secret = sodium.randombytes_buf(32);
+
+    const gen1Pub = sodium.crypto_scalarmult_base(gen1Secret);
+    const gen2Pub = sodium.crypto_scalarmult_base(gen2Secret);
+    const gen3Pub = sodium.crypto_scalarmult_base(gen3Secret);
+
+    // gen2's chain row seals gen1's secret under gen2's secret
+    const seal2 = sealPrevGeneration(gen1Secret, gen2Secret);
+    // gen3's chain row seals gen2's secret under gen3's secret
+    const seal3 = sealPrevGeneration(gen2Secret, gen3Secret);
+
+    const chain = [
+      {
+        generation: 3,
+        publicKey: encode(gen3Pub),
+        prevSecretCt: encode(seal3.ciphertext),
+        prevNonce: encode(seal3.nonce),
+      },
+      {
+        generation: 2,
+        publicKey: encode(gen2Pub),
+        prevSecretCt: encode(seal2.ciphertext),
+        prevNonce: encode(seal2.nonce),
+      },
+      {
+        generation: 1,
+        publicKey: encode(gen1Pub),
+        prevSecretCt: null,
+        prevNonce: null,
+      },
+    ];
+
+    return {
+      currentSecret: gen3Secret,
+      gen1Secret,
+      gen2Secret,
+      gen3Secret,
+      chain,
+    };
+  }
+
+  it("chain walk recovers two older generations", async () => {
+    const sodium = requireSodium();
+    const { currentSecret, gen1Secret, gen2Secret, chain } =
+      buildThreeGenerationChain(sodium);
+
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(currentSecret, volPub);
+
+    const resp = (await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_100,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 3,
+      chain,
+    })) as UnwrapOrgKeyResponse;
+
+    expect(resp.ok).toBe(true);
+
+    // Verify gen2 public key is accessible
+    const gen2PubResp = (await dispatchAndWait({
+      type: "getOrgPublicKey",
+      id: 10_101,
+      generation: 2,
+    })) as GetOrgPublicKeyResponse;
+    expect(gen2PubResp.ok).toBe(true);
+    expect(gen2PubResp.orgPublicKey).toBe(
+      encode(sodium.crypto_scalarmult_base(gen2Secret)),
+    );
+
+    // Verify gen1 public key is accessible
+    const gen1PubResp = (await dispatchAndWait({
+      type: "getOrgPublicKey",
+      id: 10_102,
+      generation: 1,
+    })) as GetOrgPublicKeyResponse;
+    expect(gen1PubResp.ok).toBe(true);
+    expect(gen1PubResp.orgPublicKey).toBe(
+      encode(sodium.crypto_scalarmult_base(gen1Secret)),
+    );
+
+    sodium.memzero(currentSecret);
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+  });
+
+  it("decrypts a blob sealed under generation 1 after two rotations", async () => {
+    const sodium = requireSodium();
+    const { currentSecret, gen1Secret, gen2Secret, chain } =
+      buildThreeGenerationChain(sodium);
+
+    // Seal content under gen1's public key (simulating pre-rotation data)
+    const gen1Pub = sodium.crypto_scalarmult_base(gen1Secret);
+    const plaintext = new TextEncoder().encode("sealed under gen1");
+    const gen1Ciphertext = sodium.crypto_box_seal(plaintext, gen1Pub);
+
+    // Load the current key with the full chain
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(currentSecret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_200,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 3,
+      chain,
+    });
+    sinkMessages = [];
+
+    // Decrypt the gen1-sealed content using orgDecrypt
+    const decResp = (await dispatchAndWait({
+      type: "orgDecrypt",
+      id: 10_201,
+      ciphertext: encode(gen1Ciphertext),
+    })) as OrgDecryptResponse;
+
+    expect(decResp.ok).toBe(true);
+    expect(new TextDecoder().decode(decode(decResp.plaintext))).toBe(
+      "sealed under gen1",
+    );
+
+    // Also verify batch decrypt reports generation 1
+    sinkMessages = [];
+    const batchResp = (await dispatchAndWait({
+      type: "orgDecryptBatch",
+      id: 10_202,
+      items: [{ cacheKey: "old-item", ciphertext: encode(gen1Ciphertext) }],
+    })) as OrgDecryptBatchResponse;
+
+    expect(batchResp.ok).toBe(true);
+    expect(batchResp.results[0]?.plaintext).toBe("sealed under gen1");
+    expect(batchResp.results[0]?.generation).toBe(1);
+
+    sodium.memzero(currentSecret);
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+  });
+
+  it("orgResealBatch returns fresh ciphertext for old-gen and null for current-gen", async () => {
+    const sodium = requireSodium();
+    const { currentSecret, gen1Secret, gen2Secret, chain } =
+      buildThreeGenerationChain(sodium);
+
+    const gen1Pub = sodium.crypto_scalarmult_base(gen1Secret);
+    const gen3Pub = sodium.crypto_scalarmult_base(currentSecret);
+
+    // Seal one item under gen1 (old) and one under gen3 (current)
+    const oldCt = sodium.crypto_box_seal(
+      new TextEncoder().encode("old data"),
+      gen1Pub,
+    );
+    const currentCt = sodium.crypto_box_seal(
+      new TextEncoder().encode("current data"),
+      gen3Pub,
+    );
+
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(currentSecret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_300,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 3,
+      chain,
+    });
+    sinkMessages = [];
+
+    const resealResp = (await dispatchAndWait({
+      type: "orgResealBatch",
+      id: 10_301,
+      items: [
+        { cacheKey: "old-item", ciphertext: encode(oldCt) },
+        { cacheKey: "current-item", ciphertext: encode(currentCt) },
+      ],
+    })) as OrgResealBatchResponse;
+
+    expect(resealResp.ok).toBe(true);
+    expect(resealResp.results).toHaveLength(2);
+
+    // Old item: resealed under the current key
+    const oldResult = resealResp.results[0];
+    expect(oldResult?.cacheKey).toBe("old-item");
+    expect(oldResult?.fromGeneration).toBe(1);
+    expect(oldResult?.resealed).not.toBeNull();
+    expect(oldResult?.indexHash).toBeNull();
+
+    // The resealed ciphertext opens under the current keypair
+    const resealedPlain = sodium.crypto_box_seal_open(
+      decode(oldResult!.resealed!),
+      gen3Pub,
+      currentSecret,
+    );
+    expect(new TextDecoder().decode(resealedPlain)).toBe("old data");
+    sodium.memzero(resealedPlain);
+
+    // Current item: nothing to do
+    const curResult = resealResp.results[1];
+    expect(curResult?.cacheKey).toBe("current-item");
+    expect(curResult?.fromGeneration).toBe(3);
+    expect(curResult?.resealed).toBeNull();
+    expect(curResult?.indexHash).toBeNull();
+
+    sodium.memzero(currentSecret);
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+  });
+
+  it("orgResealBatch computes indexHash for old-gen and current-gen items", async () => {
+    const sodium = requireSodium();
+    const { currentSecret, gen1Secret, gen2Secret, chain } =
+      buildThreeGenerationChain(sodium);
+
+    const gen1Pub = sodium.crypto_scalarmult_base(gen1Secret);
+    const gen3Pub = sodium.crypto_scalarmult_base(currentSecret);
+
+    // Seal an alias under gen1 (old) and one under gen3 (current)
+    const oldAliasCt = sodium.crypto_box_seal(
+      new TextEncoder().encode("Jane Doe"),
+      gen1Pub,
+    );
+    const currentAliasCt = sodium.crypto_box_seal(
+      new TextEncoder().encode("John Smith"),
+      gen3Pub,
+    );
+
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(currentSecret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_350,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 3,
+      chain,
+    });
+    sinkMessages = [];
+
+    const resealResp = (await dispatchAndWait({
+      type: "orgResealBatch",
+      id: 10_351,
+      items: [
+        {
+          cacheKey: "old-alias",
+          ciphertext: encode(oldAliasCt),
+          index: "alias",
+        },
+        {
+          cacheKey: "current-alias",
+          ciphertext: encode(currentAliasCt),
+          index: "alias",
+        },
+      ],
+    })) as OrgResealBatchResponse;
+
+    expect(resealResp.ok).toBe(true);
+
+    // Both items produce a non-null indexHash (alias always normalizes)
+    const oldResult = resealResp.results[0];
+    expect(oldResult?.indexHash).toMatch(/^[0-9a-f]{128}$/);
+    expect(oldResult?.fromGeneration).toBe(1);
+    expect(oldResult?.resealed).not.toBeNull();
+
+    const curResult = resealResp.results[1];
+    expect(curResult?.indexHash).toMatch(/^[0-9a-f]{128}$/);
+    expect(curResult?.fromGeneration).toBe(3);
+    expect(curResult?.resealed).toBeNull();
+
+    // The two different aliases produce different hashes
+    expect(oldResult?.indexHash).not.toBe(curResult?.indexHash);
+
+    sodium.memzero(currentSecret);
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+  });
+
+  it("orgResealBatch returns indexHash null for undecryptable items", async () => {
+    const sodium = requireSodium();
+    const { currentSecret, gen1Secret, gen2Secret, chain } =
+      buildThreeGenerationChain(sodium);
+
+    // Seal under a completely unrelated key
+    const unrelatedSecret = sodium.randombytes_buf(32);
+    const unrelatedPub = sodium.crypto_scalarmult_base(unrelatedSecret);
+    const garbageCt = sodium.crypto_box_seal(
+      new TextEncoder().encode("unreachable"),
+      unrelatedPub,
+    );
+    sodium.memzero(unrelatedSecret);
+
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(currentSecret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_360,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 3,
+      chain,
+    });
+    sinkMessages = [];
+
+    const resealResp = (await dispatchAndWait({
+      type: "orgResealBatch",
+      id: 10_361,
+      items: [
+        { cacheKey: "garbage", ciphertext: encode(garbageCt), index: "alias" },
+      ],
+    })) as OrgResealBatchResponse;
+
+    expect(resealResp.ok).toBe(true);
+    const result = resealResp.results[0];
+    expect(result?.resealed).toBeNull();
+    expect(result?.fromGeneration).toBeNull();
+    expect(result?.indexHash).toBeNull();
+
+    sodium.memzero(currentSecret);
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+  });
+
+  it("zeroAll clears every generation secret", async () => {
+    const sodium = requireSodium();
+    const { currentSecret, gen1Secret, gen2Secret, chain } =
+      buildThreeGenerationChain(sodium);
+
+    const gen1Pub = sodium.crypto_scalarmult_base(gen1Secret);
+
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(currentSecret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_400,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 3,
+      chain,
+    });
+
+    // Verify gen1 data decrypts before zero
+    const gen1Ct = sodium.crypto_box_seal(
+      new TextEncoder().encode("pre-zero"),
+      gen1Pub,
+    );
+    sinkMessages = [];
+    const preZeroResp = (await dispatchAndWait({
+      type: "orgDecrypt",
+      id: 10_401,
+      ciphertext: encode(gen1Ct),
+    })) as OrgDecryptResponse;
+    expect(preZeroResp.ok).toBe(true);
+
+    // Zero everything
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+
+    // After zero, org operations should fail (NOT_READY)
+    const postZeroResp = await dispatchAndWait({
+      type: "orgDecrypt",
+      id: 10_402,
+      ciphertext: encode(gen1Ct),
+    });
+    expect(postZeroResp.ok).toBe(false);
+    expect((postZeroResp as ErrorResponse).code).toBe("NOT_READY");
+
+    sodium.memzero(currentSecret);
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+  });
+
+  it("stops chain walk gracefully on a corrupted link", async () => {
+    const sodium = requireSodium();
+    const gen1Secret = sodium.randombytes_buf(32);
+    const gen2Secret = sodium.randombytes_buf(32);
+    const gen3Secret = sodium.randombytes_buf(32);
+
+    const gen1Pub = sodium.crypto_scalarmult_base(gen1Secret);
+    const gen2Pub = sodium.crypto_scalarmult_base(gen2Secret);
+    const gen3Pub = sodium.crypto_scalarmult_base(gen3Secret);
+
+    // gen3 -> gen2 seal is valid
+    const seal3 = sealPrevGeneration(gen2Secret, gen3Secret);
+    // gen2 -> gen1 seal is CORRUPTED (random bytes)
+    const corruptCt = sodium.randombytes_buf(48);
+    const corruptNonce = sodium.randombytes_buf(24);
+
+    const chain = [
+      {
+        generation: 3,
+        publicKey: encode(gen3Pub),
+        prevSecretCt: encode(seal3.ciphertext),
+        prevNonce: encode(seal3.nonce),
+      },
+      {
+        generation: 2,
+        publicKey: encode(gen2Pub),
+        prevSecretCt: encode(corruptCt),
+        prevNonce: encode(corruptNonce),
+      },
+      {
+        generation: 1,
+        publicKey: encode(gen1Pub),
+        prevSecretCt: null,
+        prevNonce: null,
+      },
+    ];
+
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(gen3Secret, volPub);
+
+    const resp = (await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_500,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 3,
+      chain,
+    })) as UnwrapOrgKeyResponse;
+
+    // The unwrap itself succeeds
+    expect(resp.ok).toBe(true);
+
+    // gen2 is recoverable (its link from gen3 was valid)
+    const gen2PubResp = (await dispatchAndWait({
+      type: "getOrgPublicKey",
+      id: 10_501,
+      generation: 2,
+    })) as GetOrgPublicKeyResponse;
+    expect(gen2PubResp.ok).toBe(true);
+
+    // gen1 is NOT recoverable (the gen2 -> gen1 link was corrupted)
+    const gen1PubResp = await dispatchAndWait({
+      type: "getOrgPublicKey",
+      id: 10_502,
+      generation: 1,
+    });
+    expect(gen1PubResp.ok).toBe(false);
+    expect((gen1PubResp as ErrorResponse).code).toBe("INVALID_STATE");
+
+    // Data sealed under gen2 still decrypts
+    const gen2Ct = sodium.crypto_box_seal(
+      new TextEncoder().encode("gen2 data"),
+      gen2Pub,
+    );
+    const decResp = (await dispatchAndWait({
+      type: "orgDecrypt",
+      id: 10_503,
+      ciphertext: encode(gen2Ct),
+    })) as OrgDecryptResponse;
+    expect(decResp.ok).toBe(true);
+    expect(new TextDecoder().decode(decode(decResp.plaintext))).toBe(
+      "gen2 data",
+    );
+
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+    sodium.memzero(gen3Secret);
+  });
+
+  it("old secret alone cannot decrypt post-rotation ciphertext", async () => {
+    const sodium = requireSodium();
+    const gen1Secret = sodium.randombytes_buf(32);
+    const gen3Secret = sodium.randombytes_buf(32);
+
+    const gen3Pub = sodium.crypto_scalarmult_base(gen3Secret);
+
+    // Load ONLY generation 1 (no chain, no awareness of gen3)
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(gen1Secret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_600,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
+    });
+    sinkMessages = [];
+
+    // Seal a blob under the gen-3 public key (post-rotation ciphertext)
+    const postRotationCt = sodium.crypto_box_seal(
+      new TextEncoder().encode("post-rotation data"),
+      gen3Pub,
+    );
+
+    // orgDecrypt must fail: gen1 secret cannot open gen3 ciphertext
+    const resp = await dispatchAndWait({
+      type: "orgDecrypt",
+      id: 10_601,
+      ciphertext: encode(postRotationCt),
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen3Secret);
+  });
+
+  it("decrypts a blob sealed under an older generation than its row stamp", async () => {
+    // Intake race skew: an intake page racing a rotation submits gen-N
+    // ciphertext that the server stamps N+1. The stamp is tolerated skew;
+    // the chain try-open is authoritative and never consults it.
+    const sodium = requireSodium();
+    const { currentSecret, gen1Secret, gen2Secret, chain } =
+      buildThreeGenerationChain(sodium);
+
+    const gen2Pub = sodium.crypto_scalarmult_base(gen2Secret);
+
+    // Seal content under gen2's public key (simulating intake race)
+    const plaintext = new TextEncoder().encode("intake race payload");
+    const gen2Ciphertext = sodium.crypto_box_seal(plaintext, gen2Pub);
+
+    // Load the full 3-generation chain as current
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(currentSecret, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 10_700,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 3,
+      chain,
+    });
+    sinkMessages = [];
+
+    // The worker never sees row stamps; it tries all generations in
+    // the chain. A blob sealed under gen2 must decrypt via chain walk
+    // regardless of what the server stamped the row as.
+    const decResp = (await dispatchAndWait({
+      type: "orgDecrypt",
+      id: 10_701,
+      ciphertext: encode(gen2Ciphertext),
+    })) as OrgDecryptResponse;
+
+    expect(decResp.ok).toBe(true);
+    expect(new TextDecoder().decode(decode(decResp.plaintext))).toBe(
+      "intake race payload",
+    );
+
+    sodium.memzero(currentSecret);
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
   });
 });
 
@@ -939,6 +1547,8 @@ describe("crypto-core decryptPortalReply", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     })) as UnwrapOrgKeyResponse;
 
     expect(resp.ok).toBe(true);
@@ -1118,6 +1728,8 @@ describe("crypto-core error paths", () => {
       ephemeralPoint: "x",
       nonce: "x",
       wrappedOrgKey: "x",
+      currentGeneration: 1,
+      chain: [],
     });
     expect(resp.ok).toBe(false);
     expect((resp as ErrorResponse).code).toBe("NOT_READY");
@@ -1403,6 +2015,8 @@ describe("crypto-core orgDecryptBatch error branch", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     });
     sinkMessages = [];
 
@@ -1422,7 +2036,9 @@ describe("crypto-core orgDecryptBatch error branch", () => {
     expect(resp.ok).toBe(true);
     expect(resp.results).toHaveLength(2);
     expect(resp.results.at(0)?.plaintext).toBe("valid");
+    expect(resp.results.at(0)?.generation).toBe(1);
     expect(resp.results.at(1)?.plaintext).toBeNull();
+    expect(resp.results.at(1)?.generation).toBeNull();
 
     sodium.memzero(orgSecret);
   });
@@ -2185,6 +2801,8 @@ describe("crypto-core aliasHash blind index", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     });
     sinkMessages = [];
     return orgSecret;
@@ -2324,6 +2942,8 @@ describe("crypto-core phoneMatchHash blind index", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     });
     sinkMessages = [];
     return orgSecret;
@@ -2470,6 +3090,8 @@ describe("decryptIntakeResponse and mintBackfillWraps", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     })) as UnwrapOrgKeyResponse;
 
     expect(resp.ok).toBe(true);
@@ -3157,6 +3779,8 @@ describe("crypto-core sealFollowUpsToPublic", () => {
       ephemeralPoint: encode(orgWrap.ephemeralPoint),
       nonce: encode(orgWrap.nonce),
       wrappedOrgKey: encode(orgWrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     })) as UnwrapOrgKeyResponse;
     const orgPub = decode(orgResp.orgPublicKey);
 
@@ -3795,6 +4419,8 @@ describe("crypto-core unwrapIntakeTk", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     });
     sinkMessages = [];
     return orgSecret;
@@ -3948,6 +4574,8 @@ describe("crypto-core emailMatchHash blind index", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     });
     sinkMessages = [];
     return orgSecret;
@@ -4103,6 +4731,8 @@ describe("crypto-core detectMergeCandidates", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     });
     sinkMessages = [];
     return orgSecret;
@@ -4713,6 +5343,116 @@ describe("crypto-core detectMergeCandidates", () => {
 
     sodium.memzero(tk);
   });
+
+  it("merge scan finds the duplicate pair after rotation re-derives hashes", async () => {
+    const sodium = requireSodium();
+
+    // --- Session 1: login with gen1 as current, derive a phone hash ---
+    const gen1Secret = sodium.randombytes_buf(32);
+    const gen1Pub = sodium.crypto_scalarmult_base(gen1Secret);
+
+    const volPub1 = decode(volPublicStr) as RistrettoPoint;
+    const wrap1 = eciesEncrypt(gen1Secret, volPub1);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 8200,
+      ephemeralPoint: encode(wrap1.ephemeralPoint),
+      nonce: encode(wrap1.nonce),
+      wrappedOrgKey: encode(wrap1.ciphertext),
+      currentGeneration: 1,
+      chain: [],
+    });
+    sinkMessages = [];
+
+    const staleHash = await phoneMatchHashVia("+12125550200", 8201);
+
+    // --- Reset state (simulate logout) ---
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const salt2 = sodium.randombytes_buf(16);
+    const result2 = await loginFlow("merge-gen-rotate-pw", salt2);
+    sinkMessages = [];
+
+    // --- Session 2: login with gen3 current + full chain ---
+    const gen2Secret = sodium.randombytes_buf(32);
+    const gen3Secret = sodium.randombytes_buf(32);
+    const seal2 = sealPrevGeneration(gen1Secret, gen2Secret);
+    const seal3 = sealPrevGeneration(gen2Secret, gen3Secret);
+    const gen2Pub = sodium.crypto_scalarmult_base(gen2Secret);
+    const gen3Pub = sodium.crypto_scalarmult_base(gen3Secret);
+
+    const chain = [
+      {
+        generation: 3,
+        publicKey: encode(gen3Pub),
+        prevSecretCt: encode(seal3.ciphertext),
+        prevNonce: encode(seal3.nonce),
+      },
+      {
+        generation: 2,
+        publicKey: encode(gen2Pub),
+        prevSecretCt: encode(seal2.ciphertext),
+        prevNonce: encode(seal2.nonce),
+      },
+      {
+        generation: 1,
+        publicKey: encode(gen1Pub),
+        prevSecretCt: null,
+        prevNonce: null,
+      },
+    ];
+
+    const volPub2 = decode(result2.volPublic) as RistrettoPoint;
+    const wrap2 = eciesEncrypt(gen3Secret, volPub2);
+
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 8210,
+      ephemeralPoint: encode(wrap2.ephemeralPoint),
+      nonce: encode(wrap2.nonce),
+      wrappedOrgKey: encode(wrap2.ciphertext),
+      currentGeneration: 3,
+      chain,
+    });
+    sinkMessages = [];
+
+    const freshHash = await phoneMatchHashVia("+12125550200", 8211);
+
+    // Stale hashes go dark: different org secret produces a different hash,
+    // so a stale hash can never false-match against a current one.
+    expect(freshHash).not.toBe(staleHash);
+
+    // Two clients whose hashes were both derived under the current (gen-3)
+    // secret are detected as merge candidates.
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8212,
+      clients: [
+        {
+          clientId: "client-rotated-a",
+          phoneMatchHash: freshHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "client-rotated-b",
+          phoneMatchHash: freshHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(1);
+    expect(resp.candidates[0]!.matchKind).toBe("phone");
+
+    sodium.memzero(gen1Secret);
+    sodium.memzero(gen2Secret);
+    sodium.memzero(gen3Secret);
+  });
 });
 
 // ── extractContactsFromResponse (pure function) ─────────────────────
@@ -4894,6 +5634,8 @@ describe("detectMergeCandidates cap, suppression, and canonical ordering", () =>
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     });
     sinkMessages = [];
     return orgSecret;
@@ -5212,6 +5954,8 @@ describe("decryptIntakeResponse failure and empty paths", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedOrgKey: encode(wrap.ciphertext),
+      currentGeneration: 1,
+      chain: [],
     })) as UnwrapOrgKeyResponse;
 
     expect(resp.ok).toBe(true);

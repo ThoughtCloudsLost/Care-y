@@ -52,7 +52,11 @@
   const decryptedQueues = $derived(
     (queuesQuery.data ?? []).map((q) => ({
       id: q.id,
-      name: orgCache.decrypt(`queue:${q.id}`, q.encryptedName) ?? "...",
+      name:
+        orgCache.decrypt(`queue:${q.id}`, q.encryptedName, {
+          table: "queues",
+          id: q.id,
+        }) ?? "...",
       appearance: decryptQueueAppearance(orgCache, q),
     })),
   );
@@ -113,6 +117,7 @@
             (await orgCache.decryptAsync(
               `client-alias:${r.id}`,
               r.encryptedAlias,
+              { table: "clients", id: r.id },
             )) ?? r.id.slice(0, 8),
         })),
       );
@@ -163,8 +168,10 @@
     return {
       ...raw,
       alias:
-        orgCache.decrypt(`client-alias:${raw.clientId}`, raw.encryptedAlias) ??
-        raw.clientId.slice(0, 8),
+        orgCache.decrypt(`client-alias:${raw.clientId}`, raw.encryptedAlias, {
+          table: "clients",
+          id: raw.clientId,
+        }) ?? raw.clientId.slice(0, 8),
     };
   }
 </script>

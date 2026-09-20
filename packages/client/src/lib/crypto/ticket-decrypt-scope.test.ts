@@ -214,6 +214,7 @@ describe("TicketDecryptScope", () => {
       expect(deps.mocks.orgDecrypt).toHaveBeenCalledWith(
         USER_ID,
         ENCRYPTED_NAME,
+        { table: "users", id: USER_ID },
       );
     });
 

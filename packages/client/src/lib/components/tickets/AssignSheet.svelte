@@ -59,6 +59,7 @@
       const name = orgCache.decrypt(
         `volunteer:${vol.id}`,
         vol.encryptedDisplayName,
+        { table: "users", id: vol.id },
       );
       if (name === null) continue;
       const isCurrentUser = vol.id === currentUserId;

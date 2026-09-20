@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ count: NonNullable<unknown> }} Admin_Rotation_Dialog_BodyInputs */
 
 const en_admin_rotation_dialog_body = /** @type {(inputs: Admin_Rotation_Dialog_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`This creates a new encryption key for your organization's shared data: volunteer names, knowledge base articles, queue names, and organization branding. All ${i?.count} active volunteers will receive the updated key on their next login. Ticket conversations and client information use separate, stronger encryption and are not affected by this change.`)
+	return /** @type {LocalizedString} */ (`This creates a new encryption key for your organization's shared data and re-encrypts existing records under it. All ${i?.count} active volunteers will receive the updated key on their next login. Keep this page open while records are secured; anything left over finishes automatically the next time you sign in.`)
 };
 
 const es_admin_rotation_dialog_body = /** @type {(inputs: Admin_Rotation_Dialog_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Esto crea una nueva clave de cifrado para los datos compartidos de tu organización: nombres de voluntarios, artículos de la base de conocimiento, nombres de colas y marca de la organización. Los ${i?.count} voluntarios activos recibiran la clave actualizada en su proximo inicio de sesión. Las conversaciones de tickets y la información de clientes usan cifrado separado y más fuerte, y no se ven afectadas por este cambio.`)
+	return /** @type {LocalizedString} */ (`Esto crea una nueva clave de cifrado para los datos compartidos de tu organización y vuelve a cifrar los registros existentes con ella. Los ${i?.count} voluntarios activos recibirán la clave actualizada en su próximo inicio de sesión. Mantén esta página abierta mientras se protegen los registros; lo que quede pendiente se completará automáticamente la próxima vez que inicies sesión.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "This creates a new encryption key for your organization's shared data: volunteer names, knowledge base articles, queue names, and organization branding. All ..." |
+* | "This creates a new encryption key for your organization's shared data and re-encrypts existing records under it. All {count} active volunteers will receive t..." |
 *
 * @param {Admin_Rotation_Dialog_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

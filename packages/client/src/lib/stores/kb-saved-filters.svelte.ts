@@ -15,6 +15,8 @@ import {
   kbSavedFilterStateSchema,
   type SavedFilterRecord,
 } from "@care-y/shared";
+import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import { resealSavedFilterNames } from "./saved-filter-reseal.js";
 
 export type { KbSavedFilterState } from "@care-y/shared";
 
@@ -60,6 +62,7 @@ function createKbSavedFilterStore(): {
   add(record: SavedFilterRecord): void;
   remove(id: string): void;
   toggleShare(id: string): void;
+  resealNames(bridge: CryptoBridge): Promise<void>;
   readonly count: number;
 } {
   let filters = $state(loadFromStorage());
@@ -88,6 +91,14 @@ function createKbSavedFilterStore(): {
         f.id === id ? { ...f, shared: !f.shared } : f,
       );
       persist();
+    },
+
+    async resealNames(bridge: CryptoBridge): Promise<void> {
+      const updated = await resealSavedFilterNames(bridge, filters);
+      if (updated !== null) {
+        filters = updated;
+        persist();
+      }
     },
 
     get count(): number {

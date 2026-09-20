@@ -40,6 +40,9 @@ export function resolveQueueName(
   const queue = queueMap.get(queueId);
   if (!queue) return undefined;
   return (
-    orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName) ?? undefined
+    orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName, {
+      table: "queues",
+      id: queue.id,
+    }) ?? undefined
   );
 }

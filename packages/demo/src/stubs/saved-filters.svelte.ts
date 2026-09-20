@@ -15,6 +15,7 @@
 // Type-only import from the real module (not aliased) so the color
 // union and other fields match exactly at consumer sites.
 import type { SavedFilterRecord, SavedFilterState } from "@care-y/shared";
+import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import _sodium from "libsodium-wrappers-sumo";
 
 export type { SavedFilterState };
@@ -105,6 +106,7 @@ export const savedFilterStore: {
   add(record: SavedFilterRecord): void;
   remove(id: string): void;
   toggleShare(id: string): void;
+  resealNames(bridge: CryptoBridge): Promise<void>;
   readonly count: number;
 } = {
   get filters(): SavedFilterRecord[] {
@@ -123,6 +125,12 @@ export const savedFilterStore: {
     filters = filters.map((f) =>
       f.id === id ? { ...f, shared: !f.shared } : f,
     );
+  },
+
+  // Seed names are sealed under the demo's only key generation, so the
+  // device-local reseal the shell triggers on key load has nothing to do.
+  async resealNames(_bridge: CryptoBridge): Promise<void> {
+    // no-op
   },
 
   get count(): number {

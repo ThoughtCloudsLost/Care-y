@@ -15,6 +15,16 @@ import {
   rotateOrgKeySchema,
   wrapOrgKeyForUserSchema,
   adminBootstrapUserKeysSchema,
+  resealRowsSchema,
+  reindexRowsSchema,
+  resealPendingSchema,
+  reindexPendingSchema,
+  resealBlobPendingSchema,
+  resealBlobRowSchema,
+  listFormAssetsForResealSchema,
+  getFormAssetBlobSchema,
+  replaceFormAssetBlobSchema,
+  Permission,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import { getEnv } from "../env.js";
@@ -24,6 +34,9 @@ import {
   keyCustodyProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
+import { hasPermissionForOrg } from "../auth/roles.js";
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+import type { BlobStore } from "../storage/store.js";
 
 function b64(s: string): Buffer {
   return Buffer.from(s, "base64");
@@ -31,9 +44,16 @@ function b64(s: string): Buffer {
 import { createKeyRotationService } from "../crypto/key-rotation.js";
 import { createOrgKeyRotationService } from "../crypto/org-key-rotation.js";
 import { createOrgKeyQueryService } from "../crypto/org-key-query-service.js";
+import { createOrgResealService } from "../crypto/org-reseal-service.js";
+import { createAuditService } from "../tickets/audit.js";
+
+export interface KeysRouterDeps {
+  readonly fieldEncryptor: FieldEncryptor | null;
+  readonly blobStore?: BlobStore | null;
+}
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
-export function createKeysRouter() {
+export function createKeysRouter(deps?: KeysRouterDeps) {
   return router({
     /**
      * First-time crypto key setup (account creation).
@@ -118,6 +138,13 @@ export function createKeysRouter() {
         ephemeralPoint: encode(wrap.ephemeralPoint),
         wrappedKey: encode(wrap.wrappedKey),
         nonce: encode(wrap.nonce),
+        currentGeneration: wrap.currentGeneration,
+        generations: wrap.generations.map((g) => ({
+          generation: g.generation,
+          publicKey: encode(g.publicKey),
+          prevSecretCt: g.prevSecretCt ? encode(g.prevSecretCt) : null,
+          prevNonce: g.prevNonce ? encode(g.prevNonce) : null,
+        })),
       };
     }),
 
@@ -154,6 +181,14 @@ export function createKeysRouter() {
         const svc = createOrgKeyRotationService(ctx.org.tenantDb);
         await svc.rotateOrgKey({
           newOrgPublicKey: b64(input.newOrgPublicKey),
+          newGeneration: input.newGeneration,
+          chainedFrom:
+            input.chainedFrom === null
+              ? null
+              : {
+                  prevSecretCt: b64(input.chainedFrom.prevSecretCt),
+                  prevNonce: b64(input.chainedFrom.prevNonce),
+                },
           wrappedKeys: input.wrappedKeys.map((w) => ({
             userId: w.userId,
             ephemeralPoint: b64(w.ephemeralPoint),
@@ -223,6 +258,232 @@ export function createKeysRouter() {
             wrappedKey: b64(input.wrappedOrgKey.wrappedKey),
           });
 
+          return { success: true as const };
+        }),
+      ),
+
+    /** Counts of rows per org-sealed table still at an old key generation. */
+    resealStatus: keyCustodyProcedure.query(async ({ ctx }) => {
+      const svc = createOrgResealService(ctx.org.tenantDb);
+      return svc.resealStatus();
+    }),
+
+    /** Accept a batch of re-encrypted rows for one table and bump their generation stamps. */
+    resealRows: keyCustodyProcedure.input(resealRowsSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = createOrgResealService(ctx.org.tenantDb);
+        const result = await svc.resealRows({
+          table: input.table,
+          rows: input.rows.map((r) => ({
+            id: r.id,
+            columns: Object.fromEntries(
+              Object.entries(r.columns).map(([col, v]) => [col, b64(v)]),
+            ),
+          })),
+          skippedIds: input.skippedIds,
+        });
+        const audit = createAuditService(ctx.org.tenantDb);
+        await audit.log({
+          eventType: "org_key_reseal",
+          actorId: ctx.session.userId,
+          metadata: {
+            table: input.table,
+            resealed: result.resealed,
+            skipped: result.skipped,
+          },
+        });
+        return result;
+      }),
+    ),
+
+    /** Accept a batch of re-derived blind-index hashes for one table and bump their index generation stamps. */
+    reindexRows: keyCustodyProcedure.input(reindexRowsSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = createOrgResealService(ctx.org.tenantDb);
+        const result = await svc.reindexRows({
+          table: input.table,
+          rows: input.rows,
+          skippedIds: input.skippedIds,
+        });
+        const audit = createAuditService(ctx.org.tenantDb);
+        await audit.log({
+          eventType: "org_key_reindex",
+          actorId: ctx.session.userId,
+          metadata: {
+            table: input.table,
+            reindexed: result.reindexed,
+            skipped: result.skipped,
+          },
+        });
+        return result;
+      }),
+    ),
+
+    /** Fetch old-stamped rows that need org-key resealing. Read-only, no audit log. */
+    resealPending: keyCustodyProcedure.input(resealPendingSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = createOrgResealService(ctx.org.tenantDb);
+        const result = await svc.resealPending({
+          table: input.table,
+          limit: input.limit,
+          excludeIds: input.excludeIds,
+          onlyIds: input.onlyIds,
+        });
+        return {
+          currentGeneration: result.currentGeneration,
+          rows: result.rows.map((r) => ({
+            id: r.id,
+            columns: Object.fromEntries(
+              Object.entries(r.columns).map(([col, buf]) => [
+                col,
+                buf.toString("base64url"),
+              ]),
+            ),
+          })),
+        };
+      }),
+    ),
+
+    /** Fetch old-stamped rows that need blind-index re-derivation. Read-only, no audit log. */
+    reindexPending: keyCustodyProcedure.input(reindexPendingSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const piiUnmasked = await hasPermissionForOrg(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          ctx.user.roleId,
+          Permission.VIEW_CLIENT_PII,
+        );
+        const svc = createOrgResealService(
+          ctx.org.tenantDb,
+          deps?.fieldEncryptor,
+        );
+        const result = await svc.reindexPending({
+          table: input.table,
+          limit: input.limit,
+          excludeIds: input.excludeIds,
+          piiUnmasked,
+          onlyIds: input.onlyIds,
+        });
+        return {
+          currentGeneration: result.currentGeneration,
+          piiUnmasked,
+          rows: result.rows.map((r) => {
+            if ("encryptedAlias" in r) {
+              return {
+                id: r.id,
+                encryptedAlias: r.encryptedAlias
+                  ? r.encryptedAlias.toString("base64url")
+                  : null,
+              };
+            }
+            return { id: r.id, plaintext: r.plaintext };
+          }),
+        };
+      }),
+    ),
+
+    /** Fetch old-stamped blob-carrying rows that need resealing. Returns blob bytes per row. */
+    resealBlobPending: keyCustodyProcedure.input(resealBlobPendingSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = createOrgResealService(
+          ctx.org.tenantDb,
+          deps?.fieldEncryptor,
+          deps?.blobStore,
+        );
+        const result = await svc.resealBlobPending({
+          table: input.table,
+          limit: input.limit,
+          excludeIds: input.excludeIds,
+        });
+        return {
+          currentGeneration: result.currentGeneration,
+          rows: result.rows.map((r) => ({
+            id: r.id,
+            columns: Object.fromEntries(
+              Object.entries(r.columns).map(([col, buf]) => [
+                col,
+                buf.toString("base64url"),
+              ]),
+            ),
+            blob: r.blob.toString("base64url"),
+          })),
+        };
+      }),
+    ),
+
+    /** Accept a re-encrypted blob-carrying row (columns + blob) and bump its generation stamp. */
+    resealBlobRow: keyCustodyProcedure.input(resealBlobRowSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = createOrgResealService(
+          ctx.org.tenantDb,
+          deps?.fieldEncryptor,
+          deps?.blobStore,
+        );
+        await svc.resealBlobRow({
+          table: input.table,
+          id: String(input.id),
+          columns: Object.fromEntries(
+            Object.entries(input.columns).map(([col, v]) => [col, b64(v)]),
+          ),
+          blob: b64(input.blob),
+        });
+        const audit = createAuditService(ctx.org.tenantDb);
+        await audit.log({
+          eventType: "org_key_reseal",
+          actorId: ctx.session.userId,
+          metadata: {
+            table: input.table,
+            resealed: 1,
+          },
+        });
+        return { success: true as const };
+      }),
+    ),
+
+    /** List all form assets for branding-key re-encryption. */
+    listFormAssetsForReseal: keyCustodyProcedure
+      .input(listFormAssetsForResealSchema)
+      .query(
+        withErrorWrapping(async ({ ctx }) => {
+          const svc = createOrgResealService(
+            ctx.org.tenantDb,
+            deps?.fieldEncryptor,
+            deps?.blobStore,
+          );
+          return svc.listFormAssetsForReseal();
+        }),
+      ),
+
+    /** Fetch the raw encrypted blob bytes for a form asset. */
+    getFormAssetBlob: keyCustodyProcedure.input(getFormAssetBlobSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = createOrgResealService(
+          ctx.org.tenantDb,
+          deps?.fieldEncryptor,
+          deps?.blobStore,
+        );
+        const blob = await svc.getFormAssetBlob(input.blobId);
+        return { blob: blob.toString("base64url") };
+      }),
+    ),
+
+    /** Overwrite a form asset blob in-place for branding-key re-encryption. */
+    replaceFormAssetBlob: keyCustodyProcedure
+      .input(replaceFormAssetBlobSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createOrgResealService(
+            ctx.org.tenantDb,
+            deps?.fieldEncryptor,
+            deps?.blobStore,
+          );
+          await svc.replaceFormAssetBlob(input.blobId, b64(input.blob));
+          const audit = createAuditService(ctx.org.tenantDb);
+          await audit.log({
+            eventType: "org_key_reseal",
+            actorId: ctx.session.userId,
+            metadata: { table: "form_assets" },
+          });
           return { success: true as const };
         }),
       ),

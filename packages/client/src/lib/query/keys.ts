@@ -165,6 +165,7 @@ export const consultantKeys = {
 
 export const orgKeyKeys = {
   wrappedOrgKey: () => ["keys", "wrappedOrgKey"] as const,
+  resealStatus: () => ["keys", "resealStatus"] as const,
 };
 
 export const inviteKeys = {

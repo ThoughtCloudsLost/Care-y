@@ -95,6 +95,7 @@ export function createClientRepository(
         phoneHash,
         encryptedNumber,
         phoneMatchHash: phoneMatchHash ?? null,
+        orgKeyGeneration: sealedBox.generation,
       });
 
       // 4. Seal the generated label (sealString zeroes the input Buffer).
@@ -110,6 +111,7 @@ export function createClientRepository(
           encrypted_alias: sealedLabel,
           alias_hash: null,
           phone_id: phone.id,
+          org_key_generation: sealedBox.generation,
         })
         .returningAll()
         .executeTakeFirstOrThrow();

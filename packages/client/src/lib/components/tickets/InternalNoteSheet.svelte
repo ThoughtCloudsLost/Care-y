@@ -97,7 +97,10 @@
     );
     if (nt?.encryptedDescription == null) return undefined;
     return (
-      orgCache.decrypt(nt.id + ":desc", nt.encryptedDescription) ?? undefined
+      orgCache.decrypt(nt.id + ":desc", nt.encryptedDescription, {
+        table: "note_types",
+        id: nt.id,
+      }) ?? undefined
     );
   });
 
@@ -246,7 +249,11 @@
         value={effectiveNoteTypeId ?? ""}
         options={creatableTypes.map((nt) => ({
           value: nt.id,
-          label: orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? "",
+          label:
+            orgCache.decrypt(nt.id + ":name", nt.encryptedName, {
+              table: "note_types",
+              id: nt.id,
+            }) ?? "",
         }))}
         onchange={(value: string) => {
           selectedNoteTypeId = value;
@@ -257,7 +264,10 @@
           {@const nt = creatableTypes.find((t) => t.id === option.value)}
           {#if nt}
             {@const NoteTypeIcon = resolveNoteTypeIcon(
-              orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon),
+              orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon, {
+                table: "note_types",
+                id: nt.id,
+              }),
             )}
             <NoteTypeIcon size={16} class="note-type-icon" aria-hidden="true" />
           {/if}

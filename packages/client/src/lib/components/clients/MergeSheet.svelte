@@ -206,8 +206,10 @@
     encryptedAlias: string;
   }): void {
     const alias =
-      orgCache.decrypt(`client-alias:${client.id}`, client.encryptedAlias) ??
-      "...";
+      orgCache.decrypt(`client-alias:${client.id}`, client.encryptedAlias, {
+        table: "clients",
+        id: client.id,
+      }) ?? "...";
     slotB = { id: client.id, alias };
     searchQuery = "";
     searchDebounced = "";
@@ -387,6 +389,7 @@
                   orgCache.decrypt(
                     `client-alias:${result.id}`,
                     result.encryptedAlias,
+                    { table: "clients", id: result.id },
                   ) ?? "..."}
                 <ListItem
                   link

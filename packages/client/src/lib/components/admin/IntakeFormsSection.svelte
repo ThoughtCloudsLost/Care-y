@@ -138,8 +138,10 @@
     const queue = queues.find((q: { id: string }) => q.id === queueId);
     if (!queue) return queueId.slice(0, 8);
     return (
-      orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName) ??
-      queueId.slice(0, 8)
+      orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName, {
+        table: "queues",
+        id: queue.id,
+      }) ?? queueId.slice(0, 8)
     );
   }
 

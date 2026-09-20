@@ -72,7 +72,10 @@ describe.skipIf(!process.env.DATABASE_URL)("KBCategoryService (DB)", () => {
   });
 
   it("creates a category with encrypted name only", async () => {
-    const cat = await svc.create({ encryptedName: encName("Protocols") });
+    const cat = await svc.create({
+      encryptedName: encName("Protocols"),
+      orgKeyGeneration: 1,
+    });
     expect(cat.id).toBeTruthy();
     expect(cat.encryptedName.toString()).toBe("Protocols");
     expect(cat.encryptedDescription).toBeNull();
@@ -85,6 +88,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBCategoryService (DB)", () => {
     const cat = await svc.create({
       encryptedName: encName("Resources"),
       encryptedDescription: desc,
+      orgKeyGeneration: 1,
     });
     expect(Buffer.isBuffer(cat.encryptedDescription)).toBe(true);
   });
@@ -98,7 +102,10 @@ describe.skipIf(!process.env.DATABASE_URL)("KBCategoryService (DB)", () => {
   });
 
   it("updates category encrypted name", async () => {
-    const cat = await svc.create({ encryptedName: encName("Old Name") });
+    const cat = await svc.create({
+      encryptedName: encName("Old Name"),
+      orgKeyGeneration: 1,
+    });
     const updated = await svc.update(cat.id, {
       encryptedName: encName("New Name"),
     });
@@ -109,14 +116,20 @@ describe.skipIf(!process.env.DATABASE_URL)("KBCategoryService (DB)", () => {
   });
 
   it("updates category encrypted description", async () => {
-    const cat = await svc.create({ encryptedName: encName("Desc Test") });
+    const cat = await svc.create({
+      encryptedName: encName("Desc Test"),
+      orgKeyGeneration: 1,
+    });
     const desc = Buffer.from("new-encrypted-desc");
     const updated = await svc.update(cat.id, { encryptedDescription: desc });
     expect(Buffer.isBuffer(updated.encryptedDescription)).toBe(true);
   });
 
   it("no-op update returns existing category", async () => {
-    const cat = await svc.create({ encryptedName: encName("No-op") });
+    const cat = await svc.create({
+      encryptedName: encName("No-op"),
+      orgKeyGeneration: 1,
+    });
     const same = await svc.update(cat.id, {});
     expect(same.id).toBe(cat.id);
     expect(same.encryptedName.toString()).toBe("No-op");
@@ -131,7 +144,10 @@ describe.skipIf(!process.env.DATABASE_URL)("KBCategoryService (DB)", () => {
   });
 
   it("deletes an empty category", async () => {
-    const cat = await svc.create({ encryptedName: encName("Deletable") });
+    const cat = await svc.create({
+      encryptedName: encName("Deletable"),
+      orgKeyGeneration: 1,
+    });
     await svc.delete(cat.id);
     const list = await svc.list();
     expect(list.find((c) => c.id === cat.id)).toBeUndefined();
@@ -144,8 +160,14 @@ describe.skipIf(!process.env.DATABASE_URL)("KBCategoryService (DB)", () => {
   });
 
   it("reorder swaps sort_order values", async () => {
-    const c1 = await svc.create({ encryptedName: encName("ReorderA") });
-    const c2 = await svc.create({ encryptedName: encName("ReorderB") });
+    const c1 = await svc.create({
+      encryptedName: encName("ReorderA"),
+      orgKeyGeneration: 1,
+    });
+    const c2 = await svc.create({
+      encryptedName: encName("ReorderB"),
+      orgKeyGeneration: 1,
+    });
 
     await svc.reorder([
       { categoryId: c1.id, sortOrder: c2.sortOrder },
@@ -173,6 +195,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
 
     const cat = await catSvc.create({
       encryptedName: encName("Test Category"),
+      orgKeyGeneration: 1,
     });
     categoryId = cat.id;
   });
@@ -186,6 +209,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId,
       encryptedTitle: Buffer.from("title-enc"),
       encryptedBody: Buffer.from("body-enc"),
+      orgKeyGeneration: 1,
     });
     expect(item.id).toBeTruthy();
     expect(item.categoryId).toBe(categoryId);
@@ -202,6 +226,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
         categoryId: NONEXISTENT_ID as KbCategoryId,
         encryptedTitle: Buffer.from("t"),
         encryptedBody: Buffer.from("b"),
+        orgKeyGeneration: 1,
       }),
     ).rejects.toThrow(NotFoundError);
   });
@@ -211,6 +236,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId,
       encryptedTitle: Buffer.from("find-me"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     const found = await svc.findById(item.id);
     expect(found.id).toBe(item.id);
@@ -229,6 +255,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
         categoryId,
         encryptedTitle: Buffer.from(`page-test-${String(i)}`),
         encryptedBody: Buffer.from(`body-${String(i)}`),
+        orgKeyGeneration: 1,
       });
     }
 
@@ -260,11 +287,13 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("lists filtered by categoryId", async () => {
     const cat2 = await catSvc.create({
       encryptedName: encName("Other Category"),
+      orgKeyGeneration: 1,
     });
     await svc.create(TEST_AUTHOR, {
       categoryId: cat2.id,
       encryptedTitle: Buffer.from("other-cat"),
       encryptedBody: Buffer.from("other-body"),
+      orgKeyGeneration: 1,
     });
 
     const filtered = await svc.list({
@@ -282,6 +311,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId,
       encryptedTitle: Buffer.from("old-title"),
       encryptedBody: Buffer.from("old-body"),
+      orgKeyGeneration: 1,
     });
     const updated = await svc.update(item.id, {
       encryptedTitle: Buffer.from("new-title"),
@@ -294,11 +324,13 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("update moves article to different category", async () => {
     const cat2 = await catSvc.create({
       encryptedName: encName("Move Target"),
+      orgKeyGeneration: 1,
     });
     const item = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("movable"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     const updated = await svc.update(item.id, { categoryId: cat2.id });
     expect(updated.categoryId).toBe(cat2.id);
@@ -317,6 +349,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId,
       encryptedTitle: Buffer.from("delete-me"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     await svc.delete(item.id);
     await expect(svc.findById(item.id)).rejects.toThrow(NotFoundError);
@@ -331,11 +364,13 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("category delete fails when articles exist (RESTRICT FK)", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("Has Articles"),
+      orgKeyGeneration: 1,
     });
     await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("blocker"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     // RESTRICT FK prevents category deletion
     await expect(catSvc.delete(cat.id)).rejects.toThrow();
@@ -344,12 +379,14 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("listRecentlyUpdated returns encryptedTitle as Buffer, not plaintext string", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("Encrypt Check"),
+      orgKeyGeneration: 1,
     });
     const ciphertext = Buffer.from([0xde, 0xad, 0xbe, 0xef, 0x01, 0x02]);
     await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: ciphertext,
       encryptedBody: Buffer.from("body-cipher"),
+      orgKeyGeneration: 1,
     });
 
     const recent = await svc.listRecentlyUpdated(1);
@@ -372,6 +409,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedTitle: Buffer.from("with-excerpt"),
       encryptedBody: Buffer.from("full-body"),
       encryptedExcerpt: excerpt,
+      orgKeyGeneration: 1,
     });
     expect(item.encryptedExcerpt).not.toBeNull();
     expect(Buffer.isBuffer(item.encryptedExcerpt)).toBe(true);
@@ -383,6 +421,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId,
       encryptedTitle: Buffer.from("no-excerpt"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     expect(item.encryptedExcerpt).toBeNull();
   });
@@ -392,6 +431,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId,
       encryptedTitle: Buffer.from("update-excerpt"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     expect(item.encryptedExcerpt).toBeNull();
 
@@ -409,6 +449,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedTitle: Buffer.from("list-test"),
       encryptedBody: Buffer.from("list-body"),
       encryptedExcerpt: excerpt,
+      orgKeyGeneration: 1,
     });
 
     const page = await svc.list({
@@ -432,6 +473,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       encryptedTitle: Buffer.from("detail-test"),
       encryptedBody: Buffer.from("detail-body"),
       encryptedExcerpt: Buffer.from("detail-excerpt"),
+      orgKeyGeneration: 1,
     });
 
     const found = await svc.findById(item.id);
@@ -443,12 +485,14 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("listRecentlyUpdated returns encryptedExcerpt but not encryptedBody", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("Recent Excerpt"),
+      orgKeyGeneration: 1,
     });
     await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("recent-test"),
       encryptedBody: Buffer.from("recent-body"),
       encryptedExcerpt: Buffer.from("recent-excerpt"),
+      orgKeyGeneration: 1,
     });
 
     const recent = await svc.listRecentlyUpdated(1);
@@ -463,6 +507,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("sorts by rating descending", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("Rating Sort"),
+      orgKeyGeneration: 1,
     });
     const voteSvc = createKBVoteService(testDb.db);
 
@@ -470,11 +515,13 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("low-rated"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     const high = await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("high-rated"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
 
     // Give "high" 3 upvotes to push its rating above "low"
@@ -504,17 +551,20 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("sorts by updated_at ascending", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("UpdatedAt Sort"),
+      orgKeyGeneration: 1,
     });
 
     const first = await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("first"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     const second = await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("second"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
 
     // Small delay so updated_at is distinct (PG now() is transaction-start time)
@@ -537,6 +587,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("filters by minRating", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("MinRating Filter"),
+      orgKeyGeneration: 1,
     });
     const voteSvc = createKBVoteService(testDb.db);
 
@@ -544,11 +595,13 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("no-votes"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     const upvoted = await svc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("upvoted"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     await voteSvc.castVote("00000000-0000-4000-8000-00000000c001" as UserId, {
       itemId: upvoted.id,
@@ -570,6 +623,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("filters by createdBy", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("CreatedBy Filter"),
+      orgKeyGeneration: 1,
     });
     const authorA = "author-a" as UserId;
     const authorB = "author-b" as UserId;
@@ -578,11 +632,13 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("by-a"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     await svc.create(authorB, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("by-b"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
 
     const page = await svc.list({
@@ -599,6 +655,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("filters by date range", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("Date Range Filter"),
+      orgKeyGeneration: 1,
     });
 
     // All items created "now", so filtering with a future range should return none
@@ -606,6 +663,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("in-range"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
 
     const futureDate = new Date(Date.now() + 86_400_000).toISOString();
@@ -639,6 +697,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("combines sort + filter correctly", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("Combined Sort+Filter"),
+      orgKeyGeneration: 1,
     });
     const voteSvc = createKBVoteService(testDb.db);
     const targetAuthor = "target-author" as UserId;
@@ -648,17 +707,20 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("combo-a"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     const itemB = await svc.create(targetAuthor, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("combo-b"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     // Different author, should be filtered out
     await svc.create(otherAuthor, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("combo-c"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
 
     // Give itemA more votes
@@ -689,6 +751,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("paginates with rating sort cursor without skips or duplication", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("Rating Cursor"),
+      orgKeyGeneration: 1,
     });
     const voteSvc = createKBVoteService(testDb.db);
 
@@ -698,6 +761,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
         categoryId: cat.id,
         encryptedTitle: Buffer.from(`rating-cursor-${String(i)}`),
         encryptedBody: Buffer.from("body"),
+        orgKeyGeneration: 1,
       });
       ids.push(item.id);
       // Give each item a different number of upvotes for varied ratings
@@ -752,6 +816,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("paginates with updated_at sort cursor", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("UpdatedAt Cursor"),
+      orgKeyGeneration: 1,
     });
 
     const ids: KbItemId[] = [];
@@ -760,6 +825,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
         categoryId: cat.id,
         encryptedTitle: Buffer.from(`upd-cursor-${String(i)}`),
         encryptedBody: Buffer.from("body"),
+        orgKeyGeneration: 1,
       });
       ids.push(item.id);
     }
@@ -794,6 +860,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
   it("cursor pagination with asc direction pages forward correctly", async () => {
     const cat = await catSvc.create({
       encryptedName: encName("Asc Cursor"),
+      orgKeyGeneration: 1,
     });
 
     const ids: KbItemId[] = [];
@@ -802,6 +869,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
         categoryId: cat.id,
         encryptedTitle: Buffer.from(`asc-cursor-${String(i)}`),
         encryptedBody: Buffer.from("body"),
+        orgKeyGeneration: 1,
       });
       ids.push(item.id);
     }
@@ -834,16 +902,19 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId,
       encryptedTitle: Buffer.from("body-a-title"),
       encryptedBody: Buffer.from("body-a-content"),
+      orgKeyGeneration: 1,
     });
     const b = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("body-b-title"),
       encryptedBody: Buffer.from("body-b-content"),
+      orgKeyGeneration: 1,
     });
     const c = await svc.create(TEST_AUTHOR, {
       categoryId,
       encryptedTitle: Buffer.from("body-c-title"),
       encryptedBody: Buffer.from("body-c-content"),
+      orgKeyGeneration: 1,
     });
 
     const results = await svc.listBodies([a.id, c.id]);
@@ -869,6 +940,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
       categoryId,
       encryptedTitle: Buffer.from("single-body"),
       encryptedBody: Buffer.from("single-content"),
+      orgKeyGeneration: 1,
     });
 
     const results = await svc.listBodies([item.id]);
@@ -893,6 +965,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       const cat = await catSvc.create({
         encryptedName: encName("Authors Category"),
+        orgKeyGeneration: 1,
       });
       categoryId = cat.id;
     });
@@ -907,6 +980,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         categoryId,
         encryptedTitle: Buffer.from("author-test"),
         encryptedBody: Buffer.from("body"),
+        orgKeyGeneration: 1,
       });
 
       const authors = await svc.listAuthors();
@@ -921,11 +995,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
         categoryId,
         encryptedTitle: Buffer.from("multi-1"),
         encryptedBody: Buffer.from("body"),
+        orgKeyGeneration: 1,
       });
       await svc.create(user.id, {
         categoryId,
         encryptedTitle: Buffer.from("multi-2"),
         encryptedBody: Buffer.from("body"),
+        orgKeyGeneration: 1,
       });
 
       const authors = await svc.listAuthors();
@@ -944,6 +1020,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("includes authors from different categories", async () => {
       const cat2 = await catSvc.create({
         encryptedName: encName("Authors Cat 2"),
+        orgKeyGeneration: 1,
       });
       const userA = await createTestUser(testDb.db);
       const userB = await createTestUser(testDb.db);
@@ -952,11 +1029,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
         categoryId,
         encryptedTitle: Buffer.from("cat1-article"),
         encryptedBody: Buffer.from("body"),
+        orgKeyGeneration: 1,
       });
       await svc.create(userB.id, {
         categoryId: cat2.id,
         encryptedTitle: Buffer.from("cat2-article"),
         encryptedBody: Buffer.from("body"),
+        orgKeyGeneration: 1,
       });
 
       const authors = await svc.listAuthors();
@@ -986,11 +1065,13 @@ describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {
 
     const cat = await catSvc.create({
       encryptedName: encName("Vote Category"),
+      orgKeyGeneration: 1,
     });
     const item = await itemSvc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("vote-article"),
       encryptedBody: Buffer.from("body"),
+      orgKeyGeneration: 1,
     });
     itemId = item.id;
   });
@@ -1072,11 +1153,13 @@ describe.skipIf(!process.env.DATABASE_URL)("KBVoteService (DB)", () => {
     // Create a fresh article with a vote
     const cat = await catSvc.create({
       encryptedName: encName("Cascade Test"),
+      orgKeyGeneration: 1,
     });
     const fresh = await itemSvc.create(TEST_AUTHOR, {
       categoryId: cat.id,
       encryptedTitle: Buffer.from("t"),
       encryptedBody: Buffer.from("b"),
+      orgKeyGeneration: 1,
     });
     await svc.castVote(VOTER_X, { itemId: fresh.id, direction: "up" });
 

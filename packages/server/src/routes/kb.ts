@@ -88,6 +88,7 @@ export function createKbRouter(deps: KBRouterDeps) {
               input.encryptedDescription !== undefined
                 ? Buffer.from(input.encryptedDescription, "base64")
                 : undefined,
+            orgKeyGeneration: ctx.org.sealedBox.generation,
           });
           return {
             ...cat,
@@ -155,6 +156,7 @@ export function createKbRouter(deps: KBRouterDeps) {
             input.encryptedExcerpt !== undefined
               ? Buffer.from(input.encryptedExcerpt, "base64")
               : undefined,
+          orgKeyGeneration: ctx.org.sealedBox.generation,
         });
         return {
           ...item,
@@ -386,6 +388,7 @@ export function createKbRouter(deps: KBRouterDeps) {
                   ? Buffer.from(input.encryptedFilename, "base64")
                   : undefined,
               contentType: input.contentType,
+              orgKeyGeneration: ctx.org.sealedBox.generation,
             });
             return { ...att, encryptedFilename: b64n(att.encryptedFilename) };
           } catch (err: unknown) {

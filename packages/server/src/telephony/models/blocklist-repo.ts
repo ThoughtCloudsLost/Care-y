@@ -23,6 +23,7 @@ export interface BlocklistRepository {
     phoneHash: PhoneHash,
     encryptedNumber: Buffer,
     addedBy: UserId,
+    orgKeyGeneration: number,
   ): Promise<BlocklistEntry>;
   remove(id: PhoneBlocklistId): Promise<void>;
   list(): Promise<readonly BlocklistEntry[]>;
@@ -47,6 +48,7 @@ export function createBlocklistRepository(
       phoneHash: PhoneHash,
       encryptedNumber: Buffer,
       addedBy: UserId,
+      orgKeyGeneration: number,
     ): Promise<BlocklistEntry> {
       const row = await db
         .insertInto("phone_blocklist")
@@ -54,6 +56,7 @@ export function createBlocklistRepository(
           phone_hash: phoneHash,
           encrypted_number: encryptedNumber,
           added_by: addedBy,
+          org_key_generation: orgKeyGeneration,
         })
         .returningAll()
         .executeTakeFirstOrThrow();

@@ -405,12 +405,19 @@ export async function clientReply(
         })
         .execute();
 
-      // Insert portal_reply_key_wraps row (sealed tk_temp)
+      // Insert portal_reply_key_wraps row (sealed tk_temp).
+      // No SealedBoxEncryptor in scope; read current_key_generation directly.
+      const orgGen = await trx
+        .selectFrom("org_config")
+        .select("current_key_generation")
+        .executeTakeFirstOrThrow();
+
       await trx
         .insertInto("portal_reply_key_wraps")
         .values({
           followup_id: input.followUpId,
           wrapped_tk: input.wrappedTkTemp,
+          org_key_generation: orgGen.current_key_generation,
         })
         .execute();
 

@@ -103,6 +103,14 @@ describe("createAppRouter mounting", () => {
   it("covers every optional router in DECLINABLE", () => {
     // Guards the two tests above: a router added to OptionalRouterDeps
     // without a matching entry here would go unasserted.
-    expect(DECLINABLE.length).toBe(Object.keys(NO_OPTIONAL_ROUTERS).length);
+    //
+    // keysDeps is the one group that tunes an always-mounted router
+    // instead of declining one: null leaves the keys router mounted with
+    // its reseal fetch endpoints degraded. It is counted here, not in
+    // DECLINABLE.
+    const depTunedAlwaysMounted = ["keysDeps"];
+    expect(DECLINABLE.length + depTunedAlwaysMounted.length).toBe(
+      Object.keys(NO_OPTIONAL_ROUTERS).length,
+    );
   });
 });

@@ -7,6 +7,15 @@ export interface WrappedOrgKeyRow {
   readonly ephemeralPoint: Buffer;
   readonly wrappedKey: Buffer;
   readonly nonce: Buffer;
+  readonly currentGeneration: number;
+  readonly generations: readonly OrgKeyGenerationRow[];
+}
+
+export interface OrgKeyGenerationRow {
+  readonly generation: number;
+  readonly publicKey: Buffer;
+  readonly prevSecretCt: Buffer | null;
+  readonly prevNonce: Buffer | null;
 }
 
 export interface UnwrappedUserRow {
@@ -49,10 +58,28 @@ export function createOrgKeyQueryService(
 
       if (!wrap) return null;
 
+      const config = await db
+        .selectFrom("org_config")
+        .select("current_key_generation")
+        .executeTakeFirstOrThrow();
+
+      const genRows = await db
+        .selectFrom("org_key_generations")
+        .select(["generation", "public_key", "prev_secret_ct", "prev_nonce"])
+        .orderBy("generation", "desc")
+        .execute();
+
       return {
         ephemeralPoint: wrap.ephemeral_point,
         wrappedKey: wrap.wrapped_key,
         nonce: wrap.nonce,
+        currentGeneration: config.current_key_generation,
+        generations: genRows.map((r) => ({
+          generation: r.generation,
+          publicKey: r.public_key,
+          prevSecretCt: r.prev_secret_ct,
+          prevNonce: r.prev_nonce,
+        })),
       };
     },
 

@@ -67,6 +67,7 @@ export interface UpdateOrgGeneralInput {
   readonly countryCode: string;
   readonly defaultLanguage: string;
   readonly encryptedTerminology?: string;
+  readonly orgKeyGeneration?: number;
 }
 
 export interface OnboardingService {
@@ -92,11 +93,14 @@ export async function resolveOrgPublicKey(
 ): Promise<SealedBoxEncryptor | null> {
   const row = await tenantDb
     .selectFrom("org_config")
-    .select("org_public_key")
+    .select(["org_public_key", "current_key_generation"])
     .executeTakeFirst();
 
   if (!row?.org_public_key) return null;
-  return createSealedBoxEncryptor(row.org_public_key);
+  return createSealedBoxEncryptor(
+    row.org_public_key,
+    row.current_key_generation,
+  );
 }
 
 // ── Factory ──────────────────────────────────────────────────────────
@@ -132,7 +136,9 @@ export function createOnboardingService(
       input: BootstrapAdminInput,
     ): Promise<{ userId: UserId; sessionToken: SessionToken }> {
       const orgPublicKey = input.orgPublicKey;
-      const sealedBox = createSealedBoxEncryptor(orgPublicKey);
+      // First admin bootstrap always uses generation 1 (the key is being
+      // stored for the first time in this same transaction).
+      const sealedBox = createSealedBoxEncryptor(orgPublicKey, 1);
 
       const identifierHash = indexer.hashIdentifier(
         input.identifier,
@@ -175,6 +181,7 @@ export function createOnboardingService(
               encrypted_preferred_locale: encryptedPreferredLocale,
               role_id: RoleId.ADMIN,
               has_seen_briefing: false,
+              org_key_generation: sealedBox.generation,
             })
             .returning("id")
             .executeTakeFirstOrThrow();
@@ -202,6 +209,7 @@ export function createOnboardingService(
             ua_token: uaToken,
             twofa_verified: true,
             expires_at: new Date(Date.now() + SESSION_MAX_AGE_MS),
+            org_key_generation: sealedBox.generation,
           })
           .execute();
 
@@ -267,6 +275,9 @@ export function createOnboardingService(
           input.encryptedTerminology,
           "base64",
         );
+        if (input.orgKeyGeneration !== undefined) {
+          updates.org_key_generation = input.orgKeyGeneration;
+        }
       }
 
       await db.updateTable("org_config").set(updates).execute();

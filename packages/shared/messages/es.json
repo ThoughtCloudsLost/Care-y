@@ -1192,11 +1192,15 @@
   "admin_keys_export_button": "Exportar archivo de custodia",
   "admin_rotation_dialog_title": "Rotar clave de la organización",
   "admin_rotation_dialog_why": "Rota tu clave si un miembro del equipo deja la organización, si sospechas acceso no autorizado, o como parte de un calendario regular de seguridad.",
-  "admin_rotation_dialog_body": "Esto crea una nueva clave de cifrado para los datos compartidos de tu organización: nombres de voluntarios, artículos de la base de conocimiento, nombres de colas y marca de la organización. Los {count} voluntarios activos recibiran la clave actualizada en su proximo inicio de sesión. Las conversaciones de tickets y la información de clientes usan cifrado separado y más fuerte, y no se ven afectadas por este cambio.",
+  "admin_rotation_dialog_body": "Esto crea una nueva clave de cifrado para los datos compartidos de tu organización y vuelve a cifrar los registros existentes con ella. Los {count} voluntarios activos recibirán la clave actualizada en su próximo inicio de sesión. Mantén esta página abierta mientras se protegen los registros; lo que quede pendiente se completará automáticamente la próxima vez que inicies sesión.",
   "admin_rotation_confirm": "Rotar clave",
   "admin_rotation_generating": "Generando nueva clave...",
   "admin_rotation_wrapping": "Envolviendo clave para {count} voluntarios...",
   "admin_rotation_submitting": "Enviando al servidor...",
+  "admin_rotation_resealing": "Protegiendo registros: {done} de {total}...",
+  "admin_rotation_reseal_pending": "Algunos registros aún están pendientes de volver a cifrarse. Esto se completará automáticamente la próxima vez que inicies sesión.",
+  "admin_rotation_reexport_escrow": "Tu archivo de recuperación es anterior a esta clave. Exporta uno nuevo para mantenerlo al día.",
+  "admin_rotation_export_escrow": "Exportar archivo de recuperación",
   "admin_rotation_complete": "Rotación de clave completada",
   "admin_rotation_error": "La rotación de clave fallo. Tu clave anterior sigue activa.",
   "admin_rotation_retry": "Reintentar",
@@ -3267,5 +3271,9 @@
   "demo_github_link_label": "Ver codigo fuente en GitHub",
   "demo_handbook_search_open": "Buscar en el manual",
   "demo_search_results_title": "Resultados de la búsqueda",
-  "demo_search_results_desc": "Las entradas que coinciden, mostradas tal como se leen en el manual."
+  "demo_search_results_desc": "Las entradas que coinciden, mostradas tal como se leen en el manual.",
+  "reseal_banner_progress": "Finalizando la actualización de claves: {done} de {total} elementos. Puedes seguir trabajando; deja la aplicación abierta si puedes.",
+  "admin_keys_reseal_ok": "Todos los registros usan la clave actual.",
+  "admin_keys_reseal_pending": "{count} registros pendientes de recifrado.",
+  "admin_keys_reseal_resume": "Reanudar"
 }

@@ -52,8 +52,9 @@ describe("crypto-protocol types", () => {
       "wrapWithVolPublic",
       "rewrapTk",
       "createTicketKey",
+      "orgResealBatch",
     ];
-    expect(allTypes).toHaveLength(19);
+    expect(allTypes).toHaveLength(20);
   });
 
   it("ResponseForRequest maps each request type to its response", () => {

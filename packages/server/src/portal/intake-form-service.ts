@@ -168,6 +168,7 @@ export interface IntakeFormService {
     db: Kysely<TenantDatabase>,
     userId: UserId,
     input: SaveIntakeFormInput,
+    orgKeyGeneration: number,
   ): Promise<{ formId: string; isActive: boolean }>;
 
   /** List all forms with summary info (id, name, slug, active, default, destination, field count). */
@@ -375,6 +376,7 @@ export function createIntakeFormService(deps: {
       db: Kysely<TenantDatabase>,
       _userId: UserId,
       input: SaveIntakeFormInput,
+      orgKeyGeneration: number,
     ): Promise<{ formId: string; isActive: boolean }> {
       // Server-side one-availability re-check
       const availabilityCount = input.fields.filter(
@@ -446,6 +448,7 @@ export function createIntakeFormService(deps: {
                   ? (input.closesAt ?? null)
                   : undefined,
               updated_at: new Date(),
+              org_key_generation: orgKeyGeneration,
             })
             .where("id", "=", input.formId)
             .execute();
@@ -471,6 +474,7 @@ export function createIntakeFormService(deps: {
                   ? Buffer.from(input.encryptedFormMeta, "base64")
                   : null,
               closes_at: input.closesAt ?? null,
+              org_key_generation: orgKeyGeneration,
             })
             .returning(["id", "is_active"])
             .executeTakeFirstOrThrow();
@@ -522,6 +526,7 @@ export function createIntakeFormService(deps: {
                 encrypted_label: Buffer.from(f.encryptedLabel, "base64"),
                 encrypted_config: Buffer.from(f.encryptedConfig, "base64"),
                 is_required: f.isRequired,
+                org_key_generation: orgKeyGeneration,
               })),
             )
             .execute();

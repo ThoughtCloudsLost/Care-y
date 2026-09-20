@@ -199,6 +199,7 @@
       orgCache.decrypt(
         `client-alias:${ticket.clientId}`,
         ticket.encryptedClientAlias,
+        { table: "clients", id: ticket.clientId },
       ) ?? "..."
     );
   });

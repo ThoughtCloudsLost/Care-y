@@ -139,8 +139,10 @@ export const TEST_ORG_PUBLIC_KEY: Buffer = testKeypair.publicKey;
 
 /** SealedBoxEncryptor backed by the test org keypair. Use for any test that
  *  creates sessions or users (session-repository, auth service, routes). */
-export const testSealedBox: SealedBoxEncryptor =
-  createSealedBoxEncryptor(TEST_ORG_PUBLIC_KEY);
+export const testSealedBox: SealedBoxEncryptor = createSealedBoxEncryptor(
+  TEST_ORG_PUBLIC_KEY,
+  1,
+);
 
 /**
  * Test-only: opens a sealed box produced with TEST_ORG_PUBLIC_KEY.
@@ -1190,6 +1192,7 @@ export const NO_OPTIONAL_ROUTERS: OptionalRouterDeps = {
   intakeFormDeps: null,
   clientPortalDeps: null,
   devDeps: null,
+  keysDeps: null,
 };
 
 /**
@@ -1231,6 +1234,7 @@ export const ALL_OPTIONAL_ROUTERS: OptionalRouterDeps = {
   intakeFormDeps: everyDepPresent(),
   clientPortalDeps: everyDepPresent(),
   devDeps: everyDepPresent(),
+  keysDeps: everyDepPresent(),
 };
 
 /**

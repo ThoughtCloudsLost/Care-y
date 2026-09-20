@@ -75,7 +75,10 @@ describe("mapTicketDisplayFields", () => {
       makeFieldDeps({ orgDecrypt }),
     );
     expect(fields.queueName).toBe("Housing");
-    expect(orgDecrypt).toHaveBeenCalledWith("queue:q1", "enc-queue");
+    expect(orgDecrypt).toHaveBeenCalledWith("queue:q1", "enc-queue", {
+      table: "queues",
+      id: "q1",
+    });
   });
 
   it("labels self-assigned tickets with the You copy, skipping the assignee decrypt", () => {
@@ -110,7 +113,10 @@ describe("mapTicketDisplayFields", () => {
     );
     expect(fields.assignedIsSelf).toBe(false);
     expect(fields.assignedName).toBe("Sam Volunteer");
-    expect(orgDecrypt).toHaveBeenCalledWith("assignee:u9", "enc-name");
+    expect(orgDecrypt).toHaveBeenCalledWith("assignee:u9", "enc-name", {
+      table: "users",
+      id: "u9",
+    });
   });
 
   it("leaves unassigned tickets with a null assignee name", () => {
@@ -131,7 +137,10 @@ describe("mapTicketDisplayFields", () => {
       makeFieldDeps({ orgDecrypt }),
     );
     expect(fields.clientAlias).toBe("Jane");
-    expect(orgDecrypt).toHaveBeenCalledWith("client-alias:c1", "enc-a");
+    expect(orgDecrypt).toHaveBeenCalledWith("client-alias:c1", "enc-a", {
+      table: "clients",
+      id: "c1",
+    });
   });
 
   it("returns null when the client alias has not been decrypted yet", () => {

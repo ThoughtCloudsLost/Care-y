@@ -138,7 +138,10 @@
 
   const titleRaw = $derived(
     encryptedTitle !== null
-      ? orgCache.decrypt(`kb-item:${articleId}`, encryptedTitle)
+      ? orgCache.decrypt(`kb-item:${articleId}`, encryptedTitle, {
+          table: "kb_items",
+          id: articleId,
+        })
       : null,
   );
   const titleResult: DecryptResult = $derived(
@@ -156,14 +159,20 @@
     if (categoryId === null || categoryQuery.data == null) return null;
     const cat = categoryQuery.data.find((c) => c.id === categoryId);
     if (cat == null) return null;
-    return orgCache.decrypt(`kb-cat:${cat.id}`, cat.encryptedName);
+    return orgCache.decrypt(`kb-cat:${cat.id}`, cat.encryptedName, {
+      table: "kb_categories",
+      id: cat.id,
+    });
   });
 
   // ── Author name ──
 
   const authorName = $derived(
     createdBy !== null
-      ? orgCache.decrypt(`volunteer:${createdBy}`, null)
+      ? orgCache.decrypt(`volunteer:${createdBy}`, null, {
+          table: "users",
+          id: createdBy,
+        })
       : null,
   );
 

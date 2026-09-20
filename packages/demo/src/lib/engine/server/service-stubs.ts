@@ -490,6 +490,12 @@ export async function buildServiceStubs(
       blobStore,
       pendingClients,
     },
+    // Mirrors index.ts: enables the reseal fetch endpoints (OPS field
+    // decryption for blind-index rebuilds, blob store for blob reseal).
+    keysDeps: {
+      fieldEncryptor: encryptor,
+      blobStore,
+    },
     intakeFormDeps: {
       createAuditSvc: createAuditService,
       intakeFormService,

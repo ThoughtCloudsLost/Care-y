@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This creates a new encryption key for your organization's shared data: volunteer names, knowledge base articles, queue names, and organization branding. All ..." |
+* | "This creates a new encryption key for your organization's shared data and re-encrypts existing records under it. All {count} active volunteers will receive t..." |
 *
 * @param {Admin_Rotation_Dialog_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

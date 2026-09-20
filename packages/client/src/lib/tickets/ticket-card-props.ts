@@ -12,6 +12,7 @@ import {
 import { hasTicketKeyMaterial } from "$lib/crypto/ticket-decrypt-scope.js";
 import { reactionsForTicket } from "./ticket-list-utils.js";
 import type { QueueAppearance } from "$lib/utils/queue-appearance.js";
+import type { ResealOrigin } from "$lib/crypto/org-decrypt-cache.js";
 import * as m from "$lib/paraglide/messages.js";
 
 export type DataCardProps = Omit<
@@ -43,6 +44,7 @@ export interface CardPropsMapperDeps {
   readonly orgDecrypt: (
     cacheKey: string,
     ciphertext: string | null,
+    origin?: ResealOrigin,
   ) => string | null;
   readonly decryptTitle: (
     ticketId: string,
@@ -98,13 +100,18 @@ export function mapTicketDisplayFields(
     assignedName = m.dashboard_assigned_you();
   } else if (t.assignedTo !== null) {
     assignedName =
-      deps.orgDecrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName) ??
-      null;
+      deps.orgDecrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName, {
+        table: "users",
+        id: t.assignedTo,
+      }) ?? null;
   }
 
   return {
     ticketId: t.id,
-    queueName: deps.orgDecrypt(`queue:${t.queueId}`, t.encryptedQueueName),
+    queueName: deps.orgDecrypt(`queue:${t.queueId}`, t.encryptedQueueName, {
+      table: "queues",
+      id: t.queueId,
+    }),
     displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
     priority: t.priority,
     titleResult: resolveAsyncDecrypt(
@@ -114,6 +121,7 @@ export function mapTicketDisplayFields(
     clientAlias: deps.orgDecrypt(
       `client-alias:${t.clientId}`,
       t.encryptedClientAlias,
+      { table: "clients", id: t.clientId },
     ),
     assignedName,
     assignedIsSelf,

@@ -103,6 +103,7 @@ export function createDbSessionRepository(
           ip_token: ipToken,
           ua_token: uaToken,
           expires_at: input.expiresAt,
+          org_key_generation: sealedBox.generation,
         })
         .returningAll()
         .executeTakeFirstOrThrow();

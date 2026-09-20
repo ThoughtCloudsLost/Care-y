@@ -68,8 +68,14 @@ describe("decryptQueueAppearance", () => {
       encryptedIcon: ct,
     });
 
-    expect(decrypt).toHaveBeenCalledWith("queue-color:q1", ct);
-    expect(decrypt).toHaveBeenCalledWith("queue-icon:q1", ct);
+    expect(decrypt).toHaveBeenCalledWith("queue-color:q1", ct, {
+      table: "queues",
+      id: "q1",
+    });
+    expect(decrypt).toHaveBeenCalledWith("queue-icon:q1", ct, {
+      table: "queues",
+      id: "q1",
+    });
     expect(a.colorId).toBe("purple");
     expect(a.iconId).toBe("star");
   });

@@ -326,7 +326,7 @@ export async function bootDemoEngine(
   // 6. Content seed (real seed modules)
   const t6 = timeMs();
   const orgPublicKey = seedResult.orgPublicKey;
-  const sealedBox = createSealedBoxEncryptor(orgPublicKey);
+  const sealedBox = createSealedBoxEncryptor(orgPublicKey, 1);
 
   // Derive the demo OPRF scalar and volunteer keypair deterministically.
   // Running the full client pipeline (Argon2id, OPRF blind/evaluate/finalize,

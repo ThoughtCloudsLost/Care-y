@@ -52,6 +52,7 @@ export interface NoteTypeService {
     requiresOnClose?: boolean;
     minViewRole?: RoleIdValue;
     minCreateRole?: RoleIdValue;
+    orgKeyGeneration: number;
   }): Promise<NoteTypeRecord>;
   update(input: {
     id: NoteTypeId;
@@ -220,6 +221,7 @@ export function createNoteTypeService(
           requires_on_close: input.requiresOnClose ?? false,
           min_view_role: viewRole,
           min_create_role: createRole,
+          org_key_generation: input.orgKeyGeneration,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -411,6 +413,7 @@ export async function seedDefaultNoteTypes(
           secretsEncryptor,
         ),
         requires_on_close: def.requiresOnClose,
+        org_key_generation: sealedBox.generation,
       })
       .returning("id")
       .executeTakeFirstOrThrow();

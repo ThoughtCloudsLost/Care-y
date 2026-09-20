@@ -292,6 +292,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailService (DB)", () => {
         primaryClientId: client1,
         secondaryClientId: client2,
         encryptedSnapshot: Buffer.from("snap"),
+        orgKeyGeneration: 1,
       });
 
       const result = await emailSvc.getClientEmail(client2);

@@ -57,8 +57,10 @@
       // A queue whose name will not decrypt still has to be selectable,
       // otherwise a case cannot be moved somewhere that plainly exists.
       const name =
-        orgCache.decrypt(`queue:${q.id}`, q.encryptedName) ??
-        m.ticket_system_queue_fallback(withTerms());
+        orgCache.decrypt(`queue:${q.id}`, q.encryptedName, {
+          table: "queues",
+          id: q.id,
+        }) ?? m.ticket_system_queue_fallback(withTerms());
       const appearance = decryptQueueAppearance(orgCache, q);
       results.push({ id: q.id, name, appearance });
     }

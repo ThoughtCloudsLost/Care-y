@@ -137,8 +137,12 @@ vi.mock("$lib/crypto/context.js", () => {
     getCurrentUserId: unknown;
     getCurrentUserRoleId: unknown;
     getCurrentPermissions: unknown;
+    getOrgKeyManager: unknown;
   };
   return {
+    // isLoaded false keeps the reseal auto-resume and saved-filter
+    // reseal effects inert in these tests.
+    getOrgKeyManager: () => ({ isLoaded: false }),
     getCryptoBridge: () => ({
       sealSelfBlob: vi.fn(),
       openSelfBlob: vi.fn(),

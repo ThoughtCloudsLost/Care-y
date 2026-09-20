@@ -99,7 +99,10 @@
     if (id === undefined || !noteTypesQuery?.data) return StickyNote;
     const nt = noteTypesQuery.data.types.find((t) => t.id === id);
     if (!nt) return StickyNote;
-    const slug = orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon);
+    const slug = orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon, {
+      table: "note_types",
+      id: nt.id,
+    });
     return resolveNoteTypeIconComponent(slug ?? null);
   }
 
@@ -109,7 +112,10 @@
     if (id === undefined || !noteTypesQuery?.data) return null;
     const nt = noteTypesQuery.data.types.find((t) => t.id === id);
     if (!nt) return null;
-    return orgCache.decrypt(nt.id + ":name", nt.encryptedName);
+    return orgCache.decrypt(nt.id + ":name", nt.encryptedName, {
+      table: "note_types",
+      id: nt.id,
+    });
   }
 
   /** Clear the cached failure so the next render re-fires the Worker decrypt. */

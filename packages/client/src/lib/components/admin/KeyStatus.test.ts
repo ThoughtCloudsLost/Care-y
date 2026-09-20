@@ -8,6 +8,11 @@ let mockWrappedKeyData: unknown = {
   wrappedKey: "b",
   nonce: "c",
 };
+const mockResealStatusData: unknown = {
+  currentGeneration: 1,
+  tables: [],
+  indexTables: [],
+};
 const mockOnrotate = vi.fn();
 const mockOnexport = vi.fn();
 
@@ -28,16 +33,18 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
       return mockOrgKeyLoaded;
     },
   }),
+  getCryptoBridge: () => ({}),
 }));
 
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
   ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
-    void opts;
+    const isResealStatus =
+      Array.isArray(opts.queryKey) && opts.queryKey[1] === "resealStatus";
     return {
       get data() {
-        return mockWrappedKeyData;
+        return isResealStatus ? mockResealStatusData : mockWrappedKeyData;
       },
       get isLoading() {
         return false;
@@ -55,6 +62,13 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     keys: {
       getWrappedOrgKey: {
         query: vi.fn().mockResolvedValue(null),
+      },
+      resealStatus: {
+        query: vi.fn().mockResolvedValue({
+          currentGeneration: 1,
+          tables: [],
+          indexTables: [],
+        }),
       },
     },
   },

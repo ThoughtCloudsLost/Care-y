@@ -357,6 +357,7 @@ export function createAuthService(
           encrypted_notification_addr: encryptedNotificationAddr,
           encrypted_preferred_locale: encryptedPreferredLocale,
           role_id: input.roleId,
+          org_key_generation: sealedBox.generation,
         })
         .returningAll()
         .executeTakeFirstOrThrow();

@@ -19,7 +19,12 @@
   <KeyStatus onrotate={handleRotate} onexport={handleExport} />
 </div>
 
-<KeyRotation bind:this={keyRotationRef} />
+<KeyRotation
+  bind:this={keyRotationRef}
+  onRequestEscrowExport={() => {
+    escrowExportRef?.open();
+  }}
+/>
 <EscrowExport bind:this={escrowExportRef} />
 
 <style>

@@ -638,6 +638,7 @@ const appRouter = createAppRouter({
     totpReplayCache,
   },
   oprfDeps: { oprfService },
+  keysDeps: { fieldEncryptor: encryptor, blobStore },
   orgService,
   providerFactory,
   // Both take no deps. Previously mounted by omission; stated now so the
@@ -1121,14 +1122,14 @@ async function createRelaySessionRepo(
   const tDb = tenantDb(orgSchema);
   const row = await tDb
     .selectFrom("org_config")
-    .select("org_public_key")
+    .select(["org_public_key", "current_key_generation"])
     .executeTakeFirst();
 
   // Org must have its public key set (post-onboarding).
   // Pre-onboarding orgs can't have active sessions anyway.
   const sealedBox = row?.org_public_key
-    ? createSealedBoxEncryptor(row.org_public_key)
-    : createSealedBoxEncryptor(Buffer.alloc(32));
+    ? createSealedBoxEncryptor(row.org_public_key, row.current_key_generation)
+    : createSealedBoxEncryptor(Buffer.alloc(32), 1);
 
   return createDbSessionRepository(tDb, tokenizer, sealedBox);
 }
@@ -1151,10 +1152,10 @@ async function getOrgSealedBoxEncryptor(
 ): Promise<SealedBoxEncryptor | null> {
   const row = await tenantDb(orgSchema)
     .selectFrom("org_config")
-    .select("org_public_key")
+    .select(["org_public_key", "current_key_generation"])
     .executeTakeFirst();
   return row?.org_public_key
-    ? createSealedBoxEncryptor(row.org_public_key)
+    ? createSealedBoxEncryptor(row.org_public_key, row.current_key_generation)
     : null;
 }
 

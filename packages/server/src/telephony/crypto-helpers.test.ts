@@ -13,6 +13,7 @@ import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 /** Minimal stub that returns the input bytes prefixed with a tag. */
 function createStubEncryptor(): SealedBoxEncryptor {
   return {
+    generation: 1,
     seal(plaintext: string): Buffer {
       return Buffer.from(`sealed:${plaintext}`);
     },
@@ -25,6 +26,7 @@ function createStubEncryptor(): SealedBoxEncryptor {
 /** Stub that always throws from sealBuffer. */
 function createThrowingEncryptor(): SealedBoxEncryptor {
   return {
+    generation: 1,
     seal(): Buffer {
       throw new Error("seal failure");
     },
@@ -47,6 +49,7 @@ describe("crypto-helpers", () => {
     it("zeros the intermediate plaintext Buffer after successful seal", () => {
       const captured: Buffer[] = [];
       const enc: SealedBoxEncryptor = {
+        generation: 1,
         seal(plaintext: string): Buffer {
           return Buffer.from(`sealed:${plaintext}`);
         },
@@ -68,6 +71,7 @@ describe("crypto-helpers", () => {
     it("zeros the intermediate plaintext Buffer even when sealBuffer throws", () => {
       const captured: Buffer[] = [];
       const enc: SealedBoxEncryptor = {
+        generation: 1,
         seal(): Buffer {
           throw new Error("unused");
         },

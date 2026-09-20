@@ -74,6 +74,7 @@ describe("resolveVolunteerName", () => {
     expect(cache.decrypt).toHaveBeenCalledWith(
       "volunteer:v1",
       vol1.encryptedDisplayName,
+      { table: "users", id: "v1" },
     );
   });
 });

@@ -95,6 +95,7 @@
       : orgCache.decrypt(
           `client-alias:${conflict.conflictingClientId}`,
           conflict.conflictingClientEncryptedAlias,
+          { table: "clients", id: conflict.conflictingClientId },
         ),
   );
 

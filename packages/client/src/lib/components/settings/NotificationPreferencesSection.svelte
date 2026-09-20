@@ -233,7 +233,10 @@
     id: string;
     encryptedName: string;
   }): string | null {
-    return orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName);
+    return orgCache.decrypt(`queue:${queue.id}`, queue.encryptedName, {
+      table: "queues",
+      id: queue.id,
+    });
   }
 
   // Reset queue name for dialog title

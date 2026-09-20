@@ -21,6 +21,7 @@ import type {
 } from "../types.js";
 import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
 import { BookOpen } from "@lucide/svelte";
+import type { ResealOrigin } from "$lib/crypto/org-decrypt-cache.js";
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
 import { fuzzySearch } from "../fuzzy.js";
 import * as m from "$lib/paraglide/messages.js";
@@ -75,6 +76,7 @@ export interface KBSearchProviderDeps {
   readonly decryptOrg: (
     cacheKey: string,
     ciphertext: string | null,
+    origin?: ResealOrigin,
   ) => Promise<string | null>;
   /** Resolve a category name from its ID (reactive, reads OrgDecryptCache). */
   readonly resolveCategoryName: (categoryId: string) => string | null;
@@ -114,13 +116,16 @@ export function createKbSearchProvider(
         if (page.total !== undefined) totalItemCount = page.total;
         for (const item of page.items) {
           if (cache.has(item.id)) continue;
+          const kbOrigin: ResealOrigin = { table: "kb_items", id: item.id };
           const title = await deps.decryptOrg(
             `kb-search:${item.id}:title`,
             item.encryptedTitle,
+            kbOrigin,
           );
           const bodyRaw = await deps.decryptOrg(
             `kb-search:${item.id}:excerpt`,
             item.encryptedExcerpt,
+            kbOrigin,
           );
           if (title === null) continue;
           cache.set(item.id, {
@@ -286,6 +291,7 @@ export function createKbSearchProvider(
         const plaintext = await deps.decryptOrg(
           `kb-search:${body.id}:body`,
           body.encryptedBody,
+          { table: "kb_items", id: body.id },
         );
         if (plaintext === null) continue;
 

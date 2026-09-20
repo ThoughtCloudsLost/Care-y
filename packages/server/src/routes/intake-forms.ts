@@ -82,6 +82,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
           ctx.org.tenantDb,
           ctx.user.id,
           input,
+          ctx.org.sealedBox.generation,
         );
 
         const audit = deps.createAuditSvc(ctx.org.tenantDb);

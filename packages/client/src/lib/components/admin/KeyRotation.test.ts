@@ -2,41 +2,57 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const { mockRotateOrgKey, mockInvalidateQueries, mockUsers } = vi.hoisted(
-  () => ({
-    mockRotateOrgKey: vi.fn().mockResolvedValue({ success: true }),
-    mockInvalidateQueries: vi.fn(),
-    mockUsers: [
-      {
-        id: "u1",
-        isActive: true,
-        volPublic: "AAAA",
-        encryptedDisplayName: "enc1",
-        roleId: "vol",
-        hasKeys: true,
-        hasOrgKeyWrap: true,
-      },
-      {
-        id: "u2",
-        isActive: true,
-        volPublic: "BBBB",
-        encryptedDisplayName: "enc2",
-        roleId: "vol",
-        hasKeys: true,
-        hasOrgKeyWrap: true,
-      },
-      {
-        id: "u3",
-        isActive: false,
-        volPublic: "CCCC",
-        encryptedDisplayName: "enc3",
-        roleId: "vol",
-        hasKeys: true,
-        hasOrgKeyWrap: true,
-      },
-    ],
-  }),
-);
+const {
+  mockRotateOrgKey,
+  mockInvalidateQueries,
+  mockUsers,
+  mockResealTables,
+  mockResealBlobTables,
+  mockResealBrandingClasses,
+  mockReindexViewerTables,
+} = vi.hoisted(() => ({
+  mockRotateOrgKey: vi.fn().mockResolvedValue({ success: true }),
+  mockInvalidateQueries: vi.fn(),
+  mockResealTables: vi
+    .fn()
+    .mockResolvedValue({ resealed: 3, skipped: 0, reindexed: 1 }),
+  mockResealBlobTables: vi.fn().mockResolvedValue({ resealed: 1, skipped: 0 }),
+  mockResealBrandingClasses: vi
+    .fn()
+    .mockResolvedValue({ resealed: 2, skipped: 0 }),
+  mockReindexViewerTables: vi
+    .fn()
+    .mockResolvedValue({ reindexed: 2, indexPendingTables: [] }),
+  mockUsers: [
+    {
+      id: "u1",
+      isActive: true,
+      volPublic: "AAAA",
+      encryptedDisplayName: "enc1",
+      roleId: "vol",
+      hasKeys: true,
+      hasOrgKeyWrap: true,
+    },
+    {
+      id: "u2",
+      isActive: true,
+      volPublic: "BBBB",
+      encryptedDisplayName: "enc2",
+      roleId: "vol",
+      hasKeys: true,
+      hasOrgKeyWrap: true,
+    },
+    {
+      id: "u3",
+      isActive: false,
+      volPublic: "CCCC",
+      encryptedDisplayName: "enc3",
+      roleId: "vol",
+      hasKeys: true,
+      hasOrgKeyWrap: true,
+    },
+  ],
+}));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof MessagesNS>()),
@@ -54,7 +70,25 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_rotation_retry: () => "Retry",
   admin_key_rotated: () => "Organization key rotated",
   admin_rotation_done: () => "Done",
+  admin_rotation_resealing: ({
+    done,
+    total,
+  }: {
+    done: string;
+    total: string;
+  }) => `Securing records: ${done} of ${total}...`,
+  admin_rotation_reseal_pending: () => "Some records are still waiting.",
+  admin_rotation_reexport_escrow: () => "Your recovery file predates this key.",
+  admin_rotation_export_escrow: () => "Export recovery file",
   common_cancel: () => "Cancel",
+}));
+
+vi.mock("$lib/crypto/org-reseal.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof OrgResealNS>()),
+  resealTables: mockResealTables,
+  resealBlobTables: mockResealBlobTables,
+  resealBrandingClasses: mockResealBrandingClasses,
+  reindexViewerTables: mockReindexViewerTables,
 }));
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
@@ -66,6 +100,10 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   getCryptoBridge: () => ({
     orgEncrypt: vi.fn().mockResolvedValue("encrypted"),
     orgDecrypt: vi.fn().mockResolvedValue("decrypted"),
+    // 32 bytes: the outgoing secret the rotation seals into the chain.
+    exportOrgSecretKey: vi
+      .fn()
+      .mockResolvedValue(new Uint8Array(32).fill(7).buffer),
   }),
 }));
 
@@ -101,6 +139,15 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     },
     keys: {
       rotateOrgKey: { mutate: mockRotateOrgKey },
+      getWrappedOrgKey: {
+        query: vi.fn().mockResolvedValue({
+          wrappedKey: "w",
+          ephemeralPoint: "e",
+          nonce: "n",
+          currentGeneration: 1,
+          generations: [],
+        }),
+      },
     },
   },
 }));
@@ -140,6 +187,10 @@ const fakeKeypair = {
 vi.mock("@care-y/crypto", async (importOriginal) => ({
   ...(await importOriginal<typeof CryptoNS>()),
   generateOrgKeypair: () => fakeKeypair,
+  sealPrevGeneration: () => ({
+    ciphertext: new Uint8Array(48),
+    nonce: new Uint8Array(24),
+  }),
   wrapKey: () => ({
     ephemeralPoint: new Uint8Array(32),
     nonce: new Uint8Array(24),
@@ -163,6 +214,7 @@ import type * as ContextNS from "$lib/crypto/context.js";
 import type * as MessagesNS from "$lib/paraglide/messages.js";
 import type * as CryptoNS from "@care-y/crypto";
 import type * as ShellDialogNS from "$lib/shell/ShellDialog.svelte";
+import type * as OrgResealNS from "$lib/crypto/org-reseal.js";
 
 describe("KeyRotation", () => {
   beforeEach(() => {
@@ -206,9 +258,17 @@ describe("KeyRotation", () => {
 
     const call = mockRotateOrgKey.mock.calls[0]![0] as {
       newOrgPublicKey: string;
+      newGeneration: number;
+      chainedFrom: { prevSecretCt: string; prevNonce: string } | null;
       wrappedKeys: unknown[];
     };
     expect(call.wrappedKeys).toHaveLength(2);
+    // Without a chain entry the swap would orphan every pre-rotation blob,
+    // so the rotation must never go out with chainedFrom null.
+    expect(call.newGeneration).toBe(2);
+    expect(call.chainedFrom).not.toBeNull();
+    expect(call.chainedFrom?.prevSecretCt).toBeTruthy();
+    expect(call.chainedFrom?.prevNonce).toBeTruthy();
   });
 
   it("shows completion state after successful rotation", async () => {
@@ -242,6 +302,69 @@ describe("KeyRotation", () => {
       expect(screen.getByText("Key rotation failed.")).toBeTruthy();
       expect(screen.getByText("Network error")).toBeTruthy();
     });
+  });
+
+  it("runs the inline red-tier reseal after a successful swap", async () => {
+    const { component } = render(KeyRotation);
+    component.open();
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Rotate Key")).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByText("Rotate Key"));
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Key rotation complete")).toBeTruthy();
+    });
+
+    expect(mockResealTables).toHaveBeenCalledTimes(1);
+    expect(mockResealBlobTables).toHaveBeenCalledTimes(1);
+    expect(mockResealBrandingClasses).toHaveBeenCalledTimes(1);
+    expect(mockReindexViewerTables).toHaveBeenCalledTimes(1);
+    // The reseal only starts once the swap has landed
+    expect(mockResealTables.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      mockRotateOrgKey.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("shows the escrow re-export prompt in the done state", async () => {
+    const { component } = render(KeyRotation, {
+      props: { onRequestEscrowExport: vi.fn() },
+    });
+    component.open();
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Rotate Key")).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByText("Rotate Key"));
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getByText("Your recovery file predates this key."),
+      ).toBeTruthy();
+      expect(screen.getByText("Export recovery file")).toBeTruthy();
+    });
+  });
+
+  it("completes with a pending note when the reseal fails, not a rotation error", async () => {
+    mockResealTables.mockRejectedValueOnce(new Error("network died"));
+
+    const { component } = render(KeyRotation);
+    component.open();
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Rotate Key")).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByText("Rotate Key"));
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Key rotation complete")).toBeTruthy();
+      expect(screen.getByText("Some records are still waiting.")).toBeTruthy();
+    });
+    expect(screen.queryByText("Key rotation failed.")).toBeNull();
   });
 
   it("shows retry button on error", async () => {
