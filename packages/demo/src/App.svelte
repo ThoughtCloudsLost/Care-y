@@ -93,7 +93,7 @@
   import {
     buildAggregationSection,
     buildSearchResultsSection,
-    distinctHitLabels,
+    distinctHitFacets,
     type SyntheticSection,
   } from "$demo/excursion-sections.js";
   import { searchEntries } from "$demo/handbook-search.js";
@@ -276,7 +276,9 @@
   // Debounced so the story is not relaid out on every keystroke.
   let searchQuery = $state("");
   let searchDebounced = $state("");
-  let searchFacet = $state<string | null>(null);
+  let searchFacet = $state<{ value: string; kind: "label" | "tag" } | null>(
+    null,
+  );
   $effect(() => {
     const value = searchQuery;
     const handle = setTimeout(() => {
@@ -300,17 +302,35 @@
   const searchHits = $derived(
     activeExcursion()?.kind === "search"
       ? searchEntries(searchDebounced, uiLocale, {
-          labels: searchFacet !== null ? [searchFacet] : undefined,
+          labels:
+            searchFacet !== null && searchFacet.kind === "label"
+              ? [searchFacet.value]
+              : undefined,
+          tags:
+            searchFacet !== null && searchFacet.kind === "tag"
+              ? [searchFacet.value]
+              : undefined,
         })
       : [],
   );
   // Facets come from the unfiltered hit set so toggling one off is
   // always possible.
-  const searchFacetLabels = $derived(
+  const searchHitsUnfiltered = $derived(
     activeExcursion()?.kind === "search" && searchDebounced.trim().length > 0
-      ? distinctHitLabels(searchEntries(searchDebounced, uiLocale))
+      ? searchEntries(searchDebounced, uiLocale)
       : [],
   );
+  const searchFacetLabels = $derived(distinctHitFacets(searchHitsUnfiltered));
+  // A facet chip is a label or a tag; classify it against the current
+  // hit set at click time so the filter routes to the right axis.
+  function toggleSearchFacet(facet: string): void {
+    if (searchFacet?.value === facet) {
+      searchFacet = null;
+      return;
+    }
+    const isTag = searchHitsUnfiltered.some((h) => h.tags.includes(facet));
+    searchFacet = { value: facet, kind: isTag ? "tag" : "label" };
+  }
 
   const excursionSynthetic: SyntheticSection | null = $derived.by(() => {
     const exc = activeExcursion();
@@ -2382,13 +2402,11 @@
         query={searchQuery}
         resultCount={searchHits.length}
         facetLabels={searchFacetLabels}
-        activeFacet={searchFacet}
+        activeFacet={searchFacet?.value ?? null}
         onQueryInput={(v: string) => {
           searchQuery = v;
         }}
-        onToggleFacet={(label: string) => {
-          searchFacet = searchFacet === label ? null : label;
-        }}
+        onToggleFacet={toggleSearchFacet}
         onBack={() => closeExcursion("user")}
       />
     </div>
@@ -2477,13 +2495,11 @@
     query={searchQuery}
     resultCount={searchHits.length}
     facetLabels={searchFacetLabels}
-    activeFacet={searchFacet}
+    activeFacet={searchFacet?.value ?? null}
     onQueryInput={(v: string) => {
       searchQuery = v;
     }}
-    onToggleFacet={(label: string) => {
-      searchFacet = searchFacet === label ? null : label;
-    }}
+    onToggleFacet={toggleSearchFacet}
     onBack={() => closeExcursion("user")}
   />
 {/snippet}

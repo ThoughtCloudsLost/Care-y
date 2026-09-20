@@ -24,6 +24,8 @@ export interface AggPageDef {
   readonly introKey: string;
   /** Entries carrying any of these labels compose the page. */
   readonly labels: readonly string[];
+  /** Entries carrying any of these tags compose the page. */
+  readonly tags: readonly string[];
   /** Provisional prose keys (Track P); unresolved keys are skipped. */
   readonly proseKeys: readonly string[];
 }
@@ -43,6 +45,7 @@ const PAGES: readonly AggPageDef[] = [
     titleKey: "demo_agg_encryption_title",
     introKey: "demo_agg_encryption_intro",
     labels: ["Encryption."],
+    tags: [],
     proseKeys: [],
   },
   {
@@ -50,6 +53,7 @@ const PAGES: readonly AggPageDef[] = [
     titleKey: "demo_agg_server_holds_title",
     introKey: "demo_agg_server_holds_intro",
     labels: ["What the server holds.", "Privacy."],
+    tags: [],
     proseKeys: [],
   },
   {
@@ -57,6 +61,7 @@ const PAGES: readonly AggPageDef[] = [
     titleKey: "demo_agg_who_sees_title",
     introKey: "demo_agg_who_sees_intro",
     labels: ["Permissions.", "Visibility."],
+    tags: [],
     proseKeys: [],
   },
   {
@@ -64,6 +69,7 @@ const PAGES: readonly AggPageDef[] = [
     titleKey: "demo_agg_cannot_prove_title",
     introKey: "demo_agg_cannot_prove_intro",
     labels: [],
+    tags: [],
     proseKeys: [
       "demo_agg_cannot_prove_section1",
       "demo_agg_cannot_prove_section2",
@@ -87,6 +93,7 @@ const PAGES: readonly AggPageDef[] = [
       "Full search.",
       "Privacy.",
     ],
+    tags: [],
     proseKeys: [],
   },
 ];

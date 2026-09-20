@@ -72,4 +72,25 @@ describe("handbook-corpus", () => {
     const mainEntries = corpus.filter((e) => !e.isEntry);
     expect(mainEntries.length).toBeGreaterThan(0);
   });
+
+  it("every CorpusEntry carries a tags array (empty when no tags in source)", () => {
+    const corpus = buildCorpus(LOCALE);
+    for (const entry of corpus) {
+      expect(Array.isArray(entry.tags)).toBe(true);
+    }
+  });
+
+  it("deep-dive entries appear in the corpus when catalog keys are present", () => {
+    const corpus = buildCorpus(LOCALE);
+    const deepDiveEntries = corpus.filter((e) => e.sectionId === "deep-dive");
+    // Section-level entries (the desc) carry a null subSlug by design;
+    // each of the 8 deep-dive bodies must be indexed under its slug.
+    for (const entry of deepDiveEntries) {
+      expect(entry.plainText.length).toBeGreaterThan(0);
+    }
+    const slugs = new Set(
+      deepDiveEntries.map((e) => e.subSlug).filter((s) => s !== null),
+    );
+    expect(slugs.size).toBe(8);
+  });
 });

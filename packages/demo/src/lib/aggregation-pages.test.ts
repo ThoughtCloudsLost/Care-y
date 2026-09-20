@@ -39,11 +39,11 @@ describe("aggregation-pages", () => {
     }
   });
 
-  it("pages without labels carry provisional prose keys", () => {
+  it("pages without labels or tags carry provisional prose keys", () => {
     for (const page of PAGES) {
       expect(
-        page.labels.length + page.proseKeys.length,
-        `page "${page.id}" has neither labels nor prose keys`,
+        page.labels.length + page.tags.length + page.proseKeys.length,
+        `page "${page.id}" has neither labels, tags, nor prose keys`,
       ).toBeGreaterThan(0);
     }
   });
