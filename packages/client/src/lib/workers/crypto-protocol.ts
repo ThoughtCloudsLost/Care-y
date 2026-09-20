@@ -413,6 +413,16 @@ export interface CreateTicketKeyRequest {
    */
   readonly ticketId: string;
   readonly fields: readonly { name: string; plaintext: string }[];
+  /**
+   * Queue member public keys the tk should be wrapped for, in addition
+   * to the caller's own volPublic. Each entry is a { volunteerId,
+   * volPublic } pair with base64-encoded volPublic. When absent or
+   * empty, tk is wrapped for the caller only (legacy single-wrap).
+   */
+  readonly recipients?: readonly {
+    readonly volunteerId: string;
+    readonly volPublic: string;
+  }[];
 }
 
 // ── Portal thread reseed batch operations ─────────────────────────
@@ -894,11 +904,14 @@ export interface CreateTicketKeyResponse extends SuccessBase {
     name: string;
     ciphertext: string;
   }[];
-  readonly keyWrap: {
+  /** All ECIES wraps (creator + queue members). Each includes the
+   *  target volunteerId so the server can attribute wraps on insert. */
+  readonly keyWraps: readonly {
+    volunteerId: string;
     ephemeralPoint: string;
     nonce: string;
     wrappedKey: string;
-  };
+  }[];
   readonly keyGeneration: string;
 }
 

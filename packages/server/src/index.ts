@@ -152,6 +152,7 @@ import { registerNotificationSmsHandler } from "./jobs/notification-sms.js";
 import { createNotificationPreferencesService } from "./notifications/preferences.js";
 import { createSearchService } from "./tickets/search.js";
 import { createAuditService } from "./tickets/audit.js";
+import { createOffboardingService } from "./crypto/offboarding.js";
 import {
   createKBCategoryService,
   createKBItemService,
@@ -615,6 +616,7 @@ const appRouter = createAppRouter({
     resolveCallerId: phoneResolver,
     totpReplayCache,
     createAuditSvc: (tDb) => createAuditService(tDb),
+    createOffboardingSvc: (tDb) => createOffboardingService(tDb),
   },
   profileDeps: {
     hasher,

@@ -343,11 +343,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptedDescription: testEncryptedContent(0x02),
           priority: "normal",
           keyGeneration: keyGen,
-          keyWrap: {
-            ephemeralPoint: testEphemeralPoint(),
-            nonce: testNonce(),
-            wrappedKey: testWrappedKey(),
-          },
+          keyWraps: [
+            {
+              volunteerId: user.id,
+              ephemeralPoint: testEphemeralPoint(),
+              nonce: testNonce(),
+              wrappedKey: testWrappedKey(),
+            },
+          ],
         });
 
         expect(result.id).toBeDefined();
@@ -4258,11 +4261,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptedDescription: testEncryptedContent(0x52),
           priority: "normal",
           keyGeneration: keyGen,
-          keyWrap: {
-            ephemeralPoint: testEphemeralPoint(),
-            nonce: testNonce(),
-            wrappedKey: testWrappedKey(),
-          },
+          keyWraps: [
+            {
+              volunteerId: user.id,
+              ephemeralPoint: testEphemeralPoint(),
+              nonce: testNonce(),
+              wrappedKey: testWrappedKey(),
+            },
+          ],
         });
 
         // The mutation succeeds despite the outbox path being fire-and-forget

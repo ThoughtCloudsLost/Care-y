@@ -1284,19 +1284,29 @@ export async function devSeedData(
     // Seeding assumes a reset DB (step 0), so every create is fresh and
     // the minted id is the id the row will get (AAD binding, ADR-053).
     const mintedTicketId = newTicketId();
-    const encrypted = await bridge.createTicketEncryption(mintedTicketId, [
-      { name: "title", plaintext: ticket.title },
-      { name: "description", plaintext: ticket.description },
-    ]);
+
+    const targetQueue = queues[ticket.queueIndex];
+    if (!targetQueue) continue;
+
+    // Fetch queue member public keys for the wrap floor
+    const recipients = (await ticketRouter.listQueueMemberPublicKeys.query({
+      queueId: targetQueue.id,
+    })) as readonly { volunteerId: string; volPublic: string }[];
+
+    const encrypted = await bridge.createTicketEncryption(
+      mintedTicketId,
+      [
+        { name: "title", plaintext: ticket.title },
+        { name: "description", plaintext: ticket.description },
+      ],
+      recipients,
+    );
 
     const findField = (name: string): string => {
       const field = encrypted.encryptedFields.find((f) => f.name === name);
       if (!field) throw new ClientError("Missing encrypted field: " + name);
       return field.ciphertext;
     };
-
-    const targetQueue = queues[ticket.queueIndex];
-    if (!targetQueue) continue;
 
     const result = (await ticketRouter.create.mutate({
       id: mintedTicketId,
@@ -1308,7 +1318,7 @@ export async function devSeedData(
       encryptedDescription: findField("description"),
       priority: ticket.priority,
       keyGeneration: encrypted.keyGeneration,
-      keyWrap: encrypted.keyWrap,
+      keyWraps: encrypted.keyWraps,
     })) as { id: string };
     ticketIds.push(result.id);
 

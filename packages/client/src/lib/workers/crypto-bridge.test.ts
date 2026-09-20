@@ -410,11 +410,14 @@ describe("CryptoBridge", () => {
           { name: "title", ciphertext: "ZW5jLXRpdGxl" },
           { name: "description", ciphertext: "ZW5jLWRlc2M=" },
         ],
-        keyWrap: {
-          ephemeralPoint: "ZXBoZW1lcmFs",
-          nonce: "bm9uY2U=",
-          wrappedKey: "d3JhcHBlZA==",
-        },
+        keyWraps: [
+          {
+            volunteerId: "9c4f2d10-1234-4a5b-8c6d-000000000001",
+            ephemeralPoint: "ZXBoZW1lcmFs",
+            nonce: "bm9uY2U=",
+            wrappedKey: "d3JhcHBlZA==",
+          },
+        ],
         keyGeneration: "550e8400-e29b-41d4-a716-446655440000",
       });
 
@@ -422,9 +425,9 @@ describe("CryptoBridge", () => {
       expect(result.encryptedFields).toHaveLength(2);
       expect(result.encryptedFields[0]!.name).toBe("title");
       expect(result.encryptedFields[0]!.ciphertext).toBe("ZW5jLXRpdGxl");
-      expect(result.keyWrap.ephemeralPoint).toBe("ZXBoZW1lcmFs");
-      expect(result.keyWrap.nonce).toBe("bm9uY2U=");
-      expect(result.keyWrap.wrappedKey).toBe("d3JhcHBlZA==");
+      expect(result.keyWraps[0]!.ephemeralPoint).toBe("ZXBoZW1lcmFs");
+      expect(result.keyWraps[0]!.nonce).toBe("bm9uY2U=");
+      expect(result.keyWraps[0]!.wrappedKey).toBe("d3JhcHBlZA==");
       expect(result.keyGeneration).toBe("550e8400-e29b-41d4-a716-446655440000");
     });
   });

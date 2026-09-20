@@ -87,6 +87,12 @@ export const keyWrapSchema = z.object({
 });
 export type KeyWrap = z.infer<typeof keyWrapSchema>;
 
+/** ECIES wrap with the target volunteer's identity, used when multiple wraps are submitted. */
+export const keyWrapWithRecipientSchema = keyWrapSchema.extend({
+  volunteerId: userIdSchema,
+});
+export type KeyWrapWithRecipient = z.infer<typeof keyWrapWithRecipientSchema>;
+
 // --- Input schemas ---
 
 export const createTicketInputSchema = z
@@ -100,7 +106,13 @@ export const createTicketInputSchema = z
     encryptedDescription: base64String("encryptedDescription"),
     priority: ticketPrioritySchema.default("normal"),
     keyGeneration: keyGenerationSchema,
-    keyWrap: keyWrapSchema,
+    /**
+     * ECIES wraps of the ticket key for all intended recipients
+     * (creator + active onboarded queue members). The server validates
+     * each volunteerId is an active org user. Fewer than 2 total holders
+     * is accepted but recorded as a transient-onboarding shortfall.
+     */
+    keyWraps: z.array(keyWrapWithRecipientSchema).min(1),
   })
   .refine((data) => Boolean(data.clientId) !== Boolean(data.clientToken), {
     message: "Provide either clientId or clientToken, not both",

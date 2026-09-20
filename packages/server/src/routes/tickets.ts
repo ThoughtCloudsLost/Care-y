@@ -196,6 +196,7 @@ import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
 import { rewrapFollowUp } from "../tickets/rewrap-service.js";
+import { createWrapBackfillService } from "../tickets/wrap-backfill-service.js";
 import { revokeTokensForTicket } from "../email/reply-token-service.js";
 import { phoneForViewer, emailForViewer } from "../utils/sql.js";
 import {
@@ -769,11 +770,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           ),
           priority: input.priority,
           keyGeneration: input.keyGeneration,
-          keyWrap: {
-            ephemeralPoint: Buffer.from(input.keyWrap.ephemeralPoint, "base64"),
-            nonce: Buffer.from(input.keyWrap.nonce, "base64"),
-            wrappedKey: Buffer.from(input.keyWrap.wrappedKey, "base64"),
-          },
+          keyWraps: input.keyWraps.map((w) => ({
+            volunteerId: w.volunteerId,
+            ephemeralPoint: Buffer.from(w.ephemeralPoint, "base64"),
+            nonce: Buffer.from(w.nonce, "base64"),
+            wrappedKey: Buffer.from(w.wrappedKey, "base64"),
+          })),
         });
         auditAndNotify(ctx, "ticket_created", ticket, {
           eventType: "ticket_created",
@@ -1824,6 +1826,18 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
+    /** Active, onboarded queue members with their vol_public keys.
+     *  Used by the client at ticket creation to wrap tk for the full
+     *  recipient set (creator + queue members). */
+    listQueueMemberPublicKeys: openCasesProcedure
+      .input(z.object({ queueId: queueIdSchema }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+          return svc.listMemberPublicKeys(input.queueId);
+        }),
+      ),
+
     getUserQueues: manageQueueMembershipProcedure
       .input(z.object({ userId: userIdSchema }))
       .query(
@@ -1839,6 +1853,49 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         return svc.listAllAssignments();
       }),
     ),
+
+    // --- Wrap backfill (queue-join key distribution) ---
+    listPendingWrapBackfills: viewCasesProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(200).default(50) }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createWrapBackfillService(ctx.org.tenantDb);
+          return svc.listPendingBackfills(ctx.user.id, input.limit);
+        }),
+      ),
+
+    submitWrapBackfills: viewCasesProcedure
+      .input(
+        z.object({
+          wraps: z
+            .array(
+              z.object({
+                ticketId: ticketIdSchema,
+                volunteerId: userIdSchema,
+                ephemeralPoint: z.string().min(1),
+                nonce: z.string().min(1),
+                wrappedKey: z.string().min(1),
+              }),
+            )
+            .min(1)
+            .max(200),
+        }),
+      )
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createWrapBackfillService(ctx.org.tenantDb);
+          return svc.submitBackfillWraps(
+            ctx.user.id,
+            input.wraps.map((w) => ({
+              ticketId: w.ticketId,
+              volunteerId: w.volunteerId,
+              ephemeralPoint: Buffer.from(w.ephemeralPoint, "base64"),
+              nonce: Buffer.from(w.nonce, "base64"),
+              wrappedKey: Buffer.from(w.wrappedKey, "base64"),
+            })),
+          );
+        }),
+      ),
 
     // --- Volunteers (for @mention autocomplete) ---
     listVolunteers: viewCasesProcedure.query(

@@ -14,6 +14,7 @@ import {
   createTicketService,
   type TicketService,
   type CreateTicketKeyWrap,
+  type CreateTicketKeyWrapWithRecipient,
   type PendingClient,
 } from "./ticket-service.js";
 import {
@@ -82,6 +83,12 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     };
   }
 
+  function fakeKeyWraps(
+    volunteerId: UserId,
+  ): readonly CreateTicketKeyWrapWithRecipient[] {
+    return [{ volunteerId, ...fakeKeyWrap() }];
+  }
+
   async function createClientFixture() {
     const fix = await createTestClientFixture(testDb.db);
     return { userId: fix.userId, clientId: fix.clientId, queueId: fix.queueId };
@@ -99,7 +106,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: keyGen,
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     expect(ticket.status).toBe("open");
@@ -125,7 +132,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("d"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
@@ -152,7 +159,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("d"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       }),
     ).rejects.toBeInstanceOf(MergeError);
   });
@@ -169,7 +176,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("old-desc"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
     await testDb.db
       .updateTable("tickets")
@@ -189,7 +196,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("new-desc"),
       priority: "high",
       keyGeneration: newKeyGen,
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     expect(reopened.id).toBe(first.id);
@@ -209,7 +216,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("d"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
     await testDb.db
       .updateTable("tickets")
@@ -228,7 +235,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("d2"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       }),
     ).rejects.toBeInstanceOf(ConflictError);
   });
@@ -249,7 +256,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("d"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     expect(await svc.getCreateTarget(clientId)).toEqual({
@@ -281,7 +288,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("d"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     expect(ticket.id).toBe(mintedId);
@@ -298,7 +305,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     await expect(
@@ -310,7 +317,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("other-desc"),
         priority: "high",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       }),
     ).rejects.toBeInstanceOf(ConflictError);
   });
@@ -328,7 +335,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: keyGen,
-      keyWrap: kw,
+      keyWraps: [{ volunteerId: userId, ...kw }],
     });
 
     const wrapRow = await testDb.db
@@ -357,7 +364,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("d"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     await testDb.db
@@ -376,7 +383,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("new-d"),
       priority: "normal",
       keyGeneration: newKeyGen,
-      keyWrap: newKw,
+      keyWraps: [{ volunteerId: userId, ...newKw }],
     });
 
     const wrapRow = await testDb.db
@@ -778,7 +785,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     // Create a high-priority ticket for a different client in the same queue
@@ -791,7 +798,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "high",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     // Filter to high only
@@ -1503,7 +1510,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     // Assign via direct DB update (assignment is a separate service).
@@ -1549,7 +1556,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("desc"),
         priority: p,
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       });
       ticketIds.push(t.id);
     }
@@ -1593,7 +1600,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("desc"),
         priority: p,
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       });
       ticketIds.push(t.id);
     }
@@ -1626,7 +1633,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     // Ticket B: created second, has a follow-up (last_activity = now)
@@ -1639,7 +1646,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("desc"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     // Add a follow-up to ticket B so it has recent activity
@@ -1687,7 +1694,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("desc"),
         priority: p,
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       });
       ticketIds.push(t.id);
     }
@@ -1745,7 +1752,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("desc"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       });
       ticketIds.push(t.id);
     }
@@ -1806,7 +1813,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("desc"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       });
       ticketIds.push(t.id);
 
@@ -1875,7 +1882,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("desc"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       });
       ticketIds.push(t.id);
     }
@@ -1930,7 +1937,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("d"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       });
       ticketIds.push(t1.id);
 
@@ -1943,7 +1950,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("d"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       });
       ticketIds.push(t2.id);
     }
@@ -1984,7 +1991,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("d"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       });
       ticketIds.push(t.id);
 
@@ -2056,7 +2063,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("pending-desc"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     expect(ticket.status).toBe("open");
@@ -2079,7 +2086,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("d"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       }),
     ).rejects.toBeInstanceOf(ValidationError);
   });
@@ -2108,7 +2115,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("d"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
@@ -2129,7 +2136,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("d"),
         priority: "normal",
         keyGeneration: newKeyGeneration(),
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       }),
     ).rejects.toBeInstanceOf(InternalError);
   });
@@ -2341,7 +2348,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("d"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     // Filter with future range should exclude it
@@ -2381,7 +2388,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("d"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
 
     const c2 = await createTestClientFixture(testDb.db, { queueId });
@@ -2393,7 +2400,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       encryptedDescription: Buffer.from("d"),
       priority: "normal",
       keyGeneration: newKeyGeneration(),
-      keyWrap: fakeKeyWrap(),
+      keyWraps: fakeKeyWraps(userId),
     });
     await testDb.db
       .updateTable("tickets")
@@ -2466,7 +2473,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         encryptedDescription: Buffer.from("original-desc"),
         priority: "normal",
         keyGeneration: keyGen,
-        keyWrap: fakeKeyWrap(),
+        keyWraps: fakeKeyWraps(userId),
       });
       return { userId, ticketId: ticket.id, keyGeneration: keyGen };
     }

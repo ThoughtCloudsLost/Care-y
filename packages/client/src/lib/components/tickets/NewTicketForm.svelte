@@ -12,11 +12,12 @@
     queueId: string;
     priority: TicketPriority;
     keyGeneration: string;
-    keyWrap: {
+    keyWraps: readonly {
+      volunteerId: string;
       ephemeralPoint: string;
       nonce: string;
       wrappedKey: string;
-    };
+    }[];
     clientId?: string;
     clientToken?: string;
   }
@@ -28,7 +29,7 @@
   import { List, ListInput, Preloader } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
-  import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { getCryptoBridge, getCurrentUserId } from "$lib/crypto/context.js";
   import {
     ticketPrioritySchema,
     newTicketId,
@@ -61,6 +62,11 @@
       openTicketId: string | null;
       reopenTicketId: string | null;
     }>;
+    /** Fetches active, onboarded queue members with their vol_public keys
+     *  so the worker can wrap tk for the full recipient set. */
+    fetchQueueMemberKeys: (
+      queueId: string,
+    ) => Promise<readonly { volunteerId: string; volPublic: string }[]>;
     onsubmit: (payload: NewTicketPayload) => void;
     oncollision?: (info: CollisionInfo) => void;
     submitting?: boolean;
@@ -73,6 +79,7 @@
     searchClients,
     phoneLookup,
     resolveCreateTarget,
+    fetchQueueMemberKeys,
     onsubmit,
     oncollision,
     submitting = false,
@@ -139,7 +146,18 @@
         { name: "description", plaintext: description.trim() || "" },
       ];
 
-      const result = await bridge.createTicketEncryption(ticketId, fields);
+      // Fetch queue member public keys so tk wraps to the full set.
+      // The endpoint returns all active, onboarded members. The creator
+      // is typically among them. If not (edge case), the worker's
+      // self-wrap in the legacy fallback path covers it, but for the
+      // new path we rely on the server including the creator.
+      const recipients = await fetchQueueMemberKeys(queueId);
+
+      const result = await bridge.createTicketEncryption(
+        ticketId,
+        fields,
+        recipients,
+      );
 
       const find = (name: string): string => {
         const field = result.encryptedFields.find((f) => f.name === name);
@@ -154,7 +172,7 @@
         queueId,
         priority,
         keyGeneration: result.keyGeneration,
-        keyWrap: result.keyWrap,
+        keyWraps: result.keyWraps,
         ...(selection.mode === "existing"
           ? { clientId: selection.clientId }
           : { clientToken: selection.token }),

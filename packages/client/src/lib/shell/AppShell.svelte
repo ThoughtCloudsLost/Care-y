@@ -60,6 +60,7 @@
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte";
   import { kbSavedFilterStore } from "$lib/stores/kb-saved-filters.svelte";
   import { resealSweep } from "$lib/crypto/reseal-sweep.svelte.js";
+  import { checkWrapBackfills } from "$lib/crypto/wrap-backfill-sweep.svelte.js";
   import Register from "$lib/components/Register.svelte";
   import { providePTR } from "./ptr-context.svelte.js";
   import { splitNavbar } from "$lib/stores/split-navbar.svelte.js";
@@ -963,6 +964,14 @@
     if (!currentPermissions.has(Permission.MANAGE_KEYS)) return;
     const bridge = getCryptoBridge();
     void resealSweep.autoResumeOnce(bridge);
+  });
+
+  // ── Wrap backfill sweep (queue-join key distribution, all users) ───
+  $effect(() => {
+    if (!browser || _orgKeyMgr == null) return;
+    if (!_orgKeyMgr.isLoaded) return;
+    const bridge = getCryptoBridge();
+    void checkWrapBackfills(bridge);
   });
 
   // ── Device-local saved-filter name reseal (all users) ──────────────

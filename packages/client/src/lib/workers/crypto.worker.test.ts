@@ -940,7 +940,7 @@ describe("crypto.worker", () => {
   });
 
   describe("createTicketKey", () => {
-    it("generates tk, encrypts fields, and returns decryptable ciphertexts with keyWrap", async () => {
+    it("generates tk, encrypts fields, and returns decryptable ciphertexts with keyWraps", async () => {
       await sendAndWait({ type: "zeroAll", id: 3000 });
 
       const sodium = requireSodium();
@@ -979,9 +979,9 @@ describe("crypto.worker", () => {
         id: 3002,
         ticketId: "ticket-new-roundtrip",
         keyCacheId: "ticket-new-roundtrip",
-        ephemeralPoint: resp.keyWrap.ephemeralPoint,
-        nonce: resp.keyWrap.nonce,
-        wrappedKey: resp.keyWrap.wrappedKey,
+        ephemeralPoint: resp.keyWraps[0]!.ephemeralPoint,
+        nonce: resp.keyWraps[0]!.nonce,
+        wrappedKey: resp.keyWraps[0]!.wrappedKey,
       });
       expect(unwrapResp.ok).toBe(true);
 
@@ -993,9 +993,9 @@ describe("crypto.worker", () => {
           ticketId: "ticket-new-roundtrip",
           keyCacheId: "ticket-new-roundtrip",
           slot: field.name,
-          ephemeralPoint: resp.keyWrap.ephemeralPoint,
-          nonce: resp.keyWrap.nonce,
-          wrappedKey: resp.keyWrap.wrappedKey,
+          ephemeralPoint: resp.keyWraps[0]!.ephemeralPoint,
+          nonce: resp.keyWraps[0]!.nonce,
+          wrappedKey: resp.keyWraps[0]!.wrappedKey,
           ciphertext: field.ciphertext,
         })) as DecryptContentResponse;
 
@@ -1009,9 +1009,9 @@ describe("crypto.worker", () => {
         ticketId: "ticket-new-roundtrip",
         keyCacheId: "ticket-new-roundtrip",
         slot: "title",
-        ephemeralPoint: resp.keyWrap.ephemeralPoint,
-        nonce: resp.keyWrap.nonce,
-        wrappedKey: resp.keyWrap.wrappedKey,
+        ephemeralPoint: resp.keyWraps[0]!.ephemeralPoint,
+        nonce: resp.keyWraps[0]!.nonce,
+        wrappedKey: resp.keyWraps[0]!.wrappedKey,
         ciphertext: resp.encryptedFields[0]!.ciphertext,
       })) as DecryptContentResponse;
       expect(titleResp.plaintext).toBe("Test ticket title");
@@ -1022,9 +1022,9 @@ describe("crypto.worker", () => {
         ticketId: "ticket-new-roundtrip",
         keyCacheId: "ticket-new-roundtrip",
         slot: "description",
-        ephemeralPoint: resp.keyWrap.ephemeralPoint,
-        nonce: resp.keyWrap.nonce,
-        wrappedKey: resp.keyWrap.wrappedKey,
+        ephemeralPoint: resp.keyWraps[0]!.ephemeralPoint,
+        nonce: resp.keyWraps[0]!.nonce,
+        wrappedKey: resp.keyWraps[0]!.wrappedKey,
         ciphertext: resp.encryptedFields[1]!.ciphertext,
       })) as DecryptContentResponse;
       expect(descResp.plaintext).toBe("Detailed description here");

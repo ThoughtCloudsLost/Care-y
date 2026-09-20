@@ -73,6 +73,9 @@ export const setPiiRetentionInputSchema = z.object({
 export const setUserActiveInputSchema = z.object({
   userId: userIdSchema,
   isActive: z.boolean(),
+  /** When true, proceeds with deactivation even if the user is the sole
+   *  holder of ticket key wraps (permanent data loss). */
+  force: z.boolean().optional(),
 });
 
 export const volunteerReachabilitySchema = z.enum([

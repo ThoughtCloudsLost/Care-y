@@ -75,6 +75,8 @@ export const ErrorCode = {
   // --- Admin: user management ---
   CANNOT_DEACTIVATE_SELF: "CANNOT_DEACTIVATE_SELF",
   CANNOT_DEACTIVATE_LAST_ADMIN: "CANNOT_DEACTIVATE_LAST_ADMIN",
+  /** Offboarding refused: user is the sole holder of ticket key wraps. */
+  SOLE_WRAP_HOLDER: "SOLE_WRAP_HOLDER",
 
   // --- Profile ---
   USERNAME_ALREADY_TAKEN: "USERNAME_ALREADY_TAKEN",

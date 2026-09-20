@@ -52,6 +52,7 @@ import {
   deleteAllOverrides,
 } from "../auth/roles.js";
 import type { AuditService } from "../tickets/audit.js";
+import type { OffboardingService } from "../crypto/offboarding.js";
 import {
   ForbiddenError,
   NotFoundError,
@@ -104,6 +105,10 @@ export interface AuthRouterDeps extends AuthServiceDeps {
    */
   readonly createAuditSvc:
     ((tDb: OrgContext["tenantDb"]) => AuditService) | null;
+  /** Offboarding service factory for last-holder guard on deactivation. */
+  readonly createOffboardingSvc?: (
+    tDb: OrgContext["tenantDb"],
+  ) => OffboardingService;
 }
 
 /** Safe response shape: no password_hash, no internal fields. */
@@ -403,6 +408,14 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       .input(setUserActiveInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
+          // On deactivation, check the last-holder guard via the
+          // offboarding service before proceeding. The SoleWrapHolderError
+          // surfaces to the client so it can show a data-loss confirmation.
+          if (!input.isActive && deps.createOffboardingSvc) {
+            const offSvc = deps.createOffboardingSvc(ctx.org.tenantDb);
+            await offSvc.revokeVolunteerKeys(input.userId, input.force);
+          }
+
           const authService = getAuthService(ctx.org, deps);
           const updated = await authService.setUserActive(
             ctx.user.id,
@@ -410,6 +423,19 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             input.isActive,
           );
           return { user: toUserResponse(updated) };
+        }),
+      ),
+
+    /** Returns the count of tickets the user solely holds wraps for.
+     *  Used by the deactivation UI to show a data-loss warning. */
+    getSoleHeldTicketCount: manageUsersProcedure
+      .input(z.object({ userId: userIdSchema }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (!deps.createOffboardingSvc) return { count: 0 };
+          const offSvc = deps.createOffboardingSvc(ctx.org.tenantDb);
+          const ids = await offSvc.getSoleHeldTicketIds(input.userId);
+          return { count: ids.length };
         }),
       ),
 

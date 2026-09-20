@@ -117,6 +117,7 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.CANNOT_DEACTIVATE_SELF]: () => m.error_cannot_deactivate_self(),
   [ErrorCode.CANNOT_DEACTIVATE_LAST_ADMIN]: () =>
     m.error_cannot_deactivate_last_admin(),
+  [ErrorCode.SOLE_WRAP_HOLDER]: () => m.error_sole_wrap_holder(),
 
   // Profile
   [ErrorCode.USERNAME_ALREADY_TAKEN]: () => m.error_username_already_taken(),

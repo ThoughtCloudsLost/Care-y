@@ -752,9 +752,15 @@ export class CryptoBridge {
   async createTicketEncryption(
     ticketId: string,
     fields: readonly { name: string; plaintext: string }[],
+    recipients?: readonly { volunteerId: string; volPublic: string }[],
   ): Promise<{
     encryptedFields: readonly { name: string; ciphertext: string }[];
-    keyWrap: { ephemeralPoint: string; nonce: string; wrappedKey: string };
+    keyWraps: readonly {
+      volunteerId: string;
+      ephemeralPoint: string;
+      nonce: string;
+      wrappedKey: string;
+    }[];
     keyGeneration: string;
   }> {
     const resp = expectResponse(
@@ -762,12 +768,13 @@ export class CryptoBridge {
         type: "createTicketKey",
         ticketId,
         fields,
+        recipients,
       }),
       "createTicketKey",
     );
     return {
       encryptedFields: resp.encryptedFields,
-      keyWrap: resp.keyWrap,
+      keyWraps: resp.keyWraps,
       keyGeneration: resp.keyGeneration,
     };
   }

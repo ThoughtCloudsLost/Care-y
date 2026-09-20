@@ -14,6 +14,11 @@ export interface QueueAssignment {
   readonly userId: UserId;
 }
 
+export interface QueueMemberPublicKey {
+  readonly volunteerId: UserId;
+  readonly volPublic: string; // base64url
+}
+
 export interface QueuePermissionsService {
   /** Get all queue IDs this user is assigned to. */
   getUserQueues(userId: UserId): Promise<QueueId[]>;
@@ -27,6 +32,13 @@ export interface QueuePermissionsService {
   getQueueMembers(queueId: QueueId): Promise<UserId[]>;
   /** List all queue-user assignments (bulk, for admin filtering). */
   listAllAssignments(): Promise<readonly QueueAssignment[]>;
+  /**
+   * Active, onboarded queue members with their vol_public keys.
+   * Used at ticket creation to wrap tk for the full recipient set.
+   */
+  listMemberPublicKeys(
+    queueId: QueueId,
+  ): Promise<readonly QueueMemberPublicKey[]>;
 }
 
 export function createQueuePermissionsService(
@@ -86,6 +98,31 @@ export function createQueuePermissionsService(
         queueId: r.queue_id,
         userId: r.user_id,
       }));
+    },
+
+    async listMemberPublicKeys(queueId) {
+      const rows = await db
+        .selectFrom("queue_assignments")
+        .innerJoin(
+          "user_keys",
+          "user_keys.user_id",
+          "queue_assignments.user_id",
+        )
+        .innerJoin("users", "users.id", "queue_assignments.user_id")
+        .select(["queue_assignments.user_id", "user_keys.vol_public"])
+        .where("queue_assignments.queue_id", "=", queueId)
+        .where("user_keys.vol_public", "is not", null)
+        .where("users.is_active", "=", true)
+        .execute();
+
+      return rows
+        .filter(
+          (r): r is typeof r & { vol_public: Buffer } => r.vol_public !== null,
+        )
+        .map((r) => ({
+          volunteerId: r.user_id,
+          volPublic: r.vol_public.toString("base64url"),
+        }));
     },
   };
 }

@@ -1467,19 +1467,51 @@ function handleCreateTicketKey(req: CreateTicketKeyRequest, sink: Sink): void {
       return { name: f.name, ciphertext: encode(ciphertext) };
     });
 
-    const wrap = eciesEncrypt(tk, assertPresent(volPublic, "volPublic"));
     const keyGeneration = newKeyGeneration();
+
+    // Build wraps for all recipients. When the caller provides a
+    // recipients list (the normal path), wrap for each. When no
+    // recipients are provided (legacy/test fallback), wrap for
+    // self only using a placeholder volunteerId that the server
+    // replaces with the authenticated caller's id.
+    const selfPub = assertPresent(volPublic, "volPublic");
+    const keyWraps: {
+      volunteerId: string;
+      ephemeralPoint: string;
+      nonce: string;
+      wrappedKey: string;
+    }[] = [];
+
+    if (req.recipients && req.recipients.length > 0) {
+      const seen = new Set<string>();
+      for (const r of req.recipients) {
+        if (seen.has(r.volunteerId)) continue;
+        seen.add(r.volunteerId);
+        const pubKey = decode(r.volPublic) as RistrettoPoint;
+        const w = eciesEncrypt(tk, pubKey);
+        keyWraps.push({
+          volunteerId: r.volunteerId,
+          ephemeralPoint: encode(w.ephemeralPoint),
+          nonce: encode(w.nonce),
+          wrappedKey: encode(w.ciphertext),
+        });
+      }
+    } else {
+      const w = eciesEncrypt(tk, selfPub);
+      keyWraps.push({
+        volunteerId: "__self__",
+        ephemeralPoint: encode(w.ephemeralPoint),
+        nonce: encode(w.nonce),
+        wrappedKey: encode(w.ciphertext),
+      });
+    }
 
     const msg: WorkerResponse = {
       id: req.id,
       ok: true,
       type: "createTicketKey",
       encryptedFields,
-      keyWrap: {
-        ephemeralPoint: encode(wrap.ephemeralPoint),
-        nonce: encode(wrap.nonce),
-        wrappedKey: encode(wrap.ciphertext),
-      },
+      keyWraps,
       keyGeneration,
     };
     sink(msg);
