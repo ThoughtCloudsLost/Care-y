@@ -3,9 +3,10 @@
  * Logs page behavior tests.
  *
  * Tests permission gating, tab state management (calls/audit), the
- * audit-tab MANAGE_USERS double gate, navbar context propagation,
- * section rendering, and tabpanel ARIA wiring. Follows the people-page
- * test harness pattern with stubbed sections and shell components.
+ * audit-tab VIEW_AUDIT_LOG gate, deep-link refusal rendering, navbar
+ * context propagation, section rendering, and tabpanel ARIA wiring.
+ * Follows the people-page test harness pattern with stubbed sections
+ * and shell components.
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -264,6 +265,10 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   logs_call_status_busy: () => "Busy",
   logs_call_status_failed: () => "Failed",
   logs_call_status_canceled: () => "Canceled",
+  error_insufficient_permissions: () =>
+    "You do not have permission to do this.",
+  logs_audit_permission_required: () =>
+    "The audit log requires the View Audit Log permission.",
 }));
 
 // vi.mock required: the real createVolunteersQuery needs a live QueryClient context.
@@ -340,7 +345,7 @@ function setUrl(path: string): void {
 // --- Setup ---
 
 beforeEach(() => {
-  setPermissions(Permission.VIEW_REPORTS, Permission.MANAGE_USERS);
+  setPermissions(Permission.VIEW_REPORTS, Permission.VIEW_AUDIT_LOG);
   mockPageUrl = new URL("http://localhost/admin/logs");
   mockNavbarCtx.current = undefined;
   mockGoto.mockClear();
@@ -366,8 +371,8 @@ describe("Logs page", () => {
       expect(mockGoto).toHaveBeenCalledWith("/");
     });
 
-    it("redirects when user has only MANAGE_USERS (no VIEW_REPORTS)", () => {
-      setPermissions(Permission.MANAGE_USERS);
+    it("redirects when user has only VIEW_AUDIT_LOG (no VIEW_REPORTS)", () => {
+      setPermissions(Permission.VIEW_AUDIT_LOG);
       renderPage();
 
       expect(mockGoto).toHaveBeenCalledWith("/");
@@ -380,8 +385,8 @@ describe("Logs page", () => {
       expect(mockGoto).not.toHaveBeenCalled();
     });
 
-    it("does not redirect when user has both VIEW_REPORTS and MANAGE_USERS", () => {
-      setPermissions(Permission.VIEW_REPORTS, Permission.MANAGE_USERS);
+    it("does not redirect when user has both VIEW_REPORTS and VIEW_AUDIT_LOG", () => {
+      setPermissions(Permission.VIEW_REPORTS, Permission.VIEW_AUDIT_LOG);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
@@ -414,7 +419,7 @@ describe("Logs page", () => {
   });
 
   describe("audit tab gating", () => {
-    it("hides audit tab when user has VIEW_REPORTS but not MANAGE_USERS", () => {
+    it("hides audit tab when user has VIEW_REPORTS but not VIEW_AUDIT_LOG", () => {
       setPermissions(Permission.VIEW_REPORTS);
       renderPage();
 
@@ -424,17 +429,25 @@ describe("Logs page", () => {
       expect(screen.queryByText("Audit log section (0 rows)")).toBeNull();
     });
 
-    it("forces ?tab=audit back to calls when user lacks MANAGE_USERS", () => {
+    it("shows permission refusal when ?tab=audit is deep-linked without VIEW_AUDIT_LOG", () => {
       setPermissions(Permission.VIEW_REPORTS);
       setUrl("/admin/logs?tab=audit");
       renderPage();
 
-      const panel = screen.getByRole("tabpanel");
-      expect(panel.id).toBe("panel-calls");
+      // No tabpanel is rendered; the refusal EmptyState takes its place
+      expect(screen.queryByRole("tabpanel")).toBeNull();
+      expect(
+        screen.getByText("You do not have permission to do this."),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(
+          "The audit log requires the View Audit Log permission.",
+        ),
+      ).toBeTruthy();
     });
 
-    it("shows audit tab when user has both VIEW_REPORTS and MANAGE_USERS", () => {
-      setPermissions(Permission.VIEW_REPORTS, Permission.MANAGE_USERS);
+    it("shows audit tab when user has both VIEW_REPORTS and VIEW_AUDIT_LOG", () => {
+      setPermissions(Permission.VIEW_REPORTS, Permission.VIEW_AUDIT_LOG);
       setUrl("/admin/logs?tab=audit");
       renderPage();
 

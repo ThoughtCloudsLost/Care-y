@@ -2,7 +2,6 @@
   import { List, ListItem } from "konsta/svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { Permission } from "@care-y/shared";
   import { createQuery } from "@tanstack/svelte-query";
   import { adminKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -32,17 +31,12 @@
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
 
-  const hasAdminAccess = $derived(
-    permissions.has(Permission.MANAGE_USERS) ||
-      permissions.has(Permission.MANAGE_KEYS) ||
-      permissions.has(Permission.MANAGE_ORG_IDENTITY),
-  );
+  const visible = $derived(getVisibleDestinations(permissions));
 
   $effect(() => {
-    if (!hasAdminAccess) void goto(resolve("/"));
+    if (visible.length === 0) void goto(resolve("/"));
   });
 
-  const visible = $derived(getVisibleDestinations(permissions));
   const grouped = $derived(groupDestinations(visible));
 
   const visibleGroups = $derived(GROUP_ORDER.filter((g) => grouped.has(g)));

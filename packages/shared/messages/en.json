@@ -2412,6 +2412,7 @@
   "hub_audit_log_subtitle": "Review system activity and change history",
   "logs_calls_empty_title": "No calls found",
   "logs_calls_empty_subtitle": "Call and voicemail records will appear here as they are logged.",
+  "logs_audit_permission_required": "The audit log requires the View Audit Log permission.",
   "logs_audit_empty_title": "No audit events found",
   "logs_audit_empty_subtitle": "System activity will appear here as changes are made.",
   "logs_direction_inbound": "Inbound",

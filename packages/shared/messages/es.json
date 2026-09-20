@@ -2412,6 +2412,7 @@
   "hub_audit_log_subtitle": "Revisar la actividad del sistema y el historial de cambios",
   "logs_calls_empty_title": "No se encontraron llamadas",
   "logs_calls_empty_subtitle": "Los registros de llamadas y mensajes de voz apareceran aquí a medida que se registren.",
+  "logs_audit_permission_required": "El registro de auditoría requiere el permiso Ver registro de auditoría.",
   "logs_audit_empty_title": "No se encontraron eventos de auditoría",
   "logs_audit_empty_subtitle": "La actividad del sistema aparecerá aquí a medida que se realicen cambios.",
   "logs_direction_inbound": "Entrante",

@@ -4,7 +4,7 @@
   import { resolve } from "$app/paths";
   import { createInfiniteQuery } from "@tanstack/svelte-query";
   import { SvelteMap } from "svelte/reactivity";
-  import { PhoneCall, ScrollText } from "@lucide/svelte";
+  import { PhoneCall, ScrollText, ShieldAlert } from "@lucide/svelte";
   import {
     Permission,
     auditEventTypeSchema,
@@ -38,6 +38,7 @@
   import { auditEventLabel } from "$lib/admin/audit-log-labels.js";
   import { buildDateRangeLabel } from "$lib/tickets/ticket-list-utils.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
+  import EmptyState from "$lib/components/EmptyState.svelte";
   import CallLogSection from "$lib/components/admin/CallLogSection.svelte";
   import AuditLogSection from "$lib/components/admin/AuditLogSection.svelte";
 
@@ -48,7 +49,7 @@
 
   const hasAccess = $derived(permissions.has(Permission.VIEW_REPORTS));
   const canViewAudit = $derived(
-    hasAccess && permissions.has(Permission.MANAGE_USERS),
+    hasAccess && permissions.has(Permission.VIEW_AUDIT_LOG),
   );
 
   $effect(() => {
@@ -57,13 +58,21 @@
 
   // ── Tab state ──
 
+  /** True when the URL requested ?tab=audit but the user lacks VIEW_AUDIT_LOG. */
+  let auditDeepLinkRefused = $state(false);
+
   let activeTab = $state<LogsTab>(defaultTab());
 
   $effect(() => {
     const raw = page.url.searchParams.get("tab");
     if (raw !== null && isLogsTab(raw)) {
-      // Force back to calls when the user lacks audit permission
-      activeTab = raw === "audit" && !canViewAudit ? "calls" : raw;
+      if (raw === "audit" && !canViewAudit) {
+        auditDeepLinkRefused = true;
+        activeTab = "calls";
+      } else {
+        auditDeepLinkRefused = false;
+        activeTab = raw;
+      }
     }
   });
 
@@ -438,7 +447,13 @@
   />
 {/snippet}
 
-{#if activeTab === "calls" && hasAccess}
+{#if auditDeepLinkRefused}
+  <EmptyState
+    icon={ShieldAlert}
+    title={m.error_insufficient_permissions()}
+    subtitle={m.logs_audit_permission_required()}
+  />
+{:else if activeTab === "calls" && hasAccess}
   <div role="tabpanel" id="panel-calls" aria-labelledby="tab-calls">
     <CallLogSection
       rows={callRows}

@@ -116,6 +116,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   panel_retention: () => "Retention",
   panel_reports: () => "Reports",
   panel_note_types: () => "Follow-Up Types",
+  intake_forms_title: () => "Intake Forms",
+  hub_intake_forms_subtitle: () => "Design and manage client intake forms",
   hub_general_subtitle: () => "Organization settings",
   hub_terminology_subtitle: () => "Custom terms",
   hub_note_types_subtitle: () => "Note categories",
@@ -225,8 +227,8 @@ function renderPage(): ReturnType<typeof render> {
 // --- Tests ---
 
 describe("Admin hub page", () => {
-  describe("permission guard", () => {
-    it("redirects to home when user has no admin permissions", () => {
+  describe("permission guard (destination-derived)", () => {
+    it("redirects to home when user holds no destination permission", () => {
       setPermissions();
       renderPage();
 
@@ -249,6 +251,35 @@ describe("Admin hub page", () => {
 
     it("does not redirect when user has MANAGE_ORG_IDENTITY", () => {
       setPermissions(Permission.MANAGE_ORG_IDENTITY);
+      renderPage();
+
+      expect(mockGoto).not.toHaveBeenCalled();
+    });
+
+    it("admits a default Manager with MANAGE_INTAKE_FORMS (no old three)", () => {
+      setPermissions(Permission.MANAGE_INTAKE_FORMS, Permission.VIEW_AUDIT_LOG);
+      renderPage();
+
+      expect(mockGoto).not.toHaveBeenCalled();
+    });
+
+    it("renders exactly the destinations the default Manager holds", () => {
+      setPermissions(Permission.MANAGE_INTAKE_FORMS, Permission.VIEW_AUDIT_LOG);
+      renderPage();
+
+      // Visible destinations for these two permissions
+      expect(screen.getByText("Intake Forms")).toBeTruthy();
+      expect(screen.getByText("Audit Log")).toBeTruthy();
+
+      // Destinations that require other permissions stay hidden
+      expect(screen.queryByText("Users")).toBeNull();
+      expect(screen.queryByText("Queues")).toBeNull();
+      expect(screen.queryByText("Keys")).toBeNull();
+      expect(screen.queryByText("Telephony")).toBeNull();
+    });
+
+    it("does not redirect with any single destination permission", () => {
+      setPermissions(Permission.MANAGE_QUEUES);
       renderPage();
 
       expect(mockGoto).not.toHaveBeenCalled();
@@ -456,7 +487,7 @@ describe("Admin hub page", () => {
       ).toBeTruthy();
     });
 
-    it("hides both log destinations for a volunteer without VIEW_REPORTS or MANAGE_USERS", () => {
+    it("hides both log destinations when user has neither VIEW_REPORTS nor VIEW_AUDIT_LOG", () => {
       setPermissions(Permission.MANAGE_QUEUES);
       renderPage();
 
@@ -464,7 +495,7 @@ describe("Admin hub page", () => {
       expect(screen.queryByText("Audit Log")).toBeNull();
     });
 
-    it("shows Call Log but hides Audit Log when user has VIEW_REPORTS without MANAGE_USERS", () => {
+    it("shows Call Log but hides Audit Log when user has VIEW_REPORTS without VIEW_AUDIT_LOG", () => {
       setPermissions(Permission.VIEW_REPORTS);
       renderPage();
 
