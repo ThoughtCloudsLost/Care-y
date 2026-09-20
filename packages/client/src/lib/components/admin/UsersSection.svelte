@@ -169,7 +169,7 @@
     }) => authRouter.setUserActive.mutate(input),
     onSuccess: (
       _data: unknown,
-      variables: { userId: string; isActive: boolean },
+      variables: { userId: string; isActive: boolean; force?: boolean },
     ) => {
       haptic();
       void queryClient.invalidateQueries({ queryKey: adminKeys.users() });

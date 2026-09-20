@@ -76,7 +76,7 @@
         encryptedDescription: payload.encryptedDescription,
         priority: payload.priority,
         keyGeneration: payload.keyGeneration,
-        keyWraps: payload.keyWraps,
+        keyWraps: [...payload.keyWraps],
       }),
     onSuccess: () => {
       toastStore.show(m.ticket_new_success(withTerms()));
