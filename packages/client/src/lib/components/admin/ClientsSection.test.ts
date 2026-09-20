@@ -120,6 +120,16 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   status_mark_active: () => "Active",
   status_mark_hold: () => "On hold",
   status_mark_closed: () => "Closed",
+  client_delete_action: () => "Delete client",
+  client_delete_confirm_title: () => "Delete client?",
+  client_delete_confirm_body_zero: () => "No tickets will be affected.",
+  client_delete_confirm_body_one: ({ count }: { count: number }) =>
+    `${String(count)} ticket will be affected.`,
+  client_delete_confirm_body_other: ({ count }: { count: number }) =>
+    `${String(count)} tickets will be affected.`,
+  client_deleted_toast: () => "Client deleted",
+  client_delete_error: () => "Could not delete client",
+  common_delete: () => "Delete",
 }));
 
 // vi.mock required: tRPC client creates a live HTTP connection on import.
@@ -132,6 +142,7 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
       updateAlias: { mutate: mockUpdateAlias },
       updatePhone: { mutate: mockUpdatePhone },
       updateEmail: { mutate: mockUpdateEmail },
+      deleteClient: { mutate: vi.fn().mockResolvedValue({}) },
       backfillAliasHash: { mutate: vi.fn().mockResolvedValue(undefined) },
       backfillPhoneMatchHash: { mutate: mockBackfillPhoneMatchHash },
     },
@@ -214,6 +225,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
     has: vi.fn().mockReturnValue(false),
   }),
   getCurrentUserId: () => () => "current-user-id",
+  getCurrentPermissions: () => () => new Set<string>(),
   getOrgKeyManager: () => ({
     get isLoaded() {
       return true;
@@ -290,6 +302,16 @@ vi.mock(
         await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
       ).default as unknown as (typeof EmptyStateNS)["default"],
     }) satisfies typeof EmptyStateNS,
+);
+
+vi.mock(
+  "$lib/shell/ShellDialog.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ShellDialogNS)["default"],
+    }) satisfies typeof ShellDialogNS,
 );
 
 // DecryptPlaceholder observes the viewport before it decrypts, and jsdom has
@@ -370,6 +392,7 @@ import ClientsSection from "./ClientsSection.svelte";
 import type * as TrpcNS from "$lib/trpc/index.js";
 import type * as EmptyStateNS from "$lib/components/EmptyState.svelte";
 import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
+import type * as ShellDialogNS from "$lib/shell/ShellDialog.svelte";
 import type * as QueryErrorNS from "$lib/components/QueryError.svelte";
 
 async function findDetailSheet(): Promise<HTMLElement> {

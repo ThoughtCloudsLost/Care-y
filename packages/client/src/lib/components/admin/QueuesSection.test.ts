@@ -29,6 +29,7 @@ import type * as ShellDialogMod from "$lib/shell/ShellDialog.svelte";
 import type * as ShellSheetMod from "$lib/shell/ShellSheet.svelte";
 import type * as ShellActionSheetMod from "$lib/shell/ShellActionSheet.svelte";
 import type * as QueueMemberPickerMod from "./QueueMemberPicker.svelte";
+import type * as QueueWatcherPickerMod from "./QueueWatcherPicker.svelte";
 import type * as QueueEditorMod from "./QueueEditor.svelte";
 import type * as IntakeRadioMod from "./IntakeRadio.svelte";
 
@@ -165,6 +166,12 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   decrypt_loading: () => "Loading...",
   decrypt_error: () => "Error",
   decrypt_denied: () => "Denied",
+  admin_queue_watcher_removed: () => "Watcher removed",
+  admin_queue_watchers_title: () => "Watchers",
+  admin_queue_watchers_hint: () => "Notified on new tickets",
+  admin_queue_add_watcher_button: () => "Add watcher",
+  admin_queue_remove_watcher: ({ name }: { name: string }) => `Remove ${name}`,
+  admin_queue_no_watchers: () => "No watchers",
 }));
 
 // vi.mock required: tRPC client at $lib/trpc/index.js creates a live
@@ -181,6 +188,8 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
       deleteQueue: { mutate: mockDeleteQueue },
       listQueueMembers: { query: vi.fn().mockResolvedValue([]) },
       removeQueueMember: { mutate: mockRemoveMember },
+      listQueueWatchers: { query: vi.fn().mockResolvedValue([]) },
+      removeQueueWatcher: { mutate: vi.fn().mockResolvedValue({}) },
     },
     auth: {
       listUsers: { query: vi.fn().mockResolvedValue([]) },
@@ -248,14 +257,31 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
       refetch: vi.fn(),
     };
   },
-  createQueries: () => {
+  createQueries: (
+    optsFn: () => {
+      queries: { queryKey: string[] }[];
+    },
+  ) => {
+    const opts = optsFn();
+    const firstKey = opts.queries[0]?.queryKey[0];
     const queues = mockQueuesData ?? [];
-    return queues.map((q) => ({
+    if (firstKey === "queue-members") {
+      return queues.map((q) => ({
+        get data() {
+          return mockMembersByQueue[q.id] ?? undefined;
+        },
+        get isLoading() {
+          return mockMembersLoading;
+        },
+      }));
+    }
+    // Watchers or empty queries array (watchers gated off by permissions)
+    return queues.map(() => ({
       get data() {
-        return mockMembersByQueue[q.id] ?? undefined;
+        return undefined;
       },
       get isLoading() {
-        return mockMembersLoading;
+        return false;
       },
     }));
   },
@@ -298,6 +324,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
     get: vi.fn().mockReturnValue(undefined),
     has: vi.fn().mockReturnValue(false),
   }),
+  getCurrentPermissions: () => () => new Set<string>(),
 }));
 
 // vi.mock required: buffer-encoding barrel imports from @care-y/crypto
@@ -382,6 +409,13 @@ vi.mock("$lib/shell/ShellActionSheet.svelte", async (importOriginal) => ({
 
 vi.mock("./QueueMemberPicker.svelte", async (importOriginal) => ({
   ...(await importOriginal<typeof QueueMemberPickerMod>()),
+  default: (
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+  ).default,
+}));
+
+vi.mock("./QueueWatcherPicker.svelte", async (importOriginal) => ({
+  ...(await importOriginal<typeof QueueWatcherPickerMod>()),
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,

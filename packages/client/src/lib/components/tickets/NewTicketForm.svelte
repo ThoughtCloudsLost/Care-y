@@ -29,7 +29,7 @@
   import { List, ListInput, Preloader } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
-  import { getCryptoBridge, getCurrentUserId } from "$lib/crypto/context.js";
+  import { getCryptoBridge } from "$lib/crypto/context.js";
   import {
     ticketPrioritySchema,
     newTicketId,

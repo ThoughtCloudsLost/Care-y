@@ -71,6 +71,7 @@ describe("getVisibleDestinations", () => {
       Permission.WRITE_CALL_GREETINGS,
       Permission.WRITE_AUTOMATIC_REPLIES,
       Permission.MANAGE_VOICEMAIL_QUARANTINE,
+      Permission.MANAGE_PRESETS,
       Permission.MANAGE_ORG_IDENTITY,
       Permission.MANAGE_KEYS,
       Permission.MANAGE_RETENTION,
@@ -170,6 +171,7 @@ describe("communications destinations", () => {
       "sms-templates": Permission.WRITE_AUTOMATIC_REPLIES,
       blocklist: Permission.MANAGE_INFRASTRUCTURE,
       quarantine: Permission.MANAGE_VOICEMAIL_QUARANTINE,
+      presets: Permission.MANAGE_PRESETS,
     };
     for (const dest of commsDests) {
       expect(dest.permission).toBe(expected[dest.id]);

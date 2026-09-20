@@ -570,7 +570,6 @@
 
   let deleteDialogOpen = $state(false);
   let deleteTargetId = $state<string | null>(null);
-  let deleteTargetAlias = $state<string>("");
   let deleteTargetTicketCount = $state(0);
 
   function openDeleteConfirm(): void {
@@ -578,7 +577,6 @@
     const detail = clientDetailQuery.data;
     if (detail === undefined) return;
     deleteTargetId = sheetClientId;
-    deleteTargetAlias = detailDecryptedAlias ?? "";
     deleteTargetTicketCount = detail.ticketCount;
     deleteDialogOpen = true;
   }
