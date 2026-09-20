@@ -22,9 +22,12 @@ import type { SectionId } from "./bridge.js";
  * keys off that leading "/(" either way.
  */
 export const SECTION_ROUTES: Record<
-  // Synthetic sections (the placeholder and the page-side excursions)
-  // have no product routes by construction.
-  Exclude<SectionId, "coming-soon" | "search-results" | "aggregation-view">,
+  // Synthetic sections (the placeholder, deep-dive articles, and
+  // page-side excursions) have no product routes by construction.
+  Exclude<
+    SectionId,
+    "coming-soon" | "deep-dive" | "search-results" | "aggregation-view"
+  >,
   readonly string[]
 > = {
   login: [],

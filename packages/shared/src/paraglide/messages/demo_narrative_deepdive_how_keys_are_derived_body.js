@@ -1,0 +1,81 @@
+/* eslint-disable */
+import { getLocale, experimentalStaticLocale } from '../runtime.js';
+
+/** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
+
+/** @typedef {{}} Demo_Narrative_Deepdive_How_Keys_Are_Derived_BodyInputs */
+
+const en_demo_narrative_deepdive_how_keys_are_derived_body = /** @type {(inputs: Demo_Narrative_Deepdive_How_Keys_Are_Derived_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Signing in proves who the user is and also rebuilds, in the browser, every key that opens that user's data, from the password alone. No copy of those keys is kept on the server, encrypted or otherwise, so there is nothing stored anywhere for an attacker to take away and attack at leisure. [[#keys #encryption]]
+Instead of sending the password anywhere, the browser first grinds it through Argon2id, a deliberately slow and memory-hungry function, which turns a fast guess into an expensive one. The result of that grinding is then blinded, a step that scrambles it into a value carrying no information about the password, and the blinded value goes to two independent key services that each apply half of a secret they hold. The browser recombines their two answers and unblinds the result, and what comes out is the seed for every key the user needs. Neither service sees the password, the stretched password, or the final output, and neither one alone can produce the answer. [[#keys #privacy]]
+The split changes what a stolen database and a stolen key service are each worth. [[#keys #server-holds]]
+- An attacker who takes the database cannot attack the password offline, because the database holds no key material to test a guess against by itself, and guessing requires going back through the two services, which rate limit. [[#keys #server-holds]]
+- An attacker who takes one service gets half of a secret that is useless without the other half. [[#keys #server-holds]]
+The design does not remove the risk of a stolen password. Someone who learns a user's password, and who has also obtained both halves of the service secret, can derive that one user's keys and read that one user's cases. Other users are unaffected because each user's keys come from their own password. CARE-Y answers this by requiring a passphrase of at least 16 characters and by requiring a second factor before any encrypted data is served. [The trust boundary](#deep-dive/the-trust-boundary) covers what an attacker learns without any password at all. [[#failure-states #keys]]
+**Derivation chain.** Six steps run between the typed password and the keys that open data. [[#keys #encryption]]
+1. Argon2id stretches the password at 64 MiB of memory and 4 iterations with a single lane, over the 16-byte salt stored per user in \`user_keys\`, and the client enforces that floor even if the server suggests weaker parameters. [[#keys]]
+2. The stretched output is blinded per RFC 9497 and sent for evaluation. [[#keys]]
+3. The returned evaluation is finalized into a 64-byte OPRF output. [[#keys]]
+4. HKDF-SHA512 expands that output under the label \`care-y-master-v2\` into the master key. [[#keys]]
+5. One expansion of the master key produces the user's ristretto255 private scalar under an ECIES label, whose public point is published to the server and used to wrap per-case keys. [[#keys #encryption]]
+6. The other expansion produces an unwrap key for the organization private key. [[#keys #encryption]]
+The master key and the private scalar live in a Web Worker for the session and are transferred there by \`postMessage\` rather than held on the main thread. [[#keys #encryption]]
+**Split evaluation and per-identity keys.** The evaluation secret is held as a 2-of-2 Shamir split across two isolated processes that never exchange shares. Each answers with a partial evaluation and the browser combines them by Lagrange interpolation, producing exactly the value one holder of the whole secret would have produced. Neither process uses its master share directly. Every request carries a server-constructed tag naming the identity it is for, whether a user id, a client account id, or an organization and channel pair, and each process derives its working share for that tag by HKDF over its master share. An evaluation under the wrong tag comes from an unrelated key and yields garbage, so identity claims bind mathematically rather than by bookkeeping, per-identity rate limits cannot be spread across claimed identities, and revoking a portal channel genuinely retires its key. [[#keys #server-holds]]
+**What the server stores, exhaustively.** Four values exist per user. [[#server-holds #privacy #keys]]
+- An Argon2id salt. [[#server-holds #keys]]
+- A ristretto255 public point. [[#server-holds #keys]]
+- An optional post-quantum public key. [[#server-holds #keys]]
+- A key version. [[#server-holds #keys]]
+There is no private key, no encrypted shard, and no password hash usable for derivation. Login lookup uses \`identifier_hash\`, a keyed blind index computed from the identifier the browser sends over TLS, while the stored \`encrypted_identifier\` is a sealed box under the organization public key that no server flow reads back. A seized secrets file plus a seized database allows confirming a guessed username against the blind index, and does not allow recovering usernames. [[#server-holds #privacy #keys]]
+**Rotation and recovery.** Because private keys derive rather than being stored wrapped, rotating a master share rotates every derived key at once, which makes rotation a coordinated re-enrollment window rather than a background task. Recovery from total loss of the key services runs from escrow, where the two master shares sit in one passphrase-encrypted file on hardware-encrypted offline drives. Recovery restores the same shares rather than re-splitting them, so all existing derivations stay valid. [[#keys #failure-states]]
+**Contributor entry points.** The protocol and its callers spread across four places. [[#keys]]
+- \`packages/crypto/src/oprf.ts\` holds blinding, finalizing, tagged share derivation, Lagrange combination and proactive refresh, and \`packages/crypto/src/derive.ts\` holds the Argon2id floor, the master key, the organization unwrap key and the user keypair. [[#keys]]
+- \`packages/server/src/crypto/oprf-process.ts\` performs server-side evaluation behind a Unix socket per share, reached through \`oprf-ipc.ts\`, with the share loaded into \`sodium_malloc\` memory and a canary beside it. [[#keys #server-holds]]
+- \`packages/client/src/lib/auth/login-crypto.ts\` and the workers under \`packages/client/src/lib/workers/\` orchestrate the client side. [[#keys]]
+- \`packages/server/src/db/migrations/tenant/004_create_user_keys.ts\` with \`012_extend_user_keys.ts\` define the storage shape. [[#keys #server-holds]]`)
+};
+
+const es_demo_narrative_deepdive_how_keys_are_derived_body = /** @type {(inputs: Demo_Narrative_Deepdive_How_Keys_Are_Derived_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Iniciar sesión prueba quién es la persona usuaria y además reconstruye, en el navegador, todas las claves que abren sus datos, solo a partir de la contraseña. No se guarda en el servidor ninguna copia de esas claves, cifrada o no, así que no hay nada almacenado en ningún sitio que un atacante pueda llevarse para atacarlo con calma. [[#keys #encryption]]
+En lugar de enviar la contraseña a ningún sitio, el navegador primero la tritura con Argon2id, una función deliberadamente lenta y ávida de memoria, que convierte un intento rápido en uno costoso. El resultado de esa trituración se ciega después, un paso que lo revuelve en un valor que no lleva información sobre la contraseña, y el valor ciego va a dos servicios de claves independientes que aplican cada uno la mitad de un secreto que custodian. El navegador recombina sus dos respuestas y descega el resultado, y lo que sale es la semilla de todas las claves que la persona usuaria necesita. Ninguno de los dos servicios ve la contraseña, ni la contraseña estirada, ni el resultado final, y ninguno por sí solo puede producir la respuesta. [[#keys #privacy]]
+La división cambia lo que valen por separado una base de datos robada y un servicio de claves robado. [[#keys #server-holds]]
+- Un atacante que se lleva la base de datos no puede atacar la contraseña sin conexión, porque la base de datos no contiene material de claves con el que probar un intento por sí misma, y adivinar exige volver a pasar por los dos servicios, que limitan la tasa de peticiones. [[#keys #server-holds]]
+- Un atacante que se lleva un servicio obtiene la mitad de un secreto que es inútil sin la otra mitad. [[#keys #server-holds]]
+El diseño no elimina el riesgo de una contraseña robada. Quien averigua la contraseña de una persona usuaria, y ha obtenido además las dos mitades del secreto del servicio, puede derivar las claves de esa única persona usuaria y leer los casos de esa única persona usuaria. Las demás personas usuarias no se ven afectadas porque las claves de cada una provienen de su propia contraseña. CARE-Y responde a esto exigiendo una frase de paso de al menos 16 caracteres y exigiendo un segundo factor antes de servir cualquier dato cifrado. [La frontera de confianza](#deep-dive/the-trust-boundary) cubre lo que un atacante aprende sin ninguna contraseña. [[#failure-states #keys]]
+**Cadena de derivación.** Entre la contraseña escrita y las claves que abren los datos corren seis pasos. [[#keys #encryption]]
+1. Argon2id estira la contraseña con 64 MiB de memoria y 4 iteraciones en un solo carril, sobre la sal de 16 bytes almacenada por persona usuaria en \`user_keys\`, y el cliente impone ese mínimo incluso si el servidor sugiere parámetros más débiles. [[#keys]]
+2. La salida estirada se ciega según el RFC 9497 y se envía para su evaluación. [[#keys]]
+3. La evaluación devuelta se finaliza en una salida OPRF de 64 bytes. [[#keys]]
+4. HKDF-SHA512 expande esa salida bajo la etiqueta \`care-y-master-v2\` para obtener la clave maestra. [[#keys]]
+5. Una expansión de la clave maestra produce el escalar privado ristretto255 de la persona usuaria bajo una etiqueta ECIES, cuyo punto público se publica en el servidor y se usa para envolver las claves por caso. [[#keys #encryption]]
+6. La otra expansión produce una clave de desenvoltura para la clave privada de la organización. [[#keys #encryption]]
+La clave maestra y el escalar privado viven en un Web Worker durante la sesión y se transfieren allí mediante \`postMessage\` en lugar de mantenerse en el hilo principal. [[#keys #encryption]]
+**Evaluación dividida y claves por identidad.** El secreto de evaluación se custodia como una división de Shamir 2 de 2 repartida entre dos procesos aislados que nunca intercambian sus partes. Cada uno responde con una evaluación parcial y el navegador las combina por interpolación de Lagrange, produciendo exactamente el valor que habría producido un único poseedor del secreto completo. Ninguno de los dos procesos usa su parte maestra directamente. Cada petición lleva una etiqueta construida por el servidor que nombra la identidad para la que es, sea un identificador de persona usuaria, un identificador de cuenta de cliente o un par de organización y canal, y cada proceso deriva su parte de trabajo para esa etiqueta mediante HKDF sobre su parte maestra. Una evaluación bajo la etiqueta equivocada proviene de una clave sin relación y produce basura, así que las afirmaciones de identidad se vinculan matemáticamente y no por registro contable, los límites de tasa por identidad no pueden repartirse entre identidades declaradas, y revocar un canal del portal retira de verdad su clave. [[#keys #server-holds]]
+**Qué almacena el servidor, de forma exhaustiva.** Existen cuatro valores por persona usuaria. [[#server-holds #privacy #keys]]
+- Una sal de Argon2id. [[#server-holds #keys]]
+- Un punto público ristretto255. [[#server-holds #keys]]
+- Una clave pública poscuántica opcional. [[#server-holds #keys]]
+- Una versión de clave. [[#server-holds #keys]]
+No hay clave privada, ni fragmento cifrado, ni hash de contraseña utilizable para la derivación. La búsqueda de inicio de sesión usa \`identifier_hash\`, un índice ciego con clave calculado a partir del identificador que el navegador envía por TLS, mientras que el \`encrypted_identifier\` almacenado es una caja sellada bajo la clave pública de la organización que ningún flujo del servidor vuelve a leer. Un archivo de secretos incautado junto con una base de datos incautada permite confirmar un nombre de usuario adivinado contra el índice ciego, y no permite recuperar nombres de usuario. [[#server-holds #privacy #keys]]
+**Rotación y recuperación.** Como las claves privadas se derivan en lugar de almacenarse envueltas, rotar una parte maestra rota todas las claves derivadas a la vez, lo que convierte la rotación en una ventana coordinada de nuevo registro y no en una tarea de fondo. La recuperación tras la pérdida total de los servicios de claves se hace desde el depósito de custodia, donde las dos partes maestras están en un único archivo cifrado con frase de paso sobre unidades sin conexión cifradas por hardware. La recuperación restaura las mismas partes en lugar de volver a dividirlas, así que todas las derivaciones existentes siguen siendo válidas. [[#keys #failure-states]]
+**Puntos de entrada para quien contribuye.** El protocolo y quienes lo invocan se reparten en cuatro lugares. [[#keys]]
+- \`packages/crypto/src/oprf.ts\` contiene el cegado, la finalización, la derivación de partes etiquetadas, la combinación de Lagrange y el refresco proactivo, y \`packages/crypto/src/derive.ts\` contiene el mínimo de Argon2id, la clave maestra, la clave de desenvoltura de la organización y el par de claves de la persona usuaria. [[#keys]]
+- \`packages/server/src/crypto/oprf-process.ts\` realiza la evaluación del lado del servidor detrás de un socket Unix por parte, alcanzado a través de \`oprf-ipc.ts\`, con la parte cargada en memoria de \`sodium_malloc\` y un canario junto a ella. [[#keys #server-holds]]
+- \`packages/client/src/lib/auth/login-crypto.ts\` y los workers bajo \`packages/client/src/lib/workers/\` orquestan el lado del cliente. [[#keys]]
+- \`packages/server/src/db/migrations/tenant/004_create_user_keys.ts\` junto con \`012_extend_user_keys.ts\` definen la forma del almacenamiento. [[#keys #server-holds]]`)
+};
+
+/**
+* | output |
+* | --- |
+* | "Signing in proves who the user is and also rebuilds, in the browser, every key that opens that user's data, from the password alone. No copy of those keys is..." |
+*
+* @param {Demo_Narrative_Deepdive_How_Keys_Are_Derived_BodyInputs} inputs
+* @param {{ locale?: "en" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const demo_narrative_deepdive_how_keys_are_derived_body = /** @type {((inputs?: Demo_Narrative_Deepdive_How_Keys_Are_Derived_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Deepdive_How_Keys_Are_Derived_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "es") return es_demo_narrative_deepdive_how_keys_are_derived_body(inputs)
+	return en_demo_narrative_deepdive_how_keys_are_derived_body(inputs)
+});
