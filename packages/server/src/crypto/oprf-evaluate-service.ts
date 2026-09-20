@@ -21,6 +21,7 @@
 
 import { timingSafeEqual } from "node:crypto";
 import {
+  AuthError,
   ForbiddenError,
   RateLimitError,
   PowRequiredError,
@@ -34,7 +35,7 @@ import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { PowVerifier } from "./pow.js";
 import type { OprfAuditLogger } from "./oprf-audit.js";
 import type { UserId, OrgId, ChannelSecret } from "@care-y/shared";
-import { clientAccountIdSchema } from "@care-y/shared";
+import { clientAccountIdSchema, ErrorCode } from "@care-y/shared";
 import { volunteerTag, accountTag, channelTag } from "./oprf-tags.js";
 import { hashChannelAuth } from "@care-y/crypto";
 import type { Kysely } from "kysely";
@@ -148,6 +149,8 @@ export interface OprfEvaluateRequest {
   readonly blindedElement: string;
   readonly ip: string;
   readonly sessionUserId: UserId | null;
+  /** Whether the session has completed 2FA verification. */
+  readonly twofaVerified: boolean;
   readonly powChallenge: string | undefined;
   readonly powSolution: string | undefined;
 }
@@ -237,6 +240,30 @@ export function createOprfEvaluateService(
     }
   }
 
+  /**
+   * Require 2FA verification for volunteer evaluations when the caller
+   * holds a session (i.e., has already logged in). After the login
+   * reorder (password -> 2FA -> OPRF), every volunteer evaluation
+   * arrives on a session. Pre-enrollment sessions (no enrolled 2FA
+   * methods) have twofaVerified = false but are exempted by the route
+   * layer, which only sets twofaVerified = true after a real challenge.
+   * Account (portal) evaluations skip this gate entirely.
+   */
+  async function assertTwofaGate(
+    kind: OprfEvaluateKind,
+    userId: UserId,
+    ip: string,
+    sessionUserId: UserId | null,
+    twofaVerified: boolean,
+  ): Promise<void> {
+    if (kind !== "volunteer") return;
+    if (sessionUserId === null) return;
+    if (twofaVerified) return;
+
+    await deps.auditLogger.logFailure(userId, ip, "twofa_not_verified");
+    throw new AuthError(ErrorCode.TWOFA_REQUIRED);
+  }
+
   /** Per-userId sliding window rate limit (10 requests / 15 min). */
   async function enforceUserRateLimit(
     userId: UserId,
@@ -317,9 +344,10 @@ export function createOprfEvaluateService(
 
   return {
     async evaluate(req: OprfEvaluateRequest): Promise<OprfEvaluateResult> {
-      const { userId, ip, sessionUserId, blindedElement } = req;
+      const { userId, ip, sessionUserId, twofaVerified, blindedElement } = req;
 
       await assertSessionBinding(req.kind, userId, ip, sessionUserId);
+      await assertTwofaGate(req.kind, userId, ip, sessionUserId, twofaVerified);
       await enforceUserRateLimit(userId, ip);
       await enforceIpRateLimit(userId, ip);
 

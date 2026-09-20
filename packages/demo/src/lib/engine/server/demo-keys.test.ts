@@ -124,6 +124,7 @@ describe("deriveDemoVolPublic", () => {
       blindedElement: encode(blindedElement),
       ip: "127.0.0.1",
       sessionUserId: null,
+      twofaVerified: true,
       powChallenge: undefined,
       powSolution: undefined,
     });
@@ -155,6 +156,7 @@ describe("createDemoOprfService", () => {
       ip: "127.0.0.1",
       kind: "volunteer" as const,
       sessionUserId: null,
+      twofaVerified: true,
       powChallenge: undefined,
       powSolution: undefined,
     });
@@ -196,6 +198,7 @@ describe("createDemoOprfService", () => {
       ip: "127.0.0.1",
       kind: "volunteer" as const,
       sessionUserId: null,
+      twofaVerified: true,
       powChallenge: undefined,
       powSolution: undefined,
     });
@@ -205,6 +208,7 @@ describe("createDemoOprfService", () => {
       ip: "127.0.0.1",
       kind: "account" as const,
       sessionUserId: null,
+      twofaVerified: true,
       powChallenge: undefined,
       powSolution: undefined,
     });
@@ -227,6 +231,7 @@ describe("createDemoOprfService", () => {
       ip: "127.0.0.1",
       kind: "volunteer" as const,
       sessionUserId: null,
+      twofaVerified: true,
       powChallenge: undefined,
       powSolution: undefined,
     });
@@ -236,6 +241,7 @@ describe("createDemoOprfService", () => {
       ip: "127.0.0.1",
       kind: "volunteer" as const,
       sessionUserId: null,
+      twofaVerified: true,
       powChallenge: undefined,
       powSolution: undefined,
     });

@@ -13,7 +13,8 @@ export type OprfFailureReason =
   | "pow_required"
   | "pow_invalid"
   | "oprf_failed"
-  | "session_mismatch";
+  | "session_mismatch"
+  | "twofa_not_verified";
 
 export interface OprfAuditLogger {
   /**
