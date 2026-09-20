@@ -243,7 +243,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_success_body: () => "A volunteer will read it as soon as possible.",
   intake_reference_label: () => "Your reference code:",
   intake_reference_save: () => "Save it if you want to follow up by phone.",
-  intake_submit_hint: () => "What you wrote has been encrypted.",
+  intake_submit_hint: () => "Encrypted before it is sent.",
   intake_hint_dismiss: () => "Got it",
   intake_error_generic: () =>
     "Your message didn't go through. Nothing was sent. Try again.",
@@ -260,11 +260,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "This form is no longer accepting submissions.",
   intake_noscript: () => "This form needs JavaScript.",
   intake_protected_title: () => "How you're protected",
-  intake_protected_summary: () => "Your data is encrypted.",
+  intake_protected_summary: () =>
+    "Organization can open it until someone takes your case.",
   intake_protected_encrypted_what: () => "Encrypted in browser.",
   intake_protected_encrypted_why: () => "Server cannot read.",
-  intake_protected_volunteers_what: () => "Volunteers only.",
-  intake_protected_volunteers_why: () => "Limited access.",
+  intake_protected_volunteers_what: () =>
+    "Organization can unlock until a volunteer opens your case.",
+  intake_protected_volunteers_why: () =>
+    "Encrypted before it leaves your device.",
   intake_protected_server_what: () => "Server stores scrambled data.",
   intake_protected_server_why: () => "Cannot decode.",
   account_intake_optin_title: () => "Add a secure account (optional)",

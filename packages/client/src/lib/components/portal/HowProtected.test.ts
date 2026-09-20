@@ -16,21 +16,21 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof MessagesNS>()),
   intake_protected_title: () => "How you're protected",
   intake_protected_summary: () =>
-    "What you write here is encrypted before it leaves your device.",
+    "The organization can open it until someone takes your case. After that, only your case volunteers can.",
   intake_protected_encrypted_what: () =>
     "Your information is encrypted in your browser.",
   intake_protected_encrypted_why: () =>
     "Even if someone breaks into this server, they cannot read what you wrote.",
   intake_protected_volunteers_what: () =>
-    "Only volunteers assigned to your case can read your information.",
+    "Until a volunteer first opens your case, the organization can unlock what you wrote. From then on, only the volunteers working on your case can read it.",
   intake_protected_volunteers_why: () =>
-    "Other people who use this system cannot see it.",
+    "Your information is encrypted before it leaves your device. The people who run the servers can never read it, and nobody outside the organization can see it. The organization can open it until someone takes your case; after that, access narrows to the specific people helping you.",
   intake_protected_server_what: () =>
     "The server stores your information as scrambled data.",
   intake_protected_server_why: () =>
     "If someone gains access to this server, they see only encrypted text.",
   intake_submit_hint: () =>
-    "What you wrote has been encrypted. Only assigned volunteers can read it. Even if someone breaks into this server, they cannot read it.",
+    "Encrypted before it is sent. Readable only within the organization, and only by your case volunteers once someone takes your case.",
   intake_hint_dismiss: () => "Got it",
   intake_privacy_title: () => "Privacy notice",
   intake_privacy_who_title: () => "Who is collecting your data",
@@ -42,7 +42,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_privacy_basis_body: () =>
     "We process your information to provide support.",
   intake_privacy_sharing_title: () => "Who we share your data with",
-  intake_privacy_sharing_body: () => "Volunteers assigned to your case.",
+  intake_privacy_sharing_body: () =>
+    "Volunteers decrypt your information on their own devices.",
   intake_privacy_transfer_title: () => "Cross-border data transfer",
   intake_privacy_transfer_body: () => "Twilio operates in the United States.",
   intake_privacy_retention_title: () => "How long we keep your data",

@@ -93,7 +93,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_invite_cancel: () => "Cancel",
   admin_invite_send: () => "Create Account",
   admin_invite_identifier_hint: () => "Auto-generated.",
-  user_field_login_username_pii_warning: () => "Weaker encryption",
+  user_field_login_username_pii_warning: () =>
+    "The server can never read login usernames",
   user_field_display_name_label: () => "Display Name",
   admin_invite_password_label: () => "Password",
   admin_invite_password_hint: () => "Share securely.",

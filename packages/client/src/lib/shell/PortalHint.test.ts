@@ -23,16 +23,14 @@ afterEach(() => {
 const baseProps = {
   opened: true,
   ondismiss: vi.fn(),
-  message: "What you wrote has been encrypted.",
+  message: "Encrypted before it is sent.",
 };
 
 describe("PortalHint", () => {
   describe("rendering", () => {
     it("renders the hint message when opened", () => {
       const { container } = render(PortalHint, { props: { ...baseProps } });
-      expect(container.textContent).toContain(
-        "What you wrote has been encrypted.",
-      );
+      expect(container.textContent).toContain("Encrypted before it is sent.");
     });
 
     it("does not render content when opened is false", () => {
@@ -40,7 +38,7 @@ describe("PortalHint", () => {
         props: { ...baseProps, opened: false },
       });
       expect(container.textContent).not.toContain(
-        "What you wrote has been encrypted.",
+        "Encrypted before it is sent.",
       );
     });
 

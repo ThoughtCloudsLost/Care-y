@@ -26,7 +26,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_invite_identifier_hint: () => "Auto-generated.",
   user_field_login_username_label: () => "Login Username",
   user_field_login_username_pii_warning: () =>
-    "Identifiers are stored with weaker encryption",
+    "The server can never read login usernames",
   user_field_display_name_label: () => "Display Name",
   user_field_display_name_e2e_hint: () => "End-to-end encrypted.",
   admin_invite_password_label: () => "Temporary Password",
@@ -199,12 +199,12 @@ describe("InviteUser", () => {
     await fireEvent.input(identifier, {
       target: { value: "user@example.com" },
     });
-    expect(screen.getByText(/stored with weaker encryption/)).toBeTruthy();
+    expect(screen.getByText(/can never read login usernames/)).toBeTruthy();
   });
 
   it("always shows PII warning regardless of identifier", () => {
     render(InviteUser, { opened: true, ondismiss: vi.fn() });
-    expect(screen.getByText(/stored with weaker encryption/)).toBeTruthy();
+    expect(screen.getByText(/can never read login usernames/)).toBeTruthy();
   });
 
   it("shows org key warning when org key not loaded", () => {
