@@ -15,6 +15,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgKeyManager, getCryptoBridge } from "$lib/crypto/context.js";
   import { fetchAndUnwrapOrgKey } from "$lib/auth/crypto-helpers.js";
+  import { OrgKeyNotLoadedError } from "$lib/errors.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -145,7 +146,7 @@
       // the swap below would orphan all org-tier ciphertext.
       const currentKey = await keysRouter.getWrappedOrgKey.query();
       if (currentKey === null) {
-        throw new Error("no org key to rotate");
+        throw new OrgKeyNotLoadedError();
       }
       const outgoingSecret = new Uint8Array(await bridge.exportOrgSecretKey());
 
