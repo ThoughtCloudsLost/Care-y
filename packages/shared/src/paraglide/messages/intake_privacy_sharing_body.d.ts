@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers assigned to your case can read your information after decrypting it on their own devices. If you call or text the hotline, your phone number passe..." |
+* | "Volunteers decrypt your information on their own devices. Until someone first opens your case it can be unlocked with the organization's key; after that, onl..." |
 *
 * @param {Intake_Privacy_Sharing_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

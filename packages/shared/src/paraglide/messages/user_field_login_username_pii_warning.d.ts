@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Login Usernames are stored with weaker encryption than display names because the server needs to be able to read them. Avoid using real names or email addres..." |
+* | "The server can never read login usernames, but signing in uses a per-organization fingerprint of the username, so someone holding the database could confirm ..." |
 *
 * @param {User_Field_Login_Username_Pii_WarningInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

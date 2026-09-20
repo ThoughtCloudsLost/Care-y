@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { METHOD_INFO } from "./two-factor-types.js";
 import { ErrorCode } from "./error-codes.js";
+import { Permission } from "./roles.js";
 
 const dir = dirname(fileURLToPath(import.meta.url));
 const messagesDir = resolve(dir, "../messages");
@@ -88,6 +89,56 @@ describe("ErrorCode i18n keys", () => {
         errorKeys,
         `ErrorCode.${code} should map to "${expectedKey}" in en.json`,
       ).toContain(expectedKey);
+    }
+  });
+});
+
+describe("permission_* EN labels derived from enum key names", () => {
+  /**
+   * Three labels the mechanical rule cannot produce.
+   * Key: Permission enum string value. Value: expected EN label.
+   */
+  const EXCEPTIONS: ReadonlyMap<string, string> = new Map([
+    ["send_client_sms", "Send client SMS"],
+    ["view_client_pii", "View client PII"],
+    ["delete_others_notes", "Delete others' notes"],
+  ]);
+
+  /** Derive the expected label from a Permission enum string value. */
+  function expectedLabel(enumValue: string): string {
+    const exception = EXCEPTIONS.get(enumValue);
+    if (exception !== undefined) return exception;
+    const words = enumValue.split("_");
+    return words
+      .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+      .join(" ");
+  }
+
+  it("every Permission maps to a permission_* key whose label matches the rule", () => {
+    for (const enumValue of Object.values(Permission)) {
+      const key = `permission_${enumValue}`;
+      const actual = en[key];
+      expect(actual, `missing key "${key}" in en.json`).toBeDefined();
+      expect(
+        actual,
+        `permission label "${key}" should be "${expectedLabel(enumValue)}" but was "${String(actual)}"`,
+      ).toBe(expectedLabel(enumValue));
+    }
+  });
+
+  it("no permission_* label keys exist without a matching Permission enum member", () => {
+    const enumValues = new Set(Object.values(Permission));
+    const permKeys = Object.keys(en).filter(
+      (k) => k.startsWith("permission_") && !k.endsWith("_hint"),
+    );
+    for (const key of permKeys) {
+      const value = key.replace(/^permission_/, "");
+      // Skip the not_yet_built meta-key
+      if (value === "not_yet_built") continue;
+      expect(
+        enumValues.has(value as Permission),
+        `en.json has "${key}" but no matching Permission enum member`,
+      ).toBe(true);
     }
   });
 });

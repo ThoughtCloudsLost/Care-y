@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Portal_Web_Chat_HintInputs */
 
 const en_portal_web_chat_hint = /** @type {(inputs: Portal_Web_Chat_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Your messages are encrypted before they leave your device. Only assigned volunteers can read them.`)
+	return /** @type {LocalizedString} */ (`Your messages are encrypted before they leave your device. Only your organization can read them, and once a volunteer picks up your case, only the volunteers helping you.`)
 };
 
 const es_portal_web_chat_hint = /** @type {(inputs: Portal_Web_Chat_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tus mensajes se cifran antes de salir de tu dispositivo. Solo los voluntarios asignados pueden leerlos.`)
+	return /** @type {LocalizedString} */ (`Tus mensajes se cifran antes de salir de tu dispositivo. Solo tu organización puede leerlos, y una vez que un voluntario toma tu caso, solo los voluntarios que te ayudan.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Your messages are encrypted before they leave your device. Only assigned volunteers can read them." |
+* | "Your messages are encrypted before they leave your device. Only your organization can read them, and once a volunteer picks up your case, only the volunteers..." |
 *
 * @param {Portal_Web_Chat_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -129,75 +129,74 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_role_admin: () => "Admin",
   // The case record
   permission_view_cases: () => "View cases",
-  permission_open_cases: () => "Open a new case",
-  permission_edit_case_summary: () => "Edit the case summary",
+  permission_open_cases: () => "Open cases",
+  permission_edit_case_summary: () => "Edit case summary",
   permission_write_case_notes: () => "Write case notes",
   permission_change_case_status: () => "Change case status",
-  permission_link_cases: () => "Link cases together",
+  permission_link_cases: () => "Link cases",
   permission_claim_cases: () => "Claim cases",
-  permission_assign_cases: () => "Assign cases to other people",
-  permission_delete_others_notes: () => "Delete other people's notes",
-  permission_send_client_media: () => "Attach files to a case",
-  permission_download_case_media: () => "Download recordings and files",
+  permission_assign_cases: () => "Assign cases",
+  permission_delete_others_notes: () => "Delete others' notes",
+  permission_send_client_media: () => "Send client media",
+  permission_download_case_media: () => "Download case media",
+  permission_download_case_media_hint: () =>
+    "Covers call recordings and attached files.",
   // Reaching a client
-  permission_send_client_sms: () => "Send text messages to clients",
-  permission_send_client_email: () => "Send emails to clients",
+  permission_send_client_sms: () => "Send client SMS",
+  permission_send_client_email: () => "Send client email",
   permission_call_clients: () => "Call clients",
-  permission_message_clients_in_portal: () =>
-    "Message clients in the secure portal",
+  permission_message_clients_in_portal: () => "Message clients in portal",
   // Client access
-  permission_manage_share_links: () => "Create share links",
-  permission_manage_portal_channel: () => "Set up a client's secure portal",
-  permission_reset_client_login: () => "Reset a client's portal login",
-  permission_revoke_reply_links: () => "Revoke a reply link",
+  permission_manage_share_links: () => "Manage share links",
+  permission_manage_portal_channel: () => "Manage portal channel",
+  permission_manage_portal_channel_hint: () =>
+    "Controls whether a client can access the secure portal for their case.",
+  permission_reset_client_login: () => "Reset client login",
+  permission_revoke_reply_links: () => "Revoke reply links",
   // Client records
-  permission_view_clients: () => "View client records",
-  permission_view_client_pii: () => "See full contact details",
-  permission_edit_client_contact: () => "Change contact details for any client",
-  permission_edit_client_alias: () => "Rename a client",
-  permission_merge_clients: () => "Merge duplicate client records",
-  permission_delete_clients: () => "Delete client records",
+  permission_view_clients: () => "View clients",
+  permission_view_client_pii: () => "View client PII",
+  permission_edit_client_contact: () => "Edit client contact",
+  permission_edit_client_contact_hint: () =>
+    "Applies to contact details on any client record, not only your own cases.",
+  permission_edit_client_alias: () => "Edit client alias",
+  permission_merge_clients: () => "Merge clients",
+  permission_delete_clients: () => "Delete clients",
   // Knowledge base
-  permission_view_knowledge_base: () => "Read the knowledge base",
-  permission_edit_knowledge_base: () => "Write and edit articles",
+  permission_view_knowledge_base: () => "View knowledge base",
+  permission_edit_knowledge_base: () => "Edit knowledge base",
   permission_manage_knowledge_base_categories: () =>
-    "Organise the knowledge base",
-  permission_delete_knowledge_base_articles: () => "Delete articles",
+    "Manage knowledge base categories",
+  permission_delete_knowledge_base_articles: () =>
+    "Delete knowledge base articles",
   // Queues
-  permission_manage_queues: () => "Create and change queues",
-  permission_manage_queue_membership: () => "Add and remove queue members",
+  permission_manage_queues: () => "Manage queues",
+  permission_manage_queue_membership: () => "Manage queue membership",
   permission_manage_queue_membership_hint: () =>
     "Adding someone to a queue grants them read access to every case in that queue. Removing them revokes that access.",
-  permission_manage_queue_notifications: () =>
-    "Set who is notified about a queue",
+  permission_manage_queue_notifications: () => "Manage queue notifications",
   // Intake
-  permission_manage_intake_forms: () => "Build public intake forms",
-  permission_view_intake_responses: () =>
-    "Read intake submissions from every queue",
+  permission_manage_intake_forms: () => "Manage intake forms",
+  permission_view_intake_responses: () => "View intake responses",
   permission_view_intake_responses_hint: () =>
     "Granting this decides who receives decryption keys when a form is submitted. Revoking it later does not take back keys already issued.",
-  // Running the organisation
-  permission_manage_roles: () => "Set what each role can do",
-  permission_manage_users: () => "Manage people's accounts",
-  permission_manage_org_identity: () =>
-    "Change how the organisation presents itself",
-  permission_manage_channel_routing: () =>
-    "Decide where incoming contacts land",
-  permission_manage_retention: () =>
-    "Set how long personal information is kept",
-  permission_manage_note_types: () =>
-    "Define the kinds of notes people can write",
-  permission_manage_keys: () => "Look after the encryption keys",
-  permission_manage_infrastructure: () =>
-    "Configure the phone and messaging service",
-  permission_write_call_greetings: () => "Record what callers hear",
-  permission_write_automatic_replies: () => "Write automatic text replies",
-  permission_manage_voicemail_quarantine: () => "Handle held-back voicemail",
-  permission_manage_escalation: () => "Set up escalation rules",
-  permission_manage_presets: () => "Manage saved replies",
-  permission_view_reports: () => "See reports and statistics",
-  permission_view_audit_log: () => "Read the audit log",
-  permission_view_own_shifts: () => "See your own shifts",
+  // Running the organization
+  permission_manage_roles: () => "Manage roles",
+  permission_manage_users: () => "Manage users",
+  permission_manage_org_identity: () => "Manage org identity",
+  permission_manage_channel_routing: () => "Manage channel routing",
+  permission_manage_retention: () => "Manage retention",
+  permission_manage_note_types: () => "Manage note types",
+  permission_manage_keys: () => "Manage keys",
+  permission_manage_infrastructure: () => "Manage infrastructure",
+  permission_write_call_greetings: () => "Write call greetings",
+  permission_write_automatic_replies: () => "Write automatic replies",
+  permission_manage_voicemail_quarantine: () => "Manage voicemail quarantine",
+  permission_manage_escalation: () => "Manage escalation",
+  permission_manage_presets: () => "Manage presets",
+  permission_view_reports: () => "View reports",
+  permission_view_audit_log: () => "View audit log",
+  permission_view_own_shifts: () => "View own shifts",
   // Group titles
   roles_group_case_record: () => "The case record",
   roles_group_reaching_client: () => "Reaching a client",
@@ -206,7 +205,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   roles_group_knowledge_base: () => "Knowledge base",
   roles_group_queues: () => "Queues",
   roles_group_intake: () => "Intake",
-  roles_group_running_org: () => "Running the organisation",
+  roles_group_running_org: () => "Running the organization",
   // Shared UI
   roles_toggle_aria: ({
     permission,
@@ -392,42 +391,38 @@ describe("RolePermissionsSection", () => {
     });
     // Case record group
     expect(screen.getByText("The case record")).toBeTruthy();
-    expect(screen.getByText("Open a new case")).toBeTruthy();
+    expect(screen.getByText("Open cases")).toBeTruthy();
     expect(screen.getByText("Write case notes")).toBeTruthy();
 
     // Reaching a client group
     expect(screen.getByText("Reaching a client")).toBeTruthy();
-    expect(screen.getByText("Send text messages to clients")).toBeTruthy();
+    expect(screen.getByText("Send client SMS")).toBeTruthy();
 
     // Client access group
     expect(screen.getByText("The client's access to the case")).toBeTruthy();
-    expect(screen.getByText("Create share links")).toBeTruthy();
+    expect(screen.getByText("Manage share links")).toBeTruthy();
 
     // Client records group
     expect(screen.getByText("Client records")).toBeTruthy();
-    expect(screen.getByText("View client records")).toBeTruthy();
+    expect(screen.getByText("View clients")).toBeTruthy();
 
     // Knowledge base group
     expect(screen.getByText("Knowledge base")).toBeTruthy();
-    expect(screen.getByText("Read the knowledge base")).toBeTruthy();
+    expect(screen.getByText("View knowledge base")).toBeTruthy();
 
     // Queues group
     expect(screen.getByText("Queues")).toBeTruthy();
-    expect(screen.getByText("Create and change queues")).toBeTruthy();
+    expect(screen.getByText("Manage queues")).toBeTruthy();
 
     // Intake group
     expect(screen.getByText("Intake")).toBeTruthy();
-    expect(
-      screen.getByText("Read intake submissions from every queue"),
-    ).toBeTruthy();
+    expect(screen.getByText("View intake responses")).toBeTruthy();
 
-    // Running the organisation group
-    expect(screen.getByText("Running the organisation")).toBeTruthy();
-    expect(screen.getByText("Look after the encryption keys")).toBeTruthy();
-    expect(screen.getByText("Set what each role can do")).toBeTruthy();
-    expect(
-      screen.getByText("Configure the phone and messaging service"),
-    ).toBeTruthy();
+    // Running the organization group
+    expect(screen.getByText("Running the organization")).toBeTruthy();
+    expect(screen.getByText("Manage keys")).toBeTruthy();
+    expect(screen.getByText("Manage roles")).toBeTruthy();
+    expect(screen.getByText("Manage infrastructure")).toBeTruthy();
   });
 
   it("renders three role column headers per group", async () => {
@@ -447,18 +442,18 @@ describe("RolePermissionsSection", () => {
   it("renders locked cells as disabled toggles", async () => {
     renderSection();
     await vi.waitFor(() => {
-      expect(screen.getByText("Look after the encryption keys")).toBeTruthy();
+      expect(screen.getByText("Manage keys")).toBeTruthy();
     });
 
     // Each locked permission produces 3 toggle cells (one per role column),
     // and each is disabled. The aria-label includes "locked to Admin".
     const lockedLabel = screen.getByLabelText(
-      "Look after the encryption keys for Admin, locked to Admin",
+      "Manage keys for Admin, locked to Admin",
     );
     expect(lockedLabel).toBeTruthy();
 
     const volLabel = screen.getByLabelText(
-      "Look after the encryption keys for Volunteer, locked to Admin",
+      "Manage keys for Volunteer, locked to Admin",
     );
     expect(volLabel).toBeTruthy();
   });
@@ -480,10 +475,8 @@ describe("RolePermissionsSection", () => {
       expect(screen.getByText("View cases")).toBeTruthy();
     });
 
-    // Toggle "See reports and statistics" for Volunteer (currently off).
-    const toggle = screen.getByLabelText(
-      "See reports and statistics for Volunteer",
-    );
+    // Toggle "View reports" for Volunteer (currently off).
+    const toggle = screen.getByLabelText("View reports for Volunteer");
     toggle.click();
 
     await vi.waitFor(() => {
@@ -501,9 +494,7 @@ describe("RolePermissionsSection", () => {
       expect(screen.getByText("View cases")).toBeTruthy();
     });
 
-    const toggle = screen.getByLabelText(
-      "See reports and statistics for Volunteer",
-    );
+    const toggle = screen.getByLabelText("View reports for Volunteer");
     toggle.click();
 
     await vi.waitFor(() => {
@@ -522,9 +513,7 @@ describe("RolePermissionsSection", () => {
       expect(screen.getByText("View cases")).toBeTruthy();
     });
 
-    const toggle = screen.getByLabelText(
-      "See reports and statistics for Volunteer",
-    );
+    const toggle = screen.getByLabelText("View reports for Volunteer");
     toggle.click();
 
     await vi.waitFor(() => {

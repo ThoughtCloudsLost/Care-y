@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Other people who use this system cannot see it. The server itself cannot see it. Access is limited to the specific people helping you." |
+* | "Your information is encrypted before it leaves your device. The people who run the servers can never read it, and nobody outside the organization can see it...." |
 *
 * @param {Intake_Protected_Volunteers_WhyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "What you wrote has been encrypted. Only assigned volunteers can read it. Even if someone breaks into this server, they cannot read it." |
+* | "Encrypted before it is sent. Readable only within the organization, and only by your case volunteers once someone takes your case." |
 *
 * @param {Intake_Submit_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -506,6 +506,24 @@
 
   <div class="protected-register-wrapper">
     <Register kind="careful">
+      {m.permission_manage_portal_channel_hint()}
+    </Register>
+  </div>
+
+  <div class="protected-register-wrapper">
+    <Register kind="careful">
+      {m.permission_download_case_media_hint()}
+    </Register>
+  </div>
+
+  <div class="protected-register-wrapper">
+    <Register kind="careful">
+      {m.permission_edit_client_contact_hint()}
+    </Register>
+  </div>
+
+  <div class="protected-register-wrapper">
+    <Register kind="careful">
       {m.permission_view_intake_responses_hint()}
     </Register>
   </div>

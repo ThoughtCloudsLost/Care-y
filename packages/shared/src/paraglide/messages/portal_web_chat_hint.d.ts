@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Your messages are encrypted before they leave your device. Only assigned volunteers can read them." |
+* | "Your messages are encrypted before they leave your device. Only your organization can read them, and once a volunteer picks up your case, only the volunteers..." |
 *
 * @param {Portal_Web_Chat_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

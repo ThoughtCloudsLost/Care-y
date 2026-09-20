@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Intake_Protected_Volunteers_WhatInputs */
 
 const en_intake_protected_volunteers_what = /** @type {(inputs: Intake_Protected_Volunteers_WhatInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Only volunteers assigned to your case can read your information.`)
+	return /** @type {LocalizedString} */ (`Until a volunteer first opens your case, the organization can unlock what you wrote. From then on, only the volunteers working on your case can read it.`)
 };
 
 const es_intake_protected_volunteers_what = /** @type {(inputs: Intake_Protected_Volunteers_WhatInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo los voluntarios asignados a tu caso pueden leer tu información.`)
+	return /** @type {LocalizedString} */ (`Hasta que un voluntario abra tu caso por primera vez, la organización puede acceder a lo que escribiste. A partir de entonces, solo los voluntarios que trabajan en tu caso pueden leerlo.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Only volunteers assigned to your case can read your information." |
+* | "Until a volunteer first opens your case, the organization can unlock what you wrote. From then on, only the volunteers working on your case can read it." |
 *
 * @param {Intake_Protected_Volunteers_WhatInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
