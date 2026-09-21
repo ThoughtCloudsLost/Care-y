@@ -14,7 +14,7 @@
     "prepare": "node scripts/compile-paraglide.js"
   },
   "dependencies": {
-    "zod": "4.6.2"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@inlang/paraglide-js": "2.25.1"

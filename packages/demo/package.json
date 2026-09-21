@@ -24,13 +24,13 @@
     "@care-y/shared": "workspace:*",
     "@chenglou/pretext": "0.0.9",
     "@electric-sql/pglite": "0.5.8",
-    "@lucide/svelte": "1.45.0",
-    "@tanstack/svelte-query": "6.1.48",
+    "@lucide/svelte": "1.47.0",
+    "@tanstack/svelte-query": "6.2.1",
     "@trpc/client": "11.10.0",
     "@trpc/server": "11.10.0",
     "buffer": "6.0.3",
     "konsta": "5.4.0",
-    "kysely": "0.29.5",
+    "kysely": "0.29.6",
     "libsodium-wrappers-sumo": "0.8.4"
   },
   "devDependencies": {
