@@ -303,6 +303,35 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "This link is the only way back to your conversation.",
   intake_continuation_hint: () =>
     "The link above carries the key that unlocks your conversation.",
+  intake_page_next: () => "Next",
+  intake_page_back: () => "Back",
+  intake_page_progress: ({
+    current,
+    total,
+  }: {
+    current: string;
+    total: string;
+  }) => `Step ${current} of ${total}`,
+  intake_page_advance_anyway: () => "Continue with incomplete answers",
+  intake_page_issues_heading: () => "Please review the following:",
+  intake_page_issue_row: ({ field, error }: { field: string; error: string }) =>
+    `${field}: ${error}`,
+  intake_page_issue_row_with_page: ({
+    page,
+    field,
+    error,
+  }: {
+    page: string;
+    field: string;
+    error: string;
+  }) => `Step ${page}: ${field}: ${error}`,
+  intake_page_submit_blocked: () => "Fix all issues before submitting.",
+  intake_error_number_format: () => "Enter a valid number.",
+  intake_error_number_min: ({ min }: { min: string }) =>
+    `Value must be at least ${min}.`,
+  intake_error_number_max: ({ max }: { max: string }) =>
+    `Value must be at most ${max}.`,
+  intake_error_date_format: () => "Enter a valid date.",
 }));
 
 vi.mock("$lib/shell/PageShell.svelte", async (importOriginal) => ({

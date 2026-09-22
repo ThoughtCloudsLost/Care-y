@@ -312,3 +312,86 @@ export function validateFields(opts: {
 
   return { errors, contactDetailError, valid };
 }
+
+// ---------------------------------------------------------------------------
+// Issue collection (for validation summaries)
+// ---------------------------------------------------------------------------
+
+/** A single validation issue tied to a specific field. */
+export interface ValidationIssue {
+  readonly fieldKey: string;
+  readonly fieldLabel: string;
+  readonly error: string;
+  /** 1-based page number (present only in cross-page summaries). */
+  readonly pageNumber?: number;
+}
+
+/**
+ * Collect validation issues for a single page's visible fields.
+ * Returns an array of issues (empty when everything validates).
+ *
+ * `resolveLabel` turns a PlaintextField into a display string for the
+ * summary row. The caller provides it so this function stays locale-agnostic.
+ */
+export function collectPageIssues(
+  page: FormPage,
+  fieldValues: Readonly<Record<string, FieldValue>>,
+  messages: ValidationMessages,
+  resolveLabel: (field: PlaintextField) => string,
+): readonly ValidationIssue[] {
+  const result = validateFields({
+    fields: page.fields,
+    fieldValues,
+    messages,
+    isDefaultForm: false,
+    contactMethod: "none",
+    contactDetail: "",
+    accountExpanded: false,
+    accountPassword: "",
+    accountConfirmPassword: "",
+    fieldsToValidate: page.fields,
+  });
+
+  const issues: ValidationIssue[] = [];
+  for (const field of page.fields) {
+    const err = result.errors[field.fieldKey];
+    if (err !== undefined && err !== "") {
+      issues.push({
+        fieldKey: field.fieldKey,
+        fieldLabel: resolveLabel(field),
+        error: err,
+      });
+    }
+  }
+  return issues;
+}
+
+/**
+ * Collect validation issues across all visible pages. Each issue carries a
+ * 1-based page number so the summary can direct the visitor to the right page.
+ */
+export function collectAllIssues(
+  pages: readonly FormPage[],
+  visibleIndices: readonly number[],
+  fieldValues: Readonly<Record<string, FieldValue>>,
+  messages: ValidationMessages,
+  resolveLabel: (field: PlaintextField) => string,
+): readonly ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  for (let vi = 0; vi < visibleIndices.length; vi++) {
+    const pageIdx = visibleIndices.at(vi);
+    if (pageIdx === undefined) continue;
+    const page = pages.at(pageIdx);
+    if (page === undefined) continue;
+    const pageIssues = collectPageIssues(
+      page,
+      fieldValues,
+      messages,
+      resolveLabel,
+    );
+    for (const issue of pageIssues) {
+      issues.push({ ...issue, pageNumber: vi + 1 });
+    }
+  }
+  return issues;
+}

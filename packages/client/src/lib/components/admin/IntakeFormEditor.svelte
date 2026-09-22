@@ -43,6 +43,7 @@
   import {
     resolveLocalized,
     normalizeVisibleWhen,
+    isDataFieldType,
     BASE_LOCALE,
     FORM_LOCALES,
     KB_ATTACHMENT_MAX_BYTES,
@@ -114,6 +115,19 @@
     VolunteerOption,
   } from "./intake-field-config-types.js";
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
+  import ValidationIssueSummary from "$lib/components/portal/ValidationIssueSummary.svelte";
+  import {
+    splitIntoPages as splitFieldsIntoPages,
+    isFieldVisible as isFieldVisiblePure,
+    collectPageIssues,
+    collectAllIssues,
+    validateFields,
+    type ValidationMessages as IntakeValidationMessages,
+    type ValidationIssue,
+    type FormPage,
+    type PlaintextField as PublicPlaintextField,
+    type FieldValue,
+  } from "../../../routes/(client)/intake/intake-form-logic.js";
 
   import type { IntakeOption } from "@care-y/shared";
   import type { EarlierFieldOption } from "./intake-field-config-types.js";
@@ -551,6 +565,162 @@
   function previewNoop(): void {
     // Preview fields are disabled; changes are discarded.
   }
+
+  // ---- Preview pagination state ----
+
+  /** Preview field values (the admin can type into the preview). */
+  let previewFieldValues = $state<Record<string, FieldValue>>({});
+
+  /** Preview page index within the preview pages array. */
+  let previewPageIndex = $state(0);
+
+  /** Preview validation issues for the current page (shown after clicking Next). */
+  let previewCurrentPageIssues = $state<readonly ValidationIssue[]>([]);
+
+  /** Pages derived from the current editor field list. */
+  const previewPages = $derived(
+    splitFieldsIntoPages(fields as readonly PublicPlaintextField[]),
+  );
+
+  const previewHasPages = $derived(previewPages.length > 1);
+
+  // Unlike the public form, the preview navigates every page regardless of
+  // the current answers: a page a condition can hide still needs authoring
+  // review, so it stays reachable and carries the conditional marker instead.
+  const previewVisiblePageIndices = $derived(
+    previewPages.map((_, index) => index),
+  );
+
+  const previewCurrentPage = $derived(previewPages.at(previewPageIndex));
+
+  const previewCurrentVisibleStep = $derived(
+    previewVisiblePageIndices.indexOf(previewPageIndex) + 1,
+  );
+
+  const previewTotalVisibleSteps = $derived(previewVisiblePageIndices.length);
+
+  const previewIsLastPage = $derived(
+    previewVisiblePageIndices.indexOf(previewPageIndex) ===
+      previewVisiblePageIndices.length - 1,
+  );
+
+  /** Whether a preview page contains any conditionally-visible fields. */
+  function pageHasConditionalFields(page: {
+    readonly fields: readonly PublicPlaintextField[];
+  }): boolean {
+    return page.fields.some((f) => f.visibleWhen != null);
+  }
+
+  /** Navigate preview to the next visible page. */
+  function previewGoNext(): boolean {
+    const curIdx = previewVisiblePageIndices.indexOf(previewPageIndex);
+    if (curIdx < 0 || curIdx >= previewVisiblePageIndices.length - 1)
+      return false;
+    const nextIdx = previewVisiblePageIndices.at(curIdx + 1);
+    if (nextIdx === undefined) return false;
+    previewPageIndex = nextIdx;
+    return true;
+  }
+
+  /** Navigate preview to the previous visible page. */
+  function previewGoPrev(): boolean {
+    const curIdx = previewVisiblePageIndices.indexOf(previewPageIndex);
+    if (curIdx <= 0) return false;
+    const prevIdx = previewVisiblePageIndices.at(curIdx - 1);
+    if (prevIdx === undefined) return false;
+    previewPageIndex = prevIdx;
+    return true;
+  }
+
+  /** Build validation messages for the preview. */
+  function previewValidationMessages(): IntakeValidationMessages {
+    return {
+      fieldRequired: m.intake_error_field_required(),
+      messageRequired: m.intake_error_message_required(),
+      emailFormat: m.intake_error_email_format(),
+      phoneFormat: m.intake_error_phone_format(),
+      numberFormat: m.intake_error_number_format(),
+      numberMin: (min: string) => m.intake_error_number_min({ min }),
+      numberMax: (max: string) => m.intake_error_number_max({ max }),
+      dateFormat: m.intake_error_date_format(),
+    };
+  }
+
+  /** Resolve a field label for preview issue summaries. */
+  function previewIssueLabel(field: PublicPlaintextField): string {
+    return resolveLocalized(field.label, previewLocale) ?? field.fieldKey;
+  }
+
+  /** Format a preview issue row (single page). */
+  function previewFormatIssueRow(issue: ValidationIssue): string {
+    return `${issue.fieldLabel}: ${issue.error}`;
+  }
+
+  /** Format a preview issue row (cross-page, with step number). */
+  function previewFormatCrossPageIssueRow(issue: ValidationIssue): string {
+    return `${m.intake_page_progress({ current: String(issue.pageNumber ?? 1), total: String(previewTotalVisibleSteps) })}: ${issue.fieldLabel}: ${issue.error}`;
+  }
+
+  /** Validate preview's current page fields. */
+  function previewValidateCurrentPage(): boolean {
+    if (!previewCurrentPage) return true;
+    const result = validateFields({
+      fields: previewCurrentPage.fields,
+      fieldValues: previewFieldValues,
+      messages: previewValidationMessages(),
+      isDefaultForm: false,
+      contactMethod: "none",
+      contactDetail: "",
+      accountExpanded: false,
+      accountPassword: "",
+      accountConfirmPassword: "",
+      fieldsToValidate: previewCurrentPage.fields,
+    });
+    return result.valid;
+  }
+
+  /** All cross-page preview issues. */
+  const previewAllPageIssues = $derived.by((): readonly ValidationIssue[] => {
+    if (!previewHasPages || !previewIsLastPage) return [];
+    return collectAllIssues(
+      previewPages,
+      previewVisiblePageIndices,
+      previewFieldValues,
+      previewValidationMessages(),
+      previewIssueLabel,
+    );
+  });
+
+  const previewHasOutstandingIssues = $derived(
+    previewHasPages && previewAllPageIssues.length > 0,
+  );
+
+  /** Handle preview field value changes. */
+  function handlePreviewFieldChange(
+    fieldId: string,
+    value: Exclude<FieldValue, undefined>,
+  ): void {
+    previewFieldValues = { ...previewFieldValues, [fieldId]: value };
+  }
+
+  /** Help text for a preview field, read from the editor's own field list. */
+  function previewHelpText(fieldKey: string): PlaintextField["helpText"] {
+    return fields.find((f) => f.fieldKey === fieldKey)?.helpText ?? {};
+  }
+
+  // Reset preview page index when the page count changes (field list modified).
+  // Track the previous page count so we only reset on actual changes, not on
+  // every re-render.
+  let prevPreviewPageCount = $state(previewPages.length);
+
+  $effect(() => {
+    const count = previewPages.length;
+    if (count !== prevPreviewPageCount) {
+      prevPreviewPageCount = count;
+      previewPageIndex = 0;
+      previewCurrentPageIssues = [];
+    }
+  });
 
   function handleNameInput(e: Event): void {
     const target = e.target;
@@ -1586,41 +1756,197 @@
             {@html previewDescriptionHtml}
           </div>
         {/if}
-        {#each fields as field, index (field.fieldKey)}
-          {#if field.fieldType === "pageBreak"}
-            <div class="preview-page-break" role="separator">
-              <hr class="preview-page-break-line" />
-              <span class="preview-page-break-label">
-                {pageBreakLabel(field)}
-              </span>
-              <hr class="preview-page-break-line" />
-            </div>
-          {:else if field.fieldType === "richText"}
-            {@const richHtml = renderPreviewHtml(
-              resolveRichPreview(
-                field.config.type === "richText" ? field.config.body : {},
-                previewLocale,
-              ),
+
+        {#if previewHasPages}
+          <!-- Multi-page preview: paginated with navigation -->
+          <p
+            class="preview-page-progress"
+            role="status"
+            aria-live="polite"
+            data-testid="preview-page-progress"
+          >
+            {m.intake_page_progress({
+              current: String(previewCurrentVisibleStep),
+              total: String(previewTotalVisibleSteps),
+            })}
+          </p>
+
+          <!-- Page title when present -->
+          {#if previewCurrentPage?.title}
+            {@const pageTitle = resolveLocalized(
+              previewCurrentPage.title,
+              previewLocale,
             )}
-            {#if richHtml.length > 0}
-              <div class="preview-rich-text-block preview-rich-content">
-                <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
-                {@html richHtml}
-              </div>
+            {#if pageTitle}
+              <BlockTitle>{pageTitle}</BlockTitle>
             {/if}
-          {:else}
-            <IntakeFieldRenderer
-              fieldId={`preview-${String(index)}`}
-              label={resolveLocalized(field.label, previewLocale) ?? ""}
-              helpText={resolveLocalized(field.helpText, previewLocale)}
-              config={field.config}
-              isRequired={field.isRequired}
-              locale={previewLocale}
-              value={undefined}
-              onchange={previewNoop}
+          {/if}
+
+          <!-- Conditional page marker -->
+          {#if previewCurrentPage && pageHasConditionalFields(previewCurrentPage)}
+            <p
+              class="preview-conditional-marker"
+              data-testid="preview-conditional-marker"
+            >
+              {m.intake_preview_conditional_marker()}
+            </p>
+          {/if}
+
+          <!-- Current page fields -->
+          {#if previewCurrentPage}
+            {#each previewCurrentPage.fields as field, index (field.fieldKey)}
+              {#if isFieldVisiblePure(field, previewFieldValues) && (isDataFieldType(field.fieldType) || field.fieldType === "richText")}
+                {#if field.fieldType === "richText"}
+                  {@const richHtml = renderPreviewHtml(
+                    resolveRichPreview(
+                      field.config.type === "richText" ? field.config.body : {},
+                      previewLocale,
+                    ),
+                  )}
+                  {#if richHtml.length > 0}
+                    <div class="preview-rich-text-block preview-rich-content">
+                      <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+                      {@html richHtml}
+                    </div>
+                  {/if}
+                {:else}
+                  <IntakeFieldRenderer
+                    fieldId={`preview-${field.fieldKey}`}
+                    label={resolveLocalized(field.label, previewLocale) ?? ""}
+                    helpText={resolveLocalized(
+                      previewHelpText(field.fieldKey),
+                      previewLocale,
+                    )}
+                    config={field.config}
+                    isRequired={field.isRequired}
+                    locale={previewLocale}
+                    value={previewFieldValues[field.fieldKey]}
+                    onchange={(val: Exclude<FieldValue, undefined>) =>
+                      handlePreviewFieldChange(field.fieldKey, val)}
+                  />
+                {/if}
+              {/if}
+            {/each}
+          {/if}
+
+          <!-- Preview page navigation -->
+          <div class="preview-page-nav">
+            {#if previewCurrentVisibleStep > 1}
+              <Button
+                outline
+                onclick={() => {
+                  previewCurrentPageIssues = [];
+                  previewGoPrev();
+                }}
+                data-testid="preview-page-back"
+              >
+                {m.intake_page_back()}
+              </Button>
+            {:else}
+              <span></span>
+            {/if}
+            {#if !previewIsLastPage}
+              <Button
+                onclick={() => {
+                  if (previewValidateCurrentPage()) {
+                    previewCurrentPageIssues = [];
+                    previewGoNext();
+                  } else if (previewCurrentPage) {
+                    previewCurrentPageIssues = collectPageIssues(
+                      previewCurrentPage,
+                      previewFieldValues,
+                      previewValidationMessages(),
+                      previewIssueLabel,
+                    );
+                  }
+                }}
+                data-testid="preview-page-next"
+              >
+                {m.intake_page_next()}
+              </Button>
+            {/if}
+          </div>
+
+          <!-- Current page issue summary -->
+          <ValidationIssueSummary
+            heading={m.intake_page_issues_heading()}
+            issues={previewCurrentPageIssues}
+            formatRow={previewFormatIssueRow}
+          />
+
+          <!-- Advance anyway (secondary action) -->
+          {#if previewCurrentPageIssues.length > 0 && !previewIsLastPage}
+            <div class="preview-advance-anyway">
+              <Button
+                outline
+                onclick={() => {
+                  previewCurrentPageIssues = [];
+                  previewGoNext();
+                }}
+                data-testid="preview-advance-anyway"
+              >
+                {m.intake_page_advance_anyway()}
+              </Button>
+            </div>
+          {/if}
+
+          <!-- Cross-page issue summary on last page -->
+          {#if previewIsLastPage && previewAllPageIssues.length > 0}
+            <p class="preview-submit-blocked-hint">
+              {m.intake_page_submit_blocked()}
+            </p>
+            <ValidationIssueSummary
+              heading={m.intake_page_issues_heading()}
+              issues={previewAllPageIssues}
+              formatRow={previewFormatCrossPageIssueRow}
             />
           {/if}
-        {/each}
+
+          <!-- Preview submit button (on last page) -->
+          {#if previewIsLastPage}
+            <div class="preview-submit-area">
+              <Button
+                large
+                disabled={previewHasOutstandingIssues}
+                data-testid="preview-submit"
+              >
+                {m.intake_submit()}
+              </Button>
+            </div>
+          {/if}
+        {:else}
+          <!-- Single-page preview: render all fields flat -->
+          {#each fields as field, index (field.fieldKey)}
+            {#if field.fieldType === "pageBreak"}
+              <!-- Single-page forms should not have page breaks, but handle gracefully -->
+            {:else if field.fieldType === "richText"}
+              {@const richHtml = renderPreviewHtml(
+                resolveRichPreview(
+                  field.config.type === "richText" ? field.config.body : {},
+                  previewLocale,
+                ),
+              )}
+              {#if richHtml.length > 0}
+                <div class="preview-rich-text-block preview-rich-content">
+                  <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+                  {@html richHtml}
+                </div>
+              {/if}
+            {:else}
+              <IntakeFieldRenderer
+                fieldId={`preview-${String(index)}`}
+                label={resolveLocalized(field.label, previewLocale) ?? ""}
+                helpText={resolveLocalized(field.helpText, previewLocale)}
+                config={field.config}
+                isRequired={field.isRequired}
+                locale={previewLocale}
+                value={previewFieldValues[field.fieldKey]}
+                onchange={(val: Exclude<FieldValue, undefined>) =>
+                  handlePreviewFieldChange(field.fieldKey, val)}
+              />
+            {/if}
+          {/each}
+        {/if}
       {:else if previewState === "submitted"}
         <!-- Success state, mirrors IntakeFormBody submitted layout -->
         <h2 class="intake-preview-success-heading">
@@ -1905,27 +2231,6 @@
     padding: var(--space-xl) 0;
   }
 
-  .preview-page-break {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: var(--space-md) 0;
-  }
-
-  .preview-page-break-line {
-    flex: 1;
-    border: none;
-    border-top: 1px dashed var(--hair);
-  }
-
-  .preview-page-break-label {
-    flex-shrink: 0;
-    font-size: var(--text-xs);
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
   .page-break-subtitle {
     font-size: var(--text-xs);
     color: var(--muted);
@@ -2012,6 +2317,47 @@
     color: var(--danger);
     padding: var(--space-xs) var(--space-md);
     margin: 0;
+  }
+
+  /* Preview pagination */
+  .preview-page-progress {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    text-align: center;
+    margin: 0 0 var(--space-sm);
+  }
+
+  .preview-page-nav {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+  }
+
+  .preview-advance-anyway {
+    margin-top: var(--space-sm);
+    text-align: center;
+  }
+
+  .preview-submit-blocked-hint {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--danger);
+    margin: var(--space-md) 0 var(--space-xs);
+  }
+
+  .preview-submit-area {
+    margin-top: var(--space-md);
+  }
+
+  .preview-conditional-marker {
+    font-size: var(--text-xs);
+    color: var(--careful-text, var(--ink));
+    background: var(--careful-bg, rgba(234, 179, 8, 0.08));
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: 6px;
+    margin: 0 0 var(--space-sm);
+    text-align: center;
   }
 
   /* Screen-reader only (hidden file inputs) */
