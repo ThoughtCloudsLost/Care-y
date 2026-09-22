@@ -93,6 +93,12 @@ export interface AuthService {
     encryptedDisplayName: Buffer,
   ): Promise<void>;
 
+  /** Updates an encrypted preferred locale (ciphertext only, client encrypts). */
+  updatePreferredLocale(
+    userId: UserId,
+    encryptedPreferredLocale: Buffer,
+  ): Promise<void>;
+
   /**
    * Updates a user's login identifier (username).
    * If currentPassword is provided, verifies it first (self-service path).
@@ -536,6 +542,22 @@ export function createAuthService(
       const result = await db
         .updateTable("users")
         .set({ encrypted_display_name: encryptedDisplayName })
+        .where("id", "=", userId)
+        .where("is_active", "=", true)
+        .executeTakeFirst();
+
+      if (result.numUpdatedRows === 0n) {
+        throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
+      }
+    },
+
+    async updatePreferredLocale(
+      userId: UserId,
+      encryptedPreferredLocale: Buffer,
+    ): Promise<void> {
+      const result = await db
+        .updateTable("users")
+        .set({ encrypted_preferred_locale: encryptedPreferredLocale })
         .where("id", "=", userId)
         .where("is_active", "=", true)
         .executeTakeFirst();

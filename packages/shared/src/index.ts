@@ -158,12 +158,14 @@ export {
   updateUsernameSchema,
   adminUpdateUsernameSchema,
   updatePasswordHashSchema,
+  updatePreferredLocaleSchema,
   changePasswordSchema,
   type UpdateDisplayNameInput,
   type AdminUpdateDisplayNameInput,
   type UpdateUsernameInput,
   type AdminUpdateUsernameInput,
   type UpdatePasswordHashInput,
+  type UpdatePreferredLocaleInput,
   type ChangePasswordInput,
 } from "./schemas/profile.js";
 

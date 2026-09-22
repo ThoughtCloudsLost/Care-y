@@ -272,6 +272,65 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
     });
 
+    describe("updatePreferredLocale", () => {
+      it("updates the preferred locale for the calling user", async () => {
+        const user = await createTestUser(tenantDb);
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        const newCiphertext = Buffer.from("new-encrypted-locale").toString(
+          "base64",
+        );
+        const result = await caller.profile.updatePreferredLocale({
+          encryptedPreferredLocale: newCiphertext,
+        });
+
+        expect(result.success).toBe(true);
+
+        const row = await tenantDb
+          .selectFrom("users")
+          .select("encrypted_preferred_locale")
+          .where("id", "=", user.id)
+          .executeTakeFirstOrThrow();
+
+        expect(row.encrypted_preferred_locale?.toString("base64")).toBe(
+          newCiphertext,
+        );
+      });
+
+      it("rejects unauthenticated calls", async () => {
+        const caller = buildCaller({
+          req: mockReq(),
+          res: mockRes(),
+          org: orgContext,
+          session: null,
+          user: null,
+        });
+
+        await expectTrpcError(
+          caller.profile.updatePreferredLocale({
+            encryptedPreferredLocale: "dGVzdA==",
+          }),
+          "UNAUTHORIZED",
+        );
+      });
+
+      it("rejects update for inactive user", async () => {
+        const user = await createTestUser(tenantDb, {
+          overrides: { is_active: false },
+        });
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        await expectTrpcError(
+          caller.profile.updatePreferredLocale({
+            encryptedPreferredLocale: "dGVzdA==",
+          }),
+          "NOT_FOUND",
+        );
+      });
+    });
+
     function makeAuthService(): ReturnType<typeof createAuthService> {
       const sessions = createDbSessionRepository(
         tenantDb,

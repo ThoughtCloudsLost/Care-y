@@ -36,6 +36,8 @@ import type * as CryptoContext from "$lib/crypto/context.js";
 import type * as TanstackQuery from "@tanstack/svelte-query";
 import type * as TrpcIndex from "$lib/trpc/index.js";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
+import type * as ParaglideRuntime from "$lib/paraglide/runtime.js";
+import type * as PreferredLocale from "$lib/settings/preferred-locale.js";
 import type * as HapticMod from "$lib/utils/haptic.js";
 
 // --- Hoisted state (accessible inside vi.mock factories) ---
@@ -49,6 +51,10 @@ const {
   meQueryState,
   twoFactorStatusState,
   mockDecrypt,
+  mockSavePreferredLocale,
+  mockGetLocale,
+  mockSetLocale,
+  mockIsLocale,
 } = vi.hoisted(() => ({
   mockGoto: vi.fn(),
   mockToastShow: vi.fn(),
@@ -62,6 +68,10 @@ const {
     data: undefined as Record<string, unknown> | undefined,
   },
   mockDecrypt: vi.fn((): string | null => "Test User"),
+  mockSavePreferredLocale: vi.fn().mockResolvedValue(undefined),
+  mockGetLocale: vi.fn((): string => "en"),
+  mockSetLocale: vi.fn(),
+  mockIsLocale: vi.fn((_v: unknown): _v is "en" | "es" => true),
 }));
 
 // --- Mocks ---
@@ -150,9 +160,13 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof CryptoContext>()),
   getOrgDecryptCache: () => ({
     decrypt: mockDecrypt,
+    delete: vi.fn(),
   }),
   getCryptoBridge: () => ({}),
-  getOrgKeyManager: () => ({}),
+  getOrgKeyManager: () => ({
+    isLoaded: true,
+    encryptText: vi.fn().mockResolvedValue("encrypted-locale"),
+  }),
 }));
 
 // vi.mock required: @tanstack/svelte-query creates reactive query state
@@ -162,7 +176,7 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
   useQueryClient: () => ({
     getQueryData: vi.fn(),
     setQueryData: vi.fn(),
-    invalidateQueries: vi.fn(),
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
     getQueriesData: vi.fn().mockReturnValue([]),
   }),
   createQuery: (optsFn: () => Record<string, unknown>) => {
@@ -225,6 +239,11 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     twoFactor: {
       status: { query: vi.fn() },
     },
+    profile: {
+      updatePreferredLocale: {
+        mutate: vi.fn().mockResolvedValue({ success: true }),
+      },
+    },
   },
 }));
 
@@ -248,6 +267,11 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     `${String(p.count)} method(s) enrolled`,
   settings_2fa_methods_one: () => "1 method enrolled",
   settings_2fa_none: () => "Not enabled",
+  settings_preferred_language: () => "Preferred language",
+  settings_preferred_language_saved: () => "Preferred language updated",
+  settings_preferred_language_error: () =>
+    "Could not update preferred language",
+  settings_preferred_language_none: () => "Not set",
   settings_replay_walkthrough: () => "Review security walkthrough",
   settings_review_briefing: () => "Review security briefing",
   feature_coming_soon: () => "Feature coming soon",
@@ -311,6 +335,19 @@ vi.mock("$lib/utils/haptic.js", async (importOriginal) => ({
   haptic: vi.fn(),
 }));
 
+vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ParaglideRuntime>()),
+  getLocale: mockGetLocale,
+  setLocale: mockSetLocale,
+  isLocale: mockIsLocale,
+  locales: ["en", "es"],
+}));
+
+vi.mock("$lib/settings/preferred-locale.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof PreferredLocale>()),
+  savePreferredLocale: mockSavePreferredLocale,
+}));
+
 // --- Import after mocks ---
 
 import SettingsPage from "./+page.svelte";
@@ -330,12 +367,15 @@ describe("Settings page", () => {
         id: "user-123",
         encryptedIdentifier: "dGVzdA==",
         encryptedDisplayName: "dGVzdA==",
+        encryptedPreferredLocale: "ZW4=",
       },
     };
     twoFactorStatusState.data = undefined;
     mockGoto.mockClear();
     mockToastShow.mockClear();
     mockSchemeToggle.mockClear();
+    mockSavePreferredLocale.mockClear();
+    mockGetLocale.mockReturnValue("en");
     mockDecrypt.mockReturnValue("Test User");
     mockResolvedScheme.value = "dark";
     mockNavbarCtx.current = undefined;
@@ -517,6 +557,75 @@ describe("Settings page", () => {
       render(SettingsPage);
 
       expect(screen.getByText("Review security briefing")).toBeTruthy();
+    });
+  });
+
+  // ── Preferred language ────────────────────────────────────────────
+
+  describe("preferred language row", () => {
+    it("renders the preferred language row", () => {
+      twoFactorStatusState.data = { methods: [] };
+      render(SettingsPage);
+
+      expect(screen.getByText("Preferred language")).toBeTruthy();
+    });
+
+    it("shows 'Not set' when encryptedPreferredLocale is null", () => {
+      meQueryState.data = {
+        user: {
+          id: "user-123",
+          encryptedIdentifier: "dGVzdA==",
+          encryptedDisplayName: "dGVzdA==",
+          encryptedPreferredLocale: null,
+        },
+      };
+      twoFactorStatusState.data = { methods: [] };
+      render(SettingsPage);
+
+      const row = screen.getByTestId("settings-preferred-language-row");
+      expect(row.textContent).toContain("Not set");
+    });
+
+    it("calls savePreferredLocale when the row is clicked", async () => {
+      twoFactorStatusState.data = { methods: [] };
+      render(SettingsPage);
+
+      const row = screen.getByTestId("settings-preferred-language-row");
+      await fireEvent.click(row);
+
+      // Allow the async handler to complete
+      await vi.waitFor(() => {
+        expect(mockSavePreferredLocale).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("shows success toast after saving", async () => {
+      twoFactorStatusState.data = { methods: [] };
+      render(SettingsPage);
+
+      const row = screen.getByTestId("settings-preferred-language-row");
+      await fireEvent.click(row);
+
+      await vi.waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith(
+          "Preferred language updated",
+        );
+      });
+    });
+
+    it("shows error toast when save fails", async () => {
+      mockSavePreferredLocale.mockRejectedValueOnce(new Error("network error"));
+      twoFactorStatusState.data = { methods: [] };
+      render(SettingsPage);
+
+      const row = screen.getByTestId("settings-preferred-language-row");
+      await fireEvent.click(row);
+
+      await vi.waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith(
+          "Could not update preferred language",
+        );
+      });
     });
   });
 

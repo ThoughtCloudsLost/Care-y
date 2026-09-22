@@ -27,7 +27,13 @@
   - Any child route can suppress PTR via usePTR().setEnabled(false) during init.
 -->
 <script lang="ts">
-  import { Link, Searchbar, Toolbar, ToolbarPane } from "konsta/svelte";
+  import {
+    Link,
+    Searchbar,
+    Toolbar,
+    ToolbarPane,
+    DialogButton,
+  } from "konsta/svelte";
   import PageShell from "./PageShell.svelte";
   import ShellNavbar from "./ShellNavbar.svelte";
   import { Search, User } from "@lucide/svelte";
@@ -117,6 +123,10 @@
   import { initRecentViews } from "$lib/search/recent-views.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
   import { getLocale, setLocale, type Locale } from "$lib/paraglide/runtime.js";
+  import { savePreferredLocale } from "$lib/settings/preferred-locale.js";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { haptic } from "$lib/utils/haptic.js";
+  import ShellDialog from "./ShellDialog.svelte";
 
   // Scroll container element, provided by PageShell via bindScrollEl.
   let mainEl = $state<HTMLElement | undefined>();
@@ -369,8 +379,61 @@
 
   let uiLocale = $state(getLocale());
 
+  // ── One-time "save language preference?" offer ──────────────────────
+  // Shown at most once per session. Not persisted server-side: declining
+  // means "not this time" and the offer may reappear next session.
+  let localeOfferDismissed = $state(false);
+  let localeOfferOpen = $state(false);
+  let localeOfferTarget = $state<Locale | null>(null);
+  let localeOfferSaving = $state(false);
+
+  /** Decrypt the stored locale (returns null while loading or if absent). */
+  const storedPreferredLocale = $derived.by((): string | null => {
+    if (avatarOrgCache == null) return null;
+    const enc = meQuery.data?.user.encryptedPreferredLocale;
+    if (enc == null) return null;
+    return avatarOrgCache.decrypt("me:preferred_locale", enc);
+  });
+
   function handleLocaleChange(newLocale: Locale): void {
     void setLocale(newLocale);
+
+    // Skip the offer if already dismissed this session
+    if (localeOfferDismissed) return;
+
+    // Skip if stored preference already matches the new locale
+    if (storedPreferredLocale === newLocale) return;
+
+    localeOfferTarget = newLocale;
+    localeOfferOpen = true;
+  }
+
+  function declineLocaleOffer(): void {
+    localeOfferDismissed = true;
+    localeOfferOpen = false;
+    localeOfferTarget = null;
+  }
+
+  async function acceptLocaleOffer(): Promise<void> {
+    if (localeOfferSaving || localeOfferTarget === null) return;
+    const orgKeyMgr = browser ? getOrgKeyManager() : null;
+    if (orgKeyMgr?.isLoaded !== true) return;
+
+    localeOfferSaving = true;
+    try {
+      await savePreferredLocale(orgKeyMgr, localeOfferTarget);
+      haptic();
+      avatarOrgCache?.delete("me:preferred_locale");
+      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      localeOfferDismissed = true;
+      localeOfferOpen = false;
+      localeOfferTarget = null;
+      toastStore.show(m.settings_preferred_language_saved());
+    } catch {
+      toastStore.show(m.settings_preferred_language_error());
+    } finally {
+      localeOfferSaving = false;
+    }
   }
 
   function openSearch(): void {
@@ -1374,6 +1437,26 @@
     {/snippet}
   </PageShell>
 </div>
+
+<ShellDialog
+  opened={localeOfferOpen}
+  ondismiss={declineLocaleOffer}
+  title={m.settings_persist_language_title()}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">
+      {m.settings_persist_language_body()}
+    </p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={declineLocaleOffer}>
+      {m.settings_persist_language_decline()}
+    </DialogButton>
+    <DialogButton strong onclick={acceptLocaleOffer}>
+      {m.settings_persist_language_accept()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   /* ── Desktop layout ── */
