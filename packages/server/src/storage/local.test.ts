@@ -3,7 +3,8 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 import { createLocalBlobStore } from "./local.js";
-import { BlobStoreError } from "./store.js";
+import { BlobStoreError, BLOB_CATEGORY_ENCRYPTION } from "./store.js";
+import type { BlobCategory } from "./store.js";
 import type { BlobKey, OrgSchema } from "@care-y/shared";
 import { blobKeySchema, orgSchemaNameSchema } from "@care-y/shared";
 
@@ -145,6 +146,37 @@ describe("LocalBlobStore", () => {
 
       const result = await store.get(key);
       expect(result).toEqual(blob);
+    });
+  });
+
+  describe("BLOB_CATEGORY_ENCRYPTION map", () => {
+    it("covers every BlobCategory member", () => {
+      // The satisfies clause enforces this at compile time; this test
+      // pins it at runtime so a category added to the union but missing
+      // from the map is caught by both paths.
+      const declared = Object.keys(BLOB_CATEGORY_ENCRYPTION).sort();
+      const allCategories: BlobCategory[] = [
+        "attachment",
+        "recording",
+        "greeting",
+        "export",
+        "kb-attachment",
+        "branding",
+        "quarantine",
+        "form-asset",
+      ];
+      expect(declared).toEqual(allCategories.sort());
+    });
+
+    it("every value is a recognized encryption expectation", () => {
+      const valid = new Set(["plaintext", "sealed", "branding-key"]);
+      for (const [category, expectation] of Object.entries(
+        BLOB_CATEGORY_ENCRYPTION,
+      )) {
+        expect(valid.has(expectation), `${category}: ${expectation}`).toBe(
+          true,
+        );
+      }
     });
   });
 
