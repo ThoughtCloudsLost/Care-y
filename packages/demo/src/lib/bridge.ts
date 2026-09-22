@@ -429,6 +429,13 @@ export const DEMO_INTAKE_FORM_ID = "demo-intake-form";
 export const DEMO_INTAKE_FORM_SLUG = "demo-intake-form";
 
 /**
+ * Public slug of the closed sibling form, for /(client)/intake/[slug].
+ * Resolved to the seeded closed form's real slug at the PhoneApp
+ * boundary, the same way DEMO_INTAKE_FORM_SLUG is resolved.
+ */
+export const DEMO_CLOSED_FORM_SLUG = "demo-closed-form";
+
+/**
  * Query the search section seeds into the overlay. The overlay renders
  * its entity groups and deep-search panel only past two characters
  * (SearchResults.svelte:90-158), so without a query those sub-sections
