@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "You have {queue} access but not the decryption key for this {ticket}. A teammate who can read it will share access automatically when they open it." |
+* | "You have {queue} access but not the decryption key for this {ticket}. Access arrives automatically the next time a teammate who can read it signs in." |
 *
 * @param {Dashboard_Encrypted_HelpInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

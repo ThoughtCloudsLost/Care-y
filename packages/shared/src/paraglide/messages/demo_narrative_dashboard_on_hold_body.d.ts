@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Tickets the current volunteer has placed on hold. These are still open but set aside, typically while waiting for a response from a client or an external par..." |
+* | "A hold sets a ticket aside while an answer is waited on, leaving it open and out of the working list until the hold is lifted. Every hold in the user's queue..." |
 *
 * @param {Demo_Narrative_Dashboard_On_Hold_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

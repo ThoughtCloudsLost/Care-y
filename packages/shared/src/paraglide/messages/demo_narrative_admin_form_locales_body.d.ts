@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The completeness count for each locale tracks how many translatable items have been filled out of the total, and the total counts only items that exist in at..." |
+* | "Form text is authored in English and Spanish, and the count beside each language reports how many translatable items in the form have content in it out of th..." |
 *
 * @param {Demo_Narrative_Admin_Form_Locales_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

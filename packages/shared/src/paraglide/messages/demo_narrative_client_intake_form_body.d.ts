@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The intake form is the first thing a person seeking help sees, and no login or account is needed to use it. **Quick exit.** The quick exit control is rendere..." |
+* | "The intake page takes a request for help from someone who has no account and no prior relationship to the organization, which is why it asks for nothing befo..." |
 *
 * @param {Demo_Narrative_Client_Intake_Form_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

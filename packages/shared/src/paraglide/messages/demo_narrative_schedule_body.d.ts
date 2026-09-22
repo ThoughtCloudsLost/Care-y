@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The planned scope for shift scheduling is shifts that repeat on a schedule, assigning people to cover them, and a calendar showing where coverage is complete..." |
+* | "Shift scheduling is in development, and the page that will hold the calendar carries a placeholder until it lands. The planned scope is shifts that repeat on..." |
 *
 * @param {Demo_Narrative_Schedule_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

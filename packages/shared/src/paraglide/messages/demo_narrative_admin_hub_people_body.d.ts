@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The user roster, queue configuration, and client list. User identifiers and queue names are encrypted with the organization key before storage. Client identi..." |
+* | "The people group holds three destinations, the user roster, queue configuration and the client list, and each one appears for an account holding its own perm..." |
 *
 * @param {Demo_Narrative_Admin_Hub_People_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

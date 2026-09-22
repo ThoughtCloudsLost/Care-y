@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "All open tickets assigned to the current volunteer. This is the primary working list for day-to-day case management. The count next to the section heading re..." |
+* | "Open tickets assigned to the user collect here, and a hold takes one out of the set until it is lifted. The count beside the heading is the number of tickets..." |
 *
 * @param {Demo_Narrative_Dashboard_My_Tickets_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

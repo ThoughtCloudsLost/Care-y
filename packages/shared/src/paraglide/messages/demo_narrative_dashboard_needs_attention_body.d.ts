@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A per-volunteer list of tickets needing immediate action. **What qualifies.** A ticket appears here when it is open, not on hold, marked urgent or high prior..." |
+* | "A ticket appears here when it is open, not on hold, urgent or high priority, and either unassigned or assigned to the user with unread replies. The section i..." |
 *
 * @param {Demo_Narrative_Dashboard_Needs_Attention_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

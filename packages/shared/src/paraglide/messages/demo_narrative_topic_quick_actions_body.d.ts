@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Common operations on a ticket without opening it, accessed by swiping a ticket row. **Swipe directions.** Swipe right to reply. Swipe left to assign or place..." |
+* | "A row carries the common operations on a ticket so they finish without opening it. [[#client-data]] **What a swipe offers in each direction.** Pulling a row ..." |
 *
 * @param {Demo_Narrative_Topic_Quick_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

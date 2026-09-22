@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Filter pills narrow the ticket list by status, queue, priority, assignee, on hold state, date range, or unread state. Multiple filters can be active at once...." |
+* | "Filters narrow the case list by status, queue, priority, assignee, on-hold state, creation date range, unread state and needs-attention, and several can be a..." |
 *
 * @param {Demo_Narrative_Topic_Filters_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

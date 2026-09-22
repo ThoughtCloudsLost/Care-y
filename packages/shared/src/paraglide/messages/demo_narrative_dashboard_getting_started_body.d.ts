@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A card at the top of the overview lists setup tasks, each linking to the relevant admin page. **Visibility.** The checklist is visible only to administrators..." |
+* | "A setup checklist gathers eight tasks, each one opening the admin page that finishes it. An account has access to the checklist with permission to manage the..." |
 *
 * @param {Demo_Narrative_Dashboard_Getting_Started_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

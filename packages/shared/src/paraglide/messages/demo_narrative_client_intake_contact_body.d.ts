@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The default form's contact step asks the visitor how the organization should reach them, with options for phone, email, and a choice to submit without leavin..." |
+* | "The built-in form asks how the organization should reach the visitor and accepts a refusal, with a phone number, an email address and an option to send nothi..." |
 *
 * @param {Demo_Narrative_Client_Intake_Contact_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

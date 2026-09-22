@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers can search within a single ticket's conversation for specific words or phrases. The search runs entirely in the browser against the decrypted mess..." |
+* | "Searching inside a case matches the words of its entries in the browser, against the text already decrypted there. [[#privacy #client-data #search]] **What t..." |
 *
 * @param {Demo_Narrative_Topic_Deep_Search_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

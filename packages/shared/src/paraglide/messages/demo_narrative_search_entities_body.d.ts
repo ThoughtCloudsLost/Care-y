@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "**Tickets.** Matches on decrypted title, client alias, queue name, and assignee name. Full deep search also matches on message content within tickets. **Know..." |
+* | "One query runs against cases, knowledge base articles and, for an account permitted to manage people, other accounts. While a case is open it also runs again..." |
 *
 * @param {Demo_Narrative_Search_Entities_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

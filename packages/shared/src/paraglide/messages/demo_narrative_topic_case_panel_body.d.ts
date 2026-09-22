@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The case panel holds the full case record and every case level action. It opens from the client alias or the case button in the navigation bar. **Phone numbe..." |
+* | "The case panel holds the contact rows, the client's channel, the notes and media collected on the case, and the actions that change it: editing the case, ass..." |
 *
 * @param {Demo_Narrative_Topic_Case_Panel_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

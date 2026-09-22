@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers can rate whether a knowledge base article helped resolve a call. Each volunteer gets one vote per article (up or down). **Ranking.** The aggregate..." |
+* | "An account can mark one article as helpful or unhelpful once, change that mark, or take it away, and doing so takes no more permission than reading the artic..." |
 *
 * @param {Demo_Narrative_Topic_Library_Vote_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

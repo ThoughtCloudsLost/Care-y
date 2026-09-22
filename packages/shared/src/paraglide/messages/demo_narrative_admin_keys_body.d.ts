@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The keys section reports the organization key status and provides two operations on it. **Escrow.** The escrow file carries its own KDF parameters, salt, non..." |
+* | "Every account in an organization holds its own wrapped copy of one organization key, and this section reports whether the signed-in account has that copy and..." |
 *
 * @param {Demo_Narrative_Admin_Keys_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

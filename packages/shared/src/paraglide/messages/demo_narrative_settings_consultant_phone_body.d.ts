@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A user who takes calls from a personal phone can register it through a three step verification flow that confirms the number before activating it. **Removing..." |
+* | "A user who takes calls on a personal phone registers the number here, and a code sent to that number has to come back before any call is bridged to it. [[#te..." |
 *
 * @param {Demo_Narrative_Settings_Consultant_Phone_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

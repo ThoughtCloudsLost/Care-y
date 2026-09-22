@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "**Privacy.** The server cannot read the share content because the decryption key lives in the URL fragment, which the browser never sends in a request. The s..." |
+* | "When the content appears, the page tells the reader in one short notice that the link itself carried the key, that the server cannot read the message, and th..." |
 *
 * @param {Demo_Narrative_Client_Share_Exposure_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

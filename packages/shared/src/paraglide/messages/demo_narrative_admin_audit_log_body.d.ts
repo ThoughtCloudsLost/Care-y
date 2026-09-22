@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The audit log records 47 event types spanning the full range of administrative and lifecycle actions across the organization. **What the server holds.** The ..." |
+* | "The audit log is the organization's record of who did what, covering ticket lifecycle, client records, queues, roles and permissions, intake forms, portal ch..." |
 *
 * @param {Demo_Narrative_Admin_Audit_Log_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

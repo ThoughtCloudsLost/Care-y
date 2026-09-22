@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The search sheet shows recent searches and strips of recently viewed tickets and articles. **Result groups.** Results group by type, and the group matching t..." |
+* | "Global search opens over whatever the user is doing and answers from two lists before a word is typed: the searches made this session and the cases and artic..." |
 *
 * @param {Demo_Narrative_Search_Overlay_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

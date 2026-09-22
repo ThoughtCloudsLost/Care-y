@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Sign-in requires a username and password. The username is a login identifier, not an email address, chosen at account creation by the user or an admin. **How..." |
+* | "Signing in takes a username and a password. The username is a login identifier rather than an email address, set when the account is created. One copy of the..." |
 *
 * @param {Demo_Narrative_Topic_Credentials_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

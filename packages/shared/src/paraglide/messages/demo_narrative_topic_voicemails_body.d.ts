@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When a client leaves a voicemail on the phone line, the recording is stored encrypted and the browser decrypts and decodes the audio locally, so the server o..." |
+* | "A voicemail left on the organization's line becomes an entry on the client's case with an audio the browser opens and the server cannot. [[#telephony #encryp..." |
 *
 * @param {Demo_Narrative_Topic_Voicemails_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
