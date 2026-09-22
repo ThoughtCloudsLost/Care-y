@@ -13,6 +13,11 @@ import {
   validateFields,
   collectPageIssues,
   collectAllIssues,
+  formatIssueRow,
+  formatCrossPageIssueRow,
+  nextVisibleIndex,
+  prevVisibleIndex,
+  type IssueRowMessages,
   type PlaintextField,
   type ValidationMessages,
   type FieldValue,
@@ -548,5 +553,60 @@ describe("collectAllIssues", () => {
 
     const issues = collectAllIssues(pages, visible, {}, MESSAGES, label);
     expect(issues).toEqual([]);
+  });
+});
+
+describe("formatIssueRow / formatCrossPageIssueRow", () => {
+  const ROW_MESSAGES: IssueRowMessages = {
+    issueRow: ({ field, error }) => `${field}: ${error}`,
+    issueRowWithPage: ({ page, field, error }) => `p${page} ${field}: ${error}`,
+  };
+
+  it("formats a single-page row from the injected template", () => {
+    const row = formatIssueRow(
+      { fieldKey: "fk", fieldLabel: "Name", error: "required" },
+      ROW_MESSAGES,
+    );
+    expect(row).toBe("Name: required");
+  });
+
+  it("formats a cross-page row with its page number", () => {
+    const row = formatCrossPageIssueRow(
+      { fieldKey: "fk", fieldLabel: "Name", error: "required", pageNumber: 3 },
+      ROW_MESSAGES,
+    );
+    expect(row).toBe("p3 Name: required");
+  });
+
+  it("falls back to page 1 when the issue carries no page number", () => {
+    const row = formatCrossPageIssueRow(
+      { fieldKey: "fk", fieldLabel: "Name", error: "required" },
+      ROW_MESSAGES,
+    );
+    expect(row).toBe("p1 Name: required");
+  });
+});
+
+describe("nextVisibleIndex / prevVisibleIndex", () => {
+  const VISIBLE = [0, 2, 5];
+
+  it("steps forward through visible indices", () => {
+    expect(nextVisibleIndex(VISIBLE, 0)).toBe(2);
+    expect(nextVisibleIndex(VISIBLE, 2)).toBe(5);
+  });
+
+  it("returns null past the last visible index or off the list", () => {
+    expect(nextVisibleIndex(VISIBLE, 5)).toBeNull();
+    expect(nextVisibleIndex(VISIBLE, 1)).toBeNull();
+  });
+
+  it("steps backward through visible indices", () => {
+    expect(prevVisibleIndex(VISIBLE, 5)).toBe(2);
+    expect(prevVisibleIndex(VISIBLE, 2)).toBe(0);
+  });
+
+  it("returns null before the first visible index or off the list", () => {
+    expect(prevVisibleIndex(VISIBLE, 0)).toBeNull();
+    expect(prevVisibleIndex(VISIBLE, 3)).toBeNull();
   });
 });

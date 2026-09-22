@@ -122,6 +122,11 @@
     collectPageIssues,
     collectAllIssues,
     validateFields,
+    formatIssueRow,
+    formatCrossPageIssueRow,
+    nextVisibleIndex,
+    prevVisibleIndex,
+    type IssueRowMessages,
     type ValidationMessages as IntakeValidationMessages,
     type ValidationIssue,
     type FormPage,
@@ -613,21 +618,22 @@
 
   /** Navigate preview to the next visible page. */
   function previewGoNext(): boolean {
-    const curIdx = previewVisiblePageIndices.indexOf(previewPageIndex);
-    if (curIdx < 0 || curIdx >= previewVisiblePageIndices.length - 1)
-      return false;
-    const nextIdx = previewVisiblePageIndices.at(curIdx + 1);
-    if (nextIdx === undefined) return false;
+    const nextIdx = nextVisibleIndex(
+      previewVisiblePageIndices,
+      previewPageIndex,
+    );
+    if (nextIdx === null) return false;
     previewPageIndex = nextIdx;
     return true;
   }
 
   /** Navigate preview to the previous visible page. */
   function previewGoPrev(): boolean {
-    const curIdx = previewVisiblePageIndices.indexOf(previewPageIndex);
-    if (curIdx <= 0) return false;
-    const prevIdx = previewVisiblePageIndices.at(curIdx - 1);
-    if (prevIdx === undefined) return false;
+    const prevIdx = prevVisibleIndex(
+      previewVisiblePageIndices,
+      previewPageIndex,
+    );
+    if (prevIdx === null) return false;
     previewPageIndex = prevIdx;
     return true;
   }
@@ -651,14 +657,19 @@
     return resolveLocalized(field.label, previewLocale) ?? field.fieldKey;
   }
 
+  const previewIssueRowMessages: IssueRowMessages = {
+    issueRow: m.intake_page_issue_row,
+    issueRowWithPage: m.intake_page_issue_row_with_page,
+  };
+
   /** Format a preview issue row (single page). */
   function previewFormatIssueRow(issue: ValidationIssue): string {
-    return `${issue.fieldLabel}: ${issue.error}`;
+    return formatIssueRow(issue, previewIssueRowMessages);
   }
 
-  /** Format a preview issue row (cross-page, with step number). */
+  /** Format a preview issue row (cross-page, with page number). */
   function previewFormatCrossPageIssueRow(issue: ValidationIssue): string {
-    return `${m.intake_page_progress({ current: String(issue.pageNumber ?? 1), total: String(previewTotalVisibleSteps) })}: ${issue.fieldLabel}: ${issue.error}`;
+    return formatCrossPageIssueRow(issue, previewIssueRowMessages);
   }
 
   /** Validate preview's current page fields. */

@@ -327,6 +327,66 @@ export interface ValidationIssue {
 }
 
 /**
+ * Message functions for issue summary rows. The caller injects the
+ * localized templates so this module stays locale-agnostic, mirroring
+ * the ValidationMessages pattern above.
+ */
+export interface IssueRowMessages {
+  readonly issueRow: (params: { field: string; error: string }) => string;
+  readonly issueRowWithPage: (params: {
+    page: string;
+    field: string;
+    error: string;
+  }) => string;
+}
+
+/** Format a single-page issue row. */
+export function formatIssueRow(
+  issue: ValidationIssue,
+  messages: IssueRowMessages,
+): string {
+  return messages.issueRow({ field: issue.fieldLabel, error: issue.error });
+}
+
+/** Format a cross-page issue row (includes the page number). */
+export function formatCrossPageIssueRow(
+  issue: ValidationIssue,
+  messages: IssueRowMessages,
+): string {
+  return messages.issueRowWithPage({
+    page: String(issue.pageNumber ?? 1),
+    field: issue.fieldLabel,
+    error: issue.error,
+  });
+}
+
+/**
+ * Index of the next page in `visibleIndices` after `currentIndex`, or
+ * null when already on the last visible page (or off the list).
+ */
+export function nextVisibleIndex(
+  visibleIndices: readonly number[],
+  currentIndex: number,
+): number | null {
+  const pos = visibleIndices.indexOf(currentIndex);
+  if (pos < 0 || pos >= visibleIndices.length - 1) return null;
+  return visibleIndices.at(pos + 1) ?? null;
+}
+
+/**
+ * Index of the previous page in `visibleIndices` before `currentIndex`,
+ * or null when already on the first visible page (or off the list).
+ */
+export function prevVisibleIndex(
+  visibleIndices: readonly number[],
+  currentIndex: number,
+): number | null {
+  const pos = visibleIndices.indexOf(currentIndex);
+  if (pos <= 0) return null;
+  return visibleIndices.at(pos - 1) ?? null;
+}
+
+/**
  * Collect validation issues for a single page's visible fields.
  * Returns an array of issues (empty when everything validates).
  *

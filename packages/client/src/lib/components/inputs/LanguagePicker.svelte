@@ -2,6 +2,7 @@
   import { Globe } from "@lucide/svelte";
   import { locales, isLocale, type Locale } from "$lib/paraglide/runtime.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { NATIVE_LOCALE_NAMES } from "$lib/utils/locale-names.js";
 
   interface Props {
     value: string;
@@ -10,13 +11,8 @@
 
   let { value, onchange }: Props = $props();
 
-  const NATIVE_NAMES = new Map<string, string>([
-    ["en", "English"],
-    ["es", "Español"],
-  ]);
-
   // Only offer user-facing locales (excludes dev-only pseudolocales like en-XA).
-  const userLocales = locales.filter((l) => NATIVE_NAMES.has(l));
+  const userLocales = locales.filter((l) => NATIVE_LOCALE_NAMES.has(l));
 </script>
 
 <div class="language-picker" data-testid="shell-language">
@@ -32,7 +28,7 @@
     aria-label={m.language_picker_label()}
   >
     {#each userLocales as loc (loc)}
-      <option value={loc}>{NATIVE_NAMES.get(loc) ?? loc}</option>
+      <option value={loc}>{NATIVE_LOCALE_NAMES.get(loc) ?? loc}</option>
     {/each}
   </select>
 </div>

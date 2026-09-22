@@ -39,10 +39,7 @@
   import NotificationPreferencesSection from "$lib/components/settings/NotificationPreferencesSection.svelte";
   import ConsultantPhoneSheet from "$lib/components/settings/ConsultantPhoneSheet.svelte";
 
-  const NATIVE_NAMES = new Map<string, string>([
-    ["en", "English"],
-    ["es", "Español"],
-  ]);
+  import { NATIVE_LOCALE_NAMES } from "$lib/utils/locale-names.js";
 
   const orgCache = getOrgDecryptCache();
   const cryptoBridge = getCryptoBridge();
@@ -87,7 +84,7 @@
     if (encryptedPreferredLocale === null)
       return m.settings_preferred_language_none();
     if (storedLocale === null) return m.common_loading();
-    return NATIVE_NAMES.get(storedLocale) ?? storedLocale;
+    return NATIVE_LOCALE_NAMES.get(storedLocale) ?? storedLocale;
   });
 
   let localeSaving = $state(false);

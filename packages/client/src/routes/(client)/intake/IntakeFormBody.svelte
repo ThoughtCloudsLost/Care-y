@@ -68,6 +68,11 @@
     validateFields,
     collectPageIssues,
     collectAllIssues,
+    formatIssueRow as formatIssueRowPure,
+    formatCrossPageIssueRow as formatCrossPageIssueRowPure,
+    nextVisibleIndex,
+    prevVisibleIndex,
+    type IssueRowMessages,
     type PlaintextField,
     type ValidationMessages,
     type ValidationIssue,
@@ -448,21 +453,16 @@
    * Validates the current page's visible fields before advancing.
    */
   function goNextPage(): boolean {
-    const currentVisIdx = visiblePageIndices.indexOf(currentPageIndex);
-    if (currentVisIdx < 0 || currentVisIdx >= visiblePageIndices.length - 1)
-      return false;
-    const nextIdx = visiblePageIndices.at(currentVisIdx + 1);
-    if (nextIdx === undefined) return false;
+    const nextIdx = nextVisibleIndex(visiblePageIndices, currentPageIndex);
+    if (nextIdx === null) return false;
     currentPageIndex = nextIdx;
     return true;
   }
 
   /** Navigate to the previous visible page. */
   function goPrevPage(): boolean {
-    const currentVisIdx = visiblePageIndices.indexOf(currentPageIndex);
-    if (currentVisIdx <= 0) return false;
-    const prevIdx = visiblePageIndices.at(currentVisIdx - 1);
-    if (prevIdx === undefined) return false;
+    const prevIdx = prevVisibleIndex(visiblePageIndices, currentPageIndex);
+    if (prevIdx === null) return false;
     currentPageIndex = prevIdx;
     return true;
   }
@@ -483,21 +483,19 @@
     return resolveLocalized(field.label, visitorLocale) ?? field.fieldKey;
   }
 
+  const issueRowMessages: IssueRowMessages = {
+    issueRow: m.intake_page_issue_row,
+    issueRowWithPage: m.intake_page_issue_row_with_page,
+  };
+
   /** Format a single-page issue row. */
   function formatIssueRow(issue: ValidationIssue): string {
-    return m.intake_page_issue_row({
-      field: issue.fieldLabel,
-      error: issue.error,
-    });
+    return formatIssueRowPure(issue, issueRowMessages);
   }
 
   /** Format a cross-page issue row (includes page number). */
   function formatCrossPageIssueRow(issue: ValidationIssue): string {
-    return m.intake_page_issue_row_with_page({
-      page: String(issue.pageNumber ?? 1),
-      field: issue.fieldLabel,
-      error: issue.error,
-    });
+    return formatCrossPageIssueRowPure(issue, issueRowMessages);
   }
 
   /**
