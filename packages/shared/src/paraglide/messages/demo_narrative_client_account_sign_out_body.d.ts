@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Signing out deletes the session on the server, expires the browser's cookie, zeros all key material from memory, and returns the page to the sign in form. Un..." |
+* | "Signing out deletes the session row on the server, expires the browser's cookie, zeroes the keys the tab was holding and returns the page to the sign-in form..." |
 *
 * @param {Demo_Narrative_Client_Account_Sign_Out_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The settings block controls the form's identity and behavior. **What the server holds.** The form name and public slug are stored as plaintext on the server ..." |
+* | "Form settings hold the name the organization files a form under, the address it answers on, the queue its cases land in, the date it stops accepting answers ..." |
 *
 * @param {Demo_Narrative_Admin_Form_Settings_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

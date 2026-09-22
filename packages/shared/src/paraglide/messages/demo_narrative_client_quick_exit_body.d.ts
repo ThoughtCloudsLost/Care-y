@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The quick exit control appears on every client page, from the intake form through the portal and account to share links. It is an icon with no visible text l..." |
+* | "A quick exit control is on every client-facing page, from the intake form through the portal, the account and a one-time share link. The control has no visib..." |
 *
 * @param {Demo_Narrative_Client_Quick_Exit_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

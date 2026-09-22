@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The ticket list supports five layout options. - **Table** presents tickets in a sortable data table with columns for each field - **Rows** show compact singl..." |
+* | "The tickets list presents the same rows four ways, as a table, as compact rows, as cards and as a grid. [[#client-data]] **What each presentation asks the se..." |
 *
 * @param {Demo_Narrative_Topic_View_Modes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

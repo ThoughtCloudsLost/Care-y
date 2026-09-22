@@ -6,13 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Dashboard_Unassigned_BodyInputs */
 
 const en_demo_narrative_dashboard_unassigned_body = /** @type {(inputs: Demo_Narrative_Dashboard_Unassigned_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Open tickets not yet assigned to anyone. Once assigned, a ticket moves to the assignee's working list.
-**If counts differ.** The count in the section heading reflects the full total, while the visible rows may be fewer because the overview fetches a limited page of results.`)
+	return /** @type {LocalizedString} */ (`An open ticket in the user's queues with nobody assigned waits here. Taking one records the account against the ticket and moves it into [My tickets](#dashboard/my-tickets). [[#client-data #permissions]]
+**Why the count can exceed the rows.** The number beside the heading is a server count over every queue the account has access to, while the rows come from the page the overview loaded and the section lists five of them. The two answer different questions: the count is how much work is waiting, the rows are what is at hand. [[#metadata]]
+**What an assignment records.** The assignee is a plaintext column on the ticket row, alongside the queue, the status, the priority and the creation time. A database dump shows which account holds which ticket, how long a ticket sat unheld and at what priority, and nothing about who the ticket concerns or what it says. [The trust boundary](#deep-dive/the-trust-boundary) covers the plaintext columns across the schema. [[#server-holds #metadata]]
+**The counts query.** \`counts\` in \`packages/server/src/tickets/ticket-service.ts\` sums one case expression per bucket in a single pass, restricted to the queue ids from \`getAccessibleQueueIds\`, and its unassigned arm tests for an open status and a null assignee. An account in no queue gets zeros rather than an error. [The permission system](#deep-dive/the-permission-system) covers how queue membership grants access. [[#permissions]]`)
 };
 
 const es_demo_narrative_dashboard_unassigned_body = /** @type {(inputs: Demo_Narrative_Dashboard_Unassigned_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tickets abiertos aún sin asignar a nadie. Una vez asignado, un ticket pasa a la lista de trabajo de la persona asignada.
-**Si los conteos difieren.** El conteo en el encabezado de la sección refleja el total completo, mientras que las filas visibles pueden ser menos porque el resumen obtiene una página limitada de resultados.`)
+	return /** @type {LocalizedString} */ (`Un ticket abierto de las colas de la persona usuaria sin nadie asignado espera aquí. Tomar uno registra la cuenta en el ticket y lo traslada a [Mis tickets](#dashboard/my-tickets). [[#client-data #permissions]]
+**Por qué el recuento puede superar a las filas.** El número junto al encabezado es un recuento del servidor sobre todas las colas a las que la cuenta tiene acceso, mientras que las filas salen de la página que cargó el resumen y la sección enumera cinco. Los dos responden preguntas distintas: el recuento es cuánto trabajo espera, las filas son lo que se tiene a mano. [[#metadata]]
+**Lo que registra una asignación.** La persona asignada es una columna en texto plano de la fila del ticket, junto a la cola, el estado, la prioridad y la fecha de creación. Un volcado de la base de datos muestra qué cuenta tiene qué ticket, cuánto tiempo estuvo un ticket sin asignar y con qué prioridad, y nada sobre a quién se refiere el ticket ni qué dice. [La frontera de confianza](#deep-dive/the-trust-boundary) trata las columnas en texto plano de todo el esquema. [[#server-holds #metadata]]
+**La consulta de recuentos.** \`counts\`, en \`packages/server/src/tickets/ticket-service.ts\`, suma una expresión condicional por grupo en una sola pasada, limitada a los identificadores de cola de \`getAccessibleQueueIds\`, y su rama de sin asignar comprueba que el estado sea abierto y que no haya persona asignada. Una cuenta sin ninguna cola recibe ceros en lugar de un error. [El sistema de permisos](#deep-dive/the-permission-system) trata cómo la pertenencia a una cola concede el acceso. [[#permissions]]`)
 };
 
 const en_xa2_demo_narrative_dashboard_unassigned_body = /** @type {(inputs: Demo_Narrative_Dashboard_Unassigned_BodyInputs) => LocalizedString} */ () => {
@@ -23,7 +27,7 @@ const en_xa2_demo_narrative_dashboard_unassigned_body = /** @type {(inputs: Demo
 /**
 * | output |
 * | --- |
-* | "Open tickets not yet assigned to anyone. Once assigned, a ticket moves to the assignee's working list. **If counts differ.** The count in the section heading..." |
+* | "An open ticket in the user's queues with nobody assigned waits here. Taking one records the account against the ticket and moves it into [My tickets](#dashbo..." |
 *
 * @param {Demo_Narrative_Dashboard_Unassigned_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

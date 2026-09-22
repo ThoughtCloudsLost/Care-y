@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When the user initiates an SMS reply or a phone call from a ticket, a brief notice appears reminding them that the channel is not encrypted. **SMS warning.**..." |
+* | "Choosing a channel that carries content outside the encrypted path raises a notice saying what that channel exposes. [[#privacy #telephony]] **What each noti..." |
 *
 * @param {Demo_Narrative_Topic_Exposure_Hints_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

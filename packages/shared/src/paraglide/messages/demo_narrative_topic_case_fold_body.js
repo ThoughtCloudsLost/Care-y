@@ -6,15 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Case_Fold_BodyInputs */
 
 const en_demo_narrative_topic_case_fold_body = /** @type {(inputs: Demo_Narrative_Topic_Case_Fold_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The case fields below the header can be folded away. The title, status, and priority stay visible in the header above.
-**Encryption.** The description is encrypted with the per ticket key, and the queue and assignee names with the organization key. The opened date is plaintext metadata the server uses for sorting.
-**The full record.** The complete field list, along with the role masked client phone number and the case actions, lives in the case panel.`)
+	return /** @type {LocalizedString} */ (`Folding the case record away leaves the title, the priority and the closed state and hides the description, the queue, the assignment and the opened time until the record is unfolded again. [[#client-data]]
+**What folding records.** One entry in a map held in the tab's memory, keyed by case id. Nothing is written to browser storage and no request is sent, so how long anyone keeps a case record open, and which cases they fold, is not a fact the server or a later reader of the device has. [[#privacy #server-holds]]
+**What a reload does.** The map is created fresh with each load of the application, so every case opens with its record showing. The fold is per case, so folding one case leaves the others as they were for the rest of the session. [[#failure-states]]
+**The fold store.** \`packages/client/src/lib/tickets/case-fold-store.svelte.ts\` is a reactive map with a getter and a setter, and unfolding deletes the key rather than storing false. The drag and keyboard handling is \`use-fold-drag.svelte.ts\` in \`packages/client/src/lib/shell/\`. [The case record](#ticket-detail/case-header) covers the fields themselves. [[#client-data]]`)
 };
 
 const es_demo_narrative_topic_case_fold_body = /** @type {(inputs: Demo_Narrative_Topic_Case_Fold_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los campos del caso bajo el encabezado pueden plegarse. El título, el estado y la prioridad permanecen visibles en el encabezado de arriba.
-**Cifrado.** La descripción está cifrada con la clave por ticket, y los nombres de la cola y del asignado con la clave de la organización. La fecha de apertura es un metadato en texto plano que el servidor usa para ordenar.
-**El registro completo.** La lista completa de campos, junto con el número de teléfono del cliente enmascarado por rol y las acciones del caso, vive en el panel del caso.`)
+	return /** @type {LocalizedString} */ (`Plegar el registro del caso deja el título, la prioridad y el estado de cerrado y oculta la descripción, la cola, la asignación y la fecha de apertura hasta que se despliega de nuevo. [[#client-data]]
+**Lo que registra el plegado.** Una entrada en un mapa que vive en la memoria de la pestaña, indexada por identificador de caso. No se escribe nada en el almacenamiento del navegador ni se envía ninguna petición, así que cuánto tiempo mantiene alguien abierto un registro, y qué casos pliega, no es un dato que tenga el servidor ni quien lea después el dispositivo. [[#privacy #server-holds]]
+**Lo que hace una recarga.** El mapa se crea de nuevo con cada carga de la aplicación, de modo que todos los casos se abren con su registro a la vista. El plegado es por caso, así que plegar uno deja los demás como estaban durante el resto de la sesión. [[#failure-states]]
+**El almacén del plegado.** \`packages/client/src/lib/tickets/case-fold-store.svelte.ts\` es un mapa reactivo con un getter y un setter, y desplegar borra la clave en lugar de guardar un valor falso. El arrastre y el manejo de teclado están en \`use-fold-drag.svelte.ts\`, en \`packages/client/src/lib/shell/\`. [El registro del caso](#ticket-detail/case-header) trata los campos en sí. [[#client-data]]`)
 };
 
 const en_xa2_demo_narrative_topic_case_fold_body = /** @type {(inputs: Demo_Narrative_Topic_Case_Fold_BodyInputs) => LocalizedString} */ () => {
@@ -26,7 +28,7 @@ const en_xa2_demo_narrative_topic_case_fold_body = /** @type {(inputs: Demo_Narr
 /**
 * | output |
 * | --- |
-* | "The case fields below the header can be folded away. The title, status, and priority stay visible in the header above. **Encryption.** The description is enc..." |
+* | "Folding the case record away leaves the title, the priority and the closed state and hides the description, the queue, the assignment and the opened time unt..." |
 *
 * @param {Demo_Narrative_Topic_Case_Fold_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

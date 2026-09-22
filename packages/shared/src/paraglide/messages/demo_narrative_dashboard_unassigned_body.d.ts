@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Open tickets not yet assigned to anyone. Once assigned, a ticket moves to the assignee's working list. **If counts differ.** The count in the section heading..." |
+* | "An open ticket in the user's queues with nobody assigned waits here. Taking one records the account against the ticket and moves it into [My tickets](#dashbo..." |
 *
 * @param {Demo_Narrative_Dashboard_Unassigned_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

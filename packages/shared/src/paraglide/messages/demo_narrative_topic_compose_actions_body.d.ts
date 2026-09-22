@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The compose menu lists the available actions for a ticket. The entries that appear depend on the client's contact methods and the volunteer's permissions. **..." |
+* | "The compose menu offers the ways of adding something to a case: a reply on the client's encrypted channel, a text, an email, a file, a saved response, or an ..." |
 *
 * @param {Demo_Narrative_Topic_Compose_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

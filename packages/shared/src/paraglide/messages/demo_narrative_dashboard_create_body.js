@@ -6,13 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Dashboard_Create_BodyInputs */
 
 const en_demo_narrative_dashboard_create_body = /** @type {(inputs: Demo_Narrative_Dashboard_Create_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The plus button in the navigation bar opens a creation menu. Options depend on the current role and permissions. All volunteers can create a new ticket by default. Administrators and managers may also see options for knowledge base articles, categories, queues, or inviting new volunteers.
-**Single option shortcut.** When only one creation option is available, the button skips the menu and goes directly to the creation form.`)
+	return /** @type {LocalizedString} */ (`The create action in the navigation bar opens a menu whose options depend on what the account has permission to do. A new ticket is offered on every account; an article, a category, a queue and an invitation each appear with the matching permission. [[#permissions]]
+**What each option needs.** Articles need permission to edit the knowledge base, categories to manage knowledge base categories, queues to manage queues, and invitations to manage users. Opening a ticket needs permission to open cases, which the server checks when the form is submitted. [The permission system](#deep-dive/the-permission-system) covers where a permission comes from. [[#permissions]]
+**When there is only one.** With a single option available the control goes straight to that form and no menu opens, so an account with the narrowest permissions reaches the ticket form in one step. [Creating a new ticket](#tickets/new-ticket) covers the form itself. [[#permissions]]
+**Where the options are assembled.** The list is built in \`packages/client/src/routes/(app)/+page.svelte\` from the session's permission set, and each option navigates to a route that enforces the same permission server-side. [Permission matrix](#admin-people/role-permissions) covers which role holds which of them. [[#permissions]]`)
 };
 
 const es_demo_narrative_dashboard_create_body = /** @type {(inputs: Demo_Narrative_Dashboard_Create_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El botón de más en la barra de navegación abre un menú de creación. Las opciones dependen del rol y los permisos actuales. Todos los voluntarios pueden crear un ticket nuevo por defecto. Las personas administradoras y gestoras también pueden ver opciones para artículos de la base de conocimiento, categorías, colas o invitar nuevos voluntarios.
-**Atajo de opción única.** Cuando solo hay una opción de creación disponible, el botón salta el menú y va directamente al formulario de creación.`)
+	return /** @type {LocalizedString} */ (`La acción de crear de la barra de navegación abre un menú cuyas opciones dependen de lo que la cuenta tiene permiso para hacer. Todas las cuentas reciben la opción de un ticket nuevo; un artículo, una categoría, una cola y una invitación aparecen cada uno con el permiso correspondiente. [[#permissions]]
+**Qué necesita cada opción.** Los artículos necesitan permiso para editar la base de conocimiento, las categorías para gestionar sus categorías, las colas para gestionar colas y las invitaciones para gestionar cuentas. Abrir un ticket necesita permiso para abrir casos, que el servidor comprueba al enviar el formulario. [El sistema de permisos](#deep-dive/the-permission-system) trata de dónde sale un permiso. [[#permissions]]
+**Cuando solo hay una.** Con una única opción disponible el control va directo a ese formulario y no se abre ningún menú, de modo que una cuenta con los permisos más estrechos llega al formulario de ticket en un solo paso. [Creando un nuevo ticket](#tickets/new-ticket) trata el formulario en sí. [[#permissions]]
+**Dónde se arma la lista de opciones.** La lista se construye en \`packages/client/src/routes/(app)/+page.svelte\` a partir del conjunto de permisos de la sesión, y cada opción navega a una ruta que aplica ese mismo permiso en el servidor. [Matriz de permisos](#admin-people/role-permissions) trata qué rol tiene cada uno de ellos. [[#permissions]]`)
 };
 
 const en_xa2_demo_narrative_dashboard_create_body = /** @type {(inputs: Demo_Narrative_Dashboard_Create_BodyInputs) => LocalizedString} */ () => {
@@ -23,7 +27,7 @@ const en_xa2_demo_narrative_dashboard_create_body = /** @type {(inputs: Demo_Nar
 /**
 * | output |
 * | --- |
-* | "The plus button in the navigation bar opens a creation menu. Options depend on the current role and permissions. All volunteers can create a new ticket by de..." |
+* | "The create action in the navigation bar opens a menu whose options depend on what the account has permission to do. A new ticket is offered on every account;..." |
 *
 * @param {Demo_Narrative_Dashboard_Create_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

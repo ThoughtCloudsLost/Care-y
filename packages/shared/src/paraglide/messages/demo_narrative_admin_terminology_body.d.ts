@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Organizations rename the standard terms used throughout the interface to match their own language. Six term groups are available, each with a singular and a ..." |
+* | "Organizations rename the words the interface uses for the people in it and the work it holds, in six groups that each carry a singular and a plural, except t..." |
 *
 * @param {Demo_Narrative_Admin_Terminology_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

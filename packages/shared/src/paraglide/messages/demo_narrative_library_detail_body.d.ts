@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The full article view shows the complete body text, file attachments, and voting controls. The body is decrypted locally from ciphertext stored on the server..." |
+* | "Opening an article fetches the one thing the list does not carry, its encrypted body, and decrypts it in the crypto worker before rendering it through a sani..." |
 *
 * @param {Demo_Narrative_Library_Detail_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

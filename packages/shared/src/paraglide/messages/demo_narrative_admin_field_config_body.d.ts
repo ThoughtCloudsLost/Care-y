@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The field settings sheet controls the configuration for a single field, and its contents change with the field type. Every field has a label and optional hel..." |
+* | "A field's settings hold everything about that one field, and what they offer changes with its type. Every field carries a label and optional help text in eac..." |
 *
 * @param {Demo_Narrative_Admin_Field_Config_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

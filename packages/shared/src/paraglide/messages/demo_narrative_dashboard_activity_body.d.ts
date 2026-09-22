@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A chronological list of recent events: new tickets, status changes, and assignments. **Visibility.** The feed is scoped to queues the current volunteer can a..." |
+* | "The feed is the audit log narrowed to tickets in the queues the user belongs to, newest first, five events at a time. Only events tied to a ticket appear, so..." |
 *
 * @param {Demo_Narrative_Dashboard_Activity_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

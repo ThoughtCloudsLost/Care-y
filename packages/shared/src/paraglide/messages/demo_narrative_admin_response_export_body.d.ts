@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The export button opens a dialog for downloading the current form's responses as a CSV file. The CSV is assembled entirely in the browser from responses that..." |
+* | "Exporting builds a CSV from responses the browser has already decrypted and hands it straight to the download, so no plaintext travels and the server contrib..." |
 *
 * @param {Demo_Narrative_Admin_Response_Export_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

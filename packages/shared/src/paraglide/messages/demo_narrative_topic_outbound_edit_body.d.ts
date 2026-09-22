@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers can edit an outbound in-app message after sending it by opening the message's action menu and selecting edit. The edit sheet opens with the decryp..." |
+* | "A message already sent on the client's encrypted channel can be corrected, and the correction replaces both copies of it. [[#encryption #client-data]] **What..." |
 *
 * @param {Demo_Narrative_Topic_Outbound_Edit_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

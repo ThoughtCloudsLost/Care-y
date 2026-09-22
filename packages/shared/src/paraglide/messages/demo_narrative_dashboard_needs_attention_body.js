@@ -6,15 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Dashboard_Needs_Attention_BodyInputs */
 
 const en_demo_narrative_dashboard_needs_attention_body = /** @type {(inputs: Demo_Narrative_Dashboard_Needs_Attention_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A per-volunteer list of tickets needing immediate action.
-**What qualifies.** A ticket appears here when it is open, not on hold, marked urgent or high priority, and either unassigned or assigned to the current volunteer with unread replies.
-**Visibility.** The section only appears when at least one ticket qualifies. Otherwise it is hidden entirely.`)
+	return /** @type {LocalizedString} */ (`A ticket appears here when it is open, not on hold, urgent or high priority, and either unassigned or assigned to the user with unread replies. The section is absent when nothing meets that rule. [[#client-data #privacy]]
+**Where unread comes from.** Each account keeps its own read position on each ticket, stored as ciphertext only that account can open and decrypted in the crypto worker. Nothing derived from read state is sent back, so the server cannot tell which tickets anyone has read. Membership settles as those positions decrypt, so the section fills in over the first moments of a load rather than arriving complete. [[#encryption #privacy]]
+**What the rule does not reach.** The overview holds one page of open tickets and does not run the full read-state sweep, so the rule is applied to the rows it loaded. A ticket in an accessible queue beyond that page does not qualify here even when it qualifies on the tickets list, where the sweep runs. [Filters](#tickets/filters) covers the same rule applied there. [[#failure-states]]
+**The rule and the bucketing pass.** \`isNeedsAttention\` and \`bucketTickets\` in \`packages/client/src/lib/components/dashboard/filters.ts\` are shared with the tickets-page membership filter, so the see-all landing shows the same set. Read state is assembled in \`packages/client/src/lib/tickets/create-list-read-state.svelte.ts\` and the cursor row is \`048_create_ticket_read_cursors.ts\`. [Unread badges](#tickets/unread-badges) covers how a reply counts as unread. [[#client-data]]`)
 };
 
 const es_demo_narrative_dashboard_needs_attention_body = /** @type {(inputs: Demo_Narrative_Dashboard_Needs_Attention_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una lista por voluntario de tickets que necesitan acción inmediata.
-**Qué califica.** Un ticket aparece aquí cuando está abierto, no está en espera, marcado como urgente o alta prioridad, y sin asignar o asignado al voluntario actual con respuestas no leídas.
-**Visibilidad.** La sección solo aparece cuando al menos un ticket califica. De lo contrario, se oculta completamente.`)
+	return /** @type {LocalizedString} */ (`Un ticket aparece aquí cuando está abierto, no está en espera, tiene prioridad urgente o alta y está sin asignar o asignado a la persona usuaria con respuestas sin leer. La sección no aparece cuando nada cumple esa regla. [[#client-data #privacy]]
+**De dónde sale lo no leído.** Cada cuenta mantiene su propia posición de lectura en cada ticket, guardada como texto cifrado que solo esa cuenta puede abrir y descifrada en el worker criptográfico. Nada derivado del estado de lectura se devuelve, así que el servidor no puede saber qué tickets ha leído nadie. La pertenencia a la sección se asienta a medida que esas posiciones se descifran, de modo que la sección se completa durante los primeros instantes de una carga en lugar de llegar entera. [[#encryption #privacy]]
+**Hasta dónde llega la regla.** El resumen tiene una sola página de tickets abiertos y no ejecuta el barrido completo del estado de lectura, así que la regla se aplica a las filas que cargó. Un ticket de una cola accesible más allá de esa página no cumple la regla aquí aunque sí la cumpla en la lista de tickets, donde el barrido sí se ejecuta. [Filtros](#tickets/filters) trata esa misma regla aplicada allí. [[#failure-states]]
+**La regla y el paso de clasificación.** \`isNeedsAttention\` y \`bucketTickets\`, en \`packages/client/src/lib/components/dashboard/filters.ts\`, se comparten con el filtro de pertenencia de la página de tickets, de modo que el destino de "ver todos" muestra el mismo conjunto. El estado de lectura se arma en \`packages/client/src/lib/tickets/create-list-read-state.svelte.ts\` y la fila del cursor es \`048_create_ticket_read_cursors.ts\`. [Insignias de no leídos](#tickets/unread-badges) trata cuándo una respuesta cuenta como no leída. [[#client-data]]`)
 };
 
 const en_xa2_demo_narrative_dashboard_needs_attention_body = /** @type {(inputs: Demo_Narrative_Dashboard_Needs_Attention_BodyInputs) => LocalizedString} */ () => {
@@ -26,7 +28,7 @@ const en_xa2_demo_narrative_dashboard_needs_attention_body = /** @type {(inputs:
 /**
 * | output |
 * | --- |
-* | "A per-volunteer list of tickets needing immediate action. **What qualifies.** A ticket appears here when it is open, not on hold, marked urgent or high prior..." |
+* | "A ticket appears here when it is open, not on hold, urgent or high priority, and either unassigned or assigned to the user with unread replies. The section i..." |
 *
 * @param {Demo_Narrative_Dashboard_Needs_Attention_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

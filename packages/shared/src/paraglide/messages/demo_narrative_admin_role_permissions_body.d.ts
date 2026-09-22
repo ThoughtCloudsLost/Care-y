@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The permission matrix on the people page shows which capabilities each role grants, with fifty permissions arranged across eight capability groups. **Capabil..." |
+* | "The matrix sets fifty permissions against the three roles, grouped by the area each permission governs rather than by the role that holds it by default. [[#p..." |
 *
 * @param {Demo_Narrative_Admin_Role_Permissions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

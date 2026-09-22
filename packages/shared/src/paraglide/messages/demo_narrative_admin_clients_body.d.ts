@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The client list shows all clients who have contacted the organization, and each record links to the client's associated tickets. **Encryption.** Client ident..." |
+* | "The client list carries every client record the organization holds, twenty-five at a time, with the number of cases attached to each one. [[#client-data #per..." |
 *
 * @param {Demo_Narrative_Admin_Clients_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

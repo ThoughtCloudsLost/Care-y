@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A small status line appears beneath each share link message in the ticket thread. It shows the link icon, the label \"Share link,\" and the current status. **S..." |
+* | "A share link entry in the thread carries the state of its link: waiting, opened, or expired. [[#portal]] **What each state is read from.** The share record h..." |
 *
 * @param {Demo_Narrative_Topic_Share_Status_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

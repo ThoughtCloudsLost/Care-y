@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "One card per queue defined by the organization, showing live counts of open and urgent tickets. **Live counts.** Counts are real-time database queries, not c..." |
+* | "Each active queue the user belongs to gets a card carrying a count of open tickets and a count of urgent ones. Membership decides which cards appear, so two ..." |
 *
 * @param {Demo_Narrative_Dashboard_Queues_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

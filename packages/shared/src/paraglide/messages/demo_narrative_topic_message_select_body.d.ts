@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Selection mode allows picking messages from the thread individually or all at once. **Copy.** The selection bar copies the decrypted text of every selected m..." |
+* | "Selection mode takes several entries from the thread at once and copies them as text. [[#client-data]] **What the copy contains.** One line per entry, each c..." |
 *
 * @param {Demo_Narrative_Topic_Message_Select_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

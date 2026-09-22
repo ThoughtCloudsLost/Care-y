@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Notes are visible only to org members and are encrypted with the same per ticket key as messages. The server holds the note type and role gating metadata tha..." |
+* | "An internal note records what the organization wants remembered about a case without sending anything to the client, and it is sealed with the same case key ..." |
 *
 * @param {Demo_Narrative_Topic_Notes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

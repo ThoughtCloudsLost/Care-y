@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Greetings are what callers hear when they reach a phone line. Five greeting types each serve a different point in the call flow, covering the initial answer,..." |
+* | "Greetings are what a caller hears on the way through a phone line, five of them for five points in the call, one for the answer, one for the language prompt,..." |
 *
 * @param {Demo_Narrative_Admin_Greetings_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Sort options reorder the ticket list by priority, date, last activity, queue, status, client, or message count. **Server side fields.** Priority, date, last ..." |
+* | "Sorting reorders the list by creation date, status, priority, last activity, queue, client or follow-up count, and the side that does the work differs by fie..." |
 *
 * @param {Demo_Narrative_Topic_Sort_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

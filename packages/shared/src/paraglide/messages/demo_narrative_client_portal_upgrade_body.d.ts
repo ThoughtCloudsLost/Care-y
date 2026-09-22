@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The portal offers the client two ways to strengthen their link's security. **Add a passphrase.** The browser generates a random five word passphrase the clie..." |
+* | "A client on a secure link can raise their own protection without asking anyone in the organization, by adding a spoken passphrase to the link or by moving to..." |
 *
 * @param {Demo_Narrative_Client_Portal_Upgrade_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

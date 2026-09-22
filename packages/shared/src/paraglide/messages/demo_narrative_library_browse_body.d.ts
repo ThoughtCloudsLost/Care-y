@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The library lists all published articles grouped by category. Each article shows a decrypted title and excerpt. Both are stored as ciphertext on the server a..." |
+* | "Every article an organization keeps is one list, open to any account with permission to view the knowledge base, with no per-article access rule under it. Th..." |
 *
 * @param {Demo_Narrative_Library_Browse_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

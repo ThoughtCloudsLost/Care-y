@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Photos that clients text in over MMS are stored as encrypted binary on the server and decrypted in the browser before a thumbnail appears in the thread. Tapp..." |
+* | "An image a client sends by picture message is checked, sealed with the case key and stored as ciphertext, and the thumbnail in the thread is drawn from bytes..." |
 *
 * @param {Demo_Narrative_Topic_Media_Images_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

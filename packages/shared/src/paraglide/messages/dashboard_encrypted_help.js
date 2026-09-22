@@ -6,11 +6,11 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ queue: NonNullable<unknown>, ticket: NonNullable<unknown> }} Dashboard_Encrypted_HelpInputs */
 
 const en_dashboard_encrypted_help = /** @type {(inputs: Dashboard_Encrypted_HelpInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`You have ${i?.queue} access but not the decryption key for this ${i?.ticket}. A teammate who can read it will share access automatically when they open it.`)
+	return /** @type {LocalizedString} */ (`You have ${i?.queue} access but not the decryption key for this ${i?.ticket}. Access arrives automatically the next time a teammate who can read it signs in.`)
 };
 
 const es_dashboard_encrypted_help = /** @type {(inputs: Dashboard_Encrypted_HelpInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Tienes acceso a la ${i?.queue} pero no la clave de descifrado para este ${i?.ticket}. Un compañero que pueda leerlo compartirá el acceso automáticamente cuando lo abra.`)
+	return /** @type {LocalizedString} */ (`Tienes acceso a la ${i?.queue} pero no la clave de descifrado para este ${i?.ticket}. El acceso llega automáticamente la próxima vez que inicie sesión alguien del equipo que pueda leerlo.`)
 };
 
 const en_xa2_dashboard_encrypted_help = /** @type {(inputs: Dashboard_Encrypted_HelpInputs) => LocalizedString} */ (i) => {
@@ -20,7 +20,7 @@ const en_xa2_dashboard_encrypted_help = /** @type {(inputs: Dashboard_Encrypted_
 /**
 * | output |
 * | --- |
-* | "You have {queue} access but not the decryption key for this {ticket}. A teammate who can read it will share access automatically when they open it." |
+* | "You have {queue} access but not the decryption key for this {ticket}. Access arrives automatically the next time a teammate who can read it signs in." |
 *
 * @param {Dashboard_Encrypted_HelpInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

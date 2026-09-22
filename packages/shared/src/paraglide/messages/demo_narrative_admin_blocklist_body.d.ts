@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Phone numbers can be blocked from reaching the organization, and a blocked number is rejected before a ticket is created. **Encryption.** Blocked numbers are..." |
+* | "A blocked number reaches nothing, since a call from it is rejected and a text from it is dropped, both before a client record or a ticket is touched. Blockin..." |
 *
 * @param {Demo_Narrative_Admin_Blocklist_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

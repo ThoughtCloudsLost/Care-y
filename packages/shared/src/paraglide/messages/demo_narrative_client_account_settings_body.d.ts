@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The account page keeps its controls in the drawer rather than inline on the page, and the drawer is empty until the client signs in. **Encryption.** The cont..." |
+* | "An account's controls become available only once the client has signed in, so the drawer holds nothing for anyone who opens the page without a password. [[#p..." |
 *
 * @param {Demo_Narrative_Client_Account_Settings_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

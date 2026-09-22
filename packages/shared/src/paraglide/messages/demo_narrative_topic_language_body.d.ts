@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The interface language is changeable before sign in and at any time after, and the change is immediate because both languages ship inside the app with nothin..." |
+* | "The interface language can be changed before signing in and at any time afterward, and the change takes effect without a request to the server, because Engli..." |
 *
 * @param {Demo_Narrative_Topic_Language_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

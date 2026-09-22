@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers can close a ticket when the case is resolved. **Resolution notes.** When closing, the system checks which note types are marked as required on clo..." |
+* | "Closing a case records that the work on it is finished, and reopening it puts it back in the working lists. [[#client-data #permissions]] **What a close asks..." |
 *
 * @param {Demo_Narrative_Topic_Close_Reopen_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When a client updates their contact information through the portal, the change appears in the ticket thread as a flagged entry with a tinted background and a..." |
+* | "A contact correction reaches the case thread as its own kind of entry, carrying the phone number or the email address a client says is theirs now. [[#client-..." |
 *
 * @param {Demo_Narrative_Topic_Correction_Status_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

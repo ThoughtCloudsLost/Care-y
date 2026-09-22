@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A combination of active filters can be saved as a named preset for reuse. Saved filters appear as quick access buttons above the filter pills. **Persistence...." |
+* | "A combination of active filters can be kept under a name and applied again in one step, either on the device alone or shared with the organization. [[#client..." |
 *
 * @param {Demo_Narrative_Topic_Saved_Filters_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

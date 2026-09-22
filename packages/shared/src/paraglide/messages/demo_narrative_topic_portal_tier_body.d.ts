@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The tier section in the case panel shows how the client currently receives messages and provides controls for upgrading or managing that channel. **Tier leve..." |
+* | "The tier section reports how the client currently receives messages and offers the controls that change it: setting up a secure link, regenerating or revokin..." |
 *
 * @param {Demo_Narrative_Topic_Portal_Tier_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

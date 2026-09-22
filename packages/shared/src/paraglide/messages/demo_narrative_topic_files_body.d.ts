@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers can attach files to a ticket, and each file is encrypted with the per ticket key before upload so the server stores only ciphertext along with the..." |
+* | "A file attached to a case is sealed in the browser before it is uploaded, and both the bytes and the filename reach the server already closed. [[#encryption ..." |
 *
 * @param {Demo_Narrative_Topic_Files_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

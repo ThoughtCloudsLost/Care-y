@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The share link sheet lets a volunteer compose a message and send it as a single use link to someone outside the system. **Composing.** The sheet has a text f..." |
+* | "A share link carries one message to someone outside the system, over an address that stops working after the first read or after 72 hours, whichever comes fi..." |
 *
 * @param {Demo_Narrative_Topic_Share_Link_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
