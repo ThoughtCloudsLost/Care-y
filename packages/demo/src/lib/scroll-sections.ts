@@ -166,12 +166,6 @@ export const SECTIONS: readonly Section[] = [
     group: "org",
     subs: [
       {
-        slug: "language",
-        topic: "language",
-        headingKey: "demo_narrative_topic_language_heading",
-        bodyKey: "demo_narrative_topic_language_body",
-      },
-      {
         slug: "credentials",
         topic: "credentials",
         headingKey: "demo_narrative_topic_credentials_heading",
@@ -244,13 +238,6 @@ export const SECTIONS: readonly Section[] = [
       // The dashboard is a scroll-nav page: every sub except the
       // view switcher and the create button narrates a `#section-<id>`
       // block (routes/(app)/+page.svelte, the .scroll-target divs).
-      {
-        slug: "getting-started",
-        topic: "dashboard-getting-started",
-        headingKey: "demo_narrative_dashboard_getting_started_heading",
-        bodyKey: "demo_narrative_dashboard_getting_started_body",
-        highlight: { section: "getting-started" },
-      },
       {
         slug: "shift",
         topic: "dashboard-shift",
@@ -328,6 +315,18 @@ export const SECTIONS: readonly Section[] = [
         topic: "dashboard-create",
         headingKey: "demo_narrative_dashboard_create_heading",
         bodyKey: "demo_narrative_dashboard_create_body",
+      },
+      // Last on purpose: the checklist is an admin-only setup surface,
+      // a confusing opener for a reader meeting the dashboard for the
+      // first time. In the demo the card starts collapsed (see the
+      // dashboard/section-defaults stub), so narrating it means the
+      // scroll-nav tap expands it, which is the demonstration.
+      {
+        slug: "getting-started",
+        topic: "dashboard-getting-started",
+        headingKey: "demo_narrative_dashboard_getting_started_heading",
+        bodyKey: "demo_narrative_dashboard_getting_started_body",
+        highlight: { section: "getting-started" },
       },
     ],
   },
@@ -1140,6 +1139,12 @@ export const SECTIONS: readonly Section[] = [
         topic: "settings-appearance",
         headingKey: "demo_narrative_settings_appearance_heading",
         bodyKey: "demo_narrative_settings_appearance_body",
+      },
+      {
+        slug: "language",
+        topic: "language",
+        headingKey: "demo_narrative_topic_language_heading",
+        bodyKey: "demo_narrative_topic_language_body",
       },
       {
         slug: "two-factor",
@@ -2287,7 +2292,7 @@ export function bridgeStateToLocation(
   }
 
   if (feature === "home") {
-    return { sectionId: "dashboard", subSlug: "getting-started" };
+    return { sectionId: "dashboard", subSlug: "shift" };
   }
 
   if (feature === "library") {

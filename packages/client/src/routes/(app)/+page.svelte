@@ -65,6 +65,7 @@
     getSectionRailCtx,
   } from "$lib/shell/context.js";
   import type { FilterPillsConfig, NavbarAction } from "$lib/shell/types";
+  import { DEFAULT_COLLAPSED_SECTIONS } from "$lib/components/dashboard/section-defaults.js";
   import { createSectionScroll } from "$lib/components/useSectionScroll.svelte.js";
   import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
   import { buildDashboardSections } from "$lib/shell/section-registry.js";
@@ -831,8 +832,8 @@
     }),
   );
 
-  // --- Collapsible section state (all expanded except unassigned/on-hold) ---
-  const collapsedSections = new SvelteSet<string>(["unassigned", "on-hold"]);
+  // --- Collapsible section state (defaults in section-defaults.ts) ---
+  const collapsedSections = new SvelteSet<string>(DEFAULT_COLLAPSED_SECTIONS);
 
   /**
    * A section whose body is hidden. Side by side, lanes do not collapse,

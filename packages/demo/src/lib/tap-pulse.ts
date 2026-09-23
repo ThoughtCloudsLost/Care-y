@@ -33,7 +33,6 @@ import {
 
 const LOGIN_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "credentials",
-  "language",
   "twofa",
   "twofa-totp",
   "twofa-passkey",
@@ -107,6 +106,7 @@ const SETTINGS_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "settings-security",
   "settings-notifications",
   "settings-consultant-phone",
+  "language",
 ]);
 
 /**

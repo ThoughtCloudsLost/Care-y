@@ -24,14 +24,14 @@ describe("handbook-corpus", () => {
   });
 
   it("a known key/line resolves with the expected label", () => {
-    // demo_narrative_topic_case_fold_body line 1 starts with **Encryption.**
+    // demo_narrative_topic_case_fold_body line 1 starts with **What folding records.**
     const entry = getCorpusEntry(
       LOCALE,
       "demo_narrative_topic_case_fold_body",
       1,
     );
     expect(entry).not.toBeNull();
-    expect(entry!.label).toBe("Encryption.");
+    expect(entry!.label).toBe("What folding records.");
     expect(entry!.plainText.length).toBeGreaterThan(0);
     expect(entry!.sectionId).toBe("ticket-detail");
     expect(entry!.subSlug).toBe("case-fold");
