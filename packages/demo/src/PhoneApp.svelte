@@ -1838,7 +1838,8 @@
     // expanded section: collapsing hides the very content the narration
     // is describing. When the section is currently collapsed, tapping
     // EXPANDS it, which is the demonstration (dashboard-unassigned,
-    // dashboard-on-hold are collapsed by default).
+    // dashboard-on-hold, and in the demo dashboard-getting-started are
+    // collapsed by default).
     if (tap && isSectionToggleCollapsing(el)) {
       tap = false;
     }

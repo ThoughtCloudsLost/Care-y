@@ -65,7 +65,7 @@ CARE-Y makes that scenario architecturally impossible. The server stores only ci
 - Installable **PWA** with dark mode and offline asset caching. The service worker never caches encrypted content.
 - [**Fund accounting.**](#fund-accounting) Encrypted fund tracking tied to cases and queues. Donation platform integration with no donor data entering CARE-Y. ([planned](#roadmap))
 - [**Exposure system.**](#exposure-system) Security education through the member's own session, showing what is protected, what depends on their choices, and what the system cannot protect. ([partially built](#roadmap))
-- [**i18n.**](#accessibility-and-language) English and Spanish via Paraglide JS (compile-time, tree shaken). Adding a language requires only a JSON file. ([handbook: language selection](https://handbook.care-y.org/#login/language))
+- [**i18n.**](#accessibility-and-language) English and Spanish via Paraglide JS (compile-time, tree shaken). Adding a language requires only a JSON file. ([handbook: language selection](https://handbook.care-y.org/#settings/language))
 - **[Interactive handbook.](https://handbook.care-y.org)** Runs the real frontend, server, and PostgreSQL database (via WebAssembly) entirely in the browser. Every interaction fires actual API calls against that database, and ticket decryption happens client-side with real keys. Organizations considering CARE-Y can operate the product themselves before trusting it, and organizations can use the handbook for onboarding new members.
 
 ---
@@ -192,7 +192,7 @@ CARE-Y serves populations with varied technical backgrounds and language needs.
 - **Reduced motion.** Animations respect `prefers-reduced-motion`. Users who need reduced motion get static alternatives.
 - **Increased contrast.** `prefers-contrast: more` is respected across all interactive elements.
 - **Screen reader support.** All interactive elements carry ARIA labels. Dynamic content changes are announced, and visual-only cues have text equivalents.
-- **Multilingual.** English and Spanish translations via Paraglide JS (compile-time, tree shaken). Adding a new language requires only adding JSON file. ([handbook: language selection](https://handbook.care-y.org/#login/language))
+- **Multilingual.** English and Spanish translations via Paraglide JS (compile-time, tree shaken). Adding a new language requires only adding JSON file. ([handbook: language selection](https://handbook.care-y.org/#settings/language))
 
 ---
 
@@ -465,7 +465,7 @@ CARE-Y is pre-alpha. This list reflects current plans, and ordering can shift.
         <details><summary><b>Admin</b></summary>Organization settings, people management, and communications configuration. (<a href="https://handbook.care-y.org/#admin">handbook</a>)</details>
         <details><summary><b>WCAG AA</b></summary>Automatic contrast enforcement, focus management, motion and contrast preferences, and screen reader support. (<a href="https://handbook.care-y.org">handbook</a>)</details>
         <details><summary><b>PWA</b></summary>Installable with dark mode and offline asset caching, never caches encrypted content. (<a href="https://handbook.care-y.org">handbook</a>)</details>
-        <details><summary><b>i18n</b></summary>English and Spanish via compile-time translations, adding a language requires only a JSON file. (<a href="https://handbook.care-y.org/#login/language">handbook</a>)</details>
+        <details><summary><b>i18n</b></summary>English and Spanish via compile-time translations, adding a language requires only a JSON file. (<a href="https://handbook.care-y.org/#settings/language">handbook</a>)</details>
       </td>
       <td valign="top">
         <details><summary><b>Prod infra</b></summary>Hardened servers, automated backups, encrypted data lifecycle, and deployment pipeline for the alpha launch.</details>

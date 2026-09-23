@@ -51,10 +51,6 @@ const DEFAULT_RECT = { x: 0, y: 56, w: DEFAULT_CROP_W, h: DEFAULT_CROP_H };
  */
 export const CROP_REGISTRY = {
   // -- login --
-  "login/language": {
-    selector: null,
-    fallbackRect: { ...DEFAULT_RECT },
-  },
   "login/credentials": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -438,6 +434,10 @@ export const CROP_REGISTRY = {
     fallbackRect: { ...DEFAULT_RECT },
   },
   "settings/appearance": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "settings/language": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },

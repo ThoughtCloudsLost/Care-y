@@ -1,11 +1,11 @@
 /**
  * Aggregation page definitions: curated cross-section reference views.
  *
- * Each page names the seam labels whose carrying entries it collects,
- * plus optional provisional prose keys written by the prose track
- * later. Pages render as synthetic sections through the normal story
- * pipeline (see excursion-sections.ts): whole entries, as the handbook
- * shows them, not plucked stretch fragments.
+ * Each page names the seam labels or invisible tags whose carrying
+ * entries it collects, plus optional provisional prose keys written by
+ * the prose track later. Pages render as synthetic sections through
+ * the normal story pipeline (see excursion-sections.ts): whole entries,
+ * as the handbook shows them, not plucked stretch fragments.
  *
  * This module must not import the excursion store (circular risk).
  * The type is defined here and re-exported from excursion.svelte.ts.
@@ -22,7 +22,8 @@ export interface AggPageDef {
   readonly id: AggregationPageId;
   readonly titleKey: string;
   readonly introKey: string;
-  /** Entries carrying any of these labels compose the page. */
+  /** Entries carrying any of these labels compose the page (supported
+   *  but no page currently uses labels; all active pages use tags). */
   readonly labels: readonly string[];
   /** Entries carrying any of these tags compose the page. */
   readonly tags: readonly string[];
@@ -44,24 +45,24 @@ const PAGES: readonly AggPageDef[] = [
     id: "encryption",
     titleKey: "demo_agg_encryption_title",
     introKey: "demo_agg_encryption_intro",
-    labels: ["Encryption."],
-    tags: [],
+    labels: [],
+    tags: ["encryption"],
     proseKeys: [],
   },
   {
     id: "server-holds",
     titleKey: "demo_agg_server_holds_title",
     introKey: "demo_agg_server_holds_intro",
-    labels: ["What the server holds.", "Privacy."],
-    tags: [],
+    labels: [],
+    tags: ["server-holds"],
     proseKeys: [],
   },
   {
     id: "who-sees",
     titleKey: "demo_agg_who_sees_title",
     introKey: "demo_agg_who_sees_intro",
-    labels: ["Permissions.", "Visibility."],
-    tags: [],
+    labels: [],
+    tags: ["permissions"],
     proseKeys: [],
   },
   {
@@ -80,20 +81,8 @@ const PAGES: readonly AggPageDef[] = [
     id: "searching",
     titleKey: "demo_agg_searching_title",
     introKey: "demo_agg_searching_intro",
-    labels: [
-      "Result groups.",
-      "Instant results.",
-      "Full deep search.",
-      "Coverage indicator.",
-      "Tickets.",
-      "Knowledge base articles.",
-      "Volunteers.",
-      "Deep search.",
-      "Relationship to global search.",
-      "Full search.",
-      "Privacy.",
-    ],
-    tags: [],
+    labels: [],
+    tags: ["search"],
     proseKeys: [],
   },
 ];

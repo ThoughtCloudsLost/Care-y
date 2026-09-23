@@ -28,11 +28,34 @@ describe("aggregation-pages", () => {
     }
   });
 
+  it("every tag on every page matches >= 1 EN entry", () => {
+    for (const page of PAGES) {
+      for (const tag of page.tags) {
+        const hits = searchEntries("", LOCALE, { tags: [tag], limit: 100 });
+        expect(
+          hits.length,
+          `page "${page.id}" tag "${tag}" matched no entries`,
+        ).toBeGreaterThanOrEqual(1);
+      }
+    }
+  });
+
   it("every page with labels returns non-empty entries in EN", () => {
     for (const page of PAGES) {
       if (page.labels.length === 0) continue;
       const hits = searchEntries("", LOCALE, {
         labels: page.labels,
+        limit: 100,
+      });
+      expect(hits.length, `page "${page.id}" is empty`).toBeGreaterThan(0);
+    }
+  });
+
+  it("every page with tags returns non-empty entries in EN", () => {
+    for (const page of PAGES) {
+      if (page.tags.length === 0) continue;
+      const hits = searchEntries("", LOCALE, {
+        tags: page.tags,
         limit: 100,
       });
       expect(hits.length, `page "${page.id}" is empty`).toBeGreaterThan(0);

@@ -222,6 +222,10 @@ const stubMatchers: [RegExp, string][] = [
   [/^\$lib\/shell\/navigation(\.js)?$/, "./src/stubs/shell-navigation.ts"],
   [/^\$lib\/utils\/format-time(\.js)?$/, "./src/stubs/format-time.ts"],
   [/^\$lib\/utils\/fetch-blob(\.js)?$/, "./src/stubs/fetch-blob.ts"],
+  [
+    /^\$lib\/components\/dashboard\/section-defaults(\.js|\.ts)?$/,
+    "./src/stubs/dashboard-section-defaults.ts",
+  ],
 ];
 
 // Exact-id aliases (no extensioned import forms exist for these).

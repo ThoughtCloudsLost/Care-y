@@ -61,23 +61,27 @@ describe("backstopDecision", () => {
   // -----------------------------------------------------------------
 
   it("realigns when misaligned and no retry has been spent", () => {
-    const target = { section: "login" as const, sub: "language" };
+    const target = { section: "login" as const, sub: "two-factor" };
     expect(backstopDecision(target, "login", "credentials", false)).toBe(
       "realign",
     );
   });
 
   it("surrenders when misaligned after the retry was spent", () => {
-    const target = { section: "login" as const, sub: "language" };
+    const target = { section: "login" as const, sub: "two-factor" };
     expect(backstopDecision(target, "login", "credentials", true)).toBe(
       "surrender",
     );
   });
 
   it("unmutes when the derived position reaches the target", () => {
-    const target = { section: "login" as const, sub: "language" };
-    expect(backstopDecision(target, "login", "language", false)).toBe("unmute");
-    expect(backstopDecision(target, "login", "language", true)).toBe("unmute");
+    const target = { section: "login" as const, sub: "two-factor" };
+    expect(backstopDecision(target, "login", "two-factor", false)).toBe(
+      "unmute",
+    );
+    expect(backstopDecision(target, "login", "two-factor", true)).toBe(
+      "unmute",
+    );
   });
 
   it("unmutes for targetless layout-shift suppression without realigning", () => {

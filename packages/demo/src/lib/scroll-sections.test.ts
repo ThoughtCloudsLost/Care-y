@@ -271,9 +271,15 @@ describe("resolvePhoneCommand", () => {
     expect(cmd.pulseTopic).toBe("credentials");
   });
 
-  it("resolves login/language to the form (where the picker lives)", () => {
-    const cmd = resolvePhoneCommand("login", "language", TICKET_ID, ARTICLE_ID);
-    expect(cmd.loginTarget).toBe("form");
+  it("resolves settings/language to the settings screen", () => {
+    const cmd = resolvePhoneCommand(
+      "settings",
+      "language",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("settings");
+    expect(cmd.loginTarget).toBeNull();
     expect(cmd.pulseTopic).toBe("language");
   });
 
@@ -697,7 +703,7 @@ describe("bridgeStateToLocation", () => {
 
   it("maps home feature to dashboard section", () => {
     const loc = bridgeStateToLocation("home", null, false, null, null);
-    expect(loc).toEqual({ sectionId: "dashboard", subSlug: "getting-started" });
+    expect(loc).toEqual({ sectionId: "dashboard", subSlug: "shift" });
   });
 
   it("maps library feature to library section (browse)", () => {
@@ -965,9 +971,9 @@ describe("SECTIONS taxonomy", () => {
     ).toBe(true);
   });
 
-  it("login has 10 subs", () => {
+  it("login has 9 subs", () => {
     const login = SECTIONS.find((s) => s.id === "login");
-    expect(login?.subs).toHaveLength(10);
+    expect(login?.subs).toHaveLength(9);
   });
 
   it("dashboard has 12 subs", () => {
@@ -1035,9 +1041,9 @@ describe("SECTIONS taxonomy", () => {
     expect(schedule?.subs).toHaveLength(1);
   });
 
-  it("settings has 7 subs", () => {
+  it("settings has 8 subs", () => {
     const settings = SECTIONS.find((s) => s.id === "settings");
-    expect(settings?.subs).toHaveLength(7);
+    expect(settings?.subs).toHaveLength(8);
   });
 
   it("client-intake has 6 subs", () => {

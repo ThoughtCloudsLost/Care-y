@@ -116,24 +116,24 @@ describe("searchEntries", () => {
 
   it("label filter narrows to entries carrying the label", () => {
     const all = searchEntries("", EN, {
-      labels: ["Encryption."],
+      labels: ["What folding records."],
       limit: 100,
     });
     expect(all.length).toBeGreaterThan(0);
     for (const hit of all) {
-      expect(hit.labels).toContain("Encryption.");
+      expect(hit.labels).toContain("What folding records.");
     }
   });
 
   it("empty query with labels returns entries in taxonomy order", () => {
     const hits = searchEntries("", EN, {
-      labels: ["Encryption."],
+      labels: ["What folding records."],
       limit: 100,
     });
     // Zero scores throughout; order is the corpus walk order, which is
     // stable across calls.
     const again = searchEntries("", EN, {
-      labels: ["Encryption."],
+      labels: ["What folding records."],
       limit: 100,
     });
     expect(hits.map((h) => h.subSlug)).toEqual(again.map((h) => h.subSlug));

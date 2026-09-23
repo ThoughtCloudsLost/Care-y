@@ -75,25 +75,25 @@ describe("buildAggregationSection", () => {
 });
 
 describe("distinctHitFacets", () => {
-  it("returns first-seen distinct labels across hits", () => {
+  it("returns first-seen distinct facets across hits", () => {
     const hits = searchEntries("", LOCALE, {
-      labels: ["Encryption.", "Privacy."],
-      limit: 100,
-    });
-    const labels = distinctHitFacets(hits);
-    expect(new Set(labels).size).toBe(labels.length);
-    expect(labels.includes("Encryption.") || labels.includes("Privacy.")).toBe(
-      true,
-    );
-  });
-
-  it("returns deduped facets containing carried labels", () => {
-    const hits = searchEntries("", LOCALE, {
-      labels: ["Encryption."],
+      tags: ["encryption", "server-holds"],
       limit: 100,
     });
     const facets = distinctHitFacets(hits);
     expect(new Set(facets).size).toBe(facets.length);
-    expect(facets).toContain("Encryption.");
+    expect(
+      facets.includes("encryption") || facets.includes("server-holds"),
+    ).toBe(true);
+  });
+
+  it("returns deduped facets containing carried tags", () => {
+    const hits = searchEntries("", LOCALE, {
+      tags: ["encryption"],
+      limit: 100,
+    });
+    const facets = distinctHitFacets(hits);
+    expect(new Set(facets).size).toBe(facets.length);
+    expect(facets).toContain("encryption");
   });
 });
