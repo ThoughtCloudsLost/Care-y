@@ -13,17 +13,22 @@ const es_library_title_required = /** @type {(inputs: Library_Title_RequiredInpu
 	return /** @type {LocalizedString} */ (`El título es obligatorio`)
 };
 
+const en_xa2_library_title_required = /** @type {(inputs: Library_Title_RequiredInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tìtlè ìs rèqùìrèd ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Title is required" |
 *
 * @param {Library_Title_RequiredInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_title_required = /** @type {((inputs?: Library_Title_RequiredInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Title_RequiredInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_title_required = /** @type {((inputs?: Library_Title_RequiredInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Title_RequiredInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_title_required(inputs)
+	if (locale === "en-XA") return en_xa2_library_title_required(inputs)
 	return en_library_title_required(inputs)
 });

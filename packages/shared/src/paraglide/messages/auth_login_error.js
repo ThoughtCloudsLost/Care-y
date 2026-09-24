@@ -13,17 +13,22 @@ const es_auth_login_error = /** @type {(inputs: Auth_Login_ErrorInputs) => Local
 	return /** @type {LocalizedString} */ (`Error de inicio de sesión. Inténtalo de nuevo.`)
 };
 
+const en_xa2_auth_login_error = /** @type {(inputs: Auth_Login_ErrorInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Lògìn fàìlèd. Plèàsè try àgàìn. ••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Login failed. Please try again." |
 *
 * @param {Auth_Login_ErrorInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const auth_login_error = /** @type {((inputs?: Auth_Login_ErrorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Auth_Login_ErrorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const auth_login_error = /** @type {((inputs?: Auth_Login_ErrorInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Auth_Login_ErrorInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_auth_login_error(inputs)
+	if (locale === "en-XA") return en_xa2_auth_login_error(inputs)
 	return en_auth_login_error(inputs)
 });

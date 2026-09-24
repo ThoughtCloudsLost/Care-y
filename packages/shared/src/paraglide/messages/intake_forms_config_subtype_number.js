@@ -13,17 +13,22 @@ const es_intake_forms_config_subtype_number = /** @type {(inputs: Intake_Forms_C
 	return /** @type {LocalizedString} */ (`Número`)
 };
 
+const en_xa2_intake_forms_config_subtype_number = /** @type {(inputs: Intake_Forms_Config_Subtype_NumberInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nùmbèr ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Number" |
 *
 * @param {Intake_Forms_Config_Subtype_NumberInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_config_subtype_number = /** @type {((inputs?: Intake_Forms_Config_Subtype_NumberInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Subtype_NumberInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_config_subtype_number = /** @type {((inputs?: Intake_Forms_Config_Subtype_NumberInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Subtype_NumberInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_config_subtype_number(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_config_subtype_number(inputs)
 	return en_intake_forms_config_subtype_number(inputs)
 });

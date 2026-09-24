@@ -17,17 +17,24 @@ const es_demo_narrative_topic_conversation_body = /** @type {(inputs: Demo_Narra
 **Canales.** Los mensajes pueden llegar por diferentes canales. Un mensaje SMS del cliente y una respuesta web del voluntario aparecen en el mismo hilo. El indicador de canal en cada mensaje muestra cómo fue enviado.`)
 };
 
+const en_xa2_demo_narrative_topic_conversation_body = /** @type {(inputs: Demo_Narrative_Topic_Conversation_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè màìn bòdy òf thè tìckèt dètàìl ìs à cònvèrsàtìòn thrèàd shòwìng mèssàgès bètwèèn thè vòlùntèèr ànd thè clìènt.
+ •••••••••••••••••••••••••••••••••••**Dècryptìòn. ••••** Èàch mèssàgè ìs ìndìvìdùàlly èncryptèd wìth thè pèr tìckèt kèy ùsìng XChàChà20-Pòly1305. Thè bròwsèr dècrypts thèm lòcàlly ànd thè sèrvèr nèvèr sèès thè plàìntèxt còntènt.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••**Chànnèls. •••** Mèssàgès mày àrrìvè vìà dìffèrènt chànnèls. Àn SMS mèssàgè fròm thè clìènt ànd à wèb rèply fròm thè vòlùntèèr àppèàr ìn thè sàmè thrèàd. Thè chànnèl ìndìcàtòr òn èàch mèssàgè shòws hòw ìt wàs sènt. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The main body of the ticket detail is a conversation thread showing messages between the volunteer and the client. **Decryption.** Each message is individual..." |
 *
 * @param {Demo_Narrative_Topic_Conversation_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_conversation_body = /** @type {((inputs?: Demo_Narrative_Topic_Conversation_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Conversation_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_conversation_body = /** @type {((inputs?: Demo_Narrative_Topic_Conversation_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Conversation_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_conversation_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_conversation_body(inputs)
 	return en_demo_narrative_topic_conversation_body(inputs)
 });

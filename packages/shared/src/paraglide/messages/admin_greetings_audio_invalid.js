@@ -13,17 +13,22 @@ const es_admin_greetings_audio_invalid = /** @type {(inputs: Admin_Greetings_Aud
 	return /** @type {LocalizedString} */ (`El archivo no es un formato de audio válido. Use WAV, MP3, OGG o M4A.`)
 };
 
+const en_xa2_admin_greetings_audio_invalid = /** @type {(inputs: Admin_Greetings_Audio_InvalidInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Fìlè ìs nòt à vàlìd àùdìò fòrmàt. Ùsè WÀV, MP3, ÒGG, òr M4À. ••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "File is not a valid audio format. Use WAV, MP3, OGG, or M4A." |
 *
 * @param {Admin_Greetings_Audio_InvalidInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_greetings_audio_invalid = /** @type {((inputs?: Admin_Greetings_Audio_InvalidInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Audio_InvalidInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_greetings_audio_invalid = /** @type {((inputs?: Admin_Greetings_Audio_InvalidInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Audio_InvalidInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_greetings_audio_invalid(inputs)
+	if (locale === "en-XA") return en_xa2_admin_greetings_audio_invalid(inputs)
 	return en_admin_greetings_audio_invalid(inputs)
 });

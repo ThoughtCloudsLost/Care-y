@@ -13,17 +13,22 @@ const es_view_switcher_rows = /** @type {(inputs: View_Switcher_RowsInputs) => L
 	return /** @type {LocalizedString} */ (`Filas compactas`)
 };
 
+const en_xa2_view_switcher_rows = /** @type {(inputs: View_Switcher_RowsInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Còmpàct ròws ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Compact rows" |
 *
 * @param {View_Switcher_RowsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const view_switcher_rows = /** @type {((inputs?: View_Switcher_RowsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<View_Switcher_RowsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const view_switcher_rows = /** @type {((inputs?: View_Switcher_RowsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<View_Switcher_RowsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_view_switcher_rows(inputs)
+	if (locale === "en-XA") return en_xa2_view_switcher_rows(inputs)
 	return en_view_switcher_rows(inputs)
 });

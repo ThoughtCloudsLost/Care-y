@@ -13,17 +13,22 @@ const es_account_upgrade_success_body = /** @type {(inputs: Account_Upgrade_Succ
 	return /** @type {LocalizedString} */ (`Este enlace ya no funciona. A partir de ahora, inicia sesión en /account con tu contraseña. Tus mensajes se transfirieron contigo.`)
 };
 
+const en_xa2_account_upgrade_success_body = /** @type {(inputs: Account_Upgrade_Success_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìs lìnk nò lòngèr wòrks. Fròm nòw òn, sìgn ìn àt /àccòùnt wìth yòùr pàsswòrd. Yòùr mèssàgès mòvèd wìth yòù. •••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This link no longer works. From now on, sign in at /account with your password. Your messages moved with you." |
 *
 * @param {Account_Upgrade_Success_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const account_upgrade_success_body = /** @type {((inputs?: Account_Upgrade_Success_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Upgrade_Success_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const account_upgrade_success_body = /** @type {((inputs?: Account_Upgrade_Success_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Account_Upgrade_Success_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_account_upgrade_success_body(inputs)
+	if (locale === "en-XA") return en_xa2_account_upgrade_success_body(inputs)
 	return en_account_upgrade_success_body(inputs)
 });

@@ -13,17 +13,22 @@ const es_library_editor_table = /** @type {(inputs: Library_Editor_TableInputs) 
 	return /** @type {LocalizedString} */ (`Tabla`)
 };
 
+const en_xa2_library_editor_table = /** @type {(inputs: Library_Editor_TableInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tàblè ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Table" |
 *
 * @param {Library_Editor_TableInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_editor_table = /** @type {((inputs?: Library_Editor_TableInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_TableInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_editor_table = /** @type {((inputs?: Library_Editor_TableInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_TableInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_editor_table(inputs)
+	if (locale === "en-XA") return en_xa2_library_editor_table(inputs)
 	return en_library_editor_table(inputs)
 });

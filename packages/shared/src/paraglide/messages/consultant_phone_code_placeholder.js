@@ -13,17 +13,22 @@ const es_consultant_phone_code_placeholder = /** @type {(inputs: Consultant_Phon
 	return /** @type {LocalizedString} */ (`000000`)
 };
 
+const en_xa2_consultant_phone_code_placeholder = /** @type {(inputs: Consultant_Phone_Code_PlaceholderInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦000000 ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "000000" |
 *
 * @param {Consultant_Phone_Code_PlaceholderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const consultant_phone_code_placeholder = /** @type {((inputs?: Consultant_Phone_Code_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Code_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const consultant_phone_code_placeholder = /** @type {((inputs?: Consultant_Phone_Code_PlaceholderInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Code_PlaceholderInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_consultant_phone_code_placeholder(inputs)
+	if (locale === "en-XA") return en_xa2_consultant_phone_code_placeholder(inputs)
 	return en_consultant_phone_code_placeholder(inputs)
 });

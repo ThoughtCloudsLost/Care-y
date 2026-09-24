@@ -13,17 +13,22 @@ const es_admin_greetings_audio_too_large = /** @type {(inputs: Admin_Greetings_A
 	return /** @type {LocalizedString} */ (`El archivo de audio debe ser menor a 5 MB.`)
 };
 
+const en_xa2_admin_greetings_audio_too_large = /** @type {(inputs: Admin_Greetings_Audio_Too_LargeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àùdìò fìlè mùst bè ùndèr 5 MB. •••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Audio file must be under 5 MB." |
 *
 * @param {Admin_Greetings_Audio_Too_LargeInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_greetings_audio_too_large = /** @type {((inputs?: Admin_Greetings_Audio_Too_LargeInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Audio_Too_LargeInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_greetings_audio_too_large = /** @type {((inputs?: Admin_Greetings_Audio_Too_LargeInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Audio_Too_LargeInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_greetings_audio_too_large(inputs)
+	if (locale === "en-XA") return en_xa2_admin_greetings_audio_too_large(inputs)
 	return en_admin_greetings_audio_too_large(inputs)
 });

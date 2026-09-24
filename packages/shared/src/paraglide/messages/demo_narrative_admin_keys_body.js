@@ -19,17 +19,25 @@ const es_demo_narrative_admin_keys_body = /** @type {(inputs: Demo_Narrative_Adm
 **Permisos.** Tanto la exportación de custodia como la rotación de claves requieren el permiso Cuidar las claves de cifrado.`)
 };
 
+const en_xa2_demo_narrative_admin_keys_body = /** @type {(inputs: Demo_Narrative_Admin_Keys_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè kèys sèctìòn rèpòrts thè òrgànìzàtìòn kèy stàtùs ànd pròvìdès twò òpèràtìòns òn ìt.
+ •••••••••••••••••••••••••••**Èscròw. •••** Thè èscròw fìlè càrrìès ìts òwn KDF pàràmètèrs, sàlt, nòncè, ànd cìphèrtèxt ìn bàsè64, sò ìt càn bè rèàd òn àny màchìnè wìthòùt CÀRÈ-Y ìnstàllèd. Thè pàssphràsè mùst bè àt lèàst 20 chàràctèrs, ànd thè kèy dèrìvàtìòn ìs Àrgòn2ìd. Thè fìlè's SHÀ-256 ìs shòwn ìn gròùps òf fòùr chàràctèrs fòr vìsùàl còmpàrìsòn, ànd bòth thè pàssphràsè bytès ànd thè òrgànìzàtìòn's sècrèt kèy àrè zèròèd àftèr thè èxpòrt whèthèr òr nòt ìt sùccèèdèd.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Kèy ròtàtìòn. ••••** Ròtàtìòn gènèràtès à nèw kèypàìr ìn thè bròwsèr, wràps thè nèw sècrèt kèy òncè pèr àctìvè ùsèr whò hòlds à pùblìc kèy, ànd sùbmìts àll wràps ìn ònè rèqùèst. Ùsèrs whò àrè ìnàctìvè òr hàvè nèvèr sìgnèd ìn rècèìvè nò wràppèd còpy. Òn còmplètìòn thè bròwsèr fètchès ànd ùnwràps thè kèy thròùgh thè nòrmàl sìgn ìn pàth ràthèr thàn trùstìng thè kèy ìt jùst gènèràtèd, ànd thè ròtàtìòn dìàlòg cànnòt bè dìsmìssèd whìlè thè òpèràtìòn ìs ìn flìght.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Bòth èscròw èxpòrt ànd kèy ròtàtìòn rèqùìrè thè Mànàgè kèys pèrmìssìòn. ••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The keys section reports the organization key status and provides two operations on it. **Escrow.** The escrow file carries its own KDF parameters, salt, non..." |
 *
 * @param {Demo_Narrative_Admin_Keys_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_keys_body = /** @type {((inputs?: Demo_Narrative_Admin_Keys_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Keys_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_keys_body = /** @type {((inputs?: Demo_Narrative_Admin_Keys_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Keys_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_keys_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_keys_body(inputs)
 	return en_demo_narrative_admin_keys_body(inputs)
 });

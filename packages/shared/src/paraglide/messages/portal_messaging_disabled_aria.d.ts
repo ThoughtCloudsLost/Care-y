@@ -4,13 +4,13 @@
 * | "The organization has disabled messaging on this channel. You cannot send messages at this time." |
 *
 * @param {Portal_Messaging_Disabled_AriaInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const portal_messaging_disabled_aria: ((inputs?: Portal_Messaging_Disabled_AriaInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Portal_Messaging_Disabled_AriaInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Portal_Messaging_Disabled_AriaInputs = {};

@@ -4,13 +4,13 @@
 * | "Message received from {name} at {time}" |
 *
 * @param {Ticket_Message_Received_FromInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const ticket_message_received_from: ((inputs: Ticket_Message_Received_FromInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Ticket_Message_Received_FromInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Ticket_Message_Received_FromInputs = {

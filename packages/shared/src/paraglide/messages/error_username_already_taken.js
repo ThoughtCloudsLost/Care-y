@@ -13,17 +13,22 @@ const es_error_username_already_taken = /** @type {(inputs: Error_Username_Alrea
 	return /** @type {LocalizedString} */ (`Este usuario de inicio de sesión ya está en uso.`)
 };
 
+const en_xa2_error_username_already_taken = /** @type {(inputs: Error_Username_Already_TakenInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìs lògìn ùsèrnàmè ìs àlrèàdy tàkèn. ••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This login username is already taken." |
 *
 * @param {Error_Username_Already_TakenInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_username_already_taken = /** @type {((inputs?: Error_Username_Already_TakenInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Username_Already_TakenInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_username_already_taken = /** @type {((inputs?: Error_Username_Already_TakenInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Username_Already_TakenInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_username_already_taken(inputs)
+	if (locale === "en-XA") return en_xa2_error_username_already_taken(inputs)
 	return en_error_username_already_taken(inputs)
 });

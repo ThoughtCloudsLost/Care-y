@@ -13,17 +13,22 @@ const es_escalation_rule_updated = /** @type {(inputs: Escalation_Rule_UpdatedIn
 	return /** @type {LocalizedString} */ (`Regla de escalamiento actualizada.`)
 };
 
+const en_xa2_escalation_rule_updated = /** @type {(inputs: Escalation_Rule_UpdatedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èscàlàtìòn rùlè ùpdàtèd. ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Escalation rule updated." |
 *
 * @param {Escalation_Rule_UpdatedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const escalation_rule_updated = /** @type {((inputs?: Escalation_Rule_UpdatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Rule_UpdatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const escalation_rule_updated = /** @type {((inputs?: Escalation_Rule_UpdatedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Escalation_Rule_UpdatedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_escalation_rule_updated(inputs)
+	if (locale === "en-XA") return en_xa2_escalation_rule_updated(inputs)
 	return en_escalation_rule_updated(inputs)
 });

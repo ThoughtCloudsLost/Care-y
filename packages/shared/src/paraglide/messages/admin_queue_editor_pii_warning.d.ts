@@ -4,13 +4,13 @@
 * | "{Queue} names appear in email notifications sent to {volunteers}. Use functional names like \"General Intake\" or \"Evening Line\" rather than names that could i..." |
 *
 * @param {Admin_Queue_Editor_Pii_WarningInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_queue_editor_pii_warning: ((inputs: Admin_Queue_Editor_Pii_WarningInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Queue_Editor_Pii_WarningInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Queue_Editor_Pii_WarningInputs = {

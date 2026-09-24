@@ -13,17 +13,22 @@ const es_form_content_editor_image_no_key = /** @type {(inputs: Form_Content_Edi
 	return /** @type {LocalizedString} */ (`La carga de imágenes requiere que la clave de la organización esté cargada`)
 };
 
+const en_xa2_form_content_editor_image_no_key = /** @type {(inputs: Form_Content_Editor_Image_No_KeyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ìmàgè ùplòàd rèqùìrès thè òrgànìzàtìòn kèy tò bè lòàdèd •••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Image upload requires the organization key to be loaded" |
 *
 * @param {Form_Content_Editor_Image_No_KeyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const form_content_editor_image_no_key = /** @type {((inputs?: Form_Content_Editor_Image_No_KeyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Form_Content_Editor_Image_No_KeyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const form_content_editor_image_no_key = /** @type {((inputs?: Form_Content_Editor_Image_No_KeyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Form_Content_Editor_Image_No_KeyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_form_content_editor_image_no_key(inputs)
+	if (locale === "en-XA") return en_xa2_form_content_editor_image_no_key(inputs)
 	return en_form_content_editor_image_no_key(inputs)
 });

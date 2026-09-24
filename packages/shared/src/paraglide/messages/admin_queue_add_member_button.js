@@ -13,17 +13,22 @@ const es_admin_queue_add_member_button = /** @type {(inputs: Admin_Queue_Add_Mem
 	return /** @type {LocalizedString} */ (`Agregar miembro`)
 };
 
+const en_xa2_admin_queue_add_member_button = /** @type {(inputs: Admin_Queue_Add_Member_ButtonInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àdd mèmbèr •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Add member" |
 *
 * @param {Admin_Queue_Add_Member_ButtonInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_queue_add_member_button = /** @type {((inputs?: Admin_Queue_Add_Member_ButtonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_Add_Member_ButtonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_queue_add_member_button = /** @type {((inputs?: Admin_Queue_Add_Member_ButtonInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Queue_Add_Member_ButtonInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_queue_add_member_button(inputs)
+	if (locale === "en-XA") return en_xa2_admin_queue_add_member_button(inputs)
 	return en_admin_queue_add_member_button(inputs)
 });

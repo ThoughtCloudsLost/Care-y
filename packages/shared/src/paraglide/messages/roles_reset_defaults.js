@@ -13,17 +13,22 @@ const es_roles_reset_defaults = /** @type {(inputs: Roles_Reset_DefaultsInputs) 
 	return /** @type {LocalizedString} */ (`Restablecer valores predeterminados`)
 };
 
+const en_xa2_roles_reset_defaults = /** @type {(inputs: Roles_Reset_DefaultsInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèsèt tò dèfàùlts ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Reset to defaults" |
 *
 * @param {Roles_Reset_DefaultsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const roles_reset_defaults = /** @type {((inputs?: Roles_Reset_DefaultsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_Reset_DefaultsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const roles_reset_defaults = /** @type {((inputs?: Roles_Reset_DefaultsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_Reset_DefaultsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_roles_reset_defaults(inputs)
+	if (locale === "en-XA") return en_xa2_roles_reset_defaults(inputs)
 	return en_roles_reset_defaults(inputs)
 });

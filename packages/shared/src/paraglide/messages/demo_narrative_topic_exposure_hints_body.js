@@ -21,17 +21,26 @@ const es_demo_narrative_topic_exposure_hints_body = /** @type {(inputs: Demo_Nar
 **Correo electrónico.** Los avisos de correo electrónico funcionan de forma diferente a los de SMS y llamada. Componer un correo abre una hoja de composición diferente del campo de mensaje estándar, y como esta superficie es específica del correo lleva un banner de advertencia permanente sobre el editor en lugar de un aviso de una sola vez, ya que la hoja separada señala que el usuario está haciendo algo distinto a enviar un mensaje cifrado.`)
 };
 
+const en_xa2_demo_narrative_topic_exposure_hints_body = /** @type {(inputs: Demo_Narrative_Topic_Exposure_Hints_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Whèn thè ùsèr ìnìtìàtès àn SMS rèply òr à phònè càll fròm à tìckèt, à brìèf nòtìcè àppèàrs rèmìndìng thèm thàt thè chànnèl ìs nòt èncryptèd.
+ •••••••••••••••••••••••••••••••••••••••••••**SMS wàrnìng. ••••** "SMS ìs nòt èncryptèd ànd yòùr phònè pròvìdèr càn rèàd ìt. Kèèp sènsìtìvè dètàìls ìn thè èncryptèd chàt."
+ •••••••••••••••••••••••••••••••••**Càll wàrnìng. ••••** "Thìs càll ròùtès thròùgh yòùr phònè pròvìdèr ànd thèy càn hèàr thè càll. Kèèp sènsìtìvè dètàìls ìn thè èncryptèd chàt."
+ •••••••••••••••••••••••••••••••••••••**Frèqùèncy. •••** Èàch wàrnìng àppèàrs òncè pèr sèssìòn, ànd àftèr thè ùsèr dìsmìssès ìt thè sàmè wàrnìng dòès nòt rèàppèàr ùntìl thè pàgè ìs rèlòàdèd, sò thè wàrnìngs àrè ìnfòrmàtìònàl ànd nèvèr blòck thè àctìòn.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èmàìl. ••** Èmàìl wàrnìngs wòrk dìffèrèntly fròm SMS ànd càll wàrnìngs. Còmpòsìng àn èmàìl òpèns à dìstìnct còmpòsè shèèt ràthèr thàn thè stàndàrd mèssàgè ìnpùt, ànd bècàùsè thìs sùrfàcè ìs spècìfìc tò èmàìl ìt càrrìès à pèrsìstènt wàrnìng bànnèr àbòvè thè èdìtòr ràthèr thàn à ònè tìmè nòtìcè, sìncè thè sèpàràtè shèèt ìtsèlf sìgnàls thè ùsèr ìs dòìng sòmèthìng dìffèrènt fròm sèndìng àn èncryptèd mèssàgè. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "When the user initiates an SMS reply or a phone call from a ticket, a brief notice appears reminding them that the channel is not encrypted. **SMS warning.**..." |
 *
 * @param {Demo_Narrative_Topic_Exposure_Hints_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_exposure_hints_body = /** @type {((inputs?: Demo_Narrative_Topic_Exposure_Hints_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Exposure_Hints_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_exposure_hints_body = /** @type {((inputs?: Demo_Narrative_Topic_Exposure_Hints_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Exposure_Hints_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_exposure_hints_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_exposure_hints_body(inputs)
 	return en_demo_narrative_topic_exposure_hints_body(inputs)
 });

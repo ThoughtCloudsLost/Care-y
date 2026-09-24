@@ -13,17 +13,22 @@ const es_portal_passphrase_hint = /** @type {(inputs: Portal_Passphrase_HintInpu
 	return /** @type {LocalizedString} */ (`Ingresa la frase que te dieron por teléfono.`)
 };
 
+const en_xa2_portal_passphrase_hint = /** @type {(inputs: Portal_Passphrase_HintInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èntèr thè pàssphràsè yòù wèrè gìvèn òn thè phònè. •••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Enter the passphrase you were given on the phone." |
 *
 * @param {Portal_Passphrase_HintInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const portal_passphrase_hint = /** @type {((inputs?: Portal_Passphrase_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const portal_passphrase_hint = /** @type {((inputs?: Portal_Passphrase_HintInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_HintInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_portal_passphrase_hint(inputs)
+	if (locale === "en-XA") return en_xa2_portal_passphrase_hint(inputs)
 	return en_portal_passphrase_hint(inputs)
 });

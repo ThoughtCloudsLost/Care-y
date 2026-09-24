@@ -5,6 +5,7 @@ import {
   adminUpdateDisplayNameSchema,
   updateUsernameSchema,
   adminUpdateUsernameSchema,
+  updatePreferredLocaleSchema,
   changePasswordSchema,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
@@ -57,6 +58,19 @@ export function createProfileRouter(deps: ProfileRouterDeps) {
         return { success: true as const };
       }),
     ),
+
+    updatePreferredLocale: authedProcedure
+      .input(updatePreferredLocaleSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const authService = getAuthService(ctx.org, deps);
+          await authService.updatePreferredLocale(
+            ctx.session.userId,
+            Buffer.from(input.encryptedPreferredLocale, "base64"),
+          );
+          return { success: true as const };
+        }),
+      ),
 
     adminUpdateDisplayName: manageUsersProcedure
       .input(adminUpdateDisplayNameSchema)

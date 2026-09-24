@@ -13,17 +13,22 @@ const es_tickets_action_call = /** @type {(inputs: Tickets_Action_CallInputs) =>
 	return /** @type {LocalizedString} */ (`Llamar`)
 };
 
+const en_xa2_tickets_action_call = /** @type {(inputs: Tickets_Action_CallInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Càll ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Call" |
 *
 * @param {Tickets_Action_CallInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const tickets_action_call = /** @type {((inputs?: Tickets_Action_CallInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Action_CallInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const tickets_action_call = /** @type {((inputs?: Tickets_Action_CallInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Action_CallInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_tickets_action_call(inputs)
+	if (locale === "en-XA") return en_xa2_tickets_action_call(inputs)
 	return en_tickets_action_call(inputs)
 });

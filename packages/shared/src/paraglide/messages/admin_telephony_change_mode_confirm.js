@@ -13,17 +13,22 @@ const es_admin_telephony_change_mode_confirm = /** @type {(inputs: Admin_Telepho
 	return /** @type {LocalizedString} */ (`Continuar`)
 };
 
+const en_xa2_admin_telephony_change_mode_confirm = /** @type {(inputs: Admin_Telephony_Change_Mode_ConfirmInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Còntìnùè •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Continue" |
 *
 * @param {Admin_Telephony_Change_Mode_ConfirmInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_telephony_change_mode_confirm = /** @type {((inputs?: Admin_Telephony_Change_Mode_ConfirmInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Change_Mode_ConfirmInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_telephony_change_mode_confirm = /** @type {((inputs?: Admin_Telephony_Change_Mode_ConfirmInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Change_Mode_ConfirmInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_telephony_change_mode_confirm(inputs)
+	if (locale === "en-XA") return en_xa2_admin_telephony_change_mode_confirm(inputs)
 	return en_admin_telephony_change_mode_confirm(inputs)
 });

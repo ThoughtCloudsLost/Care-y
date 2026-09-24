@@ -13,17 +13,22 @@ const es_share_sms_body = /** @type {(inputs: Share_Sms_BodyInputs) => Localized
 	return /** @type {LocalizedString} */ (`Tienes un mensaje seguro: ${i?.url}`)
 };
 
+const en_xa2_share_sms_body = /** @type {(inputs: Share_Sms_BodyInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Yòù hàvè à sècùrè mèssàgè:  •••••••••${i?.url}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "You have a secure message: {url}" |
 *
 * @param {Share_Sms_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const share_sms_body = /** @type {((inputs: Share_Sms_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Sms_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const share_sms_body = /** @type {((inputs: Share_Sms_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Sms_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_share_sms_body(inputs)
+	if (locale === "en-XA") return en_xa2_share_sms_body(inputs)
 	return en_share_sms_body(inputs)
 });

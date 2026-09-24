@@ -13,17 +13,22 @@ const es_intake_page_back = /** @type {(inputs: Intake_Page_BackInputs) => Local
 	return /** @type {LocalizedString} */ (`Atrás`)
 };
 
+const en_xa2_intake_page_back = /** @type {(inputs: Intake_Page_BackInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Bàck ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Back" |
 *
 * @param {Intake_Page_BackInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_page_back = /** @type {((inputs?: Intake_Page_BackInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Page_BackInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_page_back = /** @type {((inputs?: Intake_Page_BackInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Page_BackInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_page_back(inputs)
+	if (locale === "en-XA") return en_xa2_intake_page_back(inputs)
 	return en_intake_page_back(inputs)
 });

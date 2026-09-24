@@ -4,13 +4,13 @@
 * | "Urgent" |
 *
 * @param {Ticket_New_Priority_UrgentInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const ticket_new_priority_urgent: ((inputs?: Ticket_New_Priority_UrgentInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Ticket_New_Priority_UrgentInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Ticket_New_Priority_UrgentInputs = {};

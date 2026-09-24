@@ -4,13 +4,13 @@
 * | "{count} {tickets}" |
 *
 * @param {Clients_Ticket_Count_OtherInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const clients_ticket_count_other: ((inputs: Clients_Ticket_Count_OtherInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Clients_Ticket_Count_OtherInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Clients_Ticket_Count_OtherInputs = {

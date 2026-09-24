@@ -13,17 +13,22 @@ const es_onboarding_briefing_practice_org_access = /** @type {(inputs: Onboardin
 	return /** @type {LocalizedString} */ (`Cualquier voluntario autenticado en tu organización`)
 };
 
+const en_xa2_onboarding_briefing_practice_org_access = /** @type {(inputs: Onboarding_Briefing_Practice_Org_AccessInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àny lòggèd-ìn vòlùntèèr ìn yòùr òrg •••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Any logged-in volunteer in your org" |
 *
 * @param {Onboarding_Briefing_Practice_Org_AccessInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_briefing_practice_org_access = /** @type {((inputs?: Onboarding_Briefing_Practice_Org_AccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Practice_Org_AccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_briefing_practice_org_access = /** @type {((inputs?: Onboarding_Briefing_Practice_Org_AccessInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Practice_Org_AccessInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_briefing_practice_org_access(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_briefing_practice_org_access(inputs)
 	return en_onboarding_briefing_practice_org_access(inputs)
 });

@@ -13,17 +13,22 @@ const es_intake_avail_error_past_date = /** @type {(inputs: Intake_Avail_Error_P
 	return /** @type {LocalizedString} */ (`La fecha no puede ser en el pasado.`)
 };
 
+const en_xa2_intake_avail_error_past_date = /** @type {(inputs: Intake_Avail_Error_Past_DateInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Dàtè cànnòt bè ìn thè pàst. •••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Date cannot be in the past." |
 *
 * @param {Intake_Avail_Error_Past_DateInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_avail_error_past_date = /** @type {((inputs?: Intake_Avail_Error_Past_DateInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Error_Past_DateInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_avail_error_past_date = /** @type {((inputs?: Intake_Avail_Error_Past_DateInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Error_Past_DateInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_avail_error_past_date(inputs)
+	if (locale === "en-XA") return en_xa2_intake_avail_error_past_date(inputs)
 	return en_intake_avail_error_past_date(inputs)
 });

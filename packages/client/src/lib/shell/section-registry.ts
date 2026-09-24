@@ -17,6 +17,7 @@
 import type { QueryClient } from "@tanstack/svelte-query";
 import type { ScrollSection } from "$lib/components/useSectionScroll.svelte.js";
 import { Permission } from "@care-y/shared";
+import { canCall } from "$lib/auth/procedure-gates.js";
 import { buildAdminHubSections } from "$lib/admin/destinations.js";
 import {
   CalendarDays,
@@ -209,7 +210,7 @@ function getDashboardFlagsFromCache(
   queryClient: QueryClient,
 ): DashboardSectionFlags {
   let showGettingStarted = false;
-  if (permissions.has(Permission.MANAGE_ROLES)) {
+  if (canCall(permissions, "dashboard.getSetupChecklist")) {
     const checklistData = queryClient.getQueryData<{
       dismissed: boolean;
       items: readonly unknown[];
@@ -221,7 +222,7 @@ function getDashboardFlagsFromCache(
   }
 
   let showMergeCandidates = false;
-  if (permissions.has(Permission.VIEW_CLIENTS)) {
+  if (canCall(permissions, "clients.mergeScanData")) {
     const ticketData = queryClient.getQueryData(
       ticketsKeys.list({ statuses: ["open"] }),
     );

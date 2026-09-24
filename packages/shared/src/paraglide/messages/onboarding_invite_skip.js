@@ -13,17 +13,22 @@ const es_onboarding_invite_skip = /** @type {(inputs: Onboarding_Invite_SkipInpu
 	return /** @type {LocalizedString} */ (`Invitaré ${i?.volunteers} después`)
 };
 
+const en_xa2_onboarding_invite_skip = /** @type {(inputs: Onboarding_Invite_SkipInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Ì'll ìnvìtè  ••••${i?.volunteers} làtèr ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "I'll invite {volunteers} later" |
 *
 * @param {Onboarding_Invite_SkipInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_invite_skip = /** @type {((inputs: Onboarding_Invite_SkipInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Invite_SkipInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const onboarding_invite_skip = /** @type {((inputs: Onboarding_Invite_SkipInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Invite_SkipInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_invite_skip(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_invite_skip(inputs)
 	return en_onboarding_invite_skip(inputs)
 });

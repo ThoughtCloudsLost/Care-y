@@ -4,13 +4,13 @@
 * | "+1 (555) 000-0000" |
 *
 * @param {Twofa_Sms_Phone_PlaceholderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const twofa_sms_phone_placeholder: ((inputs?: Twofa_Sms_Phone_PlaceholderInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Twofa_Sms_Phone_PlaceholderInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Twofa_Sms_Phone_PlaceholderInputs = {};

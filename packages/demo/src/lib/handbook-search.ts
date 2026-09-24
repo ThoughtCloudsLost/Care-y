@@ -1,6 +1,6 @@
 /**
- * Full-text handbook search: normalization, index construction, and
- * ranked entry-level search across the demo handbook corpus.
+ * Full-text handbook search. Normalizes the corpus, builds the index,
+ * and runs ranked entry-level search across the demo handbook.
  *
  * Results are whole sub-entries (heading + body), not line fragments:
  * the search surface renders matches exactly as the handbook renders
@@ -151,7 +151,7 @@ interface EntryBucket {
  *
  * With `labels` set, only entries carrying one of those labels are
  * eligible. With an empty query and `labels` set, all such entries
- * return in taxonomy order (no text scoring) — the aggregation pages'
+ * return in taxonomy order (no text scoring); the aggregation pages'
  * query mode.
  *
  * Corpus lines without a sub (section titles and descriptions) are

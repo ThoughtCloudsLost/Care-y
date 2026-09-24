@@ -19,17 +19,25 @@ const es_demo_narrative_admin_people_body = /** @type {(inputs: Demo_Narrative_A
 **Permisos.** Ver y gestionar el directorio requiere el permiso Gestionar usuarios.`)
 };
 
+const en_xa2_demo_narrative_admin_people_body = /** @type {(inputs: Demo_Narrative_Admin_People_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè ròstèr shòws èvèry ùsèr ìn thè òrgànìzàtìòn wìth thèìr ròlè ànd àssìgnèd qùèùès.
+ ••••••••••••••••••••••••••**Ròlè mànàgèmènt. •••••** Èàch ùsèr hòlds ònè òf thrèè ròlès. Thè fìrst twò ròlè nàmès àrè dèfàùlts thè òrgànìzàtìòn càn rènàmè ìn tèrmìnòlògy sèttìngs, whìlè thè àdmìnìstràtòr nàmè ìs fìxèd. Thè ròlè dètèrmìnès whìch pèrmìssìòns àrè gràntèd by dèfàùlt, ànd thòsè dèfàùlts àrè àdjùstàblè pèr ròlè ìn thè pèrmìssìòn màtrìx.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Ìnvìtàtìòns. ••••** Nèw ùsèrs àrè ìnvìtèd èìthèr by gènèràtìng àn ìnvìtè lìnk òr by crèàtìng thè àccòùnt mànùàlly, ànd à pèndìng ìnvìtàtìòn càn bè rèvòkèd bèfòrè ìt ìs àccèptèd. Thè ìnvìtèd pèrsòn còmplètès ònbòàrdìng ànd kèy gènèràtìòn òn thèìr òwn dèvìcè.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Vìèwìng ànd mànàgìng thè ròstèr rèqùìrès thè Mànàgè ùsèrs pèrmìssìòn. •••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The roster shows every user in the organization with their role and assigned queues. **Role management.** Each user holds one of three roles. The first two r..." |
 *
 * @param {Demo_Narrative_Admin_People_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_people_body = /** @type {((inputs?: Demo_Narrative_Admin_People_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_People_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_people_body = /** @type {((inputs?: Demo_Narrative_Admin_People_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_People_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_people_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_people_body(inputs)
 	return en_demo_narrative_admin_people_body(inputs)
 });

@@ -4,13 +4,13 @@
 * | "{count} active" |
 *
 * @param {Admin_Hub_Badge_ActiveInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_hub_badge_active: ((inputs: Admin_Hub_Badge_ActiveInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Hub_Badge_ActiveInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Hub_Badge_ActiveInputs = {

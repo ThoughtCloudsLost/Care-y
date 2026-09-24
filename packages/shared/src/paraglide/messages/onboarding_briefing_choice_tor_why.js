@@ -13,17 +13,22 @@ const es_onboarding_briefing_choice_tor_why = /** @type {(inputs: Onboarding_Bri
 	return /** @type {LocalizedString} */ (`Sin Tor, tu proveedor de internet (y cualquiera que acceda a sus registros) puede ver que alguien visito tu sitio CARE-Y. Cada conexión incluye una dirección IP, que revela la ubicación fisica del usuario. No pueden leer el contenido cifrado, pero la conexión misma revela la participación y el paradero.`)
 };
 
+const en_xa2_onboarding_briefing_choice_tor_why = /** @type {(inputs: Onboarding_Briefing_Choice_Tor_WhyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Wìthòùt Tòr, yòùr ìntèrnèt pròvìdèr (ànd ànyònè whò càn àccèss thèìr rècòrds) càn sèè thàt sòmèònè vìsìtèd yòùr CÀRÈ-Y sìtè. Èvèry cònnèctìòn ìnclùdès àn ÌP àddrèss, whìch rèvèàls thè ùsèr's physìcàl lòcàtìòn. Thèy cànnòt rèàd thè èncryptèd còntènt, bùt thè cònnèctìòn ìtsèlf rèvèàls ìnvòlvèmènt ànd whèrèàbòùts. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Without Tor, your internet provider (and anyone who can access their records) can see that someone visited your CARE-Y site. Every connection includes an IP ..." |
 *
 * @param {Onboarding_Briefing_Choice_Tor_WhyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_briefing_choice_tor_why = /** @type {((inputs?: Onboarding_Briefing_Choice_Tor_WhyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Choice_Tor_WhyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_briefing_choice_tor_why = /** @type {((inputs?: Onboarding_Briefing_Choice_Tor_WhyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Choice_Tor_WhyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_briefing_choice_tor_why(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_briefing_choice_tor_why(inputs)
 	return en_onboarding_briefing_choice_tor_why(inputs)
 });

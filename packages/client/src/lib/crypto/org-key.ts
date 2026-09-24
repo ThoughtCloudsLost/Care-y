@@ -19,6 +19,7 @@ import { decode, encode } from "@care-y/crypto";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 
 const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
 
 /** Thrown when operations are called before the org key has been loaded. */
 export class OrgKeyNotLoadedError extends Error {
@@ -74,6 +75,13 @@ export class OrgKeyManager {
   async encryptText(plaintext: string): Promise<string> {
     const cipherBytes = await this.encrypt(textEncoder.encode(plaintext));
     return encode(cipherBytes);
+  }
+
+  /** Decrypt base64 ciphertext and return the UTF-8 plaintext string. */
+  async decryptText(ciphertextBase64: string): Promise<string> {
+    const cipherBytes = decode(ciphertextBase64);
+    const plainBytes = await this.decrypt(cipherBytes);
+    return textDecoder.decode(plainBytes);
   }
 
   /**

@@ -565,7 +565,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(result.user.roleId).toBe(RoleId.ADMIN);
       });
 
-      it("volunteer cannot register a user with admin role", async () => {
+      it("volunteer cannot register a user (lacks MANAGE_USERS)", async () => {
         const uid = randomUUID().slice(0, 8);
         const volunteer = await registerUser(
           `vol-reg-${uid}`,
@@ -586,15 +586,30 @@ describe.skipIf(!process.env.DATABASE_URL)(
         );
       });
 
-      it("any authenticated user can register a user with default (volunteer) role", async () => {
+      it("manager cannot register a user (lacks MANAGE_USERS)", async () => {
         const uid = randomUUID().slice(0, 8);
-        const volunteer = await registerUser(
-          `vol-reg-default-${uid}`,
-          RoleId.VOLUNTEER,
-        );
+        const manager = await registerUser(`mgr-reg-${uid}`, RoleId.MANAGER);
         const caller = buildCaller(
-          authed2faCtx(volunteer, makeSession(volunteer.id)),
+          authed2faCtx(manager, makeSession(manager.id)),
         );
+
+        await expectTrpcError(
+          caller.auth.register({
+            identifier: `new-vol-by-mgr-${uid}`,
+            password: "a-secure-password-16chars",
+            displayName: "New Volunteer",
+          }),
+          "FORBIDDEN",
+        );
+      });
+
+      it("admin can register a user with default (volunteer) role", async () => {
+        const uid = randomUUID().slice(0, 8);
+        const admin = await registerUser(
+          `admin-reg-default-${uid}`,
+          RoleId.ADMIN,
+        );
+        const caller = buildCaller(authed2faCtx(admin, makeSession(admin.id)));
 
         const result = await caller.auth.register({
           identifier: `new-vol-${uid}`,

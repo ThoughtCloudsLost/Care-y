@@ -19,17 +19,25 @@ const es_demo_narrative_settings_notifications_body = /** @type {(inputs: Demo_N
 **Valores predeterminados.** Los usuarios nuevos no tienen preferencias almacenadas, así que todas las notificaciones comienzan habilitadas hasta que las modifiquen.`)
 };
 
+const en_xa2_demo_narrative_settings_notifications_body = /** @type {(inputs: Demo_Narrative_Settings_Notifications_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè nòtìfìcàtìòn prèfèrèncès lèt thè ùsèr còntròl whìch èvènts pròdùcè nòtìfìcàtìòns ànd thròùgh whìch chànnèls, wìth èàch còmbìnàtìòn tògglèd ìndèpèndèntly ànd chàngès tàkìng èffèct ìmmèdìàtèly wìthòùt àffèctìng òthèr ùsèrs.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Qùèùè òvèrrìdès. •••••** À còllàpsìblè sèctìòn pèr qùèùè lèts thè ùsèr òvèrrìdè thè glòbàl sèttìng fòr spècìfìc qùèùès, ànd à qùèùè òvèrrìdè tàkès prìòrìty òvèr thè màtchìng glòbàl prèfèrèncè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••**Rèsèt. ••** À rèsèt bùttòn dèlètès àll cùstòm prèfèrèncès àftèr à cònfìrmàtìòn dìàlòg, whìch rètùrns èvèry nòtìfìcàtìòn tò ìts ènàblèd dèfàùlt.
+ ••••••••••••••••••••••••••••••••••••••••**Dèfàùlts. •••** Nèw ùsèrs hàvè nò stòrèd prèfèrèncès, sò èvèry nòtìfìcàtìòn stàrts ènàblèd ùntìl thèy chàngè ìt. ••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The notification preferences let the user control which events produce notifications and through which channels, with each combination toggled independently ..." |
 *
 * @param {Demo_Narrative_Settings_Notifications_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_settings_notifications_body = /** @type {((inputs?: Demo_Narrative_Settings_Notifications_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Settings_Notifications_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_settings_notifications_body = /** @type {((inputs?: Demo_Narrative_Settings_Notifications_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Settings_Notifications_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_settings_notifications_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_settings_notifications_body(inputs)
 	return en_demo_narrative_settings_notifications_body(inputs)
 });

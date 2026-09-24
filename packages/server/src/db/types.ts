@@ -53,6 +53,7 @@ import type {
   RecordingId,
   AttachmentId,
   PresetReplyId,
+  SavedFilterId,
   ClientMergeEventId,
   KbCategoryId,
   KbItemId,
@@ -567,6 +568,17 @@ export interface PresetRepliesTable {
   created_at: Generated<Date>;
 }
 
+export interface SavedFiltersTable {
+  id: Generated<SavedFilterId>;
+  owner_id: UserId;
+  encrypted_name: Buffer;
+  encrypted_state: Buffer;
+  color: string;
+  icon: string;
+  org_key_generation: Generated<number>;
+  created_at: Generated<Date>;
+}
+
 export interface ClientMergeEventsTable {
   id: Generated<ClientMergeEventId>;
   primary_client_id: ClientId;
@@ -1066,6 +1078,7 @@ export interface TenantDatabase {
   attachments: AttachmentsTable;
   ticket_dependencies: TicketDependenciesTable;
   preset_replies: PresetRepliesTable;
+  saved_filters: SavedFiltersTable;
   client_merge_events: ClientMergeEventsTable;
   // Knowledge Base
   kb_categories: KBCategoriesTable;

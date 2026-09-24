@@ -13,17 +13,22 @@ const es_demo_role_manager_initial = /** @type {(inputs: Demo_Role_Manager_Initi
 	return /** @type {LocalizedString} */ (`R`)
 };
 
+const en_xa2_demo_role_manager_initial = /** @type {(inputs: Demo_Role_Manager_InitialInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦M •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "M" |
 *
 * @param {Demo_Role_Manager_InitialInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_role_manager_initial = /** @type {((inputs?: Demo_Role_Manager_InitialInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Role_Manager_InitialInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_role_manager_initial = /** @type {((inputs?: Demo_Role_Manager_InitialInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Role_Manager_InitialInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_role_manager_initial(inputs)
+	if (locale === "en-XA") return en_xa2_demo_role_manager_initial(inputs)
 	return en_demo_role_manager_initial(inputs)
 });

@@ -152,6 +152,7 @@ import { registerNotificationSmsHandler } from "./jobs/notification-sms.js";
 import { createNotificationPreferencesService } from "./notifications/preferences.js";
 import { createSearchService } from "./tickets/search.js";
 import { createAuditService } from "./tickets/audit.js";
+import { createOffboardingService } from "./crypto/offboarding.js";
 import {
   createKBCategoryService,
   createKBItemService,
@@ -181,6 +182,11 @@ import {
   DEFAULT_ESCALATION_RULES_INTERVAL_MS,
 } from "./jobs/escalation-checker.js";
 import { ensureRecurringJob } from "./jobs/ensure-recurring.js";
+import {
+  registerPiiRetentionHandler,
+  PII_RETENTION_QUEUE,
+  purgeClient,
+} from "./jobs/pii-retention.js";
 import {
   registerOutboxDrainHandler,
   OUTBOX_DRAIN_QUEUE,
@@ -615,6 +621,7 @@ const appRouter = createAppRouter({
     resolveCallerId: phoneResolver,
     totpReplayCache,
     createAuditSvc: (tDb) => createAuditService(tDb),
+    createOffboardingSvc: (tDb) => createOffboardingService(tDb),
   },
   profileDeps: {
     hasher,
@@ -645,6 +652,7 @@ const appRouter = createAppRouter({
   // full set of mounted routers is readable from this one call.
   consultant: true,
   reports: true,
+  savedFilters: true,
   telephonyAdminDeps: {
     configService: telephonyConfigService,
     webhookBaseUrl: env.WEBHOOK_BASE_URL,
@@ -840,6 +848,27 @@ const appRouter = createAppRouter({
     },
     createDismissalSvc: (tDb) => createDismissalService(tDb),
     createMergeScanSvc: (tDb) => createMergeScanService(tDb),
+    async purgeClientAndAudit(tDb, clientId, orgId, actorId) {
+      const result = await tDb
+        .transaction()
+        .execute(async (trx) =>
+          purgeClient(trx, clientId, blobStore, jobQueue, orgId),
+        );
+      const auditSvc = createAuditService(tDb);
+      void auditSvc.log({
+        eventType: "client_deleted",
+        actorId,
+        metadata: {
+          ticketsPurged: result.ticketsPurged,
+          blobsDeleted: result.blobsDeleted,
+          logDeletionsEnqueued: result.logDeletionsEnqueued,
+        },
+      });
+      return {
+        ticketsPurged: result.ticketsPurged,
+        blobsDeleted: result.blobsDeleted,
+      };
+    },
   },
   devDeps: env.NODE_ENV !== "production" ? { blobStore } : null,
 });
@@ -965,6 +994,11 @@ registerPortalExpiryHandler(jobQueue, async () => {
 
 registerShareCleanupHandler(jobQueue, tenantDb, listActiveOrgSchemas);
 
+registerPiiRetentionHandler(jobQueue, tenantDb, blobStore, async () => {
+  const orgs = await listActiveOrgSchemasWithSlugs();
+  return orgs.map((o) => ({ id: o.id, schema: o.schema }));
+});
+
 // Notification outbox drain: polls tenant outbox tables for durable
 // intake notification dispatch (~5 second interval).
 registerOutboxDrainHandler(jobQueue, {
@@ -1000,6 +1034,7 @@ await ensureRecurringJob(db, jobQueue, MEDIA_CLEANUP_QUEUE);
 await ensureRecurringJob(db, jobQueue, PORTAL_EXPIRY_QUEUE);
 await ensureRecurringJob(db, jobQueue, SHARE_CLEANUP_QUEUE);
 await ensureRecurringJob(db, jobQueue, OUTBOX_DRAIN_QUEUE);
+await ensureRecurringJob(db, jobQueue, PII_RETENTION_QUEUE);
 jobQueue.start();
 console.log("Job queue started");
 
@@ -1014,6 +1049,7 @@ const webhookDispatch = createWebhookDispatch({
   tenantDb,
   providerFactory,
   indexer,
+  fieldEncryptor: encryptor,
   blobStore,
   jobQueue,
   webhookBaseUrl: env.WEBHOOK_BASE_URL,

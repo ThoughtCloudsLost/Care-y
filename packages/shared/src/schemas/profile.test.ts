@@ -5,6 +5,7 @@ import {
   updateUsernameSchema,
   adminUpdateUsernameSchema,
   updatePasswordHashSchema,
+  updatePreferredLocaleSchema,
 } from "./profile.js";
 
 describe("updateDisplayNameSchema", () => {
@@ -148,5 +149,26 @@ describe("updatePasswordHashSchema", () => {
         currentPassword: "old-password-16chars!",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("updatePreferredLocaleSchema", () => {
+  it("accepts a non-empty ciphertext string", () => {
+    const result = updatePreferredLocaleSchema.safeParse({
+      encryptedPreferredLocale: "ZW4=",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects empty encryptedPreferredLocale", () => {
+    const result = updatePreferredLocaleSchema.safeParse({
+      encryptedPreferredLocale: "",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing encryptedPreferredLocale", () => {
+    const result = updatePreferredLocaleSchema.safeParse({});
+    expect(result.success).toBe(false);
   });
 });

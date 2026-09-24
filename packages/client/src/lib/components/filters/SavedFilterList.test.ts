@@ -109,6 +109,7 @@ describe("SavedFilterList", () => {
       onapply: vi.fn(),
       ondelete: vi.fn(),
       ontoggleshare: vi.fn(),
+      currentUserId: "user-1",
     });
     const list = screen.getByRole("list", { name: "Apply saved filter" });
     expect(list).toBeTruthy();
@@ -124,6 +125,7 @@ describe("SavedFilterList", () => {
       onapply: vi.fn(),
       ondelete: vi.fn(),
       ontoggleshare: vi.fn(),
+      currentUserId: "user-1",
     });
     const chips = screen.getAllByText("My Housing Filter");
     expect(chips.length).toBeGreaterThanOrEqual(1);
@@ -136,6 +138,7 @@ describe("SavedFilterList", () => {
       onapply: vi.fn(),
       ondelete: vi.fn(),
       ontoggleshare: vi.fn(),
+      currentUserId: "user-1",
     });
     const buttons = screen.getAllByRole("button", {
       name: "My Housing Filter",
@@ -151,6 +154,7 @@ describe("SavedFilterList", () => {
       onapply,
       ondelete: vi.fn(),
       ontoggleshare: vi.fn(),
+      currentUserId: "user-1",
     });
     const buttons = screen.getAllByRole("button", {
       name: "My Housing Filter",
@@ -172,6 +176,7 @@ describe("SavedFilterList", () => {
       onapply: vi.fn(),
       ondelete: vi.fn(),
       ontoggleshare: vi.fn(),
+      currentUserId: "user-1",
     });
     const list = screen.queryByRole("list");
     expect(list).toBeNull();

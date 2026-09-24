@@ -13,17 +13,22 @@ const es_admin_keys_explainer = /** @type {(inputs: Admin_Keys_ExplainerInputs) 
 	return /** @type {LocalizedString} */ (`La clave de tu organización cifra los datos compartidos: nombres de voluntarios, artículos de la base de conocimiento, nombres de colas y marca. Las conversaciones de tickets y la información de clientes usan claves separadas por ticket.`)
 };
 
+const en_xa2_admin_keys_explainer = /** @type {(inputs: Admin_Keys_ExplainerInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Yòùr òrgànìzàtìòn kèy èncrypts shàrèd dàtà: vòlùntèèr nàmès, knòwlèdgè bàsè àrtìclès, qùèùè nàmès, ànd bràndìng. Tìckèt cònvèrsàtìòns ànd clìènt ìnfòrmàtìòn ùsè sèpàràtè pèr tìckèt kèys. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Your organization key encrypts shared data: volunteer names, knowledge base articles, queue names, and branding. Ticket conversations and client information ..." |
 *
 * @param {Admin_Keys_ExplainerInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_keys_explainer = /** @type {((inputs?: Admin_Keys_ExplainerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Keys_ExplainerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_keys_explainer = /** @type {((inputs?: Admin_Keys_ExplainerInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Keys_ExplainerInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_keys_explainer(inputs)
+	if (locale === "en-XA") return en_xa2_admin_keys_explainer(inputs)
 	return en_admin_keys_explainer(inputs)
 });

@@ -13,17 +13,22 @@ const es_getting_started_heading = /** @type {(inputs: Getting_Started_HeadingIn
 	return /** @type {LocalizedString} */ (`Primeros pasos`)
 };
 
+const en_xa2_getting_started_heading = /** @type {(inputs: Getting_Started_HeadingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Gèttìng Stàrtèd •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Getting Started" |
 *
 * @param {Getting_Started_HeadingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const getting_started_heading = /** @type {((inputs?: Getting_Started_HeadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Getting_Started_HeadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const getting_started_heading = /** @type {((inputs?: Getting_Started_HeadingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Getting_Started_HeadingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_getting_started_heading(inputs)
+	if (locale === "en-XA") return en_xa2_getting_started_heading(inputs)
 	return en_getting_started_heading(inputs)
 });

@@ -1107,6 +1107,51 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
     });
   });
 
+  // --- updatePreferredLocale ---
+
+  describe("updatePreferredLocale", () => {
+    it("throws NotFoundError for inactive user", async () => {
+      const user = await service.register({
+        identifier: "locale-inactive",
+        password: "supersecretpasswd1",
+        displayName: "Locale Inactive",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      // Deactivate
+      const actor = await service.register({
+        identifier: "actor-locale-deact",
+        password: "supersecretpasswd1",
+        displayName: "Actor",
+        roleId: RoleId.ADMIN,
+      });
+      await service.setUserActive(actor.id, user.id, false);
+
+      await expect(
+        service.updatePreferredLocale(user.id, Buffer.from("en")),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it("updates the locale for an active user", async () => {
+      const user = await service.register({
+        identifier: "locale-active",
+        password: "supersecretpasswd1",
+        displayName: "Locale Active",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      await service.updatePreferredLocale(user.id, Buffer.from("es-sealed"));
+
+      const row = await testDb.db
+        .selectFrom("users")
+        .select("encrypted_preferred_locale")
+        .where("id", "=", user.id)
+        .executeTakeFirstOrThrow();
+
+      expect(row.encrypted_preferred_locale?.toString()).toBe("es-sealed");
+    });
+  });
+
   // --- validateSession with deactivated user (line 412) ---
 
   describe("validateSession deactivated user", () => {

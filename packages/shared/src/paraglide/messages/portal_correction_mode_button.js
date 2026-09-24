@@ -13,17 +13,22 @@ const es_portal_correction_mode_button = /** @type {(inputs: Portal_Correction_M
 	return /** @type {LocalizedString} */ (`Corregir mi información de contacto`)
 };
 
+const en_xa2_portal_correction_mode_button = /** @type {(inputs: Portal_Correction_Mode_ButtonInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Còrrèct my còntàct ìnfò •••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Correct my contact info" |
 *
 * @param {Portal_Correction_Mode_ButtonInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const portal_correction_mode_button = /** @type {((inputs?: Portal_Correction_Mode_ButtonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Correction_Mode_ButtonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const portal_correction_mode_button = /** @type {((inputs?: Portal_Correction_Mode_ButtonInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Correction_Mode_ButtonInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_portal_correction_mode_button(inputs)
+	if (locale === "en-XA") return en_xa2_portal_correction_mode_button(inputs)
 	return en_portal_correction_mode_button(inputs)
 });

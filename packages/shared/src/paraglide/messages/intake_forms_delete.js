@@ -13,17 +13,22 @@ const es_intake_forms_delete = /** @type {(inputs: Intake_Forms_DeleteInputs) =>
 	return /** @type {LocalizedString} */ (`Eliminar formulario`)
 };
 
+const en_xa2_intake_forms_delete = /** @type {(inputs: Intake_Forms_DeleteInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Dèlètè fòrm ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Delete form" |
 *
 * @param {Intake_Forms_DeleteInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_delete = /** @type {((inputs?: Intake_Forms_DeleteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_DeleteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_delete = /** @type {((inputs?: Intake_Forms_DeleteInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_DeleteInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_delete(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_delete(inputs)
 	return en_intake_forms_delete(inputs)
 });

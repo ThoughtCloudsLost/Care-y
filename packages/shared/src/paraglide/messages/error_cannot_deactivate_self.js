@@ -13,17 +13,22 @@ const es_error_cannot_deactivate_self = /** @type {(inputs: Error_Cannot_Deactiv
 	return /** @type {LocalizedString} */ (`No puedes desactivar tu propia cuenta.`)
 };
 
+const en_xa2_error_cannot_deactivate_self = /** @type {(inputs: Error_Cannot_Deactivate_SelfInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Yòù cànnòt dèàctìvàtè yòùr òwn àccòùnt. ••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "You cannot deactivate your own account." |
 *
 * @param {Error_Cannot_Deactivate_SelfInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_cannot_deactivate_self = /** @type {((inputs?: Error_Cannot_Deactivate_SelfInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Cannot_Deactivate_SelfInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_cannot_deactivate_self = /** @type {((inputs?: Error_Cannot_Deactivate_SelfInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Cannot_Deactivate_SelfInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_cannot_deactivate_self(inputs)
+	if (locale === "en-XA") return en_xa2_error_cannot_deactivate_self(inputs)
 	return en_error_cannot_deactivate_self(inputs)
 });

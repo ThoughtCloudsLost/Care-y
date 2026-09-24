@@ -4,13 +4,13 @@
 * | "This shade sits close to the ochre {volunteers} see on high-priority {tickets}. The suggested shade keeps your identity and their signal apart." |
 *
 * @param {Branding_Color_Near_CareInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const branding_color_near_care: ((inputs: Branding_Color_Near_CareInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Branding_Color_Near_CareInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Branding_Color_Near_CareInputs = {

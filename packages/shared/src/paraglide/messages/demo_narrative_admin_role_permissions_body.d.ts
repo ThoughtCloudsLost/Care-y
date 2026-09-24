@@ -4,13 +4,13 @@
 * | "The permission matrix on the people page shows which capabilities each role grants, with fifty permissions arranged across eight capability groups. **Capabil..." |
 *
 * @param {Demo_Narrative_Admin_Role_Permissions_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const demo_narrative_admin_role_permissions_body: ((inputs?: Demo_Narrative_Admin_Role_Permissions_BodyInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Narrative_Admin_Role_Permissions_BodyInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Demo_Narrative_Admin_Role_Permissions_BodyInputs = {};

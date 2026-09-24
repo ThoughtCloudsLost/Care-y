@@ -13,17 +13,22 @@ const es_share_sheet_too_long = /** @type {(inputs: Share_Sheet_Too_LongInputs) 
 	return /** @type {LocalizedString} */ (`Este mensaje es demasiado largo para enviarlo como enlace seguro.`)
 };
 
+const en_xa2_share_sheet_too_long = /** @type {(inputs: Share_Sheet_Too_LongInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìs mèssàgè ìs tòò lòng tò sènd às à sècùrè lìnk. •••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This message is too long to send as a secure link." |
 *
 * @param {Share_Sheet_Too_LongInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const share_sheet_too_long = /** @type {((inputs?: Share_Sheet_Too_LongInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Sheet_Too_LongInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const share_sheet_too_long = /** @type {((inputs?: Share_Sheet_Too_LongInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Sheet_Too_LongInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_share_sheet_too_long(inputs)
+	if (locale === "en-XA") return en_xa2_share_sheet_too_long(inputs)
 	return en_share_sheet_too_long(inputs)
 });

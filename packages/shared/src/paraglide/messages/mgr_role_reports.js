@@ -13,17 +13,22 @@ const es_mgr_role_reports = /** @type {(inputs: Mgr_Role_ReportsInputs) => Local
 	return /** @type {LocalizedString} */ (`Ver reportes y métricas de la organización`)
 };
 
+const en_xa2_mgr_role_reports = /** @type {(inputs: Mgr_Role_ReportsInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vìèw rèpòrts ànd òrg mètrìcs •••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "View reports and org metrics" |
 *
 * @param {Mgr_Role_ReportsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const mgr_role_reports = /** @type {((inputs?: Mgr_Role_ReportsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Role_ReportsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const mgr_role_reports = /** @type {((inputs?: Mgr_Role_ReportsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Role_ReportsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_mgr_role_reports(inputs)
+	if (locale === "en-XA") return en_xa2_mgr_role_reports(inputs)
 	return en_mgr_role_reports(inputs)
 });

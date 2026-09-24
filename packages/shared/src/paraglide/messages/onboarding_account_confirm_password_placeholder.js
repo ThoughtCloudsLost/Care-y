@@ -13,17 +13,22 @@ const es_onboarding_account_confirm_password_placeholder = /** @type {(inputs: O
 	return /** @type {LocalizedString} */ (`Ingresa la contraseña otra vez`)
 };
 
+const en_xa2_onboarding_account_confirm_password_placeholder = /** @type {(inputs: Onboarding_Account_Confirm_Password_PlaceholderInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èntèr pàsswòrd àgàìn ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Enter password again" |
 *
 * @param {Onboarding_Account_Confirm_Password_PlaceholderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_account_confirm_password_placeholder = /** @type {((inputs?: Onboarding_Account_Confirm_Password_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Account_Confirm_Password_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_account_confirm_password_placeholder = /** @type {((inputs?: Onboarding_Account_Confirm_Password_PlaceholderInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Account_Confirm_Password_PlaceholderInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_account_confirm_password_placeholder(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_account_confirm_password_placeholder(inputs)
 	return en_onboarding_account_confirm_password_placeholder(inputs)
 });

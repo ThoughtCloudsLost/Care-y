@@ -13,17 +13,22 @@ const es_onboarding_account_display_name_placeholder = /** @type {(inputs: Onboa
 	return /** @type {LocalizedString} */ (`Cómo te verán los demas`)
 };
 
+const en_xa2_onboarding_account_display_name_placeholder = /** @type {(inputs: Onboarding_Account_Display_Name_PlaceholderInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Hòw òthèrs wìll sèè yòù •••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "How others will see you" |
 *
 * @param {Onboarding_Account_Display_Name_PlaceholderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_account_display_name_placeholder = /** @type {((inputs?: Onboarding_Account_Display_Name_PlaceholderInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Account_Display_Name_PlaceholderInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_account_display_name_placeholder = /** @type {((inputs?: Onboarding_Account_Display_Name_PlaceholderInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Account_Display_Name_PlaceholderInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_account_display_name_placeholder(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_account_display_name_placeholder(inputs)
 	return en_onboarding_account_display_name_placeholder(inputs)
 });

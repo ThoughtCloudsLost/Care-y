@@ -13,17 +13,22 @@ const es_client_merge_no_results = /** @type {(inputs: Client_Merge_No_ResultsIn
 	return /** @type {LocalizedString} */ (`No se encontraron ${i?.clients} coincidentes`)
 };
 
+const en_xa2_client_merge_no_results = /** @type {(inputs: Client_Merge_No_ResultsInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Nò màtchìng  ••••${i?.clients} fòùnd ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "No matching {clients} found" |
 *
 * @param {Client_Merge_No_ResultsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const client_merge_no_results = /** @type {((inputs: Client_Merge_No_ResultsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Merge_No_ResultsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const client_merge_no_results = /** @type {((inputs: Client_Merge_No_ResultsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Merge_No_ResultsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_client_merge_no_results(inputs)
+	if (locale === "en-XA") return en_xa2_client_merge_no_results(inputs)
 	return en_client_merge_no_results(inputs)
 });

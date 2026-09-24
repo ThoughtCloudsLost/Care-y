@@ -6,24 +6,29 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Manage_RolesInputs */
 
 const en_permission_manage_roles = /** @type {(inputs: Permission_Manage_RolesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Set what each role can do`)
+	return /** @type {LocalizedString} */ (`Manage roles`)
 };
 
 const es_permission_manage_roles = /** @type {(inputs: Permission_Manage_RolesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Definir lo que puede hacer cada rol`)
+	return /** @type {LocalizedString} */ (`Gestionar roles`)
+};
+
+const en_xa2_permission_manage_roles = /** @type {(inputs: Permission_Manage_RolesInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Mànàgè ròlès ••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Set what each role can do" |
+* | "Manage roles" |
 *
 * @param {Permission_Manage_RolesInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const permission_manage_roles = /** @type {((inputs?: Permission_Manage_RolesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_Manage_RolesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const permission_manage_roles = /** @type {((inputs?: Permission_Manage_RolesInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_Manage_RolesInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_permission_manage_roles(inputs)
+	if (locale === "en-XA") return en_xa2_permission_manage_roles(inputs)
 	return en_permission_manage_roles(inputs)
 });

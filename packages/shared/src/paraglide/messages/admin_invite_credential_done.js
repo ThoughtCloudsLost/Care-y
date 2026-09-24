@@ -13,17 +13,22 @@ const es_admin_invite_credential_done = /** @type {(inputs: Admin_Invite_Credent
 	return /** @type {LocalizedString} */ (`Crear otro`)
 };
 
+const en_xa2_admin_invite_credential_done = /** @type {(inputs: Admin_Invite_Credential_DoneInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Crèàtè Ànòthèr •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Create Another" |
 *
 * @param {Admin_Invite_Credential_DoneInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_invite_credential_done = /** @type {((inputs?: Admin_Invite_Credential_DoneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Credential_DoneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_invite_credential_done = /** @type {((inputs?: Admin_Invite_Credential_DoneInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Invite_Credential_DoneInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_invite_credential_done(inputs)
+	if (locale === "en-XA") return en_xa2_admin_invite_credential_done(inputs)
 	return en_admin_invite_credential_done(inputs)
 });

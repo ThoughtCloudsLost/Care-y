@@ -13,17 +13,22 @@ const es_admin_blocklist_block_button = /** @type {(inputs: Admin_Blocklist_Bloc
 	return /** @type {LocalizedString} */ (`Bloquear`)
 };
 
+const en_xa2_admin_blocklist_block_button = /** @type {(inputs: Admin_Blocklist_Block_ButtonInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Blòck ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Block" |
 *
 * @param {Admin_Blocklist_Block_ButtonInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_blocklist_block_button = /** @type {((inputs?: Admin_Blocklist_Block_ButtonInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Blocklist_Block_ButtonInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_blocklist_block_button = /** @type {((inputs?: Admin_Blocklist_Block_ButtonInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Blocklist_Block_ButtonInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_blocklist_block_button(inputs)
+	if (locale === "en-XA") return en_xa2_admin_blocklist_block_button(inputs)
 	return en_admin_blocklist_block_button(inputs)
 });

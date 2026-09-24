@@ -13,17 +13,22 @@ const es_dashboard_encrypted_help = /** @type {(inputs: Dashboard_Encrypted_Help
 	return /** @type {LocalizedString} */ (`Tienes acceso a la ${i?.queue} pero no la clave de descifrado para este ${i?.ticket}. Un compañero que pueda leerlo compartirá el acceso automáticamente cuando lo abra.`)
 };
 
+const en_xa2_dashboard_encrypted_help = /** @type {(inputs: Dashboard_Encrypted_HelpInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Yòù hàvè  •••${i?.queue} àccèss bùt nòt thè dècryptìòn kèy fòr thìs  ••••••••••••••${i?.ticket}. À tèàmmàtè whò càn rèàd ìt wìll shàrè àccèss àùtòmàtìcàlly whèn thèy òpèn ìt. ••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "You have {queue} access but not the decryption key for this {ticket}. A teammate who can read it will share access automatically when they open it." |
 *
 * @param {Dashboard_Encrypted_HelpInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const dashboard_encrypted_help = /** @type {((inputs: Dashboard_Encrypted_HelpInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Encrypted_HelpInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const dashboard_encrypted_help = /** @type {((inputs: Dashboard_Encrypted_HelpInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Encrypted_HelpInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_dashboard_encrypted_help(inputs)
+	if (locale === "en-XA") return en_xa2_dashboard_encrypted_help(inputs)
 	return en_dashboard_encrypted_help(inputs)
 });

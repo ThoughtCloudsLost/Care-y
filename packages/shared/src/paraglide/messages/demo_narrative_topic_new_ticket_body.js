@@ -17,17 +17,24 @@ const es_demo_narrative_topic_new_ticket_body = /** @type {(inputs: Demo_Narrati
 **Permisos.** Todos los voluntarios pueden crear tickets por defecto, esto se puede cambiar por organización en las páginas de administración. La asignación de cola se limita a las colas a las que el voluntario tiene acceso.`)
 };
 
+const en_xa2_demo_narrative_topic_new_ticket_body = /** @type {(inputs: Demo_Narrative_Topic_New_Ticket_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Whèn à vòlùntèèr crèàtès à tìckèt, thè tìtlè ànd dèscrìptìòn àrè èncryptèd ìn thè bròwsèr bèfòrè thèy lèàvè thè dèvìcè. Thè sèrvèr stòrès thè cìphèrtèxt ànd àssìgns à tìckèt ÌD wìthòùt rèàdìng thè còntènt.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Rèqùìrèd fìèlds. •••••** À nèw tìckèt nèèds à tìtlè, à qùèùè àssìgnmènt, ànd à clìènt àt mìnìmùm. Dèscrìptìòn ìs òptìònàl ànd prìòrìty dèfàùlts tò nòrmàl.
+ ••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Àll vòlùntèèrs càn crèàtè tìckèts by dèfàùlt, thìs càn bè chàngèd pèr òrg òn thè àdmìn pàgès. Qùèùè àssìgnmènt ìs lìmìtèd tò qùèùès thè vòlùntèèr hàs àccèss tò. •••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "When a volunteer creates a ticket, the title and description are encrypted in the browser before they leave the device. The server stores the ciphertext and ..." |
 *
 * @param {Demo_Narrative_Topic_New_Ticket_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_new_ticket_body = /** @type {((inputs?: Demo_Narrative_Topic_New_Ticket_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_New_Ticket_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_new_ticket_body = /** @type {((inputs?: Demo_Narrative_Topic_New_Ticket_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_New_Ticket_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_new_ticket_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_new_ticket_body(inputs)
 	return en_demo_narrative_topic_new_ticket_body(inputs)
 });

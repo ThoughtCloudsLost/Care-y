@@ -10,7 +10,11 @@ const en_hub_reports_subtitle = /** @type {(inputs: Hub_Reports_SubtitleInputs) 
 };
 
 const es_hub_reports_subtitle = /** @type {(inputs: Hub_Reports_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Estadisticas de uso e informes de actividad`)
+	return /** @type {LocalizedString} */ (`Estadísticas de uso e informes de actividad`)
+};
+
+const en_xa2_hub_reports_subtitle = /** @type {(inputs: Hub_Reports_SubtitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ùsàgè stàtìstìcs ànd àctìvìty rèpòrts ••••••••••••⟧`)
 };
 
 /**
@@ -19,11 +23,12 @@ const es_hub_reports_subtitle = /** @type {(inputs: Hub_Reports_SubtitleInputs) 
 * | "Usage statistics and activity reports" |
 *
 * @param {Hub_Reports_SubtitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const hub_reports_subtitle = /** @type {((inputs?: Hub_Reports_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Reports_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const hub_reports_subtitle = /** @type {((inputs?: Hub_Reports_SubtitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Reports_SubtitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_hub_reports_subtitle(inputs)
+	if (locale === "en-XA") return en_xa2_hub_reports_subtitle(inputs)
 	return en_hub_reports_subtitle(inputs)
 });

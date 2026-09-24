@@ -13,17 +13,22 @@ const es_notif_toggle_aria = /** @type {(inputs: Notif_Toggle_AriaInputs) => Loc
 	return /** @type {LocalizedString} */ (`${i?.channel} para ${i?.event}`)
 };
 
+const en_xa2_notif_toggle_aria = /** @type {(inputs: Notif_Toggle_AriaInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.channel} fòr  ••${i?.event}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{channel} for {event}" |
 *
 * @param {Notif_Toggle_AriaInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const notif_toggle_aria = /** @type {((inputs: Notif_Toggle_AriaInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Toggle_AriaInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const notif_toggle_aria = /** @type {((inputs: Notif_Toggle_AriaInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Notif_Toggle_AriaInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_notif_toggle_aria(inputs)
+	if (locale === "en-XA") return en_xa2_notif_toggle_aria(inputs)
 	return en_notif_toggle_aria(inputs)
 });

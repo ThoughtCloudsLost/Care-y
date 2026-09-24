@@ -13,17 +13,22 @@ const es_onboarding_telephony_skip_description = /** @type {(inputs: Onboarding_
 	return /** @type {LocalizedString} */ (`Puede configurar la telefonía desde el panel de administración en cualquier momento.`)
 };
 
+const en_xa2_onboarding_telephony_skip_description = /** @type {(inputs: Onboarding_Telephony_Skip_DescriptionInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Yòù càn sèt ùp tèlèphòny fròm thè àdmìn pànèl àt àny tìmè. ••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "You can set up telephony from the admin panel at any time." |
 *
 * @param {Onboarding_Telephony_Skip_DescriptionInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_telephony_skip_description = /** @type {((inputs?: Onboarding_Telephony_Skip_DescriptionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Telephony_Skip_DescriptionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_telephony_skip_description = /** @type {((inputs?: Onboarding_Telephony_Skip_DescriptionInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Telephony_Skip_DescriptionInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_telephony_skip_description(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_telephony_skip_description(inputs)
 	return en_onboarding_telephony_skip_description(inputs)
 });

@@ -13,17 +13,22 @@ const es_error_ticket_not_found_or_closed = /** @type {(inputs: Error_Ticket_Not
 	return /** @type {LocalizedString} */ (`${i?.Ticket} no encontrado o ya cerrado.`)
 };
 
+const en_xa2_error_ticket_not_found_or_closed = /** @type {(inputs: Error_Ticket_Not_Found_Or_ClosedInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.Ticket} nòt fòùnd òr àlrèàdy clòsèd. •••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{Ticket} not found or already closed." |
 *
 * @param {Error_Ticket_Not_Found_Or_ClosedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_ticket_not_found_or_closed = /** @type {((inputs: Error_Ticket_Not_Found_Or_ClosedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Ticket_Not_Found_Or_ClosedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const error_ticket_not_found_or_closed = /** @type {((inputs: Error_Ticket_Not_Found_Or_ClosedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Ticket_Not_Found_Or_ClosedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_ticket_not_found_or_closed(inputs)
+	if (locale === "en-XA") return en_xa2_error_ticket_not_found_or_closed(inputs)
 	return en_error_ticket_not_found_or_closed(inputs)
 });

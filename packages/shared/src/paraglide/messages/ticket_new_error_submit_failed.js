@@ -13,17 +13,22 @@ const es_ticket_new_error_submit_failed = /** @type {(inputs: Ticket_New_Error_S
 	return /** @type {LocalizedString} */ (`No se pudo crear el ${i?.ticket}. Intenta de nuevo.`)
 };
 
+const en_xa2_ticket_new_error_submit_failed = /** @type {(inputs: Ticket_New_Error_Submit_FailedInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Còùld nòt crèàtè  ••••••${i?.ticket}. Try àgàìn. ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Could not create {ticket}. Try again." |
 *
 * @param {Ticket_New_Error_Submit_FailedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_new_error_submit_failed = /** @type {((inputs: Ticket_New_Error_Submit_FailedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_Error_Submit_FailedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const ticket_new_error_submit_failed = /** @type {((inputs: Ticket_New_Error_Submit_FailedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_New_Error_Submit_FailedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_new_error_submit_failed(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_new_error_submit_failed(inputs)
 	return en_ticket_new_error_submit_failed(inputs)
 });

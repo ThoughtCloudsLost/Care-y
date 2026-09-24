@@ -86,12 +86,23 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => {
         };
       }
 
-      // follow-ups, recordings, attachments
+      // follow-ups, recordings, attachments, dependencies
       if (
         key[2] === "followUps" ||
         key[2] === "recordings" ||
-        key[2] === "attachments"
+        key[2] === "attachments" ||
+        key[2] === "dependencies"
       ) {
+        return {
+          isLoading: false,
+          isError: false,
+          error: null,
+          data: [],
+        };
+      }
+
+      // ticket list (LinkCaseSheet picker)
+      if (key[0] === "tickets" && key[1] === "list") {
         return {
           isLoading: false,
           isError: false,
@@ -199,6 +210,11 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
         query: vi.fn().mockResolvedValue({ summaries: [], reactions: {} }),
       },
       assignTo: { mutate: vi.fn().mockResolvedValue({}) },
+      listDependencies: { query: vi.fn().mockResolvedValue([]) },
+      removeDependency: { mutate: vi.fn().mockResolvedValue({}) },
+      addDependency: { mutate: vi.fn().mockResolvedValue({}) },
+      list: { query: vi.fn().mockResolvedValue([]) },
+      revokeReplyToken: { mutate: vi.fn().mockResolvedValue({}) },
       noteTypes: {
         listActive: {
           query: vi

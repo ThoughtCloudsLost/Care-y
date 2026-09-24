@@ -13,17 +13,22 @@ const es_intake_error_email_format = /** @type {(inputs: Intake_Error_Email_Form
 	return /** @type {LocalizedString} */ (`Ingresa un correo electrónico válido.`)
 };
 
+const en_xa2_intake_error_email_format = /** @type {(inputs: Intake_Error_Email_FormatInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èntèr à vàlìd èmàìl àddrèss. •••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Enter a valid email address." |
 *
 * @param {Intake_Error_Email_FormatInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_error_email_format = /** @type {((inputs?: Intake_Error_Email_FormatInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Error_Email_FormatInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_error_email_format = /** @type {((inputs?: Intake_Error_Email_FormatInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Error_Email_FormatInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_error_email_format(inputs)
+	if (locale === "en-XA") return en_xa2_intake_error_email_format(inputs)
 	return en_intake_error_email_format(inputs)
 });

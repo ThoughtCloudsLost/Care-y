@@ -13,17 +13,22 @@ const es_roles_reset_title = /** @type {(inputs: Roles_Reset_TitleInputs) => Loc
 	return /** @type {LocalizedString} */ (`¿Restablecer permisos de roles?`)
 };
 
+const en_xa2_roles_reset_title = /** @type {(inputs: Roles_Reset_TitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèsèt ròlè pèrmìssìòns? •••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Reset role permissions?" |
 *
 * @param {Roles_Reset_TitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const roles_reset_title = /** @type {((inputs?: Roles_Reset_TitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_Reset_TitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const roles_reset_title = /** @type {((inputs?: Roles_Reset_TitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Roles_Reset_TitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_roles_reset_title(inputs)
+	if (locale === "en-XA") return en_xa2_roles_reset_title(inputs)
 	return en_roles_reset_title(inputs)
 });

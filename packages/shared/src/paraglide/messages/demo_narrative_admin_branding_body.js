@@ -19,17 +19,25 @@ const es_demo_narrative_admin_branding_body = /** @type {(inputs: Demo_Narrative
 **Permisos.** Editar la marca requiere el permiso Cambiar como se presenta la organización.`)
 };
 
+const en_xa2_demo_narrative_admin_branding_body = /** @type {(inputs: Demo_Narrative_Admin_Branding_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè òrgànìzàtìòn's lògò, twò brànd còlòrs, ànd thè tèxt shòwn tò thè vìsìtòr òn thè pòrtàl àrè stòrèd às plàìntèxt òn thè sèrvèr sò pàgès vìsìtèd bèfòrè sìgnìng ìn càn dìsplày thèm wìthòùt dècryptìòn.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt thè sèrvèr hòlds. •••••••** Whèn à lògò ìs ùplòàdèd, èvèry fìlè fòrmàt ìs ràstèrìzèd tò PNG ìn thè bròwsèr bèfòrè ìt lèàvès thè dèvìcè, ànd thè ràstèrìzèd rèsùlt ìs whàt thè sèrvèr rècèìvès. Àftèr sàvìng, sèpàràtè ìcòns àrè gènèràtèd fòr thè PWÀ mànìfèst ànd hòmè scrèèn, ànd à fàìlùrè ìn thàt stèp ràìsès ìts òwn nòtìcè wìthòùt ùndòìng thè bràndìng sàvè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Còntràst. •••** Thè bràndìng èdìtòr chècks èàch brànd còlòr àgàìnst WCÀG ÀÀ còntràst rèqùìrèmènts ànd àdjùsts ìt àt rùntìmè whèn nèèdèd, ìn bòth lìght ànd dàrk mòdè. À còlòr thàt sìts tòò clòsè tò thè càrè òr ùrgènt sèmàntìc hùès dràws à nòtìcè òffèrìng à nùdgèd vàlùè, thòùgh sàvìng wìth thè òrìgìnàl ìs àlwàys àllòwèd.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Èdìtìng bràndìng rèqùìrès thè Mànàgè òrgànìzàtìòn ìdèntìty pèrmìssìòn. ••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The organization's logo, two brand colors, and the text shown to the visitor on the portal are stored as plaintext on the server so pages visited before sign..." |
 *
 * @param {Demo_Narrative_Admin_Branding_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_branding_body = /** @type {((inputs?: Demo_Narrative_Admin_Branding_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Branding_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_branding_body = /** @type {((inputs?: Demo_Narrative_Admin_Branding_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Branding_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_branding_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_branding_body(inputs)
 	return en_demo_narrative_admin_branding_body(inputs)
 });

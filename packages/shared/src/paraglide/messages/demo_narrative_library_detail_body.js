@@ -15,17 +15,23 @@ const es_demo_narrative_library_detail_body = /** @type {(inputs: Demo_Narrative
 **Metadatos.** La vista detallada muestra el título del artículo, la categoría, el autor, la fecha de creación y la fecha de última actualización. El nombre visible del autor se descifra a partir de la clave de la organización.`)
 };
 
+const en_xa2_demo_narrative_library_detail_body = /** @type {(inputs: Demo_Narrative_Library_Detail_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè fùll àrtìclè vìèw shòws thè còmplètè bòdy tèxt, fìlè àttàchmènts, ànd vòtìng còntròls. Thè bòdy ìs dècryptèd lòcàlly fròm cìphèrtèxt stòrèd òn thè sèrvèr.
+ ••••••••••••••••••••••••••••••••••••••••••••••••**Mètàdàtà. •••** Thè dètàìl vìèw shòws thè àrtìclè tìtlè, càtègòry, àùthòr, crèàtìòn dàtè, ànd làst ùpdàtèd dàtè. Thè àùthòr's dìsplày nàmè ìs dècryptèd fròm thè òrgànìzàtìòn kèy. •••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The full article view shows the complete body text, file attachments, and voting controls. The body is decrypted locally from ciphertext stored on the server..." |
 *
 * @param {Demo_Narrative_Library_Detail_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_library_detail_body = /** @type {((inputs?: Demo_Narrative_Library_Detail_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Library_Detail_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_library_detail_body = /** @type {((inputs?: Demo_Narrative_Library_Detail_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Library_Detail_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_library_detail_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_library_detail_body(inputs)
 	return en_demo_narrative_library_detail_body(inputs)
 });

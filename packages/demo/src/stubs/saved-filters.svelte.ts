@@ -107,6 +107,8 @@ export const savedFilterStore: {
   remove(id: string): void;
   toggleShare(id: string): void;
   resealNames(bridge: CryptoBridge): Promise<void>;
+  setContext(userId: string, orgKeyManager: unknown): void;
+  loadShared(orgKeyManager: unknown): Promise<void>;
   readonly count: number;
 } = {
   get filters(): SavedFilterRecord[] {
@@ -130,6 +132,15 @@ export const savedFilterStore: {
   // Seed names are sealed under the demo's only key generation, so the
   // device-local reseal the shell triggers on key load has nothing to do.
   async resealNames(_bridge: CryptoBridge): Promise<void> {
+    // no-op
+  },
+
+  // The demo has no server store; seeded filters already render as shared.
+  setContext(_userId: string, _orgKeyManager: unknown): void {
+    // no-op
+  },
+
+  async loadShared(_orgKeyManager: unknown): Promise<void> {
     // no-op
   },
 

@@ -6,24 +6,29 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Edit_Client_AliasInputs */
 
 const en_permission_edit_client_alias = /** @type {(inputs: Permission_Edit_Client_AliasInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Rename a client`)
+	return /** @type {LocalizedString} */ (`Edit client alias`)
 };
 
 const es_permission_edit_client_alias = /** @type {(inputs: Permission_Edit_Client_AliasInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambiar el alias de un cliente`)
+	return /** @type {LocalizedString} */ (`Editar alias del cliente`)
+};
+
+const en_xa2_permission_edit_client_alias = /** @type {(inputs: Permission_Edit_Client_AliasInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èdìt clìènt àlìàs ••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Rename a client" |
+* | "Edit client alias" |
 *
 * @param {Permission_Edit_Client_AliasInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const permission_edit_client_alias = /** @type {((inputs?: Permission_Edit_Client_AliasInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_Edit_Client_AliasInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const permission_edit_client_alias = /** @type {((inputs?: Permission_Edit_Client_AliasInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_Edit_Client_AliasInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_permission_edit_client_alias(inputs)
+	if (locale === "en-XA") return en_xa2_permission_edit_client_alias(inputs)
 	return en_permission_edit_client_alias(inputs)
 });

@@ -343,11 +343,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptedDescription: testEncryptedContent(0x02),
           priority: "normal",
           keyGeneration: keyGen,
-          keyWrap: {
-            ephemeralPoint: testEphemeralPoint(),
-            nonce: testNonce(),
-            wrappedKey: testWrappedKey(),
-          },
+          keyWraps: [
+            {
+              volunteerId: user.id,
+              ephemeralPoint: testEphemeralPoint(),
+              nonce: testNonce(),
+              wrappedKey: testWrappedKey(),
+            },
+          ],
         });
 
         expect(result.id).toBeDefined();
@@ -1319,6 +1322,31 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where("user_id", "=", watcher.id)
           .executeTakeFirst();
         expect(after).toBeUndefined();
+      });
+
+      it("lists queue watchers via listQueueWatchers", async () => {
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const watcherUser = await createTestUser(tenantDb);
+        const queue = await createTestQueue(tenantDb);
+        const caller = createAuthedCaller(admin);
+
+        const before = await caller.tickets.listQueueWatchers({
+          queueId: queue.id,
+        });
+        expect(before).toEqual([]);
+
+        await caller.tickets.addQueueWatcher({
+          queueId: queue.id,
+          userId: watcherUser.id,
+        });
+
+        const after = await caller.tickets.listQueueWatchers({
+          queueId: queue.id,
+        });
+        expect(after).toContain(watcherUser.id);
+        expect(after).toHaveLength(1);
       });
 
       it("tracks queue membership across the admin endpoints", async () => {
@@ -4258,11 +4286,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptedDescription: testEncryptedContent(0x52),
           priority: "normal",
           keyGeneration: keyGen,
-          keyWrap: {
-            ephemeralPoint: testEphemeralPoint(),
-            nonce: testNonce(),
-            wrappedKey: testWrappedKey(),
-          },
+          keyWraps: [
+            {
+              volunteerId: user.id,
+              ephemeralPoint: testEphemeralPoint(),
+              nonce: testNonce(),
+              wrappedKey: testWrappedKey(),
+            },
+          ],
         });
 
         // The mutation succeeds despite the outbox path being fire-and-forget

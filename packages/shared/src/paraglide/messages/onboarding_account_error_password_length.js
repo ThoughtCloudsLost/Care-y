@@ -13,17 +13,22 @@ const es_onboarding_account_error_password_length = /** @type {(inputs: Onboardi
 	return /** @type {LocalizedString} */ (`La contraseña debe tener al menos 16 caracteres.`)
 };
 
+const en_xa2_onboarding_account_error_password_length = /** @type {(inputs: Onboarding_Account_Error_Password_LengthInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Pàsswòrd mùst bè àt lèàst 16 chàràctèrs. ••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Password must be at least 16 characters." |
 *
 * @param {Onboarding_Account_Error_Password_LengthInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_account_error_password_length = /** @type {((inputs?: Onboarding_Account_Error_Password_LengthInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Account_Error_Password_LengthInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_account_error_password_length = /** @type {((inputs?: Onboarding_Account_Error_Password_LengthInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Account_Error_Password_LengthInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_account_error_password_length(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_account_error_password_length(inputs)
 	return en_onboarding_account_error_password_length(inputs)
 });

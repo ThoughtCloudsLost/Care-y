@@ -13,17 +13,22 @@ const es_panel_queues = /** @type {(inputs: Panel_QueuesInputs) => LocalizedStri
 	return /** @type {LocalizedString} */ (`${i?.Queues}`)
 };
 
+const en_xa2_panel_queues = /** @type {(inputs: Panel_QueuesInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.Queues}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{Queues}" |
 *
 * @param {Panel_QueuesInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const panel_queues = /** @type {((inputs: Panel_QueuesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_QueuesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const panel_queues = /** @type {((inputs: Panel_QueuesInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_QueuesInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_panel_queues(inputs)
+	if (locale === "en-XA") return en_xa2_panel_queues(inputs)
 	return en_panel_queues(inputs)
 });

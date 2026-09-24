@@ -13,17 +13,22 @@ const es_admin_greetings_mode_audio = /** @type {(inputs: Admin_Greetings_Mode_A
 	return /** @type {LocalizedString} */ (`Audio`)
 };
 
+const en_xa2_admin_greetings_mode_audio = /** @type {(inputs: Admin_Greetings_Mode_AudioInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àùdìò ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Audio" |
 *
 * @param {Admin_Greetings_Mode_AudioInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_greetings_mode_audio = /** @type {((inputs?: Admin_Greetings_Mode_AudioInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Mode_AudioInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_greetings_mode_audio = /** @type {((inputs?: Admin_Greetings_Mode_AudioInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Mode_AudioInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_greetings_mode_audio(inputs)
+	if (locale === "en-XA") return en_xa2_admin_greetings_mode_audio(inputs)
 	return en_admin_greetings_mode_audio(inputs)
 });

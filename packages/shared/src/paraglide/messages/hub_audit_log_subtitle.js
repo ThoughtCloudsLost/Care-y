@@ -13,17 +13,22 @@ const es_hub_audit_log_subtitle = /** @type {(inputs: Hub_Audit_Log_SubtitleInpu
 	return /** @type {LocalizedString} */ (`Revisar la actividad del sistema y el historial de cambios`)
 };
 
+const en_xa2_hub_audit_log_subtitle = /** @type {(inputs: Hub_Audit_Log_SubtitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèvìèw systèm àctìvìty ànd chàngè hìstòry •••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Review system activity and change history" |
 *
 * @param {Hub_Audit_Log_SubtitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const hub_audit_log_subtitle = /** @type {((inputs?: Hub_Audit_Log_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Audit_Log_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const hub_audit_log_subtitle = /** @type {((inputs?: Hub_Audit_Log_SubtitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Audit_Log_SubtitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_hub_audit_log_subtitle(inputs)
+	if (locale === "en-XA") return en_xa2_hub_audit_log_subtitle(inputs)
 	return en_hub_audit_log_subtitle(inputs)
 });

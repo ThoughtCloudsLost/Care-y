@@ -13,17 +13,22 @@ const es_client_phone_conflict_body = /** @type {(inputs: Client_Phone_Conflict_
 	return /** @type {LocalizedString} */ (`¿Este número pertenece a ${i?.alias}. Fusionar en su lugar?`)
 };
 
+const en_xa2_client_phone_conflict_body = /** @type {(inputs: Client_Phone_Conflict_BodyInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Thìs nùmbèr bèlòngs tò  •••••••${i?.alias}. Mèrgè ìnstèàd? •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This number belongs to {alias}. Merge instead?" |
 *
 * @param {Client_Phone_Conflict_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const client_phone_conflict_body = /** @type {((inputs: Client_Phone_Conflict_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Phone_Conflict_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const client_phone_conflict_body = /** @type {((inputs: Client_Phone_Conflict_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_Phone_Conflict_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_client_phone_conflict_body(inputs)
+	if (locale === "en-XA") return en_xa2_client_phone_conflict_body(inputs)
 	return en_client_phone_conflict_body(inputs)
 });

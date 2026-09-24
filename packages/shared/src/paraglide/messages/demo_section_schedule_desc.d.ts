@@ -4,13 +4,13 @@
 * | "Shift scheduling is in development, and the schedule page carries a placeholder instead of a calendar." |
 *
 * @param {Demo_Section_Schedule_DescInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const demo_section_schedule_desc: ((inputs?: Demo_Section_Schedule_DescInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Section_Schedule_DescInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Demo_Section_Schedule_DescInputs = {};

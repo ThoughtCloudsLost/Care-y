@@ -13,17 +13,22 @@ const es_dashboard_assigned_you = /** @type {(inputs: Dashboard_Assigned_YouInpu
 	return /** @type {LocalizedString} */ (`Tu`)
 };
 
+const en_xa2_dashboard_assigned_you = /** @type {(inputs: Dashboard_Assigned_YouInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Yòù •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "You" |
 *
 * @param {Dashboard_Assigned_YouInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const dashboard_assigned_you = /** @type {((inputs?: Dashboard_Assigned_YouInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Assigned_YouInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const dashboard_assigned_you = /** @type {((inputs?: Dashboard_Assigned_YouInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Assigned_YouInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_dashboard_assigned_you(inputs)
+	if (locale === "en-XA") return en_xa2_dashboard_assigned_you(inputs)
 	return en_dashboard_assigned_you(inputs)
 });

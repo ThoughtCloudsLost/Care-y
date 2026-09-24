@@ -6,24 +6,29 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Revoke_Reply_LinksInputs */
 
 const en_permission_revoke_reply_links = /** @type {(inputs: Permission_Revoke_Reply_LinksInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Revoke a reply link`)
+	return /** @type {LocalizedString} */ (`Revoke reply links`)
 };
 
 const es_permission_revoke_reply_links = /** @type {(inputs: Permission_Revoke_Reply_LinksInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Revocar un enlace de respuesta`)
+	return /** @type {LocalizedString} */ (`Revocar enlaces de respuesta`)
+};
+
+const en_xa2_permission_revoke_reply_links = /** @type {(inputs: Permission_Revoke_Reply_LinksInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèvòkè rèply lìnks ••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Revoke a reply link" |
+* | "Revoke reply links" |
 *
 * @param {Permission_Revoke_Reply_LinksInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const permission_revoke_reply_links = /** @type {((inputs?: Permission_Revoke_Reply_LinksInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_Revoke_Reply_LinksInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const permission_revoke_reply_links = /** @type {((inputs?: Permission_Revoke_Reply_LinksInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Permission_Revoke_Reply_LinksInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_permission_revoke_reply_links(inputs)
+	if (locale === "en-XA") return en_xa2_permission_revoke_reply_links(inputs)
 	return en_permission_revoke_reply_links(inputs)
 });

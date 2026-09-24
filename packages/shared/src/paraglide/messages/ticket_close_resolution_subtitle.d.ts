@@ -4,13 +4,13 @@
 * | "Add a note before closing (optional)" |
 *
 * @param {Ticket_Close_Resolution_SubtitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const ticket_close_resolution_subtitle: ((inputs?: Ticket_Close_Resolution_SubtitleInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Ticket_Close_Resolution_SubtitleInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Ticket_Close_Resolution_SubtitleInputs = {};

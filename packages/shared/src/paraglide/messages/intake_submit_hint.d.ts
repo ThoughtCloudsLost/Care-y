@@ -1,16 +1,16 @@
 /**
 * | output |
 * | --- |
-* | "What you wrote has been encrypted. Only assigned volunteers can read it. Even if someone breaks into this server, they cannot read it." |
+* | "Encrypted before it is sent. Readable only within the organization, and only by your case volunteers once someone takes your case." |
 *
 * @param {Intake_Submit_HintInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const intake_submit_hint: ((inputs?: Intake_Submit_HintInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Intake_Submit_HintInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Intake_Submit_HintInputs = {};

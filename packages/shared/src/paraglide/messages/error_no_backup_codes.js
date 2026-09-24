@@ -13,17 +13,22 @@ const es_error_no_backup_codes = /** @type {(inputs: Error_No_Backup_CodesInputs
 	return /** @type {LocalizedString} */ (`No hay códigos de respaldo disponibles.`)
 };
 
+const en_xa2_error_no_backup_codes = /** @type {(inputs: Error_No_Backup_CodesInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nò bàckùp còdès àvàìlàblè. ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "No backup codes available." |
 *
 * @param {Error_No_Backup_CodesInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_no_backup_codes = /** @type {((inputs?: Error_No_Backup_CodesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_No_Backup_CodesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_no_backup_codes = /** @type {((inputs?: Error_No_Backup_CodesInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_No_Backup_CodesInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_no_backup_codes(inputs)
+	if (locale === "en-XA") return en_xa2_error_no_backup_codes(inputs)
 	return en_error_no_backup_codes(inputs)
 });

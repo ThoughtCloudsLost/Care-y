@@ -71,6 +71,7 @@ describe("getVisibleDestinations", () => {
       Permission.WRITE_CALL_GREETINGS,
       Permission.WRITE_AUTOMATIC_REPLIES,
       Permission.MANAGE_VOICEMAIL_QUARANTINE,
+      Permission.MANAGE_PRESETS,
       Permission.MANAGE_ORG_IDENTITY,
       Permission.MANAGE_KEYS,
       Permission.MANAGE_RETENTION,
@@ -81,7 +82,11 @@ describe("getVisibleDestinations", () => {
     ]);
     const visible = getVisibleDestinations(permissions);
 
-    expect(visible.length).toBe(ADMIN_DESTINATIONS.length);
+    // Hidden entries declare admission only and never render as tiles.
+    const tileCount = ADMIN_DESTINATIONS.filter(
+      (d) => d.hidden !== true,
+    ).length;
+    expect(visible.length).toBe(tileCount);
   });
 });
 
@@ -94,9 +99,12 @@ describe("groupDestinations", () => {
     expect(grouped.has("organization")).toBe(true);
   });
 
-  // Render order within groups is user-facing (admin hub lists items top-to-bottom).
+  // Render order within groups is user-facing (admin hub lists items
+  // top-to-bottom). Production always groups the visible set, so hidden
+  // admission-only entries never appear here.
   it("people group contains users, queues, and clients in render order", () => {
-    const grouped = groupDestinations(ADMIN_DESTINATIONS);
+    const tiles = ADMIN_DESTINATIONS.filter((d) => d.hidden !== true);
+    const grouped = groupDestinations(tiles);
     const people = grouped.get("people") ?? [];
 
     expect(people.map((d) => d.id)).toEqual(["users", "queues", "clients"]);
@@ -170,6 +178,7 @@ describe("communications destinations", () => {
       "sms-templates": Permission.WRITE_AUTOMATIC_REPLIES,
       blocklist: Permission.MANAGE_INFRASTRUCTURE,
       quarantine: Permission.MANAGE_VOICEMAIL_QUARANTINE,
+      presets: Permission.MANAGE_PRESETS,
     };
     for (const dest of commsDests) {
       expect(dest.permission).toBe(expected[dest.id]);

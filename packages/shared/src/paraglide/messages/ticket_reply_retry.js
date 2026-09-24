@@ -13,17 +13,22 @@ const es_ticket_reply_retry = /** @type {(inputs: Ticket_Reply_RetryInputs) => L
 	return /** @type {LocalizedString} */ (`Reintentar`)
 };
 
+const en_xa2_ticket_reply_retry = /** @type {(inputs: Ticket_Reply_RetryInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rètry ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Retry" |
 *
 * @param {Ticket_Reply_RetryInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_reply_retry = /** @type {((inputs?: Ticket_Reply_RetryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Reply_RetryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const ticket_reply_retry = /** @type {((inputs?: Ticket_Reply_RetryInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Reply_RetryInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_reply_retry(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_reply_retry(inputs)
 	return en_ticket_reply_retry(inputs)
 });

@@ -179,7 +179,7 @@ function render(sections, msgs) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/-+$/, "");
     lines.push(
-      `- [${title}${label}](#${anchor}) — ${String(s.subs.length)} topics`,
+      `- [${title}${label}](#${anchor}): ${String(s.subs.length)} topics`,
     );
   }
   lines.push("");

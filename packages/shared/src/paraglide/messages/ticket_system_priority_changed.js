@@ -13,17 +13,22 @@ const es_ticket_system_priority_changed = /** @type {(inputs: Ticket_System_Prio
 	return /** @type {LocalizedString} */ (`Prioridad cambiada a ${i?.priority}`)
 };
 
+const en_xa2_ticket_system_priority_changed = /** @type {(inputs: Ticket_System_Priority_ChangedInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Prìòrìty chàngèd tò  ••••••${i?.priority}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Priority changed to {priority}" |
 *
 * @param {Ticket_System_Priority_ChangedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_system_priority_changed = /** @type {((inputs: Ticket_System_Priority_ChangedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_System_Priority_ChangedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const ticket_system_priority_changed = /** @type {((inputs: Ticket_System_Priority_ChangedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_System_Priority_ChangedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_system_priority_changed(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_system_priority_changed(inputs)
 	return en_ticket_system_priority_changed(inputs)
 });

@@ -13,17 +13,22 @@ const es_nav_tickets = /** @type {(inputs: Nav_TicketsInputs) => LocalizedString
 	return /** @type {LocalizedString} */ (`${i?.Tickets}`)
 };
 
+const en_xa2_nav_tickets = /** @type {(inputs: Nav_TicketsInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.Tickets}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{Tickets}" |
 *
 * @param {Nav_TicketsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const nav_tickets = /** @type {((inputs: Nav_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Nav_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const nav_tickets = /** @type {((inputs: Nav_TicketsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Nav_TicketsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_nav_tickets(inputs)
+	if (locale === "en-XA") return en_xa2_nav_tickets(inputs)
 	return en_nav_tickets(inputs)
 });

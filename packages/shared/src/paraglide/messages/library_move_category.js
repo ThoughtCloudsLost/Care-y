@@ -13,17 +13,22 @@ const es_library_move_category = /** @type {(inputs: Library_Move_CategoryInputs
 	return /** @type {LocalizedString} */ (`Mover categoría`)
 };
 
+const en_xa2_library_move_category = /** @type {(inputs: Library_Move_CategoryInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Mòvè càtègòry ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Move category" |
 *
 * @param {Library_Move_CategoryInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_move_category = /** @type {((inputs?: Library_Move_CategoryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Move_CategoryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_move_category = /** @type {((inputs?: Library_Move_CategoryInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Move_CategoryInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_move_category(inputs)
+	if (locale === "en-XA") return en_xa2_library_move_category(inputs)
 	return en_library_move_category(inputs)
 });

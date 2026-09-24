@@ -13,17 +13,22 @@ const es_consultant_phone_pings_disabled = /** @type {(inputs: Consultant_Phone_
 	return /** @type {LocalizedString} */ (`Notificaciones SMS desactivadas`)
 };
 
+const en_xa2_consultant_phone_pings_disabled = /** @type {(inputs: Consultant_Phone_Pings_DisabledInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦SMS pìngs dìsàblèd ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "SMS pings disabled" |
 *
 * @param {Consultant_Phone_Pings_DisabledInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const consultant_phone_pings_disabled = /** @type {((inputs?: Consultant_Phone_Pings_DisabledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Pings_DisabledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const consultant_phone_pings_disabled = /** @type {((inputs?: Consultant_Phone_Pings_DisabledInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Pings_DisabledInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_consultant_phone_pings_disabled(inputs)
+	if (locale === "en-XA") return en_xa2_consultant_phone_pings_disabled(inputs)
 	return en_consultant_phone_pings_disabled(inputs)
 });

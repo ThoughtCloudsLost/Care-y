@@ -498,7 +498,7 @@ describe("crypto-core createTicketKey", () => {
     sinkMessages = [];
   });
 
-  it("generates a tk, encrypts fields, and returns a key wrap", async () => {
+  it("generates a tk, encrypts fields, and returns key wraps", async () => {
     const resp = (await dispatchAndWait({
       type: "createTicketKey",
       id: 200,
@@ -513,11 +513,32 @@ describe("crypto-core createTicketKey", () => {
     expect(resp.encryptedFields).toHaveLength(2);
     expect(resp.encryptedFields[0]?.name).toBe("title");
     expect(resp.encryptedFields[1]?.name).toBe("description");
-    expect(resp.keyWrap).toBeDefined();
-    expect(resp.keyWrap.ephemeralPoint).toBeDefined();
-    expect(resp.keyWrap.nonce).toBeDefined();
-    expect(resp.keyWrap.wrappedKey).toBeDefined();
+    expect(resp.keyWraps).toBeDefined();
+    expect(resp.keyWraps).toHaveLength(1); // Self only when no recipients
+    expect(resp.keyWraps[0]?.ephemeralPoint).toBeDefined();
+    expect(resp.keyWraps[0]?.nonce).toBeDefined();
+    expect(resp.keyWraps[0]?.wrappedKey).toBeDefined();
     expect(resp.keyGeneration).toBeDefined();
+  });
+
+  it("wraps tk for multiple recipients when provided", async () => {
+    const sodium = requireSodium();
+    // Generate a second recipient keypair
+    const recipientPriv = sodium.crypto_core_ristretto255_scalar_random();
+    const recipientPub =
+      sodium.crypto_scalarmult_ristretto255_base(recipientPriv);
+
+    const resp = (await dispatchAndWait({
+      type: "createTicketKey",
+      id: 201,
+      ticketId: "t-create-multi",
+      fields: [{ name: "title", plaintext: "Multi-wrap test" }],
+      recipients: [{ volunteerId: "self-id", volPublic: encode(recipientPub) }],
+    })) as CreateTicketKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.keyWraps).toHaveLength(1);
+    expect(resp.keyWraps[0]?.volunteerId).toBe("self-id");
   });
 });
 

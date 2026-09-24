@@ -13,17 +13,22 @@ const es_portal_correction_sheet_body = /** @type {(inputs: Portal_Correction_Sh
 	return /** @type {LocalizedString} */ (`Escribe el número de teléfono o correo electrónico que quieres que use el equipo de apoyo. Una persona voluntaria revisará la corrección antes de aplicar cualquier cambio.`)
 };
 
+const en_xa2_portal_correction_sheet_body = /** @type {(inputs: Portal_Correction_Sheet_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èntèr thè phònè nùmbèr òr èmàìl yòù wànt thè sùppòrt tèàm tò ùsè. À vòlùntèèr wìll rèvìèw thè còrrèctìòn bèfòrè ànythìng chàngès. •••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Enter the phone number or email you want the support team to use. A volunteer will review the correction before anything changes." |
 *
 * @param {Portal_Correction_Sheet_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const portal_correction_sheet_body = /** @type {((inputs?: Portal_Correction_Sheet_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Correction_Sheet_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const portal_correction_sheet_body = /** @type {((inputs?: Portal_Correction_Sheet_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Correction_Sheet_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_portal_correction_sheet_body(inputs)
+	if (locale === "en-XA") return en_xa2_portal_correction_sheet_body(inputs)
 	return en_portal_correction_sheet_body(inputs)
 });

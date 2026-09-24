@@ -13,17 +13,22 @@ const es_error_merge_unresolved_deps = /** @type {(inputs: Error_Merge_Unresolve
 	return /** @type {LocalizedString} */ (`No se puede fusionar: el ${i?.ticket} del ${i?.client} secundario tiene dependencias sin resolver.`)
 };
 
+const en_xa2_error_merge_unresolved_deps = /** @type {(inputs: Error_Merge_Unresolved_DepsInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Cànnòt mèrgè: thè sècòndàry  •••••••••${i?.client}'s  •${i?.ticket} hàs ùnrèsòlvèd dèpèndèncìès. •••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Cannot merge: the secondary {client}'s {ticket} has unresolved dependencies." |
 *
 * @param {Error_Merge_Unresolved_DepsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_merge_unresolved_deps = /** @type {((inputs: Error_Merge_Unresolved_DepsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Merge_Unresolved_DepsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const error_merge_unresolved_deps = /** @type {((inputs: Error_Merge_Unresolved_DepsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Merge_Unresolved_DepsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_merge_unresolved_deps(inputs)
+	if (locale === "en-XA") return en_xa2_error_merge_unresolved_deps(inputs)
 	return en_error_merge_unresolved_deps(inputs)
 });

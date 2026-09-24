@@ -13,17 +13,22 @@ const es_admin_telephony_number_roles = /** @type {(inputs: Admin_Telephony_Numb
 	return /** @type {LocalizedString} */ (`Roles de números`)
 };
 
+const en_xa2_admin_telephony_number_roles = /** @type {(inputs: Admin_Telephony_Number_RolesInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nùmbèr ròlès ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Number roles" |
 *
 * @param {Admin_Telephony_Number_RolesInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_telephony_number_roles = /** @type {((inputs?: Admin_Telephony_Number_RolesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Number_RolesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_telephony_number_roles = /** @type {((inputs?: Admin_Telephony_Number_RolesInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Number_RolesInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_telephony_number_roles(inputs)
+	if (locale === "en-XA") return en_xa2_admin_telephony_number_roles(inputs)
 	return en_admin_telephony_number_roles(inputs)
 });

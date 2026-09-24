@@ -49,6 +49,7 @@ import {
   TestSetupError,
   TEST_OPS_KEY,
   testBlindIndexer,
+  testFieldEncryptor,
   type TestDb,
 } from "../test-utils.js";
 import { createCallTracker } from "./call-tracker.js";
@@ -559,6 +560,7 @@ describe.skipIf(!process.env.DATABASE_URL)("Webhook-to-DB integration", () => {
       tenantDb: tenantDbFactory,
       providerFactory,
       indexer: testBlindIndexer,
+      fieldEncryptor: testFieldEncryptor,
       blobStore,
       jobQueue: mockJobQueue,
       webhookBaseUrl: WEBHOOK_BASE_URL,
@@ -656,12 +658,12 @@ describe.skipIf(!process.env.DATABASE_URL)("Webhook-to-DB integration", () => {
 
     expect(phoneRow).toBeDefined();
     expect(phoneRow!.phone_hash).toBe(expectedHash);
-    // encrypted_number must NOT be the plaintext phone
+    // encrypted_number is OPS-encrypted per ADR-005/069/096, never plaintext
     expect(phoneRow!.encrypted_number.toString("utf-8")).not.toContain(
       senderPhone,
     );
-    // Sealed box adds 48 bytes overhead; plaintext "+15559876543" is 12 bytes
-    expect(phoneRow!.encrypted_number.length).toBeGreaterThanOrEqual(48 + 12);
+    // XChaCha20-Poly1305 adds 40 bytes (24 nonce + 16 tag); plaintext "+15559876543" is 12 bytes
+    expect(phoneRow!.encrypted_number.length).toBeGreaterThanOrEqual(40 + 12);
 
     const clientRow = await tDb
       .selectFrom("clients")

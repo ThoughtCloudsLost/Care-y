@@ -4,13 +4,14 @@ import {
   terminologyConfigSchema,
   type TerminologyLabels,
   type TerminologyConfig,
+  type DisplayLocale,
 } from "@care-y/shared";
 
 const CACHE_KEY = "care-y-terminology";
 
 export function resolveLabels(
   config: TerminologyConfig | null,
-  lang: string,
+  lang: DisplayLocale,
 ): TerminologyLabels {
   if (config !== null) {
     const match = Object.entries(config).find(([k]) => k === lang);

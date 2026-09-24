@@ -13,17 +13,22 @@ const es_admin_telephony_number_roles_description = /** @type {(inputs: Admin_Te
 	return /** @type {LocalizedString} */ (`Elija que número usar para cada tipo de comunicación.`)
 };
 
+const en_xa2_admin_telephony_number_roles_description = /** @type {(inputs: Admin_Telephony_Number_Roles_DescriptionInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Chòòsè whìch nùmbèr tò ùsè fòr èàch typè òf còmmùnìcàtìòn. ••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Choose which number to use for each type of communication." |
 *
 * @param {Admin_Telephony_Number_Roles_DescriptionInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_telephony_number_roles_description = /** @type {((inputs?: Admin_Telephony_Number_Roles_DescriptionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Number_Roles_DescriptionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_telephony_number_roles_description = /** @type {((inputs?: Admin_Telephony_Number_Roles_DescriptionInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Number_Roles_DescriptionInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_telephony_number_roles_description(inputs)
+	if (locale === "en-XA") return en_xa2_admin_telephony_number_roles_description(inputs)
 	return en_admin_telephony_number_roles_description(inputs)
 });

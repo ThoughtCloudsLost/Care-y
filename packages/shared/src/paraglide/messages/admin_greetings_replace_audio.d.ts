@@ -4,13 +4,13 @@
 * | "Replace audio" |
 *
 * @param {Admin_Greetings_Replace_AudioInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_greetings_replace_audio: ((inputs?: Admin_Greetings_Replace_AudioInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Greetings_Replace_AudioInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Greetings_Replace_AudioInputs = {};

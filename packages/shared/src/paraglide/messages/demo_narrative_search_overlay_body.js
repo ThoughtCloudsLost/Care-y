@@ -15,17 +15,23 @@ const es_demo_narrative_search_overlay_body = /** @type {(inputs: Demo_Narrative
 **Grupos de resultados.** Los resultados se agrupan por tipo, y el grupo que coincide con la página actual se ordena primero, por lo que buscar desde la lista de tickets pone los resultados de tickets arriba. Cada grupo muestra cuántas coincidencias se encontraron.`)
 };
 
+const en_xa2_demo_narrative_search_overlay_body = /** @type {(inputs: Demo_Narrative_Search_Overlay_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè sèàrch shèèt shòws rècènt sèàrchès ànd strìps òf rècèntly vìèwèd tìckèts ànd àrtìclès.
+ ••••••••••••••••••••••••••••**Rèsùlt gròùps. •••••** Rèsùlts gròùp by typè, ànd thè gròùp màtchìng thè cùrrènt pàgè sòrts fìrst, sò sèàrchìng fròm thè tìckèt lìst pùts tìckèt rèsùlts òn tòp. Èàch gròùp shòws hòw màny màtchès wèrè fòùnd. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The search sheet shows recent searches and strips of recently viewed tickets and articles. **Result groups.** Results group by type, and the group matching t..." |
 *
 * @param {Demo_Narrative_Search_Overlay_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_search_overlay_body = /** @type {((inputs?: Demo_Narrative_Search_Overlay_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Search_Overlay_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_search_overlay_body = /** @type {((inputs?: Demo_Narrative_Search_Overlay_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Search_Overlay_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_search_overlay_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_search_overlay_body(inputs)
 	return en_demo_narrative_search_overlay_body(inputs)
 });

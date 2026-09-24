@@ -13,17 +13,22 @@ const es_user_field_display_name_e2e_hint = /** @type {(inputs: User_Field_Displ
 	return /** @type {LocalizedString} */ (`Cifrado de extremo a extremo. Solo su equipo puede leerlo.`)
 };
 
+const en_xa2_user_field_display_name_e2e_hint = /** @type {(inputs: User_Field_Display_Name_E2e_HintInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ènd-tò-ènd èncryptèd. Ònly yòùr tèàm càn rèàd thìs. ••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "End-to-end encrypted. Only your team can read this." |
 *
 * @param {User_Field_Display_Name_E2e_HintInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const user_field_display_name_e2e_hint = /** @type {((inputs?: User_Field_Display_Name_E2e_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<User_Field_Display_Name_E2e_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const user_field_display_name_e2e_hint = /** @type {((inputs?: User_Field_Display_Name_E2e_HintInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<User_Field_Display_Name_E2e_HintInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_user_field_display_name_e2e_hint(inputs)
+	if (locale === "en-XA") return en_xa2_user_field_display_name_e2e_hint(inputs)
 	return en_user_field_display_name_e2e_hint(inputs)
 });

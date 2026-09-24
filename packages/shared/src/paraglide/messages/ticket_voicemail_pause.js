@@ -13,17 +13,22 @@ const es_ticket_voicemail_pause = /** @type {(inputs: Ticket_Voicemail_PauseInpu
 	return /** @type {LocalizedString} */ (`Pausar mensaje de voz`)
 };
 
+const en_xa2_ticket_voicemail_pause = /** @type {(inputs: Ticket_Voicemail_PauseInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Pàùsè vòìcèmàìl •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Pause voicemail" |
 *
 * @param {Ticket_Voicemail_PauseInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_voicemail_pause = /** @type {((inputs?: Ticket_Voicemail_PauseInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Voicemail_PauseInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const ticket_voicemail_pause = /** @type {((inputs?: Ticket_Voicemail_PauseInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Voicemail_PauseInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_voicemail_pause(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_voicemail_pause(inputs)
 	return en_ticket_voicemail_pause(inputs)
 });

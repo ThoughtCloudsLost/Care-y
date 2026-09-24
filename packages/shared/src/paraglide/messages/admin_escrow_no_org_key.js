@@ -13,17 +13,22 @@ const es_admin_escrow_no_org_key = /** @type {(inputs: Admin_Escrow_No_Org_KeyIn
 	return /** @type {LocalizedString} */ (`Clave de la organización no cargada. Inicie sesión nuevamente para exportar.`)
 };
 
+const en_xa2_admin_escrow_no_org_key = /** @type {(inputs: Admin_Escrow_No_Org_KeyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Òrgànìzàtìòn kèy nòt lòàdèd. Lòg ìn àgàìn tò èxpòrt. ••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Organization key not loaded. Log in again to export." |
 *
 * @param {Admin_Escrow_No_Org_KeyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_escrow_no_org_key = /** @type {((inputs?: Admin_Escrow_No_Org_KeyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Escrow_No_Org_KeyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_escrow_no_org_key = /** @type {((inputs?: Admin_Escrow_No_Org_KeyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Escrow_No_Org_KeyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_escrow_no_org_key(inputs)
+	if (locale === "en-XA") return en_xa2_admin_escrow_no_org_key(inputs)
 	return en_admin_escrow_no_org_key(inputs)
 });

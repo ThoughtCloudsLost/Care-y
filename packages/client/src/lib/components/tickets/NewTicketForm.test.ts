@@ -126,6 +126,7 @@ describe("NewTicketForm", () => {
             >()
             .mockResolvedValue({ openTicketId: null, reopenTicketId: null }),
           searchClients: mockSearchClients,
+          fetchQueueMemberKeys: vi.fn().mockResolvedValue([]),
           onsubmit: vi.fn(),
           formId: "test-form",
         },
@@ -148,6 +149,7 @@ describe("NewTicketForm", () => {
             >()
             .mockResolvedValue({ openTicketId: null, reopenTicketId: null }),
           searchClients: mockSearchClients,
+          fetchQueueMemberKeys: vi.fn().mockResolvedValue([]),
           onsubmit: vi.fn(),
           formId: "test-form",
         },
@@ -174,6 +176,7 @@ describe("NewTicketForm", () => {
             >()
             .mockResolvedValue({ openTicketId: null, reopenTicketId: null }),
           searchClients: mockSearchClients,
+          fetchQueueMemberKeys: vi.fn().mockResolvedValue([]),
           onsubmit: vi.fn(),
           formId: "test-form",
         },

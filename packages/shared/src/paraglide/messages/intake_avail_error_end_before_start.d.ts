@@ -4,13 +4,13 @@
 * | "End time must be after start time." |
 *
 * @param {Intake_Avail_Error_End_Before_StartInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const intake_avail_error_end_before_start: ((inputs?: Intake_Avail_Error_End_Before_StartInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Intake_Avail_Error_End_Before_StartInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Intake_Avail_Error_End_Before_StartInputs = {};

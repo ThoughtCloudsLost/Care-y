@@ -23,17 +23,27 @@ const es_demo_narrative_admin_quarantine_body = /** @type {(inputs: Demo_Narrati
 **Permisos.** Revisar y enrutar mensajes de voz en cuarentena requiere el permiso Gestionar cuarentena de correos de voz.`)
 };
 
+const en_xa2_demo_narrative_admin_quarantine_body = /** @type {(inputs: Demo_Narrative_Admin_Quarantine_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vòìcèmàìls fròm ùnknòwn càllèrs lànd ìn thè qùàràntìnè ànd wàìt fòr rèvìèw.
+ •••••••••••••••••••••••**Èncryptìòn. ••••** Qùàràntìnè àùdìò ìs sèàlèd tò thè òrgànìzàtìòn's pùblìc kèy bèfòrè stòràgè sò thè sèrvèr cànnòt àccèss thè rècòrdìng, ànd thè càllèr ànd càllèd nùmbèrs àrè sèàlèd thè sàmè wày.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••**Plàybàck. •••** Qùàràntìnè àùdìò rèàchès thè bròwsèr às sèàlèd cìphèrtèxt, ànd thè ùsèr's bròwsèr ùnsèàls ìt wìth thè òrgànìzàtìòn's prìvàtè kèy sò dècryptìòn hàppèns lòcàlly.
+ •••••••••••••••••••••••••••••••••••••••••••••••••**Ròùtìng. •••** À qùàràntìnèd vòìcèmàìl càn bè ròùtèd tò à nèw òr èxìstìng tìckèt, òr dìsmìssèd.
+ •••••••••••••••••••••••••**Qùàràntìnè rèàsòns. ••••••** À vòìcèmàìl rèàchès thè qùàràntìnè whèn nò ìntàkè qùèùè wàs cònfìgùrèd tò rècèìvè thè càll, whèn thè càllèr còùld nòt bè màtchèd tò à clìènt, òr whèn nò tràckèd càll èxìstèd tò ròùtè thè rècòrdìng tò.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Rèvìèwìng ànd ròùtìng qùàràntìnèd vòìcèmàìls rèqùìrès thè Mànàgè vòìcèmàìl qùàràntìnè pèrmìssìòn. ••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Voicemails from unknown callers land in the quarantine and wait for review. **Encryption.** Quarantine audio is sealed to the organization's public key befor..." |
 *
 * @param {Demo_Narrative_Admin_Quarantine_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_quarantine_body = /** @type {((inputs?: Demo_Narrative_Admin_Quarantine_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Quarantine_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_quarantine_body = /** @type {((inputs?: Demo_Narrative_Admin_Quarantine_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Quarantine_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_quarantine_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_quarantine_body(inputs)
 	return en_demo_narrative_admin_quarantine_body(inputs)
 });

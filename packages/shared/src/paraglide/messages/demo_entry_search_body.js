@@ -13,17 +13,22 @@ const es_demo_entry_search_body = /** @type {(inputs: Demo_Entry_Search_BodyInpu
 	return /** @type {LocalizedString} */ (`La lupa en la barra superior o la fila de búsqueda en el menú de contenidos abre una búsqueda de texto completo en todas las secciones del manual. Los resultados aparecen como entradas del manual con las coincidencias resaltadas, y las etiquetas en la parte superior filtran por sección para saltar directamente al encabezado que corresponda.`)
 };
 
+const en_xa2_demo_entry_search_body = /** @type {(inputs: Demo_Entry_Search_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè màgnìfyìng glàss ìn thè tòp bàr sèàrchès àcròss àll hàndbòòk sèctìòns. Clìck à rèsùlt tò jùmp tò thàt pàrt òf thè hàndbòòk. •••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The magnifying glass in the top bar searches across all handbook sections. Click a result to jump to that part of the handbook." |
 *
 * @param {Demo_Entry_Search_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_entry_search_body = /** @type {((inputs?: Demo_Entry_Search_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Entry_Search_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_entry_search_body = /** @type {((inputs?: Demo_Entry_Search_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Entry_Search_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_entry_search_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_entry_search_body(inputs)
 	return en_demo_entry_search_body(inputs)
 });

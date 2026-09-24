@@ -13,17 +13,22 @@ const es_error_intake_form_closed = /** @type {(inputs: Error_Intake_Form_Closed
 	return /** @type {LocalizedString} */ (`Este formulario ya no acepta envíos.`)
 };
 
+const en_xa2_error_intake_form_closed = /** @type {(inputs: Error_Intake_Form_ClosedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thìs fòrm ìs nò lòngèr àccèptìng sùbmìssìòns. ••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "This form is no longer accepting submissions." |
 *
 * @param {Error_Intake_Form_ClosedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_intake_form_closed = /** @type {((inputs?: Error_Intake_Form_ClosedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Intake_Form_ClosedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_intake_form_closed = /** @type {((inputs?: Error_Intake_Form_ClosedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Intake_Form_ClosedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_intake_form_closed(inputs)
+	if (locale === "en-XA") return en_xa2_error_intake_form_closed(inputs)
 	return en_error_intake_form_closed(inputs)
 });

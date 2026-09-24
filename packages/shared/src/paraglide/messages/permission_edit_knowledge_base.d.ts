@@ -1,16 +1,16 @@
 /**
 * | output |
 * | --- |
-* | "Write and edit articles" |
+* | "Edit knowledge base" |
 *
 * @param {Permission_Edit_Knowledge_BaseInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const permission_edit_knowledge_base: ((inputs?: Permission_Edit_Knowledge_BaseInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Permission_Edit_Knowledge_BaseInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Permission_Edit_Knowledge_BaseInputs = {};

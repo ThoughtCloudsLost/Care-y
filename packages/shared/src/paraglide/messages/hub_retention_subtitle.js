@@ -13,17 +13,22 @@ const es_hub_retention_subtitle = /** @type {(inputs: Hub_Retention_SubtitleInpu
 	return /** @type {LocalizedString} */ (`Retención de información personal identificable y ciclo de vida`)
 };
 
+const en_xa2_hub_retention_subtitle = /** @type {(inputs: Hub_Retention_SubtitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Pèrsònàl ìdèntìfyìng ìnfòrmàtìòn rètèntìòn ànd lìfècyclè •••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Personal identifying information retention and lifecycle" |
 *
 * @param {Hub_Retention_SubtitleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const hub_retention_subtitle = /** @type {((inputs?: Hub_Retention_SubtitleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Retention_SubtitleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const hub_retention_subtitle = /** @type {((inputs?: Hub_Retention_SubtitleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Hub_Retention_SubtitleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_hub_retention_subtitle(inputs)
+	if (locale === "en-XA") return en_xa2_hub_retention_subtitle(inputs)
 	return en_hub_retention_subtitle(inputs)
 });

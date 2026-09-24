@@ -19,17 +19,25 @@ const es_demo_narrative_search_how_body = /** @type {(inputs: Demo_Narrative_Sea
 **Indicador de cobertura.** Una línea debajo de los resultados muestra cuántos registros se han buscado del total, dejando claro si una búsqueda completa cubriría más.`)
 };
 
+const en_xa2_demo_narrative_search_how_body = /** @type {(inputs: Demo_Narrative_Search_How_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Glòbàl sèàrch rùns ìn twò tìèrs.
+ ••••••••••**Ìnstànt rèsùlts. •••••** Thè bròwsèr fùzzy màtchès thè qùèry àgàìnst còntènt ìt hàs àlrèàdy dècryptèd ànd càchèd. Thìs rètùrns rèsùlts ìmmèdìàtèly wìth nò nètwòrk càll.
+ ••••••••••••••••••••••••••••••••••••••••••••**Fùll dèèp sèàrch. ••••••** Whèn ìnstànt rèsùlts àrè ìnsùffìcìènt, thè bròwsèr fètchès èncryptèd dàtà fròm thè sèrvèr, dècrypts ìt lòcàlly, ànd màtchès thè qùèry àgàìnst thè plàìntèxt. Thè sèrvèr sènds èncryptèd blòbs bùt pèrfòrms nò tèxt màtchìng. Àll sèàrch tèrms stày òn thè dèvìcè.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Còvèràgè ìndìcàtòr. ••••••** À lìnè bèlòw thè rèsùlts shòws hòw màny rècòrds hàvè bèèn sèàrchèd òùt òf thè tòtàl, sò ìt ìs clèàr whèthèr à fùll sèàrch wòùld còvèr mòrè. ••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Global search runs in two tiers. **Instant results.** The browser fuzzy matches the query against content it has already decrypted and cached. This returns r..." |
 *
 * @param {Demo_Narrative_Search_How_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_search_how_body = /** @type {((inputs?: Demo_Narrative_Search_How_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Search_How_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_search_how_body = /** @type {((inputs?: Demo_Narrative_Search_How_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Search_How_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_search_how_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_search_how_body(inputs)
 	return en_demo_narrative_search_how_body(inputs)
 });

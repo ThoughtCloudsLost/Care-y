@@ -13,17 +13,22 @@ const es_admin_reactivate = /** @type {(inputs: Admin_ReactivateInputs) => Local
 	return /** @type {LocalizedString} */ (`Reactivar`)
 };
 
+const en_xa2_admin_reactivate = /** @type {(inputs: Admin_ReactivateInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèàctìvàtè •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Reactivate" |
 *
 * @param {Admin_ReactivateInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_reactivate = /** @type {((inputs?: Admin_ReactivateInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_ReactivateInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_reactivate = /** @type {((inputs?: Admin_ReactivateInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_ReactivateInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_reactivate(inputs)
+	if (locale === "en-XA") return en_xa2_admin_reactivate(inputs)
 	return en_admin_reactivate(inputs)
 });

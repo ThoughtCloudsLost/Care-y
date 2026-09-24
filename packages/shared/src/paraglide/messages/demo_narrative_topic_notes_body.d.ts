@@ -4,13 +4,13 @@
 * | "Notes are visible only to org members and are encrypted with the same per ticket key as messages. The server holds the note type and role gating metadata tha..." |
 *
 * @param {Demo_Narrative_Topic_Notes_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const demo_narrative_topic_notes_body: ((inputs?: Demo_Narrative_Topic_Notes_BodyInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Narrative_Topic_Notes_BodyInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Demo_Narrative_Topic_Notes_BodyInputs = {};

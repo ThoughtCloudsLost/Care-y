@@ -19,17 +19,25 @@ const es_demo_narrative_topic_correction_status_body = /** @type {(inputs: Demo_
 **Por qué aparece en el hilo.** Las correcciones de contacto son eventos de seguimiento almacenados en el ticket, de la misma forma que las llamadas y los enlaces compartidos, y colocarlas en la línea de tiempo permite que el equipo vea cuándo ocurrió el cambio en relación a la conversación.`)
 };
 
+const en_xa2_demo_narrative_topic_correction_status_body = /** @type {(inputs: Demo_Narrative_Topic_Correction_Status_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Whèn à clìènt ùpdàtès thèìr còntàct ìnfòrmàtìòn thròùgh thè pòrtàl, thè chàngè àppèàrs ìn thè tìckèt thrèàd às à flàggèd èntry wìth à tìntèd bàckgròùnd ànd àn ìcòn sò ìt stànds òùt fròm règùlàr mèssàgès. Thè èntry shòws strùctùrèd ròws fòr èàch chàngèd fìèld, wìth làbèls ànd nèw vàlùès.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Àpply. ••** Whèn thè còrrèctìòn ìnclùdès à phònè nùmbèr òr èmàìl àddrèss, àn Àpply bùttòn nèxt tò thàt fìèld òpèns thè còrrèspòndìng èdìt flòw prèfìllèd wìth thè nèw vàlùè sò à vòlùntèèr càn ùpdàtè thè clìènt rècòrd ìn ònè tàp ràthèr thàn rètypìng ìt.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Àcknòwlèdgè. ••••** À tògglè bùttòn òn thè stàtùs lìnè lèts à vòlùntèèr màrk thè còrrèctìòn às hàndlèd. Àftèr tògglìng, thè lìnè shòws thè nàmè òf thè vòlùntèèr whò àcknòwlèdgèd ìt sò thè tèàm knòws whò rèvìèwèd thè chàngè.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Why ìt àppèàrs ìn thè thrèàd. •••••••••** Còntàct còrrèctìòns àrè fòllòw-ùp èvènts stòrèd òn thè tìckèt, thè sàmè wày càlls ànd shàrès àrè, ànd plàcìng thèm ìn thè tìmèlìnè lèts thè tèàm sèè whèn thè chàngè hàppènèd rèlàtìvè tò thè cònvèrsàtìòn. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "When a client updates their contact information through the portal, the change appears in the ticket thread as a flagged entry with a tinted background and a..." |
 *
 * @param {Demo_Narrative_Topic_Correction_Status_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_correction_status_body = /** @type {((inputs?: Demo_Narrative_Topic_Correction_Status_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Correction_Status_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_correction_status_body = /** @type {((inputs?: Demo_Narrative_Topic_Correction_Status_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Correction_Status_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_correction_status_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_correction_status_body(inputs)
 	return en_demo_narrative_topic_correction_status_body(inputs)
 });

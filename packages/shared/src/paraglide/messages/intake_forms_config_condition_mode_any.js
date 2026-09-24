@@ -13,17 +13,22 @@ const es_intake_forms_config_condition_mode_any = /** @type {(inputs: Intake_For
 	return /** @type {LocalizedString} */ (`Cualquier condición se cumple`)
 };
 
+const en_xa2_intake_forms_config_condition_mode_any = /** @type {(inputs: Intake_Forms_Config_Condition_Mode_AnyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àny còndìtìòn màtchès •••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Any condition matches" |
 *
 * @param {Intake_Forms_Config_Condition_Mode_AnyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_config_condition_mode_any = /** @type {((inputs?: Intake_Forms_Config_Condition_Mode_AnyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Condition_Mode_AnyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_config_condition_mode_any = /** @type {((inputs?: Intake_Forms_Config_Condition_Mode_AnyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Condition_Mode_AnyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_config_condition_mode_any(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_config_condition_mode_any(inputs)
 	return en_intake_forms_config_condition_mode_any(inputs)
 });

@@ -17,17 +17,24 @@ const es_demo_narrative_topic_reply_body = /** @type {(inputs: Demo_Narrative_To
 **Confirmación de entrega.** El hilo muestra el estado de entrega de cada mensaje saliente para que el voluntario sepa si el mensaje llegó al cliente.`)
 };
 
+const en_xa2_demo_narrative_topic_reply_body = /** @type {(inputs: Demo_Narrative_Topic_Reply_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Whèn à vòlùntèèr sènds à rèply, thè mèssàgè ìs èncryptèd òn thè dèvìcè wìth thè pèr tìckèt kèy bèfòrè ìt rèàchès thè sèrvèr. Thè sèrvèr stòrès thè cìphèrtèxt ànd dèlìvèrs ìt tò thè rècìpìènt.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**SMS rèplìès. ••••** Ìf thè chànnèl ìs SMS, thè sèrvèr fòrwàrds thè mèssàgè tò thè tèlèphòny pròvìdèr thròùgh à stàtèlèss rèlày thàt rèàds thè rèqùèst bòdy às à ràw bùffèr ànd zèròs ìt fròm mèmòry ìmmèdìàtèly àftèr fòrwàrdìng. Thè rèlày nèvèr crèàtès à JàvàScrìpt strìng fròm thè còntènt, ànd thè sèrvèr dòès nòt stòrè òr lòg thè òùtbòùnd mèssàgè. À rèsìdùàl rìsk ìs àcknòwlèdgèd ìn thè còdè: thè tèlèphòny pròvìdèr's SDK mày crèàtè ìntèrnàl strìng còpìès thàt pèrsìst ùntìl gàrbàgè còllèctìòn.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Dèlìvèry cònfìrmàtìòn. •••••••** Thè thrèàd shòws dèlìvèry stàtùs fòr èàch òùtbòùnd mèssàgè sò thè vòlùntèèr knòws whèthèr thè mèssàgè rèàchèd thè clìènt. •••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "When a volunteer sends a reply, the message is encrypted on the device with the per ticket key before it reaches the server. The server stores the ciphertext..." |
 *
 * @param {Demo_Narrative_Topic_Reply_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_reply_body = /** @type {((inputs?: Demo_Narrative_Topic_Reply_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Reply_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_reply_body = /** @type {((inputs?: Demo_Narrative_Topic_Reply_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Reply_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_reply_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_reply_body(inputs)
 	return en_demo_narrative_topic_reply_body(inputs)
 });

@@ -13,17 +13,22 @@ const es_error_self_dependency = /** @type {(inputs: Error_Self_DependencyInputs
 	return /** @type {LocalizedString} */ (`Un ${i?.ticket} no puede depender de sí mismo.`)
 };
 
+const en_xa2_error_self_dependency = /** @type {(inputs: Error_Self_DependencyInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦À  •${i?.ticket} cànnòt dèpènd òn ìtsèlf. ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "A {ticket} cannot depend on itself." |
 *
 * @param {Error_Self_DependencyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_self_dependency = /** @type {((inputs: Error_Self_DependencyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Self_DependencyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const error_self_dependency = /** @type {((inputs: Error_Self_DependencyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Self_DependencyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_self_dependency(inputs)
+	if (locale === "en-XA") return en_xa2_error_self_dependency(inputs)
 	return en_error_self_dependency(inputs)
 });

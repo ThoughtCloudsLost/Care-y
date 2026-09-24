@@ -13,17 +13,22 @@ const es_client_no_tickets = /** @type {(inputs: Client_No_TicketsInputs) => Loc
 	return /** @type {LocalizedString} */ (`No hay ${i?.tickets} para este ${i?.client}.`)
 };
 
+const en_xa2_client_no_tickets = /** @type {(inputs: Client_No_TicketsInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Nò  •${i?.tickets} fòr thìs  •••${i?.client}. •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "No {tickets} for this {client}." |
 *
 * @param {Client_No_TicketsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const client_no_tickets = /** @type {((inputs: Client_No_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_No_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const client_no_tickets = /** @type {((inputs: Client_No_TicketsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Client_No_TicketsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_client_no_tickets(inputs)
+	if (locale === "en-XA") return en_xa2_client_no_tickets(inputs)
 	return en_client_no_tickets(inputs)
 });

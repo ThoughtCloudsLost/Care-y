@@ -7,11 +7,11 @@ export type Mergecandidates_Dismiss1Inputs = {};
 * | "Dismiss" |
 *
 * @param {Mergecandidates_Dismiss1Inputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 declare const mergecandidates_dismiss1: ((inputs?: Mergecandidates_Dismiss1Inputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Mergecandidates_Dismiss1Inputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;

@@ -25,17 +25,28 @@ const es_demo_narrative_client_intake_form_body = /** @type {(inputs: Demo_Narra
 **Cuando está vacío.** La página de admisión muestra un aviso de que el formulario no está disponible cuando la admisión está desactivada a nivel de la organización, cuando la dirección del formulario no coincide con un formulario publicado o cuando el formulario predeterminado integrado ha sido desactivado, y cuando JavaScript está desactivado un aviso separado explica que el formulario lo necesita para cifrar la información.`)
 };
 
+const en_xa2_demo_narrative_client_intake_form_body = /** @type {(inputs: Demo_Narrative_Client_Intake_Form_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè ìntàkè fòrm ìs thè fìrst thìng à pèrsòn sèèkìng hèlp sèès, ànd nò lògìn òr àccòùnt ìs nèèdèd tò ùsè ìt.
+ •••••••••••••••••••••••••••••••••**Qùìck èxìt. ••••** Thè qùìck èxìt còntròl ìs rèndèrèd òncè by thè clìènt shèll ràthèr thàn by èàch pàgè, sò ìt ìs prèsènt òn èvèry clìènt pàgè ànd à nèw pàgè cànnòt fòrgèt ìt. Thè fùll sèqùèncè ànd ìts sàfèty nèt àrè dòcùmèntèd ìn thè qùìck èxìt èntry.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Dèfàùlt fòrm. ••••** Èvèry òrgànìzàtìòn hàs à bùìlt-ìn ìntàkè fòrm wìth à nàmè fìèld ànd à còntàct mèthòd sèlèctòr. Àdmìnìstràtòrs càn pùblìsh cùstòm fòrms thàt rèplàcè ìt wìth thèìr òwn fìèlds, ànd èàch cùstòm fòrm gèts ìts òwn shàrèàblè lìnk.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Òrg-àùthòrèd còntènt. •••••••** Thè ìntàkè fòrm càn càrry à cùstòm ìntròdùctìòn wrìttèn by àn àdmìnìstràtòr ìn thè fòrm bùìldèr, à bànnèr ìmàgè, ànd à cùstòm sùbmìssìòn mèssàgè thàt rèplàcès thè dèfàùlt cònfìrmàtìòn còpy. Thè ìntròdùctìòn ànd thè sùbmìssìòn mèssàgè àrè èncryptèd àt rèst ànd dècryptèd by thè vìsìtòr's bròwsèr fòr dìsplày, whìlè thè bànnèr ìmàgè ìs dècryptèd by thè sèrvèr òn thè fly ànd sèrvèd às àn òrdìnàry ìmàgè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Dèvìcè tràcès. •••••** Thè ìntàkè fòrm ìtsèlf wrìtès nòthìng tò lòcàl stòràgè, sèssìòn stòràgè, òr còòkìès, ànd ànythìng thè vìsìtòr typèd stàys ìn mèmòry ònly ùntìl thè tàb clòsès. Thè làngùàgè pìckèr ànd thè còlòùr-schèmè tògglè ìn thè dràwèr dò wrìtè pèrsìstènt stàtè: thè làngùàgè pìckèr sèts à còòkìè ànd thè còlòùr-schèmè tògglè wrìtès tò lòcàl stòràgè, sò à vìsìtòr whò ùsès èìthèr ònè lèàvès à tràcè thè fòrm àlònè wòùld nòt. À bròwsèr hìstòry èntry àlsò rèmàìns bècàùsè thè pàgè ìs à nòrmàl nàvìgàtìòn.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Ìf ìt fàìls. ••••** Thè ìntàkè fòrm shòws àn èrròr wìth à rètry òptìòn whèn à nètwòrk òr dècryptìòn fàìlùrè prèvènts lòàdìng, ànd ìf thè òrgànìzàtìòn's pùblìc kèy ìs nòt àvàìlàblè àt àll ìt tèlls thè vìsìtòr ìt cànnòt èncrypt ànd sùggèsts càllìng ìnstèàd.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whèn ìt ìs èmpty. ••••••** Thè ìntàkè pàgè shòws à nòtìcè thàt thè fòrm ìs nòt àvàìlàblè whèn ìntàkè ìs dìsàblèd àt thè òrgànìzàtìòn lèvèl, whèn thè fòrm àddrèss dòès nòt màtch à pùblìshèd fòrm, òr whèn thè bùìlt-ìn dèfàùlt fòrm hàs bèèn tùrnèd òff, ànd whèn JàvàScrìpt ìs dìsàblèd à sèpàràtè nòtìcè èxplàìns thàt thè fòrm nèèds ìt tò èncrypt. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The intake form is the first thing a person seeking help sees, and no login or account is needed to use it. **Quick exit.** The quick exit control is rendere..." |
 *
 * @param {Demo_Narrative_Client_Intake_Form_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_client_intake_form_body = /** @type {((inputs?: Demo_Narrative_Client_Intake_Form_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Intake_Form_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_client_intake_form_body = /** @type {((inputs?: Demo_Narrative_Client_Intake_Form_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Intake_Form_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_client_intake_form_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_client_intake_form_body(inputs)
 	return en_demo_narrative_client_intake_form_body(inputs)
 });

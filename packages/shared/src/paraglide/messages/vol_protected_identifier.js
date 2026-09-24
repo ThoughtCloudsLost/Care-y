@@ -13,17 +13,22 @@ const es_vol_protected_identifier = /** @type {(inputs: Vol_Protected_Identifier
 	return /** @type {LocalizedString} */ (`Tu usuario de inicio de sesión es un seudónimo, no vinculado a tu identidad real.`)
 };
 
+const en_xa2_vol_protected_identifier = /** @type {(inputs: Vol_Protected_IdentifierInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Yòùr lògìn ùsèrnàmè ìs à psèùdònym, nòt lìnkèd tò yòùr rèàl ìdèntìty. •••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Your login username is a pseudonym, not linked to your real identity." |
 *
 * @param {Vol_Protected_IdentifierInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const vol_protected_identifier = /** @type {((inputs?: Vol_Protected_IdentifierInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Protected_IdentifierInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const vol_protected_identifier = /** @type {((inputs?: Vol_Protected_IdentifierInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Protected_IdentifierInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_vol_protected_identifier(inputs)
+	if (locale === "en-XA") return en_xa2_vol_protected_identifier(inputs)
 	return en_vol_protected_identifier(inputs)
 });

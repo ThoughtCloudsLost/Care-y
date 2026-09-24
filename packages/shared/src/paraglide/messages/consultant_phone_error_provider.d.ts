@@ -4,13 +4,13 @@
 * | "Could not send the code. Try again later." |
 *
 * @param {Consultant_Phone_Error_ProviderInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const consultant_phone_error_provider: ((inputs?: Consultant_Phone_Error_ProviderInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Consultant_Phone_Error_ProviderInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Consultant_Phone_Error_ProviderInputs = {};

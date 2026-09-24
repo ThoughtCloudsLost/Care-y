@@ -13,17 +13,22 @@ const es_panel_call_log = /** @type {(inputs: Panel_Call_LogInputs) => Localized
 	return /** @type {LocalizedString} */ (`Registro de llamadas`)
 };
 
+const en_xa2_panel_call_log = /** @type {(inputs: Panel_Call_LogInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Càll Lòg •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Call Log" |
 *
 * @param {Panel_Call_LogInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const panel_call_log = /** @type {((inputs?: Panel_Call_LogInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_Call_LogInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const panel_call_log = /** @type {((inputs?: Panel_Call_LogInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Panel_Call_LogInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_panel_call_log(inputs)
+	if (locale === "en-XA") return en_xa2_panel_call_log(inputs)
 	return en_panel_call_log(inputs)
 });

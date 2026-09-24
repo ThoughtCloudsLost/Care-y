@@ -23,17 +23,27 @@ const es_demo_narrative_topic_email_thread_body = /** @type {(inputs: Demo_Narra
 **Revocar el token de respuesta.** El panel del caso muestra una acción de Revocar token de respuesta por correo cuando el cliente tiene una dirección de correo electrónico registrada. Revocar el token impide que las respuestas enviadas por correo lleguen al hilo, y se crea un token nuevo automáticamente con el siguiente correo saliente de un voluntario.`)
 };
 
+const en_xa2_demo_narrative_topic_email_thread_body = /** @type {(inputs: Demo_Narrative_Topic_Email_Thread_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èmàìls sènt ànd rècèìvèd òn à tìckèt àppèàr ìn thè sàmè cònvèrsàtìòn thrèàd às SMS mèssàgès, pòrtàl rèplìès, ànd ìntèrnàl nòtès.
+ •••••••••••••••••••••••••••••••••••••••**Òùtbòùnd èmàìls. •••••** Whèn à vòlùntèèr sènds àn èmàìl fròm thè còmpòsè bàr, thè thrèàd shòws thè mèssàgè wìth à sùbjèct lìnè, thè fòrmàttèd bòdy, ànd àn Èmàìl chìp làbèlìng thè chànnèl. Thè còmpòsè shèèt whèrè thè vòlùntèèr wrìtès thè èmàìl shòws à plàìntèxt wàrnìng bànnèr bècàùsè thè mèssàgè lèàvès thè systèm ùnèncryptèd.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Ìnbòùnd èmàìls. •••••** Whèn à clìènt rèplìès by èmàìl, thè thrèàd shòws thè clàìmèd Fròm àddrèss, thè sùbjèct, ànd thè plàìn tèxt bòdy. Thè Fròm àddrèss ìs màrkèd às ùnvèrìfìèd bècàùsè thè sèrvèr cànnòt cònfìrm thè sèndèr's ìdèntìty. Ìf thè ìnbòùnd èmàìl càrrìèd àttàchmènts, à nòtìcè bèlòw thè bòdy sàys hòw màny wèrè strìppèd, sìncè èmàìl àttàchmènts àrè nòt ìmpòrtèd ìntò thè èncryptèd stòrè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Ìnbòùnd càùtìòn. •••••** Àn ìnfò bùttòn òn èàch ìnbòùnd èmàìl òpèns àn èxpàndàblè pànèl wìth thè wàrnìng "Thìs mèssàgè àrrìvèd by èmàìl. Èmàìl ìs thè èàsìèst chànnèl tò fàkè. Chèck ànythìng ìmpòrtànt ìn ìt bèfòrè àctìng òn ìt."
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Còmpòsè bàr nòtìcè. ••••••** Whèn thè clìènt's mòst rècènt mèssàgè àrrìvèd by èmàìl, à càùtìòn àppèàrs àbòvè thè còmpòsè bàr wàrnìng thàt thè clìènt mày bè èxpèctìng àn èmàìl rèply ànd mìght nòt sèè àn SMS òr pòrtàl mèssàgè. Thè càùtìòn càn bè dìsmìssèd ànd stàys dìsmìssèd fòr thàt tìckèt fòr thè rèst òf thè sèssìòn.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Rèvòkìng thè rèply tòkèn. ••••••••** Thè càsè pànèl shòws à Rèvòkè èmàìl rèply tòkèn àctìòn whèn thè clìènt hàs àn èmàìl àddrèss òn fìlè. Rèvòkìng thè tòkèn stòps èmàìlèd rèplìès fròm làndìng ìn thè thrèàd, ànd à nèw tòkèn ìs crèàtèd àùtòmàtìcàlly òn thè nèxt òùtbòùnd èmàìl fròm à vòlùntèèr. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Emails sent and received on a ticket appear in the same conversation thread as SMS messages, portal replies, and internal notes. **Outbound emails.** When a ..." |
 *
 * @param {Demo_Narrative_Topic_Email_Thread_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_email_thread_body = /** @type {((inputs?: Demo_Narrative_Topic_Email_Thread_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Email_Thread_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_email_thread_body = /** @type {((inputs?: Demo_Narrative_Topic_Email_Thread_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Email_Thread_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_email_thread_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_email_thread_body(inputs)
 	return en_demo_narrative_topic_email_thread_body(inputs)
 });

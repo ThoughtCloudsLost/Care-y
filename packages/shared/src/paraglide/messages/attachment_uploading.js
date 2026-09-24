@@ -13,17 +13,22 @@ const es_attachment_uploading = /** @type {(inputs: Attachment_UploadingInputs) 
 	return /** @type {LocalizedString} */ (`Subiendo`)
 };
 
+const en_xa2_attachment_uploading = /** @type {(inputs: Attachment_UploadingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ùplòàdìng •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Uploading" |
 *
 * @param {Attachment_UploadingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const attachment_uploading = /** @type {((inputs?: Attachment_UploadingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Attachment_UploadingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const attachment_uploading = /** @type {((inputs?: Attachment_UploadingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Attachment_UploadingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_attachment_uploading(inputs)
+	if (locale === "en-XA") return en_xa2_attachment_uploading(inputs)
 	return en_attachment_uploading(inputs)
 });

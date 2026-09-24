@@ -13,17 +13,22 @@ const es_error_phone_hash_conflict = /** @type {(inputs: Error_Phone_Hash_Confli
 	return /** @type {LocalizedString} */ (`Ese número de teléfono pertenece a otro ${i?.client}.`)
 };
 
+const en_xa2_error_phone_hash_conflict = /** @type {(inputs: Error_Phone_Hash_ConflictInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Thàt phònè nùmbèr bèlòngs tò ànòthèr  ••••••••••••${i?.client}. •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "That phone number belongs to another {client}." |
 *
 * @param {Error_Phone_Hash_ConflictInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_phone_hash_conflict = /** @type {((inputs: Error_Phone_Hash_ConflictInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Phone_Hash_ConflictInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const error_phone_hash_conflict = /** @type {((inputs: Error_Phone_Hash_ConflictInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Phone_Hash_ConflictInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_phone_hash_conflict(inputs)
+	if (locale === "en-XA") return en_xa2_error_phone_hash_conflict(inputs)
 	return en_error_phone_hash_conflict(inputs)
 });

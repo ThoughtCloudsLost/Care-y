@@ -4,13 +4,13 @@
 * | "Checkboxes" |
 *
 * @param {Intake_Forms_Field_Type_MultiselectInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const intake_forms_field_type_multiselect: ((inputs?: Intake_Forms_Field_Type_MultiselectInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Intake_Forms_Field_Type_MultiselectInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Intake_Forms_Field_Type_MultiselectInputs = {};

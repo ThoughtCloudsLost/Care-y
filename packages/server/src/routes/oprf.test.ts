@@ -11,6 +11,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { createAppRouter } from "./router.js";
 import { createCallerFactory } from "../trpc/trpc.js";
 import type { Context } from "../trpc/context.js";
+import type { Kysely } from "kysely";
+import type { TenantDatabase } from "../db/types.js";
 import {
   getSodium,
   oprfBlind,
@@ -56,7 +58,7 @@ import {
   ValidationError,
   OprfError,
 } from "../errors.js";
-import { RoleId } from "@care-y/shared";
+import { RoleId, ErrorCode } from "@care-y/shared";
 import type {
   SessionId,
   SessionToken,
@@ -149,6 +151,7 @@ function makeRequest(
     blindedElement: VALID_BLINDED_ELEMENT,
     ip: TEST_IP,
     sessionUserId: null,
+    twofaVerified: false,
     powChallenge: undefined,
     powSolution: undefined,
     ...overrides,
@@ -460,6 +463,62 @@ describe("OprfEvaluateService", () => {
 // 3. OPRF tRPC route (wiring test)
 // ---------------------------------------------------------------------------
 
+/**
+ * tenantDb stub that supports two_factor_methods + role_permission_overrides.
+ * Returns the provided enrolled methods for any userId query.
+ */
+function stubTenantDbWithMethods(
+  methods: Array<{ method_type: string }>,
+): Kysely<TenantDatabase> {
+  const stub = {
+    selectFrom: (table: string) => {
+      if (table === "two_factor_methods") {
+        return {
+          select: () => ({
+            where: () => ({
+              where: () => ({
+                execute: async () => methods,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "org_config") {
+        return {
+          select: () => ({
+            executeTakeFirst: async (): Promise<unknown> => undefined,
+          }),
+        };
+      }
+      if (table === "role_permission_overrides") {
+        return {
+          select: () => ({
+            execute: async (): Promise<unknown[]> => [],
+          }),
+        };
+      }
+      throw new Error(`stubTenantDbWithMethods: unexpected query on ${table}`);
+    },
+  };
+  return stub as unknown as Kysely<TenantDatabase>;
+}
+
+/**
+ * Org context whose tenantDb reports no enrolled 2FA methods, so the
+ * evaluate route's 2FA gate treats the target as pre-enrollment. The
+ * gate requires a resolved org for volunteer evaluations, so route
+ * tests that are not about the gate use this instead of org: null.
+ */
+function stubOrgCtx(): Context["org"] {
+  return {
+    orgId: "a0000000-0000-4000-8000-000000000001" as OrgId,
+    orgSlug: "test-org" as OrgSlug,
+    orgSchema: "org_a0000000-0000-4000-8000-000000000001" as OrgSchema,
+    tenantDb: stubTenantDbWithMethods([]),
+    sealedBox: null as never,
+  };
+}
+
 describe("OPRF tRPC route", () => {
   function buildCaller(ctxOverrides?: Partial<Context>) {
     const service = createOprfEvaluateService(makeServiceDeps());
@@ -520,7 +579,7 @@ describe("OPRF tRPC route", () => {
     const ctx: Context = {
       req: mockReq({ headers: { "x-forwarded-for": TEST_IP } }),
       res: mockRes(),
-      org: null,
+      org: stubOrgCtx(),
       session: null,
       user: null,
       ...ctxOverrides,
@@ -570,6 +629,177 @@ describe("OPRF tRPC route", () => {
       }),
       "FORBIDDEN",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3a. evaluate route: 2FA gate (enrolled methods + twofaVerified)
+// ---------------------------------------------------------------------------
+
+describe("OPRF evaluate 2FA gate", () => {
+  function buildCallerWith2fa(
+    enrolled: Array<{ method_type: string }>,
+    twofaVerified: boolean,
+    withSession = true,
+  ) {
+    const service = createOprfEvaluateService(makeServiceDeps());
+    const tenantDb = stubTenantDbWithMethods(enrolled);
+    const appRouter = createAppRouter({
+      ...NO_OPTIONAL_ROUTERS,
+      authDeps: {
+        hasher: createScryptHasher(),
+        loginLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 100,
+        }),
+        saltLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 100,
+        }),
+        fakeSaltKey: Buffer.alloc(32, 0),
+        encryptor: testFieldEncryptor,
+        indexer: testBlindIndexer,
+        isSecureCookie: false,
+        emailSender: createMockEmailSender(),
+        tokenizer: testSessionTokenizer,
+        providerFactory: createThrowingProviderFactory(),
+        resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+        totpReplayCache: createInMemoryTotpReplayCache(),
+        createAuditSvc: null,
+      },
+      profileDeps: {
+        hasher: createScryptHasher(),
+        encryptor: testFieldEncryptor,
+        indexer: testBlindIndexer,
+        tokenizer: testSessionTokenizer,
+        passwordChangeLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 100,
+        }),
+      },
+      twoFactorDeps: {
+        emailSender: createMockEmailSender(),
+        encryptor: testFieldEncryptor,
+        indexer: testBlindIndexer,
+        tokenizer: testSessionTokenizer,
+        providerFactory: createThrowingProviderFactory(),
+        resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
+        pushSender: null,
+        pushHmacKey: null,
+        totpReplayCache: createInMemoryTotpReplayCache(),
+      },
+      oprfDeps: { oprfService: service },
+      orgService: {
+        findBySlug: async () => null,
+        createOrg: async () => {
+          throw new OprfError("not implemented in test");
+        },
+      } as unknown as Parameters<typeof createAppRouter>[0]["orgService"],
+      providerFactory: createThrowingProviderFactory(),
+    });
+    const factory = createCallerFactory(appRouter);
+    const ctx: Context = {
+      req: mockReq({ headers: { "x-forwarded-for": TEST_IP } }),
+      res: mockRes(),
+      org: {
+        orgId: "a0000000-0000-4000-8000-000000000001" as OrgId,
+        orgSlug: "test-org" as OrgSlug,
+        orgSchema: "org_a0000000-0000-4000-8000-000000000001" as OrgSchema,
+        tenantDb,
+        sealedBox: null as never,
+      },
+      session: withSession
+        ? {
+            id: "test-session" as SessionId,
+            token: "test-token" as SessionToken,
+            userId: TEST_USER_ID,
+            ipToken: "test-ip-token" as IpToken,
+            uaToken: "test-ua-token" as UaToken,
+            expiresAt: new Date(Date.now() + 3_600_000),
+            twofaVerified,
+            webauthnChallenge: null,
+          }
+        : null,
+      user: withSession
+        ? {
+            id: TEST_USER_ID,
+            encryptedIdentifier: "test-user",
+            encryptedDisplayName: "Test User",
+            encryptedPreferredLocale: null,
+            roleId: RoleId.VOLUNTEER,
+            isActive: true,
+            hasSeenBriefing: true,
+          }
+        : null,
+    };
+    return factory(ctx);
+  }
+
+  it("rejects volunteer evaluation when user has enrolled 2FA but session is not verified", async () => {
+    const caller = buildCallerWith2fa([{ method_type: "totp" }], false);
+
+    await expectTrpcError(
+      caller.oprf.evaluate({
+        kind: "volunteer",
+        userId: TEST_USER_ID,
+        blindedElement: VALID_BLINDED_ELEMENT,
+      }),
+      "UNAUTHORIZED",
+      ErrorCode.TWOFA_REQUIRED,
+    );
+  });
+
+  it("allows volunteer evaluation when user has enrolled 2FA and session is verified", async () => {
+    const caller = buildCallerWith2fa([{ method_type: "totp" }], true);
+
+    const result = await caller.oprf.evaluate({
+      kind: "volunteer",
+      userId: TEST_USER_ID,
+      blindedElement: VALID_BLINDED_ELEMENT,
+    });
+    expect(result.evaluated).toBe(EXPECTED_EVALUATED);
+  });
+
+  it("rejects volunteer evaluation for an enrolled user when no session is presented", async () => {
+    // Dropping the session cookie must not bypass the gate: the lookup
+    // keys off the target userId, and an enrolled target without a
+    // verified session is refused.
+    const caller = buildCallerWith2fa([{ method_type: "totp" }], false, false);
+
+    await expectTrpcError(
+      caller.oprf.evaluate({
+        kind: "volunteer",
+        userId: TEST_USER_ID,
+        blindedElement: VALID_BLINDED_ELEMENT,
+      }),
+      "UNAUTHORIZED",
+      ErrorCode.TWOFA_REQUIRED,
+    );
+  });
+
+  it("allows volunteer evaluation when user has no enrolled 2FA (pre-enrollment)", async () => {
+    const caller = buildCallerWith2fa([], false);
+
+    const result = await caller.oprf.evaluate({
+      kind: "volunteer",
+      userId: TEST_USER_ID,
+      blindedElement: VALID_BLINDED_ELEMENT,
+    });
+    expect(result.evaluated).toBe(EXPECTED_EVALUATED);
+  });
+
+  it("allows account evaluation regardless of enrolled methods and twofaVerified", async () => {
+    const caller = buildCallerWith2fa([{ method_type: "totp" }], false);
+
+    // Account kind bypasses the 2FA gate (portal accounts have no 2FA).
+    // Use a different userId from the session's to avoid session-binding
+    // rejection (account kind skips session binding).
+    const result = await caller.oprf.evaluate({
+      kind: "account",
+      userId: TEST_USER_ID,
+      blindedElement: VALID_BLINDED_ELEMENT,
+    });
+    expect(result.evaluated).toBe(EXPECTED_EVALUATED);
   });
 });
 
@@ -914,7 +1144,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
       const ctx: Context = {
         req: mockReq({ headers: { "x-forwarded-for": TEST_IP } }),
         res: mockRes(),
-        org: null,
+        org: stubOrgCtx(),
         session: null,
         user: null,
         ...ctxOverrides,

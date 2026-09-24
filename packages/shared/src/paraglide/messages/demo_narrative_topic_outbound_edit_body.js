@@ -19,17 +19,25 @@ const es_demo_narrative_topic_outbound_edit_body = /** @type {(inputs: Demo_Narr
 **Alcance.** Solo los mensajes salientes en la aplicación escritos por el voluntario actual pueden editarse. Los mensajes SMS, mensajes de clientes y notas internas no son editables desde esta hoja.`)
 };
 
+const en_xa2_demo_narrative_topic_outbound_edit_body = /** @type {(inputs: Demo_Narrative_Topic_Outbound_Edit_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vòlùntèèrs càn èdìt àn òùtbòùnd ìn-àpp mèssàgè àftèr sèndìng ìt by òpènìng thè mèssàgè's àctìòn mènù ànd sèlèctìng èdìt. Thè èdìt shèèt òpèns wìth thè dècryptèd còntènt prèfìllèd.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••**Chàràctèr còùntèr. ••••••** À chàràctèr lìmìt àpplìès tò èdìtèd mèssàgès. À còùntèr àppèàrs nèàr thè càp ànd tùrns rèd whèn thè lìmìt ìs rèàchèd.
+ ••••••••••••••••••••••••••••••••••••**Rè-èncryptìòn. •••••** Sàvìng àn èdìt rè-èncrypts thè mèssàgè ìn thè bròwsèr ùsìng thè sàmè tìckèt kèy. Whèn à pòrtàl chànnèl ìs àctìvè, thè ùpdàtè ìs àlsò èncryptèd tò thè clìènt's pùblìc kèy sò thè còrrèctèd vèrsìòn ìs rèàdàblè òn thè clìènt sìdè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Scòpè. ••** Ònly ìn-àpp òùtbòùnd mèssàgès àùthòrèd by thè cùrrènt vòlùntèèr càn bè èdìtèd. SMS mèssàgès, clìènt mèssàgès, ànd ìntèrnàl nòtès àrè nòt èdìtàblè fròm thìs shèèt. •••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Volunteers can edit an outbound in-app message after sending it by opening the message's action menu and selecting edit. The edit sheet opens with the decryp..." |
 *
 * @param {Demo_Narrative_Topic_Outbound_Edit_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_outbound_edit_body = /** @type {((inputs?: Demo_Narrative_Topic_Outbound_Edit_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Outbound_Edit_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_outbound_edit_body = /** @type {((inputs?: Demo_Narrative_Topic_Outbound_Edit_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Outbound_Edit_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_outbound_edit_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_outbound_edit_body(inputs)
 	return en_demo_narrative_topic_outbound_edit_body(inputs)
 });

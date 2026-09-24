@@ -190,6 +190,8 @@ export interface SeedPortalResult {
   readonly customFormSlug: string;
   /** Sibling form whose closes_at has passed. */
   readonly closedFormId: IntakeFormId;
+  /** Public slug of the closed form, for /(client)/intake/[slug]. */
+  readonly closedFormSlug: string;
   /** Tickets created by the seeded intake submissions, newest last. */
   readonly responseTicketIds: readonly TicketId[];
   /** The response whose key wrap was removed, so the viewer's denied state has an example. */
@@ -1064,6 +1066,7 @@ async function seedForms(
   customFormId: IntakeFormId;
   customFormSlug: string;
   closedFormId: IntakeFormId;
+  closedFormSlug: string;
   fields: readonly SeedField[];
   queueOptionKeys: readonly string[];
 }> {
@@ -1166,6 +1169,7 @@ async function seedForms(
     customFormId,
     customFormSlug: customSlug,
     closedFormId,
+    closedFormSlug: "winter-shelter",
     fields,
     queueOptionKeys,
   };
@@ -1544,6 +1548,7 @@ export async function seedPortal(
     customFormId: forms.customFormId,
     customFormSlug: forms.customFormSlug,
     closedFormId: forms.closedFormId,
+    closedFormSlug: forms.closedFormSlug,
     responseTicketIds,
     keyNotHeldTicketId,
   };

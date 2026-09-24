@@ -13,18 +13,23 @@ const es_mergecandidates_shared_line1 = /** @type {(inputs: Mergecandidates_Shar
 	return /** @type {LocalizedString} */ (`Línea compartida`)
 };
 
+const en_xa2_mergecandidates_shared_line1 = /** @type {(inputs: Mergecandidates_Shared_Line1Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Shàrèd lìnè ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Shared line" |
 *
 * @param {Mergecandidates_Shared_Line1Inputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-const mergecandidates_shared_line1 = /** @type {((inputs?: Mergecandidates_Shared_Line1Inputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mergecandidates_Shared_Line1Inputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+const mergecandidates_shared_line1 = /** @type {((inputs?: Mergecandidates_Shared_Line1Inputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mergecandidates_Shared_Line1Inputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_mergecandidates_shared_line1(inputs)
+	if (locale === "en-XA") return en_xa2_mergecandidates_shared_line1(inputs)
 	return en_mergecandidates_shared_line1(inputs)
 });
 export { mergecandidates_shared_line1 as "mergeCandidates_shared_line" }

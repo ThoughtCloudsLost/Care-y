@@ -19,17 +19,25 @@ const es_demo_narrative_admin_intake_forms_body = /** @type {(inputs: Demo_Narra
 **Ciclo de vida.** Crear un formulario no lo publica. Un formulario creado permanece inaccesible hasta que se activa, y desactivarlo después detiene los envíos sin eliminar el formulario ni sus respuestas.`)
 };
 
+const en_xa2_demo_narrative_admin_intake_forms_body = /** @type {(inputs: Demo_Narrative_Admin_Intake_Forms_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè ìntàkè fòrms sèctìòn lìsts èvèry fòrm thè òrgànìzàtìòn hàs crèàtèd. Wèb ìntàkè càn bè swìtchèd òn òr òff fòr thè whòlè òrgànìzàtìòn, ànd whèn ìt ìs òn ànd nò cùstòm fòrm ìs màrkèd às dèfàùlt, à dèfàùlt fòrm àppèàrs sò ìntàkè àlwàys hàs sòmèthìng tò sèrvè.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Thè Mànàgè ìntàkè fòrms pèrmìssìòn ìs à mànàgèr dèfàùlt, ànd thè Vìèw ìntàkè rèspònsès pèrmìssìòn ìs àn àdmìnìstràtòr dèfàùlt. Thè twò àrè ìndèpèndènt ànd èìthèr càn bè gràntèd tò thè òthèr ròlè, sò à ùsèr whò bùìlds ànd pùblìshès à fòrm cànnòt rèàd àny rèspònsès tò ìt ùnlèss thè òrgànìzàtìòn àlsò grànts thè Vìèw ìntàkè rèspònsès pèrmìssìòn.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Fòrm dèfìnìtìòns àrè èncryptèd ùndèr à kèy dèrìvèd fròm thè òrgànìzàtìòn's pùblìc kèy, sò thè ìntàkè pàgè rèàds à fòrm wìthòùt àn àccòùnt whìlè à dàtàbàsè dùmp stàys òpàqùè. Dùplìcàtè pròdùcès à nèw èncryptèd còpy wìth frèsh fìèld kèys ànd à clèàrèd slùg sò thè còpy cànnòt còllìdè òn à pùblìc ÙRL.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Lìfècyclè. •••** Crèàtìng à fòrm dòès nòt pùblìsh ìt. À crèàtèd fòrm stàys ùnrèàchàblè ùntìl ìt ìs àctìvàtèd, ànd dèàctìvàtìng ìt làtèr stòps sùbmìssìòns wìthòùt dèlètìng thè fòrm òr ìts rèspònsès. •••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The intake forms section lists every form the organization has created. Web intake can be switched on or off for the whole organization, and when it is on an..." |
 *
 * @param {Demo_Narrative_Admin_Intake_Forms_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_intake_forms_body = /** @type {((inputs?: Demo_Narrative_Admin_Intake_Forms_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Intake_Forms_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_intake_forms_body = /** @type {((inputs?: Demo_Narrative_Admin_Intake_Forms_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Intake_Forms_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_intake_forms_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_intake_forms_body(inputs)
 	return en_demo_narrative_admin_intake_forms_body(inputs)
 });

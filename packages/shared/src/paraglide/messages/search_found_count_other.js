@@ -13,17 +13,22 @@ const es_search_found_count_other = /** @type {(inputs: Search_Found_Count_Other
 	return /** @type {LocalizedString} */ (`${i?.count} encontrados`)
 };
 
+const en_xa2_search_found_count_other = /** @type {(inputs: Search_Found_Count_OtherInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count} fòùnd ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} found" |
 *
 * @param {Search_Found_Count_OtherInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const search_found_count_other = /** @type {((inputs: Search_Found_Count_OtherInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Found_Count_OtherInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const search_found_count_other = /** @type {((inputs: Search_Found_Count_OtherInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Found_Count_OtherInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_search_found_count_other(inputs)
+	if (locale === "en-XA") return en_xa2_search_found_count_other(inputs)
 	return en_search_found_count_other(inputs)
 });

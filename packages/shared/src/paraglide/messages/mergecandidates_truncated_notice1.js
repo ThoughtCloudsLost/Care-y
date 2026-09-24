@@ -13,18 +13,23 @@ const es_mergecandidates_truncated_notice1 = /** @type {(inputs: Mergecandidates
 	return /** @type {LocalizedString} */ (`Hay más duplicados posibles de los que se muestran. Resuelve o descarta algunos, o marca los números compartidos, para ver el resto.`)
 };
 
+const en_xa2_mergecandidates_truncated_notice1 = /** @type {(inputs: Mergecandidates_Truncated_Notice1Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thèrè àrè mòrè pòssìblè dùplìcàtès thàn shòwn. Rèsòlvè òr dìsmìss sòmè, òr màrk shàrèd nùmbèrs, tò sèè thè rèst. ••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "There are more possible duplicates than shown. Resolve or dismiss some, or mark shared numbers, to see the rest." |
 *
 * @param {Mergecandidates_Truncated_Notice1Inputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-const mergecandidates_truncated_notice1 = /** @type {((inputs?: Mergecandidates_Truncated_Notice1Inputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mergecandidates_Truncated_Notice1Inputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+const mergecandidates_truncated_notice1 = /** @type {((inputs?: Mergecandidates_Truncated_Notice1Inputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mergecandidates_Truncated_Notice1Inputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_mergecandidates_truncated_notice1(inputs)
+	if (locale === "en-XA") return en_xa2_mergecandidates_truncated_notice1(inputs)
 	return en_mergecandidates_truncated_notice1(inputs)
 });
 export { mergecandidates_truncated_notice1 as "mergeCandidates_truncated_notice" }

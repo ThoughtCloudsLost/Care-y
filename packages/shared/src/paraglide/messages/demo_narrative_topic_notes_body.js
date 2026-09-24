@@ -19,17 +19,25 @@ const es_demo_narrative_topic_notes_body = /** @type {(inputs: Demo_Narrative_To
 **Reacciones.** Los voluntarios pueden añadir reacciones a las notas. Cinco tipos de reacción están disponibles: reconocer, aprobar, discrepar, marcar y completar. Las reacciones son metadatos en texto plano visibles para todos los voluntarios que pueden ver la nota, y actualmente no están disponibles en mensajes del cliente.`)
 };
 
+const en_xa2_demo_narrative_topic_notes_body = /** @type {(inputs: Demo_Narrative_Topic_Notes_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nòtès àrè vìsìblè ònly tò òrg mèmbèrs ànd àrè èncryptèd wìth thè sàmè pèr tìckèt kèy às mèssàgès. Thè sèrvèr hòlds thè nòtè typè ànd ròlè gàtìng mètàdàtà thàt dètèrmìnè whìch nòtès èàch vòlùntèèr càn sèè, bùt ìt cànnòt rèàd thè nòtè còntènt ìtsèlf.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Nòtè typès. ••••** Èàch nòtè ìs tàggèd wìth à typè. Thè fòùr dèfàùlts àrè Còmmènt fòr gènèràl òbsèrvàtìòns, Rèsòlùtìòn fòr dòcùmèntìng hòw thè tìckèt wàs rèsòlvèd ànd pròmptèd òn clòsè, Sàfèty Còncèrn fòr flàggìng rìsk tò sòmèònè's wèllbèìng wìth nòtìfìcàtìòns tò àdmìns ànd mànàgèrs, ànd Rèqùèst fòr àskìng fòr àddìtìònàl rèsòùrcès wìth nòtìfìcàtìòns tò àdmìns ànd mànàgèrs. Àdmìnìstràtòrs càn èdìt thèsè ànd crèàtè àddìtìònàl typès fròm thè àdmìn sèttìngs pàgè.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Vìsìbìlìty. ••••** Nòtè typès hàvè à mìnìmùm vìèw ròlè sèttìng. À nòtè typè rèstrìctèd tò mànàgèrs òr àbòvè ìs ìnvìsìblè tò règùlàr vòlùntèèrs. Thè sèrvèr fìltèrs nòtès by ròlè bèfòrè rètùrnìng thèm, sò rèstrìctèd nòtès nèvèr rèàch thè bròwsèr òf à vòlùntèèr bèlòw thè thrèshòld. Thè nòtè àùthòr càn àlwàys sèè thèìr òwn nòtès règàrdlèss òf ròlè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Rèàctìòns. •••** Vòlùntèèrs càn àdd rèàctìòns tò nòtès. Fìvè rèàctìòn typès àrè àvàìlàblè: àcknòwlèdgè, àppròvè, dìsàgrèè, flàg, ànd còmplètè. Rèàctìòns àrè plàìntèxt mètàdàtà vìsìblè tò àll vòlùntèèrs whò càn sèè thè nòtè, ànd thèy àrè nòt cùrrèntly àvàìlàblè òn clìènt mèssàgès. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Notes are visible only to org members and are encrypted with the same per ticket key as messages. The server holds the note type and role gating metadata tha..." |
 *
 * @param {Demo_Narrative_Topic_Notes_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_notes_body = /** @type {((inputs?: Demo_Narrative_Topic_Notes_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Notes_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_notes_body = /** @type {((inputs?: Demo_Narrative_Topic_Notes_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Notes_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_notes_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_notes_body(inputs)
 	return en_demo_narrative_topic_notes_body(inputs)
 });

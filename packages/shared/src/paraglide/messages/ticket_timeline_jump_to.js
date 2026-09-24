@@ -13,17 +13,22 @@ const es_ticket_timeline_jump_to = /** @type {(inputs: Ticket_Timeline_Jump_ToIn
 	return /** @type {LocalizedString} */ (`Ir a: ${i?.label}, ${i?.time}`)
 };
 
+const en_xa2_ticket_timeline_jump_to = /** @type {(inputs: Ticket_Timeline_Jump_ToInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Jùmp tò:  •••${i?.label},  •${i?.time}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Jump to: {label}, {time}" |
 *
 * @param {Ticket_Timeline_Jump_ToInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const ticket_timeline_jump_to = /** @type {((inputs: Ticket_Timeline_Jump_ToInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Timeline_Jump_ToInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const ticket_timeline_jump_to = /** @type {((inputs: Ticket_Timeline_Jump_ToInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Ticket_Timeline_Jump_ToInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_ticket_timeline_jump_to(inputs)
+	if (locale === "en-XA") return en_xa2_ticket_timeline_jump_to(inputs)
 	return en_ticket_timeline_jump_to(inputs)
 });

@@ -21,8 +21,8 @@
     createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { Permission } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { canCall } from "$lib/auth/procedure-gates.js";
   import { trpc } from "$lib/trpc/index.js";
   import { clientKeys, ticketKeys, ticketsKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -76,8 +76,11 @@
   const orgKeyManager = getOrgKeyManager();
   const queryClient = useQueryClient();
   const permissionsGetter = getCurrentPermissions();
-  const canMarkShared = $derived(
-    permissionsGetter().has(Permission.VIEW_CLIENTS),
+  const canQuerySharedLine = $derived(
+    canCall(permissionsGetter(), "clients.getPhoneSharedLine"),
+  );
+  const canToggleSharedLine = $derived(
+    canCall(permissionsGetter(), "clients.setPhoneSharedLine"),
   );
 
   let step = $state<Step>("input");
@@ -133,7 +136,7 @@
     queryFn: async () => {
       return clientsRouter.getPhoneSharedLine.query({ clientId });
     },
-    enabled: opened && canMarkShared,
+    enabled: opened && canQuerySharedLine,
     staleTime: Infinity,
   }));
 
@@ -262,7 +265,7 @@
           }}
         />
       </List>
-      {#if canMarkShared && sharedLineValue != null}
+      {#if canToggleSharedLine && sharedLineValue != null}
         <List nested>
           <ListItem label title={m.phone_shared_line_label()}>
             {#snippet after()}

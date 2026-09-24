@@ -13,17 +13,22 @@ const es_followup_type_share_link = /** @type {(inputs: Followup_Type_Share_Link
 	return /** @type {LocalizedString} */ (`Enlace seguro`)
 };
 
+const en_xa2_followup_type_share_link = /** @type {(inputs: Followup_Type_Share_LinkInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sècùrè lìnk ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Secure link" |
 *
 * @param {Followup_Type_Share_LinkInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const followup_type_share_link = /** @type {((inputs?: Followup_Type_Share_LinkInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Share_LinkInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const followup_type_share_link = /** @type {((inputs?: Followup_Type_Share_LinkInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Share_LinkInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_followup_type_share_link(inputs)
+	if (locale === "en-XA") return en_xa2_followup_type_share_link(inputs)
 	return en_followup_type_share_link(inputs)
 });

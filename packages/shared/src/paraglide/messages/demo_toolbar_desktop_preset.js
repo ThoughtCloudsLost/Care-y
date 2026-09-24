@@ -13,17 +13,22 @@ const es_demo_toolbar_desktop_preset = /** @type {(inputs: Demo_Toolbar_Desktop_
 	return /** @type {LocalizedString} */ (`Tamaño de escritorio`)
 };
 
+const en_xa2_demo_toolbar_desktop_preset = /** @type {(inputs: Demo_Toolbar_Desktop_PresetInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Dèsktòp sìzè ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Desktop size" |
 *
 * @param {Demo_Toolbar_Desktop_PresetInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_toolbar_desktop_preset = /** @type {((inputs?: Demo_Toolbar_Desktop_PresetInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Toolbar_Desktop_PresetInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_toolbar_desktop_preset = /** @type {((inputs?: Demo_Toolbar_Desktop_PresetInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Toolbar_Desktop_PresetInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_toolbar_desktop_preset(inputs)
+	if (locale === "en-XA") return en_xa2_demo_toolbar_desktop_preset(inputs)
 	return en_demo_toolbar_desktop_preset(inputs)
 });

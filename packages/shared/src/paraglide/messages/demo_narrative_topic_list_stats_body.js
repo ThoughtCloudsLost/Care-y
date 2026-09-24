@@ -17,17 +17,24 @@ const es_demo_narrative_topic_list_stats_body = /** @type {(inputs: Demo_Narrati
 **De dónde vienen los números.** Los conteos de estado se calculan a partir de columnas de metadatos en texto plano, por lo que el servidor los proporciona sin leer ningún contenido de ticket. El conteo de nuevas respuestas proviene del seguimiento de lectura por voluntario descrito en la sección de insignias de no leídos.`)
 };
 
+const en_xa2_demo_narrative_topic_list_stats_body = /** @type {(inputs: Demo_Narrative_Topic_List_Stats_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè ròw ùndèr thè pàgè tìtlè shòws lìvè còùnts fòr nèw, àctìvè, ànd òn hòld tìckèts, às wèll às à nèw rèplìès còùnt òncè thè bròwsèr fìnìshès chèckìng rèàd stàtè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••**Càùght ùp stàmp. •••••** Whèn èvèry tìckèt hàs bèèn rèàd, à dàtèlìnè stàmp àppèàrs àbòvè thè lìst màrkìng thè mòmènt thè vòlùntèèr càùght ùp. Nèw tìckèts àrrìvìng àftèr thàt pòìnt stàck àbòvè ìt.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••**Whèrè thè nùmbèrs còmè fròm. •••••••••** Thè stàtùs còùnts àrè còmpùtèd fròm plàìntèxt mètàdàtà còlùmns, sò thè sèrvèr pròvìdès thèm wìthòùt rèàdìng àny tìckèt còntènt. Thè nèw rèplìès còùnt còmès fròm thè pèr vòlùntèèr rèàd tràckìng dèscrìbèd ìn thè ùnrèàd bàdgès sèctìòn. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The row under the page title shows live counts for new, active, and on hold tickets, as well as a new replies count once the browser finishes checking read s..." |
 *
 * @param {Demo_Narrative_Topic_List_Stats_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_list_stats_body = /** @type {((inputs?: Demo_Narrative_Topic_List_Stats_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_List_Stats_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_list_stats_body = /** @type {((inputs?: Demo_Narrative_Topic_List_Stats_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_List_Stats_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_list_stats_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_list_stats_body(inputs)
 	return en_demo_narrative_topic_list_stats_body(inputs)
 });

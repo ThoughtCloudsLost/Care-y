@@ -19,17 +19,25 @@ const es_demo_narrative_admin_field_config_body = /** @type {(inputs: Demo_Narra
 **Persistencia.** Cambiar el tipo de campo conserva la configuración del tipo que se deja para que volver no pierda trabajo, y solo borra un rol que el nuevo tipo no puede llevar.`)
 };
 
+const en_xa2_demo_narrative_admin_field_config_body = /** @type {(inputs: Demo_Narrative_Admin_Field_Config_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè fìèld sèttìngs shèèt còntròls thè cònfìgùràtìòn fòr à sìnglè fìèld, ànd ìts còntènts chàngè wìth thè fìèld typè. Èvèry fìèld hàs à làbèl ànd òptìònàl hèlp tèxt fòr èàch lòcàlè ànd à rèqùìrèd tògglè. Tèxt fìèlds hàvè à plàcèhòldèr ànd màxìmùm lèngth, thè twò pìck typès hàvè èdìtàblè òptìòn lìsts, ànd thè stàndàlònè chèckbòx hàs à tògglè thàt rèqùìrès thè vìsìtòr tò chèck ìt bèfòrè sùbmìttìng.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Ròlès. ••** Tèn ròlès tèll thè rèst òf thè systèm whàt à fìèld's ànswèr mèàns ràthèr thàn lèàvìng ìt àn ùnlàbèlèd strìng. Ròlès thàt ìdèntìfy à pèrsòn, sùch às phònè còntàct òr rèàl nàmè, mày àppèàr àt mòst òncè pèr fòrm. Thè ròlè ànd wìdgèt typè àrè vàlìdàtèd às à pàìr, ànd whèn à chòsèn ròlè dòès nòt fìt thè cùrrènt wìdgèt thè shèèt èxplàìns thè cònflìct ànd òffèrs thè còmpàtìblè wìdgèt às à còrrèctìòn.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whèn ìt àppèàrs. •••••** À fìèld càn bè sèt tò àppèàr ònly whèn ànswèrs òn èàrlìèr fìèlds màtch spècìfìèd vàlùès, èxprèssèd às gròùps òf còndìtìòns.
+ ••••••••••••••••••••••••••••••••••••••**Pèrsìstèncè. ••••** Chàngìng thè fìèld typè prèsèrvès thè cònfìgùràtìòn òf thè typè bèìng lèft sò swìtchìng bàck dòès nòt lòsè wòrk, ànd clèàrs ònly à ròlè thè nèw typè cànnòt càrry. •••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The field settings sheet controls the configuration for a single field, and its contents change with the field type. Every field has a label and optional hel..." |
 *
 * @param {Demo_Narrative_Admin_Field_Config_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_field_config_body = /** @type {((inputs?: Demo_Narrative_Admin_Field_Config_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Field_Config_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_field_config_body = /** @type {((inputs?: Demo_Narrative_Admin_Field_Config_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Field_Config_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_field_config_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_field_config_body(inputs)
 	return en_demo_narrative_admin_field_config_body(inputs)
 });

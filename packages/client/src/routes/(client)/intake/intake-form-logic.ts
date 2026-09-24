@@ -312,3 +312,146 @@ export function validateFields(opts: {
 
   return { errors, contactDetailError, valid };
 }
+
+// ---------------------------------------------------------------------------
+// Issue collection (for validation summaries)
+// ---------------------------------------------------------------------------
+
+/** A single validation issue tied to a specific field. */
+export interface ValidationIssue {
+  readonly fieldKey: string;
+  readonly fieldLabel: string;
+  readonly error: string;
+  /** 1-based page number (present only in cross-page summaries). */
+  readonly pageNumber?: number;
+}
+
+/**
+ * Message functions for issue summary rows. The caller injects the
+ * localized templates so this module stays locale-agnostic, mirroring
+ * the ValidationMessages pattern above.
+ */
+export interface IssueRowMessages {
+  readonly issueRow: (params: { field: string; error: string }) => string;
+  readonly issueRowWithPage: (params: {
+    page: string;
+    field: string;
+    error: string;
+  }) => string;
+}
+
+/** Format a single-page issue row. */
+export function formatIssueRow(
+  issue: ValidationIssue,
+  messages: IssueRowMessages,
+): string {
+  return messages.issueRow({ field: issue.fieldLabel, error: issue.error });
+}
+
+/** Format a cross-page issue row (includes the page number). */
+export function formatCrossPageIssueRow(
+  issue: ValidationIssue,
+  messages: IssueRowMessages,
+): string {
+  return messages.issueRowWithPage({
+    page: String(issue.pageNumber ?? 1),
+    field: issue.fieldLabel,
+    error: issue.error,
+  });
+}
+
+/**
+ * Index of the next page in `visibleIndices` after `currentIndex`, or
+ * null when already on the last visible page (or off the list).
+ */
+export function nextVisibleIndex(
+  visibleIndices: readonly number[],
+  currentIndex: number,
+): number | null {
+  const pos = visibleIndices.indexOf(currentIndex);
+  if (pos < 0 || pos >= visibleIndices.length - 1) return null;
+  return visibleIndices.at(pos + 1) ?? null;
+}
+
+/**
+ * Index of the previous page in `visibleIndices` before `currentIndex`,
+ * or null when already on the first visible page (or off the list).
+ */
+export function prevVisibleIndex(
+  visibleIndices: readonly number[],
+  currentIndex: number,
+): number | null {
+  const pos = visibleIndices.indexOf(currentIndex);
+  if (pos <= 0) return null;
+  return visibleIndices.at(pos - 1) ?? null;
+}
+
+/**
+ * Collect validation issues for a single page's visible fields.
+ * Returns an array of issues (empty when everything validates).
+ *
+ * `resolveLabel` turns a PlaintextField into a display string for the
+ * summary row. The caller provides it so this function stays locale-agnostic.
+ */
+export function collectPageIssues(
+  page: FormPage,
+  fieldValues: Readonly<Record<string, FieldValue>>,
+  messages: ValidationMessages,
+  resolveLabel: (field: PlaintextField) => string,
+): readonly ValidationIssue[] {
+  const result = validateFields({
+    fields: page.fields,
+    fieldValues,
+    messages,
+    isDefaultForm: false,
+    contactMethod: "none",
+    contactDetail: "",
+    accountExpanded: false,
+    accountPassword: "",
+    accountConfirmPassword: "",
+    fieldsToValidate: page.fields,
+  });
+
+  const issues: ValidationIssue[] = [];
+  for (const field of page.fields) {
+    const err = result.errors[field.fieldKey];
+    if (err !== undefined && err !== "") {
+      issues.push({
+        fieldKey: field.fieldKey,
+        fieldLabel: resolveLabel(field),
+        error: err,
+      });
+    }
+  }
+  return issues;
+}
+
+/**
+ * Collect validation issues across all visible pages. Each issue carries a
+ * 1-based page number so the summary can direct the visitor to the right page.
+ */
+export function collectAllIssues(
+  pages: readonly FormPage[],
+  visibleIndices: readonly number[],
+  fieldValues: Readonly<Record<string, FieldValue>>,
+  messages: ValidationMessages,
+  resolveLabel: (field: PlaintextField) => string,
+): readonly ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  for (let vi = 0; vi < visibleIndices.length; vi++) {
+    const pageIdx = visibleIndices.at(vi);
+    if (pageIdx === undefined) continue;
+    const page = pages.at(pageIdx);
+    if (page === undefined) continue;
+    const pageIssues = collectPageIssues(
+      page,
+      fieldValues,
+      messages,
+      resolveLabel,
+    );
+    for (const issue of pageIssues) {
+      issues.push({ ...issue, pageNumber: vi + 1 });
+    }
+  }
+  return issues;
+}

@@ -13,17 +13,22 @@ const es_onboarding_briefing_practice_vol_data = /** @type {(inputs: Onboarding_
 	return /** @type {LocalizedString} */ (`Nombres de voluntarios, direcciones IP, detalles de sesión`)
 };
 
+const en_xa2_onboarding_briefing_practice_vol_data = /** @type {(inputs: Onboarding_Briefing_Practice_Vol_DataInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vòlùntèèr dìsplày nàmès, ÌP àddrèssès, sèssìòn dètàìls •••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Volunteer display names, IP addresses, session details" |
 *
 * @param {Onboarding_Briefing_Practice_Vol_DataInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_briefing_practice_vol_data = /** @type {((inputs?: Onboarding_Briefing_Practice_Vol_DataInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Practice_Vol_DataInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_briefing_practice_vol_data = /** @type {((inputs?: Onboarding_Briefing_Practice_Vol_DataInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Briefing_Practice_Vol_DataInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_briefing_practice_vol_data(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_briefing_practice_vol_data(inputs)
 	return en_onboarding_briefing_practice_vol_data(inputs)
 });

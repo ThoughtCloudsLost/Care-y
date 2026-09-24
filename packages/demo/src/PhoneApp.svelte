@@ -114,6 +114,7 @@
     DEMO_SHARE_ID,
     DEMO_INTAKE_FORM_ID,
     DEMO_INTAKE_FORM_SLUG,
+    DEMO_CLOSED_FORM_SLUG,
   } from "$demo/bridge.js";
   import {
     activateSettingsDriver,
@@ -243,6 +244,16 @@
           return detail.replace(DEMO_INTAKE_FORM_SLUG, portal.customFormSlug);
         }
         return detail.replace(DEMO_INTAKE_FORM_ID, portal.customFormId);
+      }
+      return unresolved === "null" ? null : detail;
+    }
+    // Closed form slug is a separate sentinel (different string value
+    // from the custom form sentinels), resolved to the seeded closed
+    // form's real slug.
+    if (detail?.includes(DEMO_CLOSED_FORM_SLUG) === true) {
+      const portal = resolvedEngine?.portal;
+      if (portal !== undefined) {
+        return detail.replace(DEMO_CLOSED_FORM_SLUG, portal.closedFormSlug);
       }
       return unresolved === "null" ? null : detail;
     }
@@ -505,6 +516,7 @@
       return {
         intakeFormId: portal.customFormId,
         intakeFormSlug: portal.customFormSlug,
+        closedFormSlug: portal.closedFormSlug,
         portalChannelPath: `portal/${portal.portalChannelId}`,
         sharePath: `share/${portal.shareId}`,
       };

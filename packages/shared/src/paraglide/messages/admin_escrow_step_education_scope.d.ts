@@ -4,13 +4,13 @@
 * | "Without it, your organization's {knowledgeBase} articles, {volunteer} names, {queue} names, and branding data cannot be recovered. {Ticket} conversations and..." |
 *
 * @param {Admin_Escrow_Step_Education_ScopeInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_escrow_step_education_scope: ((inputs: Admin_Escrow_Step_Education_ScopeInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Escrow_Step_Education_ScopeInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Escrow_Step_Education_ScopeInputs = {

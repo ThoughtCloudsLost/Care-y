@@ -180,6 +180,10 @@ export interface CreateTicketKeyWrap {
   readonly wrappedKey: Buffer;
 }
 
+export interface CreateTicketKeyWrapWithRecipient extends CreateTicketKeyWrap {
+  readonly volunteerId: UserId;
+}
+
 export interface CreateTicketInput {
   /** Client-minted ticket id the content AAD was bound to (ADR-053). */
   readonly id: TicketId;
@@ -190,7 +194,12 @@ export interface CreateTicketInput {
   readonly encryptedDescription: Buffer;
   readonly priority: TicketPriority;
   readonly keyGeneration: KeyGeneration;
-  readonly keyWrap: CreateTicketKeyWrap;
+  /**
+   * ECIES wraps of the ticket key for all intended recipients (creator +
+   * active onboarded queue members). Each entry identifies its target
+   * volunteer. The server validates recipients against active org users.
+   */
+  readonly keyWraps: readonly CreateTicketKeyWrapWithRecipient[];
 }
 
 export interface UpdateTicketInput {
@@ -615,14 +624,18 @@ export function createTicketService(
           ticket = toRecord(row);
         }
 
-        // Insert key wrap (ticket + key wrap must succeed or fail together)
-        await insertKeyWrap(
-          trx,
-          ticket.id,
-          userId,
-          input.keyGeneration,
-          input.keyWrap,
-        );
+        // Insert key wraps (ticket + wraps must succeed or fail together).
+        // The client wraps tk for the creator plus all active onboarded
+        // queue members, mirroring the server-initiated intake path.
+        for (const wrap of input.keyWraps) {
+          await insertKeyWrap(
+            trx,
+            ticket.id,
+            wrap.volunteerId,
+            input.keyGeneration,
+            wrap,
+          );
+        }
 
         return ticket;
       });

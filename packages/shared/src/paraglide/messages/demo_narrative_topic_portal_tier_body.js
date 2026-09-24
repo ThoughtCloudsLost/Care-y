@@ -21,17 +21,26 @@ const es_demo_narrative_topic_portal_tier_body = /** @type {(inputs: Demo_Narrat
 **Restablecer cuenta.** Cuando el cliente ha creado una cuenta, la sección de nivel muestra un botón de restablecer que elimina la cuenta después de un diálogo de confirmación.`)
 };
 
+const en_xa2_demo_narrative_topic_portal_tier_body = /** @type {(inputs: Demo_Narrative_Topic_Portal_Tier_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè tìèr sèctìòn ìn thè càsè pànèl shòws hòw thè clìènt cùrrèntly rècèìvès mèssàgès ànd pròvìdès còntròls fòr ùpgràdìng òr mànàgìng thàt chànnèl.
+ ••••••••••••••••••••••••••••••••••••••••••••**Tìèr lèvèls. ••••** À tìckèt stàrts àt thè bàsè tìèr, whèrè thè clìènt ìs rèàchàblè by SMS òr èmàìl. Fròm thèrè à vòlùntèèr càn sèt ùp à sècùrè lìnk, whìch gìvès thè clìènt à bròwsèr pòrtàl tìèd tò à sìnglè ÙRL. À tìckèt crèàtèd thròùgh àn ìntàkè fòrm shòws à còntìnùàtìòn chànnèl ìnstèàd, càrryìng thè clìènt's pùblìc kèy fròm sùbmìssìòn. Thè clìènt càn làtèr crèàtè à dùràblè àccòùnt thàt pèrsìsts àcròss sèssìòns.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Sèt ùp. •••** Tàppìng thè sètùp bùttòn òpèns thè sècùrè lìnk shèèt, whìch wàlks thròùgh gènèràtìng thè lìnk. Whèn à pàssphràsè ìs ènàblèd, à chìp àppèàrs nèxt tò thè tìèr làbèl sò thè vòlùntèèr càn sèè àt à glàncè whèthèr thè lìnk ìs pàssphràsè pròtèctèd.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Règènèràtè ànd rèvòkè. •••••••** Òncè à sècùrè lìnk òr còntìnùàtìòn chànnèl ìs àctìvè, règènèràtè ànd rèvòkè còntròls rèplàcè thè sètùp bùttòn. Règènèràtìng crèàtès à nèw lìnk ànd ìnvàlìdàtès thè òld ònè. Rèvòkìng dròps thè chànnèl èntìrèly ànd rètùrns thè tìckèt tò thè bàsè tìèr àftèr à cònfìrmàtìòn dìàlòg.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Àccòùnt rèsèt. •••••** Whèn thè clìènt hàs crèàtèd àn àccòùnt, thè tìèr sèctìòn shòws à rèsèt bùttòn thàt dèlètès thè àccòùnt àftèr à cònfìrmàtìòn dìàlòg. ••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The tier section in the case panel shows how the client currently receives messages and provides controls for upgrading or managing that channel. **Tier leve..." |
 *
 * @param {Demo_Narrative_Topic_Portal_Tier_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_portal_tier_body = /** @type {((inputs?: Demo_Narrative_Topic_Portal_Tier_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Portal_Tier_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_portal_tier_body = /** @type {((inputs?: Demo_Narrative_Topic_Portal_Tier_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Portal_Tier_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_portal_tier_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_portal_tier_body(inputs)
 	return en_demo_narrative_topic_portal_tier_body(inputs)
 });

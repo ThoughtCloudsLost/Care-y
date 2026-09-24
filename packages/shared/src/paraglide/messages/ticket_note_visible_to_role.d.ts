@@ -4,13 +4,13 @@
 * | "Only visible to {role} and above" |
 *
 * @param {Ticket_Note_Visible_To_RoleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const ticket_note_visible_to_role: ((inputs: Ticket_Note_Visible_To_RoleInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Ticket_Note_Visible_To_RoleInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Ticket_Note_Visible_To_RoleInputs = {

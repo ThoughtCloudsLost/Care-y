@@ -245,6 +245,10 @@ export type PresetReplyId = z.infer<typeof presetReplyIdSchema>;
 export const auditLogIdSchema = z.uuid().brand<"AuditLogId">();
 export type AuditLogId = z.infer<typeof auditLogIdSchema>;
 
+/** `saved_filters.id`. */
+export const savedFilterIdSchema = z.uuid().brand<"SavedFilterId">();
+export type SavedFilterId = z.infer<typeof savedFilterIdSchema>;
+
 // ---------------------------------------------------------------------------
 // Knowledge base
 // ---------------------------------------------------------------------------
@@ -700,6 +704,11 @@ export function newClientAccountId(): ClientAccountId {
 /** Mint a form asset id. */
 export function newFormAssetId(): FormAssetId {
   return randomId() as FormAssetId;
+}
+
+/** Mint a saved filter id. */
+export function newSavedFilterId(): SavedFilterId {
+  return randomId() as SavedFilterId;
 }
 
 /**

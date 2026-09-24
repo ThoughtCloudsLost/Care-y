@@ -13,17 +13,22 @@ const es_note_type_request = /** @type {(inputs: Note_Type_RequestInputs) => Loc
 	return /** @type {LocalizedString} */ (`Solicitud`)
 };
 
+const en_xa2_note_type_request = /** @type {(inputs: Note_Type_RequestInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèqùèst •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Request" |
 *
 * @param {Note_Type_RequestInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const note_type_request = /** @type {((inputs?: Note_Type_RequestInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Note_Type_RequestInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const note_type_request = /** @type {((inputs?: Note_Type_RequestInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Note_Type_RequestInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_note_type_request(inputs)
+	if (locale === "en-XA") return en_xa2_note_type_request(inputs)
 	return en_note_type_request(inputs)
 });

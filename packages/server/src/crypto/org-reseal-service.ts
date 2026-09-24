@@ -42,6 +42,7 @@ import {
   intakeFormIdSchema,
   intakeFormFieldIdSchema,
   clientMergeEventIdSchema,
+  savedFilterIdSchema,
   emailIdSchema,
   aliasHashSchema,
   phoneMatchHashSchema,
@@ -1020,61 +1021,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
     },
   },
 
-  phones: {
-    columns: ["encrypted_number"],
-    countPending: async (db, gen) => {
-      const r = await db
-        .selectFrom("phones")
-        .select(db.fn.countAll().as("count"))
-        .where("org_key_generation", "<", gen)
-        .executeTakeFirstOrThrow();
-      return toCount(r);
-    },
-    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
-      if (onlyIds?.length === 0) return [];
-      let q = db
-        .selectFrom("phones")
-        .select(["id", "encrypted_number"])
-        .where("org_key_generation", "<", gen)
-        .orderBy("id")
-        .limit(limit);
-      if (excludeIds.length > 0) {
-        q = q.where(
-          "id",
-          "not in",
-          excludeIds.map((v) => phoneIdSchema.parse(v)),
-        );
-      }
-      if (onlyIds !== undefined && onlyIds.length > 0) {
-        q = q.where(
-          "id",
-          "in",
-          onlyIds.map((v) => phoneIdSchema.parse(v)),
-        );
-      }
-      const rows = await q.execute();
-      return rows.map((r) => {
-        const columns: Record<string, Buffer> = {
-          encrypted_number: r.encrypted_number,
-        };
-        return { id: r.id, columns };
-      });
-    },
-    resealRow: async (tx, id, cols, gen) => {
-      const result = await tx
-        .updateTable("phones")
-        .set({
-          ...(cols.encrypted_number !== undefined
-            ? { encrypted_number: cols.encrypted_number }
-            : {}),
-          org_key_generation: gen,
-        })
-        .where("id", "=", phoneIdSchema.parse(id))
-        .where("org_key_generation", "<", gen)
-        .executeTakeFirst();
-      return Number(result.numUpdatedRows);
-    },
-  },
+  // phones: removed. encrypted_number converged to OPS tier (ADR-005/069/096).
+  // The phone_match_hash index sweep (INDEX_TABLE_NAMES) is unaffected.
 
   intake_key_wraps: {
     columns: ["wrapped_tk"],
@@ -1356,6 +1304,66 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           org_key_generation: gen,
         })
         .where("id", "=", clientMergeEventIdSchema.parse(id))
+        .where("org_key_generation", "<", gen)
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows);
+    },
+  },
+
+  saved_filters: {
+    columns: ["encrypted_name", "encrypted_state"],
+    countPending: async (db, gen) => {
+      const r = await db
+        .selectFrom("saved_filters")
+        .select(db.fn.countAll().as("count"))
+        .where("org_key_generation", "<", gen)
+        .executeTakeFirstOrThrow();
+      return toCount(r);
+    },
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
+      let q = db
+        .selectFrom("saved_filters")
+        .select(["id", "encrypted_name", "encrypted_state"])
+        .where("org_key_generation", "<", gen)
+        .orderBy("id")
+        .limit(limit);
+      if (excludeIds.length > 0) {
+        q = q.where(
+          "id",
+          "not in",
+          excludeIds.map((v) => savedFilterIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => savedFilterIdSchema.parse(v)),
+        );
+      }
+      const rows = await q.execute();
+      return rows.map((r) => {
+        const columns: Record<string, Buffer> = {
+          encrypted_name: r.encrypted_name,
+          encrypted_state: r.encrypted_state,
+        };
+        return { id: r.id, columns };
+      });
+    },
+    resealRow: async (tx, id, cols, gen) => {
+      const result = await tx
+        .updateTable("saved_filters")
+        .set({
+          ...(cols.encrypted_name !== undefined
+            ? { encrypted_name: cols.encrypted_name }
+            : {}),
+          ...(cols.encrypted_state !== undefined
+            ? { encrypted_state: cols.encrypted_state }
+            : {}),
+          org_key_generation: gen,
+        })
+        .where("id", "=", savedFilterIdSchema.parse(id))
         .where("org_key_generation", "<", gen)
         .executeTakeFirst();
       return Number(result.numUpdatedRows);

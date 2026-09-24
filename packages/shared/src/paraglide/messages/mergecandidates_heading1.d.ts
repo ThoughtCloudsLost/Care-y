@@ -7,11 +7,11 @@ export type Mergecandidates_Heading1Inputs = {};
 * | "Possible Duplicates" |
 *
 * @param {Mergecandidates_Heading1Inputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 declare const mergecandidates_heading1: ((inputs?: Mergecandidates_Heading1Inputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Mergecandidates_Heading1Inputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;

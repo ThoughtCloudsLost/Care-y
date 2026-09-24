@@ -17,17 +17,24 @@ const es_demo_narrative_dashboard_merge_candidates_body = /** @type {(inputs: De
 **Líneas compartidas.** Los candidatos que coinciden por teléfono incluyen una opción de línea compartida para marcar un número como teléfono compartido (como el de un refugio o clínica). Marcar un número como compartido lo excluye de futuros escaneos de duplicados.`)
 };
 
+const en_xa2_demo_narrative_dashboard_merge_candidates_body = /** @type {(inputs: Demo_Narrative_Dashboard_Merge_Candidates_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Whèn thè systèm fìnds twò clìènt rècòrds thàt mày bèlòng tò thè sàmè pèrsòn, thèy àppèàr hèrè às mèrgè càndìdàtès. Èàch pàìr shòws twò clìènt àlìàsès wìth à chìp ìndìcàtìng thè màtch typè (shàrèd phònè nùmbèr òr shàrèd èmàìl àddrèss). Ùp tò fìvè càndìdàtès àppèàr àt à tìmè. Whèn mòrè èxìst, à nòtìcè pròmpts rèsòlvìng òr dìsmìssìng sòmè tò rèvèàl thè rèst.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Prìvàcy. •••** Thè scàn còvèrs ònly clìènts whòsè tìckèts thè cùrrènt vòlùntèèr càn dècrypt. Dìffèrènt vòlùntèèrs mày sèè dìffèrènt càndìdàtès. Thè sèrvèr pròpòsès màtchès ùsìng blìnd ìndèx hàshès stòrèd àlòngsìdè èncryptèd còntàct dàtà. Ìt cànnòt dècrypt thè ìdèntìfìèrs thèmsèlvès. Thè bròwsèr dècrypts màtchèd clìènt àlìàsès lòcàlly.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Shàrèd lìnès. ••••** Phònè màtch càndìdàtès ìnclùdè à shàrèd lìnè òptìòn fòr màrkìng à nùmbèr às à shàrèd phònè (sùch às à shèltèr òr clìnìc lìnè). Màrkìng à nùmbèr às shàrèd rèmòvès ìt fròm fùtùrè dùplìcàtè scàns. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "When the system finds two client records that may belong to the same person, they appear here as merge candidates. Each pair shows two client aliases with a ..." |
 *
 * @param {Demo_Narrative_Dashboard_Merge_Candidates_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_dashboard_merge_candidates_body = /** @type {((inputs?: Demo_Narrative_Dashboard_Merge_Candidates_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Dashboard_Merge_Candidates_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_dashboard_merge_candidates_body = /** @type {((inputs?: Demo_Narrative_Dashboard_Merge_Candidates_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Dashboard_Merge_Candidates_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_dashboard_merge_candidates_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_dashboard_merge_candidates_body(inputs)
 	return en_demo_narrative_dashboard_merge_candidates_body(inputs)
 });

@@ -27,7 +27,13 @@
   - Any child route can suppress PTR via usePTR().setEnabled(false) during init.
 -->
 <script lang="ts">
-  import { Link, Searchbar, Toolbar, ToolbarPane } from "konsta/svelte";
+  import {
+    Link,
+    Searchbar,
+    Toolbar,
+    ToolbarPane,
+    DialogButton,
+  } from "konsta/svelte";
   import PageShell from "./PageShell.svelte";
   import ShellNavbar from "./ShellNavbar.svelte";
   import { Search, User } from "@lucide/svelte";
@@ -60,12 +66,14 @@
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte";
   import { kbSavedFilterStore } from "$lib/stores/kb-saved-filters.svelte";
   import { resealSweep } from "$lib/crypto/reseal-sweep.svelte.js";
+  import { checkWrapBackfills } from "$lib/crypto/wrap-backfill-sweep.svelte.js";
   import Register from "$lib/components/Register.svelte";
   import { providePTR } from "./ptr-context.svelte.js";
   import { splitNavbar } from "$lib/stores/split-navbar.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient, createQuery } from "@tanstack/svelte-query";
-  import { Permission } from "@care-y/shared";
+  import { canCall } from "$lib/auth/procedure-gates.js";
+  import { canEnterAdminRoute } from "$lib/admin/destinations.js";
   import {
     adminKeys,
     authKeys,
@@ -116,6 +124,10 @@
   import { initRecentViews } from "$lib/search/recent-views.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
   import { getLocale, setLocale, type Locale } from "$lib/paraglide/runtime.js";
+  import { savePreferredLocale } from "$lib/settings/preferred-locale.js";
+  import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { haptic } from "$lib/utils/haptic.js";
+  import ShellDialog from "./ShellDialog.svelte";
 
   // Scroll container element, provided by PageShell via bindScrollEl.
   let mainEl = $state<HTMLElement | undefined>();
@@ -308,8 +320,10 @@
       sections.push({ tabId: "library", items: kbItems });
     }
 
-    // Admin section (role-gated)
-    if (currentPermissions.has(Permission.MANAGE_USERS)) {
+    // Admin section: visible to any user who can reach the people page.
+    // This widens the admin nav section to queue managers and client
+    // viewers, matching the people page admission and the hub tiles.
+    if (canEnterAdminRoute(currentPermissions, "/admin/people")) {
       sections.push({
         tabId: "admin",
         items: [
@@ -368,8 +382,61 @@
 
   let uiLocale = $state(getLocale());
 
+  // ── One-time "save language preference?" offer ──────────────────────
+  // Shown at most once per session. Not persisted server-side: declining
+  // means "not this time" and the offer may reappear next session.
+  let localeOfferDismissed = $state(false);
+  let localeOfferOpen = $state(false);
+  let localeOfferTarget = $state<Locale | null>(null);
+  let localeOfferSaving = $state(false);
+
+  /** Decrypt the stored locale (returns null while loading or if absent). */
+  const storedPreferredLocale = $derived.by((): string | null => {
+    if (avatarOrgCache == null) return null;
+    const enc = meQuery.data?.user.encryptedPreferredLocale;
+    if (enc == null) return null;
+    return avatarOrgCache.decrypt("me:preferred_locale", enc);
+  });
+
   function handleLocaleChange(newLocale: Locale): void {
     void setLocale(newLocale);
+
+    // Skip the offer if already dismissed this session
+    if (localeOfferDismissed) return;
+
+    // Skip if stored preference already matches the new locale
+    if (storedPreferredLocale === newLocale) return;
+
+    localeOfferTarget = newLocale;
+    localeOfferOpen = true;
+  }
+
+  function declineLocaleOffer(): void {
+    localeOfferDismissed = true;
+    localeOfferOpen = false;
+    localeOfferTarget = null;
+  }
+
+  async function acceptLocaleOffer(): Promise<void> {
+    if (localeOfferSaving || localeOfferTarget === null) return;
+    const orgKeyMgr = browser ? getOrgKeyManager() : null;
+    if (orgKeyMgr?.isLoaded !== true) return;
+
+    localeOfferSaving = true;
+    try {
+      await savePreferredLocale(orgKeyMgr, localeOfferTarget);
+      haptic();
+      avatarOrgCache?.delete("me:preferred_locale");
+      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      localeOfferDismissed = true;
+      localeOfferOpen = false;
+      localeOfferTarget = null;
+      toastStore.show(m.settings_preferred_language_saved());
+    } catch {
+      toastStore.show(m.settings_preferred_language_error());
+    } finally {
+      localeOfferSaving = false;
+    }
   }
 
   function openSearch(): void {
@@ -583,9 +650,9 @@
         )
       : () => undefined;
 
-    // Volunteer search: admin/manager only. Reads from TanStack cache,
-    // decrypts display names via OrgDecryptCache. No server-side fullSearch.
-    const isAdminOrManager = currentPermissions.has(Permission.MANAGE_USERS);
+    // Volunteer search: requires auth.listUsers (the search provider
+    // fetches exactly that procedure).
+    const isAdminOrManager = canCall(currentPermissions, "auth.listUsers");
     const unregisterVol = isAdminOrManager
       ? registerSearchProvider(
           createVolunteerSearchProvider({
@@ -960,9 +1027,17 @@
   $effect(() => {
     if (!browser || _orgKeyMgr == null) return;
     if (!_orgKeyMgr.isLoaded) return;
-    if (!currentPermissions.has(Permission.MANAGE_KEYS)) return;
+    if (!canCall(currentPermissions, "keys.resealStatus")) return;
     const bridge = getCryptoBridge();
     void resealSweep.autoResumeOnce(bridge);
+  });
+
+  // ── Wrap backfill sweep (queue-join key distribution, all users) ───
+  $effect(() => {
+    if (!browser || _orgKeyMgr == null) return;
+    if (!_orgKeyMgr.isLoaded) return;
+    const bridge = getCryptoBridge();
+    void checkWrapBackfills(bridge);
   });
 
   // ── Device-local saved-filter name reseal (all users) ──────────────
@@ -976,6 +1051,21 @@
     const bridge = getCryptoBridge();
     void savedFilterStore.resealNames(bridge);
     void kbSavedFilterStore.resealNames(bridge);
+  });
+
+  // ── Shared saved-filter fetch (all users with VIEW_CASES) ──────────
+  let _sharedFiltersLoaded = false;
+
+  $effect(() => {
+    if (!browser || _orgKeyMgr == null) return;
+    if (!_orgKeyMgr.isLoaded) return;
+    if (_sharedFiltersLoaded) return;
+    _sharedFiltersLoaded = true;
+    const userId = getCurrentUserId()();
+    if (userId != null) {
+      savedFilterStore.setContext(userId, _orgKeyMgr);
+    }
+    void savedFilterStore.loadShared(_orgKeyMgr);
   });
 
   // ── iOS arc indicator helpers ────────────────────────────────────────
@@ -1350,6 +1440,26 @@
     {/snippet}
   </PageShell>
 </div>
+
+<ShellDialog
+  opened={localeOfferOpen}
+  ondismiss={declineLocaleOffer}
+  title={m.settings_persist_language_title()}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">
+      {m.settings_persist_language_body()}
+    </p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={declineLocaleOffer}>
+      {m.settings_persist_language_decline()}
+    </DialogButton>
+    <DialogButton strong onclick={acceptLocaleOffer}>
+      {m.settings_persist_language_accept()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   /* ── Desktop layout ── */

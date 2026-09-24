@@ -4,13 +4,13 @@
 * | "Icon" |
 *
 * @param {Saved_Filter_Icon_LabelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const saved_filter_icon_label: ((inputs?: Saved_Filter_Icon_LabelInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Saved_Filter_Icon_LabelInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Saved_Filter_Icon_LabelInputs = {};

@@ -4,13 +4,13 @@
 * | "Phone number" |
 *
 * @param {Consultant_Phone_Number_LabelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const consultant_phone_number_label: ((inputs?: Consultant_Phone_Number_LabelInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Consultant_Phone_Number_LabelInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Consultant_Phone_Number_LabelInputs = {};

@@ -12,6 +12,7 @@ import {
   Ban,
   Mic,
   MessageSquare,
+  MessageSquareDashed,
   BuildingComplex,
   Palette,
   Languages,
@@ -41,6 +42,12 @@ export interface AdminDestination {
   readonly path: string;
   readonly permission: Permission;
   readonly implemented: boolean;
+  /**
+   * Declares admission only; renders no hub tile. Lets a surface without
+   * a tile (the manager page, the roles tab) keep its admission rule in
+   * this registry so canEnterAdminRoute remains the single source.
+   */
+  readonly hidden?: true;
 }
 
 export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
@@ -126,6 +133,16 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     subtitle: m.hub_quarantine_subtitle,
     path: "/admin/communications?tab=quarantine",
     permission: Permission.MANAGE_VOICEMAIL_QUARANTINE,
+    implemented: true,
+  },
+  {
+    id: "presets",
+    group: "communications",
+    icon: MessageSquareDashed,
+    label: m.panel_presets,
+    subtitle: m.hub_presets_subtitle,
+    path: "/admin/communications?tab=presets",
+    permission: Permission.MANAGE_PRESETS,
     implemented: true,
   },
 
@@ -252,6 +269,30 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     permission: Permission.VIEW_AUDIT_LOG,
     implemented: true,
   },
+
+  // HIDDEN (admission declarations without hub tiles)
+  {
+    id: "roles",
+    group: "people",
+    icon: Users,
+    label: m.admin_tab_roles,
+    subtitle: m.admin_tab_roles,
+    path: "/admin/people?tab=roles",
+    permission: Permission.MANAGE_ROLES,
+    implemented: true,
+    hidden: true,
+  },
+  {
+    id: "manager-hub",
+    group: "people",
+    icon: Users,
+    label: () => m.mgr_page_title(withTerms()),
+    subtitle: () => m.mgr_page_title(withTerms()),
+    path: "/admin/manager",
+    permission: Permission.MANAGE_USERS,
+    implemented: true,
+    hidden: true,
+  },
 ];
 
 export const GROUP_ORDER: readonly AdminGroup[] = [
@@ -264,7 +305,38 @@ export const GROUP_ORDER: readonly AdminGroup[] = [
 export function getVisibleDestinations(
   permissions: ReadonlySet<Permission>,
 ): readonly AdminDestination[] {
-  return ADMIN_DESTINATIONS.filter((d) => permissions.has(d.permission));
+  return ADMIN_DESTINATIONS.filter(
+    (d) => d.hidden !== true && permissions.has(d.permission),
+  );
+}
+
+/**
+ * Whether the permissions set can enter an admin route whose path starts
+ * with routePrefix. Admission and tile visibility must agree by
+ * construction: the admin hub already derives visibility from these
+ * entries, so a page that hand-rolls a different admission rule can
+ * bounce a user the hub invited (which is the defect this helper
+ * removes).
+ */
+export function canEnterAdminRoute(
+  permissions: ReadonlySet<Permission>,
+  routePrefix: string,
+): boolean {
+  return ADMIN_DESTINATIONS.some(
+    (d) => routeMatches(d.path, routePrefix) && permissions.has(d.permission),
+  );
+}
+
+/**
+ * Boundary-aware prefix match: "/admin/logs" matches "/admin/logs" and
+ * "/admin/logs?tab=calls" but never "/admin/logs-x". A bare startsWith
+ * would fail open when a future entry shares a textual prefix.
+ */
+function routeMatches(destinationPath: string, routePrefix: string): boolean {
+  if (destinationPath === routePrefix) return true;
+  if (!destinationPath.startsWith(routePrefix)) return false;
+  const next = destinationPath.charAt(routePrefix.length);
+  return next === "?" || next === "/";
 }
 
 export function groupDestinations(

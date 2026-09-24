@@ -13,17 +13,22 @@ const es_onboarding_step_telephony = /** @type {(inputs: Onboarding_Step_Telepho
 	return /** @type {LocalizedString} */ (`Telefonía`)
 };
 
+const en_xa2_onboarding_step_telephony = /** @type {(inputs: Onboarding_Step_TelephonyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tèlèphòny •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Telephony" |
 *
 * @param {Onboarding_Step_TelephonyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_step_telephony = /** @type {((inputs?: Onboarding_Step_TelephonyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Step_TelephonyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_step_telephony = /** @type {((inputs?: Onboarding_Step_TelephonyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Step_TelephonyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_step_telephony(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_step_telephony(inputs)
 	return en_onboarding_step_telephony(inputs)
 });

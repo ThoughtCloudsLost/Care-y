@@ -34,6 +34,7 @@ export interface PanelActionsDeps {
   readonly onnotifications: () => void;
   readonly onsharelink: () => void;
   readonly onrevokeReplyToken: () => void;
+  readonly onlinkcases: () => void;
 }
 
 export interface PanelActions {
@@ -108,6 +109,9 @@ export function createPanelActions(deps: PanelActionsDeps): PanelActions {
         break;
       case "revokeReplyToken":
         deps.onrevokeReplyToken();
+        break;
+      case "linkCases":
+        deps.onlinkcases();
         break;
       case "cancel":
         break;

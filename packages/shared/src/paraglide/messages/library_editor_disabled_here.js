@@ -13,17 +13,22 @@ const es_library_editor_disabled_here = /** @type {(inputs: Library_Editor_Disab
 	return /** @type {LocalizedString} */ (`Mueve el cursor a un párrafo normal para usar ${i?.action}.`)
 };
 
+const en_xa2_library_editor_disabled_here = /** @type {(inputs: Library_Editor_Disabled_HereInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Mòvè yòùr cùrsòr tò à règùlàr pàràgràph tò ùsè  •••••••••••••••${i?.action}. •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Move your cursor to a regular paragraph to use {action}." |
 *
 * @param {Library_Editor_Disabled_HereInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_editor_disabled_here = /** @type {((inputs: Library_Editor_Disabled_HereInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_Disabled_HereInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const library_editor_disabled_here = /** @type {((inputs: Library_Editor_Disabled_HereInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Editor_Disabled_HereInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_editor_disabled_here(inputs)
+	if (locale === "en-XA") return en_xa2_library_editor_disabled_here(inputs)
 	return en_library_editor_disabled_here(inputs)
 });

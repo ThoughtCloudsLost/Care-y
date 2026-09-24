@@ -4,13 +4,13 @@
 * | "{count} days" |
 *
 * @param {Admin_Hub_Badge_Retention_DaysInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_hub_badge_retention_days: ((inputs: Admin_Hub_Badge_Retention_DaysInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Hub_Badge_Retention_DaysInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Hub_Badge_Retention_DaysInputs = {

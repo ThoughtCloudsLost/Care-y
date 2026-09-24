@@ -38,7 +38,8 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
     if (
       key[2] === "followUps" ||
       key[2] === "recordings" ||
-      key[2] === "attachments"
+      key[2] === "attachments" ||
+      key[2] === "dependencies"
     ) {
       return {
         isLoading: false,
@@ -49,6 +50,21 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
     }
 
     return ticketQueryState;
+  },
+  createMutation: (optsFn: () => Record<string, unknown>) => {
+    const opts = optsFn();
+    const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
+    return {
+      get isPending() {
+        return false;
+      },
+      get variables() {
+        return {} as Record<string, unknown>;
+      },
+      mutate(input: unknown) {
+        void mutationFn(input);
+      },
+    };
   },
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
@@ -79,6 +95,12 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ticket_recent_history: () => "Recent History",
   ticket_panel_recent_coming_soon: () => "Coming soon",
   revoke_reply_token_label: () => "Revoke email reply token",
+  ticket_linked_cases_title: () => "Linked cases",
+  ticket_linked_cases_empty: () => "No linked cases",
+  ticket_link_case_removed: () => "Link removed",
+  ticket_link_case_remove_error: () => "Could not remove link",
+  ticket_link_case_sheet_title: () => "Link a case",
+  common_remove: () => "Remove",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
@@ -92,6 +114,8 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     tickets: {
       get: { query: vi.fn() },
       isWatching: { query: vi.fn().mockResolvedValue(false) },
+      listDependencies: { query: vi.fn().mockResolvedValue([]) },
+      removeDependency: { mutate: vi.fn().mockResolvedValue({}) },
     },
   },
 }));

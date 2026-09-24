@@ -21,17 +21,26 @@ const es_demo_narrative_topic_quick_actions_body = /** @type {(inputs: Demo_Narr
 **Cifrado.** Las acciones que modifican datos del ticket cifran los cambios en el navegador antes de enviarlos al servidor.`)
 };
 
+const en_xa2_demo_narrative_topic_quick_actions_body = /** @type {(inputs: Demo_Narrative_Topic_Quick_Actions_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Còmmòn òpèràtìòns òn à tìckèt wìthòùt òpènìng ìt, àccèssèd by swìpìng à tìckèt ròw.
+ ••••••••••••••••••••••••••**Swìpè dìrèctìòns. ••••••** Swìpè rìght tò rèply. Swìpè lèft tò àssìgn òr plàcè à tìckèt òn hòld. À shòrt swìpè pèèks thè àctìòn trày, ànd à lòngèr swìpè fìrès thè àctìòn dìrèctly.
+ •••••••••••••••••••••••••••••••••••••••••••••••**Àvàìlàblè àctìòns. ••••••** Rèply, àssìgn, ànd hòld. Thè spècìfìc àctìòns shòwn dèpènd òn thè tìckèt's cùrrènt stàtè ànd thè vòlùntèèr's pèrmìssìòns.
+ •••••••••••••••••••••••••••••••••••••**Càrds vìèw. ••••** Ìn càrds vìèw thè sàmè àctìòns àlsò àppèàr às à vìsìblè bùttòn ròw òn èàch càrd, sò nò swìpè ìs nèèdèd tò rèàch thèm.
+ ••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Àctìòns thàt mòdìfy tìckèt dàtà èncrypt thè chàngès ìn thè bròwsèr bèfòrè sèndìng thèm tò thè sèrvèr. •••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Common operations on a ticket without opening it, accessed by swiping a ticket row. **Swipe directions.** Swipe right to reply. Swipe left to assign or place..." |
 *
 * @param {Demo_Narrative_Topic_Quick_Actions_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_quick_actions_body = /** @type {((inputs?: Demo_Narrative_Topic_Quick_Actions_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Quick_Actions_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_quick_actions_body = /** @type {((inputs?: Demo_Narrative_Topic_Quick_Actions_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Quick_Actions_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_quick_actions_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_quick_actions_body(inputs)
 	return en_demo_narrative_topic_quick_actions_body(inputs)
 });

@@ -32,7 +32,12 @@ import {
 import { _resetEnvCache } from "../env.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createPowVerifier } from "./pow.js";
-import { ForbiddenError, PowRequiredError, RateLimitError } from "../errors.js";
+import {
+  AuthError,
+  ForbiddenError,
+  PowRequiredError,
+  RateLimitError,
+} from "../errors.js";
 import type { OprfEvaluator } from "./oprf-ipc.js";
 import type { OprfAuditLogger } from "./oprf-audit.js";
 import type { UserId, OrgId, ChannelSecret } from "@care-y/shared";
@@ -146,6 +151,7 @@ describe("createOprfEvaluateService under production", () => {
       blindedElement: blinded,
       ip: "203.0.113.42",
       sessionUserId: null,
+      twofaVerified: false,
       powChallenge: undefined,
       powSolution: undefined,
     };
@@ -190,6 +196,7 @@ describe("evaluate session binding", () => {
   function baseRequest(
     kind: OprfEvaluateRequest["kind"],
     sessionUserId: UserId | null,
+    twofaVerified = false,
   ): OprfEvaluateRequest {
     return {
       kind,
@@ -197,6 +204,7 @@ describe("evaluate session binding", () => {
       blindedElement: BLINDED32,
       ip: "203.0.113.7",
       sessionUserId,
+      twofaVerified,
       powChallenge: undefined,
       powSolution: undefined,
     };
@@ -209,10 +217,38 @@ describe("evaluate session binding", () => {
     ).rejects.toThrow(ForbiddenError);
   });
 
-  it("allows a volunteer evaluation when the session matches the userId", async () => {
+  it("allows a volunteer evaluation when the session matches and 2FA is verified", async () => {
     const service = createOprfEvaluateService(makeDeps());
     await expect(
-      service.evaluate(baseRequest("volunteer", VOLUNTEER_ID)),
+      service.evaluate(baseRequest("volunteer", VOLUNTEER_ID, true)),
+    ).resolves.toEqual({
+      evaluated: Buffer.alloc(32, 0xab).toString("base64url"),
+    });
+  });
+
+  it("rejects a volunteer evaluation when session exists but 2FA is not verified", async () => {
+    const service = createOprfEvaluateService(makeDeps());
+    await expect(
+      service.evaluate(baseRequest("volunteer", VOLUNTEER_ID, false)),
+    ).rejects.toThrow(AuthError);
+  });
+
+  it("allows a volunteer evaluation when no session exists (null sessionUserId)", async () => {
+    // Pre-enrollment or truly anonymous callers pass null sessionUserId.
+    // The 2FA gate only fires when a session is present.
+    const service = createOprfEvaluateService(makeDeps());
+    await expect(
+      service.evaluate(baseRequest("volunteer", null, false)),
+    ).resolves.toEqual({
+      evaluated: Buffer.alloc(32, 0xab).toString("base64url"),
+    });
+  });
+
+  it("allows an account evaluation regardless of twofaVerified (portal accounts have no 2FA)", async () => {
+    // Account (portal) evaluations skip the 2FA gate entirely.
+    const service = createOprfEvaluateService(makeDeps());
+    await expect(
+      service.evaluate(baseRequest("account", OTHER_SESSION_ID, false)),
     ).resolves.toEqual({
       evaluated: Buffer.alloc(32, 0xab).toString("base64url"),
     });

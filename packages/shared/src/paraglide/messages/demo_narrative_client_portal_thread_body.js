@@ -17,17 +17,24 @@ const es_demo_narrative_client_portal_thread_body = /** @type {(inputs: Demo_Nar
 **Manejo del fragmento.** La página del portal elimina la credencial de la barra de direcciones después de leerla para que no persista en el historial del navegador ni aparezca si se copia la URL.`)
 };
 
+const en_xa2_demo_narrative_client_portal_thread_body = /** @type {(inputs: Demo_Narrative_Client_Portal_Thread_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè pòrtàl thrèàd ìs à mèrgèd tìmèlìnè òf mèssàgès, vòìcèmàìls, càll èntrìès, àttàchmènts, ànd còntàct còrrèctìòns, sòrtèd by dàtè. Thè vìèw càn bè nàrròwèd by typè, àùthòr, ànd dàtè ràngè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Èàch pòrtàl mèssàgè ìs èncryptèd tò thè pòrtàl chànnèl's pùblìc kèy. Thè bròwsèr dèrìvès thè còrrèspòndìng prìvàtè kèy fròm thè crèdèntìàl ìn thè ÙRL ànd dècrypts mèssàgès ìn à sèpàràtè bàckgròùnd pròcèss sò thè pàgè ìtsèlf nèvèr hòlds thè prìvàtè kèy. Èàch àttàchmènt ìs èncryptèd ùndèr ìts òwn ràndòm kèy, ànd thàt kèy ìs sèàlèd tò thè chànnèl kèy, sò thè bròwsèr òpèns ìt thròùgh thè sàmè prìvàtè kèy. Vòìcèmàìl rècòrdìngs dècrypt thròùgh thè sàmè bàckgròùnd pròcèss, whìlè càll èntrìès àrè plàìntèxt mètàdàtà thè sèrvèr stòrès wìthòùt èncryptìòn.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Fràgmènt hàndlìng. ••••••** Thè pòrtàl pàgè strìps thè crèdèntìàl fròm thè àddrèss bàr àftèr rèàdìng ìt sò ìt dòès nòt pèrsìst ìn bròwsèr hìstòry òr àppèàr ìf thè ÙRL ìs còpìèd. •••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The portal thread is a merged timeline of messages, voicemails, call entries, attachments, and contact corrections, sorted by date. The view can be narrowed ..." |
 *
 * @param {Demo_Narrative_Client_Portal_Thread_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_client_portal_thread_body = /** @type {((inputs?: Demo_Narrative_Client_Portal_Thread_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Portal_Thread_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_client_portal_thread_body = /** @type {((inputs?: Demo_Narrative_Client_Portal_Thread_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Portal_Thread_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_client_portal_thread_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_client_portal_thread_body(inputs)
 	return en_demo_narrative_client_portal_thread_body(inputs)
 });

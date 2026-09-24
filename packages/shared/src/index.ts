@@ -4,6 +4,14 @@
 /** Placeholder constant to verify cross-package imports work. */
 export const PACKAGE_NAME = "@care-y/shared" as const;
 
+// --- Encryption tier manifest ---
+export {
+  COLUMN_TIER_MANIFEST,
+  getOrgTierTables,
+  type EncryptionTier,
+  type ColumnTierEntry,
+} from "./crypto/column-tiers.js";
+
 // --- Authentication schemas ---
 export {
   RESERVED_SLUGS,
@@ -150,12 +158,14 @@ export {
   updateUsernameSchema,
   adminUpdateUsernameSchema,
   updatePasswordHashSchema,
+  updatePreferredLocaleSchema,
   changePasswordSchema,
   type UpdateDisplayNameInput,
   type AdminUpdateDisplayNameInput,
   type UpdateUsernameInput,
   type AdminUpdateUsernameInput,
   type UpdatePasswordHashInput,
+  type UpdatePreferredLocaleInput,
   type ChangePasswordInput,
 } from "./schemas/profile.js";
 
@@ -270,6 +280,7 @@ export {
   followUpSourceSchema,
   followUpTypeSchema,
   keyWrapSchema,
+  keyWrapWithRecipientSchema,
   createTicketInputSchema,
   resolveCreateTargetInputSchema,
   createFollowUpInputSchema,
@@ -283,6 +294,7 @@ export {
   createPresetReplyInputSchema,
   updatePresetReplyInputSchema,
   addDependencyInputSchema,
+  deleteClientInputSchema,
   mergeClientsInputSchema,
   undoMergeInputSchema,
   uploadAttachmentInputSchema,
@@ -312,6 +324,7 @@ export {
   callStatusSchema,
   type CallStatus,
   type KeyWrap,
+  type KeyWrapWithRecipient,
   type CreateTicketInput,
   type CreateFollowUpInput,
   type UpdateReadCursorInput,
@@ -352,6 +365,10 @@ export {
   type SavedFilterState,
   type SavedFilterColor,
   type SavedFilterRecord,
+  shareSavedFilterInputSchema,
+  unshareSavedFilterInputSchema,
+  type ShareSavedFilterInput,
+  type UnshareSavedFilterInput,
   ticketActionSchema,
   type TicketAction,
   escalationTargetSchema,
@@ -724,6 +741,7 @@ export {
 // --- Intake form schemas ---
 export {
   FORM_LOCALES,
+  isFormLocale,
   BASE_LOCALE,
   localizedTextSchema,
   resolveLocalized,
@@ -870,6 +888,7 @@ export {
   ticketKeyWrapIdSchema,
   clientMergeEventIdSchema,
   presetReplyIdSchema,
+  savedFilterIdSchema,
   auditLogIdSchema,
   type ClientId,
   type PhoneId,
@@ -885,6 +904,7 @@ export {
   type TicketKeyWrapId,
   type ClientMergeEventId,
   type PresetReplyId,
+  type SavedFilterId,
   type AuditLogId,
   // Knowledge base
   kbCategoryIdSchema,
@@ -917,6 +937,7 @@ export {
   intakeFormFieldIdSchema,
   formAssetIdSchema,
   newFormAssetId,
+  newSavedFilterId,
   type IntakeFormId,
   type IntakeFormFieldId,
   type FormAssetId,
@@ -1006,3 +1027,24 @@ export {
   newClientAccountId,
   newKeyGeneration,
 } from "./ids.js";
+
+// --- Branded locale types ---
+export {
+  mintReaderLocale,
+  mintFixedLocale,
+  type ReaderLocale,
+  type FixedLocale,
+  type DisplayLocale,
+} from "./locale-brands.js";
+
+// --- Procedure permission manifest ---
+export {
+  PROCEDURE_PERMISSIONS,
+  type GatedProcedurePath,
+} from "./procedure-permissions.js";
+
+// --- Inline-checked capability manifest ---
+export {
+  INLINE_CHECKED_CAPABILITIES,
+  type InlineCheckedCapability,
+} from "./inline-checked-capabilities.js";

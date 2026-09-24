@@ -13,17 +13,22 @@ const es_intake_avail_error_end_before_start = /** @type {(inputs: Intake_Avail_
 	return /** @type {LocalizedString} */ (`La hora de fin debe ser posterior a la hora de inicio.`)
 };
 
+const en_xa2_intake_avail_error_end_before_start = /** @type {(inputs: Intake_Avail_Error_End_Before_StartInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ènd tìmè mùst bè àftèr stàrt tìmè. •••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "End time must be after start time." |
 *
 * @param {Intake_Avail_Error_End_Before_StartInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_avail_error_end_before_start = /** @type {((inputs?: Intake_Avail_Error_End_Before_StartInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Error_End_Before_StartInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_avail_error_end_before_start = /** @type {((inputs?: Intake_Avail_Error_End_Before_StartInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Avail_Error_End_Before_StartInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_avail_error_end_before_start(inputs)
+	if (locale === "en-XA") return en_xa2_intake_avail_error_end_before_start(inputs)
 	return en_intake_avail_error_end_before_start(inputs)
 });

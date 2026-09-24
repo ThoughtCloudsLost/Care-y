@@ -496,6 +496,7 @@ describe("DemoLocationStore", () => {
       const realIds = {
         intakeFormId: "real-form-uuid",
         intakeFormSlug: "ask-for-help",
+        closedFormSlug: "winter-shelter",
         portalChannelPath: "portal/real-channel",
         sharePath: "share/real-share",
       };
@@ -540,6 +541,7 @@ describe("DemoLocationStore", () => {
       const realIds = {
         intakeFormId: "real-form-uuid",
         intakeFormSlug: "ask-for-help",
+        closedFormSlug: "winter-shelter",
         portalChannelPath: "portal/real-channel",
         sharePath: "share/real-share",
       };
@@ -584,6 +586,7 @@ describe("DemoLocationStore", () => {
       const realIds = {
         intakeFormId: "real-form-uuid",
         intakeFormSlug: "ask-for-help",
+        closedFormSlug: "winter-shelter",
         portalChannelPath: "portal/real-channel",
         sharePath: "share/real-share",
       };

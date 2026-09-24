@@ -220,6 +220,7 @@
       onapply={savedFilters.onapply}
       ondelete={savedFilters.ondelete}
       ontoggleshare={savedFilters.ontoggleshare}
+      currentUserId={savedFilters.currentUserId}
     />
   {/if}
   <div class="filter-row">

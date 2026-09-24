@@ -13,17 +13,22 @@ const es_settings_security = /** @type {(inputs: Settings_SecurityInputs) => Loc
 	return /** @type {LocalizedString} */ (`Seguridad`)
 };
 
+const en_xa2_settings_security = /** @type {(inputs: Settings_SecurityInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sècùrìty •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Security" |
 *
 * @param {Settings_SecurityInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const settings_security = /** @type {((inputs?: Settings_SecurityInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_SecurityInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const settings_security = /** @type {((inputs?: Settings_SecurityInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Settings_SecurityInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_settings_security(inputs)
+	if (locale === "en-XA") return en_xa2_settings_security(inputs)
 	return en_settings_security(inputs)
 });

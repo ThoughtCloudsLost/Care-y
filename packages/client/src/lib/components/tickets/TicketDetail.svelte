@@ -44,11 +44,11 @@
     getCurrentPermissions,
   } from "$lib/crypto/context.js";
   import {
-    Permission,
     type FollowUpListInput,
     type ReactionSummary,
     type ReactionType,
   } from "@care-y/shared";
+  import { canUseInline } from "$lib/auth/procedure-gates.js";
 
   type FollowUpType = NonNullable<FollowUpListInput["types"]>[number];
   type MediaFlag = NonNullable<FollowUpListInput["mediaFlags"]>[number];
@@ -248,7 +248,7 @@
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
   const canModerateContent = $derived(
-    permissions.has(Permission.DELETE_OTHERS_NOTES),
+    canUseInline(permissions, "deleteOthersNotes"),
   );
 
   // --- Data Loading ---

@@ -13,17 +13,22 @@ const es_consultant_phone_sending = /** @type {(inputs: Consultant_Phone_Sending
 	return /** @type {LocalizedString} */ (`Enviando...`)
 };
 
+const en_xa2_consultant_phone_sending = /** @type {(inputs: Consultant_Phone_SendingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèndìng... •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Sending..." |
 *
 * @param {Consultant_Phone_SendingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const consultant_phone_sending = /** @type {((inputs?: Consultant_Phone_SendingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_SendingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const consultant_phone_sending = /** @type {((inputs?: Consultant_Phone_SendingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_SendingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_consultant_phone_sending(inputs)
+	if (locale === "en-XA") return en_xa2_consultant_phone_sending(inputs)
 	return en_consultant_phone_sending(inputs)
 });

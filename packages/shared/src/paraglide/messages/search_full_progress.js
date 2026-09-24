@@ -13,17 +13,22 @@ const es_search_full_progress = /** @type {(inputs: Search_Full_ProgressInputs) 
 	return /** @type {LocalizedString} */ (`${i?.searched}/${i?.total}`)
 };
 
+const en_xa2_search_full_progress = /** @type {(inputs: Search_Full_ProgressInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.searched}/ •${i?.total}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{searched}/{total}" |
 *
 * @param {Search_Full_ProgressInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const search_full_progress = /** @type {((inputs: Search_Full_ProgressInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Full_ProgressInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const search_full_progress = /** @type {((inputs: Search_Full_ProgressInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Full_ProgressInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_search_full_progress(inputs)
+	if (locale === "en-XA") return en_xa2_search_full_progress(inputs)
 	return en_search_full_progress(inputs)
 });

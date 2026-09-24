@@ -99,6 +99,9 @@ export default defineConfig({
       },
     }),
   ],
+  worker: {
+    format: "es",
+  },
   server: {
     ...("https" in mkcert ? { https: mkcert.https } : {}),
     // Vite validates the Host header on the HMR WebSocket upgrade even over

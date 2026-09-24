@@ -201,7 +201,7 @@ function atomRegex(atom) {
   return new RegExp(`(^|[^\\w-])${escapeRegex(atom.name)}($|[^\\w-])`);
 }
 
-/** "client" | "demo" | null — where every atom of the selector resolves. */
+/** "client" | "demo" | null: where every atom of the selector resolves. */
 function resolveSelector(selector, clientTexts, demoTexts) {
   const atoms = selectorAtoms(selector);
   if (atoms === null) return "unparseable";
@@ -282,7 +282,7 @@ function main() {
     }
     if (outcome === "demo") {
       warnings.push(
-        `${ref.file}:${ref.line}  ${ref.selector}  (resolves only in packages/demo — demo-owned chrome)`,
+        `${ref.file}:${ref.line}  ${ref.selector}  (resolves only in packages/demo: demo-owned chrome)`,
       );
       continue;
     }

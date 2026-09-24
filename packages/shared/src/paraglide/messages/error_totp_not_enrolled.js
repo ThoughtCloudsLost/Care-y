@@ -13,17 +13,22 @@ const es_error_totp_not_enrolled = /** @type {(inputs: Error_Totp_Not_EnrolledIn
 	return /** @type {LocalizedString} */ (`La aplicación de autenticación no está configurada.`)
 };
 
+const en_xa2_error_totp_not_enrolled = /** @type {(inputs: Error_Totp_Not_EnrolledInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àùthèntìcàtòr àpp ìs nòt sèt ùp. ••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Authenticator app is not set up." |
 *
 * @param {Error_Totp_Not_EnrolledInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_totp_not_enrolled = /** @type {((inputs?: Error_Totp_Not_EnrolledInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Totp_Not_EnrolledInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_totp_not_enrolled = /** @type {((inputs?: Error_Totp_Not_EnrolledInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Totp_Not_EnrolledInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_totp_not_enrolled(inputs)
+	if (locale === "en-XA") return en_xa2_error_totp_not_enrolled(inputs)
 	return en_error_totp_not_enrolled(inputs)
 });

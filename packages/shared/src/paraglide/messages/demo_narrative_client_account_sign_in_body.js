@@ -19,17 +19,25 @@ const es_demo_narrative_client_account_sign_in_body = /** @type {(inputs: Demo_N
 **Nombres de usuario desconocidos.** El servidor responde a nombres de usuario desconocidos con una sal falsa determinista y ejecuta la misma ruta de comparación que usa para cuentas reales, de manera que una contraseña incorrecta, un nombre de usuario incorrecto y una cuenta inexistente producen el mismo mensaje genérico de error. La enumeración de cuentas desde el inicio de sesión está plenamente defendida. El lado de creación debe informar al cliente legítimo cuando un nombre de usuario ya está tomado, lo que significa que quien ataque también puede sondear nombres de usuario, pero la ruta de creación anónima está detrás del límite de frecuencia de admisión y la prueba de trabajo, la ruta dentro del portal requiere autenticación de canal de enlace seguro, y ninguna de las dos devuelve datos adicionales de la cuenta.`)
 };
 
+const en_xa2_demo_narrative_client_account_sign_in_body = /** @type {(inputs: Demo_Narrative_Client_Account_Sign_In_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè àccòùnt pàgè òpèns tò à sìgn ìn fòrm whèn thèrè ìs nò àctìvè sèssìòn.
+ •••••••••••••••••••••••**Hòw ìt wòrks. ••••** Thè pàsswòrd nèvèr lèàvès thè dèvìcè. Sìgnìng ìn dèrìvès èncryptìòn kèys fròm ìt thròùgh à dèlìbèràtèly slòw lòcàl còmpùtàtìòn còmbìnèd wìth à sèrvèr ròùnd trìp.
+ •••••••••••••••••••••••••••••••••••••••••••••••••**Sèssìòn. •••** À sùccèssfùl sìgn ìn wrìtès à sèssìòn còòkìè wìth à 24 hòùr èxpìry ànd lòàds thè clìènt's cònvèrsàtìòn thrèàd. Dècryptìòn kèys lìvè ìn pàgè mèmòry, ànd à 15 mìnùtè ìdlè tìmèr thàt wàrns àt thè tèn mìnùtè màrk zèròs thèm ànd rètùrns tò thè sìgn ìn fòrm, sò rèlòàdìng òr rètùrnìng àftèr ìnàctìvìty mèàns rètypìng thè pàsswòrd.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Ùnknòwn ùsèrnàmès. ••••••** Thè sèrvèr ànswèrs ùnknòwn ùsèrnàmès wìth à dètèrmìnìstìc fàkè sàlt ànd rùns thè sàmè còmpàrìsòn pàth ìt ùsès fòr rèàl àccòùnts, sò à wròng pàsswòrd, à wròng ùsèrnàmè, ànd à nònèxìstènt àccòùnt àll pròdùcè thè sàmè gènèrìc fàìlùrè. Thè lògìn sìdè òf àccòùnt ènùmèràtìòn ìs fùlly dèfèndèd. Thè crèàtìòn sìdè mùst tèll thè lègìtìmàtè clìènt whèn à ùsèrnàmè ìs tàkèn, whìch mèàns àn àttàckèr càn pròbè ùsèrnàmès tòò, bùt thè ànònymòùs crèàtìòn pàth sìts bèhìnd thè ìntàkè ràtè lìmìt ànd pròòf òf wòrk, thè ìn-pòrtàl pàth rèqùìrès sècùrè lìnk chànnèl àùthèntìcàtìòn, ànd nèìthèr rètùrns àny òthèr àccòùnt dàtà. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The account page opens to a sign in form when there is no active session. **How it works.** The password never leaves the device. Signing in derives encrypti..." |
 *
 * @param {Demo_Narrative_Client_Account_Sign_In_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_client_account_sign_in_body = /** @type {((inputs?: Demo_Narrative_Client_Account_Sign_In_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Account_Sign_In_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_client_account_sign_in_body = /** @type {((inputs?: Demo_Narrative_Client_Account_Sign_In_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Account_Sign_In_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_client_account_sign_in_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_client_account_sign_in_body(inputs)
 	return en_demo_narrative_client_account_sign_in_body(inputs)
 });

@@ -3,27 +3,32 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 /** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
 
-/** @typedef {{ Tickets: NonNullable<unknown>, days: NonNullable<unknown>, tickets: NonNullable<unknown> }} Admin_Retention_Active_DescriptionInputs */
+/** @typedef {{ tickets: NonNullable<unknown>, days: NonNullable<unknown> }} Admin_Retention_Active_DescriptionInputs */
 
 const en_admin_retention_active_description = /** @type {(inputs: Admin_Retention_Active_DescriptionInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.Tickets}, messages, and caller personal information older than ${i?.days} days are automatically deleted.`)
+	return /** @type {LocalizedString} */ (`Closed ${i?.tickets} and their data are deleted after ${i?.days} days without activity. People with open ${i?.tickets} are not affected.`)
 };
 
 const es_admin_retention_active_description = /** @type {(inputs: Admin_Retention_Active_DescriptionInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Los ${i?.tickets}, mensajes e información personal de los llamantes con más de ${i?.days} días se eliminan automáticamente.`)
+	return /** @type {LocalizedString} */ (`Los ${i?.tickets} cerrados y sus datos se eliminan después de ${i?.days} días sin actividad. Las personas con ${i?.tickets} abiertos no se ven afectadas.`)
+};
+
+const en_xa2_admin_retention_active_description = /** @type {(inputs: Admin_Retention_Active_DescriptionInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Clòsèd  •••${i?.tickets} ànd thèìr dàtà àrè dèlètèd àftèr  •••••••••••${i?.days} dàys wìthòùt àctìvìty. Pèòplè wìth òpèn  •••••••••••••${i?.tickets} àrè nòt àffèctèd. ••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "{Tickets}, messages, and caller personal information older than {days} days are automatically deleted." |
+* | "Closed {tickets} and their data are deleted after {days} days without activity. People with open {tickets} are not affected." |
 *
 * @param {Admin_Retention_Active_DescriptionInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_retention_active_description = /** @type {((inputs: Admin_Retention_Active_DescriptionInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Retention_Active_DescriptionInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const admin_retention_active_description = /** @type {((inputs: Admin_Retention_Active_DescriptionInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Retention_Active_DescriptionInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_retention_active_description(inputs)
+	if (locale === "en-XA") return en_xa2_admin_retention_active_description(inputs)
 	return en_admin_retention_active_description(inputs)
 });

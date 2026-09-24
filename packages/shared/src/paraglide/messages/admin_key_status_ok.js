@@ -13,17 +13,22 @@ const es_admin_key_status_ok = /** @type {(inputs: Admin_Key_Status_OkInputs) =>
 	return /** @type {LocalizedString} */ (`Listas`)
 };
 
+const en_xa2_admin_key_status_ok = /** @type {(inputs: Admin_Key_Status_OkInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèàdy ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Ready" |
 *
 * @param {Admin_Key_Status_OkInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_key_status_ok = /** @type {((inputs?: Admin_Key_Status_OkInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Key_Status_OkInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_key_status_ok = /** @type {((inputs?: Admin_Key_Status_OkInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Key_Status_OkInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_key_status_ok(inputs)
+	if (locale === "en-XA") return en_xa2_admin_key_status_ok(inputs)
 	return en_admin_key_status_ok(inputs)
 });

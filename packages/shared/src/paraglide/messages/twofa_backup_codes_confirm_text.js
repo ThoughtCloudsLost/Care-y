@@ -13,17 +13,22 @@ const es_twofa_backup_codes_confirm_text = /** @type {(inputs: Twofa_Backup_Code
 	return /** @type {LocalizedString} */ (`Estos códigos no se mostrarán de nuevo. Asegúrate de haberlos copiado o anotado.`)
 };
 
+const en_xa2_twofa_backup_codes_confirm_text = /** @type {(inputs: Twofa_Backup_Codes_Confirm_TextInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thèsè còdès wìll nòt bè shòwn àgàìn. Màkè sùrè yòù còpìèd òr wròtè thèm dòwn. ••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "These codes will not be shown again. Make sure you copied or wrote them down." |
 *
 * @param {Twofa_Backup_Codes_Confirm_TextInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const twofa_backup_codes_confirm_text = /** @type {((inputs?: Twofa_Backup_Codes_Confirm_TextInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Backup_Codes_Confirm_TextInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const twofa_backup_codes_confirm_text = /** @type {((inputs?: Twofa_Backup_Codes_Confirm_TextInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Backup_Codes_Confirm_TextInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_twofa_backup_codes_confirm_text(inputs)
+	if (locale === "en-XA") return en_xa2_twofa_backup_codes_confirm_text(inputs)
 	return en_twofa_backup_codes_confirm_text(inputs)
 });

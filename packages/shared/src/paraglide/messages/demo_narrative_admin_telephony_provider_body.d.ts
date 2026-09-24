@@ -4,13 +4,13 @@
 * | "The telephony provider section configures how the organization connects to its phone service. **Two modes.** In managed mode the numbers are provisioned for ..." |
 *
 * @param {Demo_Narrative_Admin_Telephony_Provider_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const demo_narrative_admin_telephony_provider_body: ((inputs?: Demo_Narrative_Admin_Telephony_Provider_BodyInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Narrative_Admin_Telephony_Provider_BodyInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Demo_Narrative_Admin_Telephony_Provider_BodyInputs = {};

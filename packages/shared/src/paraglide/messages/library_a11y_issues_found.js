@@ -13,17 +13,22 @@ const es_library_a11y_issues_found = /** @type {(inputs: Library_A11y_Issues_Fou
 	return /** @type {LocalizedString} */ (`${i?.count} problemas de accesibilidad encontrados`)
 };
 
+const en_xa2_library_a11y_issues_found = /** @type {(inputs: Library_A11y_Issues_FoundInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count} àccèssìbìlìty ìssùès fòùnd •••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} accessibility issues found" |
 *
 * @param {Library_A11y_Issues_FoundInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_a11y_issues_found = /** @type {((inputs: Library_A11y_Issues_FoundInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_A11y_Issues_FoundInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const library_a11y_issues_found = /** @type {((inputs: Library_A11y_Issues_FoundInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_A11y_Issues_FoundInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_a11y_issues_found(inputs)
+	if (locale === "en-XA") return en_xa2_library_a11y_issues_found(inputs)
 	return en_library_a11y_issues_found(inputs)
 });

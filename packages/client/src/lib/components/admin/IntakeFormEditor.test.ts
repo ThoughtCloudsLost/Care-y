@@ -181,6 +181,42 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "This form is no longer accepting submissions.",
   form_content_editor_image_no_key: () =>
     "Image upload requires the organization key to be loaded",
+  intake_page_next: () => "Next",
+  intake_page_back: () => "Back",
+  intake_page_progress: ({
+    current,
+    total,
+  }: {
+    current: string;
+    total: string;
+  }) => `Step ${current} of ${total}`,
+  intake_page_advance_anyway: () => "Continue with incomplete answers",
+  intake_page_issues_heading: () => "Please review the following:",
+  intake_page_issue_row: ({ field, error }: { field: string; error: string }) =>
+    `${field}: ${error}`,
+  intake_page_issue_row_with_page: ({
+    page,
+    field,
+    error,
+  }: {
+    page: string;
+    field: string;
+    error: string;
+  }) => `Step ${page}: ${field}: ${error}`,
+  intake_page_submit_blocked: () => "Fix all issues before submitting.",
+  intake_preview_conditional_marker: () => "Conditional page",
+  intake_submit: () => "Send encrypted message",
+  intake_error_field_required: () => "This field is required.",
+  intake_error_message_required: () =>
+    "Please write a message so we know how to help.",
+  intake_error_email_format: () => "Enter a valid email address.",
+  intake_error_phone_format: () => "Enter a phone number like +1 555 000 1234.",
+  intake_error_number_format: () => "Enter a valid number.",
+  intake_error_number_min: ({ min }: { min: string }) =>
+    `Value must be at least ${min}.`,
+  intake_error_number_max: ({ max }: { max: string }) =>
+    `Value must be at most ${max}.`,
+  intake_error_date_format: () => "Enter a valid date.",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
@@ -928,5 +964,217 @@ describe("IntakeFormEditor", () => {
 
     // Initial state is not dirty
     expect(ondirtychange).toHaveBeenLastCalledWith(false);
+  });
+
+  // -----------------------------------------------------------------
+  // Preview pagination tests
+  // -----------------------------------------------------------------
+
+  it("renders paginated preview with progress when fields include a page break", () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialFields: [
+          {
+            fieldKey: "fk-p1",
+            label: { en: "Name" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+          {
+            fieldKey: "fk-pb",
+            label: { en: "Page 2" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const, maxLength: 0 },
+            fieldType: "pageBreak" as const,
+            ...NO_ROLE,
+          },
+          {
+            fieldKey: "fk-p2",
+            label: { en: "Email" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+        ],
+      },
+    });
+
+    // Progress indicator should be visible
+    const progress = screen.getByTestId("preview-page-progress");
+    expect(progress).toBeTruthy();
+    expect(progress.textContent).toContain("Step 1 of 2");
+
+    // Next button should be visible
+    expect(screen.getByTestId("preview-page-next")).toBeTruthy();
+  });
+
+  it("navigates forward and backward in preview pages", async () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialFields: [
+          {
+            fieldKey: "fk-nav-p1",
+            label: { en: "First" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+          {
+            fieldKey: "fk-nav-pb",
+            label: { en: "Page 2" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const, maxLength: 0 },
+            fieldType: "pageBreak" as const,
+            ...NO_ROLE,
+          },
+          {
+            fieldKey: "fk-nav-p2",
+            label: { en: "Second" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+        ],
+      },
+    });
+
+    // Start on page 1
+    expect(screen.getByTestId("preview-page-progress").textContent).toContain(
+      "Step 1 of 2",
+    );
+
+    // Go to page 2
+    await fireEvent.click(screen.getByTestId("preview-page-next"));
+    expect(screen.getByTestId("preview-page-progress").textContent).toContain(
+      "Step 2 of 2",
+    );
+
+    // Back button should be present, go back to page 1
+    await fireEvent.click(screen.getByTestId("preview-page-back"));
+    expect(screen.getByTestId("preview-page-progress").textContent).toContain(
+      "Step 1 of 2",
+    );
+  });
+
+  it("shows conditional marker for pages with condition-gated fields", async () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialFields: [
+          {
+            fieldKey: "fk-cond-toggle",
+            label: { en: "Toggle" },
+            helpText: {},
+            isRequired: false,
+            config: {
+              type: "select" as const,
+              options: [
+                { key: "yes", label: { en: "Yes" } },
+                { key: "no", label: { en: "No" } },
+              ],
+            },
+            fieldType: "select" as const,
+            ...NO_ROLE,
+          },
+          {
+            fieldKey: "fk-cond-pb",
+            label: { en: "Conditional Page" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const, maxLength: 0 },
+            fieldType: "pageBreak" as const,
+            ...NO_ROLE,
+          },
+          {
+            fieldKey: "fk-cond-field",
+            label: { en: "Conditional field" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+            visibleWhen: {
+              version: 2 as const,
+              groups: [
+                [
+                  {
+                    fieldKey: "fk-cond-toggle",
+                    operator: "equals" as const,
+                    optionKey: "yes",
+                  },
+                ],
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    // Navigate to page 2 (the conditional page)
+    await fireEvent.click(screen.getByTestId("preview-page-next"));
+
+    // The conditional marker should appear on that page
+    const marker = screen.queryByTestId("preview-conditional-marker");
+    expect(marker).toBeTruthy();
+    expect(marker?.textContent).toContain("Conditional page");
+  });
+
+  it("shows submit button on last preview page", async () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialFields: [
+          {
+            fieldKey: "fk-sub-p1",
+            label: { en: "Name" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+          {
+            fieldKey: "fk-sub-pb",
+            label: { en: "Page 2" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const, maxLength: 0 },
+            fieldType: "pageBreak" as const,
+            ...NO_ROLE,
+          },
+          {
+            fieldKey: "fk-sub-p2",
+            label: { en: "Message" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+        ],
+      },
+    });
+
+    // Submit not visible on page 1
+    expect(screen.queryByTestId("preview-submit")).toBeNull();
+
+    // Navigate to last page
+    await fireEvent.click(screen.getByTestId("preview-page-next"));
+
+    // Submit should now be visible
+    expect(screen.getByTestId("preview-submit")).toBeTruthy();
   });
 });

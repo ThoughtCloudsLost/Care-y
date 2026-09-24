@@ -327,6 +327,8 @@ export interface SavedFiltersConfig {
   readonly onapply: (record: SavedFilterRecord) => void;
   readonly ondelete: (id: string) => void;
   readonly ontoggleshare: (id: string) => void;
+  /** Current user's ID for ownership checks on shared filters. */
+  readonly currentUserId: string | null;
 }
 
 export interface ManageConfig {

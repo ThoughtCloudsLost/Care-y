@@ -13,17 +13,22 @@ const es_twofa_error_push_timeout = /** @type {(inputs: Twofa_Error_Push_Timeout
 	return /** @type {LocalizedString} */ (`Tiempo agotado. Intenta de nuevo.`)
 };
 
+const en_xa2_twofa_error_push_timeout = /** @type {(inputs: Twofa_Error_Push_TimeoutInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tìmèd òùt. Try àgàìn. •••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Timed out. Try again." |
 *
 * @param {Twofa_Error_Push_TimeoutInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const twofa_error_push_timeout = /** @type {((inputs?: Twofa_Error_Push_TimeoutInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Error_Push_TimeoutInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const twofa_error_push_timeout = /** @type {((inputs?: Twofa_Error_Push_TimeoutInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Error_Push_TimeoutInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_twofa_error_push_timeout(inputs)
+	if (locale === "en-XA") return en_xa2_twofa_error_push_timeout(inputs)
 	return en_twofa_error_push_timeout(inputs)
 });

@@ -13,17 +13,22 @@ const es_admin_greetings_upload_audio = /** @type {(inputs: Admin_Greetings_Uplo
 	return /** @type {LocalizedString} */ (`Subir archivo de audio`)
 };
 
+const en_xa2_admin_greetings_upload_audio = /** @type {(inputs: Admin_Greetings_Upload_AudioInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ùplòàd àùdìò fìlè ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Upload audio file" |
 *
 * @param {Admin_Greetings_Upload_AudioInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_greetings_upload_audio = /** @type {((inputs?: Admin_Greetings_Upload_AudioInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Upload_AudioInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_greetings_upload_audio = /** @type {((inputs?: Admin_Greetings_Upload_AudioInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Upload_AudioInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_greetings_upload_audio(inputs)
+	if (locale === "en-XA") return en_xa2_admin_greetings_upload_audio(inputs)
 	return en_admin_greetings_upload_audio(inputs)
 });

@@ -145,7 +145,7 @@ describe("createTicketInputSchema", () => {
     encryptedTitle: VALID_BASE64,
     encryptedDescription: VALID_BASE64,
     keyGeneration: VALID_UUID,
-    keyWrap: validKeyWrap,
+    keyWraps: [{ volunteerId: VALID_UUID_2, ...validKeyWrap }],
   };
 
   it("accepts valid input with default priority", () => {

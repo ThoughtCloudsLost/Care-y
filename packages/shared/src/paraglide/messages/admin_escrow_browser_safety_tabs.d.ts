@@ -4,13 +4,13 @@
 * | "Close other browser tabs and apps you don't need" |
 *
 * @param {Admin_Escrow_Browser_Safety_TabsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_escrow_browser_safety_tabs: ((inputs?: Admin_Escrow_Browser_Safety_TabsInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_Escrow_Browser_Safety_TabsInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_Escrow_Browser_Safety_TabsInputs = {};

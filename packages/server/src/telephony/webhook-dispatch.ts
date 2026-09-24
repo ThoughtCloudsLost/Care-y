@@ -10,7 +10,10 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { OrgService } from "../org/service.js";
 import type { ProviderFactory } from "./factory.js";
-import type { BlindIndexer } from "../crypto/field-encryptor.js";
+import type {
+  BlindIndexer,
+  FieldEncryptor,
+} from "../crypto/field-encryptor.js";
 import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
@@ -88,6 +91,7 @@ export interface WebhookDispatchDeps {
   readonly tenantDb: (schema: OrgSchema) => Kysely<TenantDatabase>;
   readonly providerFactory: ProviderFactory;
   readonly indexer: BlindIndexer;
+  readonly fieldEncryptor: FieldEncryptor;
   readonly blobStore: BlobStore;
   readonly jobQueue: JobQueue;
   readonly webhookBaseUrl: string;
@@ -139,6 +143,7 @@ export function createWebhookDispatch(
       await handleInboundSms(smsData, {
         provider,
         sealedBox: org.sealedBox,
+        fieldEncryptor: deps.fieldEncryptor,
         indexer,
         blobStore,
         jobQueue,
@@ -197,6 +202,7 @@ export function createWebhookDispatch(
 
       const instructions = await handleInboundCall(callData, body, {
         sealedBox: org.sealedBox,
+        fieldEncryptor: deps.fieldEncryptor,
         indexer,
         phoneRepo,
         clientRepo,

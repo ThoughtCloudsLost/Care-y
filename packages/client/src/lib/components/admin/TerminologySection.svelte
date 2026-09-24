@@ -22,8 +22,10 @@
     terminologyConfigSchema,
     type TerminologyConfig,
     type TerminologyLabels,
+    type DisplayLocale,
   } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { asFixedLocale } from "$lib/locale/reader-locale.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -155,7 +157,7 @@
 
   function displayLabel(
     field: keyof TerminologyLabels,
-    lang: LangCode,
+    lang: DisplayLocale,
   ): string {
     let value: string;
     if (serverConfig !== null) {
@@ -381,14 +383,23 @@
         <p class="section-desc">{m.admin_terminology_description()}</p>
 
         {#each TERM_GROUPS as group (group.key)}
-          <div class="term-row">
+          <div class="term-row-pair">
             <span class="term-label">{group.label()}</span>
-            <span class="term-value">
-              {displayLabel(group.singularField, "en")}
-              {#if group.pluralField !== null}
-                / {displayLabel(group.pluralField, "en")}
-              {/if}
-            </span>
+            <div class="term-langs">
+              {#each LANGS as lang (lang)}
+                <span class="term-lang-col">
+                  <span class="term-lang-tag">{LANG_LABELS[lang]()}</span>
+                  <!-- The card shows the configured pair, so both locales
+                       are deliberately fixed rather than reader-derived. -->
+                  <span class="term-value">
+                    {displayLabel(group.singularField, asFixedLocale(lang))}
+                    {#if group.pluralField !== null}
+                      / {displayLabel(group.pluralField, asFixedLocale(lang))}
+                    {/if}
+                  </span>
+                </span>
+              {/each}
+            </div>
           </div>
         {/each}
 
@@ -569,12 +580,41 @@
     padding: 0.25rem 0;
   }
 
+  .term-row-pair {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: 0.25rem 0;
+  }
+
   .term-label {
     font-size: var(--text-xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--muted);
+  }
+
+  .term-langs {
+    display: flex;
+    gap: var(--space-md);
+  }
+
+  .term-lang-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .term-lang-tag {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    opacity: 0.7;
   }
 
   .term-value {

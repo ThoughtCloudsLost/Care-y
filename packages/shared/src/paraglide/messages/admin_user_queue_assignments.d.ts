@@ -4,13 +4,13 @@
 * | "{Queue} Assignments" |
 *
 * @param {Admin_User_Queue_AssignmentsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const admin_user_queue_assignments: ((inputs: Admin_User_Queue_AssignmentsInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Admin_User_Queue_AssignmentsInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Admin_User_Queue_AssignmentsInputs = {

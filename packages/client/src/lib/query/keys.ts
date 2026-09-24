@@ -79,6 +79,8 @@ export const ticketKeys = {
   followUpSummary: (ticketId: string, ...filterParams: unknown[]) =>
     [...ticketKeys.followUps(ticketId), "summary", ...filterParams] as const,
 
+  dependencies: (ticketId: string) =>
+    [...ticketKeys.all(ticketId), "dependencies"] as const,
   shares: (ticketId: string) =>
     [...ticketKeys.all(ticketId), "shares"] as const,
   attachments: (ticketId: string) =>
@@ -137,12 +139,15 @@ export const adminKeys = {
     [...adminKeys.all, "escalationRules", queueId] as const,
   rolePermissions: () => [...adminKeys.all, "rolePermissions"] as const,
   channelPolicy: () => [...adminKeys.all, "channelPolicy"] as const,
+  presets: () => [...adminKeys.all, "presets"] as const,
 };
 
 export const queueKeys = {
   all: ["queues"] as const,
   members: (queueId: string) => ["queue-members", queueId] as const,
   membersAll: () => ["queue-members"] as const,
+  watchers: (queueId: string) => ["queue-watchers", queueId] as const,
+  watchersAll: () => ["queue-watchers"] as const,
 };
 
 export const volunteerKeys = {

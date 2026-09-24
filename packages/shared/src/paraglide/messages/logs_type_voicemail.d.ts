@@ -4,13 +4,13 @@
 * | "Voicemail" |
 *
 * @param {Logs_Type_VoicemailInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const logs_type_voicemail: ((inputs?: Logs_Type_VoicemailInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Logs_Type_VoicemailInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Logs_Type_VoicemailInputs = {};

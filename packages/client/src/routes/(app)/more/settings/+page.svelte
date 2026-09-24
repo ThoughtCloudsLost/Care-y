@@ -8,7 +8,7 @@
     Button,
   } from "konsta/svelte";
   import { ChevronLeft } from "@lucide/svelte";
-  import { createQuery } from "@tanstack/svelte-query";
+  import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { authKeys, twoFactorKeys, consultantKeys } from "$lib/query/keys.js";
@@ -22,6 +22,15 @@
   import { themeStore } from "$lib/stores/theme.svelte";
   import { toggleSchemeWithPalette } from "$lib/branding/scheme-toggle.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { haptic } from "$lib/utils/haptic.js";
+  import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import {
+    getLocale,
+    setLocale,
+    isLocale,
+    type Locale,
+  } from "$lib/paraglide/runtime.js";
+  import { savePreferredLocale } from "$lib/settings/preferred-locale.js";
   import DisplayNameSheet from "$lib/components/settings/DisplayNameSheet.svelte";
   import UsernameSheet from "$lib/components/settings/UsernameSheet.svelte";
   import PasswordSheet from "$lib/components/settings/PasswordSheet.svelte";
@@ -30,9 +39,12 @@
   import NotificationPreferencesSection from "$lib/components/settings/NotificationPreferencesSection.svelte";
   import ConsultantPhoneSheet from "$lib/components/settings/ConsultantPhoneSheet.svelte";
 
+  import { NATIVE_LOCALE_NAMES } from "$lib/utils/locale-names.js";
+
   const orgCache = getOrgDecryptCache();
   const cryptoBridge = getCryptoBridge();
   const orgKeyManager = getOrgKeyManager();
+  const queryClient = useQueryClient();
   const navbarCtx = getNavbarOverrideCtx();
 
   const meQuery = createQuery(() => ({
@@ -58,6 +70,50 @@
       : "",
   );
   const userId = $derived(meQuery.data?.user.id ?? "");
+
+  // ── Preferred locale ────────────────────────────────────────────────
+  const encryptedPreferredLocale = $derived(
+    meQuery.data?.user.encryptedPreferredLocale ?? null,
+  );
+  const storedLocale = $derived(
+    encryptedPreferredLocale !== null
+      ? orgCache.decrypt("me:preferred_locale", encryptedPreferredLocale)
+      : null,
+  );
+  const storedLocaleDisplay = $derived.by(() => {
+    if (encryptedPreferredLocale === null)
+      return m.settings_preferred_language_none();
+    if (storedLocale === null) return m.common_loading();
+    return NATIVE_LOCALE_NAMES.get(storedLocale) ?? storedLocale;
+  });
+
+  let localeSaving = $state(false);
+
+  async function handleLocaleToggle(): Promise<void> {
+    if (localeSaving || !orgKeyManager.isLoaded) return;
+    localeSaving = true;
+    try {
+      // Toggle: if the stored/session locale is "en", switch to "es" and vice versa
+      const current = storedLocale ?? getLocale();
+      const target: Locale = current === "en" ? "es" : "en";
+      await savePreferredLocale(orgKeyManager, target);
+      haptic();
+      orgCache.delete("me:preferred_locale");
+      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      // Apply to the current session as well
+      if (isLocale(target) && target !== getLocale()) {
+        void setLocale(target, { reload: false });
+        document.documentElement.lang = target;
+      }
+      const msg = m.settings_preferred_language_saved();
+      toastStore.show(msg);
+      announceToLiveRegion("polite", msg);
+    } catch {
+      toastStore.show(m.settings_preferred_language_error());
+    } finally {
+      localeSaving = false;
+    }
+  }
 
   let displayNameSheetOpen = $state(false);
   let usernameSheetOpen = $state(false);
@@ -175,6 +231,13 @@
 
   <BlockTitle>{m.settings_appearance()}</BlockTitle>
   <List strong inset>
+    <ListItem
+      title={m.settings_preferred_language()}
+      after={storedLocaleDisplay}
+      link
+      data-testid="settings-preferred-language-row"
+      onclick={handleLocaleToggle}
+    />
     <ListItem
       title={m.settings_color_scheme()}
       after={themeStore.resolvedScheme === "dark"

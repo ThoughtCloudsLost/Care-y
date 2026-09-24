@@ -13,11 +13,14 @@
  * server package from the client suite harmless. Importing the router
  * instead would pull pg and the tenant DB into a host-run suite.
  *
- * Limit worth stating: this compares sets, not call-site pairs. Linking
- * a component's gate to the procedure it guards would need either a
- * hand-maintained table or a refactor that names the key at the call
- * site. So a gate that checks the wrong key while the server checks
- * another passes here.
+ * Limit worth stating: this compares sets, not call-site pairs. Gates
+ * that front a single procedure now use canCall() from procedure-gates.ts,
+ * which names the procedure path at the call site and resolves it through
+ * the shared PROCEDURE_PERMISSIONS manifest (itself test-locked to the
+ * server router). The remaining raw literal gates guard broader surfaces
+ * (page admission, multi-procedure controls) and are still covered only
+ * by this set comparison, so a raw gate that checks the wrong key while
+ * the server checks another still passes here.
  */
 
 import { describe, it, expect } from "vitest";

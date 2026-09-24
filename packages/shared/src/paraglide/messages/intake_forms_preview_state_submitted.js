@@ -13,17 +13,22 @@ const es_intake_forms_preview_state_submitted = /** @type {(inputs: Intake_Forms
 	return /** @type {LocalizedString} */ (`Enviado`)
 };
 
+const en_xa2_intake_forms_preview_state_submitted = /** @type {(inputs: Intake_Forms_Preview_State_SubmittedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sùbmìttèd •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Submitted" |
 *
 * @param {Intake_Forms_Preview_State_SubmittedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_preview_state_submitted = /** @type {((inputs?: Intake_Forms_Preview_State_SubmittedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Preview_State_SubmittedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_preview_state_submitted = /** @type {((inputs?: Intake_Forms_Preview_State_SubmittedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Preview_State_SubmittedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_preview_state_submitted(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_preview_state_submitted(inputs)
 	return en_intake_forms_preview_state_submitted(inputs)
 });

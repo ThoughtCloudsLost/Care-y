@@ -13,17 +13,22 @@ const es_demo_role_admin_initial = /** @type {(inputs: Demo_Role_Admin_InitialIn
 	return /** @type {LocalizedString} */ (`A`)
 };
 
+const en_xa2_demo_role_admin_initial = /** @type {(inputs: Demo_Role_Admin_InitialInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦À •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "A" |
 *
 * @param {Demo_Role_Admin_InitialInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_role_admin_initial = /** @type {((inputs?: Demo_Role_Admin_InitialInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Role_Admin_InitialInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_role_admin_initial = /** @type {((inputs?: Demo_Role_Admin_InitialInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Role_Admin_InitialInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_role_admin_initial(inputs)
+	if (locale === "en-XA") return en_xa2_demo_role_admin_initial(inputs)
 	return en_demo_role_admin_initial(inputs)
 });

@@ -13,17 +13,22 @@ const es_search_refine_label = /** @type {(inputs: Search_Refine_LabelInputs) =>
 	return /** @type {LocalizedString} */ (`Refinar búsqueda`)
 };
 
+const en_xa2_search_refine_label = /** @type {(inputs: Search_Refine_LabelInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Rèfìnè sèàrch ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Refine search" |
 *
 * @param {Search_Refine_LabelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const search_refine_label = /** @type {((inputs?: Search_Refine_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Refine_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const search_refine_label = /** @type {((inputs?: Search_Refine_LabelInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Search_Refine_LabelInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_search_refine_label(inputs)
+	if (locale === "en-XA") return en_xa2_search_refine_label(inputs)
 	return en_search_refine_label(inputs)
 });

@@ -13,17 +13,22 @@ const es_error_invalid_credentials = /** @type {(inputs: Error_Invalid_Credentia
 	return /** @type {LocalizedString} */ (`Usuario de inicio de sesión o contraseña incorrectos.`)
 };
 
+const en_xa2_error_invalid_credentials = /** @type {(inputs: Error_Invalid_CredentialsInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ìnvàlìd lògìn ùsèrnàmè òr pàsswòrd. •••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Invalid login username or password." |
 *
 * @param {Error_Invalid_CredentialsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_invalid_credentials = /** @type {((inputs?: Error_Invalid_CredentialsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Invalid_CredentialsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_invalid_credentials = /** @type {((inputs?: Error_Invalid_CredentialsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Invalid_CredentialsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_invalid_credentials(inputs)
+	if (locale === "en-XA") return en_xa2_error_invalid_credentials(inputs)
 	return en_error_invalid_credentials(inputs)
 });

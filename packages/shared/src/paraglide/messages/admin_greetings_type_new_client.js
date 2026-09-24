@@ -13,17 +13,22 @@ const es_admin_greetings_type_new_client = /** @type {(inputs: Admin_Greetings_T
 	return /** @type {LocalizedString} */ (`Primera llamada`)
 };
 
+const en_xa2_admin_greetings_type_new_client = /** @type {(inputs: Admin_Greetings_Type_New_ClientInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Fìrst-tìmè càllèr ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "First-time caller" |
 *
 * @param {Admin_Greetings_Type_New_ClientInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_greetings_type_new_client = /** @type {((inputs?: Admin_Greetings_Type_New_ClientInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Type_New_ClientInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_greetings_type_new_client = /** @type {((inputs?: Admin_Greetings_Type_New_ClientInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Greetings_Type_New_ClientInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_greetings_type_new_client(inputs)
+	if (locale === "en-XA") return en_xa2_admin_greetings_type_new_client(inputs)
 	return en_admin_greetings_type_new_client(inputs)
 });

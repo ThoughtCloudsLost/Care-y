@@ -4,13 +4,13 @@
 * | "Explore freely" |
 *
 * @param {Demo_Coming_Soon_HeadingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const demo_coming_soon_heading: ((inputs?: Demo_Coming_Soon_HeadingInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Coming_Soon_HeadingInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Demo_Coming_Soon_HeadingInputs = {};

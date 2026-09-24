@@ -13,17 +13,22 @@ const es_portal_contact_none = /** @type {(inputs: Portal_Contact_NoneInputs) =>
 	return /** @type {LocalizedString} */ (`No hay información de contacto registrada.`)
 };
 
+const en_xa2_portal_contact_none = /** @type {(inputs: Portal_Contact_NoneInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nò còntàct ìnfò òn fìlè. ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "No contact info on file." |
 *
 * @param {Portal_Contact_NoneInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const portal_contact_none = /** @type {((inputs?: Portal_Contact_NoneInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Contact_NoneInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const portal_contact_none = /** @type {((inputs?: Portal_Contact_NoneInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Contact_NoneInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_portal_contact_none(inputs)
+	if (locale === "en-XA") return en_xa2_portal_contact_none(inputs)
 	return en_portal_contact_none(inputs)
 });

@@ -13,17 +13,22 @@ const es_portal_passphrase_success_close = /** @type {(inputs: Portal_Passphrase
 	return /** @type {LocalizedString} */ (`Listo`)
 };
 
+const en_xa2_portal_passphrase_success_close = /** @type {(inputs: Portal_Passphrase_Success_CloseInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Dònè ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Done" |
 *
 * @param {Portal_Passphrase_Success_CloseInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const portal_passphrase_success_close = /** @type {((inputs?: Portal_Passphrase_Success_CloseInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_Success_CloseInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const portal_passphrase_success_close = /** @type {((inputs?: Portal_Passphrase_Success_CloseInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Portal_Passphrase_Success_CloseInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_portal_passphrase_success_close(inputs)
+	if (locale === "en-XA") return en_xa2_portal_passphrase_success_close(inputs)
 	return en_portal_passphrase_success_close(inputs)
 });

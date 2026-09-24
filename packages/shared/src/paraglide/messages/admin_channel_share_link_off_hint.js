@@ -13,17 +13,22 @@ const es_admin_channel_share_link_off_hint = /** @type {(inputs: Admin_Channel_S
 	return /** @type {LocalizedString} */ (`Los voluntarios no pueden enviar enlaces compartidos de un solo uso.`)
 };
 
+const en_xa2_admin_channel_share_link_off_hint = /** @type {(inputs: Admin_Channel_Share_Link_Off_HintInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vòlùntèèrs cànnòt sènd ònè-tìmè shàrè lìnks. ••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Volunteers cannot send one-time share links." |
 *
 * @param {Admin_Channel_Share_Link_Off_HintInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_channel_share_link_off_hint = /** @type {((inputs?: Admin_Channel_Share_Link_Off_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Channel_Share_Link_Off_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_channel_share_link_off_hint = /** @type {((inputs?: Admin_Channel_Share_Link_Off_HintInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Channel_Share_Link_Off_HintInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_channel_share_link_off_hint(inputs)
+	if (locale === "en-XA") return en_xa2_admin_channel_share_link_off_hint(inputs)
 	return en_admin_channel_share_link_off_hint(inputs)
 });

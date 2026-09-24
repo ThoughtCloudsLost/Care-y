@@ -13,17 +13,22 @@ const es_library_sort_alpha = /** @type {(inputs: Library_Sort_AlphaInputs) => L
 	return /** @type {LocalizedString} */ (`A-Z`)
 };
 
+const en_xa2_library_sort_alpha = /** @type {(inputs: Library_Sort_AlphaInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦À-Z •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "A-Z" |
 *
 * @param {Library_Sort_AlphaInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_sort_alpha = /** @type {((inputs?: Library_Sort_AlphaInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Sort_AlphaInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_sort_alpha = /** @type {((inputs?: Library_Sort_AlphaInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Sort_AlphaInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_sort_alpha(inputs)
+	if (locale === "en-XA") return en_xa2_library_sort_alpha(inputs)
 	return en_library_sort_alpha(inputs)
 });

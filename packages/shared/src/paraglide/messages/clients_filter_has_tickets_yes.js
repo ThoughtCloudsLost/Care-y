@@ -13,17 +13,22 @@ const es_clients_filter_has_tickets_yes = /** @type {(inputs: Clients_Filter_Has
 	return /** @type {LocalizedString} */ (`Con ${i?.tickets}`)
 };
 
+const en_xa2_clients_filter_has_tickets_yes = /** @type {(inputs: Clients_Filter_Has_Tickets_YesInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Wìth  ••${i?.tickets}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "With {tickets}" |
 *
 * @param {Clients_Filter_Has_Tickets_YesInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const clients_filter_has_tickets_yes = /** @type {((inputs: Clients_Filter_Has_Tickets_YesInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Clients_Filter_Has_Tickets_YesInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const clients_filter_has_tickets_yes = /** @type {((inputs: Clients_Filter_Has_Tickets_YesInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Clients_Filter_Has_Tickets_YesInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_clients_filter_has_tickets_yes(inputs)
+	if (locale === "en-XA") return en_xa2_clients_filter_has_tickets_yes(inputs)
 	return en_clients_filter_has_tickets_yes(inputs)
 });

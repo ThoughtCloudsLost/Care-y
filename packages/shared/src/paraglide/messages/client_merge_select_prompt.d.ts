@@ -4,13 +4,13 @@
 * | "Select which {client} survives:" |
 *
 * @param {Client_Merge_Select_PromptInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const client_merge_select_prompt: ((inputs: Client_Merge_Select_PromptInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Client_Merge_Select_PromptInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Client_Merge_Select_PromptInputs = {

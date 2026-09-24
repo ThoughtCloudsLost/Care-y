@@ -13,17 +13,22 @@ const es_demo_flow_seam_webauthn_authenticator = /** @type {(inputs: Demo_Flow_S
 	return /** @type {LocalizedString} */ (`El autenticador de la llave de acceso se simula en la página. En un dispositivo real el autenticador está fuera de la pestaña del navegador y guarda la clave.`)
 };
 
+const en_xa2_demo_flow_seam_webauthn_authenticator = /** @type {(inputs: Demo_Flow_Seam_Webauthn_AuthenticatorInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè pàsskèy àùthèntìcàtòr ìs sìmùlàtèd ìn thè pàgè. Òn à rèàl dèvìcè thè àùthèntìcàtòr sìts òùtsìdè thè bròwsèr tàb ànd hòlds thè kèy ìtsèlf. •••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The passkey authenticator is simulated in the page. On a real device the authenticator sits outside the browser tab and holds the key itself." |
 *
 * @param {Demo_Flow_Seam_Webauthn_AuthenticatorInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_flow_seam_webauthn_authenticator = /** @type {((inputs?: Demo_Flow_Seam_Webauthn_AuthenticatorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Seam_Webauthn_AuthenticatorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_flow_seam_webauthn_authenticator = /** @type {((inputs?: Demo_Flow_Seam_Webauthn_AuthenticatorInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Flow_Seam_Webauthn_AuthenticatorInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_flow_seam_webauthn_authenticator(inputs)
+	if (locale === "en-XA") return en_xa2_demo_flow_seam_webauthn_authenticator(inputs)
 	return en_demo_flow_seam_webauthn_authenticator(inputs)
 });

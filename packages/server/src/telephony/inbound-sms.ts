@@ -4,13 +4,17 @@
  * a ticket with per-ticket ECIES encryption, creates an encrypted follow-up,
  * sends an auto-reply, and triggers Twilio log deletion (GAP-16 M2).
  *
+ * Phone numbers are OPS-tier encrypted (FieldEncryptor, ADR-005/069/096).
  * All plaintext is zeroed immediately after encryption. No PII is logged.
  */
 
 import type { Kysely } from "kysely";
 import type { TelephonyProvider, IncomingSmsData } from "./provider.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
-import type { BlindIndexer } from "../crypto/field-encryptor.js";
+import type {
+  FieldEncryptor,
+  BlindIndexer,
+} from "../crypto/field-encryptor.js";
 import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { ClientRepository } from "./models/client-repo.js";
@@ -30,7 +34,7 @@ import type {
 import { selectAutoReply } from "./sms-auto-reply.js";
 import { enqueueLogDeletion } from "../jobs/log-deletion.js";
 import { TelephonyError } from "../errors.js";
-import { sealString } from "./crypto-helpers.js";
+import { encryptString } from "./crypto-helpers.js";
 import { resolveOrCreateTicket } from "../tickets/server-ticket-create.js";
 import {
   createEncryptedFollowUp,
@@ -53,6 +57,7 @@ export interface InboundSmsResult {
 export interface InboundSmsDeps {
   readonly provider: TelephonyProvider;
   readonly sealedBox: SealedBoxEncryptor;
+  readonly fieldEncryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
   readonly blobStore: BlobStore;
   readonly jobQueue: JobQueue;
@@ -77,7 +82,7 @@ export async function handleInboundSms(
 ): Promise<InboundSmsResult | null> {
   const {
     provider,
-    sealedBox,
+    fieldEncryptor,
     indexer,
     blobStore,
     jobQueue,
@@ -103,8 +108,8 @@ export async function handleInboundSms(
     .executeTakeFirst();
   if (policyRow?.channel_sms_enabled === false) return null;
 
-  // 2. Encrypt caller phone (sealed-box for ops-tier phone storage)
-  const encryptedPhone = sealString(sealedBox, smsData.from);
+  // 2. Encrypt caller phone (OPS-tier via FieldEncryptor, ADR-005/069/096)
+  const encryptedPhone = encryptString(fieldEncryptor, smsData.from);
 
   // 3. Find or create client by phone hash
   const { client, phone, isNew } = await clientRepo.findOrCreateByPhoneHash(

@@ -13,17 +13,22 @@ const es_vol_access_security = /** @type {(inputs: Vol_Access_SecurityInputs) =>
 	return /** @type {LocalizedString} */ (`Ver tu estado de seguridad`)
 };
 
+const en_xa2_vol_access_security = /** @type {(inputs: Vol_Access_SecurityInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vìèw yòùr sècùrìty stàtùs ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "View your security status" |
 *
 * @param {Vol_Access_SecurityInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const vol_access_security = /** @type {((inputs?: Vol_Access_SecurityInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Access_SecurityInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const vol_access_security = /** @type {((inputs?: Vol_Access_SecurityInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Access_SecurityInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_vol_access_security(inputs)
+	if (locale === "en-XA") return en_xa2_vol_access_security(inputs)
 	return en_vol_access_security(inputs)
 });

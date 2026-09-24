@@ -17,17 +17,24 @@ const es_demo_narrative_client_account_thread_body = /** @type {(inputs: Demo_Na
 **Persistencia.** Las copias de mensajes del cliente en el canal del portal se eliminan después de 30 días de inactividad, mientras que el registro propio de la organización sobre la conversación se almacena por separado bajo la clave del caso y sigue sus propias reglas de retención.`)
 };
 
+const en_xa2_demo_narrative_client_account_thread_body = /** @type {(inputs: Demo_Narrative_Client_Account_Thread_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àftèr sìgnìng ìn, thè àccòùnt pàgè shòws thè sàmè mèssàgè thrèàd ànd còmpòsèr às thè sècùrè lìnk pòrtàl, ànd thè clìènt càn clòsè thè bròwsèr, rètùrn làtèr, sìgn ìn àgàìn, ànd rèsùmè thè cònvèrsàtìòn whèrè ìt lèft òff.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Thè àccòùnt thrèàd dèrìvès dècryptìòn kèys fròm thè pàsswòrd ràthèr thàn thè ÙRL fràgmènt, bùt thè èncryptìòn ànd rèply lìfècyclè àrè òthèrwìsè ìdèntìcàl tò thè sècùrè lìnk pòrtàl. À frèsh clìènt rèply ìs rèàdàblè by àny ùsèr whò hòlds thè òrgànìzàtìòn kèy ùntìl thè fìrst ùsèr òpèns ìt, àftèr whìch ònly hòldèrs òf pèr tìckèt kèy wràps càn rèàd ìt.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrsìstèncè. ••••** Thè clìènt's mèssàgè còpìès òn thè pòrtàl chànnèl àrè dròppèd àftèr 30 dàys òf chànnèl ìnàctìvìty, whìlè thè òrgànìzàtìòn's òwn rècòrd òf thè cònvèrsàtìòn ìs stòrèd sèpàràtèly ùndèr thè pèr tìckèt kèy ànd fòllòws ìts òwn rètèntìòn rùlès. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "After signing in, the account page shows the same message thread and composer as the secure link portal, and the client can close the browser, return later, ..." |
 *
 * @param {Demo_Narrative_Client_Account_Thread_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_client_account_thread_body = /** @type {((inputs?: Demo_Narrative_Client_Account_Thread_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Account_Thread_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_client_account_thread_body = /** @type {((inputs?: Demo_Narrative_Client_Account_Thread_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Account_Thread_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_client_account_thread_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_client_account_thread_body(inputs)
 	return en_demo_narrative_client_account_thread_body(inputs)
 });

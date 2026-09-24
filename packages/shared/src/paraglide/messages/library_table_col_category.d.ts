@@ -4,13 +4,13 @@
 * | "Category" |
 *
 * @param {Library_Table_Col_CategoryInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const library_table_col_category: ((inputs?: Library_Table_Col_CategoryInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Library_Table_Col_CategoryInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Library_Table_Col_CategoryInputs = {};

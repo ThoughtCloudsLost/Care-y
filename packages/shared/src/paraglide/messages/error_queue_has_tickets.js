@@ -13,17 +13,22 @@ const es_error_queue_has_tickets = /** @type {(inputs: Error_Queue_Has_TicketsIn
 	return /** @type {LocalizedString} */ (`La ${i?.queue} tiene ${i?.tickets}. Elige una ${i?.queue} para reasignarlos.`)
 };
 
+const en_xa2_error_queue_has_tickets = /** @type {(inputs: Error_Queue_Has_TicketsInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.Queue} hàs  ••${i?.tickets}. Chòòsè à  ••••${i?.queue} tò rèàssìgn thèm tò. •••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{Queue} has {tickets}. Choose a {queue} to reassign them to." |
 *
 * @param {Error_Queue_Has_TicketsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_queue_has_tickets = /** @type {((inputs: Error_Queue_Has_TicketsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Queue_Has_TicketsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const error_queue_has_tickets = /** @type {((inputs: Error_Queue_Has_TicketsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_Queue_Has_TicketsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_queue_has_tickets(inputs)
+	if (locale === "en-XA") return en_xa2_error_queue_has_tickets(inputs)
 	return en_error_queue_has_tickets(inputs)
 });

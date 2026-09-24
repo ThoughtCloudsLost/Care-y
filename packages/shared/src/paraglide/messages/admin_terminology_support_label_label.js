@@ -13,17 +13,22 @@ const es_admin_terminology_support_label_label = /** @type {(inputs: Admin_Termi
 	return /** @type {LocalizedString} */ (`Nombre que los clientes ven en tus mensajes`)
 };
 
+const en_xa2_admin_terminology_support_label_label = /** @type {(inputs: Admin_Terminology_Support_Label_LabelInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Nàmè clìènts sèè òn yòùr mèssàgès ••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Name clients see on your messages" |
 *
 * @param {Admin_Terminology_Support_Label_LabelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_terminology_support_label_label = /** @type {((inputs?: Admin_Terminology_Support_Label_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Terminology_Support_Label_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_terminology_support_label_label = /** @type {((inputs?: Admin_Terminology_Support_Label_LabelInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Terminology_Support_Label_LabelInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_terminology_support_label_label(inputs)
+	if (locale === "en-XA") return en_xa2_admin_terminology_support_label_label(inputs)
 	return en_admin_terminology_support_label_label(inputs)
 });

@@ -35,10 +35,14 @@ import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
  *   from the sweep. They reseal through a combined columns-plus-blob
  *   path in a later task.
  */
+/**
+ * phones is intentionally absent: its only org-sealed column
+ * (encrypted_number) converged to OPS tier per ADR-005/069/096.
+ * The phone_match_hash index sweep (INDEX_TABLE_NAMES) is unaffected.
+ */
 export const RED_TIER_TABLES: readonly ResealTableName[] = [
   "intake_key_wraps",
   "portal_reply_key_wraps",
-  "phones",
   "clients",
   "consultants",
   "phone_blocklist",
@@ -67,6 +71,7 @@ export const TRAILING_TIER_TABLES: readonly ResealTableName[] = [
   "org_config",
   "merge_candidate_dismissals",
   "client_merge_events",
+  "saved_filters",
 ] as const;
 
 // ── Progress callback ──────────────────────────────────────────────

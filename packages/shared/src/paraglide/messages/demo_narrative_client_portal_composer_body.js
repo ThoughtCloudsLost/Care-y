@@ -19,17 +19,25 @@ const es_demo_narrative_client_portal_composer_body = /** @type {(inputs: Demo_N
 **Persistencia.** El texto no enviado en la barra de redacción sobrevive a la navegación dentro de la sesión pero nunca persiste más allá de la pestaña, de modo que cerrar el navegador no deja ningún borrador en el dispositivo.`)
 };
 
+const en_xa2_demo_narrative_client_portal_composer_body = /** @type {(inputs: Demo_Narrative_Client_Portal_Composer_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè pòrtàl rèply còmpòsèr èncrypts èàch mèssàgè ìn thè bròwsèr bèfòrè sèndìng thè cìphèrtèxt tò thè sèrvèr, wìth à lìmìt òf 5000 chàràctèrs ànd à còùntèr thàt àppèàrs àt 4500.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••**Ìf ìt fàìls. ••••** Ìf à sènd fàìls thè còmpòsèr rèstòrès thè mèssàgè tèxt sò thè clìènt càn rètry wìthòùt rètypìng.
+ ••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Èàch rèply ìs èncryptèd twìcè sò bòth sìdès càn rèàd ìt. À còpy sèàlèd tò thè pòrtàl chànnèl kèy lèts thè clìènt dècrypt ìt òn fùtùrè vìsìts, ànd à còntènt kèy sèàlèd tò thè òrgànìzàtìòn's pùblìc kèy lèts àny ùsèr wìth thè òrgànìzàtìòn kèy dècrypt ìt. Thàt òrgànìzàtìòn kèy còpy ìs cònsùmèd ànd dèlètèd thè fìrst tìmè à ùsèr òpèns thè mèssàgè, àftèr whìch ònly ùsèrs whò hòld pèr tìckèt kèy wràps càn rèàd ìt.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrsìstèncè. ••••** Ùnsènt tèxt ìn thè còmpòsè bàr sùrvìvès nàvìgàtìòn wìthìn thè sèssìòn bùt nèvèr òùtlìvès thè tàb, sò clòsìng thè bròwsèr lèàvès nò dràft òn thè dèvìcè. ••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The portal reply composer encrypts each message in the browser before sending the ciphertext to the server, with a limit of 5000 characters and a counter tha..." |
 *
 * @param {Demo_Narrative_Client_Portal_Composer_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_client_portal_composer_body = /** @type {((inputs?: Demo_Narrative_Client_Portal_Composer_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Portal_Composer_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_client_portal_composer_body = /** @type {((inputs?: Demo_Narrative_Client_Portal_Composer_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Client_Portal_Composer_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_client_portal_composer_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_client_portal_composer_body(inputs)
 	return en_demo_narrative_client_portal_composer_body(inputs)
 });

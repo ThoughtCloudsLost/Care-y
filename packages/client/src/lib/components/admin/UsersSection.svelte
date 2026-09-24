@@ -162,11 +162,14 @@
   }));
 
   const setActiveMutation = createMutation(() => ({
-    mutationFn: async (input: { userId: string; isActive: boolean }) =>
-      authRouter.setUserActive.mutate(input),
+    mutationFn: async (input: {
+      userId: string;
+      isActive: boolean;
+      force?: boolean;
+    }) => authRouter.setUserActive.mutate(input),
     onSuccess: (
       _data: unknown,
-      variables: { userId: string; isActive: boolean },
+      variables: { userId: string; isActive: boolean; force?: boolean },
     ) => {
       haptic();
       void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
@@ -176,8 +179,13 @@
       toastStore.show(msg);
       announceToLiveRegion(variables.isActive ? "polite" : "assertive", msg);
     },
-    onError: () => {
-      toastStore.show(m.error_generic());
+    onError: (err: Error) => {
+      if (err.message === ErrorCode.SOLE_WRAP_HOLDER) {
+        // Extract count from the structured error data if available
+        openSoleHolderDialog(dialogUserId);
+      } else {
+        toastStore.show(m.error_generic());
+      }
     },
   }));
 
@@ -490,6 +498,31 @@
     setActiveMutation.mutate({
       userId: dialogUserId,
       isActive: dialogIsReactivation,
+    });
+  }
+
+  // ── Sole-holder data-loss dialog ──
+  let soleHolderDialogOpened = $state(false);
+  let soleHolderUserId = $state("");
+  let soleHolderCount = $state(0);
+
+  function openSoleHolderDialog(userId: string): void {
+    soleHolderUserId = userId;
+    soleHolderDialogOpened = true;
+    // Fetch the actual count for the confirmation message
+    void authRouter.getSoleHeldTicketCount
+      .query({ userId })
+      .then((result: { count: number }) => {
+        soleHolderCount = result.count;
+      });
+  }
+
+  function confirmForceDeactivate(): void {
+    soleHolderDialogOpened = false;
+    setActiveMutation.mutate({
+      userId: soleHolderUserId,
+      isActive: false,
+      force: true,
     });
   }
 
@@ -810,6 +843,32 @@
       {:else}
         {m.admin_deactivate()}
       {/if}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
+
+<ShellDialog
+  opened={soleHolderDialogOpened}
+  ondismiss={() => (soleHolderDialogOpened = false)}
+  title={soleHolderCount === 1
+    ? m.admin_deactivate_sole_holder_title_one({ count: soleHolderCount })
+    : m.admin_deactivate_sole_holder_title_other({ count: soleHolderCount })}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">
+      {m.admin_deactivate_sole_holder_body()}
+    </p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={() => (soleHolderDialogOpened = false)}>
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton
+      strong
+      class={DIALOG_DESTRUCTIVE_CLASS}
+      onclick={confirmForceDeactivate}
+    >
+      {m.admin_deactivate_sole_holder_confirm()}
     </DialogButton>
   {/snippet}
 </ShellDialog>

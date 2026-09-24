@@ -13,17 +13,22 @@ const es_library_table_col_author = /** @type {(inputs: Library_Table_Col_Author
 	return /** @type {LocalizedString} */ (`Autor`)
 };
 
+const en_xa2_library_table_col_author = /** @type {(inputs: Library_Table_Col_AuthorInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àùthòr ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Author" |
 *
 * @param {Library_Table_Col_AuthorInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_table_col_author = /** @type {((inputs?: Library_Table_Col_AuthorInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Table_Col_AuthorInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_table_col_author = /** @type {((inputs?: Library_Table_Col_AuthorInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Table_Col_AuthorInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_table_col_author(inputs)
+	if (locale === "en-XA") return en_xa2_library_table_col_author(inputs)
 	return en_library_table_col_author(inputs)
 });

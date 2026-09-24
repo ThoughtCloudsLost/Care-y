@@ -13,17 +13,22 @@ const es_onboarding_step_branding = /** @type {(inputs: Onboarding_Step_Branding
 	return /** @type {LocalizedString} */ (`Marca`)
 };
 
+const en_xa2_onboarding_step_branding = /** @type {(inputs: Onboarding_Step_BrandingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Bràndìng •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Branding" |
 *
 * @param {Onboarding_Step_BrandingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const onboarding_step_branding = /** @type {((inputs?: Onboarding_Step_BrandingInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Step_BrandingInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const onboarding_step_branding = /** @type {((inputs?: Onboarding_Step_BrandingInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Onboarding_Step_BrandingInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_onboarding_step_branding(inputs)
+	if (locale === "en-XA") return en_xa2_onboarding_step_branding(inputs)
 	return en_onboarding_step_branding(inputs)
 });

@@ -13,17 +13,22 @@ const es_library_delete_all_success = /** @type {(inputs: Library_Delete_All_Suc
 	return /** @type {LocalizedString} */ (`Se eliminaron ${i?.count} artículos`)
 };
 
+const en_xa2_library_delete_all_success = /** @type {(inputs: Library_Delete_All_SuccessInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Dèlètèd  •••${i?.count} àrtìclès •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Deleted {count} articles" |
 *
 * @param {Library_Delete_All_SuccessInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_delete_all_success = /** @type {((inputs: Library_Delete_All_SuccessInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Delete_All_SuccessInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const library_delete_all_success = /** @type {((inputs: Library_Delete_All_SuccessInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Delete_All_SuccessInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_delete_all_success(inputs)
+	if (locale === "en-XA") return en_xa2_library_delete_all_success(inputs)
 	return en_library_delete_all_success(inputs)
 });

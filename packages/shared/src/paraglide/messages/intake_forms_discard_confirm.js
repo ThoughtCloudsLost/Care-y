@@ -13,17 +13,22 @@ const es_intake_forms_discard_confirm = /** @type {(inputs: Intake_Forms_Discard
 	return /** @type {LocalizedString} */ (`¿Tiene cambios sin guardar. Desea salir sin guardar?`)
 };
 
+const en_xa2_intake_forms_discard_confirm = /** @type {(inputs: Intake_Forms_Discard_ConfirmInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Yòù hàvè ùnsàvèd chàngès. Lèàvè wìthòùt sàvìng? •••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "You have unsaved changes. Leave without saving?" |
 *
 * @param {Intake_Forms_Discard_ConfirmInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_discard_confirm = /** @type {((inputs?: Intake_Forms_Discard_ConfirmInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Discard_ConfirmInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_discard_confirm = /** @type {((inputs?: Intake_Forms_Discard_ConfirmInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Discard_ConfirmInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_discard_confirm(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_discard_confirm(inputs)
 	return en_intake_forms_discard_confirm(inputs)
 });

@@ -117,9 +117,14 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.CANNOT_DEACTIVATE_SELF]: () => m.error_cannot_deactivate_self(),
   [ErrorCode.CANNOT_DEACTIVATE_LAST_ADMIN]: () =>
     m.error_cannot_deactivate_last_admin(),
+  [ErrorCode.SOLE_WRAP_HOLDER]: () => m.error_sole_wrap_holder(),
 
   // Profile
   [ErrorCode.USERNAME_ALREADY_TAKEN]: () => m.error_username_already_taken(),
+
+  // Saved filters
+  [ErrorCode.SAVED_FILTER_NOT_FOUND]: () => m.error_saved_filter_not_found(),
+  [ErrorCode.SAVED_FILTER_NOT_OWNER]: () => m.error_saved_filter_not_owner(),
 
   // Queues / presets / media
   [ErrorCode.QUEUE_NOT_FOUND]: () => m.error_queue_not_found(withTerms()),

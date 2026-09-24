@@ -19,17 +19,25 @@ const es_demo_narrative_admin_channel_policy_body = /** @type {(inputs: Demo_Nar
 **Permisos.** Cambiar la política de canales requiere el permiso Gestionar enrutamiento de canales.`)
 };
 
+const en_xa2_demo_narrative_admin_channel_policy_body = /** @type {(inputs: Demo_Narrative_Admin_Channel_Policy_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè chànnèl pòlìcy còntròls whìch còmmùnìcàtìòn chànnèls àrè àvàìlàblè àcròss thè òrgànìzàtìòn, wìth fìvè chànnèls thàt èàch hàvè àn ìndèpèndènt tògglè.
+ ••••••••••••••••••••••••••••••••••••••••••••••**Èffèct òn ùsèrs. •••••** À dìsàblèd chànnèl dìsàppèàrs fròm còmpòsè àctìòns ànd fròm àny còntròl thàt wòùld ùsè ìt, sò à ùsèr wòrkìng à tìckèt nèvèr sèès àn òptìòn thè òrgànìzàtìòn hàs tùrnèd òff. Thè pòlìcy ìs àlsò ènfòrcèd òn thè sèrvèr, nòt ònly ìn thè ìntèrfàcè, sò à dìrèct rèqùèst fòr à dìsàblèd chànnèl ìs rèjèctèd.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Ònbòàrdìng. ••••** Thè chànnèl pòlìcy àlsò àppèàrs dùrìng thè òrgànìzàtìòn sètùp flòw òn thè còmmùnìcàtìòns stèp, sò thè ìnìtìàl chànnèl àvàìlàbìlìty càn bè sèt bèfòrè ànyònè stàrts wòrkìng tìckèts.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Chàngìng thè chànnèl pòlìcy rèqùìrès thè Mànàgè chànnèl ròùtìng pèrmìssìòn. •••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The channel policy controls which communication channels are available across the organization, with five channels that each have an independent toggle. **Ef..." |
 *
 * @param {Demo_Narrative_Admin_Channel_Policy_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_channel_policy_body = /** @type {((inputs?: Demo_Narrative_Admin_Channel_Policy_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Channel_Policy_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_channel_policy_body = /** @type {((inputs?: Demo_Narrative_Admin_Channel_Policy_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Channel_Policy_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_channel_policy_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_channel_policy_body(inputs)
 	return en_demo_narrative_admin_channel_policy_body(inputs)
 });

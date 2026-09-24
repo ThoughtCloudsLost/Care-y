@@ -24,7 +24,10 @@ import type { InboundSmsDeps } from "./inbound-sms.js";
 import type * as InboundMmsModule from "./inbound-mms.js";
 import type { TelephonyProvider, IncomingSmsData } from "./provider.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
-import type { BlindIndexer } from "../crypto/field-encryptor.js";
+import type {
+  FieldEncryptor,
+  BlindIndexer,
+} from "../crypto/field-encryptor.js";
 import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { ClientRepository } from "./models/client-repo.js";
@@ -98,6 +101,17 @@ function createMockSealedBox(): SealedBoxEncryptor {
     generation: 1,
     seal: vi.fn((s: string) => Buffer.from(`sealed:${s}`)),
     sealBuffer: vi.fn((b: Buffer) => Buffer.from(`sealed:${b.toString()}`)),
+  };
+}
+
+function createMockFieldEncryptor(): FieldEncryptor {
+  return {
+    encrypt: vi.fn((s: string) => Buffer.from(`ops:${s}`)),
+    encryptBuffer: vi.fn((b: Buffer) => Buffer.from(`ops:${b.toString()}`)),
+    decrypt: vi.fn((b: Buffer) => b.toString().replace("ops:", "")),
+    decryptToBuffer: vi.fn((b: Buffer) =>
+      Buffer.from(b.toString().replace("ops:", "")),
+    ),
   };
 }
 
@@ -228,6 +242,7 @@ function makeDeps(overrides?: Partial<InboundSmsDeps>): InboundSmsDeps {
   return {
     provider: createMockProvider(),
     sealedBox: createMockSealedBox(),
+    fieldEncryptor: createMockFieldEncryptor(),
     indexer: createMockIndexer(),
     blobStore: createMockBlobStore(),
     jobQueue: createMockJobQueue(),

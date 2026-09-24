@@ -4,13 +4,13 @@
 * | "One moment, loading this screen. This short wait happens only in the handbook simulator, not in the installed app." |
 *
 * @param {Demo_Route_LoadingInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const demo_route_loading: ((inputs?: Demo_Route_LoadingInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Route_LoadingInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Demo_Route_LoadingInputs = {};

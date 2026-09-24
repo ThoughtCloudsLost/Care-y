@@ -13,17 +13,22 @@ const es_admin_user_deactivated = /** @type {(inputs: Admin_User_DeactivatedInpu
 	return /** @type {LocalizedString} */ (`Usuario desactivado`)
 };
 
+const en_xa2_admin_user_deactivated = /** @type {(inputs: Admin_User_DeactivatedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ùsèr dèàctìvàtèd •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "User deactivated" |
 *
 * @param {Admin_User_DeactivatedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_user_deactivated = /** @type {((inputs?: Admin_User_DeactivatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_User_DeactivatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_user_deactivated = /** @type {((inputs?: Admin_User_DeactivatedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_User_DeactivatedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_user_deactivated(inputs)
+	if (locale === "en-XA") return en_xa2_admin_user_deactivated(inputs)
 	return en_admin_user_deactivated(inputs)
 });

@@ -13,17 +13,22 @@ const es_intake_retention_disclosure = /** @type {(inputs: Intake_Retention_Disc
 	return /** @type {LocalizedString} */ (`Cuando llamas o envias un mensaje de texto a esta línea de ayuda, tu número de teléfono se usa para conectar la llamada o entregar el mensaje. El sistema de la línea cifra tu información de inmediato, pero el proveedor de servicio telefónico conserva un registro de tu número de teléfono por hasta 150 días. Esto es requerido por las políticas del proveedor y la línea de ayuda no puede cambiarlo. Tus mensajes son conservados por el proveedor por hasta 60 días. El operador de la línea esta evaluando alternativas que eliminen esta retención por parte de terceros.`)
 };
 
+const en_xa2_intake_retention_disclosure = /** @type {(inputs: Intake_Retention_DisclosureInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Whèn yòù càll òr tèxt thìs hòtlìnè, yòùr phònè nùmbèr ìs ùsèd tò cònnèct thè càll òr dèlìvèr thè mèssàgè. Thè hòtlìnè systèm èncrypts yòùr ìnfòrmàtìòn ìmmèdìàtèly, bùt thè phònè sèrvìcè pròvìdèr kèèps à rècòrd òf yòùr phònè nùmbèr fòr ùp tò 150 dàys. Thìs ìs rèqùìrèd by thè pròvìdèr's pòlìcìès ànd cànnòt bè chàngèd by thè hòtlìnè. Yòùr mèssàgès àrè kèpt by thè pròvìdèr fòr ùp tò 60 dàys. Thè hòtlìnè òpèràtòr ìs èvàlùàtìng àltèrnàtìvès thàt èlìmìnàtè thìs thìrd-pàrty rètèntìòn. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "When you call or text this hotline, your phone number is used to connect the call or deliver the message. The hotline system encrypts your information immedi..." |
 *
 * @param {Intake_Retention_DisclosureInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_retention_disclosure = /** @type {((inputs?: Intake_Retention_DisclosureInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Retention_DisclosureInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_retention_disclosure = /** @type {((inputs?: Intake_Retention_DisclosureInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Retention_DisclosureInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_retention_disclosure(inputs)
+	if (locale === "en-XA") return en_xa2_intake_retention_disclosure(inputs)
 	return en_intake_retention_disclosure(inputs)
 });

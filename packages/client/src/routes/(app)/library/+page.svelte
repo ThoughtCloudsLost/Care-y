@@ -50,12 +50,12 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import {
     kbSavedFilterStateSchema,
-    Permission,
     type KbSortField,
     type SavedFilterColor,
     type KbItemId,
     kbItemIdSchema,
   } from "@care-y/shared";
+  import { canCall } from "$lib/auth/procedure-gates.js";
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
   import CreateSavedFilter from "$lib/components/filters/CreateSavedFilter.svelte";
@@ -81,12 +81,13 @@
   const currentUserId = $derived(currentUserIdGetter());
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
-  const canEdit = $derived(permissions.has(Permission.EDIT_KNOWLEDGE_BASE));
-  const canDelete = $derived(
-    permissions.has(Permission.DELETE_KNOWLEDGE_BASE_ARTICLES),
-  );
+  const canEdit = $derived(canCall(permissions, "kb.createItem"));
+  const canDelete = $derived(canCall(permissions, "kb.deleteItem"));
+  // Gates the category management sheet opener. The sheet itself
+  // contains create, update, and delete operations; gated on the
+  // create path as the entry-point procedure.
   const canManageCategories = $derived(
-    permissions.has(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES),
+    canCall(permissions, "kb.createCategory"),
   );
   const libraryLayout = getLibraryLayoutCtx();
   const kbRouter = requireRouter(trpc.kb, "kb");
@@ -545,6 +546,7 @@
     onapply: dispatch.handleSavedFilterApply,
     ondelete: dispatch.handleSavedFilterDelete,
     ontoggleshare: dispatch.handleSavedFilterToggleShare,
+    currentUserId: currentUserId ?? null,
   });
 
   // --- Filter pill definitions ---

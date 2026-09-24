@@ -13,17 +13,22 @@ const es_library_select_article_prompt = /** @type {(inputs: Library_Select_Arti
 	return /** @type {LocalizedString} */ (`Selecciona un artículo para leer`)
 };
 
+const en_xa2_library_select_article_prompt = /** @type {(inputs: Library_Select_Article_PromptInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèlèct àn àrtìclè tò rèàd ••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Select an article to read" |
 *
 * @param {Library_Select_Article_PromptInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_select_article_prompt = /** @type {((inputs?: Library_Select_Article_PromptInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Select_Article_PromptInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_select_article_prompt = /** @type {((inputs?: Library_Select_Article_PromptInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Select_Article_PromptInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_select_article_prompt(inputs)
+	if (locale === "en-XA") return en_xa2_library_select_article_prompt(inputs)
 	return en_library_select_article_prompt(inputs)
 });

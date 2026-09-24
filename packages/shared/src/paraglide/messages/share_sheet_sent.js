@@ -13,17 +13,22 @@ const es_share_sheet_sent = /** @type {(inputs: Share_Sheet_SentInputs) => Local
 	return /** @type {LocalizedString} */ (`Enlace enviado`)
 };
 
+const en_xa2_share_sheet_sent = /** @type {(inputs: Share_Sheet_SentInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Lìnk sènt •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Link sent" |
 *
 * @param {Share_Sheet_SentInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const share_sheet_sent = /** @type {((inputs?: Share_Sheet_SentInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Sheet_SentInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const share_sheet_sent = /** @type {((inputs?: Share_Sheet_SentInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Share_Sheet_SentInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_share_sheet_sent(inputs)
+	if (locale === "en-XA") return en_xa2_share_sheet_sent(inputs)
 	return en_share_sheet_sent(inputs)
 });

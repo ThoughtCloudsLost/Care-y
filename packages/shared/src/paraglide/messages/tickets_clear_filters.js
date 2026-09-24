@@ -13,17 +13,22 @@ const es_tickets_clear_filters = /** @type {(inputs: Tickets_Clear_FiltersInputs
 	return /** @type {LocalizedString} */ (`Borrar todos`)
 };
 
+const en_xa2_tickets_clear_filters = /** @type {(inputs: Tickets_Clear_FiltersInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Clèàr àll •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Clear all" |
 *
 * @param {Tickets_Clear_FiltersInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const tickets_clear_filters = /** @type {((inputs?: Tickets_Clear_FiltersInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Clear_FiltersInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const tickets_clear_filters = /** @type {((inputs?: Tickets_Clear_FiltersInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Tickets_Clear_FiltersInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_tickets_clear_filters(inputs)
+	if (locale === "en-XA") return en_xa2_tickets_clear_filters(inputs)
 	return en_tickets_clear_filters(inputs)
 });

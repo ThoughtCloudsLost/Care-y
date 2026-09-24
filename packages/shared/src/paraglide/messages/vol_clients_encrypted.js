@@ -13,17 +13,22 @@ const es_vol_clients_encrypted = /** @type {(inputs: Vol_Clients_EncryptedInputs
 	return /** @type {LocalizedString} */ (`Toda la información del cliente se cifra antes de llegar al servidor. Solo tu equipo puede descifrarla.`)
 };
 
+const en_xa2_vol_clients_encrypted = /** @type {(inputs: Vol_Clients_EncryptedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Àll clìènt ìnfòrmàtìòn ìs èncryptèd bèfòrè ìt rèàchès thè sèrvèr. Ònly yòùr tèàm càn dècrypt ìt. •••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "All client information is encrypted before it reaches the server. Only your team can decrypt it." |
 *
 * @param {Vol_Clients_EncryptedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const vol_clients_encrypted = /** @type {((inputs?: Vol_Clients_EncryptedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Clients_EncryptedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const vol_clients_encrypted = /** @type {((inputs?: Vol_Clients_EncryptedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Vol_Clients_EncryptedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_vol_clients_encrypted(inputs)
+	if (locale === "en-XA") return en_xa2_vol_clients_encrypted(inputs)
 	return en_vol_clients_encrypted(inputs)
 });

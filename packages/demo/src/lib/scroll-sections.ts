@@ -1241,7 +1241,7 @@ export const SECTIONS: readonly Section[] = [
         topic: null,
         headingKey: "demo_narrative_client_intake_closed_heading",
         bodyKey: "demo_narrative_client_intake_closed_body",
-        highlight: { selectors: [".intake-not-available", ".intake-intro"] },
+        highlight: { selectors: [".intake-not-available"] },
       },
     ],
   },
@@ -1705,6 +1705,8 @@ export interface ClientDetailIds {
   readonly intakeFormId: string;
   /** That form's public slug, for /(client)/intake/[slug]. */
   readonly intakeFormSlug: string;
+  /** Public slug of the closed sibling form, for /(client)/intake/[slug]. */
+  readonly closedFormSlug: string;
   /** Whole path prefix for /(client)/portal/[channelId]. */
   readonly portalChannelPath: string;
   /** Whole path prefix for /(client)/share/[id]. */
@@ -1720,6 +1722,7 @@ export interface ClientDetailIds {
 export const DEFAULT_CLIENT_DETAIL_IDS: ClientDetailIds = {
   intakeFormId: "demo-intake-form",
   intakeFormSlug: "demo-intake-form",
+  closedFormSlug: "demo-closed-form",
   portalChannelPath: "portal/demo-channel",
   sharePath: "share/demo-share",
 };
@@ -1739,8 +1742,13 @@ export function resolvePhoneCommand(
   articleDetailId: string,
   clientIds: ClientDetailIds = DEFAULT_CLIENT_DETAIL_IDS,
 ): PhoneCommand {
-  const { intakeFormId, intakeFormSlug, portalChannelPath, sharePath } =
-    clientIds;
+  const {
+    intakeFormId,
+    intakeFormSlug,
+    closedFormSlug,
+    portalChannelPath,
+    sharePath,
+  } = clientIds;
   // Find the topic, desktopOnly flag, and highlight region for this
   // sub-section
   let pulseTopic: DemoTopic | null = null;
@@ -1952,10 +1960,18 @@ export function resolvePhoneCommand(
     // already expects. The two parameterized pages pass a sentinel path
     // that PhoneApp swaps for the seeded one, and whose URL fragment it
     // applies at the same boundary.
-    case "client-intake":
+    case "client-intake": {
+      let intakeDetail: string;
+      if (subSlug === "fields") {
+        intakeDetail = `intake/${intakeFormSlug}`;
+      } else if (subSlug === "closed-form") {
+        intakeDetail = `intake/${closedFormSlug}`;
+      } else {
+        intakeDetail = "intake";
+      }
       return {
         feature: "client",
-        detail: subSlug === "fields" ? `intake/${intakeFormSlug}` : "intake",
+        detail: intakeDetail,
         loginTarget: null,
         openSearch: false,
         pulseTopic,
@@ -1963,6 +1979,7 @@ export function resolvePhoneCommand(
         routeSlug: null,
         highlight,
       };
+    }
     case "client-privacy":
       return {
         feature: "client",

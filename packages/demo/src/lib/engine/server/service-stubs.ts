@@ -414,6 +414,7 @@ export async function buildServiceStubs(
     providerFactory: rejectingProviderFactory,
     reports: true,
     consultant: true,
+    savedFilters: true,
     telephonyContentDeps: {
       createService: createTelephonyContentService,
       blobStore,

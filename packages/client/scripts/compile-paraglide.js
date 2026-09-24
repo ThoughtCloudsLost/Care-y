@@ -1,6 +1,18 @@
 import { compile } from "@inlang/paraglide-js";
+import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import { existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Generate the en-XA pseudolocale from en.json before compiling.
+// The client's messages live in ../shared/messages (see project.inlang pathPattern).
+const __scriptDir = dirname(fileURLToPath(import.meta.url));
+const sharedMessagesDir = resolve(__scriptDir, "../../shared/messages");
+execSync(
+  `node ${resolve(__scriptDir, "../../shared/scripts/generate-pseudolocale.js")} ${sharedMessagesDir}`,
+  { stdio: "inherit" },
+);
 
 // Paraglide's writeOutput collects file writes with Promise.allSettled and
 // never inspects the rejections, so under kernel file-table pressure

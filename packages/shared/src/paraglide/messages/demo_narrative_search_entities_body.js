@@ -17,17 +17,24 @@ const es_demo_narrative_search_entities_body = /** @type {(inputs: Demo_Narrativ
 **Voluntarios.** Disponible solo para personas administradoras y gestoras. Coincide con nombres visibles descifrados.`)
 };
 
+const en_xa2_demo_narrative_search_entities_body = /** @type {(inputs: Demo_Narrative_Search_Entities_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦**Tìckèts. •••** Màtchès òn dècryptèd tìtlè, clìènt àlìàs, qùèùè nàmè, ànd àssìgnèè nàmè. Fùll dèèp sèàrch àlsò màtchès òn mèssàgè còntènt wìthìn tìckèts.
+ ••••••••••••••••••••••••••••••••••••••••••**Knòwlèdgè bàsè àrtìclès. ••••••••** Màtchès òn dècryptèd tìtlè ànd èxcèrpt. Fùll dèèp sèàrch àlsò màtchès òn fùll àrtìclè bòdy tèxt.
+ ••••••••••••••••••••••••••••••**Vòlùntèèrs. ••••** Àvàìlàblè tò àdmìnìstràtòrs ànd mànàgèrs ònly. Màtchès òn dècryptèd dìsplày nàmès. •••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "**Tickets.** Matches on decrypted title, client alias, queue name, and assignee name. Full deep search also matches on message content within tickets. **Know..." |
 *
 * @param {Demo_Narrative_Search_Entities_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_search_entities_body = /** @type {((inputs?: Demo_Narrative_Search_Entities_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Search_Entities_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_search_entities_body = /** @type {((inputs?: Demo_Narrative_Search_Entities_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Search_Entities_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_search_entities_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_search_entities_body(inputs)
 	return en_demo_narrative_search_entities_body(inputs)
 });

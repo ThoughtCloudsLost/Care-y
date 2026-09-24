@@ -13,17 +13,22 @@ const es_twofa_push_send = /** @type {(inputs: Twofa_Push_SendInputs) => Localiz
 	return /** @type {LocalizedString} */ (`Enviar notificación`)
 };
 
+const en_xa2_twofa_push_send = /** @type {(inputs: Twofa_Push_SendInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sènd nòtìfìcàtìòn ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Send notification" |
 *
 * @param {Twofa_Push_SendInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const twofa_push_send = /** @type {((inputs?: Twofa_Push_SendInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Push_SendInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const twofa_push_send = /** @type {((inputs?: Twofa_Push_SendInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Twofa_Push_SendInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_twofa_push_send(inputs)
+	if (locale === "en-XA") return en_xa2_twofa_push_send(inputs)
 	return en_twofa_push_send(inputs)
 });

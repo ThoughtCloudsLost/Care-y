@@ -13,17 +13,22 @@ const es_dashboard_encrypted_ticket = /** @type {(inputs: Dashboard_Encrypted_Ti
 	return /** @type {LocalizedString} */ (`${i?.Ticket} bloqueado`)
 };
 
+const en_xa2_dashboard_encrypted_ticket = /** @type {(inputs: Dashboard_Encrypted_TicketInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Lòckèd  •••${i?.ticket}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Locked {ticket}" |
 *
 * @param {Dashboard_Encrypted_TicketInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const dashboard_encrypted_ticket = /** @type {((inputs: Dashboard_Encrypted_TicketInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Encrypted_TicketInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const dashboard_encrypted_ticket = /** @type {((inputs: Dashboard_Encrypted_TicketInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Dashboard_Encrypted_TicketInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_dashboard_encrypted_ticket(inputs)
+	if (locale === "en-XA") return en_xa2_dashboard_encrypted_ticket(inputs)
 	return en_dashboard_encrypted_ticket(inputs)
 });

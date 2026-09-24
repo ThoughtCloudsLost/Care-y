@@ -17,17 +17,24 @@ const es_demo_narrative_topic_message_select_body = /** @type {(inputs: Demo_Nar
 **Privacidad.** El estado de selección y el texto copiado permanecen en el dispositivo. El servidor no sabe cuáles mensajes fueron seleccionados.`)
 };
 
+const en_xa2_demo_narrative_topic_message_select_body = /** @type {(inputs: Demo_Narrative_Topic_Message_Select_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Sèlèctìòn mòdè àllòws pìckìng mèssàgès fròm thè thrèàd ìndìvìdùàlly òr àll àt òncè.
+ ••••••••••••••••••••••••••**Còpy. ••** Thè sèlèctìòn bàr còpìès thè dècryptèd tèxt òf èvèry sèlèctèd mèssàgè tò thè clìpbòàrd ìn ònè àctìòn.
+ •••••••••••••••••••••••••••••••**Prìvàcy. •••** Sèlèctìòn stàtè ànd thè còpìèd tèxt stày òn thè dèvìcè. Thè sèrvèr dòès nòt knòw whìch mèssàgès wèrè sèlèctèd. ••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Selection mode allows picking messages from the thread individually or all at once. **Copy.** The selection bar copies the decrypted text of every selected m..." |
 *
 * @param {Demo_Narrative_Topic_Message_Select_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_message_select_body = /** @type {((inputs?: Demo_Narrative_Topic_Message_Select_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Message_Select_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_message_select_body = /** @type {((inputs?: Demo_Narrative_Topic_Message_Select_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Message_Select_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_message_select_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_message_select_body(inputs)
 	return en_demo_narrative_topic_message_select_body(inputs)
 });

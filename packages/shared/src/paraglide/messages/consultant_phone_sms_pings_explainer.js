@@ -13,17 +13,22 @@ const es_consultant_phone_sms_pings_explainer = /** @type {(inputs: Consultant_P
 	return /** @type {LocalizedString} */ (`Activar esto almacena tu número para que el servidor pueda enviarte mensajes cuando haya actividad. Si lo dejas desactivado, las notificaciones SMS llegaran como correo electrónico.`)
 };
 
+const en_xa2_consultant_phone_sms_pings_explainer = /** @type {(inputs: Consultant_Phone_Sms_Pings_ExplainerInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tùrnìng thìs òn stòrès yòùr nùmbèr sò thè sèrvèr càn tèxt yòù whèn àctìvìty hàppèns. Ìf yòù lèàvè ìt òff, SMS pìngs wìll àrrìvè às èmàìl ìnstèàd. ••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Turning this on stores your number so the server can text you when activity happens. If you leave it off, SMS pings will arrive as email instead." |
 *
 * @param {Consultant_Phone_Sms_Pings_ExplainerInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const consultant_phone_sms_pings_explainer = /** @type {((inputs?: Consultant_Phone_Sms_Pings_ExplainerInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Sms_Pings_ExplainerInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const consultant_phone_sms_pings_explainer = /** @type {((inputs?: Consultant_Phone_Sms_Pings_ExplainerInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Consultant_Phone_Sms_Pings_ExplainerInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_consultant_phone_sms_pings_explainer(inputs)
+	if (locale === "en-XA") return en_xa2_consultant_phone_sms_pings_explainer(inputs)
 	return en_consultant_phone_sms_pings_explainer(inputs)
 });

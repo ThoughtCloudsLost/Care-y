@@ -13,17 +13,22 @@ const es_admin_branding_name_hint = /** @type {(inputs: Admin_Branding_Name_Hint
 	return /** @type {LocalizedString} */ (`Mostrado a ${i?.volunteers} y ${i?.clients}.`)
 };
 
+const en_xa2_admin_branding_name_hint = /** @type {(inputs: Admin_Branding_Name_HintInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Shòwn tò  •••${i?.volunteers} ànd  ••${i?.clients}. •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Shown to {volunteers} and {clients}." |
 *
 * @param {Admin_Branding_Name_HintInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_branding_name_hint = /** @type {((inputs: Admin_Branding_Name_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Name_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const admin_branding_name_hint = /** @type {((inputs: Admin_Branding_Name_HintInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Branding_Name_HintInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_branding_name_hint(inputs)
+	if (locale === "en-XA") return en_xa2_admin_branding_name_hint(inputs)
 	return en_admin_branding_name_hint(inputs)
 });

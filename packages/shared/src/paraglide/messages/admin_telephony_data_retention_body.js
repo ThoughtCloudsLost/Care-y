@@ -13,17 +13,22 @@ const es_admin_telephony_data_retention_body = /** @type {(inputs: Admin_Telepho
 	return /** @type {LocalizedString} */ (`Su proveedor telefónico conserva sus propios registros de llamadas y mensajes hasta por 30 días. CARE-Y solicita la eliminación después del procesamiento, pero el proveedor puede retenerlos durante ese periodo.`)
 };
 
+const en_xa2_admin_telephony_data_retention_body = /** @type {(inputs: Admin_Telephony_Data_Retention_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Yòùr phònè pròvìdèr kèèps ìts òwn lògs òf càlls ànd mèssàgès fòr ùp tò 30 dàys. CÀRÈ-Y rèqùèsts dèlètìòn àftèr pròcèssìng, bùt thè pròvìdèr mày rètàìn thèm dùrìng thàt wìndòw. •••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Your phone provider keeps its own logs of calls and messages for up to 30 days. CARE-Y requests deletion after processing, but the provider may retain them d..." |
 *
 * @param {Admin_Telephony_Data_Retention_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_telephony_data_retention_body = /** @type {((inputs?: Admin_Telephony_Data_Retention_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Data_Retention_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_telephony_data_retention_body = /** @type {((inputs?: Admin_Telephony_Data_Retention_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Telephony_Data_Retention_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_telephony_data_retention_body(inputs)
+	if (locale === "en-XA") return en_xa2_admin_telephony_data_retention_body(inputs)
 	return en_admin_telephony_data_retention_body(inputs)
 });

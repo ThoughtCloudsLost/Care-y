@@ -13,17 +13,22 @@ const es_mgr_section_role = /** @type {(inputs: Mgr_Section_RoleInputs) => Local
 	return /** @type {LocalizedString} */ (`Tu Rol`)
 };
 
+const en_xa2_mgr_section_role = /** @type {(inputs: Mgr_Section_RoleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Yòùr Ròlè •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Your Role" |
 *
 * @param {Mgr_Section_RoleInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const mgr_section_role = /** @type {((inputs?: Mgr_Section_RoleInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Section_RoleInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const mgr_section_role = /** @type {((inputs?: Mgr_Section_RoleInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Mgr_Section_RoleInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_mgr_section_role(inputs)
+	if (locale === "en-XA") return en_xa2_mgr_section_role(inputs)
 	return en_mgr_section_role(inputs)
 });

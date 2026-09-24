@@ -42,6 +42,15 @@ export type AdminUpdateUsernameInput = z.infer<
 >;
 export type UpdatePasswordHashInput = z.infer<typeof updatePasswordHashSchema>;
 
+/** Self-service preferred locale update. Server stores ciphertext only (org-key sealed box). */
+export const updatePreferredLocaleSchema = z.object({
+  encryptedPreferredLocale: z.string().min(1),
+});
+
+export type UpdatePreferredLocaleInput = z.infer<
+  typeof updatePreferredLocaleSchema
+>;
+
 /** Atomic password change: verify old, hash new, rotate keys, kill sessions. */
 export const changePasswordSchema = passwordChangeKeysSchema.extend({
   currentPassword: passwordSchema,

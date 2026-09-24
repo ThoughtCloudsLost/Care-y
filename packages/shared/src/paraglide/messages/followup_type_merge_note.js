@@ -13,17 +13,22 @@ const es_followup_type_merge_note = /** @type {(inputs: Followup_Type_Merge_Note
 	return /** @type {LocalizedString} */ (`${i?.Tickets} combinados`)
 };
 
+const en_xa2_followup_type_merge_note = /** @type {(inputs: Followup_Type_Merge_NoteInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Còmbìnèd  •••${i?.Tickets}⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Combined {Tickets}" |
 *
 * @param {Followup_Type_Merge_NoteInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const followup_type_merge_note = /** @type {((inputs: Followup_Type_Merge_NoteInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Merge_NoteInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const followup_type_merge_note = /** @type {((inputs: Followup_Type_Merge_NoteInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Followup_Type_Merge_NoteInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_followup_type_merge_note(inputs)
+	if (locale === "en-XA") return en_xa2_followup_type_merge_note(inputs)
 	return en_followup_type_merge_note(inputs)
 });

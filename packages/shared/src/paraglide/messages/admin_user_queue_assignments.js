@@ -13,17 +13,22 @@ const es_admin_user_queue_assignments = /** @type {(inputs: Admin_User_Queue_Ass
 	return /** @type {LocalizedString} */ (`Asignaciones de ${i?.queue}`)
 };
 
+const en_xa2_admin_user_queue_assignments = /** @type {(inputs: Admin_User_Queue_AssignmentsInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.Queue} Àssìgnmènts ••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{Queue} Assignments" |
 *
 * @param {Admin_User_Queue_AssignmentsInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_user_queue_assignments = /** @type {((inputs: Admin_User_Queue_AssignmentsInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_User_Queue_AssignmentsInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const admin_user_queue_assignments = /** @type {((inputs: Admin_User_Queue_AssignmentsInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_User_Queue_AssignmentsInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_user_queue_assignments(inputs)
+	if (locale === "en-XA") return en_xa2_admin_user_queue_assignments(inputs)
 	return en_admin_user_queue_assignments(inputs)
 });

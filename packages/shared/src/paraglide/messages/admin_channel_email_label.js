@@ -13,17 +13,22 @@ const es_admin_channel_email_label = /** @type {(inputs: Admin_Channel_Email_Lab
 	return /** @type {LocalizedString} */ (`Correo electrónico`)
 };
 
+const en_xa2_admin_channel_email_label = /** @type {(inputs: Admin_Channel_Email_LabelInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Èmàìl ••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Email" |
 *
 * @param {Admin_Channel_Email_LabelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_channel_email_label = /** @type {((inputs?: Admin_Channel_Email_LabelInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Channel_Email_LabelInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_channel_email_label = /** @type {((inputs?: Admin_Channel_Email_LabelInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Channel_Email_LabelInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_channel_email_label(inputs)
+	if (locale === "en-XA") return en_xa2_admin_channel_email_label(inputs)
 	return en_admin_channel_email_label(inputs)
 });

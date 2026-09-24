@@ -13,17 +13,22 @@ const es_call_status_completed_inbound = /** @type {(inputs: Call_Status_Complet
 	return /** @type {LocalizedString} */ (`Llamada entrante (${i?.duration})`)
 };
 
+const en_xa2_call_status_completed_inbound = /** @type {(inputs: Call_Status_Completed_InboundInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦Ìnbòùnd càll ( •••••${i?.duration}) •⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Inbound call ({duration})" |
 *
 * @param {Call_Status_Completed_InboundInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const call_status_completed_inbound = /** @type {((inputs: Call_Status_Completed_InboundInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Call_Status_Completed_InboundInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const call_status_completed_inbound = /** @type {((inputs: Call_Status_Completed_InboundInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Call_Status_Completed_InboundInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_call_status_completed_inbound(inputs)
+	if (locale === "en-XA") return en_xa2_call_status_completed_inbound(inputs)
 	return en_call_status_completed_inbound(inputs)
 });

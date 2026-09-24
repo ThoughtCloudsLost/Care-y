@@ -4,13 +4,13 @@
 * | "Ticket notifications reset to defaults" |
 *
 * @param {Notif_Ticket_Reset_SuccessInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const notif_ticket_reset_success: ((inputs?: Notif_Ticket_Reset_SuccessInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Notif_Ticket_Reset_SuccessInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Notif_Ticket_Reset_SuccessInputs = {};

@@ -108,6 +108,14 @@ export default defineConfig({
           globalSetup: ["src/test-global-setup.ts"],
           include: ["src/**/*.test.ts"],
           exclude: ["**/dist/**", "**/node_modules/**"],
+          // createTestDb runs the full tenant migration chain (~8s solo on
+          // a 1-CPU container, worse with parallel workers). The vitest
+          // defaults (10s hooks, 5s tests) have no headroom until the
+          // baseline tenant migration (ADR-105) shrinks the chain. Some
+          // tests call createTestDb in their own body for schema isolation,
+          // so both knobs need raising.
+          hookTimeout: 120_000,
+          testTimeout: 60_000,
           coverage: {
             provider: "v8",
             thresholds: thresholds.server,

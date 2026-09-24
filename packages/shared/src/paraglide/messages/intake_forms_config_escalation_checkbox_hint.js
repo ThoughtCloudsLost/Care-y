@@ -13,17 +13,22 @@ const es_intake_forms_config_escalation_checkbox_hint = /** @type {(inputs: Inta
 	return /** @type {LocalizedString} */ (`Cuando se marca, el formulario activa una alerta de escalamiento.`)
 };
 
+const en_xa2_intake_forms_config_escalation_checkbox_hint = /** @type {(inputs: Intake_Forms_Config_Escalation_Checkbox_HintInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Whèn chèckèd, thè fòrm trìggèrs àn èscàlàtìòn àlèrt. ••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "When checked, the form triggers an escalation alert." |
 *
 * @param {Intake_Forms_Config_Escalation_Checkbox_HintInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const intake_forms_config_escalation_checkbox_hint = /** @type {((inputs?: Intake_Forms_Config_Escalation_Checkbox_HintInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Escalation_Checkbox_HintInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const intake_forms_config_escalation_checkbox_hint = /** @type {((inputs?: Intake_Forms_Config_Escalation_Checkbox_HintInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Intake_Forms_Config_Escalation_Checkbox_HintInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_intake_forms_config_escalation_checkbox_hint(inputs)
+	if (locale === "en-XA") return en_xa2_intake_forms_config_escalation_checkbox_hint(inputs)
 	return en_intake_forms_config_escalation_checkbox_hint(inputs)
 });

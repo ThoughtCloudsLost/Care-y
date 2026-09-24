@@ -4,13 +4,13 @@
 * | "What's protected" |
 *
 * @param {Onboarding_Briefing_Practice_Col_ProtectedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const onboarding_briefing_practice_col_protected: ((inputs?: Onboarding_Briefing_Practice_Col_ProtectedInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Onboarding_Briefing_Practice_Col_ProtectedInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Onboarding_Briefing_Practice_Col_ProtectedInputs = {};

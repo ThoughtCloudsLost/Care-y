@@ -13,17 +13,22 @@ const es_error_user_not_found = /** @type {(inputs: Error_User_Not_FoundInputs) 
 	return /** @type {LocalizedString} */ (`Usuario no encontrado.`)
 };
 
+const en_xa2_error_user_not_found = /** @type {(inputs: Error_User_Not_FoundInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Ùsèr nòt fòùnd. •••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "User not found." |
 *
 * @param {Error_User_Not_FoundInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const error_user_not_found = /** @type {((inputs?: Error_User_Not_FoundInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_User_Not_FoundInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const error_user_not_found = /** @type {((inputs?: Error_User_Not_FoundInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Error_User_Not_FoundInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_error_user_not_found(inputs)
+	if (locale === "en-XA") return en_xa2_error_user_not_found(inputs)
 	return en_error_user_not_found(inputs)
 });

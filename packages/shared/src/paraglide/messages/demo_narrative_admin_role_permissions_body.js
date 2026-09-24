@@ -27,17 +27,29 @@ const es_demo_narrative_admin_role_permissions_body = /** @type {(inputs: Demo_N
 **Permisos.** Cambiar la matriz requiere el permiso Gestionar roles.`)
 };
 
+const en_xa2_demo_narrative_admin_role_permissions_body = /** @type {(inputs: Demo_Narrative_Admin_Role_Permissions_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè pèrmìssìòn màtrìx òn thè pèòplè pàgè shòws whìch càpàbìlìtìès èàch ròlè grànts, wìth fìfty pèrmìssìòns àrràngèd àcròss èìght càpàbìlìty gròùps.
+ •••••••••••••••••••••••••••••••••••••••••••••**Càpàbìlìty gròùps. ••••••** Thè pèrmìssìòns àrè òrgànìzèd by thè àrèà thèy gòvèrn ràthèr thàn by whìch ròlè hòlds thèm. Gròùps còvèr thè càsè rècòrd, rèàchìng à clìènt, thè clìènt's àccèss tò à càsè, clìènt rècòrds, thè knòwlèdgè bàsè, qùèùès, ìntàkè, ànd rùnnìng thè òrgànìzàtìòn. Bècàùsè gròùpìng ànd ròlè lèvèl àrè ìndèpèndènt, à pèrmìssìòn's gròùp dòès nòt tèll thè rèàdèr whìch ròlè hòlds ìt by dèfàùlt.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Dèfàùlts ànd òvèrrìdès. •••••••** Èàch ròlè shìps wìth à dèfàùlt pèrmìssìòn sèt, ànd thè òrgànìzàtìòn càn chàngè àny pèrmìssìòn thàt ìs nòt lòckèd by tògglìng ìts cèll. Thè fìrst twò ròlè nàmès àrè dèfàùlts thè òrgànìzàtìòn càn rènàmè ìn tèrmìnòlògy sèttìngs, whìlè àdmìnìstràtòr ìs fìxèd. Tògglìng à cèll tàkès èffèct ìmmèdìàtèly fòr èvèry ùsèr hòldìng thàt ròlè, ànd cèlls thàt hàvè bèèn chàngèd fròm thèìr dèfàùlt àrè màrkèd.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Lòckèd pèrmìssìòns. ••••••** Thrèè pèrmìssìòns stày wìth thè àdmìnìstràtòr ròlè règàrdlèss òf òvèrrìdès ànd cànnòt bè tògglèd àwày. Thèy pròtèct kèy mànàgèmènt, ròlè mànàgèmènt, ànd ìnfràstrùctùrè cònfìgùràtìòn, ànd thè ènfòrcèmènt àpplìès whèn pèrmìssìòns àrè wrìttèn ànd whèn thèy àrè rèàd, sò à ròw ìnsèrtèd stràìght ìntò thè dàtàbàsè gràntìng ònè òf thèm tò ànòthèr ròlè hàs nò èffèct.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Qùèùè mèmbèrshìp scòpè. •••••••** Àddìng à ùsèr tò à qùèùè grànts thèm rèàd àccèss tò èvèry càsè ìn thàt qùèùè, sò thè scòpè òf gràntìng thè Mànàgè qùèùè mèmbèrshìp pèrmìssìòn ìs wìdèr thàn ìt àppèàrs.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••**Ìntàkè rèspònsè dècryptìòn. •••••••••** Thè Vìèw ìntàkè rèspònsès pèrmìssìòn còntròls whò rècèìvès dècryptìòn kèys whèn à fòrm ìs sùbmìttèd, ànd rèvòkìng ìt làtèr dòès nòt tàkè bàck kèys àlrèàdy ìssùèd.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••**Rèsèt. ••** Rèsèttìng thè màtrìx rètùrns èvèry pèrmìssìòn tò ìts shìppèd dèfàùlt àftèr à cònfìrmàtìòn dìàlòg.
+ ••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Chàngìng thè màtrìx rèqùìrès thè Mànàgè ròlès pèrmìssìòn. ••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The permission matrix on the people page shows which capabilities each role grants, with fifty permissions arranged across eight capability groups. **Capabil..." |
 *
 * @param {Demo_Narrative_Admin_Role_Permissions_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_admin_role_permissions_body = /** @type {((inputs?: Demo_Narrative_Admin_Role_Permissions_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Role_Permissions_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_admin_role_permissions_body = /** @type {((inputs?: Demo_Narrative_Admin_Role_Permissions_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Admin_Role_Permissions_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_admin_role_permissions_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_admin_role_permissions_body(inputs)
 	return en_demo_narrative_admin_role_permissions_body(inputs)
 });

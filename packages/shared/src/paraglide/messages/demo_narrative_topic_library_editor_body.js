@@ -21,17 +21,26 @@ const es_demo_narrative_topic_library_editor_body = /** @type {(inputs: Demo_Nar
 **Cifrado.** El cuerpo completo del artículo se cifra con la clave de la organización en el navegador antes de enviarse a un servidor que almacena texto cifrado que no puede leer.`)
 };
 
+const en_xa2_demo_narrative_topic_library_editor_body = /** @type {(inputs: Demo_Narrative_Topic_Library_Editor_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè rìch tèxt èdìtòr sùppòrts hèàdìngs (fòùr lèvèls), bòld, ìtàlìc, strìkèthròùgh, ìnlìnè còdè, blòckqùòtès, bùllèt lìsts, òrdèrèd lìsts, còdè blòcks, lìnks, tàblès, hòrìzòntàl rùlès, ànd fìgùrès wìth càptìòns.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Dràftìng còntròls. ••••••** Thè èdìtòr nàvìgàtìòn bàr càrrìès ùndò, rèdò, ànd à pùblìsh bùttòn thàt stàys dìsàblèd ùntìl thè àrtìclè ìs còmplètè ènòùgh tò sàvè, ànd càncèllìng wìth ùnsàvèd chàngès àsks bèfòrè dìscàrdìng.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Ìmàgès ànd àttàchmènts. •••••••** Ìmàgès càn bè ìnsèrtèd ìnlìnè ìn thè àrtìclè bòdy. Òthèr fìlè typès sùch às PDFs càn bè àttàchèd tò àn àrtìclè ànd àppèàr às dòwnlòàd chìps. Àll àttàchmènts àrè èncryptèd wìth thè òrgànìzàtìòn kèy bèfòrè stòràgè.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Àccèssìbìlìty. •••••** Thè èdìtòr chècks hèàdìng hìèràrchy, wàrns àbòùt gènèrìc lìnk tèxt, ànd pròmpts fòr ìmàgè àlt tèxt bèfòrè ìnsèrtìng àn ìmàgè. À chèckbòx màrks dècòràtìvè ìmàgès thàt dò nòt nèèd àlt tèxt. Thè lìbràry sèèds àn àrtìclè nàmèd Try thè àccèssìbìlìty chèckèr whòsè dèlìbèràtè pròblèms shòw thèsè chècks fìrìng whèn òpènèd ìn thè èdìtòr.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Thè fùll àrtìclè bòdy ìs èncryptèd wìth thè òrgànìzàtìòn kèy ìn thè bròwsèr bèfòrè bèìng sènt tò à sèrvèr thàt stòrès cìphèrtèxt ìt cànnòt rèàd. ••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The rich text editor supports headings (four levels), bold, italic, strikethrough, inline code, blockquotes, bullet lists, ordered lists, code blocks, links,..." |
 *
 * @param {Demo_Narrative_Topic_Library_Editor_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_library_editor_body = /** @type {((inputs?: Demo_Narrative_Topic_Library_Editor_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Library_Editor_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_library_editor_body = /** @type {((inputs?: Demo_Narrative_Topic_Library_Editor_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Library_Editor_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_library_editor_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_library_editor_body(inputs)
 	return en_demo_narrative_topic_library_editor_body(inputs)
 });

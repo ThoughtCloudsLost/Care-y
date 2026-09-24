@@ -26,6 +26,7 @@ import {
 import {
   DEMO_INTAKE_FORM_ID,
   DEMO_INTAKE_FORM_SLUG,
+  DEMO_CLOSED_FORM_SLUG,
   DEMO_PORTAL_CHANNEL_ID,
   DEMO_SHARE_ID,
 } from "./bridge.js";
@@ -562,6 +563,44 @@ describe("resolvePhoneCommand", () => {
       ARTICLE_ID,
     );
     expect(twofaCmd.pulseTopic).toBe("settings-2fa");
+  });
+
+  it("resolves client-intake/fields to intake with the custom form slug", () => {
+    const ids = {
+      intakeFormId: "real-form-uuid",
+      intakeFormSlug: "ask-for-help",
+      closedFormSlug: "winter-shelter",
+      portalChannelPath: "portal/real-channel",
+      sharePath: "share/real-share",
+    };
+    const cmd = resolvePhoneCommand(
+      "client-intake",
+      "fields",
+      TICKET_ID,
+      ARTICLE_ID,
+      ids,
+    );
+    expect(cmd.feature).toBe("client");
+    expect(cmd.detail).toBe("intake/ask-for-help");
+  });
+
+  it("resolves client-intake/closed-form to intake with the closed form slug", () => {
+    const ids = {
+      intakeFormId: "real-form-uuid",
+      intakeFormSlug: "ask-for-help",
+      closedFormSlug: "winter-shelter",
+      portalChannelPath: "portal/real-channel",
+      sharePath: "share/real-share",
+    };
+    const cmd = resolvePhoneCommand(
+      "client-intake",
+      "closed-form",
+      TICKET_ID,
+      ARTICLE_ID,
+      ids,
+    );
+    expect(cmd.feature).toBe("client");
+    expect(cmd.detail).toBe("intake/winter-shelter");
   });
 });
 
@@ -1111,6 +1150,7 @@ describe("DEFAULT_CLIENT_DETAIL_IDS", () => {
     expect(DEFAULT_CLIENT_DETAIL_IDS).toEqual({
       intakeFormId: DEMO_INTAKE_FORM_ID,
       intakeFormSlug: DEMO_INTAKE_FORM_SLUG,
+      closedFormSlug: DEMO_CLOSED_FORM_SLUG,
       portalChannelPath: DEMO_PORTAL_CHANNEL_ID,
       sharePath: DEMO_SHARE_ID,
     });

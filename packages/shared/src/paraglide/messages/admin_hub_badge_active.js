@@ -13,17 +13,22 @@ const es_admin_hub_badge_active = /** @type {(inputs: Admin_Hub_Badge_ActiveInpu
 	return /** @type {LocalizedString} */ (`${i?.count} activos`)
 };
 
+const en_xa2_admin_hub_badge_active = /** @type {(inputs: Admin_Hub_Badge_ActiveInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`⟦${i?.count} àctìvè •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "{count} active" |
 *
 * @param {Admin_Hub_Badge_ActiveInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_hub_badge_active = /** @type {((inputs: Admin_Hub_Badge_ActiveInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Hub_Badge_ActiveInputs, { locale?: "en" | "es" }, {}>} */ ((inputs, options = {}) => {
+export const admin_hub_badge_active = /** @type {((inputs: Admin_Hub_Badge_ActiveInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Hub_Badge_ActiveInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_hub_badge_active(inputs)
+	if (locale === "en-XA") return en_xa2_admin_hub_badge_active(inputs)
 	return en_admin_hub_badge_active(inputs)
 });

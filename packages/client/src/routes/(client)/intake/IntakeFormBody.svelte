@@ -50,7 +50,7 @@
     resolveLocalized,
     isDataFieldType,
     BASE_LOCALE,
-    FORM_LOCALES,
+    isFormLocale,
     newTicketId,
     newFollowupId,
     type LocalizedText,
@@ -66,9 +66,18 @@
     splitIntoPages,
     visiblePageIndices as computeVisiblePageIndices,
     validateFields,
+    collectPageIssues,
+    collectAllIssues,
+    formatIssueRow as formatIssueRowPure,
+    formatCrossPageIssueRow as formatCrossPageIssueRowPure,
+    nextVisibleIndex,
+    prevVisibleIndex,
+    type IssueRowMessages,
     type PlaintextField,
     type ValidationMessages,
+    type ValidationIssue,
   } from "./intake-form-logic.js";
+  import ValidationIssueSummary from "$lib/components/portal/ValidationIssueSummary.svelte";
   import { readRichLocale } from "$lib/utils/localized-text.js";
   import {
     renderFormRichText,
@@ -103,7 +112,7 @@
    */
   const visitorLocale: FormLocale = $derived.by((): FormLocale => {
     const raw = getLocale();
-    return FORM_LOCALES.includes(raw) ? raw : BASE_LOCALE;
+    return isFormLocale(raw) ? raw : BASE_LOCALE;
   });
 
   // ---- Default form definition ----
@@ -444,21 +453,16 @@
    * Validates the current page's visible fields before advancing.
    */
   function goNextPage(): boolean {
-    const currentVisIdx = visiblePageIndices.indexOf(currentPageIndex);
-    if (currentVisIdx < 0 || currentVisIdx >= visiblePageIndices.length - 1)
-      return false;
-    const nextIdx = visiblePageIndices.at(currentVisIdx + 1);
-    if (nextIdx === undefined) return false;
+    const nextIdx = nextVisibleIndex(visiblePageIndices, currentPageIndex);
+    if (nextIdx === null) return false;
     currentPageIndex = nextIdx;
     return true;
   }
 
   /** Navigate to the previous visible page. */
   function goPrevPage(): boolean {
-    const currentVisIdx = visiblePageIndices.indexOf(currentPageIndex);
-    if (currentVisIdx <= 0) return false;
-    const prevIdx = visiblePageIndices.at(currentVisIdx - 1);
-    if (prevIdx === undefined) return false;
+    const prevIdx = prevVisibleIndex(visiblePageIndices, currentPageIndex);
+    if (prevIdx === null) return false;
     currentPageIndex = prevIdx;
     return true;
   }
@@ -467,6 +471,55 @@
   const isLastPage = $derived(
     visiblePageIndices.indexOf(currentPageIndex) ===
       visiblePageIndices.length - 1,
+  );
+
+  // ---- Page validation issue state ----
+
+  /** Issues for the current page, shown after clicking Next. */
+  let currentPageIssues = $state<readonly ValidationIssue[]>([]);
+
+  /** Resolve a field label for the issue summary. */
+  function resolveIssueLabel(field: PlaintextField): string {
+    return resolveLocalized(field.label, visitorLocale) ?? field.fieldKey;
+  }
+
+  const issueRowMessages: IssueRowMessages = {
+    issueRow: m.intake_page_issue_row,
+    issueRowWithPage: m.intake_page_issue_row_with_page,
+  };
+
+  /** Format a single-page issue row. */
+  function formatIssueRow(issue: ValidationIssue): string {
+    return formatIssueRowPure(issue, issueRowMessages);
+  }
+
+  /** Format a cross-page issue row (includes page number). */
+  function formatCrossPageIssueRow(issue: ValidationIssue): string {
+    return formatCrossPageIssueRowPure(issue, issueRowMessages);
+  }
+
+  /**
+   * All validation issues across every visible page. Computed on demand
+   * when the visitor reaches the final page, so the summary lists every
+   * outstanding problem with its page number.
+   */
+  const allPageIssues = $derived.by((): readonly ValidationIssue[] => {
+    if (!hasPages || isDefaultForm || !isLastPage) return [];
+    return collectAllIssues(
+      formPages,
+      visiblePageIndices,
+      fieldValues,
+      validationMessages(),
+      resolveIssueLabel,
+    );
+  });
+
+  /**
+   * Submit is hard-blocked when there are outstanding issues across pages.
+   * Single-page forms and the default form use the existing validation path.
+   */
+  const hasOutstandingIssues = $derived(
+    hasPages && !isDefaultForm && allPageIssues.length > 0,
   );
 
   // ---- PoW state ----
@@ -1060,6 +1113,7 @@
       orgKeyUnavailable ||
       loadFailed ||
       resolvedForm.error ||
+      hasOutstandingIssues ||
       (powRequired && powSolving && powSolution === null),
   );
   // ---- Client shell ----
@@ -1557,7 +1611,14 @@
       <Block>
         <div class="intake-page-nav">
           {#if currentVisibleStep > 1}
-            <Button outline onclick={goPrevPage} data-testid="intake-page-back">
+            <Button
+              outline
+              onclick={() => {
+                currentPageIssues = [];
+                goPrevPage();
+              }}
+              data-testid="intake-page-back"
+            >
               {m.intake_page_back()}
             </Button>
           {:else}
@@ -1566,10 +1627,19 @@
           {#if !isLastPage}
             <Button
               onclick={() => {
-                // Validate current page before advancing
                 if (currentPage && validate(currentPage.fields)) {
+                  currentPageIssues = [];
                   goNextPage();
                 } else {
+                  // Show per-field inline errors AND the issue summary
+                  if (currentPage) {
+                    currentPageIssues = collectPageIssues(
+                      currentPage,
+                      fieldValues,
+                      validationMessages(),
+                      resolveIssueLabel,
+                    );
+                  }
                   announceToLiveRegion(
                     "polite",
                     m.intake_error_field_required(),
@@ -1583,11 +1653,48 @@
             </Button>
           {/if}
         </div>
+
+        <!-- Current page validation issue summary (shown after Next fails) -->
+        <ValidationIssueSummary
+          heading={m.intake_page_issues_heading()}
+          issues={currentPageIssues}
+          formatRow={formatIssueRow}
+        />
+
+        <!-- Advance anyway (secondary action, shown only when there are issues) -->
+        {#if currentPageIssues.length > 0 && !isLastPage}
+          <div class="intake-advance-anyway">
+            <Button
+              outline
+              onclick={() => {
+                currentPageIssues = [];
+                goNextPage();
+              }}
+              data-testid="intake-advance-anyway"
+            >
+              {m.intake_page_advance_anyway()}
+            </Button>
+          </div>
+        {/if}
       </Block>
     {/if}
 
     <!-- Submit button (shown on last page or single-page forms) -->
     {#if !hasPages || isDefaultForm || isLastPage}
+      <!-- Cross-page validation summary (multi-page forms on final page) -->
+      {#if hasPages && !isDefaultForm && allPageIssues.length > 0}
+        <Block>
+          <p class="intake-submit-blocked-hint">
+            {m.intake_page_submit_blocked()}
+          </p>
+          <ValidationIssueSummary
+            heading={m.intake_page_issues_heading()}
+            issues={allPageIssues}
+            formatRow={formatCrossPageIssueRow}
+          />
+        </Block>
+      {/if}
+
       <Block>
         <Button
           large
@@ -1842,6 +1949,18 @@
     display: flex;
     justify-content: space-between;
     gap: var(--space-sm);
+  }
+
+  .intake-advance-anyway {
+    margin-top: var(--space-sm);
+    text-align: center;
+  }
+
+  .intake-submit-blocked-hint {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--danger);
+    margin: 0 0 var(--space-xs);
   }
 
   .intake-continuation-text {

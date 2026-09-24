@@ -243,7 +243,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_success_body: () => "A volunteer will read it as soon as possible.",
   intake_reference_label: () => "Your reference code:",
   intake_reference_save: () => "Save it if you want to follow up by phone.",
-  intake_submit_hint: () => "What you wrote has been encrypted.",
+  intake_submit_hint: () => "Encrypted before it is sent.",
   intake_hint_dismiss: () => "Got it",
   intake_error_generic: () =>
     "Your message didn't go through. Nothing was sent. Try again.",
@@ -260,11 +260,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "This form is no longer accepting submissions.",
   intake_noscript: () => "This form needs JavaScript.",
   intake_protected_title: () => "How you're protected",
-  intake_protected_summary: () => "Your data is encrypted.",
+  intake_protected_summary: () =>
+    "Organization can open it until someone takes your case.",
   intake_protected_encrypted_what: () => "Encrypted in browser.",
   intake_protected_encrypted_why: () => "Server cannot read.",
-  intake_protected_volunteers_what: () => "Volunteers only.",
-  intake_protected_volunteers_why: () => "Limited access.",
+  intake_protected_volunteers_what: () =>
+    "Organization can unlock until a volunteer opens your case.",
+  intake_protected_volunteers_why: () =>
+    "Encrypted before it leaves your device.",
   intake_protected_server_what: () => "Server stores scrambled data.",
   intake_protected_server_why: () => "Cannot decode.",
   account_intake_optin_title: () => "Add a secure account (optional)",
@@ -300,6 +303,35 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "This link is the only way back to your conversation.",
   intake_continuation_hint: () =>
     "The link above carries the key that unlocks your conversation.",
+  intake_page_next: () => "Next",
+  intake_page_back: () => "Back",
+  intake_page_progress: ({
+    current,
+    total,
+  }: {
+    current: string;
+    total: string;
+  }) => `Step ${current} of ${total}`,
+  intake_page_advance_anyway: () => "Continue with incomplete answers",
+  intake_page_issues_heading: () => "Please review the following:",
+  intake_page_issue_row: ({ field, error }: { field: string; error: string }) =>
+    `${field}: ${error}`,
+  intake_page_issue_row_with_page: ({
+    page,
+    field,
+    error,
+  }: {
+    page: string;
+    field: string;
+    error: string;
+  }) => `Step ${page}: ${field}: ${error}`,
+  intake_page_submit_blocked: () => "Fix all issues before submitting.",
+  intake_error_number_format: () => "Enter a valid number.",
+  intake_error_number_min: ({ min }: { min: string }) =>
+    `Value must be at least ${min}.`,
+  intake_error_number_max: ({ max }: { max: string }) =>
+    `Value must be at most ${max}.`,
+  intake_error_date_format: () => "Enter a valid date.",
 }));
 
 vi.mock("$lib/shell/PageShell.svelte", async (importOriginal) => ({

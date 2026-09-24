@@ -76,7 +76,7 @@
         encryptedDescription: payload.encryptedDescription,
         priority: payload.priority,
         keyGeneration: payload.keyGeneration,
-        keyWrap: payload.keyWrap,
+        keyWraps: [...payload.keyWraps],
       }),
     onSuccess: () => {
       toastStore.show(m.ticket_new_success(withTerms()));
@@ -190,6 +190,8 @@
   <NewTicketForm
     resolveCreateTarget={async (clientId: string) =>
       ticketRouter.resolveCreateTarget.query({ clientId })}
+    fetchQueueMemberKeys={async (qId: string) =>
+      ticketRouter.listQueueMemberPublicKeys.query({ queueId: qId })}
     queues={decryptedQueues}
     {searchClients}
     {phoneLookup}

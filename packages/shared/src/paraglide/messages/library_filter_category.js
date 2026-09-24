@@ -13,17 +13,22 @@ const es_library_filter_category = /** @type {(inputs: Library_Filter_CategoryIn
 	return /** @type {LocalizedString} */ (`Categoría`)
 };
 
+const en_xa2_library_filter_category = /** @type {(inputs: Library_Filter_CategoryInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Càtègòry •••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Category" |
 *
 * @param {Library_Filter_CategoryInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const library_filter_category = /** @type {((inputs?: Library_Filter_CategoryInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Filter_CategoryInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const library_filter_category = /** @type {((inputs?: Library_Filter_CategoryInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Library_Filter_CategoryInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_library_filter_category(inputs)
+	if (locale === "en-XA") return en_xa2_library_filter_category(inputs)
 	return en_library_filter_category(inputs)
 });

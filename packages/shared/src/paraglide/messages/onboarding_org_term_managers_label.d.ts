@@ -4,13 +4,13 @@
 * | "Senior roles (plural)" |
 *
 * @param {Onboarding_Org_Term_Managers_LabelInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
 export const onboarding_org_term_managers_label: ((inputs?: Onboarding_Org_Term_Managers_LabelInputs, options?: {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Onboarding_Org_Term_Managers_LabelInputs, {
-    locale?: "en" | "es";
+    locale?: "en" | "es" | "en-XA";
 }, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Onboarding_Org_Term_Managers_LabelInputs = {};

@@ -17,17 +17,24 @@ const es_demo_narrative_topic_deep_search_body = /** @type {(inputs: Demo_Narrat
 **Privacidad.** Ningún término de búsqueda se envía al servidor. El servidor no sabe qué buscó el voluntario ni qué mensajes coincidieron.`)
 };
 
+const en_xa2_demo_narrative_topic_deep_search_body = /** @type {(inputs: Demo_Narrative_Topic_Deep_Search_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Vòlùntèèrs càn sèàrch wìthìn à sìnglè tìckèt's cònvèrsàtìòn fòr spècìfìc wòrds òr phràsès. Thè sèàrch rùns èntìrèly ìn thè bròwsèr àgàìnst thè dècryptèd mèssàgè còntènt.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••**Dèèp sèàrch. ••••** Ìf thè sèàrch tèrm pròdùcès nò màtchès àmòng thè cùrrèntly lòàdèd mèssàgès, thè systèm àùtòmàtìcàlly lòàds ànd dècrypts òldèr pàgès òf thè cònvèrsàtìòn ànd sèàrchès thòsè às wèll. À prògrèss ìndìcàtòr shòws hòw màny mèssàgès hàvè bèèn sèàrchèd òùt òf thè tòtàl. Thè sèàrch tèrm mùst bè àt lèàst twò chàràctèrs.
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Prìvàcy. •••** Nò sèàrch tèrms àrè sènt tò thè sèrvèr. Thè sèrvèr dòès nòt knòw whàt thè vòlùntèèr sèàrchèd fòr òr whìch mèssàgès màtchèd. ••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Volunteers can search within a single ticket's conversation for specific words or phrases. The search runs entirely in the browser against the decrypted mess..." |
 *
 * @param {Demo_Narrative_Topic_Deep_Search_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_topic_deep_search_body = /** @type {((inputs?: Demo_Narrative_Topic_Deep_Search_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Deep_Search_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_topic_deep_search_body = /** @type {((inputs?: Demo_Narrative_Topic_Deep_Search_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Topic_Deep_Search_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_topic_deep_search_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_topic_deep_search_body(inputs)
 	return en_demo_narrative_topic_deep_search_body(inputs)
 });

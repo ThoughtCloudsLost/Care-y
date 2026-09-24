@@ -13,17 +13,22 @@ const es_admin_templates_created = /** @type {(inputs: Admin_Templates_CreatedIn
 	return /** @type {LocalizedString} */ (`Plantilla creada.`)
 };
 
+const en_xa2_admin_templates_created = /** @type {(inputs: Admin_Templates_CreatedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Tèmplàtè crèàtèd. ••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "Template created." |
 *
 * @param {Admin_Templates_CreatedInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const admin_templates_created = /** @type {((inputs?: Admin_Templates_CreatedInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Templates_CreatedInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const admin_templates_created = /** @type {((inputs?: Admin_Templates_CreatedInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Admin_Templates_CreatedInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_admin_templates_created(inputs)
+	if (locale === "en-XA") return en_xa2_admin_templates_created(inputs)
 	return en_admin_templates_created(inputs)
 });

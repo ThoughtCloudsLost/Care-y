@@ -35,6 +35,7 @@ import {
   suggestDuplicatesInputSchema,
   getPhoneSharedLineInputSchema,
   setPhoneSharedLineInputSchema,
+  deleteClientInputSchema,
   phoneHashSchema,
 } from "@care-y/shared";
 import type { OrgId, ClientId, UserId } from "@care-y/shared";
@@ -84,6 +85,17 @@ export interface ClientRouterDeps {
     ((db: Kysely<TenantDatabase>) => DismissalService) | null;
   readonly createMergeScanSvc:
     ((db: Kysely<TenantDatabase>) => MergeScanService) | null;
+  /**
+   * Full client purge: opens a transaction, calls the pii-retention
+   * purgeClient cascade, and logs an audit event (counts only).
+   * Wired in index.ts where blobStore, jobQueue, and auditSvc are in scope.
+   */
+  readonly purgeClientAndAudit: (
+    db: Kysely<TenantDatabase>,
+    clientId: ClientId,
+    orgId: OrgId,
+    actorId: UserId,
+  ) => Promise<{ ticketsPurged: number; blobsDeleted: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,6 +109,9 @@ const viewClientsProcedure = permissionProcedure(Permission.VIEW_CLIENTS);
 const editClientAliasProcedure = permissionProcedure(
   Permission.EDIT_CLIENT_ALIAS,
 );
+
+/** Permanently deleting a client and all their data. */
+const deleteClientsProcedure = permissionProcedure(Permission.DELETE_CLIENTS);
 
 // ---------------------------------------------------------------------------
 // Router
@@ -529,5 +544,36 @@ export function createClientRouter(deps: ClientRouterDeps) {
         };
       }),
     ),
+
+    /**
+     * Permanently delete a client and all their data.
+     *
+     * Delegates to purgeClientAndAudit (wired in index.ts), which runs
+     * the pii-retention purgeClient cascade inside a transaction and
+     * logs an audit event with counts only.
+     */
+    deleteClient: deleteClientsProcedure
+      .input(deleteClientInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
+
+          // getById throws NOT_FOUND if the client does not exist.
+          // Its ticketCount feeds the confirmation response.
+          const detail = await svc.getById(input.clientId);
+
+          const result = await deps.purgeClientAndAudit(
+            ctx.org.tenantDb,
+            input.clientId,
+            ctx.org.orgId,
+            ctx.user.id,
+          );
+
+          return {
+            ticketsPurged: detail.ticketCount,
+            blobsDeleted: result.blobsDeleted,
+          };
+        }),
+      ),
   });
 }
