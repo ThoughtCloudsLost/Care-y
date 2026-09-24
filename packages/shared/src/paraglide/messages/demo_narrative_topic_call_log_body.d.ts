@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Every call attempt between a volunteer and a client is logged in the thread with its outcome so the history of reaching a client stays visible inside the cas..." |
+* | "A call placed or received on a case is recorded in the thread with its outcome, and a connected call carries how long it ran. [[#telephony #client-data]] **W..." |
 *
 * @param {Demo_Narrative_Topic_Call_Log_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

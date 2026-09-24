@@ -6,19 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Exposure_Hints_BodyInputs */
 
 const en_demo_narrative_topic_exposure_hints_body = /** @type {(inputs: Demo_Narrative_Topic_Exposure_Hints_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`When the user initiates an SMS reply or a phone call from a ticket, a brief notice appears reminding them that the channel is not encrypted.
-**SMS warning.** "SMS is not encrypted and your phone provider can read it. Keep sensitive details in the encrypted chat."
-**Call warning.** "This call routes through your phone provider and they can hear the call. Keep sensitive details in the encrypted chat."
-**Frequency.** Each warning appears once per session, and after the user dismisses it the same warning does not reappear until the page is reloaded, so the warnings are informational and never block the action.
-**Email.** Email warnings work differently from SMS and call warnings. Composing an email opens a distinct compose sheet rather than the standard message input, and because this surface is specific to email it carries a persistent warning banner above the editor rather than a one time notice, since the separate sheet itself signals the user is doing something different from sending an encrypted message.`)
+	return /** @type {LocalizedString} */ (`Choosing a channel that carries content outside the encrypted path raises a notice saying what that channel exposes. [[#privacy #telephony]]
+**What each notice says.** The text notice says a phone company can read the message. The call notice says a phone company can hear the call. Both name the party that gains access, rather than calling the channel insecure, because the exposure is to a specific company that keeps records and answers legal demands. [The telephony relay](#deep-dive/the-telephony-relay) covers what the carrier and the provider hold. [[#telephony #server-holds]]
+**When they are raised.** Once per kind per session, on the choice rather than on the send, and a notice clears itself after a few seconds. Neither notice blocks the action: the user decides, and they are told before the decision rather than after it. A reload raises them again. [[#failure-states]]
+**Email is warned differently.** Composing an email opens its own surface, which carries a standing warning rather than a passing notice, and every inbound email carries a caution of its own about how easily a sender's address is faked. [Email on a case](#ticket-detail/email-thread) covers both. [[#privacy]]
+**What the notices do not cover.** They report what the channel exposes, not what the recipient's device or mailbox does with it afterwards, and they say nothing about whether a message arrived. [Share link status](#ticket-detail/share-status) covers that limit for share links. [[#failure-states]]
+**Where the state lives.** \`create-exposure-hint.svelte.ts\` in \`packages/client/src/lib/composables/ticket-detail/\` holds the shown set for the session, and \`ExposureHint.svelte\` renders one with a six-second timeout. The equivalent notice on the client's side is [Exposure notice](#client-share/exposure-hint). [[#client-data]]`)
 };
 
 const es_demo_narrative_topic_exposure_hints_body = /** @type {(inputs: Demo_Narrative_Topic_Exposure_Hints_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cuando el usuario inicia una respuesta por SMS o una llamada telefónica desde un ticket, aparece un breve aviso recordándole que el canal no está cifrado.
-**Aviso de SMS.** "El SMS no está cifrado y tu proveedor de telefonía puede leerlo. Mantén los detalles sensibles en el chat cifrado."
-**Aviso de llamada.** "Esta llamada pasa por tu proveedor de telefonía y pueden escuchar la llamada. Mantén los detalles sensibles en el chat cifrado."
-**Frecuencia.** Cada aviso aparece una vez por sesión, y después de que el usuario lo descarta el mismo aviso no vuelve a aparecer hasta que se recarga la página, por lo que los avisos son informativos y nunca bloquean la acción.
-**Correo electrónico.** Los avisos de correo electrónico funcionan de forma diferente a los de SMS y llamada. Componer un correo abre una hoja de composición diferente del campo de mensaje estándar, y como esta superficie es específica del correo lleva un banner de advertencia permanente sobre el editor en lugar de un aviso de una sola vez, ya que la hoja separada señala que el usuario está haciendo algo distinto a enviar un mensaje cifrado.`)
+	return /** @type {LocalizedString} */ (`Elegir un canal que lleva contenido fuera del camino cifrado levanta un aviso que dice qué expone ese canal. [[#privacy #telephony]]
+**Qué dice cada aviso.** El aviso del mensaje de texto dice que una compañía telefónica puede leerlo. El aviso de la llamada dice que una compañía telefónica puede oírla. Los dos nombran a quien obtiene el acceso en lugar de llamar inseguro al canal, porque la exposición es ante una empresa concreta que guarda registros y responde a requerimientos legales. [El relé de telefonía](#deep-dive/the-telephony-relay) trata lo que guardan la operadora y el proveedor. [[#telephony #server-holds]]
+**Cuándo se levantan.** Una vez por tipo y por sesión, al elegir y no al enviar, y el aviso se retira solo a los pocos segundos. Ninguno de los dos bloquea la acción: decide la persona usuaria, y se le dice antes de decidir y no después. Una recarga vuelve a levantarlos. [[#failure-states]]
+**El correo se advierte de otra manera.** Redactar un correo abre una superficie propia, que lleva una advertencia permanente en lugar de un aviso pasajero, y cada correo entrante lleva su propia advertencia sobre lo fácil que es falsificar la dirección de quien lo envía. [El correo en un caso](#ticket-detail/email-thread) trata ambas. [[#privacy]]
+**Lo que los avisos no cubren.** Indican qué expone el canal, no lo que el dispositivo o el buzón de quien recibe hagan después con ello, y no dicen nada sobre si un mensaje llegó. [Estado del enlace compartido](#ticket-detail/share-status) trata ese límite para los enlaces compartidos. [[#failure-states]]
+**Dónde vive el estado.** \`create-exposure-hint.svelte.ts\`, en \`packages/client/src/lib/composables/ticket-detail/\`, guarda el conjunto de avisos ya mostrados durante la sesión, y \`ExposureHint.svelte\` dibuja uno con un tiempo de seis segundos. El aviso equivalente del lado del cliente es [Aviso de exposición](#client-share/exposure-hint). [[#client-data]]`)
 };
 
 const en_xa2_demo_narrative_topic_exposure_hints_body = /** @type {(inputs: Demo_Narrative_Topic_Exposure_Hints_BodyInputs) => LocalizedString} */ () => {
@@ -32,7 +34,7 @@ const en_xa2_demo_narrative_topic_exposure_hints_body = /** @type {(inputs: Demo
 /**
 * | output |
 * | --- |
-* | "When the user initiates an SMS reply or a phone call from a ticket, a brief notice appears reminding them that the channel is not encrypted. **SMS warning.**..." |
+* | "Choosing a channel that carries content outside the encrypted path raises a notice saying what that channel exposes. [[#privacy #telephony]] **What each noti..." |
 *
 * @param {Demo_Narrative_Topic_Exposure_Hints_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

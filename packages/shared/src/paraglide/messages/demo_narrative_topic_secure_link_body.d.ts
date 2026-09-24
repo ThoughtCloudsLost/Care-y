@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The secure link sheet walks through a six step flow to generate a URL that gives the client browser access to the ticket thread. **Passphrase toggle.** The f..." |
+* | "Setting up a secure link mints a private page for one client, reachable only by the exact address the user hands over. [[#portal #keys]] **What the browser m..." |
 *
 * @param {Demo_Narrative_Topic_Secure_Link_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

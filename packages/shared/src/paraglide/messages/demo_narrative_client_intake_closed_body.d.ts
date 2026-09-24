@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The closed form state replaces the form fields with the organization's configured closing message and prevents submission. **Custom message.** Administrators..." |
+* | "A form can be given a closing date, after which it stops accepting submissions and shows a closing message in place of its questions. [[#portal #failure-stat..." |
 *
 * @param {Demo_Narrative_Client_Intake_Closed_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

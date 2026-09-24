@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Each phone line has a number, a purpose role, and associated greetings. On a running CARE-Y server, phone lines connect to numbers provisioned through the te..." |
+* | "An organization's phone lines are the numbers its provider account holds, each one carrying a number and the provider's own id for it. Two purposes can be as..." |
 *
 * @param {Demo_Narrative_Admin_Phone_Lines_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

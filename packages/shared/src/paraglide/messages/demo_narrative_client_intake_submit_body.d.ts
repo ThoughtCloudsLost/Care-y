@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The server cannot read any of the submitted answers, because the intake form encrypts all field values in the browser and composes a ticket title and descrip..." |
+* | "Submitting encrypts every answer in the browser, composes the case title and body from them there as well, and sends ciphertext the server has no key for. Th..." |
 *
 * @param {Demo_Narrative_Client_Intake_Submit_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

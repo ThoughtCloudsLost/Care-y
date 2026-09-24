@@ -84,9 +84,15 @@ export function buildAggregationSection(
   locale: string,
 ): SyntheticSection {
   const page = getAggPage(pageId);
+  const hasLabels = page !== undefined && page.labels.length > 0;
+  const hasTags = page !== undefined && page.tags.length > 0;
   const hits =
-    page !== undefined && page.labels.length > 0
-      ? searchEntries("", locale, { labels: page.labels, limit: 100 })
+    hasLabels || hasTags
+      ? searchEntries("", locale, {
+          labels: hasLabels ? page.labels : undefined,
+          tags: hasTags ? page.tags : undefined,
+          limit: 100,
+        })
       : [];
   const { subs, slugMap } = subsForHits(hits);
 
@@ -114,27 +120,35 @@ export function buildAggregationSection(
   };
 }
 
-/** Distinct seam labels across a hit list, most frequent first (ties
- *  keep first-seen order); the facet row reads best when the labels
- *  most likely to narrow usefully come first. */
-export function distinctHitLabels(
+/** Distinct seam labels and tags across a hit list, most frequent first
+ *  (ties keep first-seen order). Tag facets display without the trailing
+ *  period that labels carry. The merged list feeds the facet chip row. */
+export function distinctHitFacets(
   hits: readonly EntryHit[],
 ): readonly string[] {
   const counts = new Map<string, number>();
   const order: string[] = [];
+
+  function tally(facet: string): void {
+    const prev = counts.get(facet);
+    if (prev === undefined) {
+      counts.set(facet, 1);
+      order.push(facet);
+    } else {
+      counts.set(facet, prev + 1);
+    }
+  }
+
   for (const hit of hits) {
     for (const label of hit.labels) {
-      const prev = counts.get(label);
-      if (prev === undefined) {
-        counts.set(label, 1);
-        order.push(label);
-      } else {
-        counts.set(label, prev + 1);
-      }
+      tally(label);
+    }
+    for (const tag of hit.tags) {
+      tally(tag);
     }
   }
   return order
-    .map((label, idx) => ({ label, idx, count: counts.get(label) ?? 0 }))
+    .map((facet, idx) => ({ facet, idx, count: counts.get(facet) ?? 0 }))
     .sort((a, b) => b.count - a.count || a.idx - b.idx)
-    .map((e) => e.label);
+    .map((e) => e.facet);
 }

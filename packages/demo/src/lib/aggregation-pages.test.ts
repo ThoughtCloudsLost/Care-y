@@ -28,6 +28,18 @@ describe("aggregation-pages", () => {
     }
   });
 
+  it("every tag on every page matches >= 1 EN entry", () => {
+    for (const page of PAGES) {
+      for (const tag of page.tags) {
+        const hits = searchEntries("", LOCALE, { tags: [tag], limit: 100 });
+        expect(
+          hits.length,
+          `page "${page.id}" tag "${tag}" matched no entries`,
+        ).toBeGreaterThanOrEqual(1);
+      }
+    }
+  });
+
   it("every page with labels returns non-empty entries in EN", () => {
     for (const page of PAGES) {
       if (page.labels.length === 0) continue;
@@ -39,11 +51,22 @@ describe("aggregation-pages", () => {
     }
   });
 
-  it("pages without labels carry provisional prose keys", () => {
+  it("every page with tags returns non-empty entries in EN", () => {
+    for (const page of PAGES) {
+      if (page.tags.length === 0) continue;
+      const hits = searchEntries("", LOCALE, {
+        tags: page.tags,
+        limit: 100,
+      });
+      expect(hits.length, `page "${page.id}" is empty`).toBeGreaterThan(0);
+    }
+  });
+
+  it("pages without labels or tags carry provisional prose keys", () => {
     for (const page of PAGES) {
       expect(
-        page.labels.length + page.proseKeys.length,
-        `page "${page.id}" has neither labels nor prose keys`,
+        page.labels.length + page.tags.length + page.proseKeys.length,
+        `page "${page.id}" has neither labels, tags, nor prose keys`,
       ).toBeGreaterThan(0);
     }
   });

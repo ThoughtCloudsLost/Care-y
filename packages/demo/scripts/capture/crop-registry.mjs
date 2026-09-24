@@ -51,10 +51,6 @@ const DEFAULT_RECT = { x: 0, y: 56, w: DEFAULT_CROP_W, h: DEFAULT_CROP_H };
  */
 export const CROP_REGISTRY = {
   // -- login --
-  "login/language": {
-    selector: null,
-    fallbackRect: { ...DEFAULT_RECT },
-  },
   "login/credentials": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -441,6 +437,10 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "settings/language": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "settings/security": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -623,6 +623,39 @@ export const CROP_REGISTRY = {
     fallbackRect: { ...DEFAULT_RECT },
   },
   "client-share/exposure-hint": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- deep-dive (reference articles, no phone screen) --
+  "deep-dive/what-is-care-y": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "deep-dive/how-encryption-works": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "deep-dive/how-keys-are-derived": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "deep-dive/the-trust-boundary": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "deep-dive/the-telephony-relay": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "deep-dive/the-permission-system": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "deep-dive/portal-channel-lifecycle": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "deep-dive/data-retention": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },

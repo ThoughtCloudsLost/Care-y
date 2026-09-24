@@ -464,17 +464,36 @@
             {#if line.fragments !== undefined}
               <!-- Rich line: one span per styled fragment -->
               {#each line.fragments as frag, fi (fi)}
-                <span
-                  class="flow-line {lineColorClass(
-                    vb.block,
-                    activeSection,
-                    activeSub,
-                  )}"
-                  class:flow-line--bold={frag.bold}
-                  style:left="{line.x + frag.dx}px"
-                  style:top="{line.y - vb.geo.topY}px"
-                  style:width="{frag.width}px">{frag.text}</span
-                >
+                {#if frag.link !== undefined}
+                  <button
+                    type="button"
+                    class="flow-line flow-line--link {lineColorClass(
+                      vb.block,
+                      activeSection,
+                      activeSub,
+                    )}"
+                    style:left="{line.x + frag.dx}px"
+                    style:top="{line.y - vb.geo.topY}px"
+                    style:width="{frag.width}px"
+                    onclick={() => {
+                      if (frag.link !== undefined) {
+                        window.location.hash = frag.link.target;
+                      }
+                    }}>{frag.text}</button
+                  >
+                {:else}
+                  <span
+                    class="flow-line {lineColorClass(
+                      vb.block,
+                      activeSection,
+                      activeSub,
+                    )}"
+                    class:flow-line--bold={frag.bold}
+                    style:left="{line.x + frag.dx}px"
+                    style:top="{line.y - vb.geo.topY}px"
+                    style:width="{frag.width}px">{frag.text}</span
+                  >
+                {/if}
               {/each}
             {:else}
               <span
@@ -576,6 +595,29 @@
      after the kind classes so the font override wins on shared spans. */
   .flow-line--bold {
     font: var(--flow-font-sub-body-bold);
+  }
+
+  /* Entry link fragments: understated underline, inherits text color,
+     cursor pointer. Rendered as <button> for SPA hash navigation. */
+  .flow-line--link {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    text-decoration: underline;
+    text-decoration-color: var(--hair-2);
+    text-underline-offset: 2px;
+    cursor: pointer;
+    color: inherit;
+  }
+
+  .flow-line--link:hover {
+    text-decoration-color: var(--ink);
+  }
+
+  .flow-line--link:focus-visible {
+    outline: 2px solid var(--demo-accent);
+    outline-offset: 2px;
   }
 
   /* Tint behind the page title and description */

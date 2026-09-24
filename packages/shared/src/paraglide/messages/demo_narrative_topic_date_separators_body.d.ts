@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Date separators mark where one day ends and the next begins, and long conversations load in pages that are fetched and decrypted as the volunteer scrolls up ..." |
+* | "A dateline marks each change of day in the thread, and a line marks where reading stopped last time. [[#client-data]] **Where the day boundary comes from.** ..." |
 *
 * @param {Demo_Narrative_Topic_Date_Separators_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

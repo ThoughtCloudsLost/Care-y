@@ -6,11 +6,11 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Key_Derivation_HeadingInputs */
 
 const en_demo_narrative_topic_key_derivation_heading = /** @type {(inputs: Demo_Narrative_Topic_Key_Derivation_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`How encryption keys are derived`)
+	return /** @type {LocalizedString} */ (`What a sign-in unlocks`)
 };
 
 const es_demo_narrative_topic_key_derivation_heading = /** @type {(inputs: Demo_Narrative_Topic_Key_Derivation_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cómo se derivan las claves de cifrado`)
+	return /** @type {LocalizedString} */ (`Lo que desbloquea un inicio de sesión`)
 };
 
 const en_xa2_demo_narrative_topic_key_derivation_heading = /** @type {(inputs: Demo_Narrative_Topic_Key_Derivation_HeadingInputs) => LocalizedString} */ () => {
@@ -20,7 +20,7 @@ const en_xa2_demo_narrative_topic_key_derivation_heading = /** @type {(inputs: D
 /**
 * | output |
 * | --- |
-* | "How encryption keys are derived" |
+* | "What a sign-in unlocks" |
 *
 * @param {Demo_Narrative_Topic_Key_Derivation_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

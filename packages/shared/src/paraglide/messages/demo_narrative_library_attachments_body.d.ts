@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Articles can have file attachments, both inline images and downloadable files. **Encryption.** All attachments are encrypted with the organization key before..." |
+* | "An article can carry images placed inside its text and files hung off it for download, and both are encrypted in the browser before upload. Images, PDFs and ..." |
 *
 * @param {Demo_Narrative_Library_Attachments_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

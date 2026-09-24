@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When the system finds two client records that may belong to the same person, they appear here as merge candidates. Each pair shows two client aliases with a ..." |
+* | "A scan pairs client records that share a phone number or an email address and offers each pair for review or dismissal. The matching runs in the browser; the..." |
 *
 * @param {Demo_Narrative_Dashboard_Merge_Candidates_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

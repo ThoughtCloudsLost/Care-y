@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Light and dark color schemes are available. The preference is saved locally on the device and is not sent to the server." |
+* | "The color scheme alternates between light and dark, and the choice is written to the browser's own storage on that device and sent nowhere. A browser with no..." |
 *
 * @param {Demo_Narrative_Settings_Appearance_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Administrators organize the knowledge library into categories. Each category name is encrypted with the organization key before storage, so a database breach..." |
+* | "Every article belongs to exactly one category, and categories are the organization's own vocabulary rather than a fixed set. Creating, renaming, reordering a..." |
 *
 * @param {Demo_Narrative_Topic_Library_Categories_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

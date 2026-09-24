@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "External channel configuration: telephony provider, voicemail greetings, SMS templates, the number blocklist, and the voicemail quarantine. These settings co..." |
+* | "The communications group configures how the organization reaches a client and how an inbound message is routed, across six destinations behind five different..." |
 *
 * @param {Demo_Narrative_Admin_Hub_Comms_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -116,24 +116,24 @@ describe("searchEntries", () => {
 
   it("label filter narrows to entries carrying the label", () => {
     const all = searchEntries("", EN, {
-      labels: ["Encryption."],
+      labels: ["What folding records."],
       limit: 100,
     });
     expect(all.length).toBeGreaterThan(0);
     for (const hit of all) {
-      expect(hit.labels).toContain("Encryption.");
+      expect(hit.labels).toContain("What folding records.");
     }
   });
 
   it("empty query with labels returns entries in taxonomy order", () => {
     const hits = searchEntries("", EN, {
-      labels: ["Encryption."],
+      labels: ["What folding records."],
       limit: 100,
     });
     // Zero scores throughout; order is the corpus walk order, which is
     // stable across calls.
     const again = searchEntries("", EN, {
-      labels: ["Encryption."],
+      labels: ["What folding records."],
       limit: 100,
     });
     expect(hits.map((h) => h.subSlug)).toEqual(again.map((h) => h.subSlug));
@@ -147,5 +147,34 @@ describe("searchEntries", () => {
     expect(es.length).toBeGreaterThan(0);
     // The EN cache was not clobbered by the ES build.
     expect(searchEntries("encryption", EN).length).toBe(en.length);
+  });
+
+  it("every hit carries a tags array", () => {
+    const hits = searchEntries("encryption", EN);
+    for (const hit of hits) {
+      expect(Array.isArray(hit.tags)).toBe(true);
+    }
+  });
+
+  it("empty query with tags filter returns matching entries", () => {
+    // No entries carry tags yet (no tags in the corpus source), so
+    // this should return empty. The filter path is exercised: if tags
+    // were present, only entries carrying at least one would survive.
+    const hits = searchEntries("", EN, {
+      tags: ["nonexistent-tag"],
+      limit: 100,
+    });
+    expect(hits).toEqual([]);
+  });
+
+  it("mixed label+tag filter narrows to entries carrying both", () => {
+    // With tags: ["nonexistent-tag"], no entry can pass, even if it
+    // carries the label.
+    const hits = searchEntries("", EN, {
+      labels: ["Encryption."],
+      tags: ["nonexistent-tag"],
+      limit: 100,
+    });
+    expect(hits).toEqual([]);
   });
 });

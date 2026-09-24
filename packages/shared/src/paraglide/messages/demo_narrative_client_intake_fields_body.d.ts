@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When the organization has published a custom intake form, the intake page shows its configured fields instead of the built-in default. **Conditional fields.*..." |
+* | "A published form carries its own questions, and the page renders whatever field set the organization saved in place of the built-in one. Text, long text, dro..." |
 *
 * @param {Demo_Narrative_Client_Intake_Fields_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

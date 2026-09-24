@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The form editor saves as a whole, so changes to fields accumulate until the user saves the form. **Removing.** Removing a field is immediate and has no confi..." |
+* | "A form is edited as one working copy in the browser and written as one whole, so adding, removing, reordering and reconfiguring fields all accumulate until a..." |
 *
 * @param {Demo_Narrative_Admin_Form_Builder_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

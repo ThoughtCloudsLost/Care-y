@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Impact reports, operational metrics, deep analysis, the call log, and the audit log. The analytics group is in development." |
+* | "The analytics group holds five destinations, the call log, the audit log and three reporting dashboards that are in development. [[#permissions #metadata]] *..." |
 *
 * @param {Demo_Narrative_Admin_Hub_Analytics_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

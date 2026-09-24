@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The magnifier next to the filter pills in the toolbar opens a search row for the ticket list. Typing matches against the tickets the browser has already decr..." |
+* | "Searching this page matches what the browser has already decrypted and steps through the matches one at a time without leaving the list. [[#client-data #priv..." |
 *
 * @param {Demo_Narrative_Topic_List_Search_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

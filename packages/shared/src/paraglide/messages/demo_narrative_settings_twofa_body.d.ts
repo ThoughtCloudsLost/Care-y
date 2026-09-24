@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "All supported second factor methods are enrolled from this page. **Available methods.** Passkeys (platform authenticators and cross platform security keys), ..." |
+* | "Every second-factor method an account uses is enrolled and removed from settings, and an account can hold several at once with each one working on its own. [..." |
 *
 * @param {Demo_Narrative_Settings_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

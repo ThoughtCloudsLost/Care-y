@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The same person can end up as two client records, usually after calling from a new number, and the merge tool resolves this from the client detail sheet. **W..." |
+* | "A merge names one of two records the survivor and marks the other as merged into it, which is a pointer between rows rather than a rewrite of either. [[#clie..." |
 *
 * @param {Demo_Narrative_Admin_Client_Merge_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

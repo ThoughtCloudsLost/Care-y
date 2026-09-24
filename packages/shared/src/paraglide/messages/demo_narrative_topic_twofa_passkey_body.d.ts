@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A passkey turns the device into the second factor. No code to type, nothing to intercept. Two forms are supported: a device credential protected by the scree..." |
+* | "A passkey makes the device itself the second factor, with no code to read out and nothing in transit that is worth intercepting. [[#keys #privacy]] **The two..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Passkey_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The notification preferences let the user control which events produce notifications and through which channels, with each combination toggled independently ..." |
+* | "A switch for each pairing of an event and a delivery channel decides what reaches the user and how, across nine events and three channels. An account with no..." |
 *
 * @param {Demo_Narrative_Settings_Notifications_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

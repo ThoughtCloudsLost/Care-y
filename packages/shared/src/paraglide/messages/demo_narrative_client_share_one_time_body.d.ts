@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Each share link works only once. After the content has been shown, the server deletes the ciphertext in the same transaction that records the open, so the en..." |
+* | "A share link opens once, and the read is settled by a single conditional update, so one reader among several racing gets the content while the ciphertext col..." |
 *
 * @param {Demo_Narrative_Client_Share_One_Time_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

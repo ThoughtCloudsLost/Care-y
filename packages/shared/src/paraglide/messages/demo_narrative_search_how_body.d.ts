@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Global search runs in two tiers. **Instant results.** The browser fuzzy matches the query against content it has already decrypted and cached. This returns r..." |
+* | "No search term ever leaves the device. Matching is done in the browser against text the browser has decrypted, which is what allows a query about case conten..." |
 *
 * @param {Demo_Narrative_Search_How_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

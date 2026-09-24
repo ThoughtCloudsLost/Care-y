@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A preview of recently updated knowledge base articles. **Encryption.** Article titles are encrypted with the organization key. The server stores ciphertext a..." |
+* | "The knowledge base preview lists the two articles saved most recently, ordered by the time each was last edited. An account has access to them with permissio..." |
 *
 * @param {Demo_Narrative_Dashboard_Kb_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

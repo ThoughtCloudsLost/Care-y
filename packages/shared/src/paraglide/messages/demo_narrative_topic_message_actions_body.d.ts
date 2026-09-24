@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Tapping and holding a message opens a context menu with actions for that specific message. **Available actions.** Copy, edit, and delete are available. Edit ..." |
+* | "Holding an entry in the thread offers the actions that entry allows, which depend on what kind it is and who wrote it. [[#permissions #client-data]] **What i..." |
 *
 * @param {Demo_Narrative_Topic_Message_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -24,14 +24,14 @@ describe("handbook-corpus", () => {
   });
 
   it("a known key/line resolves with the expected label", () => {
-    // demo_narrative_topic_case_fold_body line 1 starts with **Encryption.**
+    // demo_narrative_topic_case_fold_body line 1 starts with **What folding records.**
     const entry = getCorpusEntry(
       LOCALE,
       "demo_narrative_topic_case_fold_body",
       1,
     );
     expect(entry).not.toBeNull();
-    expect(entry!.label).toBe("Encryption.");
+    expect(entry!.label).toBe("What folding records.");
     expect(entry!.plainText.length).toBeGreaterThan(0);
     expect(entry!.sectionId).toBe("ticket-detail");
     expect(entry!.subSlug).toBe("case-fold");
@@ -71,5 +71,26 @@ describe("handbook-corpus", () => {
     const corpus = buildCorpus(LOCALE);
     const mainEntries = corpus.filter((e) => !e.isEntry);
     expect(mainEntries.length).toBeGreaterThan(0);
+  });
+
+  it("every CorpusEntry carries a tags array (empty when no tags in source)", () => {
+    const corpus = buildCorpus(LOCALE);
+    for (const entry of corpus) {
+      expect(Array.isArray(entry.tags)).toBe(true);
+    }
+  });
+
+  it("deep-dive entries appear in the corpus when catalog keys are present", () => {
+    const corpus = buildCorpus(LOCALE);
+    const deepDiveEntries = corpus.filter((e) => e.sectionId === "deep-dive");
+    // Section-level entries (the desc) carry a null subSlug by design;
+    // each of the 8 deep-dive bodies must be indexed under its slug.
+    for (const entry of deepDiveEntries) {
+      expect(entry.plainText.length).toBeGreaterThan(0);
+    }
+    const slugs = new Set(
+      deepDiveEntries.map((e) => e.subSlug).filter((s) => s !== null),
+    );
+    expect(slugs.size).toBe(8);
   });
 });

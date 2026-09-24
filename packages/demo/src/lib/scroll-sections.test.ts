@@ -271,9 +271,15 @@ describe("resolvePhoneCommand", () => {
     expect(cmd.pulseTopic).toBe("credentials");
   });
 
-  it("resolves login/language to the form (where the picker lives)", () => {
-    const cmd = resolvePhoneCommand("login", "language", TICKET_ID, ARTICLE_ID);
-    expect(cmd.loginTarget).toBe("form");
+  it("resolves settings/language to the settings screen", () => {
+    const cmd = resolvePhoneCommand(
+      "settings",
+      "language",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("settings");
+    expect(cmd.loginTarget).toBeNull();
     expect(cmd.pulseTopic).toBe("language");
   });
 
@@ -697,7 +703,7 @@ describe("bridgeStateToLocation", () => {
 
   it("maps home feature to dashboard section", () => {
     const loc = bridgeStateToLocation("home", null, false, null, null);
-    expect(loc).toEqual({ sectionId: "dashboard", subSlug: "getting-started" });
+    expect(loc).toEqual({ sectionId: "dashboard", subSlug: "shift" });
   });
 
   it("maps library feature to library section (browse)", () => {
@@ -922,8 +928,8 @@ describe("loginStageTopics", () => {
 });
 
 describe("SECTIONS taxonomy", () => {
-  it("has twenty sections", () => {
-    expect(SECTIONS).toHaveLength(20);
+  it("has twenty-one sections", () => {
+    expect(SECTIONS).toHaveLength(21);
   });
 
   it("section IDs are in visitor-journey order", () => {
@@ -948,20 +954,26 @@ describe("SECTIONS taxonomy", () => {
       "client-portal",
       "client-account",
       "client-share",
+      "deep-dive",
     ]);
   });
 
-  it("the client arc runs last, after every org section", () => {
+  it("the client arc sits between the org journey sections and the reference tail", () => {
     const groups = SECTIONS.map((s) => s.group);
     const firstClient = groups.indexOf("client");
+    const lastClient = groups.lastIndexOf("client");
     expect(firstClient).toBeGreaterThan(-1);
-    expect(groups.slice(firstClient).every((g) => g === "client")).toBe(true);
+    // Every section before the first client is org
     expect(groups.slice(0, firstClient).every((g) => g === "org")).toBe(true);
+    // The client block is contiguous (no org sections interleaved)
+    expect(
+      groups.slice(firstClient, lastClient + 1).every((g) => g === "client"),
+    ).toBe(true);
   });
 
-  it("login has 10 subs", () => {
+  it("login has 9 subs", () => {
     const login = SECTIONS.find((s) => s.id === "login");
-    expect(login?.subs).toHaveLength(10);
+    expect(login?.subs).toHaveLength(9);
   });
 
   it("dashboard has 12 subs", () => {
@@ -1029,9 +1041,9 @@ describe("SECTIONS taxonomy", () => {
     expect(schedule?.subs).toHaveLength(1);
   });
 
-  it("settings has 7 subs", () => {
+  it("settings has 8 subs", () => {
     const settings = SECTIONS.find((s) => s.id === "settings");
-    expect(settings?.subs).toHaveLength(7);
+    expect(settings?.subs).toHaveLength(8);
   });
 
   it("client-intake has 6 subs", () => {
@@ -1547,10 +1559,18 @@ describe("highlight coverage", () => {
   const TICKET_ID = "test-ticket-id";
   const ARTICLE_ID = "test-article-id";
 
+  /** Section IDs that never command the phone to a screen and
+   *  therefore have nothing on the simulator to circle. */
+  const PHONE_FREE_SECTIONS: ReadonlySet<string> = new Set(["deep-dive"]);
+
   it("every sub-section resolves to a highlight target", () => {
     const uncovered: string[] = [];
 
     for (const section of SECTIONS) {
+      // Sections that never command the phone (prose-only reference
+      // articles) have no screen to circle, so they are exempt.
+      if (PHONE_FREE_SECTIONS.has(section.id)) continue;
+
       for (const sub of section.subs) {
         const highlight = sub.highlight;
         const hasRegion =
@@ -1625,5 +1645,106 @@ describe("highlight coverage", () => {
   it("resolves no highlight for a section with no sub selected", () => {
     const cmd = resolvePhoneCommand("dashboard", null, TICKET_ID, ARTICLE_ID);
     expect(cmd.highlight).toBeNull();
+  });
+});
+
+// -----------------------------------------------------------------------
+// Deep-dive section
+// -----------------------------------------------------------------------
+
+describe("deep-dive section", () => {
+  it("is registered in SECTIONS with 8 subs", () => {
+    const dd = SECTIONS.find((s) => s.id === "deep-dive");
+    expect(dd).toBeDefined();
+    expect(dd!.subs).toHaveLength(8);
+  });
+
+  it("has empty routes (no product route)", () => {
+    const dd = SECTIONS.find((s) => s.id === "deep-dive");
+    expect(dd!.routes).toEqual([]);
+  });
+
+  it("belongs to the org group", () => {
+    const dd = SECTIONS.find((s) => s.id === "deep-dive");
+    expect(dd!.group).toBe("org");
+  });
+
+  it("every sub has topic: null", () => {
+    const dd = SECTIONS.find((s) => s.id === "deep-dive");
+    for (const sub of dd!.subs) {
+      expect(sub.topic).toBeNull();
+    }
+  });
+
+  it("sub slugs match the draft link targets", () => {
+    const dd = SECTIONS.find((s) => s.id === "deep-dive");
+    const slugs = dd!.subs.map((s) => s.slug);
+    expect(slugs).toContain("what-is-care-y");
+    expect(slugs).toContain("how-encryption-works");
+    expect(slugs).toContain("how-keys-are-derived");
+    expect(slugs).toContain("the-trust-boundary");
+    expect(slugs).toContain("the-telephony-relay");
+    expect(slugs).toContain("the-permission-system");
+    expect(slugs).toContain("portal-channel-lifecycle");
+    expect(slugs).toContain("data-retention");
+  });
+
+  it("parseHash resolves #deep-dive/<slug> to the section and sub", () => {
+    expect(parseHash("#deep-dive/what-is-care-y")).toEqual({
+      sectionId: "deep-dive",
+      subSlug: "what-is-care-y",
+    });
+    expect(parseHash("#deep-dive/data-retention")).toEqual({
+      sectionId: "deep-dive",
+      subSlug: "data-retention",
+    });
+  });
+
+  it("parseHash resolves bare #deep-dive to the section with no sub", () => {
+    expect(parseHash("#deep-dive")).toEqual({
+      sectionId: "deep-dive",
+      subSlug: null,
+    });
+  });
+
+  it("parseHash returns null sub for unknown deep-dive slug", () => {
+    expect(parseHash("#deep-dive/nonexistent")).toEqual({
+      sectionId: "deep-dive",
+      subSlug: null,
+    });
+  });
+
+  it("resolvePhoneCommand produces the synthetic deep-dive command", () => {
+    const cmd = resolvePhoneCommand("deep-dive", "what-is-care-y", "t", "a");
+    expect(cmd.feature).toBe("other");
+    expect(cmd.detail).toBe("deep-dive");
+    expect(cmd.pulseTopic).toBeNull();
+    expect(cmd.routeSlug).toBeNull();
+    expect(cmd.highlight).toBeNull();
+  });
+
+  it("sectionMatchesPhone converges on the synthetic deep-dive detail", () => {
+    expect(sectionMatchesPhone("deep-dive", "other", "deep-dive", false)).toBe(
+      true,
+    );
+    expect(sectionMatchesPhone("deep-dive", "other", null, false)).toBe(false);
+    expect(sectionMatchesPhone("deep-dive", "home", null, false)).toBe(false);
+    expect(sectionMatchesPhone("deep-dive", "login", null, false)).toBe(false);
+  });
+
+  it("getSection resolves deep-dive by ID", () => {
+    const s = getSection("deep-dive");
+    expect(s).toBeDefined();
+    expect(s!.id).toBe("deep-dive");
+  });
+
+  it("getSub resolves each deep-dive sub", () => {
+    const dd = SECTIONS.find((s) => s.id === "deep-dive")!;
+    for (const sub of dd.subs) {
+      const result = getSub("deep-dive", sub.slug);
+      expect(result).toBeDefined();
+      expect(result!.sub.slug).toBe(sub.slug);
+      expect(result!.section.id).toBe("deep-dive");
+    }
   });
 });

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The password is the starting point, but it is not the key. The browser runs an Argon2id derivation (tuned to use 64 MB of memory across four passes) to trans..." |
+* | "The browser stretches the password with Argon2id over 64 MB of memory and four passes before any of it becomes key material. That cost is what the rest of th..." |
 *
 * @param {Demo_Narrative_Topic_Key_Derivation_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

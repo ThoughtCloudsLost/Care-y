@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The row under the page title shows live counts for new, active, and on hold tickets, as well as a new replies count once the browser finishes checking read s..." |
+* | "The counts report how many tickets are new, active and on hold across every queue the user has access to, and how many carry replies the user has not read. [..." |
 *
 * @param {Demo_Narrative_Topic_List_Stats_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
