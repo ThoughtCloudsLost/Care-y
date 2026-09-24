@@ -239,7 +239,6 @@ describe("savedFilterStore", () => {
         ],
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- test mock, not production code
       await store.loadShared(mockOrgKeyMgr as never);
 
       expect(store.count).toBe(2);

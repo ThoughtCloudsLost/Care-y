@@ -19,6 +19,10 @@ services:
       context: .
       target: test
     user: "1001"
+    # PID 1 is `tail -f /dev/null` (test target); exec'd vitest workers have
+    # no reaper without an init, and unreaped zombies have wedged the stack
+    # to the point that `docker rm -f` failed.
+    init: true
     # Relaxed from dev's read_only: true. Vitest writes temp files, and
     # bind-mounted source dirs need writable overlays.
     read_only: false
@@ -83,6 +87,8 @@ services:
       context: .
       dockerfile: Dockerfile.oprf
     user: "2001"
+    # PID 1 is pnpm, which does not reap children or forward signals.
+    init: true
     read_only: true
     mem_limit: 128m
     cpus: "0.25"
@@ -100,6 +106,8 @@ services:
       context: .
       dockerfile: Dockerfile.oprf
     user: "2001"
+    # PID 1 is pnpm, which does not reap children or forward signals.
+    init: true
     read_only: true
     mem_limit: 128m
     cpus: "0.25"

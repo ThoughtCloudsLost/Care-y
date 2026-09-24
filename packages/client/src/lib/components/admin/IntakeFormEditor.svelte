@@ -129,7 +129,6 @@
     type IssueRowMessages,
     type ValidationMessages as IntakeValidationMessages,
     type ValidationIssue,
-    type FormPage,
     type PlaintextField as PublicPlaintextField,
     type FieldValue,
   } from "../../../routes/(client)/intake/intake-form-logic.js";
@@ -564,11 +563,6 @@
   function cancelDelete(): void {
     deleteDialogOpened = false;
     deleteError = "";
-  }
-
-  /** No-op handler for read-only preview fields. */
-  function previewNoop(): void {
-    // Preview fields are disabled; changes are discarded.
   }
 
   // ---- Preview pagination state ----
@@ -1180,13 +1174,6 @@
   }
 
   const hasFieldBodyCapErrors = $derived(fieldBodyCapErrors.size > 0);
-
-  /** Resolve a page break label in the preview locale, with a fallback. */
-  function pageBreakLabel(field: PlaintextField): string {
-    const resolved = resolveLocalized(field.label, previewLocale);
-    if (resolved != null && resolved.length > 0) return resolved;
-    return m.intake_forms_page_break_divider();
-  }
 
   /**
    * Validate per-locale 30K cap on a named rich text field.
@@ -1805,7 +1792,7 @@
 
           <!-- Current page fields -->
           {#if previewCurrentPage}
-            {#each previewCurrentPage.fields as field, index (field.fieldKey)}
+            {#each previewCurrentPage.fields as field (field.fieldKey)}
               {#if isFieldVisiblePure(field, previewFieldValues) && (isDataFieldType(field.fieldType) || field.fieldType === "richText")}
                 {#if field.fieldType === "richText"}
                   {@const richHtml = renderPreviewHtml(

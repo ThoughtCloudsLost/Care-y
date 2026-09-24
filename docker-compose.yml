@@ -13,6 +13,8 @@ services:
       context: .
       target: production
     user: "1001"
+    # PID 1 is pnpm, which does not reap children or forward signals.
+    init: true
     read_only: true
     security_opt:
       - no-new-privileges:true
@@ -113,6 +115,8 @@ services:
       context: .
       dockerfile: Dockerfile.oprf
     user: "2001"
+    # PID 1 is pnpm, which does not reap children or forward signals.
+    init: true
     read_only: true
     security_opt:
       - no-new-privileges:true
@@ -132,6 +136,8 @@ services:
       context: .
       dockerfile: Dockerfile.oprf
     user: "2001"
+    # PID 1 is pnpm, which does not reap children or forward signals.
+    init: true
     read_only: true
     security_opt:
       - no-new-privileges:true

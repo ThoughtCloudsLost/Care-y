@@ -154,6 +154,7 @@ describe("es.json values differ from en.json", () => {
     ["demo_app_brand", "product name"],
 
     // Interpolation-only templates (the visible content is a variable, not translatable text)
+    ["intake_page_issue_row", "interpolation-only: {field}: {error}"],
     ["nav_tickets", "interpolation-only: {Tickets}"],
     ["tab_library", "interpolation-only: {KnowledgeBase}"],
     ["library_title", "interpolation-only: {KnowledgeBase}"],
