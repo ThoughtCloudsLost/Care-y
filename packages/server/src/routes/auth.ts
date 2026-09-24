@@ -275,7 +275,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       }),
     ),
 
-    register: authedProcedure
+    register: manageUsersProcedure
       .input(
         registerInputSchema.extend({
           roleId: assignRoleInputSchema.shape.roleId.optional(),

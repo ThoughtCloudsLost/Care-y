@@ -303,7 +303,28 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     );
   });
 
-  it("auth.register creates user when called by authenticated user", async () => {
+  it("auth.register rejects authenticated caller without MANAGE_USERS", async () => {
+    const authService = makeAuthService(tenantDb);
+    const volunteer = await authService.register({
+      identifier: "volunteer-no-manage",
+      password: "volunteer-password-long-enough",
+      displayName: "Volunteer No Manage",
+      roleId: RoleId.VOLUNTEER,
+    });
+
+    const { caller } = createAuthedCaller(volunteer, "vol-token", true);
+    await expectTrpcError(
+      caller.auth.register({
+        identifier: "blocked-user",
+        password: "blocked-password-long-enough",
+        displayName: "Blocked User",
+        roleId: RoleId.VOLUNTEER,
+      }),
+      "FORBIDDEN",
+    );
+  });
+
+  it("auth.register creates user when called by admin (has MANAGE_USERS)", async () => {
     const authService = makeAuthService(tenantDb);
     const admin = await authService.register({
       identifier: "admin-bootstrap",
@@ -312,7 +333,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       roleId: RoleId.ADMIN,
     });
 
-    const { caller } = createAuthedCaller(admin, "admin-token");
+    const { caller } = createAuthedCaller(admin, "admin-token", true);
     const result = await caller.auth.register({
       identifier: "invited-user",
       password: "invited-password-long-enough",
@@ -513,7 +534,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       roleId: RoleId.ADMIN,
     });
 
-    const { caller } = createAuthedCaller(admin, "dup-admin-token");
+    const { caller } = createAuthedCaller(admin, "dup-admin-token", true);
 
     // First registration succeeds
     await caller.auth.register({
@@ -524,7 +545,11 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     });
 
     // Second registration with same identifier fails through throwAsTrpc
-    const { caller: caller2 } = createAuthedCaller(admin, "dup-admin-token");
+    const { caller: caller2 } = createAuthedCaller(
+      admin,
+      "dup-admin-token",
+      true,
+    );
     await expectTrpcError(
       caller2.auth.register({
         identifier: "dup-target",
@@ -572,7 +597,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       roleId: RoleId.ADMIN,
     });
 
-    const { caller } = createAuthedCaller(admin, "email-admin-token");
+    const { caller } = createAuthedCaller(admin, "email-admin-token", true);
     const result = await caller.auth.register({
       identifier: "email-user",
       password: "email-user-password-long-enough",
