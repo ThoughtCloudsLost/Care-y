@@ -115,7 +115,7 @@ export function buildAggregationSection(
 }
 
 /** Distinct seam labels across a hit list, most frequent first (ties
- *  keep first-seen order) — the facet row reads best when the labels
+ *  keep first-seen order); the facet row reads best when the labels
  *  most likely to narrow usefully come first. */
 export function distinctHitLabels(
   hits: readonly EntryHit[],
