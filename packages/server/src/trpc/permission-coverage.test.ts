@@ -29,7 +29,11 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { Permission } from "@care-y/shared";
+import {
+  Permission,
+  PROCEDURE_PERMISSIONS,
+  INLINE_CHECKED_CAPABILITIES,
+} from "@care-y/shared";
 import { createAppRouter } from "../routes/router.js";
 import { RELAY_PERMISSIONS } from "../routes/relay.js";
 import { createTestRouterDeps, ALL_OPTIONAL_ROUTERS } from "../test-utils.js";
@@ -69,6 +73,23 @@ export const BLOB_DOWNLOAD_KEYS: readonly Permission[] = [
   Permission.VIEW_KNOWLEDGE_BASE,
   Permission.DOWNLOAD_CASE_MEDIA,
 ];
+
+/** Procedure path to its meta.permission, from the built router. */
+function pathPermissionMap(): Map<string, Permission> {
+  const router = createAppRouter({
+    ...createTestRouterDeps(),
+    ...ALL_OPTIONAL_ROUTERS,
+  });
+
+  const map = new Map<string, Permission>();
+  for (const [routePath, procedure] of Object.entries(router._def.procedures)) {
+    const meta = (procedure as { _def: { meta?: ProcedureMeta } })._def.meta;
+    const permission = meta?.permission;
+    if (permission === undefined) continue;
+    map.set(routePath, permission);
+  }
+  return map;
+}
 
 /** Permission to the procedure paths that enforce it, from the built router. */
 function permissionsFromRouter(): Map<Permission, string[]> {
@@ -144,5 +165,77 @@ describe("permission coverage", () => {
       .sort();
 
     expect(offRouter).toEqual([]);
+  });
+});
+
+describe("PROCEDURE_PERMISSIONS manifest", () => {
+  const routerMap = pathPermissionMap();
+  const manifestEntries = Object.entries(PROCEDURE_PERMISSIONS) as Array<
+    [string, Permission]
+  >;
+
+  it("contains every gated procedure from the router", () => {
+    const inRouterNotManifest: string[] = [];
+    for (const [path, permission] of routerMap) {
+      const manifestPermission = (
+        PROCEDURE_PERMISSIONS as Record<string, Permission>
+      )[path];
+      if (manifestPermission === undefined) {
+        inRouterNotManifest.push(`${path} (${permission})`);
+      }
+    }
+
+    expect(
+      inRouterNotManifest,
+      `Procedures in the built router but missing from PROCEDURE_PERMISSIONS:\n  ${inRouterNotManifest.join("\n  ")}`,
+    ).toEqual([]);
+  });
+
+  it("contains no entry absent from the router", () => {
+    const inManifestNotRouter: string[] = [];
+    for (const [path, permission] of manifestEntries) {
+      if (!routerMap.has(path)) {
+        inManifestNotRouter.push(`${path} (${permission})`);
+      }
+    }
+
+    expect(
+      inManifestNotRouter,
+      `Entries in PROCEDURE_PERMISSIONS but not in the built router:\n  ${inManifestNotRouter.join("\n  ")}`,
+    ).toEqual([]);
+  });
+
+  it("agrees on the permission for every shared path", () => {
+    const mismatched: string[] = [];
+    for (const [path, manifestPermission] of manifestEntries) {
+      const routerPermission = routerMap.get(path);
+      if (
+        routerPermission !== undefined &&
+        routerPermission !== manifestPermission
+      ) {
+        mismatched.push(
+          `${path}: manifest=${manifestPermission}, router=${routerPermission}`,
+        );
+      }
+    }
+
+    expect(
+      mismatched,
+      `Permission mismatch between manifest and router:\n  ${mismatched.join("\n  ")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("INLINE_CHECKED_CAPABILITIES manifest", () => {
+  it("covers every permission in the INLINE_CHECKED list", () => {
+    const capabilityValues = new Set<Permission>(
+      Object.values(INLINE_CHECKED_CAPABILITIES),
+    );
+    const missing = INLINE_CHECKED.filter((p) => !capabilityValues.has(p));
+
+    expect(
+      missing,
+      `Permissions in INLINE_CHECKED but absent from INLINE_CHECKED_CAPABILITIES values:\n  ${missing.join("\n  ")}`,
+    ).toEqual([]);
   });
 });

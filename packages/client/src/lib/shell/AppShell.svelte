@@ -72,7 +72,8 @@
   import { splitNavbar } from "$lib/stores/split-navbar.svelte.js";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { useQueryClient, createQuery } from "@tanstack/svelte-query";
-  import { Permission } from "@care-y/shared";
+  import { canCall } from "$lib/auth/procedure-gates.js";
+  import { canEnterAdminRoute } from "$lib/admin/destinations.js";
   import {
     adminKeys,
     authKeys,
@@ -319,8 +320,10 @@
       sections.push({ tabId: "library", items: kbItems });
     }
 
-    // Admin section (role-gated)
-    if (currentPermissions.has(Permission.MANAGE_USERS)) {
+    // Admin section: visible to any user who can reach the people page.
+    // This widens the admin nav section to queue managers and client
+    // viewers, matching the people page admission and the hub tiles.
+    if (canEnterAdminRoute(currentPermissions, "/admin/people")) {
       sections.push({
         tabId: "admin",
         items: [
@@ -647,9 +650,9 @@
         )
       : () => undefined;
 
-    // Volunteer search: admin/manager only. Reads from TanStack cache,
-    // decrypts display names via OrgDecryptCache. No server-side fullSearch.
-    const isAdminOrManager = currentPermissions.has(Permission.MANAGE_USERS);
+    // Volunteer search: requires auth.listUsers (the search provider
+    // fetches exactly that procedure).
+    const isAdminOrManager = canCall(currentPermissions, "auth.listUsers");
     const unregisterVol = isAdminOrManager
       ? registerSearchProvider(
           createVolunteerSearchProvider({
@@ -1024,7 +1027,7 @@
   $effect(() => {
     if (!browser || _orgKeyMgr == null) return;
     if (!_orgKeyMgr.isLoaded) return;
-    if (!currentPermissions.has(Permission.MANAGE_KEYS)) return;
+    if (!canCall(currentPermissions, "keys.resealStatus")) return;
     const bridge = getCryptoBridge();
     void resealSweep.autoResumeOnce(bridge);
   });

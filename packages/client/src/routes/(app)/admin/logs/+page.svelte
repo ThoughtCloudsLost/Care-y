@@ -5,11 +5,8 @@
   import { createInfiniteQuery } from "@tanstack/svelte-query";
   import { SvelteMap } from "svelte/reactivity";
   import { PhoneCall, ScrollText, ShieldAlert } from "@lucide/svelte";
-  import {
-    Permission,
-    auditEventTypeSchema,
-    callStatusSchema,
-  } from "@care-y/shared";
+  import { auditEventTypeSchema, callStatusSchema } from "@care-y/shared";
+  import { canEnterAdminRoute } from "$lib/admin/destinations.js";
   import IconTabToggle from "$lib/components/shared/IconTabToggle.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import {
@@ -47,9 +44,14 @@
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
 
-  const hasAccess = $derived(permissions.has(Permission.VIEW_REPORTS));
+  // Admission derived from the destination registry: any destination
+  // under /admin/logs visible to the user's permissions admits them.
+  const hasAccess = $derived(canEnterAdminRoute(permissions, "/admin/logs"));
+  const canViewCalls = $derived(
+    canEnterAdminRoute(permissions, "/admin/logs?tab=calls"),
+  );
   const canViewAudit = $derived(
-    hasAccess && permissions.has(Permission.VIEW_AUDIT_LOG),
+    canEnterAdminRoute(permissions, "/admin/logs?tab=audit"),
   );
 
   $effect(() => {
@@ -58,19 +60,24 @@
 
   // ── Tab state ──
 
-  /** True when the URL requested ?tab=audit but the user lacks VIEW_AUDIT_LOG. */
-  let auditDeepLinkRefused = $state(false);
+  /** True when a deep link requested a tab the user lacks permission for. */
+  let deepLinkRefused = $state(false);
+
+  /** Default to the first tab the user can actually see. */
+  const fallbackTab = $derived<LogsTab>(canViewCalls ? "calls" : "audit");
 
   let activeTab = $state<LogsTab>(defaultTab());
 
   $effect(() => {
     const raw = page.url.searchParams.get("tab");
     if (raw !== null && isLogsTab(raw)) {
-      if (raw === "audit" && !canViewAudit) {
-        auditDeepLinkRefused = true;
-        activeTab = "calls";
+      const allowed =
+        (raw === "calls" && canViewCalls) || (raw === "audit" && canViewAudit);
+      if (!allowed) {
+        deepLinkRefused = true;
+        activeTab = fallbackTab;
       } else {
-        auditDeepLinkRefused = false;
+        deepLinkRefused = false;
         activeTab = raw;
       }
     }
@@ -129,7 +136,7 @@
     initialPageParam: 1,
     getNextPageParam: (last) =>
       last.page * last.pageSize < last.total ? last.page + 1 : undefined,
-    enabled: activeTab === "calls" && hasAccess,
+    enabled: activeTab === "calls" && canViewCalls,
   }));
 
   const callRows = $derived(
@@ -415,7 +422,9 @@
 
 {#snippet tabSegmented()}
   {@const tabs = [
-    { id: "calls", label: m.logs_tab_calls(), icon: PhoneCall },
+    ...(canViewCalls
+      ? [{ id: "calls", label: m.logs_tab_calls(), icon: PhoneCall }]
+      : []),
     ...(canViewAudit
       ? [{ id: "audit", label: m.logs_tab_audit(), icon: ScrollText }]
       : []),
@@ -447,13 +456,13 @@
   />
 {/snippet}
 
-{#if auditDeepLinkRefused}
+{#if deepLinkRefused}
   <EmptyState
     icon={ShieldAlert}
     title={m.error_insufficient_permissions()}
     subtitle={m.logs_audit_permission_required()}
   />
-{:else if activeTab === "calls" && hasAccess}
+{:else if activeTab === "calls" && canViewCalls}
   <div role="tabpanel" id="panel-calls" aria-labelledby="tab-calls">
     <CallLogSection
       rows={callRows}

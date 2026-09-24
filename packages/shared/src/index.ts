@@ -1036,3 +1036,15 @@ export {
   type FixedLocale,
   type DisplayLocale,
 } from "./locale-brands.js";
+
+// --- Procedure permission manifest ---
+export {
+  PROCEDURE_PERMISSIONS,
+  type GatedProcedurePath,
+} from "./procedure-permissions.js";
+
+// --- Inline-checked capability manifest ---
+export {
+  INLINE_CHECKED_CAPABILITIES,
+  type InlineCheckedCapability,
+} from "./inline-checked-capabilities.js";

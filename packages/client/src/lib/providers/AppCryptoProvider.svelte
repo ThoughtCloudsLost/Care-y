@@ -35,7 +35,8 @@
     setCurrentPermissions,
     setPreviewLoader,
   } from "$lib/crypto/context-init.js";
-  import { Permission } from "@care-y/shared";
+  import { canCall } from "$lib/auth/procedure-gates.js";
+  import type { Permission } from "@care-y/shared";
   import { rewrapBlobsForFollowUp } from "$lib/crypto/rewrap-blobs.js";
   import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { setAdminOrgKeyPolling } from "$lib/crypto/admin-org-key-poll.svelte.js";
@@ -66,7 +67,7 @@
   setCurrentPermissions(() => currentPermissions);
 
   const canManageKeys = $derived(
-    currentPermissions.has(Permission.MANAGE_KEYS),
+    canCall(currentPermissions, "keys.listUnwrappedUsers"),
   );
 
   const unwrappedQuery = createQuery(() => ({

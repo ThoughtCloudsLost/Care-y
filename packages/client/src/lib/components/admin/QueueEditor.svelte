@@ -10,8 +10,8 @@
     getCurrentPermissions,
     getOrgDecryptCache,
   } from "$lib/crypto/context.js";
-  import { Permission } from "@care-y/shared";
   import { haptic } from "$lib/utils/haptic.js";
+  import { canCall } from "$lib/auth/procedure-gates.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { requireRouter } from "$lib/errors.js";
@@ -52,7 +52,7 @@
   const orgCache = getOrgDecryptCache();
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
-  const canManageQueues = $derived(permissions.has(Permission.MANAGE_QUEUES));
+  const canManageQueues = $derived(canCall(permissions, "tickets.deleteQueue"));
 
   const isCreateMode = $derived(queueId === null);
 

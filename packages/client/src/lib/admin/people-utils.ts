@@ -1,5 +1,7 @@
-import { Permission, RoleId } from "@care-y/shared";
+import { RoleId } from "@care-y/shared";
+import type { Permission } from "@care-y/shared";
 import type { RoleIdValue } from "@care-y/shared";
+import { canEnterAdminRoute } from "./destinations.js";
 import type {
   UserSortField,
   UserStatus,
@@ -56,11 +58,16 @@ export function isClientSortField(value: string): value is ClientSortField {
   return (CLIENT_SORT_FIELDS as readonly string[]).includes(value);
 }
 
-export function defaultTab(permissions: ReadonlySet<string>): PeopleTab {
-  if (permissions.has(Permission.MANAGE_USERS)) return "users";
-  if (permissions.has(Permission.MANAGE_QUEUES)) return "queues";
-  if (permissions.has(Permission.VIEW_CLIENTS)) return "clients";
-  if (permissions.has(Permission.MANAGE_ROLES)) return "roles";
+export function defaultTab(permissions: ReadonlySet<Permission>): PeopleTab {
+  if (canEnterAdminRoute(permissions, "/admin/people?tab=users"))
+    return "users";
+  if (canEnterAdminRoute(permissions, "/admin/people?tab=queues"))
+    return "queues";
+  if (canEnterAdminRoute(permissions, "/admin/people?tab=clients"))
+    return "clients";
+  // The roles tab has no destination tile; keep its explicit gate.
+  if (canEnterAdminRoute(permissions, "/admin/people?tab=roles"))
+    return "roles";
   return "queues";
 }
 

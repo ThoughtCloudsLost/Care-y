@@ -371,11 +371,11 @@ describe("Logs page", () => {
       expect(mockGoto).toHaveBeenCalledWith("/");
     });
 
-    it("redirects when user has only VIEW_AUDIT_LOG (no VIEW_REPORTS)", () => {
+    it("admits a user with only VIEW_AUDIT_LOG (audit tab has its own destination entry)", () => {
       setPermissions(Permission.VIEW_AUDIT_LOG);
       renderPage();
 
-      expect(mockGoto).toHaveBeenCalledWith("/");
+      expect(mockGoto).not.toHaveBeenCalled();
     });
 
     it("does not redirect when user has VIEW_REPORTS", () => {

@@ -6,7 +6,8 @@
   import { resolve } from "$app/paths";
   import { createQuery, createInfiniteQuery } from "@tanstack/svelte-query";
   import { queueKeys, adminKeys, clientKeys } from "$lib/query/keys.js";
-  import { Permission, RoleId } from "@care-y/shared";
+  import { RoleId } from "@care-y/shared";
+  import { canEnterAdminRoute } from "$lib/admin/destinations.js";
   import {
     Users,
     Layers,
@@ -68,14 +69,20 @@
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
 
-  const canManageUsers = $derived(permissions.has(Permission.MANAGE_USERS));
-  const canManageQueues = $derived(permissions.has(Permission.MANAGE_QUEUES));
-  const canViewClients = $derived(permissions.has(Permission.VIEW_CLIENTS));
-  const canManageRoles = $derived(permissions.has(Permission.MANAGE_ROLES));
-  const canInviteWithLink = $derived(canManageRoles);
-  const hasAccess = $derived(
-    canManageUsers || canManageQueues || canViewClients || canManageRoles,
+  const canManageUsers = $derived(
+    canEnterAdminRoute(permissions, "/admin/people?tab=users"),
   );
+  const canManageQueues = $derived(
+    canEnterAdminRoute(permissions, "/admin/people?tab=queues"),
+  );
+  const canViewClients = $derived(
+    canEnterAdminRoute(permissions, "/admin/people?tab=clients"),
+  );
+  const canManageRoles = $derived(
+    canEnterAdminRoute(permissions, "/admin/people?tab=roles"),
+  );
+  const canInviteWithLink = $derived(canManageRoles);
+  const hasAccess = $derived(canEnterAdminRoute(permissions, "/admin/people"));
 
   $effect(() => {
     if (!hasAccess) void goto(resolve("/"));

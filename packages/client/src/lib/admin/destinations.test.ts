@@ -82,7 +82,11 @@ describe("getVisibleDestinations", () => {
     ]);
     const visible = getVisibleDestinations(permissions);
 
-    expect(visible.length).toBe(ADMIN_DESTINATIONS.length);
+    // Hidden entries declare admission only and never render as tiles.
+    const tileCount = ADMIN_DESTINATIONS.filter(
+      (d) => d.hidden !== true,
+    ).length;
+    expect(visible.length).toBe(tileCount);
   });
 });
 
@@ -95,9 +99,12 @@ describe("groupDestinations", () => {
     expect(grouped.has("organization")).toBe(true);
   });
 
-  // Render order within groups is user-facing (admin hub lists items top-to-bottom).
+  // Render order within groups is user-facing (admin hub lists items
+  // top-to-bottom). Production always groups the visible set, so hidden
+  // admission-only entries never appear here.
   it("people group contains users, queues, and clients in render order", () => {
-    const grouped = groupDestinations(ADMIN_DESTINATIONS);
+    const tiles = ADMIN_DESTINATIONS.filter((d) => d.hidden !== true);
+    const grouped = groupDestinations(tiles);
     const people = grouped.get("people") ?? [];
 
     expect(people.map((d) => d.id)).toEqual(["users", "queues", "clients"]);

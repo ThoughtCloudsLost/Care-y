@@ -18,7 +18,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
-  import { Permission } from "@care-y/shared";
+  import { canCall } from "$lib/auth/procedure-gates.js";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import StatusMark from "$lib/components/StatusMark.svelte";
   import { haptic } from "$lib/utils/haptic.js";
@@ -37,7 +37,12 @@
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
   const permissionsGetter = getCurrentPermissions();
-  const canLink = $derived(permissionsGetter().has(Permission.LINK_CASES));
+  const canAddLink = $derived(
+    canCall(permissionsGetter(), "tickets.addDependency"),
+  );
+  const canRemoveLink = $derived(
+    canCall(permissionsGetter(), "tickets.removeDependency"),
+  );
 
   // --- Dependencies query ---
 
@@ -113,7 +118,7 @@
             <span class="linked-date">
               {formatRelativeTime(new Date(dep.createdAt))}
             </span>
-            {#if canLink}
+            {#if canRemoveLink}
               <button
                 type="button"
                 class="linked-remove touch-feedback"
@@ -134,7 +139,7 @@
   </List>
 {/if}
 
-{#if canLink}
+{#if canAddLink}
   <div class="linked-add-row">
     <button
       type="button"

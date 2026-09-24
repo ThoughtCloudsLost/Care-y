@@ -553,4 +553,32 @@ export default tseslint.config(
       "care-y/no-tenant-raw-sql": "off",
     },
   },
+
+  // No literal Permission gates in client code. Every gate derives from a
+  // machine source: canCall() for controls fronting one tRPC procedure
+  // (PROCEDURE_PERMISSIONS, test-locked to the server router),
+  // canEnterAdminRoute() for admin surface admission (the destination
+  // registry; hidden entries declare admission without a tile), and
+  // canUseInline() for
+  // capabilities the server checks inside resolvers
+  // (INLINE_CHECKED_CAPABILITIES, test-locked to the server's list).
+  // There is deliberately no file allowlist. If a gate genuinely cannot
+  // derive from any of the three sources, stop and get explicit user
+  // approval before adding one.
+  {
+    files: ["packages/client/src/**/*.ts", "packages/client/src/**/*.svelte"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        BRAND_CAST_SELECTOR,
+        {
+          selector:
+            "CallExpression[callee.property.name='has'][arguments.0.type='MemberExpression'][arguments.0.object.name='Permission']",
+          message:
+            "Derive the gate instead of hand-picking a permission: canCall() for a procedure, canEnterAdminRoute() for an admin surface, canUseInline() for an inline-checked capability. If none applies, get explicit user approval before adding an allowlist.",
+        },
+      ],
+    },
+  },
 );

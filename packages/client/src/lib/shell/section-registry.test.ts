@@ -222,7 +222,7 @@ describe("section-registry", () => {
       expect(sections.some((s) => s.id === "shift")).toBe(true);
     });
 
-    it("includes getting-started in hover when cache has checklist and user has MANAGE_ROLES", () => {
+    it("includes getting-started in hover when cache has checklist and user has MANAGE_ORG_IDENTITY", () => {
       const cache = {
         [JSON.stringify(["dashboard", "setupChecklist"])]: {
           dismissed: false,
@@ -230,7 +230,7 @@ describe("section-registry", () => {
         },
       };
       const qc = createMockQueryClient(cache);
-      const perms = new Set([Permission.MANAGE_ROLES]);
+      const perms = new Set([Permission.MANAGE_ORG_IDENTITY]);
       const sections = getHoverSections("/", perms, qc);
       expect(sections.some((s) => s.id === "getting-started")).toBe(true);
     });

@@ -36,7 +36,8 @@
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
   import { decryptQueueAppearance } from "$lib/utils/queue-appearance.js";
-  import { ErrorCode, Permission } from "@care-y/shared";
+  import { ErrorCode } from "@care-y/shared";
+  import { canCall } from "$lib/auth/procedure-gates.js";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import { queueFilterStore } from "$lib/stores/queue-filters.svelte.js";
@@ -57,8 +58,14 @@
   const orgCache = getOrgDecryptCache();
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
-  const canManageWatchers = $derived(
-    permissions.has(Permission.MANAGE_QUEUE_NOTIFICATIONS),
+  const canListWatchers = $derived(
+    canCall(permissions, "tickets.listQueueWatchers"),
+  );
+  const canAddWatcher = $derived(
+    canCall(permissions, "tickets.addQueueWatcher"),
+  );
+  const canRemoveWatcher = $derived(
+    canCall(permissions, "tickets.removeQueueWatcher"),
   );
 
   // ── Queries ──
@@ -140,7 +147,7 @@
   // ── Queue watchers via createQueries (one query per queue) ──
 
   const watcherResults = createQueries(() => ({
-    queries: canManageWatchers
+    queries: canListWatchers
       ? (queuesQuery.data ?? []).map((q) => ({
           queryKey: queueKeys.watchers(q.id),
           queryFn: async () =>
@@ -153,7 +160,7 @@
     const queues = queuesQuery.data ?? [];
     const watchers = new SvelteMap<string, readonly string[]>();
     const loading = new SvelteMap<string, boolean>();
-    if (!canManageWatchers) return { watchers, loading };
+    if (!canListWatchers) return { watchers, loading };
     const results = watcherResults;
     let idx = 0;
     for (const q of queues) {
@@ -682,7 +689,7 @@
               </div>
 
               <!-- Watcher section (notification-only, no read access) -->
-              {#if canManageWatchers}
+              {#if canListWatchers}
                 {@const queueWatchers =
                   watcherData.watchers.get(queue.id) ?? []}
                 {@const watchersLoading =
@@ -711,26 +718,30 @@
                             content={watcherName}
                             length={10}
                           />
-                          <button
-                            class="chip-remove"
-                            aria-label={m.admin_queue_remove_watcher({
-                              name: watcherName ?? watcherId.slice(0, 8),
-                            })}
-                            onclick={() =>
-                              removeWatcherMutation.mutate({
-                                queueId: queue.id,
-                                userId: watcherId,
+                          {#if canRemoveWatcher}
+                            <button
+                              class="chip-remove"
+                              aria-label={m.admin_queue_remove_watcher({
+                                name: watcherName ?? watcherId.slice(0, 8),
                               })}
-                          >
-                            <X size={14} aria-hidden="true" />
-                          </button>
+                              onclick={() =>
+                                removeWatcherMutation.mutate({
+                                  queueId: queue.id,
+                                  userId: watcherId,
+                                })}
+                            >
+                              <X size={14} aria-hidden="true" />
+                            </button>
+                          {/if}
                         </Chip>
                       {/each}
                     </div>
 
-                    <SoftButton onclick={() => openWatcherPicker(queue.id)}>
-                      {m.admin_queue_add_watcher_button()}
-                    </SoftButton>
+                    {#if canAddWatcher}
+                      <SoftButton onclick={() => openWatcherPicker(queue.id)}>
+                        {m.admin_queue_add_watcher_button()}
+                      </SoftButton>
+                    {/if}
 
                     {#if queueWatchers.length === 0}
                       <p class="no-members">
@@ -825,7 +836,7 @@
 />
 
 <!-- Watcher picker sheet -->
-{#if canManageWatchers}
+{#if canAddWatcher}
   <QueueWatcherPicker
     opened={watcherPickerOpened}
     queueId={watcherPickerQueueId}

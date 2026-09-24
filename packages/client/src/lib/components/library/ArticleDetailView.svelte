@@ -31,8 +31,8 @@
     type DecryptResult,
   } from "$lib/crypto/decrypt-result.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
-  import { Permission } from "@care-y/shared";
   import { requireRouter } from "$lib/errors.js";
+  import { canCall } from "$lib/auth/procedure-gates.js";
   import { renderArticleBody } from "$lib/utils/render-article.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -64,7 +64,7 @@
   const orgCache = getOrgDecryptCache();
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
-  const canEdit = $derived(permissions.has(Permission.EDIT_KNOWLEDGE_BASE));
+  const canEdit = $derived(canCall(permissions, "kb.updateItem"));
 
   // Recently-viewed history: an article open counts as a view. Covers the
   // full-page route and the split pane (both mount this component).

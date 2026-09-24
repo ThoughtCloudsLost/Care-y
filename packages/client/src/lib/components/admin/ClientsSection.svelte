@@ -26,7 +26,7 @@
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { clientKeys, ticketsKeys } from "$lib/query/keys.js";
-  import { Permission } from "@care-y/shared";
+  import { canCall } from "$lib/auth/procedure-gates.js";
   import { ErrorCode } from "@care-y/shared";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -106,7 +106,7 @@
   const orgCache = getOrgDecryptCache();
   const permissionsGetter = getCurrentPermissions();
   const canDeleteClients = $derived(
-    permissionsGetter().has(Permission.DELETE_CLIENTS),
+    canCall(permissionsGetter(), "clients.deleteClient"),
   );
 
   // ---------------------------------------------------------------------------

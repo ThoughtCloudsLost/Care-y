@@ -47,8 +47,8 @@
     getCurrentUserId,
     getCurrentPermissions,
   } from "$lib/crypto/context.js";
-  import { Permission } from "@care-y/shared";
   import type { ReactionSummary } from "@care-y/shared";
+  import { canCall, canUseInline } from "$lib/auth/procedure-gates.js";
   import {
     decryptQueueAppearance,
     type QueueAppearance,
@@ -107,35 +107,38 @@
   }
 
   const createOptions = $derived.by((): CreateOption[] => {
-    const options: CreateOption[] = [
-      {
+    const options: CreateOption[] = [];
+    if (canCall(permissions, "tickets.create")) {
+      options.push({
         id: "ticket",
         label: m.create_new_ticket(withTerms()),
         icon: TicketPlus,
-      },
-    ];
-    if (permissions.has(Permission.EDIT_KNOWLEDGE_BASE)) {
+      });
+    }
+    if (canCall(permissions, "kb.createItem")) {
       options.push({
         id: "article",
         label: m.create_new_article(),
         icon: FilePlus,
       });
     }
-    if (permissions.has(Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES)) {
+    if (canCall(permissions, "kb.createCategory")) {
       options.push({
         id: "category",
         label: m.create_new_category(),
         icon: FolderPlus,
       });
     }
-    if (permissions.has(Permission.MANAGE_QUEUES)) {
+    if (canCall(permissions, "tickets.createQueue")) {
       options.push({
         id: "queue",
         label: m.create_new_queue(withTerms()),
         icon: LayersPlus,
       });
     }
-    if (permissions.has(Permission.MANAGE_USERS)) {
+    // Fronts the inline-checked onboarding.generateInvite procedure;
+    // no manifest path exists, so the inline capability map is used.
+    if (canUseInline(permissions, "generateInvite")) {
       options.push({
         id: "user",
         label: m.create_invite_user(),
@@ -184,13 +187,12 @@
 
   // Navbar right-action override: "+" button with create popover.
   $effect(() => {
-    const createAction: NavbarAction = {
-      icon: Plus,
-      label: m.nav_create_new(),
-      onclick: handleCreateTap,
-    };
+    const actions: NavbarAction[] =
+      createOptions.length > 0
+        ? [{ icon: Plus, label: m.nav_create_new(), onclick: handleCreateTap }]
+        : [];
     navbarCtx.current = {
-      actions: [createAction],
+      actions,
       subnavbar: dashboardSubnavbar,
     };
     sectionRailCtx.current = {
@@ -347,13 +349,13 @@
 
   let callSheetOpen = $state(false);
 
-  // --- Getting Started checklist (admin-only, TanStack deduplicates with GettingStartedCard) ---
+  // --- Getting Started checklist (org-identity gate, TanStack deduplicates with GettingStartedCard) ---
 
   const checklistQuery = createQuery(() => ({
     queryKey: ["dashboard", "setupChecklist"],
     queryFn: async () => trpc.dashboard.getSetupChecklist.query(),
     staleTime: 60_000,
-    enabled: permissions.has(Permission.MANAGE_ROLES),
+    enabled: canCall(permissions, "dashboard.getSetupChecklist"),
   }));
 
   const showGettingStarted = $derived(
@@ -372,11 +374,11 @@
       keyWrap: t.keyWrap ?? null,
       intakeWrap: t.intakeWrap ?? null,
     })),
-    canViewClients: permissions.has(Permission.VIEW_CLIENTS),
+    canViewClients: canCall(permissions, "clients.mergeScanData"),
   }));
 
   const showMergeCandidates = $derived(
-    permissions.has(Permission.VIEW_CLIENTS) &&
+    canCall(permissions, "clients.mergeScanData") &&
       mergeScan.undismissed.length > 0,
   );
 

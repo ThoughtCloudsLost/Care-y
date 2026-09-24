@@ -5,7 +5,7 @@
   import { queueKeys, ticketsKeys } from "$lib/query/keys.js";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { Permission } from "@care-y/shared";
+  import { canEnterAdminRoute } from "$lib/admin/destinations.js";
   import {
     ClipboardList,
     Layers,
@@ -37,7 +37,7 @@
 
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
-  const hasAccess = $derived(permissions.has(Permission.MANAGE_USERS));
+  const hasAccess = $derived(canEnterAdminRoute(permissions, "/admin/manager"));
 
   $effect(() => {
     if (!hasAccess) void goto(resolve("/"));

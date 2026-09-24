@@ -29,8 +29,8 @@
     ChartColumn,
     Trash,
   } from "@lucide/svelte";
+  import { canCall } from "$lib/auth/procedure-gates.js";
   import {
-    Permission,
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
     intakeFieldConfigSchema,
@@ -71,7 +71,7 @@
   const orgKeyManager = getOrgKeyManager();
   const permissionsGetter = getCurrentPermissions();
   const canViewResponses = $derived(
-    permissionsGetter().has(Permission.VIEW_INTAKE_RESPONSES),
+    canCall(permissionsGetter(), "intakeForms.listResponses"),
   );
 
   let duplicatingFormId = $state<string | null>(null);
