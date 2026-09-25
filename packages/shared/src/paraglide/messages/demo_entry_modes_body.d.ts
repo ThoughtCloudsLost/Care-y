@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Read and Simulate are toggled from the top bar. Read mode shows the handbook as a document with the simulator hidden but still running. Simulate mode shows t..." |
+* | "Switch between the read-only handbook and the interactive simulator app from the top bar. Read shows the handbook as a document. The simulator is hidden but ..." |
 *
 * @param {Demo_Entry_Modes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

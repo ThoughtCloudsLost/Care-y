@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The tickets list presents the same rows four ways, as a table, as compact rows, as cards and as a grid. [[#client-data]] **What each presentation asks the se..." |
+* | "The ticket list has four view modes: table, compact rows, cards, and grid. [[#client-data]] **What each mode requests.** Compact rows request no message prev..." |
 *
 * @param {Demo_Narrative_Topic_View_Modes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

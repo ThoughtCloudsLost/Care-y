@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An authenticator app shows a six-digit code that changes every thirty seconds, computed from a secret shared once at enrollment and the current time, so it w..." |
+* | "An authenticator app generates a six-digit code that changes every thirty seconds. The code is computed from a secret shared once at enrollment and the curre..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Totp_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

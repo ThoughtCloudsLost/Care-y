@@ -22,9 +22,11 @@ const es_demo_narrative_topic_message_select_body = /** @type {(inputs: Demo_Nar
 };
 
 const en_xa2_demo_narrative_topic_message_select_body = /** @type {(inputs: Demo_Narrative_Topic_Message_Select_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Sèlèctìòn mòdè àllòws pìckìng mèssàgès fròm thè thrèàd ìndìvìdùàlly òr àll àt òncè.
- ••••••••••••••••••••••••••**Còpy. ••** Thè sèlèctìòn bàr còpìès thè dècryptèd tèxt òf èvèry sèlèctèd mèssàgè tò thè clìpbòàrd ìn ònè àctìòn.
- •••••••••••••••••••••••••••••••**Prìvàcy. •••** Sèlèctìòn stàtè ànd thè còpìèd tèxt stày òn thè dèvìcè. Thè sèrvèr dòès nòt knòw whìch mèssàgès wèrè sèlèctèd. ••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Sèlèctìòn mòdè tàkès sèvèràl èntrìès fròm thè thrèàd àt òncè ànd còpìès thèm às tèxt. [[#clìènt-dàtà]]
+ •••••••••••••••••••••••••••••••**Whàt thè còpy còntàìns. •••••••** Ònè lìnè pèr èntry, èàch càrryìng thè tìmè, whò wròtè ìt ànd thè dècryptèd tèxt, wìth à clìènt's èntrìès àttrìbùtèd tò thèìr àlìàs ànd ìntèrnàl nòtès màrkèd às sùch. Àn èntry thè bròwsèr hàs nòt òpènèd ìs còpìèd às à màrkèr nàmìng why ràthèr thàn às à gùèss, sò àn èntry thè àccòùnt hòlds nò kèy fòr rèàds às ùnàvàìlàblè ìnstèàd òf blànk. [[#fàìlùrè-stàtès #clìènt-dàtà]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whèrè thè còpy gòès. ••••••** Thè dèvìcè clìpbòàrd, whìch ìs òùtsìdè whàt thè àpplìcàtìòn còntròls. Tèxt thàt lèàvès thè thrèàd thìs wày càn bè rèàd by whàtèvèr èlsè òn thàt dèvìcè rèàds thè clìpbòàrd ànd pàstèd ànywhèrè, ànd nò pàrt òf thè càsè's pròtèctìòn fòllòws ìt. [[#prìvàcy]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt thè sèrvèr lèàrns. •••••••** Nòthìng. Sèlèctìng ànd còpyìng sènd nò rèqùèst, sò whìch èntrìès ànyònè sìnglèd òùt òn à càsè ìs nòt à fàct thè sèrvèr hòlds. [[#sèrvèr-hòlds #prìvàcy]]
+ •••••••••••••••••••••••••••••••••••••••••••••••**Thè sèlèctìòn stàtè. ••••••** \`crèàtè-sèlèct-mòdè.svèltè.ts\` ìn \`pàckàgès/clìènt/src/lìb/còmpòsàblès/tìckèt-dètàìl/\` hòlds thè sèlèctèd ìdèntìfìèrs ìn à sèt thàt lìvès fòr thè lèngth òf thè mòdè, rèàds ìts tèxt fròm thè dècrypt càchè ràthèr thàn dècryptìng àgàìn, ànd clèàrs ìtsèlf àftèr à còpy. [[#clìènt-dàtà]] •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**

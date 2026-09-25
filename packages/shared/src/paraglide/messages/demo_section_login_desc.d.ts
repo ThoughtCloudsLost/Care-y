@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "How credentials protect case data before it reaches the server." |
+* | "How signing in verifies the volunteer and derives the encryption keys in the browser." |
 *
 * @param {Demo_Section_Login_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

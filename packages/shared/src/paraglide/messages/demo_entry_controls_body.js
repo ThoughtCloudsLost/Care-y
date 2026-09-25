@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Entry_Controls_BodyInputs */
 
 const en_demo_entry_controls_body = /** @type {(inputs: Demo_Entry_Controls_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`In simulate mode, a toolbar above the frame lets you resize with phone or desktop presets, switch roles, and enter fullscreen. The toolbar is also a drag handle, so you can grab it anywhere to reposition the frame, and you can resize from any edge or corner by dragging.`)
+	return /** @type {LocalizedString} */ (`When the app simulator is open, a toolbar above the simulator lets you enter fullscreen mode, resize to phone or desktop presets, and switch the logged in user's role. The toolbar is also a drag handle, so you can grab it anywhere to reposition the simulator, and you can resize from any edge or corner by dragging.`)
 };
 
 const es_demo_entry_controls_body = /** @type {(inputs: Demo_Entry_Controls_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`En el modo simulación, una barra oscura sobre el marco permite cambiar el tamaño con preajustes de teléfono o escritorio, cambiar de rol y entrar en pantalla completa. La barra también sirve como asa de arrastre, así que puedes agarrarla en cualquier punto para reposicionar el marco, y puedes cambiar el tamaño desde cualquier borde o esquina arrastrando.`)
+	return /** @type {LocalizedString} */ (`Cuando el simulador de la aplicación está abierto, una barra oscura sobre el simulador permite entrar en pantalla completa, cambiar el tamaño con preajustes de teléfono o escritorio y cambiar el rol del usuario conectado. La barra también sirve como asa de arrastre, así que puedes agarrarla en cualquier punto para reposicionar el simulador, y puedes cambiar el tamaño desde cualquier borde o esquina arrastrando.`)
 };
 
 const en_xa2_demo_entry_controls_body = /** @type {(inputs: Demo_Entry_Controls_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Ìn sìmùlàtè mòdè, à tòòlbàr àbòvè thè fràmè lèts yòù rèsìzè wìth phònè òr dèsktòp prèsèts, swìtch ròlès, ànd èntèr fùllscrèèn. Thè tòòlbàr ìs àlsò à dràg hàndlè, sò yòù càn gràb ìt ànywhèrè tò rèpòsìtìòn thè fràmè, ànd yòù càn rèsìzè fròm àny èdgè òr còrnèr by dràggìng. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Whèn thè àpp sìmùlàtòr ìs òpèn, à tòòlbàr àbòvè thè sìmùlàtòr lèts yòù èntèr fùllscrèèn mòdè, rèsìzè tò phònè òr dèsktòp prèsèts, ànd swìtch thè lòggèd ìn ùsèr's ròlè. Thè tòòlbàr ìs àlsò à dràg hàndlè, sò yòù càn gràb ìt ànywhèrè tò rèpòsìtìòn thè sìmùlàtòr, ànd yòù càn rèsìzè fròm àny èdgè òr còrnèr by dràggìng. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "In simulate mode, a toolbar above the frame lets you resize with phone or desktop presets, switch roles, and enter fullscreen. The toolbar is also a drag han..." |
+* | "When the app simulator is open, a toolbar above the simulator lets you enter fullscreen mode, resize to phone or desktop presets, and switch the logged in us..." |
 *
 * @param {Demo_Entry_Controls_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

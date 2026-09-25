@@ -18,7 +18,9 @@ const es_demo_narrative_admin_hub_people_body = /** @type {(inputs: Demo_Narrati
 };
 
 const en_xa2_demo_narrative_admin_hub_people_body = /** @type {(inputs: Demo_Narrative_Admin_Hub_People_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Thè ùsèr ròstèr, qùèùè cònfìgùràtìòn, ànd clìènt lìst. Ùsèr ìdèntìfìèrs ànd qùèùè nàmès àrè èncryptèd wìth thè òrgànìzàtìòn kèy bèfòrè stòràgè. Clìènt ìdèntìfìèrs àrè èncryptèd sèpàràtèly, ànd fùll còntàct dètàìls àrè gàtèd by thè Vìèw clìènt PÌÌ pèrmìssìòn. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Thè pèòplè gròùp hòlds thrèè dèstìnàtìòns, thè ùsèr ròstèr, qùèùè cònfìgùràtìòn ànd thè clìènt lìst, ànd èàch ònè àppèàrs fòr àn àccòùnt hòldìng ìts òwn pèrmìssìòn. [[#pèrmìssìòns]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt ìs èncryptèd bèhìnd èàch ònè. •••••••••••** Dìsplày nàmès ànd qùèùè nàmès àrè òrgànìzàtìòn-kèy cìphèrtèxt thè bròwsèr òpèns. À clìènt's àlìàs ìs tòò, whìlè thèìr phònè nùmbèr ànd èmàìl àddrèss àrè èncryptèd wìth à kèy thè sèrvèr hòlds, bècàùsè thè sèrvèr ìs whàt plàcès thè càll. [Clìènt mànàgèmènt](#àdmìn-pèòplè/clìènts) còvèrs thàt splìt. [[#èncryptìòn #clìènt-dàtà]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Why à còùnt càn bè àbsènt. ••••••••** Thè àctìvè ùsèr còùnt, thè qùèùè còùnt ànd thè òthèr fìgùrès òn thè gròùp còmè fròm ònè stàtùs qùèry thàt rùns òn Mànàgè ròlès, sò àn àccòùnt àdmìttèd by à dèstìnàtìòn pèrmìssìòn àlònè rèàchès thè dèstìnàtìòn ànd ìs gìvèn nò fìgùrè fòr ìt. [Thè pèrmìssìòn systèm](#dèèp-dìvè/thè-pèrmìssìòn-systèm) còvèrs hòw thòsè chècks àrè màdè. [[#pèrmìssìòns #mètàdàtà]] ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Enrolling a first second-factor method also produces eight backup codes, each of which completes one sign-in and then stops working. They exist for the sign-..." |
+* | "Enrolling a first second-factor method also produces eight backup codes. Each code works for one sign-in, then expires. They cover situations where the usual..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Backup_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

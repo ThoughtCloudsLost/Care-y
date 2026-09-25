@@ -14,7 +14,7 @@ const es_dashboard_encrypted_help = /** @type {(inputs: Dashboard_Encrypted_Help
 };
 
 const en_xa2_dashboard_encrypted_help = /** @type {(inputs: Dashboard_Encrypted_HelpInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`⟦Yòù hàvè  •••${i?.queue} àccèss bùt nòt thè dècryptìòn kèy fòr thìs  ••••••••••••••${i?.ticket}. À tèàmmàtè whò càn rèàd ìt wìll shàrè àccèss àùtòmàtìcàlly whèn thèy òpèn ìt. ••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Yòù hàvè  •••${i?.queue} àccèss bùt nòt thè dècryptìòn kèy fòr thìs  ••••••••••••••${i?.ticket}. Àccèss àrrìvès àùtòmàtìcàlly thè nèxt tìmè à tèàmmàtè whò càn rèàd ìt sìgns ìn. •••••••••••••••••••••••••⟧`)
 };
 
 /**

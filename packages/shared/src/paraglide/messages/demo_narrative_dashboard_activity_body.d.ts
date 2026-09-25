@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The feed is the audit log narrowed to tickets in the queues the user belongs to, newest first, five events at a time. Only events tied to a ticket appear, so..." |
+* | "The activity feed shows activities from the audit log for tickets in the queues the signed-in user belongs to, newest first. It loads five at a time. [[#perm..." |
 *
 * @param {Demo_Narrative_Dashboard_Activity_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

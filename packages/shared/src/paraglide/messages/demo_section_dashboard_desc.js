@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Dashboard_DescInputs */
 
 const en_demo_section_dashboard_desc = /** @type {(inputs: Demo_Section_Dashboard_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The home screen after sign-in. Collapsible cards show shift status, ticket counts per queue, recent activity, knowledge base updates, and merge candidates. All displayed data is decrypted locally in the browser.`)
+	return /** @type {LocalizedString} */ (`Surfaces the volunteer's shift status, queue counts, recent activity, knowledge base updates, and merge candidates. The browser decrypts all card data locally.`)
 };
 
 const es_demo_section_dashboard_desc = /** @type {(inputs: Demo_Section_Dashboard_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pantalla de inicio tras iniciar sesión. Tarjetas plegables muestran el estado del turno, conteos de tickets por cola, actividad reciente, novedades de la base de conocimiento y candidatos de fusión. Todos los datos mostrados se descifran localmente en el navegador.`)
+	return /** @type {LocalizedString} */ (`Muestra el estado del turno, los recuentos de cola, la actividad reciente, las actualizaciones de la base de conocimiento y los candidatos a fusionar. El navegador descifra todos los datos de las tarjetas de forma local.`)
 };
 
 const en_xa2_demo_section_dashboard_desc = /** @type {(inputs: Demo_Section_Dashboard_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Thè hòmè scrèèn àftèr sìgn-ìn. Còllàpsìblè càrds shòw shìft stàtùs, tìckèt còùnts pèr qùèùè, rècènt àctìvìty, knòwlèdgè bàsè ùpdàtès, ànd mèrgè càndìdàtès. Àll dìsplàyèd dàtà ìs dècryptèd lòcàlly ìn thè bròwsèr. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Sùrfàcès thè vòlùntèèr's shìft stàtùs, qùèùè còùnts, rècènt àctìvìty, knòwlèdgè bàsè ùpdàtès, ànd mèrgè càndìdàtès. Thè bròwsèr dècrypts àll càrd dàtà lòcàlly. ••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The home screen after sign-in. Collapsible cards show shift status, ticket counts per queue, recent activity, knowledge base updates, and merge candidates. A..." |
+* | "Surfaces the volunteer's shift status, queue counts, recent activity, knowledge base updates, and merge candidates. The browser decrypts all card data locally." |
 *
 * @param {Demo_Section_Dashboard_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

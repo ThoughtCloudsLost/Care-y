@@ -22,8 +22,11 @@ const es_demo_narrative_admin_roles_body = /** @type {(inputs: Demo_Narrative_Ad
 };
 
 const en_xa2_demo_narrative_admin_roles_body = /** @type {(inputs: Demo_Narrative_Admin_Roles_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Thè ròlè rèfèrèncè pàgès sùmmàrìzè whàt ùsèrs ìn èàch ròlè càn sèè ànd dò, ànd thè sècùrìty stàtùs lìnk òn èàch pàgè ìs ìn dèvèlòpmènt.
- •••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Vìèwìng thè ròlè rèfèrèncè pàgès rèqùìrès thè Mànàgè ùsèrs pèrmìssìòn. ••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Twò rèfèrèncè pàgès stàtè whàt à mànàgèr ànd whàt à vòlùntèèr àrè èxpèctèd tò bè àblè tò dò, ìn fìxèd wòrdìng thàt nò pèrmìssìòn chàngè rèwrìtès. [[#pèrmìssìòns]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••**Whàt èàch pàgè rèàds fròm thè sèrvèr. ••••••••••••** Thè mànàgèr pàgè àsks fòr èvèry àctìvè qùèùè ànd rèpòrts thè òpèn càsè còùnt òf èàch ònè bèsìdè thè rèàdèr's òwn qùèùès, sò ìt rèpòrts dèpth fòr qùèùès thè rèàdèr ìs nòt à mèmbèr òf. Thè vòlùntèèr pàgè àsks ònly fòr thè rèàdèr's òwn qùèùès. Qùèùè nàmès àrrìvè às òrgànìzàtìòn-kèy cìphèrtèxt òn bòth, ànd à nàmè thè bròwsèr cànnòt òpèn ìs lèft às à plàcèhòldèr ràthèr thàn dròppèd. [[#mètàdàtà #èncryptìòn]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whèrè thè wòrdìng càn drìft fròm thè grànt. •••••••••••••** Thè càpàbìlìty lìnès àrè fìxèd tèxt, whìlè thè pèrmìssìòn sèt bèhìnd thèm ìs thè òrgànìzàtìòn's tò èdìt, sò à ròlè whòsè màtrìx ròws hàvè bèèn chàngèd kèèps rèàdìng thè shìppèd dèscrìptìòn òf ìtsèlf. Ònè vòlùntèèr lìnè nàmès shìft mànàgèmènt, whìch ìs ìn dèvèlòpmènt. [Thè pèrmìssìòn màtrìx](#àdmìn-pèòplè/ròlè-pèrmìssìòns) còvèrs whàt àn òrgànìzàtìòn càn chàngè. [[#pèrmìssìòns #fàìlùrè-stàtès]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whò rèàchès whìch pàgè. •••••••** Thè mànàgèr pàgè sènds àn àccòùnt wìthòùt Mànàgè ùsèrs bàck tò thè òvèrvìèw. Thè vòlùntèèr pàgè ìs òpèn tò àny sìgnèd-ìn àccòùnt, ànd èvèrythìng ìt rèpòrts ìs thè rèàdèr's òwn, sò òpènìng ìt sàys nòthìng àbòùt ànyònè èlsè. [Thè pèrmìssìòn systèm](#dèèp-dìvè/thè-pèrmìssìòn-systèm) còvèrs hòw thòsè chècks àrè màdè. [[#pèrmìssìòns #prìvàcy]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt thè pàgès dò nòt dò yèt. •••••••••** Thè sècùrìty stàtùs lìnk òn èàch pàgè ràìsès à nòtìcè ìnstèàd òf òpènìng ànythìng, ànd thè tòùr rèplày òn thè vòlùntèèr pàgè dòès thè sàmè. [[#fàìlùrè-stàtès]] ••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**

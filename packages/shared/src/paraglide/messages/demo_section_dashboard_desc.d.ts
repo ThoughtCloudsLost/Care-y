@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The home screen after sign-in. Collapsible cards show shift status, ticket counts per queue, recent activity, knowledge base updates, and merge candidates. A..." |
+* | "Surfaces the volunteer's shift status, queue counts, recent activity, knowledge base updates, and merge candidates. The browser decrypts all card data locally." |
 *
 * @param {Demo_Section_Dashboard_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

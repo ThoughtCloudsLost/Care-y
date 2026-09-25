@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A six-digit code is sent by text to the number enrolled on the account. It is good for five minutes and a third wrong entry deletes it, the same shape as an ..." |
+* | "A six-digit code is sent by text to the phone number enrolled on the account. The code is valid for five minutes. A third wrong entry deletes the code rather..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Sms_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

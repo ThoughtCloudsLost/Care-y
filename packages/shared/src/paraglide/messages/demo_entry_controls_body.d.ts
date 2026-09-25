@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "In simulate mode, a toolbar above the frame lets you resize with phone or desktop presets, switch roles, and enter fullscreen. The toolbar is also a drag han..." |
+* | "When the app simulator is open, a toolbar above the simulator lets you enter fullscreen mode, resize to phone or desktop presets, and switch the logged in us..." |
 *
 * @param {Demo_Entry_Controls_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

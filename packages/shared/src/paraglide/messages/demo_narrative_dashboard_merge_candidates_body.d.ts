@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A scan pairs client records that share a phone number or an email address and offers each pair for review or dismissal. The matching runs in the browser; the..." |
+* | "This section pairs client records that share a phone number or email address and lists each pair for review or dismissal. It appears only for accounts with t..." |
 *
 * @param {Demo_Narrative_Dashboard_Merge_Candidates_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

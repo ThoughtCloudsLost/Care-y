@@ -20,9 +20,10 @@ const es_demo_narrative_topic_case_fold_body = /** @type {(inputs: Demo_Narrativ
 };
 
 const en_xa2_demo_narrative_topic_case_fold_body = /** @type {(inputs: Demo_Narrative_Topic_Case_Fold_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Thè càsè fìèlds bèlòw thè hèàdèr càn bè fòldèd àwày. Thè tìtlè, stàtùs, ànd prìòrìty stày vìsìblè ìn thè hèàdèr àbòvè.
- ••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Thè dèscrìptìòn ìs èncryptèd wìth thè pèr tìckèt kèy, ànd thè qùèùè ànd àssìgnèè nàmès wìth thè òrgànìzàtìòn kèy. Thè òpènèd dàtè ìs plàìntèxt mètàdàtà thè sèrvèr ùsès fòr sòrtìng.
- •••••••••••••••••••••••••••••••••••••••••••••••••••••••**Thè fùll rècòrd. •••••** Thè còmplètè fìèld lìst, àlòng wìth thè ròlè màskèd clìènt phònè nùmbèr ànd thè càsè àctìòns, lìvès ìn thè càsè pànèl. ••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Fòldìng thè càsè rècòrd àwày lèàvès thè tìtlè, thè prìòrìty ànd thè clòsèd stàtè ànd hìdès thè dèscrìptìòn, thè qùèùè, thè àssìgnmènt ànd thè òpènèd tìmè ùntìl thè rècòrd ìs ùnfòldèd àgàìn. [[#clìènt-dàtà]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt fòldìng rècòrds. •••••••** Ònè èntry ìn à màp hèld ìn thè tàb's mèmòry, kèyèd by càsè ìd. Nòthìng ìs wrìttèn tò bròwsèr stòràgè ànd nò rèqùèst ìs sènt, sò hòw lòng ànyònè kèèps à càsè rècòrd òpèn, ànd whìch càsès thèy fòld, ìs nòt à fàct thè sèrvèr òr à làtèr rèàdèr òf thè dèvìcè hàs. [[#prìvàcy #sèrvèr-hòlds]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt à rèlòàd dòès. ••••••** Thè màp ìs crèàtèd frèsh wìth èàch lòàd òf thè àpplìcàtìòn, sò èvèry càsè òpèns wìth ìts rècòrd shòwìng. Thè fòld ìs pèr càsè, sò fòldìng ònè càsè lèàvès thè òthèrs às thèy wèrè fòr thè rèst òf thè sèssìòn. [[#fàìlùrè-stàtès]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Thè fòld stòrè. •••••** \`pàckàgès/clìènt/src/lìb/tìckèts/càsè-fòld-stòrè.svèltè.ts\` ìs à rèàctìvè màp wìth à gèttèr ànd à sèttèr, ànd ùnfòldìng dèlètès thè kèy ràthèr thàn stòrìng fàlsè. Thè dràg ànd kèybòàrd hàndlìng ìs \`ùsè-fòld-dràg.svèltè.ts\` ìn \`pàckàgès/clìènt/src/lìb/shèll/\`. [Thè càsè rècòrd](#tìckèt-dètàìl/càsè-hèàdèr) còvèrs thè fìèlds thèmsèlvès. [[#clìènt-dàtà]] ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**

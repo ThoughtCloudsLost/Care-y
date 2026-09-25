@@ -6,29 +6,48 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Dashboard_Activity_BodyInputs */
 
 const en_demo_narrative_dashboard_activity_body = /** @type {(inputs: Demo_Narrative_Dashboard_Activity_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The feed is the audit log narrowed to tickets in the queues the user belongs to, newest first, five events at a time. Only events tied to a ticket appear, so organization-level actions are absent from it. [[#permissions #metadata]]
-**What an audit row holds.** The event type, the account that acted, the ticket it acted on, a metadata object and a timestamp, all plaintext. The service writes no names, numbers or message content, so a row records that a ticket was closed and not what it was about. The client alias and queue name shown beside each event are organization-key ciphertext joined in by the query and opened in the browser. [[#server-holds #encryption]]
-**Which events get a name.** Creation, closing, reopening, a follow-up and a mention are labeled. An event type the feed does not recognize is shown with a generic label rather than dropped, so a new event type appears as activity before it has wording. A deployment without the audit service writes no rows at all, and the feed answers empty rather than failing. [[#failure-states]]
-**The feed query.** \`listRecentForQueues\` in \`packages/server/src/tickets/audit.ts\` joins the audit log to tickets, clients and queues, and applies no access control of its own: the route hands it the caller's queue ids and nothing else. The audit log is append-only, with no update or delete path. [Audit log](#admin-logs/audit) covers the full log and who has access to it. [[#permissions]]`)
+	return /** @type {LocalizedString} */ (`The activity feed shows activities from the audit log for tickets in the queues the signed-in user belongs to, newest first. It loads five at a time. [[#permissions #metadata]]
+**Activity fields and encryption.** Each activity records its type, an internal ID for the account that acted, an internal ID for the ticket acted on, a metadata object, and a timestamp, all as plaintext on the server. Neither ID is a name or case content. An activity records that a ticket was closed, not what the ticket contained. Volunteer names are encrypted separately. The service writes no phone numbers or message content. The server can see the pattern of which account acted on which ticket and when. The client alias and queue name displayed beside each activity are end-to-end encrypted with the organization key. The query joins them in from their source tables. The browser decrypts them. [[#server-holds #encryption]]
+**Activity types.** The feed currently has five activity types:
+- Creation: a new ticket is opened, whether by staff or by a client submitting an intake form or calling the intake phone number.
+- Closing: someone closes a ticket.
+- Reopening: someone reopens a closed ticket.
+- Follow-up: a reply or note is added to a ticket's conversation, including messages a client sends through the portal.
+- Mention: a follow-up that @-mentions an account is recorded as a mention instead of a follow-up.
+An activity type added after these still appears in the feed with a generic label. [[#failure-states]]
+**Query path and access control.** \`listRecentForQueues\` in \`packages/server/src/tickets/audit.ts\` joins the audit log to tickets, clients, and queues. It applies no access control of its own. The route passes only the caller's queue IDs to the function. The audit log is append-only with no update or delete path. [Audit log](#admin-logs/audit) covers the full log and who can access it. [[#permissions]]`)
 };
 
 const es_demo_narrative_dashboard_activity_body = /** @type {(inputs: Demo_Narrative_Dashboard_Activity_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El feed es el registro de auditoría reducido a los tickets de las colas a las que pertenece la persona usuaria, del más reciente al más antiguo, cinco eventos cada vez. Solo aparecen los eventos ligados a un ticket, así que las acciones a nivel de organización no figuran en él. [[#permissions #metadata]]
-**Lo que guarda una fila de auditoría.** El tipo de evento, la cuenta que actuó, el ticket sobre el que actuó, un objeto de metadatos y una marca de tiempo, todo en texto plano. El servicio no escribe nombres, números ni contenido de mensajes, de modo que una fila registra que un ticket se cerró y no de qué trataba. El alias del cliente y el nombre de la cola que acompañan a cada evento son texto cifrado con la clave de la organización que la consulta incorpora y que abre el navegador. [[#server-holds #encryption]]
-**Qué eventos reciben un nombre.** La creación, el cierre, la reapertura, un seguimiento y una mención llevan etiqueta. Un tipo de evento que el feed no reconoce se muestra con una etiqueta genérica en lugar de descartarse, así que un tipo nuevo aparece como actividad antes de tener redacción propia. Una instalación sin el servicio de auditoría no escribe ninguna fila, y el feed responde vacío en lugar de fallar. [[#failure-states]]
-**La consulta del feed.** \`listRecentForQueues\`, en \`packages/server/src/tickets/audit.ts\`, une el registro de auditoría con los tickets, los clientes y las colas, y no aplica ningún control de acceso propio: la ruta le entrega los identificadores de cola de quien consulta y nada más. El registro de auditoría es de solo añadido, sin ninguna ruta de actualización ni de borrado. [Registro de auditoría](#admin-logs/audit) trata el registro completo y quién tiene acceso a él. [[#permissions]]`)
+	return /** @type {LocalizedString} */ (`El feed de actividad muestra actividades del registro de auditoría para tickets en las colas a las que pertenece el usuario con sesión iniciada, de la más reciente a la más antigua. Carga cinco a la vez. [[#permissions #metadata]]
+**Campos de actividad y cifrado.** Cada actividad registra su tipo, un ID interno de la cuenta que actuó, un ID interno del ticket sobre el que se actuó, un objeto de metadatos y una marca de tiempo, todo como texto plano en el servidor. Ninguno de los dos IDs es un nombre ni contenido del caso. Una actividad registra que un ticket fue cerrado, no lo que el ticket contenía. Los nombres de los voluntarios se cifran por separado. El servicio no registra números de teléfono ni contenido de mensajes. El servidor puede ver el patrón de qué cuenta actuó sobre qué ticket y cuándo. El alias del cliente y el nombre de la cola que se muestran junto a cada actividad están cifrados de extremo a extremo con la clave de la organización. La consulta los une desde sus tablas de origen. El navegador los descifra. [[#server-holds #encryption]]
+**Tipos de actividad.** El feed tiene actualmente cinco tipos de actividad:
+- Creación: se abre un ticket nuevo, ya sea por parte del personal o por un cliente que envía un formulario de ingreso o llama al número de teléfono de ingreso.
+- Cierre: alguien cierra un ticket.
+- Reapertura: alguien reabre un ticket cerrado.
+- Seguimiento: se añade una respuesta o nota a la conversación de un ticket, incluidos los mensajes que un cliente envía a través del portal.
+- Mención: un seguimiento que @-menciona una cuenta se registra como mención en lugar de seguimiento.
+Un tipo de actividad añadido después de estos aparece en el feed con una etiqueta genérica. [[#failure-states]]
+**Ruta de consulta y control de acceso.** \`listRecentForQueues\` en \`packages/server/src/tickets/audit.ts\` une el registro de auditoría con tickets, clientes y colas. No aplica control de acceso propio. La ruta pasa solo los IDs de cola del usuario que llama a la función. El registro de auditoría es de solo adición, sin ruta de actualización ni eliminación. [Registro de auditoría](#admin-logs/audit) cubre el registro completo y quién puede acceder a él. [[#permissions]]`)
 };
 
 const en_xa2_demo_narrative_dashboard_activity_body = /** @type {(inputs: Demo_Narrative_Dashboard_Activity_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦À chrònòlògìcàl lìst òf rècènt èvènts: nèw tìckèts, stàtùs chàngès, ànd àssìgnmènts.
- ••••••••••••••••••••••••••**Vìsìbìlìty. ••••** Thè fèèd ìs scòpèd tò qùèùès thè cùrrènt vòlùntèèr càn àccèss. Vòlùntèèrs wìth dìffèrènt qùèùè mèmbèrshìps sèè dìffèrènt àctìvìty fèèds.
- ••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Clìènt àlìàsès ànd qùèùè nàmès ìn èàch èvènt àrè èncryptèd wìth thè òrgànìzàtìòn kèy ànd dècryptèd ìn thè bròwsèr àt dìsplày tìmè. Strùctùràl mètàdàtà (èvènt typè, tìckèt ÌD, tìmèstàmp) ìs nòt èncryptèd bècàùsè thè sèrvèr nèèds ìt tò sòrt ànd fìltèr rèsùlts. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Thè àctìvìty fèèd shòws àctìvìtìès fròm thè àùdìt lòg fòr tìckèts ìn thè qùèùès thè sìgnèd-ìn ùsèr bèlòngs tò, nèwèst fìrst. Ìt lòàds fìvè àt à tìmè. [[#pèrmìssìòns #mètàdàtà]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••**Àctìvìty fìèlds ànd èncryptìòn. ••••••••••** Èàch àctìvìty rècòrds ìts typè, àn ìntèrnàl ÌD fòr thè àccòùnt thàt àctèd, àn ìntèrnàl ÌD fòr thè tìckèt àctèd òn, à mètàdàtà òbjèct, ànd à tìmèstàmp, àll às plàìntèxt òn thè sèrvèr. Nèìthèr ÌD ìs à nàmè òr càsè còntènt. Àn àctìvìty rècòrds thàt à tìckèt wàs clòsèd, nòt whàt thè tìckèt còntàìnèd. Vòlùntèèr nàmès àrè èncryptèd sèpàràtèly. Thè sèrvìcè wrìtès nò phònè nùmbèrs òr mèssàgè còntènt. Thè sèrvèr càn sèè thè pàttèrn òf whìch àccòùnt àctèd òn whìch tìckèt ànd whèn. Thè clìènt àlìàs ànd qùèùè nàmè dìsplàyèd bèsìdè èàch àctìvìty àrè ènd-tò-ènd èncryptèd wìth thè òrgànìzàtìòn kèy. Thè qùèry jòìns thèm ìn fròm thèìr sòùrcè tàblès. Thè bròwsèr dècrypts thèm. [[#sèrvèr-hòlds #èncryptìòn]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Àctìvìty typès. •••••** Thè fèèd cùrrèntly hàs fìvè àctìvìty typès:
+- Crèàtìòn: à nèw tìckèt ìs òpènèd, whèthèr by stàff òr by à clìènt sùbmìttìng àn ìntàkè fòrm òr càllìng thè ìntàkè phònè nùmbèr.
+- Clòsìng: sòmèònè clòsès à tìckèt.
+- Rèòpènìng: sòmèònè rèòpèns à clòsèd tìckèt.
+- Fòllòw-ùp: à rèply òr nòtè ìs àddèd tò à tìckèt's cònvèrsàtìòn, ìnclùdìng mèssàgès à clìènt sènds thròùgh thè pòrtàl.
+- Mèntìòn: à fòllòw-ùp thàt @-mèntìòns àn àccòùnt ìs rècòrdèd às à mèntìòn ìnstèàd òf à fòllòw-ùp.
+Àn àctìvìty typè àddèd àftèr thèsè stìll àppèàrs ìn thè fèèd wìth à gènèrìc làbèl. [[#fàìlùrè-stàtès]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Qùèry pàth ànd àccèss còntròl. •••••••••** \`lìstRècèntFòrQùèùès\` ìn \`pàckàgès/sèrvèr/src/tìckèts/àùdìt.ts\` jòìns thè àùdìt lòg tò tìckèts, clìènts, ànd qùèùès. Ìt àpplìès nò àccèss còntròl òf ìts òwn. Thè ròùtè pàssès ònly thè càllèr's qùèùè ÌDs tò thè fùnctìòn. Thè àùdìt lòg ìs àppènd-ònly wìth nò ùpdàtè òr dèlètè pàth. [Àùdìt lòg](#àdmìn-lògs/àùdìt) còvèrs thè fùll lòg ànd whò càn àccèss ìt. [[#pèrmìssìòns]] ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The feed is the audit log narrowed to tickets in the queues the user belongs to, newest first, five events at a time. Only events tied to a ticket appear, so..." |
+* | "The activity feed shows activities from the audit log for tickets in the queues the signed-in user belongs to, newest first. It loads five at a time. [[#perm..." |
 *
 * @param {Demo_Narrative_Dashboard_Activity_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A ticket appears here when it is open, not on hold, urgent or high priority, and either unassigned or assigned to the user with unread replies. The section i..." |
+* | "A ticket belongs to this section when it meets every condition below. The section is absent when no ticket qualifies. [[#client-data #privacy]] - The ticket ..." |
 *
 * @param {Demo_Narrative_Dashboard_Needs_Attention_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

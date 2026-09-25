@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A setup checklist gathers eight tasks, each one opening the admin page that finishes it. An account has access to the checklist with permission to manage the..." |
+* | "A setup checklist on the dashboard guides initial configuration. Each item links to the admin page where it is completed. Only accounts with the Manage org i..." |
 *
 * @param {Demo_Narrative_Dashboard_Getting_Started_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Dashboard_Merge_Candidates_HeadingInputs */
 
 const en_demo_narrative_dashboard_merge_candidates_heading = /** @type {(inputs: Demo_Narrative_Dashboard_Merge_Candidates_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Merge candidates`)
+	return /** @type {LocalizedString} */ (`Possible duplicates`)
 };
 
 const es_demo_narrative_dashboard_merge_candidates_heading = /** @type {(inputs: Demo_Narrative_Dashboard_Merge_Candidates_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Candidatos para fusión`)
+	return /** @type {LocalizedString} */ (`Posibles duplicados`)
 };
 
 const en_xa2_demo_narrative_dashboard_merge_candidates_heading = /** @type {(inputs: Demo_Narrative_Dashboard_Merge_Candidates_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Mèrgè càndìdàtès •••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Pòssìblè dùplìcàtès ••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Merge candidates" |
+* | "Possible duplicates" |
 *
 * @param {Demo_Narrative_Dashboard_Merge_Candidates_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

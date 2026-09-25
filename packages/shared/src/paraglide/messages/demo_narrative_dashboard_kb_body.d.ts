@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The knowledge base preview lists the two articles saved most recently, ordered by the time each was last edited. An account has access to them with permissio..." |
+* | "The knowledge base preview shows the two articles edited most recently, ordered by last-edit time. Viewing them requires the view-knowledge-base permission. ..." |
 *
 * @param {Demo_Narrative_Dashboard_Kb_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The view switcher changes how every ticket section on the overview is presented, across four choices: table, rows, cards and grid. The overview opens on card..." |
+* | "The view switcher sets the view mode for every ticket section on the overview. Four view modes are available: table, rows, cards, and grid. The overview open..." |
 *
 * @param {Demo_Narrative_Dashboard_View_Switcher_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

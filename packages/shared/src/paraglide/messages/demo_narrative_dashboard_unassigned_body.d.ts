@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An open ticket in the user's queues with nobody assigned waits here. Taking one records the account against the ticket and moves it into [My tickets](#dashbo..." |
+* | "This section lists open tickets with no assignee from the queues the signed-in user belongs to. Tickets on hold are excluded. Taking a ticket sets the signed..." |
 *
 * @param {Demo_Narrative_Dashboard_Unassigned_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

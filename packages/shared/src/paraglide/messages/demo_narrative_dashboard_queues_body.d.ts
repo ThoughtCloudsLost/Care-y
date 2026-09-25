@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Each active queue the user belongs to gets a card carrying a count of open tickets and a count of urgent ones. Membership decides which cards appear, so two ..." |
+* | "Each active queue the user belongs to appears as a card. Each card shows a count of open tickets and a count of urgent tickets. Which cards appear depends on..." |
 *
 * @param {Demo_Narrative_Dashboard_Queues_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

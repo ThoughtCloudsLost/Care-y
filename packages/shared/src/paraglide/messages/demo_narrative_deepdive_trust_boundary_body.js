@@ -71,17 +71,51 @@ El número de filas, las relaciones de claves externas y las secuencias de marca
 Quien contribuye una consulta decide en qué lado de la frontera se ejecuta su filtro, y un filtro que el servidor evalúa es un filtro que el servidor puede leer. [[#permissions #trust-boundary]]`)
 };
 
+const en_xa2_demo_narrative_deepdive_trust_boundary_body = /** @type {(inputs: Demo_Narrative_Deepdive_Trust_Boundary_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè trùst bòùndàry ìs thè lìnè bètwèèn whàt thè sèrvèr càn rèàd ànd whàt ònly à bròwsèr càn rèàd, ànd knòwìng whèrè ìt sìts ìs hòw àn òrgànìzàtìòn dècìdès whèthèr CÀRÈ-Y ìs sàfè ènòùgh fòr thè pèòplè ìt sèrvès. [[#trùst-bòùndàry #èncryptìòn]]
+Thè bròwsèr sìdè òf thè lìnè hòlds thè còntènt thàt ìdèntìfìès òr qùòtès ànyònè. [[#trùst-bòùndàry #èncryptìòn #clìènt-dàtà]]
+- À clìènt's àlìàs, whìch ìs thè nàmè thè òrgànìzàtìòn rècòrds fòr thèm. [[#trùst-bòùndàry #clìènt-dàtà]]
+- Mèssàgès, càsè nòtès, ànd thè fìlès àttàchèd tò à càsè. [[#trùst-bòùndàry #clìènt-dàtà]]
+- Qùèùè nàmès, lìbràry àrtìclès ànd nòtè typès. [[#trùst-bòùndàry #èncryptìòn]]
+- Àn ìntàkè fòrm's qùèstìòns ànd thè ànswèrs à clìènt sùbmìttèd. [[#trùst-bòùndàry #clìènt-dàtà]]
+Thè sèrvèr sìdè òf thè lìnè hòlds thè fàcts thè sèrvèr nèèds tò dò ìts jòb wìthòùt à pèrsòn prèsènt. [[#trùst-bòùndàry #sèrvèr-hòlds #mètàdàtà]]
+- Ìt knòws à càsè èxìsts, whèn ìt wàs crèàtèd, whìch qùèùè ìt bèlòngs tò, whàt stàtùs ànd prìòrìty ìt càrrìès, ànd whìch àccòùnt ìs àssìgnèd tò ìt. [[#trùst-bòùndàry #sèrvèr-hòlds]]
+- Ìt knòws hòw màny mèssàgès à càsè hàs ànd whèn èàch àrrìvèd. [[#trùst-bòùndàry #mètàdàtà]]
+- Ìt knòws whìch àccòùnts èxìst, whèn thèy sìgnèd ìn, ànd whìch sècònd-fàctòr mèthòds thèy ènròllèd. [[#trùst-bòùndàry #mètàdàtà]]
+- Ìt knòws thè crèdèntìàls fòr thè phònè systèm ànd thè màìl sèrvèr, bècàùsè ìt hàs tò ùsè thèm. [[#trùst-bòùndàry #sèrvèr-hòlds]]
+- Ìt hàs àccèss tò à clìènt's phònè nùmbèr ànd èmàìl àddrèss, bècàùsè ìt ìs whàt dìàls thè nùmbèr ànd àddrèssès thè màìl, ànd thòsè twò còlùmns àrè sèàlèd ùndèr thè sèrvèr's òwn òpèràtìònàl kèy ràthèr thàn ùndèr thè òrgànìzàtìòn's. [[#trùst-bòùndàry #sèrvèr-hòlds #clìènt-dàtà]]
+Mètàdàtà ìs thè còst òf thàt àrràngèmènt, ànd àctìvìty pàttèrns àrè vìsìblè ìn ìt. À dùmp shòws whèn thè òrgànìzàtìòn ìs bùsy, whìch qùèùès càrry thè mòst wòrk, hòw lòng càsès stày òpèn, hòw òftèn à pàrtìcùlàr àccòùnt ìs àctìvè, ànd whèn sòmèònè sìgnèd ìn. Rèlàtìònshìp strùctùrè ìs vìsìblè tòò, bècàùsè thè àssìgnmènt còlùmn nàmès à rèàl àccòùnt ànd thèrè ìs ònè rèàd-màrkèr ròw pèr àccòùnt pèr càsè thèy òpènèd. Nònè òf thàt ìdèntìfìès à clìènt, ànd àll òf ìt dèscrìbès thè òrgànìzàtìòn tò ànyònè hòldìng thè dàtàbàsè. Àn òrgànìzàtìòn whòsè thrèàt mòdèl ìnclùdès àn àdvèrsàry ìntèrèstèd ìn stàffìng pàttèrns ràthèr thàn càsè còntènts shòùld wèìgh thìs èxpòsùrè bèfòrè àdòptìng thè systèm. [[#mètàdàtà #prìvàcy #trùst-bòùndàry]]
+Twò thìngs sìt òùtsìdè thè èncryptìòn bòùndàry èntìrèly by dèsìgn. [[#trùst-bòùndàry #prìvàcy]]
+- Ìntàkè pàgè bràndìng ìs pùblìc, sò à clìènt càn rècògnìzè whò thèy àrè còntàctìng. [[#trùst-bòùndàry #prìvàcy]]
+- Nòtìfìcàtìòn èmàìl àddrèssès fòr ùsèrs whò òpt ìntò èmàìl nòtìfìcàtìòns àrè rèàdàblè by thè sèrvèr, bècàùsè thè sèrvèr ìs whàt àddrèssès thè mèssàgè, whìch ìs why ìn-àpp ànd pùsh nòtìfìcàtìòns èxìst fòr ùsèrs whò wòùld ràthèr dèclìnè. [[#trùst-bòùndàry #prìvàcy]]
+Thìrd pàrtìès hòld thèìr òwn còpìès òf sòmè thìngs, ànd CÀRÈ-Y cànnòt èncrypt whàt ìt nèvèr tòùchèd fìrst. À tèxt mèssàgè èxìstèd ìn thè càrrìèr's nètwòrk ànd àt thè tèlèphòny pròvìdèr bèfòrè ìt rèàchèd CÀRÈ-Y. Àn èmàìl èxìstèd ìn thè sèndèr's òwn màìl systèm. [Thè tèlèphòny rèlày](#dèèp-dìvè/thè-tèlèphòny-rèlày) còvèrs whàt CÀRÈ-Y dòès àbòùt thàt, ànd [Thè pòrtàl chànnèl lìfècyclè](#dèèp-dìvè/pòrtàl-chànnèl-lìfècyclè) còvèrs thè chànnèls thàt àvòìd thìrd pàrtìès àltògèthèr. [[#tèlèphòny #pòrtàl #trùst-bòùndàry]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Plàìntèxt còlùmns, nàmèd. ••••••••** Fòùr tàblès càrry thè bùlk òf thè plàìntèxt mètàdàtà. [[#sèrvèr-hòlds #mètàdàtà #clìènt-dàtà]]
+- Òn \`tìckèts\`, thè plàìntèxt còlùmns àrè \`ìd\`, \`clìènt_ìd\`, \`qùèùè_ìd\`, \`stàtùs\`, \`prìòrìty\`, \`òn_hòld\`, \`àssìgnèd_tò\`, \`kèy_gènèràtìòn\` ànd \`crèàtèd_àt\`, whìlè \`èncryptèd_tìtlè\` ànd \`èncryptèd_dèscrìptìòn\` àrè bytèà. [[#sèrvèr-hòlds #clìènt-dàtà]]
+- Òn \`clìènts\`, \`èncryptèd_àlìàs\` ìs bytèà ùndèr thè òrgànìzàtìòn kèy wìth àn \`àlìàs_hàsh\` blìnd ìndèx bèsìdè ìt, \`còmmùnìcàtìòn_tìèr\` ìs plàìntèxt ànd nàmès whìch chànnèl tìèr thè clìènt ìs òn, ànd thè phònè rèfèrèncè ìs à fòrèìgn kèy tò \`phònès\`, whèrè \`èncryptèd_nùmbèr\` ìs bytèà ùndèr thè sèrvèr's òpèràtìònàl kèy bèsìdè à \`phònè_hàsh\` blìnd ìndèx. [[#sèrvèr-hòlds #clìènt-dàtà]]
+- Òn \`pòrtàl_chànnèls\`, thè chànnèl ìd, àùth hàsh, clìènt pùblìc kèy, pàssphràsè flàg, stàtùs ànd àctìvìty tìmèstàmps àrè plàìntèxt whìlè èvèry mèssàgè bòdy ìs cìphèrtèxt. [[#sèrvèr-hòlds #pòrtàl]]
+- Òn \`tìckèt_rèàd_cùrsòrs\`, thè càsè ìd ànd ùsèr ìd àrè thè plàìntèxt prìmàry kèy wìth ònly thè cùrsòr vàlùè èncryptèd, sò thè ròw's èxìstèncè dìsclòsès thàt thè àccòùnt òpènèd thàt càsè whìlè thè pòsìtìòn stàys ùnrèàdàblè. [[#sèrvèr-hòlds #mètàdàtà]]
+Ròw còùnts, fòrèìgn kèy rèlàtìònshìps ànd tìmèstàmp sèqùèncès àrè rèàdàblè strùctùràlly thròùghòùt, whìch ìs whàt màkès thè àctìvìty ìnfèrèncè àbòvè pòssìblè. Nàrròwìng thè càsè lìst ìs à SQL qùèry thè sèrvèr rùns òvèr thòsè sàmè plàìntèxt còlùmns, sò thè qùèùè, stàtùs, prìòrìty, hòld stàtè ànd àssìgnmènt sòmèònè fìltèrèd tò àrè vìsìblè tò ìt, whìlè à sàvèd fìltèr's nàmè ànd stòrèd stàtè àrè sèàlèd tò thè òrgànìzàtìòn kèy ànd àrè nòt. [[#mètàdàtà #sèrvèr-hòlds]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Àùdìt ànd òpèràtìònàl rècòrds. •••••••••** Thè àùdìt lòg ìs psèùdònymòùs ànd làrgèly plàìntèxt by dèsìgn, hòldìng àn èvènt typè, àn àctòr ìd, àn òptìònàl càsè ìd ànd à JSÒN mètàdàtà òbjèct, sò àn àdmìnìstràtòr's bròwsèr càn qùèry ìt wìthòùt à dècryptìòn pàss. Ìt càrrìès nò càsè còntènt, nò phònè nùmbèrs ànd nò clìènt àlìàsès. Ràtè-lìmìt còùntèrs, jòb qùèùè ròws, sèssìòn tòkèns ànd thè kèy-èvàlùàtìòn àùdìt lòg àrè òpèràtìònàl-tìèr dàtà thè sèrvèr rèàds dìrèctly, whìlè thè ÌP àddrèss ànd ùsèr àgènt rècòrdèd òn à sèssìòn àrè sèàlèd tò thè òrgànìzàtìòn kèy ànd àrè nòt. [[#sèrvèr-hòlds #mètàdàtà #prìvàcy]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whèrè ènfòrcèmènt lìvès. ••••••••** Èvèry àccèss dècìsìòn ìs sèrvèr-àùthòrìtàtìvè, ànd thè clìènt hìdìng à còntròl ìs cònvènìèncè ònly. [[#pèrmìssìòns #trùst-bòùndàry]]
+- Càsè àccèss rùns thròùgh \`pàckàgès/sèrvèr/src/tìckèts/àccèss.ts\`. [[#pèrmìssìòns #trùst-bòùndàry]]
+- Pèrmìssìòn gàtès rùn thròùgh \`pàckàgès/sèrvèr/src/àùth/ròlès.ts\` ànd \`ròlè-mìddlèwàrè.ts\`. [[#pèrmìssìòns]]
+- Pèr-chànnèl pòlìcy rùns thròùgh sèrvìcè-làyèr àssèrtìòns àt èvèry rèlày hàndlèr ànd tRPC pròcèdùrè. [[#pèrmìssìòns #tèlèphòny]]
+- Òrgànìzàtìòn ìsòlàtìòn rùns thròùgh Kysèly schèmà scòpìng ìn \`pàckàgès/sèrvèr/src/db/\`. [[#pèrmìssìòns #sèrvèr-hòlds]]
+À còntrìbùtòr àddìng à qùèry dècìdès whìch sìdè òf thè bòùndàry ìts fìltèr rùns òn, ànd à fìltèr thè sèrvèr èvàlùàtès ìs à fìltèr thè sèrvèr càn rèàd. [[#pèrmìssìòns #trùst-bòùndàry]] ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
 /**
 * | output |
 * | --- |
 * | "The trust boundary is the line between what the server can read and what only a browser can read, and knowing where it sits is how an organization decides wh..." |
 *
 * @param {Demo_Narrative_Deepdive_Trust_Boundary_BodyInputs} inputs
-* @param {{ locale?: "en" | "es" }} options
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
 * @returns {LocalizedString}
 */
-export const demo_narrative_deepdive_trust_boundary_body = /** @type {((inputs?: Demo_Narrative_Deepdive_Trust_Boundary_BodyInputs, options?: { locale?: "en" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Deepdive_Trust_Boundary_BodyInputs, { locale?: "en" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+export const demo_narrative_deepdive_trust_boundary_body = /** @type {((inputs?: Demo_Narrative_Deepdive_Trust_Boundary_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Deepdive_Trust_Boundary_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
 	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
 	if (locale === "es") return es_demo_narrative_deepdive_trust_boundary_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_deepdive_trust_boundary_body(inputs)
 	return en_demo_narrative_deepdive_trust_boundary_body(inputs)
 });

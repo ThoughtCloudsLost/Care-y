@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The browser stretches the password with Argon2id over 64 MB of memory and four passes before any of it becomes key material. That cost is what the rest of th..." |
+* | "The browser stretches the password with Argon2id using 64 MB of memory and four passes before producing any key material. This cost makes each offline guess ..." |
 *
 * @param {Demo_Narrative_Topic_Key_Derivation_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

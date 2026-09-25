@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A correct password alone does not open case data. Every sign-in also asks for a second factor through a separate channel, and the browser starts deriving enc..." |
+* | "The browser derives encryption keys only after a second factor is verified. An attacker who has the password but not the second factor cannot obtain key mate..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

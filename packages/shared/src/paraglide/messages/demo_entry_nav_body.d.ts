@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The contents menu in the top bar lists every handbook section, and clicking one jumps there. The simulator follows where the handbook goes, and tapping aroun..." |
+* | "The contents menu in the top bar lists every handbook section. The simulator follows where the handbook goes, and tapping around inside the simulator moves t..." |
 *
 * @param {Demo_Entry_Nav_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

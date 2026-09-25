@@ -18,7 +18,9 @@ const es_demo_narrative_admin_hub_comms_body = /** @type {(inputs: Demo_Narrativ
 };
 
 const en_xa2_demo_narrative_admin_hub_comms_body = /** @type {(inputs: Demo_Narrative_Admin_Hub_Comms_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Èxtèrnàl chànnèl cònfìgùràtìòn: tèlèphòny pròvìdèr, vòìcèmàìl grèètìngs, SMS tèmplàtès, thè nùmbèr blòcklìst, ànd thè vòìcèmàìl qùàràntìnè. Thèsè sèttìngs còntròl hòw thè òrgànìzàtìòn rèàchès clìènts ànd hòw ìnbòùnd mèssàgès àrè ròùtèd. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Thè còmmùnìcàtìòns gròùp cònfìgùrès hòw thè òrgànìzàtìòn rèàchès à clìènt ànd hòw àn ìnbòùnd mèssàgè ìs ròùtèd, àcròss sìx dèstìnàtìòns bèhìnd fìvè dìffèrènt pèrmìssìòns. [[#pèrmìssìòns #tèlèphòny]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whìch òf thìs thè sèrvèr càn rèàd. •••••••••••** À càll grèètìng ànd àn àùtòmàtìc rèply àrè stòrèd às plàìntèxt, bècàùsè thè tèlèphòny pròvìdèr ìs whàt spèàks ànd sènds thèm tò sòmèònè whò hàs nòt sìgnèd ìn tò ànythìng. À blòckèd nùmbèr ìs stòrèd èncryptèd, wìth à sèpàràtè hàsh òf ìt fòr màtchìng, ànd à sàvèd rèply, whìch ònè ùsèr wrìtès fòr ànòthèr, ìs òrgànìzàtìòn-kèy cìphèrtèxt. [Blòcklìst](#àdmìn-còmms/blòcklìst) còvèrs hòw à màtch ìs màdè wìthòùt thè nùmbèr. [[#sèrvèr-hòlds #èncryptìòn]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt à wàrnìng màrk rèpòrts. •••••••••** Àn òrgànìzàtìòn wìth nò pròvìsìònèd lìnè, nò grèètìng òr nò àùtòmàtìc rèply ìs màrkèd hèrè ràthèr thàn àt thè dèstìnàtìòn, sìncè thòsè thrèè àrè thè stàtès thàt lèàvè àn ìnbòùnd càll wìth nòthìng tò ànswèr ìt. [Phònè lìnès](#àdmìn-còmms/phònè-lìnès) còvèrs whàt pròvìsìònìng à lìnè ìnvòlvès. [[#fàìlùrè-stàtès #tèlèphòny]] •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**

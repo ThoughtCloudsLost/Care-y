@@ -18,7 +18,9 @@ const es_demo_narrative_admin_hub_analytics_body = /** @type {(inputs: Demo_Narr
 };
 
 const en_xa2_demo_narrative_admin_hub_analytics_body = /** @type {(inputs: Demo_Narrative_Admin_Hub_Analytics_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Ìmpàct rèpòrts, òpèràtìònàl mètrìcs, dèèp ànàlysìs, thè càll lòg, ànd thè àùdìt lòg. Thè ànàlytìcs gròùp ìs ìn dèvèlòpmènt. •••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Thè ànàlytìcs gròùp hòlds fìvè dèstìnàtìòns, thè càll lòg, thè àùdìt lòg ànd thrèè rèpòrtìng dàshbòàrds thàt àrè ìn dèvèlòpmènt. [[#pèrmìssìòns #mètàdàtà]]
+ •••••••••••••••••••••••••••••••••••••••••••••••**Twò pèrmìssìòns, nòt ònè. ••••••••** Thè thrèè dàshbòàrds ànd thè càll lòg rùn òn Vìèw rèpòrts, whìlè thè àùdìt lòg càrrìès ìts òwn pèrmìssìòn, sò àn òrgànìzàtìòn càn grànt rèpòrtìng wìthòùt gràntìng thè rècòrd òf whò dìd whàt. [Àùdìt lòg](#àdmìn-lògs/àùdìt) còvèrs whàt à ròw ìn thàt rècòrd hòlds. [[#pèrmìssìòns]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt ìn dèvèlòpmènt mèàns hèrè. ••••••••••** À dàshbòàrd dèstìnàtìòn ràìsès à nòtìcè ìnstèàd òf òpènìng, whìlè thè càll lòg ànd thè àùdìt lòg àrè bùìlt ànd thèìr pàgès ènfòrcè thè sàmè pèrmìssìòns thè gròùp dòès. [Càll hìstòry](#àdmìn-lògs/càlls) còvèrs whàt à càll lèàvès bèhìnd. [[#fàìlùrè-stàtès]] •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**

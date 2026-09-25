@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A hold sets a ticket aside while an answer is waited on, leaving it open and out of the working list until the hold is lifted. Every hold in the user's queue..." |
+* | "This section lists every on-hold ticket from the queues the signed-in user belongs to, regardless of who placed the hold. The section is absent when no ticke..." |
 *
 * @param {Demo_Narrative_Dashboard_On_Hold_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

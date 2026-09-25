@@ -14,7 +14,7 @@ const es_demo_narrative_topic_key_derivation_heading = /** @type {(inputs: Demo_
 };
 
 const en_xa2_demo_narrative_topic_key_derivation_heading = /** @type {(inputs: Demo_Narrative_Topic_Key_Derivation_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Hòw èncryptìòn kèys àrè dèrìvèd ••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Whàt à sìgn-ìn ùnlòcks •••••••⟧`)
 };
 
 /**
