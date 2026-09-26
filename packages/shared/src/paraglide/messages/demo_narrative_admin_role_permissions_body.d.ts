@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The matrix sets fifty permissions against the three roles, grouped by the area each permission governs rather than by the role that holds it by default. [[#p..." |
+* | "The matrix lists every permission against each of the three roles, grouped by the area of work each permission governs. An organization can move most permiss..." |
 *
 * @param {Demo_Narrative_Admin_Role_Permissions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

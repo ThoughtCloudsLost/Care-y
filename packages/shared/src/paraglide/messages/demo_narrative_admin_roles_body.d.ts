@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Two reference pages state what a manager and what a volunteer are expected to be able to do, in fixed wording that no permission change rewrites. [[#permissi..." |
+* | "Each role has a reference page that lists the capabilities a manager or a volunteer can expect, in fixed wording that the organization's permission changes d..." |
 *
 * @param {Demo_Narrative_Admin_Roles_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
