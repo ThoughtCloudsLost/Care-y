@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Filters narrow the case thread by kind of entry, by who wrote it, and by a date range, and the three combine. [[#client-data]] **What a filter is answered fr..." |
+* | "Filters narrow the ticket's case thread by kind of entry, by author, and by a date range, and the three combine. [[#client-data]] **What does the server answ..." |
 *
 * @param {Demo_Narrative_Topic_Thread_Filters_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

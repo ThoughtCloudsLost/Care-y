@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Searching inside a case matches the words of its entries in the browser, against the text already decrypted there. [[#privacy #client-data #search]] **What t..." |
+* | "Searching inside a ticket matches against the text already decrypted in the browser. No search term is sent to the server, no result is reported back, and th..." |
 *
 * @param {Demo_Narrative_Topic_Deep_Search_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
