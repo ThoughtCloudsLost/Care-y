@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An internal note records what the organization wants remembered about a case without sending anything to the client, and it is sealed with the same case key ..." |
+* | "An internal note records what the organization wants remembered about a ticket without sending anything to the client. The note is sealed with the same ticke..." |
 *
 * @param {Demo_Narrative_Topic_Notes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

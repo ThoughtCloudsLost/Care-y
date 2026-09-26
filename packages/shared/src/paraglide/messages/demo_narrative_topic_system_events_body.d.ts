@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Assignments, status changes, priority and queue moves, holds and merges are recorded in the thread as their own entries, so what was done to a case sits in t..." |
+* | "Assignments, status changes, priority and queue moves, holds, and merges are recorded in the conversation thread as follow-ups of their own, so what was done..." |
 *
 * @param {Demo_Narrative_Topic_System_Events_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

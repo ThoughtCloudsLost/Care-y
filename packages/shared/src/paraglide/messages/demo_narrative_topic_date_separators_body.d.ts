@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A dateline marks each change of day in the thread, and a line marks where reading stopped last time. [[#client-data]] **Where the day boundary comes from.** ..." |
+* | "A date separator marks each change of day in the thread, and a separate line marks where reading stopped last time. The same component draws both lines on th..." |
 *
 * @param {Demo_Narrative_Topic_Date_Separators_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
