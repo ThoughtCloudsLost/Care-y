@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Closing a case records that the work on it is finished, and reopening it puts it back in the working lists. [[#client-data #permissions]] **What a close asks..." |
+* | "Closing a ticket records that the work on it is finished. Reopening puts the ticket back in the working lists. Both require the Change case status permission..." |
 *
 * @param {Demo_Narrative_Topic_Close_Reopen_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

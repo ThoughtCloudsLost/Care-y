@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An image a client sends by picture message is validated, sealed with the ticket key, and stored as ciphertext. The thumbnail in the thread is drawn from byte..." |
+* | "An image a client sends by picture message is validated, sealed with the ticket key, and stored as ciphertext. The browser decrypts the image before displayi..." |
 *
 * @param {Demo_Narrative_Topic_Media_Images_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
