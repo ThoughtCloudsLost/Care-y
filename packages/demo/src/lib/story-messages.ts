@@ -648,6 +648,10 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_deepdive_how_keys_are_derived_heading(),
   demo_narrative_deepdive_how_keys_are_derived_body: () =>
     m.demo_narrative_deepdive_how_keys_are_derived_body(),
+  demo_narrative_deepdive_org_key_lifecycle_heading: () =>
+    m.demo_narrative_deepdive_org_key_lifecycle_heading(),
+  demo_narrative_deepdive_org_key_lifecycle_body: () =>
+    m.demo_narrative_deepdive_org_key_lifecycle_body(),
   demo_narrative_deepdive_trust_boundary_heading: () =>
     m.demo_narrative_deepdive_trust_boundary_heading(),
   demo_narrative_deepdive_trust_boundary_body: () =>
@@ -656,6 +660,18 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_deepdive_deployment_heading(),
   demo_narrative_deepdive_deployment_body: () =>
     m.demo_narrative_deepdive_deployment_body(),
+  demo_narrative_deepdive_verifying_the_code_heading: () =>
+    m.demo_narrative_deepdive_verifying_the_code_heading(),
+  demo_narrative_deepdive_verifying_the_code_body: () =>
+    m.demo_narrative_deepdive_verifying_the_code_body(),
+  demo_narrative_deepdive_network_heading: () =>
+    m.demo_narrative_deepdive_network_heading(),
+  demo_narrative_deepdive_network_body: () =>
+    m.demo_narrative_deepdive_network_body(),
+  demo_narrative_deepdive_on_the_device_heading: () =>
+    m.demo_narrative_deepdive_on_the_device_heading(),
+  demo_narrative_deepdive_on_the_device_body: () =>
+    m.demo_narrative_deepdive_on_the_device_body(),
   demo_narrative_deepdive_telephony_relay_heading: () =>
     m.demo_narrative_deepdive_telephony_relay_heading(),
   demo_narrative_deepdive_telephony_relay_body: () =>

@@ -1653,10 +1653,10 @@ describe("highlight coverage", () => {
 // -----------------------------------------------------------------------
 
 describe("deep-dive section", () => {
-  it("is registered in SECTIONS with 9 subs", () => {
+  it("is registered in SECTIONS with 13 subs", () => {
     const dd = SECTIONS.find((s) => s.id === "deep-dive");
     expect(dd).toBeDefined();
-    expect(dd!.subs).toHaveLength(9);
+    expect(dd!.subs).toHaveLength(13);
   });
 
   it("has empty routes (no product route)", () => {
@@ -1684,6 +1684,10 @@ describe("deep-dive section", () => {
     expect(slugs).toContain("how-keys-are-derived");
     expect(slugs).toContain("the-trust-boundary");
     expect(slugs).toContain("deployment");
+    expect(slugs).toContain("organization-key-lifecycle");
+    expect(slugs).toContain("verifying-the-code");
+    expect(slugs).toContain("what-the-network-sees");
+    expect(slugs).toContain("on-the-device");
     expect(slugs).toContain("the-telephony-relay");
     expect(slugs).toContain("the-permission-system");
     expect(slugs).toContain("portal-channel-lifecycle");

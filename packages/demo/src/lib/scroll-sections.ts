@@ -1455,6 +1455,12 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_deepdive_how_keys_are_derived_body",
       },
       {
+        slug: "organization-key-lifecycle",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_org_key_lifecycle_heading",
+        bodyKey: "demo_narrative_deepdive_org_key_lifecycle_body",
+      },
+      {
         slug: "the-trust-boundary",
         topic: null,
         headingKey: "demo_narrative_deepdive_trust_boundary_heading",
@@ -1465,6 +1471,24 @@ export const SECTIONS: readonly Section[] = [
         topic: null,
         headingKey: "demo_narrative_deepdive_deployment_heading",
         bodyKey: "demo_narrative_deepdive_deployment_body",
+      },
+      {
+        slug: "verifying-the-code",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_verifying_the_code_heading",
+        bodyKey: "demo_narrative_deepdive_verifying_the_code_body",
+      },
+      {
+        slug: "what-the-network-sees",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_network_heading",
+        bodyKey: "demo_narrative_deepdive_network_body",
+      },
+      {
+        slug: "on-the-device",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_on_the_device_heading",
+        bodyKey: "demo_narrative_deepdive_on_the_device_body",
       },
       {
         slug: "the-telephony-relay",
