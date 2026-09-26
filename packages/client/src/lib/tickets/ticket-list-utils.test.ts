@@ -4,7 +4,6 @@ import {
   isFilterStatus,
   isSortField,
   filterByDisplayStatus,
-  matchesServerFilters,
   reactionsForTicket,
   matchTitles,
   mergeSearchMatches,
@@ -18,8 +17,6 @@ import {
   GRID_CARD_MIN_WIDTH,
   VALID_STATUSES,
   SORT_FIELDS,
-  type TicketForServerFilter,
-  type TicketServerFilterParams,
 } from "./ticket-list-utils.js";
 import type { DisplayStatus } from "./display-status.js";
 
@@ -514,63 +511,30 @@ describe("buildFilterSummary", () => {
 });
 
 describe("buildAssigneeOptions", () => {
-  const labels = {
-    me: (count: string) => `Me (${count})`,
-    unassigned: (count: string) => `Unassigned (${count})`,
-  };
+  const labels = { me: "Me (5)", unassigned: "Unassigned (3)" };
 
-  it("includes 'me' option when currentUserId provided", () => {
-    const result = buildAssigneeOptions(
-      "user-1",
-      { mine: 5, unassigned: 3 },
-      labels,
-    );
-    expect(result).toEqual([
+  it("includes the 'me' option when a current user is known", () => {
+    expect(buildAssigneeOptions("user-1", labels)).toEqual([
       { value: "user-1", label: "Me (5)" },
       { value: "__unassigned__", label: "Unassigned (3)" },
     ]);
   });
 
-  it("omits 'me' option when no currentUserId", () => {
-    const result = buildAssigneeOptions(
-      undefined,
-      { mine: 0, unassigned: 7 },
-      labels,
-    );
-    expect(result).toEqual([
-      { value: "__unassigned__", label: "Unassigned (7)" },
+  it("omits the 'me' option when there is no current user", () => {
+    expect(buildAssigneeOptions(undefined, labels)).toEqual([
+      { value: "__unassigned__", label: "Unassigned (3)" },
     ]);
   });
 
-  it("handles undefined counts", () => {
-    const result = buildAssigneeOptions("user-1", undefined, labels);
-    expect(result[0]?.label).toBe("Me (0)");
-    expect(result[1]?.label).toBe("Unassigned (0)");
-  });
-
-  it("accepts facet assignee shape (mine + unassigned)", () => {
-    // The page passes facets.assignee which has { mine, unassigned }
-    // matching the counts parameter shape.
-    const facetAssignee = { mine: 12, unassigned: 4 };
-    const result = buildAssigneeOptions("user-1", facetAssignee, labels);
-    expect(result[0]?.label).toBe("Me (12)");
-    expect(result[1]?.label).toBe("Unassigned (4)");
-  });
-
-  it("supports label callbacks that ignore the passed count", () => {
-    // The page routes counts through withCount, so the label callback
-    // ignores the pre-stringified count and formats its own.
-    const customLabels = {
-      me: (_count: string) => "Me (42+)",
-      unassigned: (_count: string) => "Unassigned (7)",
-    };
-    const result = buildAssigneeOptions(
-      "user-1",
-      { mine: 0, unassigned: 0 },
-      customLabels,
-    );
-    expect(result[0]?.label).toBe("Me (42+)");
-    expect(result[1]?.label).toBe("Unassigned (7)");
+  it("passes composed labels through untouched", () => {
+    // The caller formats counts, floors included, so anything it hands
+    // over reaches the option verbatim.
+    const result = buildAssigneeOptions("user-1", {
+      me: "Me (20+)",
+      unassigned: "Unassigned",
+    });
+    expect(result[0]?.label).toBe("Me (20+)");
+    expect(result[1]?.label).toBe("Unassigned");
   });
 });
 
@@ -688,226 +652,5 @@ describe("resolveGridColumns", () => {
     expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 2)).toBe(2);
     expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 3)).toBe(3);
     expect(resolveGridColumns(1280)).toBe(4);
-  });
-});
-
-describe("matchesServerFilters", () => {
-  function record(
-    overrides: Partial<TicketForServerFilter> = {},
-  ): TicketForServerFilter {
-    return {
-      id: "t-1",
-      status: "open",
-      onHold: false,
-      followUpCount: 0,
-      queueId: "q-1",
-      priority: "normal",
-      assignedTo: "u-1",
-      createdAt: "2026-06-15T12:00:00.000Z",
-      ...overrides,
-    };
-  }
-
-  function params(
-    overrides: Partial<TicketServerFilterParams> = {},
-  ): TicketServerFilterParams {
-    return { ...overrides };
-  }
-
-  it("keeps all records when no filter dimensions are active", () => {
-    expect(matchesServerFilters(record(), params())).toBe(true);
-  });
-
-  it("excludes a record whose status is not in the active statuses set", () => {
-    expect(
-      matchesServerFilters(
-        record({ status: "open" }),
-        params({ statuses: ["closed"] }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record whose status is in the active statuses set", () => {
-    expect(
-      matchesServerFilters(
-        record({ status: "closed" }),
-        params({ statuses: ["open", "closed"] }),
-      ),
-    ).toBe(true);
-  });
-
-  it("treats an empty statuses array as no filter", () => {
-    expect(
-      matchesServerFilters(
-        record({ status: "open" }),
-        params({ statuses: [] }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes a non-hold record when onHold is true", () => {
-    expect(
-      matchesServerFilters(record({ onHold: false }), params({ onHold: true })),
-    ).toBe(false);
-  });
-
-  it("keeps an on-hold record when onHold is true", () => {
-    expect(
-      matchesServerFilters(record({ onHold: true }), params({ onHold: true })),
-    ).toBe(true);
-  });
-
-  it("excludes a record whose queue is not in the active queue set", () => {
-    expect(
-      matchesServerFilters(
-        record({ queueId: "q-2" }),
-        params({ queueIds: ["q-1", "q-3"] }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record whose queue matches one in the set", () => {
-    expect(
-      matchesServerFilters(
-        record({ queueId: "q-3" }),
-        params({ queueIds: ["q-1", "q-3"] }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes a record whose priority is not in the active priority set", () => {
-    expect(
-      matchesServerFilters(
-        record({ priority: "low" }),
-        params({ priorities: ["high", "urgent"] }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record whose priority matches one in the set", () => {
-    expect(
-      matchesServerFilters(
-        record({ priority: "high" }),
-        params({ priorities: ["high", "urgent"] }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes a record when assignedTo is a string and does not match", () => {
-    expect(
-      matchesServerFilters(
-        record({ assignedTo: "u-1" }),
-        params({ assignedTo: "u-2" }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record when assignedTo matches exactly", () => {
-    expect(
-      matchesServerFilters(
-        record({ assignedTo: "u-2" }),
-        params({ assignedTo: "u-2" }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes an assigned record when assignedTo is null (unassigned-only)", () => {
-    expect(
-      matchesServerFilters(
-        record({ assignedTo: "u-1" }),
-        params({ assignedTo: null }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps an unassigned record when assignedTo is null", () => {
-    expect(
-      matchesServerFilters(
-        record({ assignedTo: null }),
-        params({ assignedTo: null }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes a record created before the createdAfter boundary", () => {
-    expect(
-      matchesServerFilters(
-        record({ createdAt: "2026-05-01T00:00:00.000Z" }),
-        params({ createdAfter: "2026-06-01T00:00:00.000Z" }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record created at or after the createdAfter boundary", () => {
-    expect(
-      matchesServerFilters(
-        record({ createdAt: "2026-06-01T00:00:00.000Z" }),
-        params({ createdAfter: "2026-06-01T00:00:00.000Z" }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes a record created after the createdBefore boundary", () => {
-    expect(
-      matchesServerFilters(
-        record({ createdAt: "2026-08-01T00:00:00.000Z" }),
-        params({ createdBefore: "2026-07-01T00:00:00.000Z" }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record created at or before the createdBefore boundary", () => {
-    expect(
-      matchesServerFilters(
-        record({ createdAt: "2026-07-01T00:00:00.000Z" }),
-        params({ createdBefore: "2026-07-01T00:00:00.000Z" }),
-      ),
-    ).toBe(true);
-  });
-
-  it("accepts Date objects for createdAt (superjson deserialization)", () => {
-    expect(
-      matchesServerFilters(
-        record({ createdAt: new Date("2026-06-15T12:00:00.000Z") }),
-        params({ createdAfter: "2026-06-01T00:00:00.000Z" }),
-      ),
-    ).toBe(true);
-  });
-
-  it("rejects when any single dimension fails (AND composition)", () => {
-    expect(
-      matchesServerFilters(
-        record({ status: "open", onHold: false, queueId: "q-2" }),
-        params({
-          statuses: ["open"],
-          onHold: true,
-          queueIds: ["q-2"],
-        }),
-      ),
-    ).toBe(false);
-  });
-
-  it("passes when all active dimensions match simultaneously", () => {
-    expect(
-      matchesServerFilters(
-        record({
-          status: "open",
-          onHold: true,
-          queueId: "q-1",
-          priority: "high",
-          assignedTo: "u-3",
-          createdAt: "2026-06-15T00:00:00.000Z",
-        }),
-        params({
-          statuses: ["open"],
-          onHold: true,
-          queueIds: ["q-1"],
-          priorities: ["high"],
-          assignedTo: "u-3",
-          createdAfter: "2026-06-01T00:00:00.000Z",
-          createdBefore: "2026-07-01T00:00:00.000Z",
-        }),
-      ),
-    ).toBe(true);
   });
 });

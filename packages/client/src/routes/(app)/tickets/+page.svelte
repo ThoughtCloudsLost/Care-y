@@ -12,6 +12,7 @@
   } from "$lib/tickets/queries.js";
   import {
     computeFacets,
+    matchesFilters,
     type FacetFilterState,
     type FacetContext,
   } from "$lib/tickets/facet-filters.js";
@@ -119,7 +120,6 @@
   import { createReplyFlow } from "$lib/composables/ticket-list/create-reply-flow.svelte.js";
   import {
     filterByDisplayStatus,
-    matchesServerFilters,
     matchTitles,
     type TitleEntry,
     mergeSearchMatches,
@@ -350,19 +350,18 @@
     enabled: unloadedUnreadIds.length > 0,
   }));
 
-  // Pinned rows arrive from outside the filtered list query, so they
-  // must pass the same narrowing the loaded window went through: the
-  // server-param mirror first, then the new/active display post-filter.
-  // Without this, an unread ticket the active filter excludes pins
-  // itself above the filtered list.
+  // Pinned rows arrive from outside the filtered list query, so they must
+  // pass the same narrowing the loaded window went through. They go
+  // through `matchesFilters`, the predicate the facet counts are computed
+  // with, so a row is pinned on exactly the rule that produced the number
+  // beside the filter. Without this, an unread ticket the active filter
+  // excludes pins itself above the filtered list.
   const pinnedRecords = $derived.by(() => {
     if (unloadedUnreadIds.length === 0) return [];
     const loaded = new Set(loadedTicketIds);
-    const unloaded = (pinnedQuery.data ?? []).filter(
-      (t) =>
-        !loaded.has(t.id) && matchesServerFilters(t, filterStore.serverParams),
+    return (pinnedQuery.data ?? []).filter(
+      (t) => !loaded.has(t.id) && matchesFilters(t, facetFilters, facetCtx),
     );
-    return filterByDisplayStatus(unloaded, filterStore.statuses);
   });
 
   const pinnedLoading = $derived(
@@ -1141,10 +1140,9 @@
   );
 
   const assigneeOptions = $derived(
-    buildAssigneeOptions(currentUserId, facets.assignee, {
-      me: (_count) => withCount(m.tickets_filter_me(), facets.assignee.mine),
-      unassigned: (_count) =>
-        withCount(m.tickets_unassigned(), facets.assignee.unassigned),
+    buildAssigneeOptions(currentUserId, {
+      me: withCount(m.tickets_filter_me(), facets.assignee.mine),
+      unassigned: withCount(m.tickets_unassigned(), facets.assignee.unassigned),
     }),
   );
 

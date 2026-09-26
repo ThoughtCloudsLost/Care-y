@@ -57,16 +57,6 @@ export function filterByDisplayStatus<T extends TicketForFilter>(
   );
 }
 
-export interface TicketServerFilterParams {
-  readonly statuses?: readonly string[];
-  readonly onHold?: boolean;
-  readonly queueIds?: readonly string[];
-  readonly priorities?: readonly string[];
-  readonly assignedTo?: string | null;
-  readonly createdAfter?: string;
-  readonly createdBefore?: string;
-}
-
 export interface TicketForServerFilter extends TicketForFilter {
   readonly queueId: string;
   readonly priority: string;
@@ -74,54 +64,11 @@ export interface TicketForServerFilter extends TicketForFilter {
   readonly createdAt: string | Date;
 }
 
-/**
- * Client mirror of the server list query's WHERE clauses: every active
- * param must match (AND-composed, same as the SQL). Pinned unread rows
- * are fetched outside the filtered list query, so they must pass this
- * check before joining the visible list.
- */
-export function matchesServerFilters(
-  t: TicketForServerFilter,
-  p: TicketServerFilterParams,
-): boolean {
-  if (
-    p.statuses !== undefined &&
-    p.statuses.length > 0 &&
-    !p.statuses.includes(t.status)
-  ) {
-    return false;
-  }
-  if (p.onHold !== undefined && t.onHold !== p.onHold) return false;
-  if (
-    p.queueIds !== undefined &&
-    p.queueIds.length > 0 &&
-    !p.queueIds.includes(t.queueId)
-  ) {
-    return false;
-  }
-  if (
-    p.priorities !== undefined &&
-    p.priorities.length > 0 &&
-    !p.priorities.includes(t.priority)
-  ) {
-    return false;
-  }
-  if (p.assignedTo === null && t.assignedTo !== null) return false;
-  if (typeof p.assignedTo === "string" && t.assignedTo !== p.assignedTo) {
-    return false;
-  }
-  const created =
-    typeof t.createdAt === "string"
-      ? Date.parse(t.createdAt)
-      : t.createdAt.getTime();
-  if (p.createdAfter !== undefined && created < Date.parse(p.createdAfter)) {
-    return false;
-  }
-  if (p.createdBefore !== undefined && created > Date.parse(p.createdBefore)) {
-    return false;
-  }
-  return true;
-}
+// A second predicate mirroring the server's WHERE clauses used to live
+// here, applied to pinned rows. It duplicated the queue, priority,
+// assignee and date rules that `matchesFilters` in facet-filters.ts
+// already carries, so the pinned path calls that instead: the rows a
+// filter admits and the count beside it now come from one predicate.
 
 export function reactionsForTicket(
   followUps: readonly { readonly id: string }[] | undefined,
@@ -328,25 +275,24 @@ export function resolveGridColumns(containerWidth: number): number {
 }
 
 export interface AssigneeOptionLabels {
-  readonly me: (count: string) => string;
-  readonly unassigned: (count: string) => string;
+  readonly me: string;
+  readonly unassigned: string;
 }
 
+/**
+ * The two assignee option values, with labels the caller has already
+ * composed. Counts are not threaded through here: the caller formats them
+ * alongside every other pill, so a count argument would only be
+ * stringified and handed straight back.
+ */
 export function buildAssigneeOptions(
   currentUserId: string | undefined,
-  counts: { readonly mine?: number; readonly unassigned?: number } | undefined,
   labels: AssigneeOptionLabels,
 ): { value: string; label: string }[] {
   const opts: { value: string; label: string }[] = [];
   if (currentUserId !== undefined) {
-    opts.push({
-      value: currentUserId,
-      label: labels.me(String(counts?.mine ?? 0)),
-    });
+    opts.push({ value: currentUserId, label: labels.me });
   }
-  opts.push({
-    value: "__unassigned__",
-    label: labels.unassigned(String(counts?.unassigned ?? 0)),
-  });
+  opts.push({ value: "__unassigned__", label: labels.unassigned });
   return opts;
 }
