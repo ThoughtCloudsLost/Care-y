@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An image a client sends by picture message is checked, sealed with the case key and stored as ciphertext, and the thumbnail in the thread is drawn from bytes..." |
+* | "An image a client sends by picture message is validated, sealed with the ticket key, and stored as ciphertext. The thumbnail in the thread is drawn from byte..." |
 *
 * @param {Demo_Narrative_Topic_Media_Images_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A voicemail left on the organization's line becomes an entry on the client's case with an audio the browser opens and the server cannot. [[#telephony #encryp..." |
+* | "A voicemail on the organization's line becomes a follow-up on the client's ticket, with audio the browser opens and the server cannot. [[#telephony #encrypti..." |
 *
 * @param {Demo_Narrative_Topic_Voicemails_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

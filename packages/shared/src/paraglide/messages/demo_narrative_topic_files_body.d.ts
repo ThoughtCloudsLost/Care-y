@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A file attached to a case is sealed in the browser before it is uploaded, and both the bytes and the filename reach the server already closed. [[#encryption ..." |
+* | "A file attached to a ticket is sealed in the browser before upload. Both the bytes and the filename reach the server as ciphertext. [[#encryption #client-dat..." |
 *
 * @param {Demo_Narrative_Topic_Files_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
