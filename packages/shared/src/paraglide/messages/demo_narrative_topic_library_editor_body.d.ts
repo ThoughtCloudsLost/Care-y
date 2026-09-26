@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An article is written as a structured document with headings, lists, quotes, code, tables, links, images and figures, and the browser seals it before it leav..." |
+* | "An article is a structured document that the browser encrypts with the organization key before sending. The editor accepts headings, lists, blockquotes, code..." |
 *
 * @param {Demo_Narrative_Topic_Library_Editor_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
