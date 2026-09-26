@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Organizations rename the words the interface uses for the people in it and the work it holds, in six groups that each carry a singular and a plural, except t..." |
+* | "The terminology editor lets an organization rename the words the interface uses for its people and work. Each group is configured separately for English and ..." |
 *
 * @param {Demo_Narrative_Admin_Terminology_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

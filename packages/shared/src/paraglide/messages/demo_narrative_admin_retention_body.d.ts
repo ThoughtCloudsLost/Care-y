@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Automatic deletion is off when an organization starts, and turning it on means choosing a window between 1 and 3,650 days, with 365 filled in as a starting p..." |
+* | "A new organization starts with automatic deletion off. The user turns it on by choosing a window between 1 and 3,650 days; 365 is filled in as a starting poi..." |
 *
 * @param {Demo_Narrative_Admin_Retention_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

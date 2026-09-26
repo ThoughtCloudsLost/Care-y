@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The organization's logo, its two brand colors and the welcome text a visitor reads are stored in the clear, so a page shown before anyone signs in can displa..." |
+* | "Branding holds the organization's logo, its two brand colors, the welcome text a visitor reads on the intake form, and the support label a client sees on por..." |
 *
 * @param {Demo_Narrative_Admin_Branding_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
