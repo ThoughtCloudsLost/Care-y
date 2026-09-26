@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A submission the user holds no key for still lists, with its arrival time and no answers, so the existence of a response is never hidden from someone who can..." |
+* | "A submission the user cannot decrypt still appears in the list with its arrival time and no answers. A second state reports a submission whose key material i..." |
 *
 * @param {Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

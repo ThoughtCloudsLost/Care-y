@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The viewer lists the submissions one custom form has received, newest first, twenty-five at a time, and decrypts each one in the crypto worker as it arrives...." |
+* | "The viewer lists submissions for one custom form, newest first, twenty-five at a time. Each row arrives encrypted and decrypts in the browser. Viewing requir..." |
 *
 * @param {Demo_Narrative_Admin_Form_Responses_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
