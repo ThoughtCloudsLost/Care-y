@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The provider connection is how an organization reaches a phone network, under one of two arrangements. Bring your own telephony means the organization keeps ..." |
+* | "The provider connection gives an organization a path to the phone network under one of two arrangements. Self-managed telephony means the organization owns a..." |
 *
 * @param {Demo_Narrative_Admin_Telephony_Provider_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

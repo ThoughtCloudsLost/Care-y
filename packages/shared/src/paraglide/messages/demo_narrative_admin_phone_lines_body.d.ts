@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An organization's phone lines are the numbers its provider account holds, each one carrying a number and the provider's own id for it. Two purposes can be as..." |
+* | "Phone lines are the numbers an organization's provider account holds. Each number carries a provider-assigned ID that the server uses to tell them apart. One..." |
 *
 * @param {Demo_Narrative_Admin_Phone_Lines_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

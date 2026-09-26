@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Secure_Link_BodyInputs */
 
 const en_demo_narrative_topic_secure_link_body = /** @type {(inputs: Demo_Narrative_Topic_Secure_Link_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Setting up a secure link creates a private page for one client, reachable only by the exact address the signed-in account hands over. [[#portal #keys]]
+	return /** @type {LocalizedString} */ (`Setting up a secure link creates a private page for one client, reachable only by the exact address the signed-in user hands over. [[#portal #keys]]
 **What does the browser generate and what does the server receive?** The browser draws a 24-byte random seed and derives from it:
 - The channel identifier, used to address the client's page on the server
 - A bearer token that the client's page sends with every server call to prove it holds the address
@@ -23,7 +23,7 @@ The seed stays in the URL fragment, after the \`#\`. Browsers never include the 
 };
 
 const es_demo_narrative_topic_secure_link_body = /** @type {(inputs: Demo_Narrative_Topic_Secure_Link_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configurar un enlace seguro crea una página privada para un cliente, accesible solo con la dirección exacta que la cuenta que ha iniciado sesión entrega. [[#portal #keys]]
+	return /** @type {LocalizedString} */ (`Configurar un enlace seguro crea una página privada para un cliente, accesible solo con la dirección exacta que la persona usuaria entrega. [[#portal #keys]]
 **¿Qué genera el navegador y qué recibe el servidor?** El navegador genera una semilla aleatoria de 24 bytes y deriva de ella:
 - El identificador de canal, usado para dirigirse a la página del cliente en el servidor
 - Un token portador que la página del cliente envía con cada llamada al servidor para demostrar que posee la dirección
@@ -40,8 +40,8 @@ La semilla permanece en el fragmento de la URL, después del \`#\`. Los navegado
 };
 
 const en_xa2_demo_narrative_topic_secure_link_body = /** @type {(inputs: Demo_Narrative_Topic_Secure_Link_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Sèttìng ùp à sècùrè lìnk crèàtès à prìvàtè pàgè fòr ònè clìènt, rèàchàblè ònly by thè èxàct àddrèss thè sìgnèd-ìn àccòùnt hànds òvèr. [[#pòrtàl #kèys]]
- ••••••••••••••••••••••••••••••••••••••••••••••**Whàt dòès thè bròwsèr gènèràtè ànd whàt dòès thè sèrvèr rècèìvè? ••••••••••••••••••••** Thè bròwsèr dràws à 24-bytè ràndòm sèèd ànd dèrìvès fròm ìt:
+	return /** @type {LocalizedString} */ (`⟦Sèttìng ùp à sècùrè lìnk crèàtès à prìvàtè pàgè fòr ònè clìènt, rèàchàblè ònly by thè èxàct àddrèss thè sìgnèd-ìn ùsèr hànds òvèr. [[#pòrtàl #kèys]]
+ •••••••••••••••••••••••••••••••••••••••••••••**Whàt dòès thè bròwsèr gènèràtè ànd whàt dòès thè sèrvèr rècèìvè? ••••••••••••••••••••** Thè bròwsèr dràws à 24-bytè ràndòm sèèd ànd dèrìvès fròm ìt:
 - Thè chànnèl ìdèntìfìèr, ùsèd tò àddrèss thè clìènt's pàgè òn thè sèrvèr
 - À bèàrèr tòkèn thàt thè clìènt's pàgè sènds wìth èvèry sèrvèr càll tò pròvè ìt hòlds thè àddrèss
 - À sàlt fòr thè kèy-dèrìvàtìòn stèp
@@ -59,7 +59,7 @@ Thè sèèd stàys ìn thè ÙRL fràgmènt, àftèr thè \`#\`. Bròwsèrs nèv
 /**
 * | output |
 * | --- |
-* | "Setting up a secure link creates a private page for one client, reachable only by the exact address the signed-in account hands over. [[#portal #keys]] **Wha..." |
+* | "Setting up a secure link creates a private page for one client, reachable only by the exact address the signed-in user hands over. [[#portal #keys]] **What d..." |
 *
 * @param {Demo_Narrative_Topic_Secure_Link_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

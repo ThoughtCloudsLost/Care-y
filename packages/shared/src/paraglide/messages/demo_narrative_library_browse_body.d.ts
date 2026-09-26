@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Any account holding the View knowledge base permission can read every article the organization keeps, with no per-article access restriction. An article has ..." |
+* | "Any user holding the View knowledge base permission can read every article the organization keeps, with no per-article access restriction. An article has no ..." |
 *
 * @param {Demo_Narrative_Library_Browse_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
