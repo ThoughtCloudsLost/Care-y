@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An article can carry images placed inside its text and files hung off it for download, and both are encrypted in the browser before upload. Images, PDFs and ..." |
+* | "Articles accept file attachments that the browser encrypts with the organization key before upload. Accepted types are images (JPEG, PNG, GIF, WebP), PDFs an..." |
 *
 * @param {Demo_Narrative_Library_Attachments_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

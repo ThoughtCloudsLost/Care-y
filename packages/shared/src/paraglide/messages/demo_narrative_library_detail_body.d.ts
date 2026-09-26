@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Opening an article fetches the one thing the list does not carry, its encrypted body, and decrypts it in the crypto worker before rendering it through a sani..." |
+* | "The browser fetches the article's encrypted body from the server, decrypts it with the organization key, and strips anything that could run as code before re..." |
 *
 * @param {Demo_Narrative_Library_Detail_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

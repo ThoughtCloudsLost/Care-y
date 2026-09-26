@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An account can mark one article as helpful or unhelpful once, change that mark, or take it away, and doing so takes no more permission than reading the artic..." |
+* | "Any account with the View knowledge base permission can mark an article as helpful or unhelpful, change that mark, or remove it. Each account gets one vote p..." |
 *
 * @param {Demo_Narrative_Topic_Library_Vote_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
