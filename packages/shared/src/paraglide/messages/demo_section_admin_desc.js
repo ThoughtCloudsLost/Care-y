@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_DescInputs */
 
 const en_demo_section_admin_desc = /** @type {(inputs: Demo_Section_Admin_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The landing page for organization management. Each destination requires a specific permission, and the hub shows only the destinations the current permission set includes. Since the permission matrix is configurable, two users with the same role title may see different destinations. Live counts on each destination double as health signals, switching to a warning style when a threshold is crossed.`)
+	return /** @type {LocalizedString} */ (`The admin hub holds the organization's settings and reporting pages, grouped into [People](#admin/hub-people), [Communications](#admin/hub-comms), [Organization](#admin/hub-org) and [Analytics](#admin/hub-analytics). Each destination requires its own permission, and an account that lacks a permission does not see that destination. The permission matrix is configurable per organization, so the set of destinations two roles see can differ. An account holding the Manage roles permission also receives a status figure beside each destination; an account admitted by another permission alone reaches its destinations without those figures. [The permission system](#deep-dive/the-permission-system) covers where permissions come from.`)
 };
 
 const es_demo_section_admin_desc = /** @type {(inputs: Demo_Section_Admin_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La página de inicio para la gestión de la organización. Cada destino requiere un permiso específico, y el centro muestra solo los destinos que el conjunto de permisos actual incluye. Como la matriz de permisos es configurable, dos personas con el mismo título de rol pueden ver destinos diferentes. Los conteos en vivo de cada destino funcionan como señales de salud, cambiando a estilo de advertencia cuando se cruza un umbral.`)
+	return /** @type {LocalizedString} */ (`Administración reúne las páginas de configuración e informes de la organización, agrupadas en [Personas](#admin/hub-people), [Comunicaciones](#admin/hub-comms), [Organización](#admin/hub-org) y [Analíticas](#admin/hub-analytics). Cada destino requiere su propio permiso, y una cuenta que no lo posee no ve ese destino. La matriz de permisos es configurable por organización, así que el conjunto de destinos que ven dos roles puede diferir. Una cuenta con el permiso Gestionar roles también recibe una cifra de estado junto a cada destino; una cuenta admitida por otro permiso solo llega a sus destinos sin esas cifras. [El sistema de permisos](#deep-dive/the-permission-system) trata de dónde salen los permisos.`)
 };
 
 const en_xa2_demo_section_admin_desc = /** @type {(inputs: Demo_Section_Admin_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Thè làndìng pàgè fòr òrgànìzàtìòn mànàgèmènt. Èàch dèstìnàtìòn rèqùìrès à spècìfìc pèrmìssìòn, ànd thè hùb shòws ònly thè dèstìnàtìòns thè cùrrènt pèrmìssìòn sèt ìnclùdès. Sìncè thè pèrmìssìòn màtrìx ìs cònfìgùràblè, twò ùsèrs wìth thè sàmè ròlè tìtlè mày sèè dìffèrènt dèstìnàtìòns. Lìvè còùnts òn èàch dèstìnàtìòn dòùblè às hèàlth sìgnàls, swìtchìng tò à wàrnìng stylè whèn à thrèshòld ìs cròssèd. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Thè àdmìn hùb hòlds thè òrgànìzàtìòn's sèttìngs ànd rèpòrtìng pàgès, gròùpèd ìntò [Pèòplè](#àdmìn/hùb-pèòplè), [Còmmùnìcàtìòns](#àdmìn/hùb-còmms), [Òrgànìzàtìòn](#àdmìn/hùb-òrg) ànd [Ànàlytìcs](#àdmìn/hùb-ànàlytìcs). Èàch dèstìnàtìòn rèqùìrès ìts òwn pèrmìssìòn, ànd àn àccòùnt thàt làcks à pèrmìssìòn dòès nòt sèè thàt dèstìnàtìòn. Thè pèrmìssìòn màtrìx ìs cònfìgùràblè pèr òrgànìzàtìòn, sò thè sèt òf dèstìnàtìòns twò ròlès sèè càn dìffèr. Àn àccòùnt hòldìng thè Mànàgè ròlès pèrmìssìòn àlsò rècèìvès à stàtùs fìgùrè bèsìdè èàch dèstìnàtìòn; àn àccòùnt àdmìttèd by ànòthèr pèrmìssìòn àlònè rèàchès ìts dèstìnàtìòns wìthòùt thòsè fìgùrès. [Thè pèrmìssìòn systèm](#dèèp-dìvè/thè-pèrmìssìòn-systèm) còvèrs whèrè pèrmìssìòns còmè fròm. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The landing page for organization management. Each destination requires a specific permission, and the hub shows only the destinations the current permission..." |
+* | "The admin hub holds the organization's settings and reporting pages, grouped into [People](#admin/hub-people), [Communications](#admin/hub-comms), [Organizat..." |
 *
 * @param {Demo_Section_Admin_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

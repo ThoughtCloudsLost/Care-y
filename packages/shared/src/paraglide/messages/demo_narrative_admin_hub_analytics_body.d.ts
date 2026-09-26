@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The analytics group holds five destinations, the call log, the audit log and three reporting dashboards that are in development. [[#permissions #metadata]] *..." |
+* | "The analytics group collects the reporting and logging destinations under separate permission gates. [[#permissions #metadata]] - The Impact, Operations, and..." |
 *
 * @param {Demo_Narrative_Admin_Hub_Analytics_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

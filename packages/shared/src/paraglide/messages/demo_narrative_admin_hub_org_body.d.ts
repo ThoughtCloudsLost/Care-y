@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The organization group holds seven destinations that shape the whole workspace rather than any one case, from the organization's name to its retention policy..." |
+* | "The organization group collects the settings that apply to the whole workspace, not to any single ticket, from naming and branding to retention and key custo..." |
 *
 * @param {Demo_Narrative_Admin_Hub_Org_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

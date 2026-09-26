@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The landing page for organization management. Each destination requires a specific permission, and the hub shows only the destinations the current permission..." |
+* | "The admin hub holds the organization's settings and reporting pages, grouped into [People](#admin/hub-people), [Communications](#admin/hub-comms), [Organizat..." |
 *
 * @param {Demo_Section_Admin_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

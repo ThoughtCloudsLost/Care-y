@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The people group holds three destinations, the user roster, queue configuration and the client list, and each one appears for an account holding its own perm..." |
+* | "The group gives access to the user roster, queue management and the client list. The roster requires Manage users, queue management requires Manage queues, a..." |
 *
 * @param {Demo_Narrative_Admin_Hub_People_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The communications group configures how the organization reaches a client and how an inbound message is routed, across six destinations behind five different..." |
+* | "The communications group configures outbound channels, inbound routing, and reusable content across these destinations: [[#permissions #telephony]] - Phone l..." |
 *
 * @param {Demo_Narrative_Admin_Hub_Comms_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
