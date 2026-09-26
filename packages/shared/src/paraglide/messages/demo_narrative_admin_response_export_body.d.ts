@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Exporting builds a CSV from responses the browser has already decrypted and hands it straight to the download, so no plaintext travels and the server contrib..." |
+* | "The browser assembles the CSV from responses it has already decrypted. The server sends nothing new for the export, and no plaintext leaves the device until ..." |
 *
 * @param {Demo_Narrative_Admin_Response_Export_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

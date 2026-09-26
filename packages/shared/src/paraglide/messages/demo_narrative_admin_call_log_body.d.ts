@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The call history lists every call and voicemail recorded against a ticket, newest first, fifty at a time, and carries no phone number at any point. Each row ..." |
+* | "Every call and voicemail written to a ticket appears in the call history, sorted newest first and paged fifty at a time. The call history holds and shows no ..." |
 *
 * @param {Demo_Narrative_Admin_Call_Log_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

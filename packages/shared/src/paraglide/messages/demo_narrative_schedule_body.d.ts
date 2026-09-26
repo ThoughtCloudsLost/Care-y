@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Shift scheduling is in development, and the page that will hold the calendar carries a placeholder until it lands. The planned scope is shifts that repeat on..." |
+* | "The schedule page defines recurring shifts with start and end times and assigns volunteers to cover them. A calendar shows coverage by day, week, or month. E..." |
 *
 * @param {Demo_Narrative_Schedule_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

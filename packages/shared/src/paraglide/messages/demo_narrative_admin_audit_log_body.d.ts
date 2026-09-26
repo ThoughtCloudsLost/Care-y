@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The audit log is the organization's record of who did what. It covers ticket lifecycle, client records, queues, roles and permissions, intake forms, portal c..." |
+* | "The audit log records administrative and lifecycle actions taken in the organization. Entries are only ever added. The service has no update path and no dele..." |
 *
 * @param {Demo_Narrative_Admin_Audit_Log_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
