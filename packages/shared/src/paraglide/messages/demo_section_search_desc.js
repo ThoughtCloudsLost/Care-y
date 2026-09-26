@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Search_DescInputs */
 
 const en_demo_section_search_desc = /** @type {(inputs: Demo_Section_Search_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Search finds results across tickets, knowledge base articles, and volunteers from a single interface. All text matching happens in the browser against decrypted content. No search terms are sent to the server.`)
+	return /** @type {LocalizedString} */ (`Global search runs a single query against tickets and knowledge base articles from any page. Matching happens in the browser against content the browser has already decrypted; no search term leaves the device. The server answers requests for encrypted data it cannot read and never learns what was typed or which records matched. [How global search works](#search/how-it-works) explains how queries run without sending a word to the server and what traffic patterns remain visible.`)
 };
 
 const es_demo_section_search_desc = /** @type {(inputs: Demo_Section_Search_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La búsqueda encuentra resultados en tickets, artículos de la base de conocimiento y voluntarios desde una única interfaz. Toda la comparación de texto ocurre en el navegador contra contenido descifrado. Ningún término de búsqueda se envía al servidor.`)
+	return /** @type {LocalizedString} */ (`La búsqueda global ejecuta una sola consulta contra tickets y artículos de la base de conocimiento desde cualquier página. La comparación ocurre en el navegador contra contenido que el navegador ya descifró; ningún término de búsqueda sale del dispositivo. El servidor responde con datos cifrados que no puede leer y nunca conoce lo que se escribió ni qué registros coincidieron. [Cómo funciona la búsqueda global](#search/how-it-works) explica cómo las consultas se ejecutan sin enviar una palabra al servidor y qué patrones de tráfico quedan visibles.`)
 };
 
 const en_xa2_demo_section_search_desc = /** @type {(inputs: Demo_Section_Search_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Sèàrch fìnds rèsùlts àcròss tìckèts, knòwlèdgè bàsè àrtìclès, ànd vòlùntèèrs fròm à sìnglè ìntèrfàcè. Àll tèxt màtchìng hàppèns ìn thè bròwsèr àgàìnst dècryptèd còntènt. Nò sèàrch tèrms àrè sènt tò thè sèrvèr. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Glòbàl sèàrch rùns à sìnglè qùèry àgàìnst tìckèts ànd knòwlèdgè bàsè àrtìclès fròm àny pàgè. Màtchìng hàppèns ìn thè bròwsèr àgàìnst còntènt thè bròwsèr hàs àlrèàdy dècryptèd; nò sèàrch tèrm lèàvès thè dèvìcè. Thè sèrvèr ànswèrs rèqùèsts fòr èncryptèd dàtà ìt cànnòt rèàd ànd nèvèr lèàrns whàt wàs typèd òr whìch rècòrds màtchèd. [Hòw glòbàl sèàrch wòrks](#sèàrch/hòw-ìt-wòrks) èxplàìns hòw qùèrìès rùn wìthòùt sèndìng à wòrd tò thè sèrvèr ànd whàt tràffìc pàttèrns rèmàìn vìsìblè. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Search finds results across tickets, knowledge base articles, and volunteers from a single interface. All text matching happens in the browser against decryp..." |
+* | "Global search runs a single query against tickets and knowledge base articles from any page. Matching happens in the browser against content the browser has ..." |
 *
 * @param {Demo_Section_Search_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

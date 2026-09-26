@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "One query runs against cases, knowledge base articles and, for an account permitted to manage people, other accounts. While a case is open it also runs again..." |
+* | "One query runs against cases, knowledge base articles and, for an account holding the Manage users permission, other accounts. While a case is open the query..." |
 *
 * @param {Demo_Narrative_Search_Entities_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

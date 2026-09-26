@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Search finds results across tickets, knowledge base articles, and volunteers from a single interface. All text matching happens in the browser against decryp..." |
+* | "Global search runs a single query against tickets and knowledge base articles from any page. Matching happens in the browser against content the browser has ..." |
 *
 * @param {Demo_Section_Search_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

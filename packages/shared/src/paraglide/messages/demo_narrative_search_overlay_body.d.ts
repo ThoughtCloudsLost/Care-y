@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Global search is an overlay. Before the user enters any search term it shows two lists: the searches the user has made since signing in and recently opened c..." |
+* | "Global search opens as an overlay and shows recent searches and recently viewed cases and articles before the account enters a search term. Results appear af..." |
 *
 * @param {Demo_Narrative_Search_Overlay_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
