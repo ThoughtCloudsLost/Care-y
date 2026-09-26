@@ -35,8 +35,12 @@
     getTicketDecryptCache,
     getOrgDecryptCache,
     getCurrentUserId,
+    getCurrentPermissions,
     getPreviewLoader,
   } from "$lib/crypto/context.js";
+  import { canCall } from "$lib/auth/procedure-gates.js";
+  import { allowedQuickActions } from "$lib/tickets/quick-action-gates.js";
+  import { getErrorMessage } from "$lib/components/query-error-messages.js";
   import {
     getScrollContainer,
     getNavbarOverrideCtx,
@@ -140,6 +144,11 @@
   const orgCache = getOrgDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
+  const permissionsGetter = getCurrentPermissions();
+  const permissions = $derived(permissionsGetter());
+  const quickActions = $derived(allowedQuickActions(permissions));
+  // Bulk priority and queue changes go through the same procedure as hold.
+  const canBulkUpdate = $derived(canCall(permissions, "tickets.update"));
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
   const previewLoader = getPreviewLoader();
@@ -475,6 +484,9 @@
       onfullopen: handleTicketFullOpen,
       onselect: (id: string) => multiSelect.toggleSelection(id),
       onaction: handleAction,
+      get allowedActions() {
+        return quickActions;
+      },
       onencryptedhelp: showEncryptedHelp,
     }),
   );
@@ -855,7 +867,7 @@
       });
     } catch (err: unknown) {
       console.error("[tickets] take failed", err);
-      toastStore.show(m.error_generic(), 3000);
+      toastStore.show(getErrorMessage(err), 3000);
     }
   }
 
@@ -1362,50 +1374,54 @@
     ariaLabel={m.tickets_selected({ count: multiSelect.selectedIds.size })}
   >
     {#snippet actions()}
-      <Button
-        tonal
-        rounded
-        small
-        inline
-        class="bulk-action-btn"
-        onclick={handleBulkAssign}
-      >
-        <UserPlus size={16} aria-hidden="true" />
-        {m.tickets_action_assign()}
-      </Button>
-      <Button
-        tonal
-        rounded
-        small
-        inline
-        class="bulk-action-btn"
-        onclick={() => void bulkActions.handleBulkHold()}
-      >
-        <Pause size={16} aria-hidden="true" />
-        {m.tickets_action_hold()}
-      </Button>
-      <Button
-        tonal
-        rounded
-        small
-        inline
-        class="bulk-action-btn"
-        onclick={handleBulkPriority}
-      >
-        <ChevronsUp size={16} aria-hidden="true" />
-        {m.ticket_bulk_priority()}
-      </Button>
-      <Button
-        tonal
-        rounded
-        small
-        inline
-        class="bulk-action-btn"
-        onclick={handleBulkQueue}
-      >
-        <FolderInput size={16} aria-hidden="true" />
-        {m.ticket_bulk_queue(withTerms())}
-      </Button>
+      {#if quickActions.has("assign")}
+        <Button
+          tonal
+          rounded
+          small
+          inline
+          class="bulk-action-btn"
+          onclick={handleBulkAssign}
+        >
+          <UserPlus size={16} aria-hidden="true" />
+          {m.tickets_action_assign()}
+        </Button>
+      {/if}
+      {#if canBulkUpdate}
+        <Button
+          tonal
+          rounded
+          small
+          inline
+          class="bulk-action-btn"
+          onclick={() => void bulkActions.handleBulkHold()}
+        >
+          <Pause size={16} aria-hidden="true" />
+          {m.tickets_action_hold()}
+        </Button>
+        <Button
+          tonal
+          rounded
+          small
+          inline
+          class="bulk-action-btn"
+          onclick={handleBulkPriority}
+        >
+          <ChevronsUp size={16} aria-hidden="true" />
+          {m.ticket_bulk_priority()}
+        </Button>
+        <Button
+          tonal
+          rounded
+          small
+          inline
+          class="bulk-action-btn"
+          onclick={handleBulkQueue}
+        >
+          <FolderInput size={16} aria-hidden="true" />
+          {m.ticket_bulk_queue(withTerms())}
+        </Button>
+      {/if}
     {/snippet}
   </BulkActionBar>
 {/snippet}
@@ -1603,6 +1619,7 @@
                     ticketId={item.id}
                     disabled={multiSelect.active}
                     onaction={handleAction}
+                    allowedActions={quickActions}
                     onlongpress={(id: string) =>
                       multiSelect.handleLongPress(id)}
                   >

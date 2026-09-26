@@ -62,6 +62,7 @@
     onfullopen,
     onselect,
     onaction,
+    allowedActions = new Set<TicketQuickAction>(),
     onencryptedhelp,
     loading = false,
     searchTerm = null,
@@ -72,6 +73,21 @@
   const isUnassigned = $derived(assignedName === null && !assignedIsSelf);
   const isUnread = $derived(unreadCount > 0);
   const isClosed = $derived(displayStatus === "closed");
+
+  // Each quick action renders only when the account may use it; the hold
+  // and owner buttons check the action they would fire.
+  const holdAction = $derived<TicketQuickAction>(
+    displayStatus === "hold" ? "unhold" : "hold",
+  );
+  const ownerAction = $derived<TicketQuickAction>(
+    isUnassigned ? "take" : "assign",
+  );
+  const showReply = $derived(allowedActions.has("reply"));
+  const showCall = $derived(allowedActions.has("call"));
+  const showHold = $derived(allowedActions.has(holdAction));
+  const showOwner = $derived(allowedActions.has(ownerAction));
+  const showContactGroup = $derived(showReply || showCall);
+  const showCaseGroup = $derived(showHold || showOwner);
 
   const activityDate = $derived(lastActivityAt ?? createdAt);
   const relativeTime = $derived(formatRelativeTime(activityDate));
@@ -294,53 +310,58 @@
       <div class="card-meta">
         {@render metaRow()}
       </div>
-      <div class="actions" data-testid="card-actions">
-        <span class="act-group">
-          <button
-            type="button"
-            class="act"
-            onclick={(e) => fireAction(e, "reply")}
-          >
-            {m.tickets_action_reply()}
-          </button>
-          <button
-            type="button"
-            class="act"
-            onclick={(e) => fireAction(e, "call")}
-          >
-            {m.tickets_action_call()}
-          </button>
-        </span>
-        <span class="act-group">
-          <button
-            type="button"
-            class="act act-quiet"
-            onclick={(e) =>
-              fireAction(e, displayStatus === "hold" ? "unhold" : "hold")}
-          >
-            {displayStatus === "hold"
-              ? m.tickets_action_unhold()
-              : m.tickets_action_hold()}
-          </button>
-          {#if isUnassigned}
-            <button
-              type="button"
-              class="act"
-              onclick={(e) => fireAction(e, "take")}
-            >
-              {m.tickets_action_take()}
-            </button>
-          {:else}
-            <button
-              type="button"
-              class="act"
-              onclick={(e) => fireAction(e, "assign")}
-            >
-              {m.tickets_action_assign()}
-            </button>
+      {#if showContactGroup || showCaseGroup}
+        <div class="actions" data-testid="card-actions">
+          {#if showContactGroup}
+            <span class="act-group">
+              {#if showReply}
+                <button
+                  type="button"
+                  class="act"
+                  onclick={(e) => fireAction(e, "reply")}
+                >
+                  {m.tickets_action_reply()}
+                </button>
+              {/if}
+              {#if showCall}
+                <button
+                  type="button"
+                  class="act"
+                  onclick={(e) => fireAction(e, "call")}
+                >
+                  {m.tickets_action_call()}
+                </button>
+              {/if}
+            </span>
           {/if}
-        </span>
-      </div>
+          {#if showCaseGroup}
+            <span class="act-group act-group-end">
+              {#if showHold}
+                <button
+                  type="button"
+                  class="act act-quiet"
+                  onclick={(e) => fireAction(e, holdAction)}
+                >
+                  {displayStatus === "hold"
+                    ? m.tickets_action_unhold()
+                    : m.tickets_action_hold()}
+                </button>
+              {/if}
+              {#if showOwner}
+                <button
+                  type="button"
+                  class="act"
+                  onclick={(e) => fireAction(e, ownerAction)}
+                >
+                  {isUnassigned
+                    ? m.tickets_action_take()
+                    : m.tickets_action_assign()}
+                </button>
+              {/if}
+            </span>
+          {/if}
+        </div>
+      {/if}
     {:else}
       <div class="row-top">
         {#if multiSelectActive}
@@ -599,6 +620,11 @@
   .act-group {
     display: flex;
     gap: 18px;
+  }
+
+  /* Keeps the case group on the right when the contact group is hidden. */
+  .act-group-end {
+    margin-left: auto;
   }
 
   .act {

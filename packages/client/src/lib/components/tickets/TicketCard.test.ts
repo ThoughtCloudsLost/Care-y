@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import TicketCard from "./TicketCard.svelte";
+import type { TicketQuickAction } from "./ticket-types.js";
 import type * as ContextNS from "$lib/shell/context.js";
 import type * as SvelteQueryNS from "@tanstack/svelte-query";
 import type * as ContextNS2 from "$lib/crypto/context.js";
@@ -124,7 +125,20 @@ describe("TicketCard", () => {
     onselect,
   };
 
-  const asCards = { ...defaults, viewMode: "cards" as const };
+  const ALL_ACTIONS: ReadonlySet<TicketQuickAction> = new Set([
+    "reply",
+    "call",
+    "hold",
+    "unhold",
+    "assign",
+    "take",
+  ]);
+
+  const asCards = {
+    ...defaults,
+    viewMode: "cards" as const,
+    allowedActions: ALL_ACTIONS,
+  };
   const asGrid = { ...defaults, viewMode: "grid" as const };
 
   afterEach(() => {
@@ -469,6 +483,85 @@ describe("TicketCard", () => {
     expect(unholdBtn).toBeDefined();
     if (unholdBtn) await fireEvent.click(unholdBtn);
     expect(onaction).toHaveBeenCalledWith("t-001", "unhold");
+  });
+
+  // --- Quick actions: permission gating ---
+
+  function withActions(
+    ...actions: TicketQuickAction[]
+  ): ReadonlySet<TicketQuickAction> {
+    return new Set(actions);
+  }
+
+  it("renders no action row when no allowed actions are passed", () => {
+    const { container } = render(TicketCard, {
+      props: { ...defaults, viewMode: "cards" as const },
+    });
+    expect(container.querySelector("[data-testid='card-actions']")).toBeNull();
+  });
+
+  it("renders no action row when the allowed set is empty", () => {
+    const { container } = render(TicketCard, {
+      props: { ...asCards, allowedActions: withActions() },
+    });
+    expect(container.querySelector("[data-testid='card-actions']")).toBeNull();
+  });
+
+  it("renders only the allowed actions", () => {
+    const { container } = render(TicketCard, {
+      props: { ...asCards, allowedActions: withActions("reply", "take") },
+    });
+    expect(actionButtons(container)).toEqual(["Reply", "Take"]);
+  });
+
+  it("omits the contact group when reply and call are not allowed", () => {
+    const { container } = render(TicketCard, {
+      props: { ...asCards, allowedActions: withActions("hold", "take") },
+    });
+    expect(container.querySelectorAll(".act-group")).toHaveLength(1);
+    expect(actionButtons(container)).toEqual(["Hold", "Take"]);
+  });
+
+  it("omits the case group when hold and the owner action are not allowed", () => {
+    const { container } = render(TicketCard, {
+      props: { ...asCards, allowedActions: withActions("reply", "call") },
+    });
+    expect(container.querySelectorAll(".act-group")).toHaveLength(1);
+    expect(actionButtons(container)).toEqual(["Reply", "Call"]);
+  });
+
+  it("gates the hold button on the action it would fire", () => {
+    const { container: held } = render(TicketCard, {
+      props: {
+        ...asCards,
+        displayStatus: "hold" as const,
+        allowedActions: withActions("hold"),
+      },
+    });
+    expect(held.querySelector("[data-testid='card-actions']")).toBeNull();
+    cleanup();
+
+    const { container: active } = render(TicketCard, {
+      props: { ...asCards, allowedActions: withActions("hold") },
+    });
+    expect(actionButtons(active)).toEqual(["Hold"]);
+  });
+
+  it("gates take and assign each on its own action", () => {
+    const { container: unassigned } = render(TicketCard, {
+      props: { ...asCards, allowedActions: withActions("assign") },
+    });
+    expect(unassigned.querySelector("[data-testid='card-actions']")).toBeNull();
+    cleanup();
+
+    const { container: assigned } = render(TicketCard, {
+      props: {
+        ...asCards,
+        assignedName: "Jordan",
+        allowedActions: withActions("assign"),
+      },
+    });
+    expect(actionButtons(assigned)).toEqual(["Assign"]);
   });
 
   // --- Open interaction ---

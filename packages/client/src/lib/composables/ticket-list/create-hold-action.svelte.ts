@@ -3,6 +3,7 @@ import { SvelteSet } from "svelte/reactivity";
 import { ticketsKeys } from "$lib/query/keys.js";
 import { optimisticMutation } from "$lib/utils/optimistic-mutation.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
+import { getErrorMessage } from "$lib/components/query-error-messages.js";
 import { haptic } from "$lib/utils/haptic.js";
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
@@ -70,8 +71,8 @@ export function createHoldAction(deps: HoldActionDeps): HoldActionState {
             queryKey: ticketsKeys.facetIndex(),
           });
         },
-        onError: () => {
-          toastStore.show(m.error_generic(), 3000);
+        onError: (err) => {
+          toastStore.show(getErrorMessage(err), 3000);
         },
       });
     } finally {

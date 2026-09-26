@@ -49,6 +49,8 @@
   } from "$lib/crypto/context.js";
   import type { ReactionSummary } from "@care-y/shared";
   import { canCall, canUseInline } from "$lib/auth/procedure-gates.js";
+  import { allowedQuickActions } from "$lib/tickets/quick-action-gates.js";
+  import { getErrorMessage } from "$lib/components/query-error-messages.js";
   import {
     decryptQueueAppearance,
     type QueueAppearance,
@@ -93,6 +95,7 @@
   const currentUserId = $derived(currentUserIdGetter());
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
+  const quickActions = $derived(allowedQuickActions(permissions));
   const navbarCtx = getNavbarOverrideCtx();
   const sectionRailCtx = getSectionRailCtx();
   const queryClient = useQueryClient();
@@ -416,19 +419,38 @@
 
   // --- Meta-section derived props (unchanged; owned by their sections) ---
 
+  // Only ticket rows carry an alias; outside-queue rows name the queue alone
+  // and org rows carry no ciphertext at all.
   const activityProps = $derived(
-    (activityQuery.data ?? []).map((a) => ({
-      ...a,
-      clientAlias: orgCache.decrypt(
-        `client-alias:${a.clientId}`,
-        a.encryptedClientAlias,
-        { table: "clients", id: a.clientId },
-      ),
-      queueName: orgCache.decrypt(`queue:${a.queueId}`, a.encryptedQueueName, {
-        table: "queues",
-        id: a.queueId,
-      }),
-    })),
+    (activityQuery.data?.entries ?? []).map((a) => {
+      switch (a.kind) {
+        case "ticket":
+          return {
+            ...a,
+            clientAlias: orgCache.decrypt(
+              `client-alias:${a.clientId}`,
+              a.encryptedClientAlias,
+              { table: "clients", id: a.clientId },
+            ),
+            queueName: orgCache.decrypt(
+              `queue:${a.queueId}`,
+              a.encryptedQueueName,
+              { table: "queues", id: a.queueId },
+            ),
+          };
+        case "ticket_outside_queues":
+          return {
+            ...a,
+            queueName: orgCache.decrypt(
+              `queue:${a.queueId}`,
+              a.encryptedQueueName,
+              { table: "queues", id: a.queueId },
+            ),
+          };
+        case "org":
+          return a;
+      }
+    }),
   );
 
   const kbProps = $derived(
@@ -512,6 +534,7 @@
       previewReactionsMap,
       ontap: handleTicketTap,
       onaction: handleAction,
+      allowedActions: quickActions,
       onencryptedhelp: showEncryptedHelp,
     }),
   );
@@ -589,7 +612,7 @@
       void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
     } catch (err: unknown) {
       console.error("[dashboard] take failed", err);
-      toastStore.show(m.error_generic(), 3000);
+      toastStore.show(getErrorMessage(err), 3000);
     }
   }
 
@@ -700,6 +723,7 @@
   <div id="section-activity" class="scroll-target" data-column="left">
     <ActivitySection
       activity={activityProps}
+      lastHourCount={activityQuery.data?.lastHourCount ?? 0}
       loading={activityQuery.isLoading}
       expanded={!collapsedSections.has("activity")}
       ontoggle={() => toggleSection("activity")}

@@ -1,7 +1,7 @@
 /**
  * Permission gate helpers for client-side visibility checks.
  *
- * Three sources, checked in this order:
+ * Four sources, checked in this order:
  *
  *  1. Procedure gate (canCall): the control fronts a single tRPC
  *     procedure. The PROCEDURE_PERMISSIONS manifest is test-locked to
@@ -17,15 +17,22 @@
  *     INLINE_CHECKED_CAPABILITIES map is test-locked to the server's
  *     INLINE_CHECKED list.
  *
- *  4. Anything else needs explicit user approval and stays as a raw
+ *  4. Client channel (canUseChannel): the control reaches a client over
+ *     the portal, SMS, email or a call. The server builds its relay and
+ *     outbound follow-up gates from CLIENT_CHANNEL_PERMISSIONS, and a
+ *     server test asserts every key in it is enforced.
+ *
+ *  5. Anything else needs explicit user approval and stays as a raw
  *     Permission literal in the ESLint allowlist.
  */
 
 import {
   PROCEDURE_PERMISSIONS,
   INLINE_CHECKED_CAPABILITIES,
+  CLIENT_CHANNEL_PERMISSIONS,
   type GatedProcedurePath,
   type InlineCheckedCapability,
+  type ClientChannel,
   type Permission,
 } from "@care-y/shared";
 
@@ -38,6 +45,10 @@ const procedurePermissionByPath: ReadonlyMap<string, Permission> = new Map(
 
 const inlinePermissionByCapability: ReadonlyMap<string, Permission> = new Map(
   Object.entries(INLINE_CHECKED_CAPABILITIES),
+);
+
+const channelPermissionByChannel: ReadonlyMap<string, Permission> = new Map(
+  Object.entries(CLIENT_CHANNEL_PERMISSIONS),
 );
 
 /**
@@ -68,5 +79,20 @@ export function canUseInline(
   capability: InlineCheckedCapability,
 ): boolean {
   const required = inlinePermissionByCapability.get(capability);
+  return required !== undefined && permissions.has(required);
+}
+
+/**
+ * Returns true when the given permissions set holds the key for reaching
+ * a client over the named channel.
+ *
+ * The channel parameter is typed as `ClientChannel`, so a nonexistent
+ * channel is a compile error.
+ */
+export function canUseChannel(
+  permissions: ReadonlySet<Permission>,
+  channel: ClientChannel,
+): boolean {
+  const required = channelPermissionByChannel.get(channel);
   return required !== undefined && permissions.has(required);
 }

@@ -33,6 +33,7 @@ import {
   Permission,
   PROCEDURE_PERMISSIONS,
   INLINE_CHECKED_CAPABILITIES,
+  CLIENT_CHANNEL_PERMISSIONS,
 } from "@care-y/shared";
 import { createAppRouter } from "../routes/router.js";
 import { RELAY_PERMISSIONS } from "../routes/relay.js";
@@ -236,6 +237,26 @@ describe("INLINE_CHECKED_CAPABILITIES manifest", () => {
     expect(
       missing,
       `Permissions in INLINE_CHECKED but absent from INLINE_CHECKED_CAPABILITIES values:\n  ${missing.join("\n  ")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("CLIENT_CHANNEL_PERMISSIONS manifest", () => {
+  const enforced = new Set<Permission>([
+    ...permissionsFromRouter().keys(),
+    ...RELAY_PERMISSIONS.values(),
+  ]);
+
+  it("names only keys the server enforces", () => {
+    // The browser hides a channel on these keys. One the server never
+    // checks would hide a control that nothing refuses.
+    const unenforced = Object.entries(CLIENT_CHANNEL_PERMISSIONS)
+      .filter(([, permission]) => !enforced.has(permission))
+      .map(([channel, permission]) => `${channel} (${permission})`);
+
+    expect(
+      unenforced,
+      `Channels in CLIENT_CHANNEL_PERMISSIONS whose key the server does not enforce:\n  ${unenforced.join("\n  ")}`,
     ).toEqual([]);
   });
 });

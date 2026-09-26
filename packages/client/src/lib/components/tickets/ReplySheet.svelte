@@ -16,7 +16,13 @@
     getFollowUpDecryptCache,
     getOrgDecryptCache,
     getCurrentUserId,
+    getCurrentPermissions,
   } from "$lib/crypto/context.js";
+  import {
+    canCall,
+    canUseChannel,
+    canUseInline,
+  } from "$lib/auth/procedure-gates.js";
   import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { requireRouter } from "$lib/errors.js";
@@ -97,11 +103,30 @@
   const orgCache = getOrgDecryptCache();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
+  const permissionsGetter = getCurrentPermissions();
+  const permissions = $derived(permissionsGetter());
   const queryClient = useQueryClient();
 
   // ── Channel policy (cached, deduped by TanStack Query) ──
 
   const channelPolicy = createChannelPolicyQuery();
+
+  // A channel is offered only when the org has it switched on, the client
+  // can receive on it, and the account may send on it. Same conditions as
+  // the ticket detail compose menu.
+  const canPortal = $derived(
+    channelPolicy.secureLinkEnabled &&
+      portalCapable &&
+      canUseChannel(permissions, "portal"),
+  );
+  const canSms = $derived(
+    channelPolicy.smsEnabled && hasPhone && canUseChannel(permissions, "sms"),
+  );
+  const canAttach = $derived(
+    canPortal && canCall(permissions, "tickets.uploadAttachment"),
+  );
+  const canAddNote = $derived(canUseInline(permissions, "writeCaseNotes"));
+
   const replyEmailExpected = $derived(
     latestClientType === "email_inbound" && channelPolicy.emailEnabled,
   );
@@ -238,8 +263,8 @@
     prevOpened = opened;
     if (!justOpened) return;
 
-    const hasReply = portalCapable;
-    const hasSms = hasPhone;
+    const hasReply = canPortal;
+    const hasSms = canSms;
 
     if (hasReply && hasSms) {
       // Both available: open the compose actions popover so the
@@ -433,17 +458,20 @@
     setDraftForMode(ticketId, "reply", body);
     compose?.activateReply();
   }}
-  onreply={portalCapable ? () => compose?.activateReply() : undefined}
-  ontextclient={hasPhone
+  onreply={canPortal ? () => compose?.activateReply() : undefined}
+  ontextclient={canSms
     ? () => {
         exposureHint.show("sms");
         compose?.activateSms();
       }
     : undefined}
-  onattach={(file: File) => {
-    compose?.activateReply();
-    void attachmentUpload.attach(file);
-  }}
+  onattach={canAttach
+    ? (file: File) => {
+        compose?.activateReply();
+        void attachmentUpload.attach(file);
+      }
+    : undefined}
+  {canAddNote}
 />
 
 {#if exposureHint.type}

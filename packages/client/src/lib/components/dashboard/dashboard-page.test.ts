@@ -59,6 +59,9 @@ vi.stubGlobal(
 
 const mockGoto = vi.fn();
 
+// Org-key decrypts, keyed by cache key. Null means decrypt pending.
+const mockOrgDecrypt = vi.fn<(key: string) => string | null>();
+
 // --- Mocks ---
 
 vi.mock("$app/navigation", async (importOriginal) => ({
@@ -190,7 +193,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
     size: 0,
   }),
   getOrgDecryptCache: () => ({
-    decrypt: vi.fn().mockReturnValue(null),
+    decrypt: mockOrgDecrypt,
     has: vi.fn().mockReturnValue(false),
     get: vi.fn().mockReturnValue(undefined),
     clear: vi.fn(),
@@ -295,7 +298,10 @@ function buildQueryStates(overrides?: {
   counts?: Record<string, unknown>;
 }): Array<Record<string, unknown>> {
   return [
-    overrides?.activity ?? emptyDataQuery,
+    overrides?.activity ?? {
+      ...defaultQueryState,
+      data: { entries: [], lastHourCount: 0 },
+    },
     overrides?.queues ?? emptyDataQuery,
     overrides?.shift ?? { ...defaultQueryState, data: { shift: null } },
     overrides?.kb ?? emptyDataQuery,
@@ -332,6 +338,8 @@ beforeEach(() => {
     data: [],
   });
   mockGoto.mockClear();
+  mockOrgDecrypt.mockReset();
+  mockOrgDecrypt.mockReturnValue(null);
   setPermissions(...DEFAULT_PERMISSIONS);
 });
 
@@ -499,6 +507,116 @@ describe("Dashboard page", () => {
     await fireEvent.click(seeAll);
 
     expect(mockGoto).toHaveBeenCalledWith("/tickets?filter=needs-attention");
+  });
+});
+
+describe("Dashboard activity feed", () => {
+  const now = new Date().toISOString();
+  const activityData = [
+    {
+      kind: "ticket",
+      id: "a-ticket",
+      eventType: "followup_added",
+      ticketId: "ticket-9",
+      clientId: "client-9",
+      encryptedClientAlias: "YWxpYXM=",
+      queueId: "queue-mine",
+      encryptedQueueName: "bWluZQ==",
+      createdAt: now,
+    },
+    {
+      kind: "ticket_outside_queues",
+      id: "a-outside",
+      eventType: "ticket_closed",
+      queueId: "queue-other",
+      encryptedQueueName: "b3RoZXI=",
+      createdAt: now,
+    },
+    {
+      kind: "org",
+      id: "a-org",
+      eventType: "queue_created",
+      createdAt: now,
+    },
+  ];
+
+  function renderFeed(lastHourCount = 12) {
+    mockOrgDecrypt.mockImplementation((key) => {
+      if (key === "client-alias:client-9") return "Sparrow";
+      if (key === "queue:queue-mine") return "Intake";
+      if (key === "queue:queue-other") return "Legal";
+      return null;
+    });
+    queryStates = buildQueryStates({
+      activity: {
+        ...defaultQueryState,
+        data: { entries: activityData, lastHourCount },
+      },
+    });
+    const { container } = render(PageModule.default);
+    const rows = Array.from(
+      container.querySelectorAll("#section-activity .activity-row"),
+    );
+    const summary = container.querySelector(
+      "#section-activity .activity-summary span",
+    );
+    return { rows, summary };
+  }
+
+  it("summarises the server's last-hour count rather than the rows returned", () => {
+    const { rows, summary } = renderFeed(12);
+    expect(rows).toHaveLength(3);
+    expect(summary?.textContent).toBe("12 events in the last hour");
+  });
+
+  it("uses the singular summary when one event falls in the last hour", () => {
+    const { summary } = renderFeed(1);
+    expect(summary?.textContent).toBe("1 event in the last hour");
+  });
+
+  it("decrypts the alias only for ticket rows and the queue name for both ticket kinds", () => {
+    renderFeed();
+    const keys = mockOrgDecrypt.mock.calls.map(([key]) => key);
+    expect(keys).toContain("client-alias:client-9");
+    expect(keys).toContain("queue:queue-mine");
+    expect(keys).toContain("queue:queue-other");
+    // The outside-queue and org rows carry no alias to decrypt.
+    const aliasKeys = keys.filter((key) => key.startsWith("client-alias:"));
+    expect(aliasKeys).toEqual(["client-alias:client-9"]);
+  });
+
+  it("renders a ticket row that opens its ticket", async () => {
+    const { rows } = renderFeed();
+    expect(rows).toHaveLength(3);
+    const ticketRow = rows[0]!;
+    expect(ticketRow.getAttribute("role")).toBe("button");
+    expect(ticketRow.textContent).toContain("Sparrow");
+    expect(ticketRow.textContent).toContain("in Intake");
+    await fireEvent.click(ticketRow);
+    expect(mockGoto).toHaveBeenCalledWith("/tickets/ticket-9");
+  });
+
+  it("renders an outside-queue row with its queue and no alias or tap", async () => {
+    const { rows } = renderFeed();
+    const outsideRow = rows[1]!;
+    expect(outsideRow.getAttribute("role")).toBeNull();
+    expect(outsideRow.querySelector(".activity-alias")).toBeNull();
+    expect(outsideRow.textContent).toContain("in Legal");
+    await fireEvent.click(outsideRow);
+    expect(mockGoto).not.toHaveBeenCalled();
+  });
+
+  it("renders an org row with its label and no queue, alias or tap", async () => {
+    const { rows } = renderFeed();
+    const orgRow = rows[2]!;
+    expect(orgRow.getAttribute("role")).toBeNull();
+    expect(orgRow.querySelector(".activity-event")?.textContent).toBe(
+      "Queue created",
+    );
+    expect(orgRow.querySelector(".activity-alias")).toBeNull();
+    expect(orgRow.querySelector(".activity-queue")).toBeNull();
+    await fireEvent.click(orgRow);
+    expect(mockGoto).not.toHaveBeenCalled();
   });
 });
 

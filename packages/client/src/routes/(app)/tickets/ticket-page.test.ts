@@ -29,6 +29,7 @@ import type * as NavigationNS from "$app/navigation";
 import type * as PreviewLoaderNS from "$lib/tickets/preview-loader.svelte.js";
 import type * as ViewModeNS from "$lib/stores/view-mode.svelte.js";
 import type * as FiltersNS from "$lib/stores/filters.svelte.js";
+import { getMockPermissions } from "$mocks/permissions.js";
 
 // --- Mocks ---
 
@@ -187,6 +188,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
     zero: vi.fn(),
   }),
   getCurrentUserId: () => () => "user-001",
+  getCurrentPermissions: () => getMockPermissions,
   getPreviewLoader: () => mockPreviewLoader,
   getCryptoBridge: () => ({
     encrypt: vi.fn().mockResolvedValue("base64-ciphertext"),

@@ -58,6 +58,8 @@ export interface CardPropsMapperDeps {
   readonly previewReactionsMap: ReadonlyMap<string, ReactionSummary[]>;
   readonly ontap: (ticketId: string) => void;
   readonly onaction: (ticketId: string, action: TicketQuickAction) => void;
+  /** Quick actions the account may use; the card hides the rest. */
+  readonly allowedActions: ReadonlySet<TicketQuickAction>;
   readonly onencryptedhelp: () => void;
   readonly onselect?: (ticketId: string) => void;
   readonly onfullopen?: (ticketId: string) => void;
@@ -154,6 +156,7 @@ export function createCardPropsMapper(
           }
         : undefined,
       onaction: deps.onaction,
+      allowedActions: deps.allowedActions,
       onencryptedhelp: deps.onencryptedhelp,
     };
   };

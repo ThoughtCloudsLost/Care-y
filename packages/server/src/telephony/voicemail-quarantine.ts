@@ -519,6 +519,7 @@ export async function routeQuarantined(
   await auditService.log({
     eventType: "voicemail_quarantine_routed",
     actorId,
+    ticketId,
     metadata: {
       quarantineId: input.quarantineId,
       routedTicketId: ticketId,

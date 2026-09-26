@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { QueryClient } from "@tanstack/svelte-query";
 import { ClientError } from "$lib/errors.js";
+import { ErrorCode } from "@care-y/shared";
 import { createHoldAction } from "./create-hold-action.svelte.js";
 import type * as ToastNS from "$lib/stores/toast.svelte.js";
 import type * as HapticNS from "$lib/utils/haptic.js";
@@ -23,6 +24,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ticket_toast_held: () => "Held",
   ticket_toast_unheld: () => "Unheld",
   error_generic: () => "Error",
+  error_insufficient_permissions: () => "No permission",
 }));
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
   (await import("$mocks/with-terms.js")).withTermsMock(
@@ -174,5 +176,24 @@ describe("createHoldAction", () => {
     await action.handleHold("t1", false);
 
     expect(toastStore.show).toHaveBeenCalledWith("Error", 3000);
+  });
+
+  it("shows the permission message when the server refuses the hold", async () => {
+    const { optimisticMutation } =
+      await import("$lib/utils/optimistic-mutation.js");
+    (optimisticMutation as Mock).mockImplementationOnce(
+      async (opts: Record<string, unknown>) => {
+        lastOptimisticOpts = opts;
+        (opts.onError as (err: unknown) => void)(
+          new Error(ErrorCode.INSUFFICIENT_PERMISSIONS),
+        );
+      },
+    );
+    const { toastStore } = await import("$lib/stores/toast.svelte.js");
+
+    const action = make();
+    await action.handleHold("t1", false);
+
+    expect(toastStore.show).toHaveBeenCalledWith("No permission", 3000);
   });
 });

@@ -10,6 +10,7 @@ import type { RawFollowUpPreview } from "./preview-loader.svelte.js";
 import { DECRYPT_ERROR_SENTINEL } from "$lib/crypto/async-decrypt-cache.js";
 import * as m from "$lib/paraglide/messages.js";
 import type { ReactionSummary } from "@care-y/shared";
+import type { TicketQuickAction } from "$lib/components/tickets/ticket-types.js";
 
 function makeRecord(
   overrides: Partial<TicketLikeRecord> & { id: string },
@@ -267,6 +268,7 @@ describe("createCardPropsMapper", () => {
       previewReactionsMap: new Map<string, ReactionSummary[]>(),
       ontap: vi.fn(),
       onaction: vi.fn(),
+      allowedActions: new Set(),
       onencryptedhelp: vi.fn(),
       ...overrides,
     };
@@ -308,6 +310,33 @@ describe("createCardPropsMapper", () => {
       }),
     )(makeRecord({ id: "t1" }));
     expect(props.previewReactions).toEqual({ n1: summaries });
+  });
+
+  it("passes the allowed quick actions through to every card", () => {
+    const allowedActions = new Set<TicketQuickAction>(["reply", "take"]);
+    const props = createCardPropsMapper(makeMapperDeps({ allowedActions }))(
+      makeRecord({ id: "t1" }),
+    );
+    expect(props.allowedActions).toBe(allowedActions);
+  });
+
+  it("reads allowed actions through a getter at map time", () => {
+    let current: ReadonlySet<TicketQuickAction> = new Set(["reply"]);
+    const deps = makeMapperDeps();
+    const mapper = createCardPropsMapper({
+      ...deps,
+      get allowedActions() {
+        return current;
+      },
+    });
+    expect(mapper(makeRecord({ id: "t1" })).allowedActions).toEqual(
+      new Set(["reply"]),
+    );
+
+    current = new Set<TicketQuickAction>(["call"]);
+    expect(mapper(makeRecord({ id: "t1" })).allowedActions).toEqual(
+      new Set(["call"]),
+    );
   });
 
   it("wraps onselect so the callback receives the ticket id", () => {

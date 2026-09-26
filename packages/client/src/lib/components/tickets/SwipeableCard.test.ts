@@ -87,9 +87,19 @@ function slider(container: HTMLElement): HTMLElement {
   return el as HTMLElement;
 }
 
+const ALL_ACTIONS: ReadonlySet<TicketQuickAction> = new Set([
+  "reply",
+  "call",
+  "hold",
+  "unhold",
+  "assign",
+  "take",
+]);
+
 describe("SwipeableCard", () => {
   const defaults = {
     ticketId: "t-001",
+    allowedActions: ALL_ACTIONS,
     onaction: vi.fn<(ticketId: string, action: TicketQuickAction) => void>(),
     onlongpress: vi.fn<(ticketId: string) => void>(),
     children: childSnippet,
@@ -428,6 +438,32 @@ describe("SwipeableCard", () => {
 
   // ── Click suppression ──
 
+  it("does not suppress the next tap after a peek button fires", async () => {
+    const clickSpy = vi.fn();
+    const { container } = render(SwipeableCard, { props: defaults });
+    const el = card(container);
+    el.addEventListener("click", clickSpy);
+
+    await pointerDown(el, { clientX: 200, clientY: 200 });
+    await pointerMove(el, { clientX: 215, clientY: 200 });
+    await pointerMove(el, { clientX: 260, clientY: 200 });
+    await pointerUp(el, { clientX: 260, clientY: 200 });
+    await tick();
+
+    const buttons = container.querySelectorAll(".peek-btn");
+    await fireEvent.click(buttons[0]!);
+    await vi.advanceTimersByTimeAsync(400);
+    // The peek button sits inside the card, so its own click bubbles here.
+    clickSpy.mockClear();
+
+    // A plain tap afterwards must reach the card.
+    await pointerDown(el, { clientX: 200, clientY: 200 });
+    await pointerUp(el, { clientX: 200, clientY: 200 });
+    await fireEvent.click(slider(container));
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("suppresses click after a horizontal swipe", async () => {
     const clickSpy = vi.fn();
     const { container } = render(SwipeableCard, { props: defaults });
@@ -659,7 +695,11 @@ describe("SwipeableCard", () => {
 
   it("does not throw when onaction is not provided", async () => {
     const { container } = render(SwipeableCard, {
-      props: { ticketId: "t-002", children: childSnippet },
+      props: {
+        ticketId: "t-002",
+        allowedActions: ALL_ACTIONS,
+        children: childSnippet,
+      },
     });
     const el = card(container);
 
@@ -676,7 +716,11 @@ describe("SwipeableCard", () => {
 
   it("does not throw when onlongpress is not provided", async () => {
     const { container } = render(SwipeableCard, {
-      props: { ticketId: "t-002", children: childSnippet },
+      props: {
+        ticketId: "t-002",
+        allowedActions: ALL_ACTIONS,
+        children: childSnippet,
+      },
     });
     const el = card(container);
 
@@ -724,5 +768,160 @@ describe("SwipeableCard", () => {
 
     await vi.advanceTimersByTimeAsync(400);
     expect(defaults.onaction).toHaveBeenCalledWith("t-001", "hold");
+  });
+
+  // ── Permission gating: zones the account may not use drop out ──
+
+  function withActions(
+    ...actions: TicketQuickAction[]
+  ): ReadonlySet<TicketQuickAction> {
+    return new Set(actions);
+  }
+
+  it("fires a lone right zone past FAR_THRESHOLD instead of switching", async () => {
+    const { container } = render(SwipeableCard, {
+      props: { ...defaults, allowedActions: withActions("reply") },
+    });
+    const el = card(container);
+
+    await pointerDown(el, { clientX: 100, clientY: 200 });
+    await pointerMove(el, { clientX: 115, clientY: 200 });
+    await pointerMove(el, { clientX: 260, clientY: 200 });
+    await pointerUp(el, { clientX: 260, clientY: 200 });
+
+    await vi.advanceTimersByTimeAsync(400);
+    expect(defaults.onaction).toHaveBeenCalledWith("t-001", "reply");
+    expect(defaults.onaction).not.toHaveBeenCalledWith("t-001", "call");
+  });
+
+  it("fires a lone far zone at ACTION_THRESHOLD", async () => {
+    const { container } = render(SwipeableCard, {
+      props: { ...defaults, allowedActions: withActions("call") },
+    });
+    const el = card(container);
+
+    await pointerDown(el, { clientX: 100, clientY: 200 });
+    // 100px: past ACTION_THRESHOLD (80px), short of FAR_THRESHOLD (140px)
+    await pointerMove(el, { clientX: 115, clientY: 200 });
+    await pointerMove(el, { clientX: 200, clientY: 200 });
+    await pointerUp(el, { clientX: 200, clientY: 200 });
+
+    await vi.advanceTimersByTimeAsync(400);
+    expect(defaults.onaction).toHaveBeenCalledWith("t-001", "call");
+  });
+
+  it("fires a lone left hold zone at ACTION_THRESHOLD", async () => {
+    const { container } = render(SwipeableCard, {
+      props: { ...defaults, allowedActions: withActions("hold") },
+    });
+    const el = card(container);
+
+    await pointerDown(el, { clientX: 300, clientY: 200 });
+    await pointerMove(el, { clientX: 285, clientY: 200 });
+    await pointerMove(el, { clientX: 200, clientY: 200 });
+    await pointerUp(el, { clientX: 200, clientY: 200 });
+
+    await vi.advanceTimersByTimeAsync(400);
+    expect(defaults.onaction).toHaveBeenCalledWith("t-001", "hold");
+  });
+
+  it("peeks only the lone zone's button", async () => {
+    const { container } = render(SwipeableCard, {
+      props: { ...defaults, allowedActions: withActions("call") },
+    });
+    const el = card(container);
+
+    await pointerDown(el, { clientX: 200, clientY: 200 });
+    await pointerMove(el, { clientX: 215, clientY: 200 });
+    await pointerMove(el, { clientX: 260, clientY: 200 });
+    await pointerUp(el, { clientX: 260, clientY: 200 });
+    await tick();
+
+    const buttons = container.querySelectorAll(".peek-btn");
+    expect(buttons).toHaveLength(1);
+    await fireEvent.click(buttons[0]!);
+
+    await vi.advanceTimersByTimeAsync(400);
+    expect(defaults.onaction).toHaveBeenCalledWith("t-001", "call");
+  });
+
+  it("keeps the card still in a direction with no zones", async () => {
+    const { container } = render(SwipeableCard, {
+      props: { ...defaults, allowedActions: withActions("reply", "call") },
+    });
+    const el = card(container);
+
+    await pointerDown(el, { clientX: 300, clientY: 200 });
+    await pointerMove(el, { clientX: 285, clientY: 200 });
+    await pointerMove(el, { clientX: 140, clientY: 200 });
+
+    expect(slider(container).style.transform).toBe("translateX(0px)");
+    expect(container.querySelector(".action-panel--visible")).toBeNull();
+
+    await pointerUp(el, { clientX: 140, clientY: 200 });
+    await tick();
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(defaults.onaction).not.toHaveBeenCalled();
+    expect(container.querySelector(".peek-tray")).toBeNull();
+  });
+
+  it("still swipes the direction that has zones", async () => {
+    const { container } = render(SwipeableCard, {
+      props: { ...defaults, allowedActions: withActions("assign", "hold") },
+    });
+    const el = card(container);
+
+    await pointerDown(el, { clientX: 100, clientY: 200 });
+    await pointerMove(el, { clientX: 115, clientY: 200 });
+    await pointerMove(el, { clientX: 200, clientY: 200 });
+    expect(slider(container).style.transform).toBe("translateX(0px)");
+    await pointerUp(el, { clientX: 200, clientY: 200 });
+
+    await pointerDown(el, { clientX: 300, clientY: 200 });
+    await pointerMove(el, { clientX: 285, clientY: 200 });
+    await pointerMove(el, { clientX: 200, clientY: 200 });
+    expect(slider(container).style.transform).toBe("translateX(-100px)");
+    await pointerUp(el, { clientX: 200, clientY: 200 });
+
+    await vi.advanceTimersByTimeAsync(400);
+    expect(defaults.onaction).toHaveBeenCalledTimes(1);
+    expect(defaults.onaction).toHaveBeenCalledWith("t-001", "assign");
+  });
+
+  it("does not swipe either way with no zones, but keeps long-press and tap", async () => {
+    const clickSpy = vi.fn();
+    const { container } = render(SwipeableCard, {
+      props: { ...defaults, allowedActions: withActions() },
+    });
+    const el = card(container);
+    el.addEventListener("click", clickSpy);
+
+    for (const endX of [400, 0]) {
+      await pointerDown(el, { clientX: 200, clientY: 200 });
+      await pointerMove(el, { clientX: endX > 200 ? 215 : 185, clientY: 200 });
+      await pointerMove(el, { clientX: endX, clientY: 200 });
+      expect(slider(container).style.transform).toBe("translateX(0px)");
+      await pointerUp(el, { clientX: endX, clientY: 200 });
+    }
+    await tick();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(defaults.onaction).not.toHaveBeenCalled();
+    expect(container.querySelector(".peek-tray")).toBeNull();
+
+    // Long-press still fires on a held, unmoved pointer.
+    await pointerDown(el, { clientX: 200, clientY: 200 });
+    await vi.advanceTimersByTimeAsync(500);
+    await pointerUp(el, { clientX: 200, clientY: 200 });
+    expect(defaults.onlongpress).toHaveBeenCalledWith("t-001");
+    // The click that follows a long-press is suppressed, as today.
+    await fireEvent.click(slider(container));
+    expect(clickSpy).not.toHaveBeenCalled();
+
+    // A plain tap still reaches the card.
+    await pointerDown(el, { clientX: 200, clientY: 200 });
+    await pointerUp(el, { clientX: 200, clientY: 200 });
+    await fireEvent.click(slider(container));
+    expect(clickSpy).toHaveBeenCalledTimes(1);
   });
 });

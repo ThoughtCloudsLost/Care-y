@@ -24,7 +24,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { Permission } from "@care-y/shared";
+import { Permission, CLIENT_CHANNEL_PERMISSIONS } from "@care-y/shared";
 
 // The glob options must be written inline at every call: Vite parses them
 // statically and rejects an identifier.
@@ -79,6 +79,10 @@ function permissionsNamedIn(sources: Iterable<string>): Set<Permission> {
   return found;
 }
 
+const CHANNEL_KEYS: ReadonlyMap<string, Permission> = new Map(
+  Object.entries(CLIENT_CHANNEL_PERMISSIONS),
+);
+
 /** Keys the server names in a gate: a procedure, an inline check, or a relay route. */
 function serverEnforcedPermissions(): Set<Permission> {
   const found = new Set<Permission>();
@@ -88,10 +92,18 @@ function serverEnforcedPermissions(): Set<Permission> {
   for (const [file, source] of Object.entries(SERVER_SOURCES)) {
     const matches = [...source.matchAll(gatePattern)];
 
-    // The relay maps route to key rather than calling a gate helper.
+    // The relay maps route to key rather than calling a gate helper, and
+    // spells its channel keys through the shared channel manifest.
     if (file.endsWith("/routes/relay.ts")) {
       for (const m of source.matchAll(/"\/relay\/[^"]+",\s*Permission\.(\w+)/g))
         matches.push(m);
+      for (const m of source.matchAll(
+        /"\/relay\/[^"]+",\s*CLIENT_CHANNEL_PERMISSIONS\.(\w+)/g,
+      )) {
+        const permission =
+          m[1] === undefined ? undefined : CHANNEL_KEYS.get(m[1]);
+        if (permission !== undefined) found.add(permission);
+      }
     }
     // blob-download selects between two keys on blob category.
     if (file.endsWith("/routes/blob-download.ts")) {

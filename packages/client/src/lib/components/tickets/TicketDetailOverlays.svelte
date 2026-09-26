@@ -115,6 +115,8 @@
     onattach?: (file: File) => void;
     onemailclient?: () => void;
     ondraftset: (body: string) => void;
+    /** Shows "Add internal note" in the compose menu. */
+    canAddNote: boolean;
     voiceEnabled?: boolean;
     shareLinkEnabled?: boolean;
     secureLinkEnabled?: boolean;
@@ -190,6 +192,7 @@
     onattach,
     onemailclient,
     ondraftset,
+    canAddNote,
     voiceEnabled = true,
     shareLinkEnabled = true,
     secureLinkEnabled = true,
@@ -254,6 +257,7 @@
   {ontextclient}
   {onattach}
   {onemailclient}
+  {canAddNote}
 />
 
 <ShellPopover

@@ -28,14 +28,22 @@
     ticketId: string;
     /** Called when a preset reply is selected (caller sets draft text). */
     onpresetselect: (body: string) => void;
-    /** Called when "Reply to client" is tapped. Activates reply mode. */
+    /**
+     * Called when "Reply to client" is tapped. Activates reply mode. Also
+     * shows preset replies, since a preset fills the portal reply draft.
+     */
     onreply?: () => void;
     /** Called when "Text Client" is tapped. Caller handles exposure hint + SMS. */
     ontextclient?: () => void;
-    /** Called when a file is picked. The caller owns encryption and upload. */
+    /**
+     * Called when a file is picked. The caller owns encryption and upload.
+     * Shown only when provided.
+     */
     onattach?: (file: File) => void;
     /** Called when "Email client" is tapped. Shown only when the client has an email. */
     onemailclient?: () => void;
+    /** Shows "Add internal note" when the account may write case notes. */
+    canAddNote: boolean;
   }
 
   let {
@@ -48,6 +56,7 @@
     ontextclient,
     onattach,
     onemailclient,
+    canAddNote,
   }: ComposeActionsProps = $props();
 
   let fileInputEl = $state<HTMLInputElement | null>(null);
@@ -105,21 +114,27 @@
   ariaLabel={m.ticket_compose_actions()}
 >
   <KList nested>
-    <ListItem title={m.ticket_attach_file()} onclick={handleAttach}>
-      {#snippet media()}
-        <Paperclip size={20} aria-hidden="true" />
-      {/snippet}
-    </ListItem>
-    <ListItem title={m.ticket_preset_replies()} onclick={handlePreset}>
-      {#snippet media()}
-        <MessageSquareReply size={20} aria-hidden="true" />
-      {/snippet}
-    </ListItem>
-    <ListItem title={m.ticket_add_internal_note()} onclick={handleNote}>
-      {#snippet media()}
-        <NotepadTextDashed size={20} aria-hidden="true" />
-      {/snippet}
-    </ListItem>
+    {#if onattach}
+      <ListItem title={m.ticket_attach_file()} onclick={handleAttach}>
+        {#snippet media()}
+          <Paperclip size={20} aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/if}
+    {#if onreply}
+      <ListItem title={m.ticket_preset_replies()} onclick={handlePreset}>
+        {#snippet media()}
+          <MessageSquareReply size={20} aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/if}
+    {#if canAddNote}
+      <ListItem title={m.ticket_add_internal_note()} onclick={handleNote}>
+        {#snippet media()}
+          <NotepadTextDashed size={20} aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/if}
     {#if onreply}
       <ListItem
         title={m.ticket_reply_to_client(withTerms())}

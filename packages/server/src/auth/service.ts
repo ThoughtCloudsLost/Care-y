@@ -132,15 +132,26 @@ export interface AuthService {
   /** Checks whether a user_keys row exists for the given user. */
   hasUserKeys(userId: UserId): Promise<boolean>;
 
-  getHubStatus(): Promise<{
-    activeUserCount: number;
-    queueCount: number;
-    keyStatus: "ok" | "missing";
-    retentionDays: number | null;
-    blocklistCount: number;
-    greetingCount: number;
-    templateCount: number;
-  }>;
+  /** Number of active user accounts, for the admin hub. */
+  countActiveUsers(): Promise<number>;
+
+  /** Number of queues, for the admin hub. */
+  countQueues(): Promise<number>;
+
+  /** Whether the org public key has been uploaded, for the admin hub. */
+  getKeyStatus(): Promise<"ok" | "missing">;
+
+  /** The org's PII retention setting in days, or null when unset. */
+  getPiiRetentionDays(): Promise<number | null>;
+
+  /** Number of phone blocklist entries, for the admin hub. */
+  countBlocklistEntries(): Promise<number>;
+
+  /** Number of call greetings, for the admin hub. */
+  countGreetings(): Promise<number>;
+
+  /** Number of automatic reply templates, for the admin hub. */
+  countReplyTemplates(): Promise<number>;
 }
 
 export const SESSION_COOKIE_NAME = "care_y_session" as const;
@@ -643,60 +654,61 @@ export function createAuthService(
       });
     },
 
-    async getHubStatus(): Promise<{
-      activeUserCount: number;
-      queueCount: number;
-      keyStatus: "ok" | "missing";
-      retentionDays: number | null;
-      blocklistCount: number;
-      greetingCount: number;
-      templateCount: number;
-    }> {
-      const [
-        userCount,
-        queueCount,
-        keyStatus,
-        retentionConfig,
-        blocklistCount,
-        greetingCount,
-        templateCount,
-      ] = await Promise.all([
-        db
-          .selectFrom("users")
-          .select(db.fn.countAll<string>().as("c"))
-          .where("is_active", "=", true)
-          .executeTakeFirstOrThrow(),
-        db
-          .selectFrom("queues")
-          .select(db.fn.countAll<string>().as("c"))
-          .executeTakeFirstOrThrow(),
-        db.selectFrom("org_config").select("org_public_key").executeTakeFirst(),
-        db
-          .selectFrom("org_config")
-          .select("pii_retention_days")
-          .executeTakeFirst(),
-        db
-          .selectFrom("phone_blocklist")
-          .select(db.fn.countAll<string>().as("c"))
-          .executeTakeFirstOrThrow(),
-        db
-          .selectFrom("phone_greetings")
-          .select(db.fn.countAll<string>().as("c"))
-          .executeTakeFirstOrThrow(),
-        db
-          .selectFrom("sms_responses")
-          .select(db.fn.countAll<string>().as("c"))
-          .executeTakeFirstOrThrow(),
-      ]);
-      return {
-        activeUserCount: Number(userCount.c),
-        queueCount: Number(queueCount.c),
-        keyStatus: keyStatus?.org_public_key ? "ok" : "missing",
-        retentionDays: retentionConfig?.pii_retention_days ?? null,
-        blocklistCount: Number(blocklistCount.c),
-        greetingCount: Number(greetingCount.c),
-        templateCount: Number(templateCount.c),
-      };
+    async countActiveUsers(): Promise<number> {
+      const row = await db
+        .selectFrom("users")
+        .select(db.fn.countAll<string>().as("c"))
+        .where("is_active", "=", true)
+        .executeTakeFirstOrThrow();
+      return Number(row.c);
+    },
+
+    async countQueues(): Promise<number> {
+      const row = await db
+        .selectFrom("queues")
+        .select(db.fn.countAll<string>().as("c"))
+        .executeTakeFirstOrThrow();
+      return Number(row.c);
+    },
+
+    async getKeyStatus(): Promise<"ok" | "missing"> {
+      const row = await db
+        .selectFrom("org_config")
+        .select("org_public_key")
+        .executeTakeFirst();
+      return row?.org_public_key ? "ok" : "missing";
+    },
+
+    async getPiiRetentionDays(): Promise<number | null> {
+      const row = await db
+        .selectFrom("org_config")
+        .select("pii_retention_days")
+        .executeTakeFirst();
+      return row?.pii_retention_days ?? null;
+    },
+
+    async countBlocklistEntries(): Promise<number> {
+      const row = await db
+        .selectFrom("phone_blocklist")
+        .select(db.fn.countAll<string>().as("c"))
+        .executeTakeFirstOrThrow();
+      return Number(row.c);
+    },
+
+    async countGreetings(): Promise<number> {
+      const row = await db
+        .selectFrom("phone_greetings")
+        .select(db.fn.countAll<string>().as("c"))
+        .executeTakeFirstOrThrow();
+      return Number(row.c);
+    },
+
+    async countReplyTemplates(): Promise<number> {
+      const row = await db
+        .selectFrom("sms_responses")
+        .select(db.fn.countAll<string>().as("c"))
+        .executeTakeFirstOrThrow();
+      return Number(row.c);
     },
   };
 }

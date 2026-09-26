@@ -33,12 +33,15 @@ import {
 import {
   RoleId,
   ErrorCode,
+  Permission,
   channelSecretSchema,
   aliasHashSchema,
+  type AuditEventType,
   type RoleIdValue,
   type EmailHash,
 } from "@care-y/shared";
 import type {
+  AuditLogId,
   SessionId,
   SessionToken,
   UserId,
@@ -85,6 +88,7 @@ import { createSecretsEncryptor, deriveSecretsKey } from "../config/secrets.js";
 import type { BlobStore } from "../storage/store.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import { NotFoundError } from "../errors.js";
+import { invalidateRolePermissionCache } from "../auth/roles.js";
 
 // ---------------------------------------------------------------------------
 // In-memory BlobStore for tests (no filesystem or S3 needed)
@@ -1653,16 +1657,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
 
         const caller = createAuthedCaller(user);
-        const rows = await caller.tickets.recentActivity();
+        const { entries: rows } = await caller.tickets.recentActivity();
 
-        const mine = rows.find((r) => r.ticketId === ticketId);
+        const ticketRows = rows.flatMap((r) =>
+          r.kind === "ticket" ? [r] : [],
+        );
+        const mine = ticketRows.find((r) => r.ticketId === ticketId);
         expect(mine).toBeDefined();
         expect(mine!.eventType).toBe("ticket_created");
         expect(mine!.clientId).toBeDefined();
         expect(mine!.encryptedClientAlias).toBeDefined();
 
-        // The foreign queue's event must not leak into this user's feed
-        expect(rows.some((r) => r.ticketId === foreign.ticketId)).toBe(false);
+        // The foreign queue's event must not leak into this user's feed,
+        // not even as an outside-queue row: volunteers lack VIEW_AUDIT_LOG.
+        expect(rows.every((r) => r.kind === "ticket")).toBe(true);
+        expect(ticketRows.some((r) => r.ticketId === foreign.ticketId)).toBe(
+          false,
+        );
       });
     });
 
@@ -2605,7 +2616,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const auditRow = await vi.waitFor(async () => {
           const row = await tenantDb
             .selectFrom("audit_log")
-            .select(["event_type", "actor_id"])
+            .select(["event_type", "actor_id", "ticket_id"])
             .where("event_type", "=", "client_tier_changed")
             .where("actor_id", "=", user.id)
             .orderBy("created_at", "desc")
@@ -2614,6 +2625,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           return row!;
         });
         expect(auditRow.event_type).toBe("client_tier_changed");
+        expect(auditRow.ticket_id).toBe(fixture.ticketId);
       });
     });
 
@@ -2941,7 +2953,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const auditRow = await vi.waitFor(async () => {
           const row = await tenantDb
             .selectFrom("audit_log")
-            .select(["event_type", "actor_id", "metadata"])
+            .select(["event_type", "actor_id", "ticket_id", "metadata"])
             .where("event_type", "=", "client_account_reset")
             .where("actor_id", "=", user.id)
             .orderBy("created_at", "desc")
@@ -2950,6 +2962,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           return row!;
         });
         expect(auditRow.event_type).toBe("client_account_reset");
+        expect(auditRow.ticket_id).toBe(fixture.ticketId);
         const meta = auditRow.metadata as Record<string, unknown>;
         expect(meta).toEqual({ operation: "reset" });
         expect(meta).not.toHaveProperty("username");
@@ -4168,23 +4181,200 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // -----------------------------------------------------------------------
 
     describe("recentActivity early returns", () => {
-      it("returns empty array when audit service is not injected", async () => {
+      it("returns an empty feed when audit service is not injected", async () => {
         const { user } = await setupUserWithTicket();
         const caller = createAuthedCaller(user, {
           deps: { createAuditSvc: undefined },
         });
 
         const result = await caller.tickets.recentActivity();
-        expect(result).toEqual([]);
+        expect(result).toEqual({ entries: [], lastHourCount: 0 });
       });
 
-      it("returns empty array when user has no queue memberships", async () => {
-        // User with no queue assignments
+      it("returns an empty feed for a queue-less account with no org permissions", async () => {
+        // Volunteer with no queue assignments; no volunteer default gates an
+        // org event, so even a fresh org event stays out of the feed.
         const user = await createTestUser(tenantDb);
+        await createAuditService(tenantDb).log({
+          eventType: "queue_created",
+          actorId: user.id,
+        });
         const caller = createAuthedCaller(user);
 
         const result = await caller.tickets.recentActivity();
-        expect(result).toEqual([]);
+        expect(result).toEqual({ entries: [], lastHourCount: 0 });
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // recentActivity feed scope: org events and outside-queue rows
+    // -----------------------------------------------------------------------
+
+    describe("recentActivity feed scope", () => {
+      /** Id of the newest audit row one actor wrote for one event type. */
+      async function auditIdFor(actorId: UserId, eventType: AuditEventType) {
+        const row = await tenantDb
+          .selectFrom("audit_log")
+          .select("id")
+          .where("actor_id", "=", actorId)
+          .where("event_type", "=", eventType)
+          .orderBy("created_at", "desc")
+          .executeTakeFirstOrThrow();
+        return row.id;
+      }
+
+      /**
+       * Dates a row into the future so it sorts ahead of every event other
+       * tests in this schema have written.
+       */
+      async function dateAhead(id: AuditLogId, at: string): Promise<void> {
+        await tenantDb
+          .updateTable("audit_log")
+          .set({ created_at: new Date(at) })
+          .where("id", "=", id)
+          .execute();
+      }
+
+      it("shows queue events to a queue-less account holding MANAGE_QUEUES", async () => {
+        const user = await createTestUser(tenantDb);
+        const auditSvc = createAuditService(tenantDb);
+        await auditSvc.log({ eventType: "queue_created", actorId: user.id });
+        await auditSvc.log({
+          eventType: "note_type_created",
+          actorId: user.id,
+        });
+        const queueEventId = await auditIdFor(user.id, "queue_created");
+        const noteTypeEventId = await auditIdFor(user.id, "note_type_created");
+        await dateAhead(queueEventId, "2099-02-01T00:00:00Z");
+        await dateAhead(noteTypeEventId, "2099-02-02T00:00:00Z");
+
+        const orgSchema = testDb.schemaName as OrgSchema;
+        await tenantDb
+          .insertInto("role_permission_overrides")
+          .values({
+            role_id: RoleId.VOLUNTEER,
+            permission: Permission.MANAGE_QUEUES,
+            enabled: true,
+          })
+          .onConflict((oc) => oc.columns(["role_id", "permission"]).doNothing())
+          .execute();
+        invalidateRolePermissionCache(orgSchema);
+
+        try {
+          const caller = createAuthedCaller(user);
+          const { entries: rows } = await caller.tickets.recentActivity({
+            limit: 10,
+          });
+
+          expect(rows.find((r) => r.id === queueEventId)).toEqual({
+            kind: "org",
+            id: queueEventId,
+            eventType: "queue_created",
+            createdAt: expect.any(Date),
+          });
+          // MANAGE_NOTE_TYPES is not held, so its event stays out.
+          expect(rows.some((r) => r.id === noteTypeEventId)).toBe(false);
+          expect(
+            rows.every(
+              (r) => r.kind === "org" && r.eventType.startsWith("queue_"),
+            ),
+          ).toBe(true);
+        } finally {
+          // The override would leak into every later volunteer test.
+          await tenantDb
+            .deleteFrom("role_permission_overrides")
+            .where("role_id", "=", RoleId.VOLUNTEER)
+            .where("permission", "=", Permission.MANAGE_QUEUES)
+            .execute();
+          invalidateRolePermissionCache(orgSchema);
+        }
+      });
+
+      it("hides queue events from an account without MANAGE_QUEUES", async () => {
+        const user = await createTestUser(tenantDb);
+        await createAuditService(tenantDb).log({
+          eventType: "queue_updated",
+          actorId: user.id,
+        });
+        const queueEventId = await auditIdFor(user.id, "queue_updated");
+        await dateAhead(queueEventId, "2099-03-01T00:00:00Z");
+
+        const caller = createAuthedCaller(user);
+        const { entries: rows } = await caller.tickets.recentActivity({
+          limit: 10,
+        });
+
+        expect(rows.some((r) => r.id === queueEventId)).toBe(false);
+      });
+
+      it("shows a VIEW_AUDIT_LOG holder outside-queue rows without ticket, client or alias", async () => {
+        const { user } = await setupUserWithTicket(RoleId.MANAGER);
+        const foreign = await createTestTicketFixture(tenantDb);
+
+        await createAuditService(tenantDb).log({
+          eventType: "ticket_created",
+          actorId: user.id,
+          ticketId: foreign.ticketId,
+        });
+        const outsideId = await auditIdFor(user.id, "ticket_created");
+        await dateAhead(outsideId, "2099-12-01T00:00:00Z");
+
+        const caller = createAuthedCaller(user);
+        const { entries: rows } = await caller.tickets.recentActivity({
+          limit: 10,
+        });
+
+        const outside = rows.find((r) => r.id === outsideId);
+        expect(outside).toEqual({
+          kind: "ticket_outside_queues",
+          id: outsideId,
+          eventType: "ticket_created",
+          queueId: foreign.queueId,
+          encryptedQueueName: expect.any(String),
+          createdAt: expect.any(Date),
+        });
+        const serialized = JSON.stringify(outside);
+        expect(serialized).not.toContain(foreign.ticketId);
+        expect(serialized).not.toContain(foreign.clientId);
+      });
+
+      it("counts every visible event in the last hour, past the row limit", async () => {
+        const { user, ticketId } = await setupUserWithTicket();
+        const foreign = await createTestTicketFixture(tenantDb);
+        const auditSvc = createAuditService(tenantDb);
+
+        // Two hours old, so outside the summary window.
+        await auditSvc.log({
+          eventType: "ticket_reopened",
+          actorId: user.id,
+          ticketId,
+        });
+        const olderId = await auditIdFor(user.id, "ticket_reopened");
+        await tenantDb
+          .updateTable("audit_log")
+          .set({ created_at: new Date(Date.now() - 2 * 60 * 60 * 1000) })
+          .where("id", "=", olderId)
+          .execute();
+
+        for (let i = 0; i < 7; i++) {
+          await auditSvc.log({
+            eventType: "ticket_created",
+            actorId: user.id,
+            ticketId,
+          });
+        }
+        // A queue this volunteer is not in stays out of the count.
+        await auditSvc.log({
+          eventType: "ticket_created",
+          actorId: user.id,
+          ticketId: foreign.ticketId,
+        });
+
+        const caller = createAuthedCaller(user);
+        const result = await caller.tickets.recentActivity();
+
+        expect(result.entries).toHaveLength(5);
+        expect(result.lastHourCount).toBe(7);
       });
     });
 

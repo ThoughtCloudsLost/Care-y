@@ -62,6 +62,7 @@ import type {
 } from "@care-y/shared";
 import {
   Permission,
+  CLIENT_CHANNEL_PERMISSIONS,
   EMAIL_RELAY_LIMITS,
   phoneMatchHashSchema,
   orgSchemaNameSchema,
@@ -193,7 +194,8 @@ export interface RelayHandler {
 
 /**
  * The permission each relay endpoint requires. Reaching a client is split
- * per channel, so an org can staff messaging and calling separately.
+ * per channel, so an org can staff messaging and calling separately. The
+ * channel keys come from the shared manifest the browser gates on.
  *
  * `/relay/consultant-verify` is absent on purpose: it verifies the
  * caller's own phone number and reaches no client. `/relay/phone-lookup`
@@ -201,10 +203,10 @@ export interface RelayHandler {
  * key that governs seeing contact details.
  */
 export const RELAY_PERMISSIONS: ReadonlyMap<string, Permission> = new Map([
-  ["/relay/sms", Permission.SEND_CLIENT_SMS],
-  ["/relay/email", Permission.SEND_CLIENT_EMAIL],
-  ["/relay/call", Permission.CALL_CLIENTS],
-  ["/relay/webrtc-token", Permission.CALL_CLIENTS],
+  ["/relay/sms", CLIENT_CHANNEL_PERMISSIONS.sms],
+  ["/relay/email", CLIENT_CHANNEL_PERMISSIONS.email],
+  ["/relay/call", CLIENT_CHANNEL_PERMISSIONS.call],
+  ["/relay/webrtc-token", CLIENT_CHANNEL_PERMISSIONS.call],
   ["/relay/phone-lookup", Permission.VIEW_CLIENT_PII],
 ]);
 

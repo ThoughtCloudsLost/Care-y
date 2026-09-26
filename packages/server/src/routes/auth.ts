@@ -34,6 +34,11 @@ import {
   orgProcedure,
   authedProcedure,
   adminProcedure,
+  keyCustodyProcedure,
+  infrastructureProcedure,
+  manageQueuesProcedure,
+  writeCallGreetingsProcedure,
+  writeAutomaticRepliesProcedure,
   permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
@@ -439,10 +444,52 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         }),
       ),
 
-    hubStatus: adminProcedure.query(
+    hubActiveUserCount: manageUsersProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const authService = getAuthService(ctx.org, deps);
-        return await authService.getHubStatus();
+        return { count: await authService.countActiveUsers() };
+      }),
+    ),
+
+    hubQueueCount: manageQueuesProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const authService = getAuthService(ctx.org, deps);
+        return { count: await authService.countQueues() };
+      }),
+    ),
+
+    hubKeyStatus: keyCustodyProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const authService = getAuthService(ctx.org, deps);
+        return { status: await authService.getKeyStatus() };
+      }),
+    ),
+
+    hubRetention: manageRetentionProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const authService = getAuthService(ctx.org, deps);
+        return { retentionDays: await authService.getPiiRetentionDays() };
+      }),
+    ),
+
+    hubBlocklistCount: infrastructureProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const authService = getAuthService(ctx.org, deps);
+        return { count: await authService.countBlocklistEntries() };
+      }),
+    ),
+
+    hubGreetingCount: writeCallGreetingsProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const authService = getAuthService(ctx.org, deps);
+        return { count: await authService.countGreetings() };
+      }),
+    ),
+
+    hubTemplateCount: writeAutomaticRepliesProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const authService = getAuthService(ctx.org, deps);
+        return { count: await authService.countReplyTemplates() };
       }),
     ),
 

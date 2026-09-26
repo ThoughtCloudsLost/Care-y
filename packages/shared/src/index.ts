@@ -1053,3 +1053,9 @@ export {
   INLINE_CHECKED_CAPABILITIES,
   type InlineCheckedCapability,
 } from "./inline-checked-capabilities.js";
+
+// --- Client channel permission manifest ---
+export {
+  CLIENT_CHANNEL_PERMISSIONS,
+  type ClientChannel,
+} from "./channel-permissions.js";

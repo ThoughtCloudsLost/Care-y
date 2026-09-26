@@ -19,23 +19,34 @@ import {
   router,
   authedProcedure,
   viewCasesProcedure,
+  manageQueuesProcedure,
   permissionProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
-import { hasPermissionForOrg, requirePermissionForOrg } from "../auth/roles.js";
+import {
+  getEffectivePermissions,
+  hasPermissionForOrg,
+  isValidRoleId,
+  requirePermissionForOrg,
+} from "../auth/roles.js";
+import {
+  FEED_SUMMARY_WINDOW_MS,
+  resolveFeedScope,
+} from "../tickets/activity-feed-scope.js";
 
 /**
  * Which key a follow-up needs, decided by what the entry does rather than
  * where it is written. The four outbound types reach the client and take
- * the key for the channel they travel on. Everything else records
- * something that happened to the case, so it takes the note key.
+ * the key for the channel they travel on, from the shared manifest the
+ * browser gates on. Everything else records something that happened to
+ * the case, so it takes the note key.
  */
 const OUTBOUND_FOLLOW_UP_PERMISSIONS: ReadonlyMap<FollowUpType, Permission> =
   new Map([
-    ["sms_outbound", Permission.SEND_CLIENT_SMS],
-    ["email_outbound", Permission.SEND_CLIENT_EMAIL],
-    ["phone_call", Permission.CALL_CLIENTS],
-    ["message", Permission.MESSAGE_CLIENTS_IN_PORTAL],
+    ["sms_outbound", CLIENT_CHANNEL_PERMISSIONS.sms],
+    ["email_outbound", CLIENT_CHANNEL_PERMISSIONS.email],
+    ["phone_call", CLIENT_CHANNEL_PERMISSIONS.call],
+    ["message", CLIENT_CHANNEL_PERMISSIONS.portal],
   ]);
 
 function permissionForFollowUpType(type: FollowUpType): Permission {
@@ -99,8 +110,6 @@ const manageNoteTypesProcedure = permissionProcedure(
   Permission.MANAGE_NOTE_TYPES,
 );
 
-const manageQueuesProcedure = permissionProcedure(Permission.MANAGE_QUEUES);
-
 const manageQueueMembershipProcedure = permissionProcedure(
   Permission.MANAGE_QUEUE_MEMBERSHIP,
 );
@@ -157,6 +166,7 @@ import type {
 import {
   ErrorCode,
   Permission,
+  CLIENT_CHANNEL_PERMISSIONS,
   meetsRoleThreshold,
   upgradeToSecureLinkInputSchema,
   updateOutboundMessageInputSchema,
@@ -1945,7 +1955,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    // --- Dashboard: activity feed (scoped to user's queues) ---
+    // --- Dashboard: activity feed (queue and permission scoped) ---
     recentActivity: viewCasesProcedure
       .input(
         z
@@ -1958,23 +1968,49 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           // Without the audit service no audit rows are ever written, so an
           // empty feed is the accurate answer rather than a failure. Matches
           // the no-op behaviour of the audit() helper above.
-          if (!deps.createAuditSvc) return [];
+          if (!deps.createAuditSvc) return { entries: [], lastHourCount: 0 };
 
+          const permissions = isValidRoleId(ctx.user.roleId)
+            ? await getEffectivePermissions(
+                tDb,
+                ctx.org.orgSchema,
+                ctx.user.roleId,
+              )
+            : new Set<Permission>();
+          const scope = resolveFeedScope(permissions);
           const qps = deps.createQueuePermissionsSvc(tDb);
-          const queueIds = await qps.getUserQueues(ctx.user.id);
-
-          if (queueIds.length === 0) return [];
+          const ownQueueIds = await qps.getUserQueues(ctx.user.id);
 
           const auditSvc = deps.createAuditSvc(tDb);
-          const entries = await auditSvc.listRecentForQueues(
-            queueIds,
-            input.limit,
-          );
-          return entries.map((e) => ({
-            ...e,
-            encryptedClientAlias: b64(e.encryptedClientAlias),
-            encryptedQueueName: b64(e.encryptedQueueName),
-          }));
+          const since = new Date(Date.now() - FEED_SUMMARY_WINDOW_MS);
+          const [entries, lastHourCount] = await Promise.all([
+            auditSvc.listRecentActivity({
+              ...scope,
+              ownQueueIds,
+              limit: input.limit,
+            }),
+            auditSvc.countRecentActivity({ ...scope, ownQueueIds, since }),
+          ]);
+          return {
+            entries: entries.map((e) => {
+              switch (e.kind) {
+                case "ticket":
+                  return {
+                    ...e,
+                    encryptedClientAlias: b64(e.encryptedClientAlias),
+                    encryptedQueueName: b64(e.encryptedQueueName),
+                  };
+                case "ticket_outside_queues":
+                  return {
+                    ...e,
+                    encryptedQueueName: b64(e.encryptedQueueName),
+                  };
+                case "org":
+                  return e;
+              }
+            }),
+            lastHourCount,
+          };
         }),
       ),
 
@@ -2224,6 +2260,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           audit(ctx.org.tenantDb, {
             eventType: "client_tier_changed",
             actorId: ctx.user.id,
+            ticketId: input.ticketId,
             metadata: { operation: "upgrade_to_secure_link" },
           });
         }),
@@ -2275,6 +2312,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           audit(ctx.org.tenantDb, {
             eventType: "portal_channel_regenerated",
             actorId: ctx.user.id,
+            ticketId: input.ticketId,
             metadata: { operation: "regenerate" },
           });
         }),
@@ -2297,6 +2335,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           audit(ctx.org.tenantDb, {
             eventType: "portal_channel_revoked",
             actorId: ctx.user.id,
+            ticketId: input.ticketId,
             metadata: { operation: "revoke" },
           });
         }),
@@ -2358,6 +2397,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           audit(ctx.org.tenantDb, {
             eventType: "client_account_reset",
             actorId: ctx.user.id,
+            ticketId: input.ticketId,
             metadata: { operation: "reset" },
           });
         }),

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { QueryClient } from "@tanstack/svelte-query";
+import { ErrorCode } from "@care-y/shared";
 import { createAssignFlow } from "./create-assign-flow.svelte.js";
 import type * as WithTermsNS from "$lib/terminology/with-terms.js";
 import type * as HapticNS from "$lib/utils/haptic.js";
@@ -22,6 +23,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ticket_toast_assigned: ({ name }: { name: string }) => `Assigned to ${name}`,
   ticket_toast_unassigned: () => "Unassigned",
   error_generic: () => "Error",
+  error_insufficient_permissions: () => "No permission",
 }));
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
   (await import("$mocks/with-terms.js")).withTermsMock(
@@ -159,6 +161,31 @@ describe("createAssignFlow", () => {
       const flow = make();
       await flow.handleAssign("t1", "user-3");
       expect(toastStore.show).toHaveBeenCalledWith("Error", 3000);
+    });
+
+    it("shows the permission message when the server refuses the assignment", async () => {
+      const { optimisticMutation } =
+        await import("$lib/utils/optimistic-mutation.js");
+      (optimisticMutation as Mock).mockImplementationOnce(
+        async (opts: {
+          mutate: () => Promise<unknown>;
+          onError?: (err: unknown) => void;
+        }) => {
+          try {
+            await opts.mutate();
+          } catch (err: unknown) {
+            opts.onError?.(err);
+          }
+        },
+      );
+      assignMutate.mockRejectedValueOnce(
+        new Error(ErrorCode.INSUFFICIENT_PERMISSIONS),
+      );
+
+      const { toastStore } = await import("$lib/stores/toast.svelte.js");
+      const flow = make();
+      await flow.handleAssign("t1", "user-3");
+      expect(toastStore.show).toHaveBeenCalledWith("No permission", 3000);
     });
 
     it("passes correct queryKey to optimistic mutation", async () => {

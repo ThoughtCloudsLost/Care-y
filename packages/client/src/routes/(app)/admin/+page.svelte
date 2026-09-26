@@ -11,6 +11,7 @@
     getSectionRailCtx,
   } from "$lib/shell/context.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
+  import { canCall } from "$lib/auth/procedure-gates.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -45,79 +46,155 @@
 
   const scroll = createSectionScroll(() => scrollSections);
 
-  const hubStatusQuery = createQuery(() => ({
-    queryKey: adminKeys.hubStatus(),
-    queryFn: async () => authRouter.hubStatus.query(),
+  // One query per hub row, each enabled only for an account that may call
+  // it. A row whose query has no data (not permitted, loading or failed)
+  // shows no badge rather than a figure it cannot vouch for.
+
+  const activeUserCountQuery = createQuery(() => ({
+    queryKey: adminKeys.hubActiveUserCount(),
+    queryFn: async () => authRouter.hubActiveUserCount.query(),
+    enabled: canCall(permissions, "auth.hubActiveUserCount"),
+    staleTime: 60_000,
+  }));
+
+  const queueCountQuery = createQuery(() => ({
+    queryKey: adminKeys.hubQueueCount(),
+    queryFn: async () => authRouter.hubQueueCount.query(),
+    enabled: canCall(permissions, "auth.hubQueueCount"),
+    staleTime: 60_000,
+  }));
+
+  const keyStatusQuery = createQuery(() => ({
+    queryKey: adminKeys.hubKeyStatus(),
+    queryFn: async () => authRouter.hubKeyStatus.query(),
+    enabled: canCall(permissions, "auth.hubKeyStatus"),
+    staleTime: 60_000,
+  }));
+
+  const retentionQuery = createQuery(() => ({
+    queryKey: adminKeys.hubRetention(),
+    queryFn: async () => authRouter.hubRetention.query(),
+    enabled: canCall(permissions, "auth.hubRetention"),
+    staleTime: 60_000,
+  }));
+
+  const blocklistCountQuery = createQuery(() => ({
+    queryKey: adminKeys.hubBlocklistCount(),
+    queryFn: async () => authRouter.hubBlocklistCount.query(),
+    enabled: canCall(permissions, "auth.hubBlocklistCount"),
+    staleTime: 60_000,
+  }));
+
+  const greetingCountQuery = createQuery(() => ({
+    queryKey: adminKeys.hubGreetingCount(),
+    queryFn: async () => authRouter.hubGreetingCount.query(),
+    enabled: canCall(permissions, "auth.hubGreetingCount"),
+    staleTime: 60_000,
+  }));
+
+  const templateCountQuery = createQuery(() => ({
+    queryKey: adminKeys.hubTemplateCount(),
+    queryFn: async () => authRouter.hubTemplateCount.query(),
+    enabled: canCall(permissions, "auth.hubTemplateCount"),
     staleTime: 60_000,
   }));
 
   const provisionedPhonesQuery = createQuery(() => ({
     queryKey: adminKeys.telephonyPhones(),
     queryFn: async () => telephonyAdmin.getProvisionedPhones.query(),
+    enabled: canCall(permissions, "telephonyAdmin.getProvisionedPhones"),
     staleTime: 60_000,
   }));
 
   function getBadge(destId: string): string | null {
-    const data = hubStatusQuery.data;
-    if (!data) return null;
     switch (destId) {
-      case "users":
-        return m.admin_hub_badge_active({
-          count: String(data.activeUserCount),
-        });
-      case "queues":
+      case "users": {
+        const data = activeUserCountQuery.data;
+        if (!data) return null;
+        return m.admin_hub_badge_active({ count: String(data.count) });
+      }
+      case "queues": {
+        const data = queueCountQuery.data;
+        if (!data) return null;
         return m.admin_hub_badge_queues(
-          withTerms({ count: String(data.queueCount) }),
+          withTerms({ count: String(data.count) }),
         );
-      case "keys":
-        return data.keyStatus === "ok"
+      }
+      case "keys": {
+        const data = keyStatusQuery.data;
+        if (!data) return null;
+        return data.status === "ok"
           ? m.admin_hub_badge_keys_ok()
           : m.admin_hub_badge_keys_missing();
-      case "retention":
+      }
+      case "retention": {
+        const data = retentionQuery.data;
+        if (!data) return null;
         return data.retentionDays !== null && data.retentionDays !== 0
           ? m.admin_hub_badge_retention_days({
               count: String(data.retentionDays),
             })
           : m.admin_hub_badge_retention_disabled();
+      }
       case "telephony": {
-        const lineCount = provisionedPhonesQuery.data?.length ?? 0;
-        return lineCount > 0
-          ? m.admin_hub_badge_phones({ count: String(lineCount) })
+        const phones = provisionedPhonesQuery.data;
+        if (!phones) return null;
+        return phones.length > 0
+          ? m.admin_hub_badge_phones({ count: String(phones.length) })
           : m.admin_hub_badge_no_phones();
       }
-      case "blocklist":
-        return m.admin_hub_badge_blocked({
-          count: String(data.blocklistCount),
-        });
-      case "greetings":
-        return m.admin_hub_badge_greetings({
-          count: String(data.greetingCount),
-        });
-      case "sms-templates":
-        return m.admin_hub_badge_templates({
-          count: String(data.templateCount),
-        });
+      case "blocklist": {
+        const data = blocklistCountQuery.data;
+        if (!data) return null;
+        return m.admin_hub_badge_blocked({ count: String(data.count) });
+      }
+      case "greetings": {
+        const data = greetingCountQuery.data;
+        if (!data) return null;
+        return m.admin_hub_badge_greetings({ count: String(data.count) });
+      }
+      case "sms-templates": {
+        const data = templateCountQuery.data;
+        if (!data) return null;
+        return m.admin_hub_badge_templates({ count: String(data.count) });
+      }
       default:
         return null;
     }
   }
 
   function badgeVariant(destId: string): "default" | "ok" | "warning" | null {
-    const data = hubStatusQuery.data;
-    if (!data) return null;
     switch (destId) {
-      case "keys":
-        return data.keyStatus === "ok" ? "ok" : "warning";
-      case "telephony": {
-        const lineCount = provisionedPhonesQuery.data?.length ?? 0;
-        return lineCount > 0 ? "ok" : "warning";
+      case "users":
+        return activeUserCountQuery.data ? "default" : null;
+      case "queues":
+        return queueCountQuery.data ? "default" : null;
+      case "keys": {
+        const data = keyStatusQuery.data;
+        if (!data) return null;
+        return data.status === "ok" ? "ok" : "warning";
       }
-      case "greetings":
-        return data.greetingCount > 0 ? "default" : "warning";
-      case "sms-templates":
-        return data.templateCount > 0 ? "default" : "warning";
+      case "retention":
+        return retentionQuery.data ? "default" : null;
+      case "telephony": {
+        const phones = provisionedPhonesQuery.data;
+        if (!phones) return null;
+        return phones.length > 0 ? "ok" : "warning";
+      }
+      case "blocklist":
+        return blocklistCountQuery.data ? "default" : null;
+      case "greetings": {
+        const data = greetingCountQuery.data;
+        if (!data) return null;
+        return data.count > 0 ? "default" : "warning";
+      }
+      case "sms-templates": {
+        const data = templateCountQuery.data;
+        if (!data) return null;
+        return data.count > 0 ? "default" : "warning";
+      }
       default:
-        return "default";
+        return null;
     }
   }
 

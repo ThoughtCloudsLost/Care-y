@@ -421,6 +421,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           (r.metadata as Record<string, unknown>).quarantineId === quarantineId,
       );
       expect(relevant).toBeDefined();
+      expect(relevant!.ticket_id).toBe(result.ticketId);
     }, 30_000);
 
     it("route-to-client creates intake ticket and follow-up", async () => {

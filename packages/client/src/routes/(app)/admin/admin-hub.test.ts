@@ -17,9 +17,20 @@ import type * as NavigationNS from "$app/navigation";
 import type * as UseSectionScrollNS from "$lib/components/useSectionScroll.svelte.js";
 import { Permission } from "@care-y/shared";
 import { setPermissions, getMockPermissions } from "$mocks/permissions.js";
-let mockHubStatusData: Record<string, unknown> | undefined;
-let mockProvisionedPhones:
-  readonly { number: string; sid: string }[] | undefined;
+// Data each hub query returns once fetched, keyed by the last segment of
+// its query key. A key with no entry stays loading.
+const mockQueryData = new Map<string, unknown>();
+
+const hubQueries = vi.hoisted(() => ({
+  hubActiveUserCount: vi.fn().mockResolvedValue({ count: 0 }),
+  hubQueueCount: vi.fn().mockResolvedValue({ count: 0 }),
+  hubKeyStatus: vi.fn().mockResolvedValue({ status: "ok" }),
+  hubRetention: vi.fn().mockResolvedValue({ retentionDays: null }),
+  hubBlocklistCount: vi.fn().mockResolvedValue({ count: 0 }),
+  hubGreetingCount: vi.fn().mockResolvedValue({ count: 0 }),
+  hubTemplateCount: vi.fn().mockResolvedValue({ count: 0 }),
+  getProvisionedPhones: vi.fn().mockResolvedValue([]),
+}));
 
 const mockGoto = vi.fn();
 // --- Mocks ---
@@ -62,18 +73,23 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
     invalidateQueries: vi.fn(),
     getQueriesData: vi.fn().mockReturnValue([]),
   }),
+  // Mirrors TanStack's gate: a disabled query never runs its queryFn and
+  // holds no data.
   createQuery: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
     const key = opts.queryKey as readonly string[];
-    const isPhones = key.includes("provisionedPhones");
+    const name = key.at(-1) ?? "";
+    const enabled = opts.enabled !== false;
+    if (enabled) void (opts.queryFn as () => Promise<unknown>)();
+    const data = (): unknown => (enabled ? mockQueryData.get(name) : undefined);
     return {
       get isLoading() {
-        return isPhones ? !mockProvisionedPhones : !mockHubStatusData;
+        return enabled && data() === undefined;
       },
       isError: false,
       error: null,
       get data() {
-        return isPhones ? mockProvisionedPhones : mockHubStatusData;
+        return data();
       },
     };
   },
@@ -83,10 +99,16 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     auth: {
-      hubStatus: { query: vi.fn().mockResolvedValue({}) },
+      hubActiveUserCount: { query: hubQueries.hubActiveUserCount },
+      hubQueueCount: { query: hubQueries.hubQueueCount },
+      hubKeyStatus: { query: hubQueries.hubKeyStatus },
+      hubRetention: { query: hubQueries.hubRetention },
+      hubBlocklistCount: { query: hubQueries.hubBlocklistCount },
+      hubGreetingCount: { query: hubQueries.hubGreetingCount },
+      hubTemplateCount: { query: hubQueries.hubTemplateCount },
     },
     telephonyAdmin: {
-      getProvisionedPhones: { query: vi.fn().mockResolvedValue([]) },
+      getProvisionedPhones: { query: hubQueries.getProvisionedPhones },
     },
   },
 }));
@@ -212,8 +234,8 @@ beforeEach(() => {
     Permission.VIEW_REPORTS,
     Permission.MANAGE_PRESETS,
   );
-  mockHubStatusData = undefined;
-  mockProvisionedPhones = undefined;
+  mockQueryData.clear();
+  for (const query of Object.values(hubQueries)) query.mockClear();
   mockNavbarCtx.current = undefined;
   mockGoto.mockClear();
   mockToastShow.mockClear();
@@ -350,13 +372,11 @@ describe("Admin hub page", () => {
   });
 
   describe("status badges", () => {
-    it("renders badges when hub status data is available", () => {
-      mockHubStatusData = {
-        activeUserCount: 5,
-        queueCount: 3,
-        keyStatus: "ok",
-        retentionDays: 90,
-      };
+    it("renders badges when hub data is available", () => {
+      mockQueryData.set("hubActiveUserCount", { count: 5 });
+      mockQueryData.set("hubQueueCount", { count: 3 });
+      mockQueryData.set("hubKeyStatus", { status: "ok" });
+      mockQueryData.set("hubRetention", { retentionDays: 90 });
       renderPage();
 
       expect(screen.getByText("5 active")).toBeTruthy();
@@ -366,12 +386,8 @@ describe("Admin hub page", () => {
     });
 
     it("shows 'Action needed' when key status is missing", () => {
-      mockHubStatusData = {
-        activeUserCount: 1,
-        queueCount: 0,
-        keyStatus: "missing",
-        retentionDays: null,
-      };
+      mockQueryData.set("hubKeyStatus", { status: "missing" });
+      mockQueryData.set("hubRetention", { retentionDays: null });
       renderPage();
 
       expect(screen.getByText("Action needed")).toBeTruthy();
@@ -379,21 +395,15 @@ describe("Admin hub page", () => {
     });
 
     it("renders communications badges with success variant when counts > 0", () => {
-      mockHubStatusData = {
-        activeUserCount: 2,
-        queueCount: 1,
-        keyStatus: "ok",
-        retentionDays: 30,
-        blocklistCount: 7,
-        greetingCount: 3,
-        templateCount: 5,
-      };
-      mockProvisionedPhones = [
+      mockQueryData.set("hubBlocklistCount", { count: 7 });
+      mockQueryData.set("hubGreetingCount", { count: 3 });
+      mockQueryData.set("hubTemplateCount", { count: 5 });
+      mockQueryData.set("provisionedPhones", [
         { number: "+15550001111", sid: "PN001" },
         { number: "+15550002222", sid: "PN002" },
         { number: "+15550003333", sid: "PN003" },
         { number: "+15550004444", sid: "PN004" },
-      ];
+      ]);
       renderPage();
 
       expect(screen.getByText("4 numbers")).toBeTruthy();
@@ -411,16 +421,10 @@ describe("Admin hub page", () => {
     });
 
     it("shows warning variant when communications counts are zero", () => {
-      mockHubStatusData = {
-        activeUserCount: 1,
-        queueCount: 0,
-        keyStatus: "ok",
-        retentionDays: null,
-        blocklistCount: 0,
-        greetingCount: 0,
-        templateCount: 0,
-      };
-      mockProvisionedPhones = [];
+      mockQueryData.set("hubBlocklistCount", { count: 0 });
+      mockQueryData.set("hubGreetingCount", { count: 0 });
+      mockQueryData.set("hubTemplateCount", { count: 0 });
+      mockQueryData.set("provisionedPhones", []);
       renderPage();
 
       expect(screen.getByText("No phones")).toBeTruthy();
@@ -440,11 +444,43 @@ describe("Admin hub page", () => {
     });
 
     it("does not render badges when query has no data yet", () => {
-      mockHubStatusData = undefined;
       renderPage();
 
       expect(screen.queryByText(/^\d+ active$/)).toBeNull();
       expect(screen.queryByText(/^\d+ queues$/)).toBeNull();
+    });
+
+    it("shows no telephony warning while the phones query has no data", () => {
+      renderPage();
+
+      expect(screen.getByText("Telephony")).toBeTruthy();
+      expect(screen.queryByText("No phones")).toBeNull();
+      expect(screen.queryByText(/^\d+ numbers$/)).toBeNull();
+    });
+
+    it("makes no request for a row whose permission the account lacks", () => {
+      setPermissions(Permission.MANAGE_USERS);
+      renderPage();
+
+      expect(hubQueries.hubActiveUserCount).toHaveBeenCalledOnce();
+      expect(hubQueries.hubQueueCount).not.toHaveBeenCalled();
+      expect(hubQueries.hubKeyStatus).not.toHaveBeenCalled();
+      expect(hubQueries.hubRetention).not.toHaveBeenCalled();
+      expect(hubQueries.hubBlocklistCount).not.toHaveBeenCalled();
+      expect(hubQueries.hubGreetingCount).not.toHaveBeenCalled();
+      expect(hubQueries.hubTemplateCount).not.toHaveBeenCalled();
+      expect(hubQueries.getProvisionedPhones).not.toHaveBeenCalled();
+    });
+
+    it("shows a row's badge from its own query without MANAGE_ROLES", () => {
+      setPermissions(Permission.MANAGE_RETENTION);
+      mockQueryData.set("hubRetention", { retentionDays: 90 });
+      mockQueryData.set("hubActiveUserCount", { count: 5 });
+      renderPage();
+
+      expect(hubQueries.hubRetention).toHaveBeenCalledOnce();
+      expect(screen.getByText("90 days")).toBeTruthy();
+      expect(screen.queryByText("5 active")).toBeNull();
     });
   });
 

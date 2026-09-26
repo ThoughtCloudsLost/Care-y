@@ -2,11 +2,15 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const { mockSetPiiRetention } = vi.hoisted(() => ({
-  mockSetPiiRetention: vi.fn().mockResolvedValue({ success: true }),
-}));
+const { mockSetPiiRetention, mockHubRetention, mockInvalidateQueries } =
+  vi.hoisted(() => ({
+    mockSetPiiRetention: vi.fn().mockResolvedValue({ success: true }),
+    mockHubRetention: vi.fn(),
+    mockInvalidateQueries: vi.fn(),
+  }));
 
-let mockHubStatusData: { retentionDays: number | null } | undefined;
+let mockRetentionData: { retentionDays: number | null } | undefined;
+let lastQueryOpts: Record<string, unknown> | undefined;
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof MessagesNS>()),
@@ -37,7 +41,7 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     auth: {
-      hubStatus: { query: vi.fn() },
+      hubRetention: { query: mockHubRetention },
       setPiiRetention: { mutate: mockSetPiiRetention },
     },
   },
@@ -46,17 +50,17 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
   ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
-    optsFn();
+    lastQueryOpts = optsFn();
     return {
       get isLoading() {
-        return !mockHubStatusData;
+        return !mockRetentionData;
       },
       get isError() {
         return false;
       },
       error: null,
       get data() {
-        return mockHubStatusData;
+        return mockRetentionData;
       },
       refetch: vi.fn(),
     };
@@ -78,7 +82,7 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
       },
     };
   },
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
 vi.mock(
@@ -119,6 +123,7 @@ vi.mock(
 );
 
 import RetentionSection from "./RetentionSection.svelte";
+import { adminKeys } from "$lib/query/keys.js";
 import type * as AnnounceNS from "$lib/utils/announce.js";
 import type * as HapticNS from "$lib/utils/haptic.js";
 import type * as ToastNS from "$lib/stores/toast.svelte.js";
@@ -131,19 +136,30 @@ import type * as ShellDialogNS from "$lib/shell/ShellDialog.svelte";
 describe("RetentionSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockHubStatusData = undefined;
+    mockRetentionData = undefined;
+    lastQueryOpts = undefined;
   });
 
   afterEach(cleanup);
 
+  it("reads the retention setting from auth.hubRetention", async () => {
+    mockRetentionData = { retentionDays: 90 };
+    render(RetentionSection);
+
+    expect(lastQueryOpts?.queryKey).toEqual(adminKeys.hubRetention());
+    const queryFn = lastQueryOpts?.queryFn as () => Promise<unknown>;
+    await queryFn();
+    expect(mockHubRetention).toHaveBeenCalledOnce();
+  });
+
   it("renders disabled toggle during loading", () => {
-    mockHubStatusData = undefined;
+    mockRetentionData = undefined;
     render(RetentionSection);
     expect(screen.getByText("Auto-delete PII")).toBeTruthy();
   });
 
   it("initializes enabled with days when server has retention configured", () => {
-    mockHubStatusData = { retentionDays: 90 };
+    mockRetentionData = { retentionDays: 90 };
     render(RetentionSection);
 
     expect(screen.getByText("Deleting after 90 days")).toBeTruthy();
@@ -153,7 +169,7 @@ describe("RetentionSection", () => {
   });
 
   it("initializes disabled when server has no retention", () => {
-    mockHubStatusData = { retentionDays: null };
+    mockRetentionData = { retentionDays: null };
     render(RetentionSection);
 
     expect(screen.getByText("Auto-delete is disabled")).toBeTruthy();
@@ -162,7 +178,7 @@ describe("RetentionSection", () => {
   });
 
   it("shows unsaved hint when days differ from server value", async () => {
-    mockHubStatusData = { retentionDays: 90 };
+    mockRetentionData = { retentionDays: 90 };
     render(RetentionSection);
 
     const input = document.querySelector<HTMLInputElement>("#retention-days")!;
@@ -173,7 +189,7 @@ describe("RetentionSection", () => {
   });
 
   it("does not show unsaved hint when days match server value", () => {
-    mockHubStatusData = { retentionDays: 90 };
+    mockRetentionData = { retentionDays: 90 };
     render(RetentionSection);
 
     expect(screen.queryByText("Unsaved changes")).toBeNull();
@@ -185,7 +201,7 @@ describe("RetentionSection", () => {
   // the Svelte handler in jsdom. These flows are verified via Playwright.
 
   it("calls mutation with null on confirm clear", async () => {
-    mockHubStatusData = { retentionDays: 90 };
+    mockRetentionData = { retentionDays: 90 };
     render(RetentionSection);
 
     const toggle = document.querySelector<HTMLInputElement>(
@@ -196,10 +212,15 @@ describe("RetentionSection", () => {
     await fireEvent.click(screen.getByText("Disable"));
 
     expect(mockSetPiiRetention).toHaveBeenCalledWith({ days: null });
+    await vi.waitFor(() => {
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({
+        queryKey: adminKeys.hubRetention(),
+      });
+    });
   });
 
   it("renders range hint text", () => {
-    mockHubStatusData = { retentionDays: 90 };
+    mockRetentionData = { retentionDays: 90 };
     render(RetentionSection);
 
     expect(screen.getByText("1-3650")).toBeTruthy();
