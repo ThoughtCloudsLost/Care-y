@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "No search term ever leaves the device. Matching is done in the browser against text the browser has decrypted, which is what allows a query about case conten..." |
+* | "No search term ever leaves the device. The browser matches the query against text it has already decrypted, which is why a query about case content can run a..." |
 *
 * @param {Demo_Narrative_Search_How_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
