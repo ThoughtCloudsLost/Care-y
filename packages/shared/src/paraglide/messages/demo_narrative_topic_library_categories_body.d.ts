@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Every article belongs to exactly one category, and categories are the organization's own vocabulary rather than a fixed set. Creating, renaming, reordering a..." |
+* | "Knowledge base articles are grouped by category, one category per article. The organization defines whatever categories it needs. Creating, renaming, reorder..." |
 *
 * @param {Demo_Narrative_Topic_Library_Categories_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

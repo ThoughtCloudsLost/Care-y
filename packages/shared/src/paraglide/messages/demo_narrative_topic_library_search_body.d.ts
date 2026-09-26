@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Searching the library matches a term against the titles and excerpts already decrypted in the browser, using the same fuzzy matcher the overlay uses, and ord..." |
+* | "Searching the library matches the term against the titles and excerpts already decrypted in the browser, orders the list by match quality, and sends no part ..." |
 *
 * @param {Demo_Narrative_Topic_Library_Search_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

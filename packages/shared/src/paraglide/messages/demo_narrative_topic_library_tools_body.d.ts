@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The list can be sorted by creation date, last edit or rating, narrowed by category, rating band, author and a creation date range, and presented in four ways..." |
+* | "Four view modes are available, with sorting by creation date, last edit, or rating, and filters for category, author, a creation date range, and two rating b..." |
 *
 * @param {Demo_Narrative_Topic_Library_Tools_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
