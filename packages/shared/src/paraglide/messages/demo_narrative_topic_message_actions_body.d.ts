@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Holding an entry in the thread offers the actions that entry allows, which depend on what kind it is and who wrote it. [[#permissions #client-data]] **What i..." |
+* | "A long press on an entry in the thread opens a menu of the actions that entry allows. Shift+F10 opens the same menu from a keyboard. An entry with nothing en..." |
 *
 * @param {Demo_Narrative_Topic_Message_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

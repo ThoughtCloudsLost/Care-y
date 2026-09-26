@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Choosing a channel that carries content outside the encrypted path raises a notice saying what that channel exposes. [[#privacy #telephony]] **What each noti..." |
+* | "Sending a text or placing a call leaves the encrypted path. The browser warns once per channel per session that the phone provider can read or hear the conte..." |
 *
 * @param {Demo_Narrative_Topic_Exposure_Hints_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
