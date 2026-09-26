@@ -98,6 +98,7 @@
         createdAt: c.createdAt,
         followUpCount: c.followUpCount,
         unreadCount: c.unreadCount,
+        unreadCountIsFloor: c.unreadCountIsFloor,
         queueSortOrder: t.queueSortOrder,
       };
     });

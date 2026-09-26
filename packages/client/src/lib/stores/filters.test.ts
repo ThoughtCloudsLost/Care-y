@@ -161,18 +161,18 @@ describe("filterStore", () => {
       expect(store.serverParams.sortDirection).toBe("asc");
     });
 
-    it("maps 'new' display status to server status 'open'", async () => {
+    it("maps 'new' to open tickets that are not held", async () => {
       const store = await getStore();
       store.toggleStatus("new");
       expect(store.serverParams.statuses).toEqual(["open"]);
-      expect(store.serverParams.onHold).toBeUndefined();
+      expect(store.serverParams.onHold).toBe(false);
     });
 
-    it("maps 'active' display status to server status 'open'", async () => {
+    it("maps 'active' to open tickets that are not held", async () => {
       const store = await getStore();
       store.toggleStatus("active");
       expect(store.serverParams.statuses).toEqual(["open"]);
-      expect(store.serverParams.onHold).toBeUndefined();
+      expect(store.serverParams.onHold).toBe(false);
     });
 
     it("maps both 'new' and 'active' to single 'open' without duplicates", async () => {
@@ -180,19 +180,14 @@ describe("filterStore", () => {
       store.toggleStatus("new");
       store.toggleStatus("active");
       expect(store.serverParams.statuses).toEqual(["open"]);
+      expect(store.serverParams.onHold).toBe(false);
     });
 
-    it("maps hold to onHold: true, not in statuses array", async () => {
+    it("maps 'hold' to open tickets that are held", async () => {
       const store = await getStore();
       store.toggleStatus("hold");
-      expect(store.serverParams.onHold).toBe(true);
-      expect(store.serverParams.statuses).toBeUndefined();
-    });
-
-    it("splits hold from display statuses correctly", async () => {
-      const store = await getStore();
-      store.toggleStatus("active");
-      store.toggleStatus("hold");
+      // Hold is a status, not an axis crossing the other three: a held
+      // ticket is open, so the status list is not left empty.
       expect(store.serverParams.statuses).toEqual(["open"]);
       expect(store.serverParams.onHold).toBe(true);
     });
@@ -201,6 +196,7 @@ describe("filterStore", () => {
       const store = await getStore();
       store.toggleStatus("closed");
       expect(store.serverParams.statuses).toEqual(["closed"]);
+      expect(store.serverParams.onHold).toBe(false);
     });
 
     it("combines open and closed server statuses", async () => {
@@ -211,6 +207,32 @@ describe("filterStore", () => {
         expect.arrayContaining(["open", "closed"]),
       );
       expect(store.serverParams.statuses).toHaveLength(2);
+      expect(store.serverParams.onHold).toBe(false);
+    });
+
+    describe("selections spanning the held boundary send no onHold", () => {
+      // These have no faithful params: one onHold boolean cannot express
+      // "held OR not held". Constraining it would drop rows instead of
+      // over-fetching them, so the param is omitted and the route narrows
+      // via filterByDisplayStatus.
+
+      it("omits onHold for 'active' plus 'hold'", async () => {
+        const store = await getStore();
+        store.toggleStatus("active");
+        store.toggleStatus("hold");
+        expect(store.serverParams.statuses).toEqual(["open"]);
+        expect(store.serverParams.onHold).toBeUndefined();
+      });
+
+      it("omits onHold for 'closed' plus 'hold'", async () => {
+        const store = await getStore();
+        store.toggleStatus("closed");
+        store.toggleStatus("hold");
+        expect(store.serverParams.statuses).toEqual(
+          expect.arrayContaining(["open", "closed"]),
+        );
+        expect(store.serverParams.onHold).toBeUndefined();
+      });
     });
 
     it("maps priorities to array", async () => {
@@ -246,38 +268,6 @@ describe("filterStore", () => {
       expect(params.queueIds).toBeUndefined();
       expect(params.priorities).toBeUndefined();
       expect(params.assignedTo).toBeUndefined();
-    });
-  });
-
-  describe("needsDisplayStatusPostFilter", () => {
-    it("is false when no statuses selected", async () => {
-      const store = await getStore();
-      expect(store.needsDisplayStatusPostFilter).toBe(false);
-    });
-
-    it("is true when only 'new' is selected", async () => {
-      const store = await getStore();
-      store.toggleStatus("new");
-      expect(store.needsDisplayStatusPostFilter).toBe(true);
-    });
-
-    it("is true when only 'active' is selected", async () => {
-      const store = await getStore();
-      store.toggleStatus("active");
-      expect(store.needsDisplayStatusPostFilter).toBe(true);
-    });
-
-    it("is false when both 'new' and 'active' are selected", async () => {
-      const store = await getStore();
-      store.toggleStatus("new");
-      store.toggleStatus("active");
-      expect(store.needsDisplayStatusPostFilter).toBe(false);
-    });
-
-    it("is false when neither 'new' nor 'active' is selected (only hold)", async () => {
-      const store = await getStore();
-      store.toggleStatus("hold");
-      expect(store.needsDisplayStatusPostFilter).toBe(false);
     });
   });
 

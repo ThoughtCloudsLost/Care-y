@@ -6,7 +6,16 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import { ticketsKeys, ticketKeys, volunteerKeys } from "$lib/query/keys";
-  import { createCountsQuery } from "$lib/tickets/queries.js";
+  import {
+    createCountsQuery,
+    createFacetIndexQuery,
+  } from "$lib/tickets/queries.js";
+  import {
+    computeFacets,
+    type FacetFilterState,
+    type FacetContext,
+  } from "$lib/tickets/facet-filters.js";
+  import { formatCount } from "$lib/tickets/format-count.js";
   import { untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { page } from "$app/state";
@@ -224,6 +233,8 @@
     queryFn: async () => ticketRouter.myQueues.query(),
   }));
 
+  const facetIndexQuery = createFacetIndexQuery(ticketRouter, () => true);
+
   // --- Read state (unread pills, sort, filter, global truth) ---
 
   const loadedTicketIds = $derived(allTickets.map((t) => t.id));
@@ -351,11 +362,7 @@
       (t) =>
         !loaded.has(t.id) && matchesServerFilters(t, filterStore.serverParams),
     );
-    return filterByDisplayStatus(
-      unloaded,
-      filterStore.needsDisplayStatusPostFilter,
-      filterStore.statuses.has("new"),
-    );
+    return filterByDisplayStatus(unloaded, filterStore.statuses);
   });
 
   const pinnedLoading = $derived(
@@ -364,12 +371,10 @@
 
   // --- Derived display list (Layer C extractions) ---
 
+  // serverParams is a superset for any selection spanning the held
+  // boundary, so this is where the status filter actually applies.
   const displayFiltered = $derived(
-    filterByDisplayStatus(
-      allTickets,
-      filterStore.needsDisplayStatusPostFilter,
-      filterStore.statuses.has("new"),
-    ),
+    filterByDisplayStatus(allTickets, filterStore.statuses),
   );
 
   // --- Preview reactions ---
@@ -461,6 +466,8 @@
       },
       currentUserId: currentUserId ?? "",
       unreadCount: (ticketId) => listReadState.unreadCount(ticketId),
+      unreadCountIsFloor: (ticketId) =>
+        listReadState.unreadCountIsFloor(ticketId),
       getPreview: (ticketId) => previewLoader.get(ticketId),
       get previewReactionsMap() {
         return previewReactions.byId;
@@ -713,6 +720,7 @@
       ...mapTicketDisplayFields(t, tableFieldDeps),
       encryptedTitle: t.encryptedTitle,
       unreadCount: listReadState.unreadCount(t.id),
+      unreadCountIsFloor: listReadState.unreadCountIsFloor(t.id),
     })),
   );
 
@@ -842,6 +850,9 @@
       toastStore.show(m.ticket_toast_taken(withTerms()));
       void queryClient.invalidateQueries({
         queryKey: ticketsKeys.lists(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ticketsKeys.facetIndex(),
       });
     } catch (err: unknown) {
       console.error("[tickets] take failed", err);
@@ -1003,43 +1014,65 @@
 
   // --- Filter config ---
 
-  const counts = $derived(countsQuery.data);
-  const priorityCounts = $derived(counts?.byPriority);
+  // Facet counts derived from the facet index query. The index lands
+  // asynchronously; until it does, option labels render bare. Once
+  // present, counts are floors when the index is incomplete.
+  const facetFilters: FacetFilterState = $derived({
+    statuses: filterStore.statuses,
+    queueIds: filterStore.queueIds,
+    priorities: filterStore.priorities,
+    assigneeId: filterStore.assigneeId,
+    dateFrom: filterStore.dateFrom,
+    dateTo: filterStore.dateTo,
+    unreadOnly: filterStore.unreadOnly,
+    needsAttentionOnly: filterStore.needsAttentionOnly,
+  });
+
+  const facetCtx: FacetContext = $derived({
+    currentUserId,
+    isUnread: (id: string) => listReadState.isUnread(id),
+  });
+
+  const facets = $derived(
+    computeFacets(facetIndexQuery.data?.rows ?? [], facetFilters, facetCtx),
+  );
+
+  // Counts go bare until the index lands, and render as floors while it
+  // is incomplete. Showing a number we know is short would be the same
+  // defect this work is fixing.
+  function withCount(label: string, n: number): string {
+    if (facetIndexQuery.data === undefined) return label;
+    return `${label} (${formatCount(n, !facetIndexQuery.data.complete)})`;
+  }
 
   // "Unread" rides the Status dropdown and "Needs attention" rides
   // Priority: to a volunteer they ARE a status and a priority concern.
   // Both toggle client-side membership flags, never filterStore.
 
-  // No server aggregate exists for needs-attention; this counts the
-  // loaded window plus pinned rows, exactly the set the option shows.
-  const needsAttentionCount = $derived(
-    [...pinnedRecords, ...allTickets].filter((t) =>
-      isNeedsAttention(t, currentUserId, (id) => listReadState.isUnread(id)),
-    ).length,
-  );
   const statusOptions = $derived([
     {
       value: "new",
-      label: `${m.tickets_filter_new()} (${String(counts?.new ?? 0)})`,
+      label: withCount(m.tickets_filter_new(), facets.status.new),
     },
     {
       value: "active",
-      label: `${m.tickets_filter_active()} (${String(counts?.active ?? 0)})`,
+      label: withCount(m.tickets_filter_active(), facets.status.active),
     },
     {
       value: "hold",
-      label: `${m.tickets_filter_hold()} (${String(counts?.onHold ?? 0)})`,
+      label: withCount(m.tickets_filter_hold(), facets.status.hold),
     },
     {
       value: "closed",
-      label: `${m.tickets_filter_closed()} (${String(counts?.closed ?? 0)})`,
+      label: withCount(m.tickets_filter_closed(), facets.status.closed),
     },
     {
       value: "unread",
-      // Global truth arrives with the sweep; until then the label goes
-      // bare rather than showing a placeholder number.
+      // Unread depends on read state; until the sweep settles the count
+      // would undercount, so it stays bare until both the facet index
+      // AND the sweep have landed.
       label: listReadState.sweepSettled()
-        ? `${m.tickets_filter_unread()} (${String(listReadState.unreadTotal())})`
+        ? withCount(m.tickets_filter_unread(), facets.unread)
         : m.tickets_filter_unread(),
     },
   ]);
@@ -1047,23 +1080,38 @@
   const priorityOptions = $derived([
     {
       value: "low",
-      label: `${m.tickets_filter_priority_low()} (${String(priorityCounts?.low ?? 0)})`,
+      label: withCount(
+        m.tickets_filter_priority_low(),
+        facets.priority.low ?? 0,
+      ),
     },
     {
       value: "normal",
-      label: `${m.tickets_filter_priority_normal()} (${String(priorityCounts?.normal ?? 0)})`,
+      label: withCount(
+        m.tickets_filter_priority_normal(),
+        facets.priority.normal ?? 0,
+      ),
     },
     {
       value: "high",
-      label: `${m.tickets_filter_priority_high()} (${String(priorityCounts?.high ?? 0)})`,
+      label: withCount(
+        m.tickets_filter_priority_high(),
+        facets.priority.high ?? 0,
+      ),
     },
     {
       value: "urgent",
-      label: `${m.tickets_filter_priority_urgent()} (${String(priorityCounts?.urgent ?? 0)})`,
+      label: withCount(
+        m.tickets_filter_priority_urgent(),
+        facets.priority.urgent ?? 0,
+      ),
     },
     {
       value: "needs-attention",
-      label: `${m.tickets_filter_needs_attention()} (${String(needsAttentionCount)})`,
+      label: withCount(
+        m.tickets_filter_needs_attention(),
+        facets.needsAttention,
+      ),
     },
   ]);
 
@@ -1082,14 +1130,21 @@
   const queueOptions = $derived(
     (queuesQuery.data ?? []).map((q) => ({
       value: q.id,
-      label: `${orgCache.decrypt(`queue:${q.id}`, q.encryptedName, { table: "queues", id: q.id }) ?? "..."} (${q.openCount})`,
+      label: withCount(
+        orgCache.decrypt(`queue:${q.id}`, q.encryptedName, {
+          table: "queues",
+          id: q.id,
+        }) ?? "...",
+        facets.queue.get(q.id) ?? 0,
+      ),
     })),
   );
 
   const assigneeOptions = $derived(
-    buildAssigneeOptions(currentUserId, counts, {
-      me: (count) => `${m.tickets_filter_me()} (${count})`,
-      unassigned: (count) => `${m.tickets_unassigned()} (${count})`,
+    buildAssigneeOptions(currentUserId, facets.assignee, {
+      me: (_count) => withCount(m.tickets_filter_me(), facets.assignee.mine),
+      unassigned: (_count) =>
+        withCount(m.tickets_unassigned(), facets.assignee.unassigned),
     }),
   );
 

@@ -66,6 +66,9 @@ export function createHoldAction(deps: HoldActionDeps): HoldActionState {
           void queryClient.invalidateQueries({
             queryKey: ticketsKeys.lists(),
           });
+          void queryClient.invalidateQueries({
+            queryKey: ticketsKeys.facetIndex(),
+          });
         },
         onError: () => {
           toastStore.show(m.error_generic(), 3000);

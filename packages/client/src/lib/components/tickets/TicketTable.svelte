@@ -31,6 +31,7 @@
     createdAt: Date;
     followUpCount: number;
     unreadCount: number;
+    unreadCountIsFloor?: boolean;
   }
 
   interface TicketTableProps {
@@ -564,7 +565,10 @@
               </td>
               <td class="col-msgs hide-narrow cell-muted">
                 {#if row.unreadCount > 0}
-                  <NewPill count={row.unreadCount} />
+                  <NewPill
+                    count={row.unreadCount}
+                    isFloor={row.unreadCountIsFloor}
+                  />
                 {:else if row.followUpCount > 0}
                   {row.followUpCount}
                 {/if}

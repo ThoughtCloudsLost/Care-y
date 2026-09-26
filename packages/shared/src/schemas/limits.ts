@@ -32,3 +32,14 @@ export const PORTAL_ATTACHMENT_MAX_PLAINTEXT_BYTES =
 
 /** Attachments one follow-up may carry. Bounds a single request's work. */
 export const PORTAL_ATTACHMENTS_PER_MESSAGE = 5;
+
+/**
+ * Newest non-system follow-up timestamps returned per ticket by
+ * listReadState. Bounds the payload for a 50-ticket window; client-side
+ * unread counts cap at this window size by design.
+ *
+ * The browser reads this to tell a saturated count from an exact one:
+ * when all timestamps in the window are newer than the cursor AND the
+ * window is full, the true count may be higher than what was returned.
+ */
+export const READ_STATE_TIMESTAMPS_PER_TICKET = 20;

@@ -37,6 +37,7 @@ export const ticketsKeys = {
   readState: (ticketIds: readonly string[]) =>
     [...ticketsKeys.readStates(), ticketIds] as const,
   readStateSweep: () => [...ticketsKeys.all, "readStateSweep"] as const,
+  facetIndex: () => [...ticketsKeys.all, "facetIndex"] as const,
   // Unread-but-unloaded tickets fetched by id (tickets.get) so the sort
   // can pin them above the loaded window and the unread filter can show
   // them. Lives under the list namespace: it is list presentation data.

@@ -9,7 +9,12 @@
  * - No activity timestamps on the ticket row (ADR-018 section 7)
  */
 
-import { type Kysely, type Transaction } from "kysely";
+import {
+  type Kysely,
+  type Transaction,
+  type Expression,
+  type SqlBool,
+} from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { keysetAfter } from "../db/keyset.js";
 import { createPhoneRepository } from "../telephony/models/phone-repo.js";
@@ -18,6 +23,7 @@ import type {
   RecentFollowUpsInput,
   ListReadStateInput,
   SweepReadStateInput,
+  TicketFacetIndexInput,
   TicketStatus,
   TicketPriority,
   TicketSortField,
@@ -47,7 +53,11 @@ import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { maskPhone } from "../utils/sql.js";
 import { createDependencyService } from "./dependency-service.js";
 import { createReadCursorService } from "./read-cursor-service.js";
-import { ErrorCode, aliasHashSchema } from "@care-y/shared";
+import {
+  ErrorCode,
+  aliasHashSchema,
+  READ_STATE_TIMESTAMPS_PER_TICKET,
+} from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 
 export interface TicketRecord {
@@ -146,12 +156,9 @@ export interface TicketReadState {
   readonly followUpCreatedAt: Date[];
 }
 
-/**
- * Newest non-system follow-up timestamps returned per ticket by
- * listReadState. Bounds the payload for a 50-ticket window; client-side
- * unread counts cap at this window size by design.
- */
-const READ_STATE_TIMESTAMPS_PER_TICKET = 20;
+// READ_STATE_TIMESTAMPS_PER_TICKET is a protocol constant imported from
+// @care-y/shared (schemas/limits); the browser reads it to tell a
+// saturated count from an exact one.
 
 /**
  * One cursor row in the global read-state sweep: the opaque cursor
@@ -171,6 +178,27 @@ export interface SweepReadStateEntry {
 
 export interface SweepReadStateResult {
   readonly items: SweepReadStateEntry[];
+  readonly nextCursor: TicketId | null;
+}
+
+/**
+ * One row of the facet index: the plaintext metadata the browser filters
+ * and counts on. No ciphertext, no PII, nothing to decrypt. Every field
+ * is one `list` already returns per page.
+ */
+export interface TicketFacetRow {
+  readonly id: TicketId;
+  readonly status: TicketStatus;
+  readonly onHold: boolean;
+  readonly priority: TicketPriority;
+  readonly assignedTo: UserId | null;
+  readonly queueId: QueueId;
+  readonly createdAt: Date;
+  readonly followUpCount: number;
+}
+
+export interface TicketFacetIndexResult {
+  readonly items: TicketFacetRow[];
   readonly nextCursor: TicketId | null;
 }
 
@@ -266,6 +294,16 @@ export interface TicketService {
     input: SweepReadStateInput,
   ): Promise<SweepReadStateResult>;
   counts(userId: UserId): Promise<TicketCounts>;
+  /**
+   * Paginated metadata sweep over the caller's accessible queues, scoped
+   * exactly as `list`. Backs the browser's filter option counts, which
+   * cannot be computed here: unread and needs-attention are decided
+   * against an encrypted read cursor only the browser can compare.
+   */
+  facetIndex(
+    userId: UserId,
+    input: TicketFacetIndexInput,
+  ): Promise<TicketFacetIndexResult>;
   /**
    * Alias search over clients the caller can already reach.
    *
@@ -1056,161 +1094,56 @@ export function createTicketService(
           (join) => join.onRef("fc.ticket_id", "=", "t.id"),
         )
         .where("t.queue_id", "in", [...queueIds])
-        .select([
-          (eb) =>
-            eb.fn
-              .sum(
-                eb
-                  .case()
-                  .when(
-                    eb.and([
-                      eb("t.status", "=", "open"),
-                      eb("t.on_hold", "=", false),
-                      eb(eb.fn.coalesce("fc.fu_count", eb.lit(0)), "=", 0),
-                    ]),
-                  )
-                  .then(1)
-                  .else(0)
-                  .end(),
-              )
-              .as("new_count"),
-          (eb) =>
-            eb.fn
-              .sum(
-                eb
-                  .case()
-                  .when(
-                    eb.and([
-                      eb("t.status", "=", "open"),
-                      eb("t.on_hold", "=", false),
-                      eb(eb.fn.coalesce("fc.fu_count", eb.lit(0)), ">", 0),
-                    ]),
-                  )
-                  .then(1)
-                  .else(0)
-                  .end(),
-              )
-              .as("active_count"),
-          (eb) =>
-            eb.fn
-              .sum(
-                eb
-                  .case()
-                  .when(eb("t.status", "=", "closed"))
-                  .then(1)
-                  .else(0)
-                  .end(),
-              )
-              .as("closed_count"),
-          (eb) =>
-            eb.fn
-              .sum(
-                eb
-                  .case()
-                  .when(eb("t.on_hold", "=", true))
-                  .then(1)
-                  .else(0)
-                  .end(),
-              )
-              .as("on_hold_count"),
-          (eb) =>
-            eb.fn
-              .sum(
-                eb
-                  .case()
-                  .when(
-                    eb.and([
-                      eb("t.assigned_to", "is", null),
-                      eb("t.status", "=", "open"),
-                    ]),
-                  )
-                  .then(1)
-                  .else(0)
-                  .end(),
-              )
-              .as("unassigned_count"),
-          (eb) =>
-            eb.fn
-              .sum(
-                eb
-                  .case()
-                  .when(
-                    eb.and([
-                      eb("t.priority", "=", "low"),
-                      eb("t.status", "=", "open"),
-                    ]),
-                  )
-                  .then(1)
-                  .else(0)
-                  .end(),
-              )
-              .as("p_low"),
-          (eb) =>
-            eb.fn
-              .sum(
-                eb
-                  .case()
-                  .when(
-                    eb.and([
-                      eb("t.priority", "=", "normal"),
-                      eb("t.status", "=", "open"),
-                    ]),
-                  )
-                  .then(1)
-                  .else(0)
-                  .end(),
-              )
-              .as("p_normal"),
-          (eb) =>
-            eb.fn
-              .sum(
-                eb
-                  .case()
-                  .when(
-                    eb.and([
-                      eb("t.priority", "=", "high"),
-                      eb("t.status", "=", "open"),
-                    ]),
-                  )
-                  .then(1)
-                  .else(0)
-                  .end(),
-              )
-              .as("p_high"),
-          (eb) =>
-            eb.fn
-              .sum(
-                eb
-                  .case()
-                  .when(
-                    eb.and([
-                      eb("t.priority", "=", "urgent"),
-                      eb("t.status", "=", "open"),
-                    ]),
-                  )
-                  .then(1)
-                  .else(0)
-                  .end(),
-              )
-              .as("p_urgent"),
-          (eb) =>
-            eb.fn
-              .sum(
-                eb
-                  .case()
-                  .when(
-                    eb.and([
-                      eb("t.assigned_to", "=", userId),
-                      eb("t.status", "=", "open"),
-                    ]),
-                  )
-                  .then(1)
-                  .else(0)
-                  .end(),
-              )
-              .as("mine_count"),
-          (eb) => eb.fn.countAll().as("total_count"),
-        ])
+        .select((eb) => {
+          // New, Active, Hold and Closed partition every ticket. `close`
+          // clears the hold, which keeps every held ticket open. A held
+          // ticket counts as neither New nor Active. Arms scoped to open
+          // work share one predicate, spelled once here. Hand-spelling it
+          // per arm let the arms drift apart, and the headings stopped
+          // agreeing with the rows they described.
+          const openWork = eb.and([
+            eb("t.status", "=", "open"),
+            eb("t.on_hold", "=", false),
+          ]);
+          const followUps = eb.fn.coalesce("fc.fu_count", eb.lit(0));
+          const countWhen = (
+            condition: Expression<SqlBool>,
+          ): ReturnType<typeof eb.fn.sum> =>
+            eb.fn.sum(eb.case().when(condition).then(1).else(0).end());
+
+          return [
+            countWhen(eb.and([openWork, eb(followUps, "=", 0)])).as(
+              "new_count",
+            ),
+            countWhen(eb.and([openWork, eb(followUps, ">", 0)])).as(
+              "active_count",
+            ),
+            countWhen(eb("t.status", "=", "closed")).as("closed_count"),
+            // The hold arm is the mirror of openWork: still open, but held.
+            countWhen(
+              eb.and([eb("t.status", "=", "open"), eb("t.on_hold", "=", true)]),
+            ).as("on_hold_count"),
+            countWhen(eb.and([openWork, eb("t.assigned_to", "is", null)])).as(
+              "unassigned_count",
+            ),
+            countWhen(eb.and([openWork, eb("t.priority", "=", "low")])).as(
+              "p_low",
+            ),
+            countWhen(eb.and([openWork, eb("t.priority", "=", "normal")])).as(
+              "p_normal",
+            ),
+            countWhen(eb.and([openWork, eb("t.priority", "=", "high")])).as(
+              "p_high",
+            ),
+            countWhen(eb.and([openWork, eb("t.priority", "=", "urgent")])).as(
+              "p_urgent",
+            ),
+            countWhen(eb.and([openWork, eb("t.assigned_to", "=", userId)])).as(
+              "mine_count",
+            ),
+            eb.fn.countAll().as("total_count"),
+          ];
+        })
         .executeTakeFirstOrThrow();
 
       return {
@@ -1227,6 +1160,71 @@ export function createTicketService(
           high: Number(rows.p_high),
           urgent: Number(rows.p_urgent),
         },
+      };
+    },
+
+    async facetIndex(userId, input) {
+      const accessibleQueues = await getAccessibleQueueIds(userId);
+      if (accessibleQueues.length === 0) return { items: [], nextCursor: null };
+
+      // Plaintext metadata only: no encrypted column is selected and
+      // nothing here needs decrypting. Every field is one `list` already
+      // returns per page, so this adds no class of exposure. It makes the
+      // whole accessible set enumerable in one traversal rather than in
+      // pages, which `list` already permits.
+      //
+      // Read state is deliberately absent. The read cursor is stored
+      // encrypted and only the browser can compare it, so the unread and
+      // needs-attention facets are computed there. Do not add a read-state
+      // column or an unread flag to this projection: that would hand the
+      // server the comparison the encryption exists to withhold.
+      const afterId = input.cursor;
+      const rows = await db
+        .selectFrom("tickets as t")
+        .select((eb) => [
+          "t.id",
+          "t.status",
+          "t.on_hold",
+          "t.priority",
+          "t.assigned_to",
+          "t.queue_id",
+          "t.created_at",
+          // Same correlated count `list` returns, so New and Active
+          // resolve identically on both paths.
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.countAll().as("cnt"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .as("followup_count"),
+        ])
+        .where("t.queue_id", "in", [...accessibleQueues])
+        .$if(afterId !== undefined, (qb) => {
+          if (afterId === undefined) return qb;
+          return qb.where("t.id", ">", afterId);
+        })
+        .orderBy("t.id")
+        .limit(input.limit)
+        .execute();
+
+      const items = rows.map((row): TicketFacetRow => ({
+        id: row.id,
+        status: row.status,
+        onHold: row.on_hold,
+        priority: row.priority,
+        assignedTo: row.assigned_to,
+        queueId: row.queue_id,
+        createdAt: row.created_at,
+        followUpCount: Number(row.followup_count ?? 0),
+      }));
+
+      // Paging ends when a page comes back short. The browser also stops
+      // at its own row ceiling and marks the index incomplete, which is
+      // what turns its counts into floors.
+      const last = items.at(-1);
+      return {
+        items,
+        nextCursor:
+          items.length === input.limit && last !== undefined ? last.id : null,
       };
     },
 
@@ -1307,9 +1305,13 @@ export function createTicketService(
         throw new TicketError(ErrorCode.TICKET_UNRESOLVED_DEPS);
       }
 
+      // Closing clears the hold. Hold is a peer status of New, Active and
+      // Closed, so a closed ticket carrying the flag would sit in two
+      // statuses at once: counted under Hold forever while no hold view
+      // can show it, since those views load open tickets.
       const row = await db
         .updateTable("tickets")
-        .set({ status: "closed" })
+        .set({ status: "closed", on_hold: false })
         .where("id", "=", ticketId)
         .where("status", "=", "open")
         .returningAll()

@@ -98,6 +98,7 @@ export const PROCEDURE_PERMISSIONS = {
   "tickets.listReadState": Permission.VIEW_CASES,
   "tickets.readStateSweep": Permission.VIEW_CASES,
   "tickets.counts": Permission.VIEW_CASES,
+  "tickets.facetIndex": Permission.VIEW_CASES,
   "tickets.searchClients": Permission.VIEW_CASES,
   "tickets.update": Permission.CHANGE_CASE_STATUS,
   "tickets.close": Permission.CHANGE_CASE_STATUS,

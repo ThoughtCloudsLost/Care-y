@@ -302,6 +302,7 @@ export {
   recentFollowUpsInputSchema,
   listReadStateInputSchema,
   sweepReadStateInputSchema,
+  ticketFacetIndexInputSchema,
   followUpListInputSchema,
   followUpSummaryInputSchema,
   followUpsByIdsInputSchema,
@@ -343,6 +344,7 @@ export {
   type RecentFollowUpsInput,
   type ListReadStateInput,
   type SweepReadStateInput,
+  type TicketFacetIndexInput,
   type FollowUpListInput,
   type RecordingListInput,
   type AttachmentListInput,
@@ -824,6 +826,9 @@ export {
   type IntakeAnswer,
   type IntakeTicketContent,
 } from "./schemas/intake-ticket-composition.js";
+
+// --- Protocol limits ---
+export { READ_STATE_TIMESTAMPS_PER_TICKET } from "./schemas/limits.js";
 
 // --- Branded identifier types (ADR-074) ---
 // Schemas are exported for wire boundaries so tRPC inputs arrive branded.

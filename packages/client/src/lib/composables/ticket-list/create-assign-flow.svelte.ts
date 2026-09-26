@@ -74,6 +74,9 @@ export function createAssignFlow(deps: AssignFlowDeps): AssignFlowState {
         void deps.queryClient.invalidateQueries({
           queryKey: ticketsKeys.lists(),
         });
+        void deps.queryClient.invalidateQueries({
+          queryKey: ticketsKeys.facetIndex(),
+        });
       },
       onError: () => {
         toastStore.show(m.error_generic(), 3000);

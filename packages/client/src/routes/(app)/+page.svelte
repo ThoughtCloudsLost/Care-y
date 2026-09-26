@@ -239,12 +239,18 @@
     queryFn: async () => ticketRouter.dashboardInfo.query(),
   }));
 
+  // Declared here rather than with the other section flags below: the
+  // query options thunk reads it during setup, so a later declaration
+  // leaves it in the temporal dead zone and throws.
+  const showKb = $derived(canCall(permissions, "kb.recentItems"));
+
   const kbQuery = createQuery(() => ({
     queryKey: kbKeys.recentItems(),
     queryFn: async () => {
       if (!trpc.kb) return [];
-      return trpc.kb.recentItems.query({ limit: 2 });
+      return trpc.kb.recentItems.query({ limit: 5 });
     },
+    enabled: showKb,
   }));
 
   const countsQuery = createQuery(() => ({
@@ -399,6 +405,7 @@
   const dashboardSections = $derived(
     buildDashboardSections({
       showGettingStarted,
+      showKb,
       showMergeCandidates,
       showNeedsAttention,
       showOnHold,
@@ -499,6 +506,8 @@
       },
       currentUserId: currentUserId ?? "",
       unreadCount: (ticketId) => listReadState.unreadCount(ticketId),
+      unreadCountIsFloor: (ticketId) =>
+        listReadState.unreadCountIsFloor(ticketId),
       getPreview: (ticketId) => previewLoader.get(ticketId),
       previewReactionsMap,
       ontap: handleTicketTap,
@@ -698,15 +707,17 @@
     />
   </div>
 
-  <div id="section-kb" class="scroll-target" data-column="left">
-    <KBSection
-      kbItems={kbProps}
-      loading={kbQuery.isLoading}
-      expanded={!collapsedSections.has("kb")}
-      ontoggle={() => toggleSection("kb")}
-      ontap={handleKBTap}
-    />
-  </div>
+  {#if showKb}
+    <div id="section-kb" class="scroll-target" data-column="left">
+      <KBSection
+        kbItems={kbProps}
+        loading={kbQuery.isLoading}
+        expanded={!collapsedSections.has("kb")}
+        ontoggle={() => toggleSection("kb")}
+        ontap={handleKBTap}
+      />
+    </div>
+  {/if}
 
   {#if showMergeCandidates}
     <div id="section-merge-candidates" class="scroll-target" data-column="left">

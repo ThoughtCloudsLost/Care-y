@@ -518,6 +518,67 @@ describe("createListReadState", () => {
       });
     });
   });
+
+  describe("unreadCountIsFloor", () => {
+    // Timestamps are written as UTC strings rather than built by mutating
+    // a Date. The setters are local-time, so a machine offset (including
+    // half-hour zones) shifts the fixture relative to the cursor and the
+    // outcome stops depending on the code under test.
+    const utcMinutes = (day: string, count: number): string[] =>
+      Array.from(
+        { length: count },
+        (_, i) => `2026-07-${day}T00:${String(i).padStart(2, "0")}:00Z`,
+      );
+
+    it("returns true for a full window entirely newer than the cursor", async () => {
+      // 20 timestamps, all newer than the cursor: saturated window.
+      const timestamps = utcMinutes("02", 20);
+      harness = createHarness({
+        responses: { "ct-floor": readUpToPayload("2026-07-01T10:00:00Z") },
+        windowData: { "t-1": windowEntry("ct-floor", timestamps) },
+      });
+      await vi.waitFor(() => {
+        expect(harness!.readState.unreadCount("t-1")).toBe(20);
+      });
+      expect(harness.readState.unreadCountIsFloor("t-1")).toBe(true);
+    });
+
+    it("returns false for a full window with the cursor inside", async () => {
+      // 20 hourly timestamps spanning 00:00 to 19:00 with the cursor at
+      // 10:00, so nine are newer and the count is exact rather than a floor.
+      const timestamps = Array.from(
+        { length: 20 },
+        (_, i) => `2026-07-01T${String(i).padStart(2, "0")}:00:00Z`,
+      );
+      harness = createHarness({
+        responses: { "ct-mid": readUpToPayload("2026-07-01T10:00:00Z") },
+        windowData: { "t-1": windowEntry("ct-mid", timestamps) },
+      });
+      await vi.waitFor(() => {
+        expect(harness!.readState.unreadCount("t-1")).toBeGreaterThan(0);
+      });
+      expect(harness.readState.unreadCountIsFloor("t-1")).toBe(false);
+    });
+
+    it("returns false for a partial window entirely newer than the cursor", async () => {
+      // Only 5 timestamps (fewer than the window size), all newer than
+      // the cursor, so the count is exact.
+      const timestamps = utcMinutes("02", 5);
+      harness = createHarness({
+        responses: { "ct-partial": readUpToPayload("2026-07-01T10:00:00Z") },
+        windowData: { "t-1": windowEntry("ct-partial", timestamps) },
+      });
+      await vi.waitFor(() => {
+        expect(harness!.readState.unreadCount("t-1")).toBe(5);
+      });
+      expect(harness.readState.unreadCountIsFloor("t-1")).toBe(false);
+    });
+
+    it("returns false for a ticket outside the loaded window", () => {
+      harness = createHarness({ responses: {} });
+      expect(harness.readState.unreadCountIsFloor("t-unknown")).toBe(false);
+    });
+  });
 });
 
 describe("fetchReadStateWindow", () => {

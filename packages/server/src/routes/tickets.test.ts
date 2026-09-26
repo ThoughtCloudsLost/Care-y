@@ -1573,6 +1573,67 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
       });
 
+      it("counts a ticket closed while held as closed only", async () => {
+        const { user, queueId } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        // A second ticket in the same queue, closed while still flagged
+        // on hold. Hold and Closed are peer statuses, so it belongs to
+        // exactly one of them and the four must still sum to the total.
+        const held = await createTestTicketFixture(tenantDb, { queueId });
+        await tenantDb
+          .updateTable("tickets")
+          .set({ status: "closed", on_hold: true })
+          .where("id", "=", held.ticketId)
+          .execute();
+
+        const counts = await caller.tickets.counts();
+        expect(counts).toEqual({
+          total: 2,
+          new: 1,
+          active: 0,
+          closed: 1,
+          onHold: 0,
+          unassigned: 1,
+          mine: 0,
+          byPriority: { low: 0, normal: 1, high: 0, urgent: 0 },
+        });
+        expect(counts.new + counts.active + counts.onHold + counts.closed).toBe(
+          counts.total,
+        );
+      });
+
+      it("facetIndex returns only the caller's ticket", async () => {
+        const { user, queueId } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        // A foreign ticket in its own queue the caller cannot reach
+        const foreign = await createTestTicketFixture(tenantDb);
+
+        const result = await caller.tickets.facetIndex({ limit: 500 });
+        const ids = result.items.map((i: { id: TicketId }) => i.id);
+
+        // Must contain the caller's ticket, not the foreign one
+        const callerTickets = result.items.filter(
+          (i: { queueId: typeof queueId }) => i.queueId === queueId,
+        );
+        expect(callerTickets.length).toBeGreaterThanOrEqual(1);
+        expect(ids).not.toContain(foreign.ticketId);
+      });
+
+      it("facetIndex item carries expected queueId and status", async () => {
+        const { user, queueId, ticketId } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        const result = await caller.tickets.facetIndex({ limit: 500 });
+        const item = result.items.find(
+          (i: { id: TicketId }) => i.id === ticketId,
+        );
+        expect(item).toBeDefined();
+        expect(item!.queueId).toBe(queueId);
+        expect(item!.status).toBe("open");
+      });
+
       it("recentActivity returns audit events for accessible queues only", async () => {
         const { user, ticketId } = await setupUserWithTicket();
         const foreign = await createTestTicketFixture(tenantDb);

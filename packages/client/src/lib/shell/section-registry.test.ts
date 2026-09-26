@@ -78,6 +78,7 @@ describe("section-registry", () => {
     it("includes core sections with all flags false", () => {
       const sections = buildDashboardSections({
         showGettingStarted: false,
+        showKb: true,
         showMergeCandidates: false,
         showNeedsAttention: false,
         showOnHold: false,
@@ -94,6 +95,7 @@ describe("section-registry", () => {
     it("omits conditional sections when all flags false", () => {
       const sections = buildDashboardSections({
         showGettingStarted: false,
+        showKb: true,
         showMergeCandidates: false,
         showNeedsAttention: false,
         showOnHold: false,
@@ -108,6 +110,7 @@ describe("section-registry", () => {
     it("includes getting-started when flag is true", () => {
       const sections = buildDashboardSections({
         showGettingStarted: true,
+        showKb: true,
         showMergeCandidates: false,
         showNeedsAttention: false,
         showOnHold: false,
@@ -118,6 +121,7 @@ describe("section-registry", () => {
     it("includes merge-candidates when flag is true", () => {
       const sections = buildDashboardSections({
         showGettingStarted: false,
+        showKb: true,
         showMergeCandidates: true,
         showNeedsAttention: false,
         showOnHold: false,
@@ -128,6 +132,7 @@ describe("section-registry", () => {
     it("includes needs-attention when flag is true", () => {
       const sections = buildDashboardSections({
         showGettingStarted: false,
+        showKb: true,
         showMergeCandidates: false,
         showNeedsAttention: true,
         showOnHold: false,
@@ -138,6 +143,7 @@ describe("section-registry", () => {
     it("includes on-hold when flag is true", () => {
       const sections = buildDashboardSections({
         showGettingStarted: false,
+        showKb: true,
         showMergeCandidates: false,
         showNeedsAttention: false,
         showOnHold: true,
@@ -148,15 +154,39 @@ describe("section-registry", () => {
     it("includes all conditional sections when all flags true", () => {
       const sections = buildDashboardSections({
         showGettingStarted: true,
+        showKb: true,
         showMergeCandidates: true,
         showNeedsAttention: true,
         showOnHold: true,
       });
       const ids = sections.map((s) => s.id);
       expect(ids).toContain("getting-started");
+      expect(ids).toContain("kb");
       expect(ids).toContain("merge-candidates");
       expect(ids).toContain("needs-attention");
       expect(ids).toContain("on-hold");
+    });
+
+    it("includes kb when showKb is true", () => {
+      const sections = buildDashboardSections({
+        showGettingStarted: false,
+        showKb: true,
+        showMergeCandidates: false,
+        showNeedsAttention: false,
+        showOnHold: false,
+      });
+      expect(sections.some((s) => s.id === "kb")).toBe(true);
+    });
+
+    it("omits kb when showKb is false", () => {
+      const sections = buildDashboardSections({
+        showGettingStarted: false,
+        showKb: false,
+        showMergeCandidates: false,
+        showNeedsAttention: false,
+        showOnHold: false,
+      });
+      expect(sections.some((s) => s.id === "kb")).toBe(false);
     });
   });
 

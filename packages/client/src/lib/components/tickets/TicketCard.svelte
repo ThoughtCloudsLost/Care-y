@@ -53,6 +53,7 @@
     lastActivityAt,
     followUpCount,
     unreadCount,
+    unreadCountIsFloor = false,
     previewFollowUps,
     previewReactions,
     selected = false,
@@ -190,7 +191,10 @@
         <span class="r-alias">{@render hl(clientAlias ?? "...")}</span>
         <span class="r-side">
           {#if priority !== "normal"}<PriorityStamp {priority} />{/if}
-          {#if isUnread}<NewPill count={unreadCount} />{/if}
+          {#if isUnread}<NewPill
+              count={unreadCount}
+              isFloor={unreadCountIsFloor}
+            />{/if}
         </span>
       </span>
       <span class="r-title">{@render titleBlock()}</span>
@@ -371,7 +375,7 @@
         <span class="meta-right">
           <span class="r-time num">{relativeTime}</span>
           {#if msgLabel}<span class="grid-msgs">· {msgLabel}</span>{/if}
-          <NewPill count={unreadCount} />
+          <NewPill count={unreadCount} isFloor={unreadCountIsFloor} />
         </span>
       </div>
     {/if}

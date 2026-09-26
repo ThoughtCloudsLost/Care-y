@@ -2296,6 +2296,300 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(result.mine).toBe(0);
   });
 
+  describe("counts treats hold as a mutually exclusive status", () => {
+    /**
+     * New, Active, Hold and Closed partition every ticket: a held ticket
+     * is open and is neither New nor Active, and closing clears the hold.
+     * Fixtures are written through the DB rather than the service so
+     * follow-up counts stay controlled (the service emits system
+     * follow-ups, which would move a ticket from New to Active).
+     */
+    async function partitionFixtures(): Promise<{ userId: UserId }> {
+      const base = await createTestTicketFixture(testDb.db, {
+        createUser: true,
+      });
+      const userId = base.userId!;
+      const queueId = base.queueId;
+
+      // T1 (base): open, not held, no follow-ups, unassigned, normal -> New
+      // T2: same but carrying a follow-up -> Active
+      const t2 = await createTestTicketFixture(testDb.db, { queueId });
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          ticket_id: t2.ticketId,
+          source: "volunteer",
+          type: "message",
+          encrypted_content: Buffer.from("fu"),
+        })
+        .execute();
+
+      // T3: open + held, unassigned, normal -> Hold
+      const t3 = await createTestTicketFixture(testDb.db, { queueId });
+      await testDb.db
+        .updateTable("tickets")
+        .set({ on_hold: true })
+        .where("id", "=", t3.ticketId)
+        .execute();
+
+      // T4: closed -> Closed
+      const t4 = await createTestTicketFixture(testDb.db, { queueId });
+      await testDb.db
+        .updateTable("tickets")
+        .set({ status: "closed" })
+        .where("id", "=", t4.ticketId)
+        .execute();
+
+      // T5: closed while held. Belongs to Closed alone; the hold arm must
+      // not claim it, or the four statuses stop partitioning the set.
+      const t5 = await createTestTicketFixture(testDb.db, { queueId });
+      await testDb.db
+        .updateTable("tickets")
+        .set({ status: "closed", on_hold: true })
+        .where("id", "=", t5.ticketId)
+        .execute();
+
+      // T6: open + held + assigned to the viewer. Held, so not "mine".
+      const t6 = await createTestTicketFixture(testDb.db, { queueId });
+      await testDb.db
+        .updateTable("tickets")
+        .set({ on_hold: true, assigned_to: userId })
+        .where("id", "=", t6.ticketId)
+        .execute();
+
+      // T7: open + held + urgent. Held, so not an urgent open ticket.
+      const t7 = await createTestTicketFixture(testDb.db, { queueId });
+      await testDb.db
+        .updateTable("tickets")
+        .set({ on_hold: true, priority: "urgent" })
+        .where("id", "=", t7.ticketId)
+        .execute();
+
+      return { userId };
+    }
+
+    it("the four statuses partition every ticket", async () => {
+      const { userId } = await partitionFixtures();
+      const c = await svc.counts(userId);
+
+      expect(c.total).toBe(7);
+      expect(c.new).toBe(1); // T1
+      expect(c.active).toBe(1); // T2
+      expect(c.onHold).toBe(3); // T3, T6, T7 -- not the closed T5
+      expect(c.closed).toBe(2); // T4, T5
+
+      // The property the arms exist to satisfy.
+      expect(c.new + c.active + c.onHold + c.closed).toBe(c.total);
+    });
+
+    it("the assignee counts exclude held tickets", async () => {
+      const { userId } = await partitionFixtures();
+      const c = await svc.counts(userId);
+
+      expect(c.unassigned).toBe(2); // T1, T2 -- not the held T3, T7
+      expect(c.mine).toBe(0); // T6 is assigned to the viewer but held
+    });
+
+    it("the priority counts exclude held tickets", async () => {
+      const { userId } = await partitionFixtures();
+      const c = await svc.counts(userId);
+
+      expect(c.byPriority).toEqual({
+        low: 0,
+        normal: 2, // T1, T2 -- not the held T3, T6
+        high: 0,
+        urgent: 0, // T7 is urgent but held
+      });
+    });
+  });
+
+  describe("facetIndex", () => {
+    it("returns empty with null cursor for a user with no queue access", async () => {
+      const outsider = await createTestUser(testDb.db);
+      const result = await svc.facetIndex(outsider.id, { limit: 500 });
+      expect(result.items).toEqual([]);
+      expect(result.nextCursor).toBeNull();
+    });
+
+    it("returns only tickets in the caller's accessible queues", async () => {
+      const fix = await createTestTicketFixture(testDb.db, {
+        createUser: true,
+      });
+      const userId = fix.userId!;
+
+      // A second ticket in a separate queue the caller has no access to
+      const foreign = await createTestTicketFixture(testDb.db);
+
+      const result = await svc.facetIndex(userId, { limit: 500 });
+      const ids = result.items.map((i) => i.id);
+      expect(ids).toContain(fix.ticketId);
+      expect(ids).not.toContain(foreign.ticketId);
+    });
+
+    it("row projection carries exactly the expected fields", async () => {
+      // Guard against an encrypted or PII column being added to the
+      // projection later. The facet index must stay metadata-only.
+      const fix = await createTestTicketFixture(testDb.db, {
+        createUser: true,
+      });
+
+      const result = await svc.facetIndex(fix.userId!, { limit: 500 });
+      expect(result.items.length).toBeGreaterThan(0);
+
+      const item = result.items.find((i) => i.id === fix.ticketId)!;
+      expect(item).toBeDefined();
+      expect(Object.keys(item).sort()).toEqual(
+        [
+          "assignedTo",
+          "createdAt",
+          "followUpCount",
+          "id",
+          "onHold",
+          "priority",
+          "queueId",
+          "status",
+        ].sort(),
+      );
+    });
+
+    it("followUpCount reflects inserted follow-ups", async () => {
+      const fix = await createTestTicketFixture(testDb.db, {
+        createUser: true,
+      });
+      const userId = fix.userId!;
+      const queueId = fix.queueId;
+
+      // ticket with two follow-ups
+      const withFu = await createTestTicketFixture(testDb.db, { queueId });
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          ticket_id: withFu.ticketId,
+          source: "volunteer",
+          type: "message",
+          encrypted_content: Buffer.from("fu-1"),
+        })
+        .execute();
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          ticket_id: withFu.ticketId,
+          source: "volunteer",
+          type: "message",
+          encrypted_content: Buffer.from("fu-2"),
+        })
+        .execute();
+
+      const result = await svc.facetIndex(userId, { limit: 500 });
+      const withCount = result.items.find((i) => i.id === withFu.ticketId);
+      const withoutCount = result.items.find((i) => i.id === fix.ticketId);
+
+      expect(withCount).toBeDefined();
+      expect(withCount!.followUpCount).toBe(2);
+      expect(withoutCount).toBeDefined();
+      expect(withoutCount!.followUpCount).toBe(0);
+    });
+
+    it("status, onHold, priority and assignedTo reflect the row", async () => {
+      const fix = await createTestTicketFixture(testDb.db, {
+        createUser: true,
+      });
+      const userId = fix.userId!;
+
+      await testDb.db
+        .updateTable("tickets")
+        .set({
+          status: "closed",
+          on_hold: true,
+          priority: "urgent",
+          assigned_to: userId,
+        })
+        .where("id", "=", fix.ticketId)
+        .execute();
+
+      const result = await svc.facetIndex(userId, { limit: 500 });
+      const item = result.items.find((i) => i.id === fix.ticketId);
+      expect(item).toBeDefined();
+      expect(item!.status).toBe("closed");
+      expect(item!.onHold).toBe(true);
+      expect(item!.priority).toBe("urgent");
+      expect(item!.assignedTo).toBe(userId);
+    });
+
+    it("pages through results with cursor", async () => {
+      const fix = await createTestTicketFixture(testDb.db, {
+        createUser: true,
+      });
+      const userId = fix.userId!;
+      const queueId = fix.queueId;
+
+      // Two more tickets in the same queue (three total)
+      const t2 = await createTestTicketFixture(testDb.db, { queueId });
+      const t3 = await createTestTicketFixture(testDb.db, { queueId });
+      const allIds = new Set([fix.ticketId, t2.ticketId, t3.ticketId]);
+
+      // First page: limit 2
+      const page1 = await svc.facetIndex(userId, { limit: 2 });
+      expect(page1.items).toHaveLength(2);
+      expect(page1.nextCursor).not.toBeNull();
+      expect(page1.nextCursor).toBe(page1.items.at(-1)?.id);
+
+      // Second page: limit 2, using cursor from first page
+      const page2 = await svc.facetIndex(userId, {
+        limit: 2,
+        cursor: page1.nextCursor!,
+      });
+      expect(page2.items.length).toBeGreaterThanOrEqual(1);
+      expect(page2.nextCursor).toBeNull();
+
+      // The union of both pages covers all three ids with no duplicates
+      const collected = [...page1.items, ...page2.items].map((i) => i.id);
+      const unique = new Set(collected);
+      expect(unique.size).toBe(collected.length);
+      for (const id of allIds) {
+        expect(unique).toContain(id);
+      }
+    });
+
+    it("a full page reports a cursor by design", async () => {
+      // When items.length === limit the implementation returns a cursor.
+      // The client stops paging when a later page comes back short.
+      const fix = await createTestTicketFixture(testDb.db, {
+        createUser: true,
+      });
+      const userId = fix.userId!;
+      const queueId = fix.queueId;
+
+      await createTestTicketFixture(testDb.db, { queueId });
+
+      // Exactly two tickets, limit 2: page is full
+      const result = await svc.facetIndex(userId, { limit: 2 });
+      expect(result.items).toHaveLength(2);
+      // nextCursor is allowed (and expected) to be non-null here
+      expect(result.nextCursor).not.toBeNull();
+    });
+  });
+
+  it("close clears the hold", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const held = await svc.update(userId, { ticketId, onHold: true });
+    expect(held.onHold).toBe(true);
+
+    const closed = await svc.close(userId, ticketId);
+    expect(closed.status).toBe("closed");
+    expect(closed.onHold).toBe(false);
+  });
+
+  it("a ticket closed while held reopens without the hold", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    await svc.update(userId, { ticketId, onHold: true });
+    await svc.close(userId, ticketId);
+
+    const reopened = await svc.reopen(userId, ticketId, newKeyGeneration());
+    expect(reopened.status).toBe("open");
+    expect(reopened.onHold).toBe(false);
+  });
+
   // --- update with empty changes returns existing ticket ---
 
   it("update with no changes returns existing ticket", async () => {

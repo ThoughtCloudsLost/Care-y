@@ -35,6 +35,7 @@ export type RawCachedTicket = TicketLikeRecord;
 export interface TicketSearchData extends TicketDisplayFields {
   readonly encryptedTitle: string;
   readonly unreadCount: number;
+  readonly unreadCountIsFloor: boolean;
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
   /** The query that produced this result; renders the <mark> highlights. */
   readonly searchTerm: string;
@@ -125,6 +126,7 @@ export function createTicketSearchProvider(
       searchTerm: query,
       encryptedTitle: raw.encryptedTitle,
       unreadCount: 0,
+      unreadCountIsFloor: false,
       previewFollowUps: deps.getPreviewFollowUps(raw.id),
     };
   }

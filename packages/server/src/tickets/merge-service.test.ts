@@ -110,6 +110,35 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
     expect(ticket.status).toBe("closed");
   });
 
+  it("merge clears the hold on the secondary's ticket", async () => {
+    const a = await createClientWithTicket();
+    const b = await createClientWithTicket();
+
+    await testDb.db
+      .updateTable("tickets")
+      .set({ on_hold: true })
+      .where("id", "=", b.ticketId)
+      .execute();
+
+    await svc.merge({
+      primaryClientId: a.clientId,
+      secondaryClientId: b.clientId,
+      encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
+    });
+
+    const ticket = await testDb.db
+      .selectFrom("tickets")
+      .select(["status", "on_hold"])
+      .where("id", "=", b.ticketId)
+      .executeTakeFirstOrThrow();
+
+    // Closing is the other half of the hold partition: a closed ticket
+    // carrying on_hold would inflate the hold count forever.
+    expect(ticket.status).toBe("closed");
+    expect(ticket.on_hold).toBe(false);
+  });
+
   it("merge rejects self-merge", async () => {
     const a = await createClientWithTicket();
     await expect(

@@ -15,8 +15,9 @@ import {
   ticketsKeys,
   noteTypeKeys,
 } from "$lib/query/keys";
+import type { TicketForServerFilter } from "$lib/tickets/ticket-list-utils.js";
 
-type TicketRouter = NonNullable<TRPCClient<AppRouter>["tickets"]>;
+export type TicketRouter = NonNullable<TRPCClient<AppRouter>["tickets"]>;
 type VolunteersData = Awaited<
   ReturnType<TicketRouter["listVolunteers"]["query"]>
 >;
@@ -88,5 +89,85 @@ export function createAllNoteTypesQuery(
     queryKey: noteTypeKeys.full(),
     queryFn: async () => noteTypesRouter.list.query(),
     staleTime: 5 * 60 * 1000,
+  }));
+}
+
+/** Server caps the page at 500. */
+const FACET_INDEX_PAGE_SIZE = 500;
+/** Row ceiling. Past it the index is incomplete and its counts are floors. */
+const FACET_INDEX_MAX_ROWS = 5000;
+
+export { FACET_INDEX_PAGE_SIZE, FACET_INDEX_MAX_ROWS };
+
+export interface FacetIndexData {
+  readonly rows: readonly TicketForServerFilter[];
+  /** True only when paging ended because the server ran out of rows. */
+  readonly complete: boolean;
+}
+
+/**
+ * Fetches every ticket's plaintext metadata (status, priority, queue, assignee,
+ * date, follow-up count) in paginated sweeps and returns it as a flat array.
+ * The consuming code (computeFacets in facet-filters.ts) uses these rows to
+ * derive filter option counts entirely in the browser.
+ *
+ * When `complete` is false, the row set was truncated (either by a page fetch
+ * failure or by hitting the row ceiling). Every count derived from an
+ * incomplete index is a lower bound, not an exact total.
+ *
+ * Read state is deliberately absent from the projection. The read cursor is
+ * encrypted and only the browser can compare it, so unread and needs-attention
+ * facets are computed against a separate client-side cursor store.
+ */
+/**
+ * The paging loop, exported so tests exercise this code rather than a
+ * re-implementation of it. A test that mirrors the loop proves only that
+ * the mirror works.
+ */
+export async function fetchFacetIndex(
+  ticketRouter: TicketRouter,
+): Promise<FacetIndexData> {
+  const rows: TicketForServerFilter[] = [];
+  let cursor: string | undefined;
+
+  for (;;) {
+    if (rows.length >= FACET_INDEX_MAX_ROWS) {
+      return { rows, complete: false };
+    }
+
+    let page: Awaited<ReturnType<TicketRouter["facetIndex"]["query"]>>;
+    try {
+      page = await ticketRouter.facetIndex.query({
+        cursor,
+        limit: FACET_INDEX_PAGE_SIZE,
+      });
+    } catch {
+      // A single failed page must not blank every filter count on the
+      // page. The rows already gathered still yield correct floors, so
+      // return them and mark the index incomplete.
+      return { rows, complete: false };
+    }
+
+    rows.push(...page.items);
+
+    // Termination is the cursor, never the page length: a short page is
+    // not proof the server ran out of rows.
+    if (page.nextCursor === null) {
+      return { rows, complete: true };
+    }
+
+    cursor = page.nextCursor;
+  }
+}
+
+export function createFacetIndexQuery(
+  ticketRouter: TicketRouter,
+  enabled: () => boolean,
+): CreateQueryResult<FacetIndexData> {
+  return createQuery(() => ({
+    queryKey: ticketsKeys.facetIndex(),
+    enabled: enabled(),
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<FacetIndexData> => fetchFacetIndex(ticketRouter),
   }));
 }

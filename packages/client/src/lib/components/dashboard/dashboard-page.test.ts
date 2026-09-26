@@ -454,6 +454,27 @@ describe("Dashboard page", () => {
     expect(section).toBeNull();
   });
 
+  it("does not render the knowledge base section without the view-knowledge-base permission", () => {
+    // Remove VIEW_KNOWLEDGE_BASE from the permission set.
+    setPermissions(
+      Permission.VIEW_CASES,
+      Permission.WRITE_CASE_NOTES,
+      Permission.VIEW_OWN_SHIFTS,
+    );
+    infiniteTicketsState = ticketsInfinite({
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: [makeTicket({ assignedTo: USER_ID })],
+    });
+    queryStates = buildQueryStates();
+
+    render(PageModule.default);
+
+    const section = document.getElementById("section-kb");
+    expect(section).toBeNull();
+  });
+
   it("links needs-attention overflow to the tickets needs-attention filter", async () => {
     // Six urgent unassigned tickets exceed the five-item preview cap, so
     // needs-attention renders its "See all" action. The two normal

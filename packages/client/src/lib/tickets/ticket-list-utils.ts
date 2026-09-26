@@ -1,7 +1,8 @@
-import type { DisplayStatus } from "./display-status.js";
+import { deriveDisplayStatus, type DisplayStatus } from "./display-status.js";
 import {
   ticketSortFieldSchema,
   type TicketSortField,
+  type TicketStatus,
   type ReactionSummary,
 } from "@care-y/shared";
 import type { FuzzyMatch } from "$lib/search/fuzzy.js";
@@ -28,23 +29,32 @@ export function isSortField(v: string): v is SortField {
 
 export interface TicketForFilter {
   readonly id: string;
-  readonly status: string;
+  readonly status: TicketStatus;
   readonly onHold: boolean;
   readonly followUpCount: number;
 }
 
+/**
+ * Narrows a list to the selected display statuses. New, Active, Hold and
+ * Closed partition every ticket, so membership is one equality test
+ * against `deriveDisplayStatus`. An empty selection means no narrowing.
+ *
+ * This is where status filtering is decided, not in the query params. The
+ * server list input takes ("open" | "closed")[] plus an onHold boolean,
+ * which can only describe an intersection, so a selection spanning the
+ * held boundary (New + Hold, Closed + Hold) has no faithful params.
+ * `serverParams` sends the narrowest safe superset and this does the
+ * exact narrowing, which keeps every selection expressible.
+ */
 export function filterByDisplayStatus<T extends TicketForFilter>(
   tickets: readonly T[],
-  needsFilter: boolean,
-  wantNew: boolean,
+  selected: ReadonlySet<DisplayStatus>,
 ): readonly T[] {
-  if (!needsFilter) return tickets;
+  if (selected.size === 0) return tickets;
 
-  return tickets.filter((t) => {
-    if (t.status !== "open") return true;
-    if (t.onHold) return true;
-    return wantNew ? t.followUpCount === 0 : t.followUpCount > 0;
-  });
+  return tickets.filter((t) =>
+    selected.has(deriveDisplayStatus(t.status, t.onHold, t.followUpCount)),
+  );
 }
 
 export interface TicketServerFilterParams {

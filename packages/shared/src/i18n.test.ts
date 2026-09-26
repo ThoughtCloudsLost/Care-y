@@ -277,6 +277,9 @@ describe("es.json values differ from en.json", () => {
       "code placeholder: XXXX-XXXX",
     ],
 
+    // Pure formatting, no words to translate
+    ["count_at_least", "number plus a trailing plus sign, no prose"],
+
     // Identical short words that are the same in both languages
     ["panel_general", "identical word: General"],
     ["admin_tab_org_general", "identical word: General"],

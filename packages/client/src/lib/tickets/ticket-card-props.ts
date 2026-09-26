@@ -53,6 +53,7 @@ export interface CardPropsMapperDeps {
   ) => string | undefined;
   readonly currentUserId: string;
   readonly unreadCount: (ticketId: string) => number;
+  readonly unreadCountIsFloor: (ticketId: string) => boolean;
   readonly getPreview: (ticketId: string) => RawFollowUpPreview[] | undefined;
   readonly previewReactionsMap: ReadonlyMap<string, ReactionSummary[]>;
   readonly ontap: (ticketId: string) => void;
@@ -142,6 +143,7 @@ export function createCardPropsMapper(
       ...mapTicketDisplayFields(t, deps),
       queueAppearance: deps.queueAppearance?.(t.queueId),
       unreadCount: deps.unreadCount(t.id),
+      unreadCountIsFloor: deps.unreadCountIsFloor(t.id),
       previewFollowUps: previews,
       previewReactions: reactionsForTicket(previews, deps.previewReactionsMap),
       ontap: deps.ontap,

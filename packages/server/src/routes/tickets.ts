@@ -207,6 +207,7 @@ import {
   recentFollowUpsInputSchema,
   listReadStateInputSchema,
   sweepReadStateInputSchema,
+  ticketFacetIndexInputSchema,
   createFollowUpInputSchema,
   followUpListInputSchema,
   updateReadCursorInputSchema,
@@ -881,6 +882,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         return svc.counts(ctx.user.id);
+      }),
+    ),
+
+    // Metadata-only projection, so the result needs no b64 wrapping: unlike
+    // readStateSweep there is no Buffer in it. See the service method for
+    // why the filter counts it feeds are computed in the browser.
+    facetIndex: viewCasesProcedure.input(ticketFacetIndexInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const { svc } = ticketSvc(ctx.org.tenantDb);
+        return svc.facetIndex(ctx.user.id, input);
       }),
     ),
 

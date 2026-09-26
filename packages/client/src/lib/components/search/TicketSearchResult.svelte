@@ -23,6 +23,7 @@
     lastActivityAt={result.lastActivityAt}
     followUpCount={result.followUpCount}
     unreadCount={result.unreadCount}
+    unreadCountIsFloor={result.unreadCountIsFloor}
     previewFollowUps={result.previewFollowUps}
     searchTerm={result.searchTerm}
     selected={false}

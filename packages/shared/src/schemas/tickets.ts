@@ -316,6 +316,26 @@ export const sweepReadStateInputSchema = z.object({
 });
 export type SweepReadStateInput = z.infer<typeof sweepReadStateInputSchema>;
 
+/**
+ * Paginated metadata-only sweep over every ticket in the caller's
+ * accessible queues, scoped exactly as `list` is. The browser pages this
+ * to build a local index and computes filter option counts from it, so
+ * each count and the rows its option yields come out of one predicate.
+ *
+ * Counting cannot move to the server: two of the filter dimensions
+ * (unread, needs attention) are decided against an encrypted read cursor
+ * the server cannot compare, and handing it the answer would give up
+ * what that encryption protects.
+ *
+ * The projection carries no ciphertext and no PII. Every field is one
+ * `list` already returns per page.
+ */
+export const ticketFacetIndexInputSchema = z.object({
+  cursor: ticketIdSchema.optional(),
+  limit: z.number().int().min(1).max(500).default(500),
+});
+export type TicketFacetIndexInput = z.infer<typeof ticketFacetIndexInputSchema>;
+
 export const followUpListDirectionSchema = z.enum(["newer", "older"]);
 
 export const mediaFlagSchema = z.enum(["recording", "image", "file"]);

@@ -31,6 +31,7 @@ export interface TicketCardProps {
   readonly lastActivityAt: Date | null;
   readonly followUpCount: number;
   readonly unreadCount: number;
+  readonly unreadCountIsFloor?: boolean;
   /** undefined = not loaded from server yet */
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
   /** Reaction summaries keyed by follow-up ID (display-only in preview). */

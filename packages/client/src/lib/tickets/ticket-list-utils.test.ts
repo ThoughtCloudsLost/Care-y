@@ -21,6 +21,7 @@ import {
   type TicketForServerFilter,
   type TicketServerFilterParams,
 } from "./ticket-list-utils.js";
+import type { DisplayStatus } from "./display-status.js";
 
 describe("isFilterStatus", () => {
   it.each(["new", "active", "hold", "closed"])("returns true for '%s'", (v) => {
@@ -61,41 +62,59 @@ describe("isSortField", () => {
 });
 
 describe("filterByDisplayStatus", () => {
+  // One ticket per display status, so each selection has exactly one
+  // correct answer and the four are visibly mutually exclusive.
   const tickets = [
-    { id: "1", status: "open", onHold: false, followUpCount: 0 },
-    { id: "2", status: "open", onHold: false, followUpCount: 3 },
-    { id: "3", status: "open", onHold: true, followUpCount: 1 },
-    { id: "4", status: "closed", onHold: false, followUpCount: 5 },
+    { id: "new", status: "open" as const, onHold: false, followUpCount: 0 },
+    { id: "active", status: "open" as const, onHold: false, followUpCount: 3 },
+    { id: "hold", status: "open" as const, onHold: true, followUpCount: 1 },
+    {
+      id: "closed",
+      status: "closed" as const,
+      onHold: false,
+      followUpCount: 5,
+    },
   ];
 
-  it("returns all tickets when needsFilter is false", () => {
-    expect(filterByDisplayStatus(tickets, false, true)).toBe(tickets);
+  const select = (...s: DisplayStatus[]): ReadonlySet<DisplayStatus> =>
+    new Set(s);
+  const idsFor = (...s: DisplayStatus[]): string[] =>
+    filterByDisplayStatus(tickets, select(...s)).map((t) => t.id);
+
+  it("returns the same array when nothing is selected", () => {
+    expect(filterByDisplayStatus(tickets, select())).toBe(tickets);
   });
 
-  it("filters for new tickets (followUpCount === 0)", () => {
-    const result = filterByDisplayStatus(tickets, true, true);
-    const ids = result.map((t) => t.id);
-    expect(ids).toEqual(["1", "3", "4"]);
+  it("matches each display status to exactly its own ticket", () => {
+    expect(idsFor("new")).toEqual(["new"]);
+    expect(idsFor("active")).toEqual(["active"]);
+    expect(idsFor("hold")).toEqual(["hold"]);
+    expect(idsFor("closed")).toEqual(["closed"]);
   });
 
-  it("filters for active tickets (followUpCount > 0)", () => {
-    const result = filterByDisplayStatus(tickets, true, false);
-    const ids = result.map((t) => t.id);
-    expect(ids).toEqual(["2", "3", "4"]);
+  it("does not leak held or closed tickets into New or Active", () => {
+    // The previous implementation passed both through unconditionally,
+    // so selecting New returned held and closed tickets as well.
+    expect(idsFor("new")).not.toContain("hold");
+    expect(idsFor("new")).not.toContain("closed");
+    expect(idsFor("active")).not.toContain("hold");
   });
 
-  it("always passes through on-hold tickets", () => {
-    const result = filterByDisplayStatus(tickets, true, true);
-    expect(result.some((t) => t.id === "3")).toBe(true);
+  it("unions the selected statuses", () => {
+    expect(idsFor("new", "active")).toEqual(["new", "active"]);
+    // The two selections the server params cannot express.
+    expect(idsFor("new", "hold")).toEqual(["new", "hold"]);
+    expect(idsFor("closed", "hold")).toEqual(["hold", "closed"]);
   });
 
-  it("always passes through closed tickets", () => {
-    const result = filterByDisplayStatus(tickets, true, true);
-    expect(result.some((t) => t.id === "4")).toBe(true);
+  it("selecting all four returns every ticket", () => {
+    expect(idsFor("new", "active", "hold", "closed")).toHaveLength(
+      tickets.length,
+    );
   });
 
   it("handles empty array", () => {
-    expect(filterByDisplayStatus([], true, true)).toEqual([]);
+    expect(filterByDisplayStatus([], select("new"))).toEqual([]);
   });
 });
 
@@ -527,6 +546,31 @@ describe("buildAssigneeOptions", () => {
     const result = buildAssigneeOptions("user-1", undefined, labels);
     expect(result[0]?.label).toBe("Me (0)");
     expect(result[1]?.label).toBe("Unassigned (0)");
+  });
+
+  it("accepts facet assignee shape (mine + unassigned)", () => {
+    // The page passes facets.assignee which has { mine, unassigned }
+    // matching the counts parameter shape.
+    const facetAssignee = { mine: 12, unassigned: 4 };
+    const result = buildAssigneeOptions("user-1", facetAssignee, labels);
+    expect(result[0]?.label).toBe("Me (12)");
+    expect(result[1]?.label).toBe("Unassigned (4)");
+  });
+
+  it("supports label callbacks that ignore the passed count", () => {
+    // The page routes counts through withCount, so the label callback
+    // ignores the pre-stringified count and formats its own.
+    const customLabels = {
+      me: (_count: string) => "Me (42+)",
+      unassigned: (_count: string) => "Unassigned (7)",
+    };
+    const result = buildAssigneeOptions(
+      "user-1",
+      { mine: 0, unassigned: 0 },
+      customLabels,
+    );
+    expect(result[0]?.label).toBe("Me (42+)");
+    expect(result[1]?.label).toBe("Unassigned (7)");
   });
 });
 

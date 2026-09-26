@@ -52,6 +52,11 @@ let infiniteQueryState: Record<string, unknown> = {};
 // default for tests that don't care); [] = settled with zero unread.
 let sweepQueryData: unknown = undefined;
 
+// Controlled facet index data. undefined = query pending (labels render
+// bare); set to { rows, complete } to exercise count formatting.
+let facetIndexData: { rows: unknown[]; complete: boolean } | undefined =
+  undefined;
+
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
   ...(await importOriginal<typeof SvelteQueryNS>()),
   useQueryClient: () => ({
@@ -68,11 +73,16 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
     const opts = optsFn();
     const key = opts.queryKey;
     const isSweep = Array.isArray(key) && key.includes("readStateSweep");
+    const isFacetIndex = Array.isArray(key) && key.includes("facetIndex");
     return {
       isLoading: false,
       isError: false,
       error: null,
-      data: isSweep ? sweepQueryData : undefined,
+      data: isSweep
+        ? sweepQueryData
+        : isFacetIndex
+          ? facetIndexData
+          : undefined,
     };
   },
   createMutation: () => ({
@@ -105,6 +115,9 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
       searchClients: { query: vi.fn().mockResolvedValue([]) },
       counts: {
         query: vi.fn().mockResolvedValue({ new: 0, active: 0, onHold: 0 }),
+      },
+      facetIndex: {
+        query: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
       },
       noteTypes: {
         listActive: {
@@ -252,6 +265,8 @@ vi.mock(
         assigneeId: null,
         dateFrom: null,
         dateTo: null,
+        unreadOnly: false,
+        needsAttentionOnly: false,
         get activeCount() {
           return currentActiveCount;
         },
@@ -260,6 +275,8 @@ vi.mock(
         togglePriority: vi.fn(),
         setAssignee: vi.fn(),
         setDateRange: vi.fn(),
+        setUnreadOnly: vi.fn(),
+        setNeedsAttentionOnly: vi.fn(),
         clearAll: vi.fn(),
       } as unknown as typeof FiltersNS.filterStore,
     }) satisfies typeof FiltersNS,
@@ -341,6 +358,7 @@ beforeEach(() => {
   currentViewMode = "list";
   infiniteQueryState = {};
   sweepQueryData = undefined;
+  facetIndexData = undefined;
   currentActiveCount = 0;
 });
 
@@ -646,5 +664,102 @@ describe("Ticket list page", () => {
     // fetchNextPage. Verify the query state is wired correctly.
     expect(infiniteQueryState.hasNextPage).toBe(true);
     expect(typeof infiniteQueryState.fetchNextPage).toBe("function");
+  });
+
+  // --- Facet-driven filter counts ---
+
+  it("renders without error when the facet index query has no data (labels bare)", () => {
+    facetIndexData = undefined;
+    const tickets = [makeTicket()];
+    infiniteQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { pages: [tickets], pageParams: [undefined] },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
+
+    const { container } = render(PageModule.default);
+    // The page mounts and wires filter pills via the navbar context.
+    // When facetIndexData is undefined, withCount returns labels bare
+    // (no parenthesized count). The component renders without crashing.
+    expect(container.querySelector("[data-ticket-list]")).toBeTruthy();
+    expect(mockNavbarCtx.current).toBeTruthy();
+  });
+
+  it("renders without error when the facet index reports incomplete data", () => {
+    // Incomplete index: counts are lower bounds rendered with "+".
+    facetIndexData = {
+      rows: [
+        {
+          id: "t-1",
+          status: "open",
+          onHold: false,
+          followUpCount: 0,
+          queueId: "queue-001",
+          priority: "normal",
+          assignedTo: null,
+          createdAt: "2026-06-15T00:00:00Z",
+        },
+      ],
+      complete: false,
+    };
+    const tickets = [makeTicket()];
+    infiniteQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { pages: [tickets], pageParams: [undefined] },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
+
+    const { container } = render(PageModule.default);
+    expect(container.querySelector("[data-ticket-list]")).toBeTruthy();
+  });
+
+  it("renders without error when the facet index is complete", () => {
+    // Complete index: counts are exact, no "+" suffix.
+    facetIndexData = {
+      rows: [
+        {
+          id: "t-1",
+          status: "open",
+          onHold: false,
+          followUpCount: 0,
+          queueId: "queue-001",
+          priority: "high",
+          assignedTo: "user-001",
+          createdAt: "2026-06-15T00:00:00Z",
+        },
+        {
+          id: "t-2",
+          status: "closed",
+          onHold: false,
+          followUpCount: 3,
+          queueId: "queue-002",
+          priority: "normal",
+          assignedTo: null,
+          createdAt: "2026-06-14T00:00:00Z",
+        },
+      ],
+      complete: true,
+    };
+    const tickets = [makeTicket()];
+    infiniteQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { pages: [tickets], pageParams: [undefined] },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
+
+    const { container } = render(PageModule.default);
+    expect(container.querySelector("[data-ticket-list]")).toBeTruthy();
   });
 });

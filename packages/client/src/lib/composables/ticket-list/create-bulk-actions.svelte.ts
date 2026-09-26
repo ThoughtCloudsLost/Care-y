@@ -98,6 +98,7 @@ export function createBulkActions(deps: BulkActionsDeps): BulkActions {
 
     exitMultiSelect();
     void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.facetIndex() });
   }
 
   async function handleBulkHold(): Promise<void> {
@@ -121,6 +122,7 @@ export function createBulkActions(deps: BulkActionsDeps): BulkActions {
 
     exitMultiSelect();
     void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.facetIndex() });
   }
 
   async function handleBulkPriority(priority: TicketPriority): Promise<void> {
@@ -146,6 +148,7 @@ export function createBulkActions(deps: BulkActionsDeps): BulkActions {
 
     exitMultiSelect();
     void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.facetIndex() });
   }
 
   async function handleBulkQueue(queueId: string): Promise<void> {
@@ -171,6 +174,7 @@ export function createBulkActions(deps: BulkActionsDeps): BulkActions {
 
     exitMultiSelect();
     void queryClient.invalidateQueries({ queryKey: ticketsKeys.lists() });
+    void queryClient.invalidateQueries({ queryKey: ticketsKeys.facetIndex() });
   }
 
   return {

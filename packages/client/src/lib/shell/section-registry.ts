@@ -117,6 +117,7 @@ export const VOLUNTEER_SECTIONS: readonly ScrollSection[] = [
  */
 export interface DashboardSectionFlags {
   readonly showGettingStarted: boolean;
+  readonly showKb: boolean;
   readonly showMergeCandidates: boolean;
   readonly showNeedsAttention: boolean;
   readonly showOnHold: boolean;
@@ -156,11 +157,13 @@ export function buildDashboardSections(
     label: m.dashboard_activity_heading,
     icon: Activity,
   });
-  sections.push({
-    id: "kb",
-    label: () => m.dashboard_kb_heading(withTerms()),
-    icon: BookOpen,
-  });
+  if (flags.showKb) {
+    sections.push({
+      id: "kb",
+      label: () => m.dashboard_kb_heading(withTerms()),
+      icon: BookOpen,
+    });
+  }
 
   if (flags.showMergeCandidates) {
     sections.push({
@@ -237,10 +240,13 @@ function getDashboardFlagsFromCache(
   const countsData = queryClient.getQueryData<{ onHold?: number }>(
     ticketsKeys.counts(),
   );
+  const showKb = canCall(permissions, "kb.recentItems");
+
   const showOnHold = countsData != null && (countsData.onHold ?? 0) > 0;
 
   return {
     showGettingStarted,
+    showKb,
     showMergeCandidates,
     showNeedsAttention,
     showOnHold,

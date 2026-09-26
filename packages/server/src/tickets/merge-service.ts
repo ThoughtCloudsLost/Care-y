@@ -292,9 +292,11 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
             throw new MergeError(ErrorCode.MERGE_UNRESOLVED_DEPS);
           }
 
+          // Clears the hold alongside the close, matching
+          // TicketService.close: a closed ticket must not stay flagged.
           await trx
             .updateTable("tickets")
-            .set({ status: "closed" })
+            .set({ status: "closed", on_hold: false })
             .where("id", "=", secondaryTicket.id)
             .execute();
 

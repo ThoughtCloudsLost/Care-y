@@ -262,6 +262,7 @@ describe("createCardPropsMapper", () => {
     return {
       ...makeFieldDeps(),
       unreadCount: () => 3,
+      unreadCountIsFloor: () => false,
       getPreview: () => undefined,
       previewReactionsMap: new Map<string, ReactionSummary[]>(),
       ontap: vi.fn(),
