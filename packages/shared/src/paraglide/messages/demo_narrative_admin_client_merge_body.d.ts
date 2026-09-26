@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A merge names one of two records the survivor and marks the other as merged into it, which is a pointer between rows rather than a rewrite of either. [[#clie..." |
+* | "Merging two client records sets one as the survivor and writes a pointer from the other into it. Neither record is rewritten. The merged-away record keeps it..." |
 *
 * @param {Demo_Narrative_Admin_Client_Merge_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

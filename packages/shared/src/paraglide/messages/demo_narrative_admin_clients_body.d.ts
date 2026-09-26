@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The client list carries every client record the organization holds, twenty-five at a time, with the number of cases attached to each one. [[#client-data #per..." |
+* | "The client list holds every client record the organization has created, paginated twenty-five at a time, with a ticket count beside each record. The alias is..." |
 *
 * @param {Demo_Narrative_Admin_Clients_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
