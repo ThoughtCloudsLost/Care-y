@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Every field shown here is decrypted locally by the browser. The server stores and relays ciphertext without access to the content. The view has two modes: a ..." |
+* | "Surfaces what is recorded on one ticket: client contact on each channel, volunteer notes, attached files, and actions that change the ticket's state. A clien..." |
 *
 * @param {Demo_Section_Ticket_Detail_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

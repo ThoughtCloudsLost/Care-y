@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Setting up a secure link mints a private page for one client, reachable only by the exact address the user hands over. [[#portal #keys]] **What the browser m..." |
+* | "Setting up a secure link creates a private page for one client, reachable only by the exact address the signed-in account hands over. [[#portal #keys]] **Wha..." |
 *
 * @param {Demo_Narrative_Topic_Secure_Link_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

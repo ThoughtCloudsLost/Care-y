@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The case panel holds the contact rows, the client's channel, the notes and media collected on the case, and the actions that change it: editing the case, ass..." |
+* | "The panel holds the client's contact details and their channel, the notes and files on the ticket, and the actions that change it: editing, assigning, changi..." |
 *
 * @param {Demo_Narrative_Topic_Case_Panel_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

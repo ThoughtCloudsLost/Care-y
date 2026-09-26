@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The case header reports the title, the priority, whether the case is closed, and a field list holding the description, the queue, who holds the case and how ..." |
+* | "The case header reports the ticket's title, the priority, whether the ticket is closed, the description, the queue, who holds the ticket and how long ago it ..." |
 *
 * @param {Demo_Narrative_Topic_Case_Header_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
