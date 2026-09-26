@@ -170,6 +170,7 @@ export type DemoTopic =
   | "dashboard-create"
   | "decryption"
   | "view-modes"
+  | "kanban-board"
   | "list-stats"
   | "sort"
   | "select-mode"
@@ -295,6 +296,7 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   "dashboard-merge-candidates",
   "decryption",
   "view-modes",
+  "kanban-board",
   "list-stats",
   "sort",
   "select-mode",

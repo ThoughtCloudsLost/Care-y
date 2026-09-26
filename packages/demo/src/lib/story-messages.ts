@@ -77,6 +77,10 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_topic_view_modes_heading(),
   demo_narrative_topic_view_modes_body: () =>
     m.demo_narrative_topic_view_modes_body(),
+  demo_narrative_topic_kanban_board_heading: () =>
+    m.demo_narrative_topic_kanban_board_heading(),
+  demo_narrative_topic_kanban_board_body: () =>
+    m.demo_narrative_topic_kanban_board_body(),
   demo_narrative_topic_select_mode_heading: () =>
     m.demo_narrative_topic_select_mode_heading(),
   demo_narrative_topic_select_mode_body: () =>

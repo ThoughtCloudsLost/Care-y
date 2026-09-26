@@ -566,6 +566,30 @@ describe("composed sort candidates", () => {
 });
 
 // -----------------------------------------------------------------------
+// Kanban board candidates
+// -----------------------------------------------------------------------
+
+describe("kanban-board candidates", () => {
+  it("includes the switcher's Kanban segment label in both locales", () => {
+    const candidates = buildTopicCandidates("kanban-board");
+    expect(candidates.has("Kanban board")).toBe(true);
+    expect(candidates.has("Tablero kanban")).toBe(true);
+  });
+
+  it("resolves to the ticket list", () => {
+    expect(topicFeatureTarget("kanban-board")).toEqual({
+      feature: "tickets",
+      detail: null,
+    });
+  });
+
+  it("is visual-only: no real tap switches the list to the board", () => {
+    expect(TAP_TOPICS.has("kanban-board")).toBe(false);
+    expect(buildActivationCandidates("kanban-board").size).toBe(0);
+  });
+});
+
+// -----------------------------------------------------------------------
 // SMS title candidates (exposure-hints second stage)
 // -----------------------------------------------------------------------
 
