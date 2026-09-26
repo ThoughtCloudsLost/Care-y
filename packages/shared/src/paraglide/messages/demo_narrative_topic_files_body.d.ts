@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A file attached to a ticket is sealed in the browser before upload. Both the bytes and the filename reach the server as ciphertext. [[#encryption #client-dat..." |
+* | "The browser seals a file before uploading it. Both the bytes and the filename reach the server as ciphertext. [[#encryption #client-data]] **What key does ea..." |
 *
 * @param {Demo_Narrative_Topic_Files_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

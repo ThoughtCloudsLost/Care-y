@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Assignments, status changes, priority and queue moves, holds, and merges are recorded in the conversation thread as follow-ups of their own, so what was done..." |
+* | "Assignments, status changes, priority moves, queue moves, holds, and merges each appear in the conversation thread as a follow-up. The record of what was don..." |
 *
 * @param {Demo_Narrative_Topic_System_Events_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
