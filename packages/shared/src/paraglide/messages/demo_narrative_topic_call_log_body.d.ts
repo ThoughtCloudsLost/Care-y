@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A call placed or received on a case is recorded in the thread with its outcome, and a connected call carries how long it ran. [[#telephony #client-data]] **W..." |
+* | "A call placed or received on a ticket is recorded in the thread as a follow-up with its outcome, and a connected call carries how long it ran. [[#telephony #..." |
 *
 * @param {Demo_Narrative_Topic_Call_Log_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
