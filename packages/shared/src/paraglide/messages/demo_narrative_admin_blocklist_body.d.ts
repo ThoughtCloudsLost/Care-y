@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A blocked number reaches nothing, since a call from it is rejected and a text from it is dropped, both before a client record or a ticket is touched. Blockin..." |
+* | "The blocklist prevents a phone number from reaching the organization. An inbound call from a blocked number receives a busy signal, and an inbound text is dr..." |
 *
 * @param {Demo_Narrative_Admin_Blocklist_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
