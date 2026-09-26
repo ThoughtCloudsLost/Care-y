@@ -981,9 +981,9 @@ describe("SECTIONS taxonomy", () => {
     expect(dashboard?.subs).toHaveLength(12);
   });
 
-  it("tickets has 12 subs", () => {
+  it("tickets has 13 subs", () => {
     const tickets = SECTIONS.find((s) => s.id === "tickets");
-    expect(tickets?.subs).toHaveLength(12);
+    expect(tickets?.subs).toHaveLength(13);
   });
 
   it("ticket-detail has 27 subs", () => {
@@ -1653,10 +1653,10 @@ describe("highlight coverage", () => {
 // -----------------------------------------------------------------------
 
 describe("deep-dive section", () => {
-  it("is registered in SECTIONS with 8 subs", () => {
+  it("is registered in SECTIONS with 9 subs", () => {
     const dd = SECTIONS.find((s) => s.id === "deep-dive");
     expect(dd).toBeDefined();
-    expect(dd!.subs).toHaveLength(8);
+    expect(dd!.subs).toHaveLength(9);
   });
 
   it("has empty routes (no product route)", () => {
@@ -1683,6 +1683,7 @@ describe("deep-dive section", () => {
     expect(slugs).toContain("how-encryption-works");
     expect(slugs).toContain("how-keys-are-derived");
     expect(slugs).toContain("the-trust-boundary");
+    expect(slugs).toContain("deployment");
     expect(slugs).toContain("the-telephony-relay");
     expect(slugs).toContain("the-permission-system");
     expect(slugs).toContain("portal-channel-lifecycle");

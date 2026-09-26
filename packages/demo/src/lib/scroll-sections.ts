@@ -1461,6 +1461,12 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_deepdive_trust_boundary_body",
       },
       {
+        slug: "deployment",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_deployment_heading",
+        bodyKey: "demo_narrative_deepdive_deployment_body",
+      },
+      {
         slug: "the-telephony-relay",
         topic: null,
         headingKey: "demo_narrative_deepdive_telephony_relay_heading",

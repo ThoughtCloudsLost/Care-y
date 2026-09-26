@@ -652,6 +652,10 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_deepdive_trust_boundary_heading(),
   demo_narrative_deepdive_trust_boundary_body: () =>
     m.demo_narrative_deepdive_trust_boundary_body(),
+  demo_narrative_deepdive_deployment_heading: () =>
+    m.demo_narrative_deepdive_deployment_heading(),
+  demo_narrative_deepdive_deployment_body: () =>
+    m.demo_narrative_deepdive_deployment_body(),
   demo_narrative_deepdive_telephony_relay_heading: () =>
     m.demo_narrative_deepdive_telephony_relay_heading(),
   demo_narrative_deepdive_telephony_relay_body: () =>
