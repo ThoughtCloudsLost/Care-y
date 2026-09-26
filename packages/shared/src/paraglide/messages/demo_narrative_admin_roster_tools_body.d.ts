@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Four filters, three sort fields and a search narrow the roster after the browser has fetched it, so none of them tell the server what was looked for. [[#priv..." |
+* | "Filtering, sorting and searching the roster all run in the browser after the full list has loaded, so none of them send search terms or filter selections to ..." |
 *
 * @param {Demo_Narrative_Admin_Roster_Tools_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
