@@ -7,7 +7,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 const en_demo_narrative_dashboard_create_body = /** @type {(inputs: Demo_Narrative_Dashboard_Create_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`The navigation bar's create button opens a menu of options gated by the signed-in account's permissions. The button does not appear when the account holds none of the required permissions. [[#permissions]]
-**What each option requires.** [[#permissions]]
+**What does each option require?** [[#permissions]]
 - Ticket opens the new ticket form. Requires the Open cases permission.
 - Article opens the article editor. Requires the Edit knowledge base permission.
 - Category opens category management. Requires the Manage knowledge base categories permission.
@@ -20,7 +20,7 @@ The server enforces the same permission when the destination form is submitted. 
 
 const es_demo_narrative_dashboard_create_body = /** @type {(inputs: Demo_Narrative_Dashboard_Create_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`El botón de crear de la barra de navegación abre un menú de opciones condicionadas por los permisos de la cuenta que ha iniciado sesión. El botón no aparece cuando la cuenta no tiene ninguno de los permisos requeridos. [[#permissions]]
-**Qué necesita cada opción.** [[#permissions]]
+**¿Qué necesita cada opción?** [[#permissions]]
 - Ticket abre el formulario de nuevo ticket. Requiere el permiso Abrir casos.
 - Artículo abre el editor de artículos. Requiere el permiso Editar base de conocimiento.
 - Categoría abre la gestión de categorías. Requiere el permiso Gestionar categorías de la base de conocimiento.
@@ -33,7 +33,7 @@ El servidor aplica el mismo permiso cuando se envía el formulario de destino. [
 
 const en_xa2_demo_narrative_dashboard_create_body = /** @type {(inputs: Demo_Narrative_Dashboard_Create_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`⟦Thè nàvìgàtìòn bàr's crèàtè bùttòn òpèns à mènù òf òptìòns gàtèd by thè sìgnèd-ìn àccòùnt's pèrmìssìòns. Thè bùttòn dòès nòt àppèàr whèn thè àccòùnt hòlds nònè òf thè rèqùìrèd pèrmìssìòns. [[#pèrmìssìòns]]
- ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt èàch òptìòn rèqùìrès. ••••••••** [[#pèrmìssìòns]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt dòès èàch òptìòn rèqùìrè? •••••••••** [[#pèrmìssìòns]]
 - Tìckèt òpèns thè nèw tìckèt fòrm. Rèqùìrès thè Òpèn càsès pèrmìssìòn.
 - Àrtìclè òpèns thè àrtìclè èdìtòr. Rèqùìrès thè Èdìt knòwlèdgè bàsè pèrmìssìòn.
 - Càtègòry òpèns càtègòry mànàgèmènt. Rèqùìrès thè Mànàgè knòwlèdgè bàsè càtègòrìès pèrmìssìòn.

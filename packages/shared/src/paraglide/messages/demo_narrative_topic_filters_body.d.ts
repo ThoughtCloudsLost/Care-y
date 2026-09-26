@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Filters narrow the case list by status, queue, priority, assignee, on-hold state, creation date range, unread state and needs-attention, and several can be a..." |
+* | "The ticket list can be filtered by status, queue, priority, assignee, creation date range, unread only, and needs attention only. Several dimensions can be a..." |
 *
 * @param {Demo_Narrative_Topic_Filters_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

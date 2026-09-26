@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Select mode turns the list into a pick-several surface so one action applies to every ticket chosen, and a long press on a row both enters the mode and picks..." |
+* | "Select mode lets an account pick several tickets so one action applies to all of them. The Select control beside the filters turns select mode on. A long pre..." |
 *
 * @param {Demo_Narrative_Topic_Select_Mode_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

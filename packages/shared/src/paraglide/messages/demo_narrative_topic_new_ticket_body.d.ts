@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Opening a ticket seals its title and description in the browser under a key minted there, and the server files the ciphertext without ever holding the key. [..." |
+* | "Creating a ticket seals its title and description in the browser under a ticket key minted there. The server files the ciphertext and never holds the key. [[..." |
 *
 * @param {Demo_Narrative_Topic_New_Ticket_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

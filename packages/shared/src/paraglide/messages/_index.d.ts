@@ -1280,6 +1280,8 @@ export * from "./demo_narrative_topic_files_body.js";
 export * from "./demo_narrative_topic_files_heading.js";
 export * from "./demo_narrative_topic_filters_body.js";
 export * from "./demo_narrative_topic_filters_heading.js";
+export * from "./demo_narrative_topic_kanban_board_body.js";
+export * from "./demo_narrative_topic_kanban_board_heading.js";
 export * from "./demo_narrative_topic_key_derivation_body.js";
 export * from "./demo_narrative_topic_key_derivation_heading.js";
 export * from "./demo_narrative_topic_language_body.js";

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Every ticket title, description, and message is encrypted with keys only the browser holds. The server stores ciphertext and routes it without reading it. So..." |
+* | "A ticket is one client's case file. Each client has at most one open ticket. Contact on any channel (call, SMS, email, web intake form, portal message, voice..." |
 *
 * @param {Demo_Section_Tickets_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

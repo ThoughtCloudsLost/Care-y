@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Sorting reorders the list by creation date, status, priority, last activity, queue, client or follow-up count, and the side that does the work differs by fie..." |
+* | "The ticket list can be sorted by creation date, priority, last activity, queue, follow-up count, client, title, assignee, and status. Which side performs the..." |
 *
 * @param {Demo_Narrative_Topic_Sort_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

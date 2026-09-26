@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "On a wide enough window the list keeps a ticket open alongside it, so choosing another ticket replaces the open one and never the list. [[#client-data]] **Wh..." |
+* | "A wide window shows the ticket list and an open ticket side by side. Choosing a ticket in the list replaces the open ticket in the second pane. The list keep..." |
 *
 * @param {Demo_Narrative_Topic_Split_View_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

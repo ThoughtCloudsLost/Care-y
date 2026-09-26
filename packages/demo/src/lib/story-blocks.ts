@@ -130,8 +130,15 @@ export function buildBlocks(sects: Section[], loc: string): FlowBlock[] {
     } satisfies FlowTextBlock);
     // A description splits on newlines into one block per paragraph,
     // like bodies do. The first block keeps the historical `--desc` id.
+    // Marked-up paragraphs carry styled runs so links resolve the same
+    // way they do in bodies.
     const descParas = resolveStoryMessage(section.descKey, loc).split("\n");
     for (let pi = 0; pi < descParas.length; pi++) {
+      const paraText = descParas.at(pi) ?? "";
+      const paraUnits = hasFlowMarkup(paraText)
+        ? parseFlowMarkup(paraText)
+        : null;
+      const paraUnit = paraUnits?.at(0);
       result.push({
         id:
           pi === 0
@@ -140,7 +147,11 @@ export function buildBlocks(sects: Section[], loc: string): FlowBlock[] {
         sectionId: section.id,
         subSlug: null,
         kind: "section-desc",
-        text: descParas.at(pi) ?? "",
+        text: paraUnit !== undefined ? unitText(paraUnit) : paraText,
+        runs:
+          paraUnit !== undefined && unitHasRichContent(paraUnit)
+            ? paraUnit.runs
+            : undefined,
         spaceBefore: pi > 0 ? PARA_SPACE : undefined,
       } satisfies FlowTextBlock);
     }

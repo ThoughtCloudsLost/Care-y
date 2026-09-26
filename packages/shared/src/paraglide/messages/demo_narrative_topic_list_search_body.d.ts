@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Searching this page matches what the browser has already decrypted and steps through the matches one at a time without leaving the list. [[#client-data #priv..." |
+* | "A search control in the ticket list header opens a search bar below the filters. The search bar matches a term against the decrypted fields of each loaded ti..." |
 *
 * @param {Demo_Narrative_Topic_List_Search_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

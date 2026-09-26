@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The ticket list has four view modes: table, compact rows, cards, and grid. [[#client-data]] **What each mode requests.** Compact rows request no message prev..." |
+* | "The ticket list's \"View as\" switcher offers Table, Compact rows, Cards, Grid, and Kanban board. The overview page keeps its own view-mode preference, covered..." |
 *
 * @param {Demo_Narrative_Topic_View_Modes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

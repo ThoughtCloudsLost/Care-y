@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The browser opens a ticket's title with a key wrapped for the signed-in account, and the server holds the ciphertext and that wrap without being able to use ..." |
+* | "The title, the description, and the messages are encrypted in the browser before they reach the server. [[#encryption #keys]] **What does each field hold?** ..." |
 *
 * @param {Demo_Narrative_Topic_Decryption_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

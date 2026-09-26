@@ -350,6 +350,12 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_topic_view_modes_body",
       },
       {
+        slug: "kanban-board",
+        topic: "kanban-board",
+        headingKey: "demo_narrative_topic_kanban_board_heading",
+        bodyKey: "demo_narrative_topic_kanban_board_body",
+      },
+      {
         slug: "stats",
         topic: "list-stats",
         headingKey: "demo_narrative_topic_list_stats_heading",

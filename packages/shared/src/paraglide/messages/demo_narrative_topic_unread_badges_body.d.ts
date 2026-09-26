@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A ticket carries an unread count when someone other than the user has replied to it since the user last read it. [[#client-data]] **How a reply is counted as..." |
+* | "Each ticket row shows how many replies the signed-in account has not read. [[#client-data #encryption]] **Where does the count come from?** Each account keep..." |
 *
 * @param {Demo_Narrative_Topic_Unread_Badges_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

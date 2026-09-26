@@ -12,7 +12,7 @@ const en_demo_narrative_dashboard_activity_body = /** @type {(inputs: Demo_Narra
 - Creation: a new ticket is opened, whether by staff or by a client submitting an intake form or calling the intake phone number.
 - Closing: someone closes a ticket.
 - Reopening: someone reopens a closed ticket.
-- Follow-up: a reply or note is added to a ticket's conversation, including messages a client sends through the portal.
+- Follow-up: a reply or note is added to a ticket's conversation. A message a client sends through the portal is recorded as a follow-up.
 - Mention: a follow-up that @-mentions an account is recorded as a mention instead of a follow-up.
 An activity type added after these still appears in the feed with a generic label. [[#failure-states]]
 **Query path and access control.** \`listRecentForQueues\` in \`packages/server/src/tickets/audit.ts\` joins the audit log to tickets, clients, and queues. It applies no access control of its own. The route passes only the caller's queue IDs to the function. The audit log is append-only with no update or delete path. [Audit log](#admin-logs/audit) covers the full log and who can access it. [[#permissions]]`)
@@ -25,7 +25,7 @@ const es_demo_narrative_dashboard_activity_body = /** @type {(inputs: Demo_Narra
 - Creación: se abre un ticket nuevo, ya sea por parte del personal o por un cliente que envía un formulario de ingreso o llama al número de teléfono de ingreso.
 - Cierre: alguien cierra un ticket.
 - Reapertura: alguien reabre un ticket cerrado.
-- Seguimiento: se añade una respuesta o nota a la conversación de un ticket, incluidos los mensajes que un cliente envía a través del portal.
+- Seguimiento: se añade una respuesta o nota a la conversación de un ticket. Un mensaje que un cliente envía a través del portal se registra como seguimiento.
 - Mención: un seguimiento que @-menciona una cuenta se registra como mención en lugar de seguimiento.
 Un tipo de actividad añadido después de estos aparece en el feed con una etiqueta genérica. [[#failure-states]]
 **Ruta de consulta y control de acceso.** \`listRecentForQueues\` en \`packages/server/src/tickets/audit.ts\` une el registro de auditoría con tickets, clientes y colas. No aplica control de acceso propio. La ruta pasa solo los IDs de cola del usuario que llama a la función. El registro de auditoría es de solo adición, sin ruta de actualización ni eliminación. [Registro de auditoría](#admin-logs/audit) cubre el registro completo y quién puede acceder a él. [[#permissions]]`)
@@ -38,10 +38,10 @@ const en_xa2_demo_narrative_dashboard_activity_body = /** @type {(inputs: Demo_N
 - Crèàtìòn: à nèw tìckèt ìs òpènèd, whèthèr by stàff òr by à clìènt sùbmìttìng àn ìntàkè fòrm òr càllìng thè ìntàkè phònè nùmbèr.
 - Clòsìng: sòmèònè clòsès à tìckèt.
 - Rèòpènìng: sòmèònè rèòpèns à clòsèd tìckèt.
-- Fòllòw-ùp: à rèply òr nòtè ìs àddèd tò à tìckèt's cònvèrsàtìòn, ìnclùdìng mèssàgès à clìènt sènds thròùgh thè pòrtàl.
+- Fòllòw-ùp: à rèply òr nòtè ìs àddèd tò à tìckèt's cònvèrsàtìòn. À mèssàgè à clìènt sènds thròùgh thè pòrtàl ìs rècòrdèd às à fòllòw-ùp.
 - Mèntìòn: à fòllòw-ùp thàt @-mèntìòns àn àccòùnt ìs rècòrdèd às à mèntìòn ìnstèàd òf à fòllòw-ùp.
 Àn àctìvìty typè àddèd àftèr thèsè stìll àppèàrs ìn thè fèèd wìth à gènèrìc làbèl. [[#fàìlùrè-stàtès]]
- ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Qùèry pàth ànd àccèss còntròl. •••••••••** \`lìstRècèntFòrQùèùès\` ìn \`pàckàgès/sèrvèr/src/tìckèts/àùdìt.ts\` jòìns thè àùdìt lòg tò tìckèts, clìènts, ànd qùèùès. Ìt àpplìès nò àccèss còntròl òf ìts òwn. Thè ròùtè pàssès ònly thè càllèr's qùèùè ÌDs tò thè fùnctìòn. Thè àùdìt lòg ìs àppènd-ònly wìth nò ùpdàtè òr dèlètè pàth. [Àùdìt lòg](#àdmìn-lògs/àùdìt) còvèrs thè fùll lòg ànd whò càn àccèss ìt. [[#pèrmìssìòns]] ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Qùèry pàth ànd àccèss còntròl. •••••••••** \`lìstRècèntFòrQùèùès\` ìn \`pàckàgès/sèrvèr/src/tìckèts/àùdìt.ts\` jòìns thè àùdìt lòg tò tìckèts, clìènts, ànd qùèùès. Ìt àpplìès nò àccèss còntròl òf ìts òwn. Thè ròùtè pàssès ònly thè càllèr's qùèùè ÌDs tò thè fùnctìòn. Thè àùdìt lòg ìs àppènd-ònly wìth nò ùpdàtè òr dèlètè pàth. [Àùdìt lòg](#àdmìn-lògs/àùdìt) còvèrs thè fùll lòg ànd whò càn àccèss ìt. [[#pèrmìssìòns]] ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**

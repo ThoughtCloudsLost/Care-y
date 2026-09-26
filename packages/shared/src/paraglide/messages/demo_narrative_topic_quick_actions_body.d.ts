@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A row carries the common operations on a ticket so they finish without opening it. [[#client-data]] **What a swipe offers in each direction.** Pulling a row ..." |
+* | "Quick actions are the common operations on a ticket, run without opening it. Rows in the ticket list carry them as a swipe gesture and cards carry them as bu..." |
 *
 * @param {Demo_Narrative_Topic_Quick_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

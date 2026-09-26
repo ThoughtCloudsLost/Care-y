@@ -55,7 +55,6 @@ const ALWAYS_ACCENTED = [
   "ultima", // última
   "ultimo", // último
   "facil", // fácil
-  "quien", // quién (interrogative; the corpus only uses it in questions)
   "linea", // línea
   "ingles", // inglés
   "espanol", // español
@@ -63,13 +62,27 @@ const ALWAYS_ACCENTED = [
 
 /**
  * Keys whose values may legitimately contain a listed bare form.
- * Both entries use "quien" as an unaccented relative pronoun
- * ("Solo quien posea la clave", "quien ataque"), which is correct.
+ *
+ * Empty: its two entries existed only to excuse "quien", which is no
+ * longer a listed bare form. An allowlist entry skips every check for
+ * that key, so keeping them would have hidden any other missing accent
+ * in those two values.
  */
-const ALLOWLIST: ReadonlySet<string> = new Set([
-  "demo_narrative_client_intake_fields_body",
-  "demo_narrative_client_account_sign_in_body",
-]);
+const ALLOWLIST: ReadonlySet<string> = new Set<string>([]);
+
+/**
+ * "quien" is correct unaccented as a relative pronoun ("Solo quien posea
+ * la clave", "lo que escucha quien llama"), and the corpus uses it that
+ * way roughly ninety times, so it cannot sit in ALWAYS_ACCENTED. The
+ * interrogative does need its accent, and it is identifiable: Spanish
+ * opens a direct question with an inverted mark, so an interrogative
+ * "quién" is the first word after "¿".
+ *
+ * A relative pronoun inside a question stays unaccented ("¿Qué ve quien
+ * llama?"), which is why this anchors on the mark rather than scanning
+ * the whole question.
+ */
+const BARE_INTERROGATIVE_QUIEN = /¿\s*quien\b/iu;
 
 describe("es.json accent spelling", () => {
   const data = JSON.parse(readFileSync(ES_PATH, "utf-8")) as Record<
@@ -88,6 +101,19 @@ describe("es.json accent spelling", () => {
         if (BARE_FORMS.has(word)) {
           offenders.push(`${key}: contains "${word}" (${value.slice(0, 60)})`);
         }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("no question opens with an unaccented interrogative quien", () => {
+    const offenders: string[] = [];
+    for (const [key, value] of Object.entries(data)) {
+      if (typeof value !== "string") continue;
+      if (BARE_INTERROGATIVE_QUIEN.test(value)) {
+        offenders.push(
+          `${key}: opens a question with "quien" (${value.slice(0, 60)})`,
+        );
       }
     }
     expect(offenders).toEqual([]);

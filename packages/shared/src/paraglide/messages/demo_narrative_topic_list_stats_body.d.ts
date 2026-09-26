@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The counts report how many tickets are new, active and on hold across every queue the user has access to, and how many carry replies the user has not read. [..." |
+* | "The ticket list shows counts across every queue the account can access, plus a count of tickets carrying replies the account has not read. The status counts ..." |
 *
 * @param {Demo_Narrative_Topic_List_Stats_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
