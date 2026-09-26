@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_Org_DescInputs */
 
 const en_demo_section_admin_org_desc = /** @type {(inputs: Demo_Section_Admin_Org_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`These entries cover settings that shape the whole workspace rather than any one ticket or person. General info and branding are stored without encryption so pages the visitor sees before signing in can display them, while terminology is encrypted with the organization key.`)
+	return /** @type {LocalizedString} */ (`The organization section holds workspace-level settings that no single ticket or person owns. General info and branding are plaintext so the login page and client portal can display them before anyone signs in. Terminology, note type names, and note type icons are encrypted with the organization key. Note type notification targets are encrypted with the server's operational key, because the server reads them to route notifications. Retention windows are plaintext integers the server enforces directly. [How encryption works](#deep-dive/how-encryption-works) covers the organization key, and [The trust boundary](#deep-dive/the-trust-boundary) covers what the server's operational key protects.`)
 };
 
 const es_demo_section_admin_org_desc = /** @type {(inputs: Demo_Section_Admin_Org_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Estas entradas cubren ajustes que dan forma a todo el espacio de trabajo en lugar de a un ticket o una persona en particular. La información general y la marca se almacenan sin cifrar para que las páginas que el visitante ve antes de iniciar sesión puedan mostrarlas, mientras que la terminología se cifra con la clave de la organización.`)
+	return /** @type {LocalizedString} */ (`La sección de organización reúne ajustes que aplican a todo el espacio de trabajo y no pertenecen a ningún ticket ni persona individual. La marca y la información general son texto plano para que la página de inicio de sesión y el portal del cliente puedan mostrarlas antes de que alguien inicie sesión. La terminología, los nombres de tipo de nota y sus iconos se cifran con la clave de la organización. Los destinatarios de notificación de cada tipo de nota se cifran con la clave operativa del servidor, porque el servidor los lee para enrutar las notificaciones. Las ventanas de retención son valores en texto plano que el servidor aplica directamente. [Cómo funciona el cifrado](#deep-dive/how-encryption-works) trata la clave de la organización, y [La frontera de confianza](#deep-dive/the-trust-boundary) trata lo que protege la clave operativa del servidor.`)
 };
 
 const en_xa2_demo_section_admin_org_desc = /** @type {(inputs: Demo_Section_Admin_Org_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Thèsè èntrìès còvèr sèttìngs thàt shàpè thè whòlè wòrkspàcè ràthèr thàn àny ònè tìckèt òr pèrsòn. Gènèràl ìnfò ànd bràndìng àrè stòrèd wìthòùt èncryptìòn sò pàgès thè vìsìtòr sèès bèfòrè sìgnìng ìn càn dìsplày thèm, whìlè tèrmìnòlògy ìs èncryptèd wìth thè òrgànìzàtìòn kèy. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Thè òrgànìzàtìòn sèctìòn hòlds wòrkspàcè-lèvèl sèttìngs thàt nò sìnglè tìckèt òr pèrsòn òwns. Gènèràl ìnfò ànd bràndìng àrè plàìntèxt sò thè lògìn pàgè ànd clìènt pòrtàl càn dìsplày thèm bèfòrè ànyònè sìgns ìn. Tèrmìnòlògy, nòtè typè nàmès, ànd nòtè typè ìcòns àrè èncryptèd wìth thè òrgànìzàtìòn kèy. Nòtè typè nòtìfìcàtìòn tàrgèts àrè èncryptèd wìth thè sèrvèr's òpèràtìònàl kèy, bècàùsè thè sèrvèr rèàds thèm tò ròùtè nòtìfìcàtìòns. Rètèntìòn wìndòws àrè plàìntèxt ìntègèrs thè sèrvèr ènfòrcès dìrèctly. [Hòw èncryptìòn wòrks](#dèèp-dìvè/hòw-èncryptìòn-wòrks) còvèrs thè òrgànìzàtìòn kèy, ànd [Thè trùst bòùndàry](#dèèp-dìvè/thè-trùst-bòùndàry) còvèrs whàt thè sèrvèr's òpèràtìònàl kèy pròtècts. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "These entries cover settings that shape the whole workspace rather than any one ticket or person. General info and branding are stored without encryption so ..." |
+* | "The organization section holds workspace-level settings that no single ticket or person owns. General info and branding are plaintext so the login page and c..." |
 *
 * @param {Demo_Section_Admin_Org_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

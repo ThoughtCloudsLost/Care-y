@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "General information holds the organization's name, the country its phone numbers belong to, the language it starts people in, and the address the client-faci..." |
+* | "General information holds the organization's name, its country code, its default language and the address the client-facing quick exit navigates to, and all ..." |
 *
 * @param {Demo_Narrative_Admin_General_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A voicemail that cannot be attached to a case is held in quarantine instead of being discarded, and waits there for someone to route it. A voicemail lands th..." |
+* | "A voicemail the system cannot attach to a ticket is sealed with the organization key and held in quarantine for manual routing. The system does not store the..." |
 *
 * @param {Demo_Narrative_Admin_Quarantine_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
