@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Every account in an organization holds its own wrapped copy of one organization key, and this section reports whether the signed-in account has that copy and..." |
+* | "Each account in an organization holds its own wrapped copy of one organization key. This page reports whether the user's account has that copy and offers esc..." |
 *
 * @param {Demo_Narrative_Admin_Keys_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

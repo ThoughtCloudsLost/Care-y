@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A field's settings hold everything about that one field, and what they offer changes with its type. Every field carries a label and optional help text in eac..." |
+* | "Each field type carries its own settings. All types share a label and optional help text in each language and a required switch. Text and long text fields ad..." |
 *
 * @param {Demo_Narrative_Admin_Field_Config_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

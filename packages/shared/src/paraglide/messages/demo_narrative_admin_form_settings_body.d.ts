@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Form settings hold the name the organization files a form under, the address it answers on, the queue its cases land in, the date it stops accepting answers ..." |
+* | "Each form carries an internal name, an address on the public site, a destination queue for the cases it creates, an optional closing date and a banner image...." |
 *
 * @param {Demo_Narrative_Admin_Form_Settings_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

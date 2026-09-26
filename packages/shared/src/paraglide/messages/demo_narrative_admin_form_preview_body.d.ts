@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The preview renders the form through the same field renderer the public page uses and accepts answers the way a visitor would, so the form can be walked befo..." |
+* | "The preview renders the form with the same field renderer and the same page-splitting and validation logic the public intake page uses. The user can walk eve..." |
 *
 * @param {Demo_Narrative_Admin_Form_Preview_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

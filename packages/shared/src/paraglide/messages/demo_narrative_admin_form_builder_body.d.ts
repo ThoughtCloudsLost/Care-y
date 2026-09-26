@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A form is edited as one working copy in the browser and written as one whole, so adding, removing, reordering and reconfiguring fields all accumulate until a..." |
+* | "The editor holds one working copy in the browser. Adding, removing, reordering and configuring fields all accumulate locally until the user saves. Each save ..." |
 *
 * @param {Demo_Narrative_Admin_Form_Builder_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

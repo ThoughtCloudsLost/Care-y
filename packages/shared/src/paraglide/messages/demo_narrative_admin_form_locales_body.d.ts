@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Form text is authored in English and Spanish, and the count beside each language reports how many translatable items in the form have content in it out of th..." |
+* | "Every form carries English and Spanish text side by side, and a count beside a language shows how many of the form's translatable items have been filled in t..." |
 *
 * @param {Demo_Narrative_Admin_Form_Locales_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

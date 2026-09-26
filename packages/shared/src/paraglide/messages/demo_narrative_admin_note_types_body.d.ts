@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Note types are the categories a note can be filed under, and an organization defines its own set, each with a name, an icon and an optional description, alon..." |
+* | "Each organization defines the categories that internal notes can carry, and each type has a name, an icon, and an optional description. The product also list..." |
 *
 * @param {Demo_Narrative_Admin_Note_Types_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
