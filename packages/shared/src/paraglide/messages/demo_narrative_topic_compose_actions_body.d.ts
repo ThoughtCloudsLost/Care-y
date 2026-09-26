@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The compose menu offers the ways of adding something to a case: a reply on the client's encrypted channel, a text, an email, a file, a saved response, or an ..." |
+* | "The compose menu lists the ways to add a follow-up to a ticket: a reply on the client's encrypted channel, a text, an email, a file, a preset reply, or an in..." |
 *
 * @param {Demo_Narrative_Topic_Compose_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

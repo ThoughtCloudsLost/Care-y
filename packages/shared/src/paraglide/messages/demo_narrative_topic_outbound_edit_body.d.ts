@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A message already sent on the client's encrypted channel can be corrected, and the correction replaces both copies of it. [[#encryption #client-data]] **What..." |
+* | "A message already sent on the client's encrypted channel can be corrected. The correction replaces both the follow-up row and the client's portal copy. [[#en..." |
 *
 * @param {Demo_Narrative_Topic_Outbound_Edit_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

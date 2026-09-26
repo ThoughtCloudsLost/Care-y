@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A reply written on a case is encrypted in the browser under that case's own key before it goes anywhere, and the server stores the result without holding a k..." |
+* | "A reply is encrypted in the browser under the ticket key before it leaves the device, and the server stores the result without holding a key that can open it..." |
 *
 * @param {Demo_Narrative_Topic_Reply_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
