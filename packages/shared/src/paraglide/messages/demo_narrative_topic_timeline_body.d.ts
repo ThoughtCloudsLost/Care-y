@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The timeline presents the whole case as a dated index: recorded events and notes named one by one, runs of messages collapsed into a single line carrying how..." |
+* | "The timeline indexes a ticket's follow-ups by date. Notes, recorded events, and calls appear individually with their content. Ordinary messages are collapsed..." |
 *
 * @param {Demo_Narrative_Topic_Timeline_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
