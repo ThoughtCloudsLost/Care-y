@@ -24,6 +24,7 @@ import type { BlobStore } from "../storage/store.js";
 import { eciesEncrypt, toRistrettoPoint, encode } from "@care-y/crypto";
 import { enqueueNotification } from "../notifications/outbox.js";
 import { reopenClosedTicket } from "../tickets/ticket-reopen.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 import { findActiveChannel } from "./channel-service.js";
 import { portal_nudge_sms_body } from "@care-y/shared/paraglide/messages.js";
 import type { Locale } from "@care-y/shared/paraglide/runtime.js";
@@ -155,6 +156,8 @@ export interface PortalMessageServiceDeps {
   readonly orgId: OrgId;
   readonly orgSchema: OrgSchema;
   readonly orgSlug: OrgSlug;
+  /** Called with the ticket id after a client reply commits. */
+  readonly onTicketChanged?: TicketChangeListener;
 }
 
 // ---------------------------------------------------------------------------
@@ -463,6 +466,8 @@ export async function clientReply(
     }
     throw err;
   }
+
+  deps.onTicketChanged?.(ticket.id);
 }
 
 // ---------------------------------------------------------------------------

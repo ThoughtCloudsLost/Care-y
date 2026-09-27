@@ -27,7 +27,7 @@
  * supports appending new SvelteSet dimensions without restructuring.
  */
 
-import { SvelteSet } from "svelte/reactivity";
+import { SvelteDate, SvelteSet } from "svelte/reactivity";
 import type { TicketPriority, TicketSortField } from "@care-y/shared";
 import type { DisplayStatus } from "$lib/tickets/display-status.js";
 import type { SavedFilterState } from "./saved-filters.svelte.js";
@@ -42,7 +42,63 @@ export interface SortConfig {
   readonly direction: SortDirection;
 }
 
-function createFilterStore(): {
+/**
+ * The `tickets.list` input a filter state translates to. A fetch hint:
+ * status is a superset (see the file header), narrowed on the client.
+ */
+export interface TicketListServerParams {
+  statuses?: ("open" | "closed")[];
+  onHold?: boolean;
+  queueIds?: string[];
+  priorities?: TicketPriority[];
+  assignedTo?: string | null;
+  createdAfter?: string;
+  createdBefore?: string;
+  sortBy: SortField;
+  sortDirection: SortDirection;
+  limit: number;
+}
+
+/**
+ * Narrowest safe superset of the selected display statuses, as the
+ * server's statuses and onHold inputs. The exact narrowing is
+ * filterByDisplayStatus in the route; see the file header for why the
+ * server input cannot carry it. Undefined in either field means that
+ * input is not constrained.
+ */
+export function displayStatusServerParams(
+  selected: ReadonlySet<FilterStatus>,
+): Pick<TicketListServerParams, "statuses" | "onHold"> {
+  const hasNew = selected.has("new");
+  const hasActive = selected.has("active");
+  const hasClosed = selected.has("closed");
+  const hasHold = selected.has("hold");
+
+  const serverStatuses: ("open" | "closed")[] = [];
+  if (hasNew || hasActive || hasHold) serverStatuses.push("open");
+  if (hasClosed) serverStatuses.push("closed");
+
+  // Every selected status has to agree before onHold can narrow the
+  // fetch. Constraining it on a mixed selection would drop rows rather
+  // than over-fetch them: Closed + Hold with onHold: true returns no
+  // closed ticket at all.
+  const wantsHeld = hasHold;
+  const wantsUnheld = hasNew || hasActive || hasClosed;
+  const onHold =
+    wantsHeld === wantsUnheld ? undefined : wantsHeld ? true : false;
+
+  return {
+    statuses: serverStatuses.length > 0 ? serverStatuses : undefined,
+    onHold,
+  };
+}
+
+/**
+ * Creates one independent filter state. The tickets page uses the
+ * `filterStore` singleton below; a surface that filters several lists
+ * separately (the dashboard's lanes) creates one store per list.
+ */
+export function createFilterStore(): {
   readonly statuses: SvelteSet<FilterStatus>;
   toggleStatus(v: FilterStatus): void;
   readonly queueIds: SvelteSet<string>;
@@ -62,18 +118,7 @@ function createFilterStore(): {
   readonly needsAttentionOnly: boolean;
   setNeedsAttentionOnly(v: boolean): void;
   readonly activeCount: number;
-  readonly serverParams: {
-    statuses?: ("open" | "closed")[];
-    onHold?: boolean;
-    queueIds?: string[];
-    priorities?: TicketPriority[];
-    assignedTo?: string | null;
-    createdAfter?: string;
-    createdBefore?: string;
-    sortBy: SortField;
-    sortDirection: SortDirection;
-    limit: number;
-  };
+  readonly serverParams: TicketListServerParams;
   captureState(): SavedFilterState;
   applyState(state: SavedFilterState): void;
   clearAll(): void;
@@ -114,31 +159,13 @@ function createFilterStore(): {
       (needsAttentionOnly ? 1 : 0),
   );
 
-  // Narrowest safe superset of the selected display statuses. The exact
-  // narrowing is filterByDisplayStatus in the route; see the file header
-  // for why the server input cannot carry it.
-  const serverParams = $derived.by(() => {
-    const hasNew = statuses.has("new");
-    const hasActive = statuses.has("active");
-    const hasClosed = statuses.has("closed");
-    const hasHold = statuses.has("hold");
-
-    const serverStatuses: ("open" | "closed")[] = [];
-    if (hasNew || hasActive || hasHold) serverStatuses.push("open");
-    if (hasClosed) serverStatuses.push("closed");
-
-    // Every selected status has to agree before onHold can narrow the
-    // fetch. Constraining it on a mixed selection would drop rows rather
-    // than over-fetch them: Closed + Hold with onHold: true returns no
-    // closed ticket at all.
-    const wantsHeld = hasHold;
-    const wantsUnheld = hasNew || hasActive || hasClosed;
-    const onHold =
-      wantsHeld === wantsUnheld ? undefined : wantsHeld ? true : false;
-
+  // Status translates through displayStatusServerParams, the one place
+  // the display-status superset rule lives.
+  const serverParams = $derived.by((): TicketListServerParams => {
+    const status = displayStatusServerParams(statuses);
     return {
-      statuses: serverStatuses.length > 0 ? serverStatuses : undefined,
-      onHold,
+      statuses: status.statuses,
+      onHold: status.onHold,
       queueIds: queueIds.size > 0 ? [...queueIds] : undefined,
       priorities:
         priorities.size > 0 ? ([...priorities] as TicketPriority[]) : undefined,
@@ -218,7 +245,7 @@ function createFilterStore(): {
     get activeCount(): number {
       return activeCount;
     },
-    get serverParams() {
+    get serverParams(): TicketListServerParams {
       return serverParams;
     },
 
@@ -245,8 +272,9 @@ function createFilterStore(): {
       priorities.clear();
       for (const p of state.priorities) priorities.add(p);
       assigneeId = state.assigneeId;
-      dateFrom = state.dateFrom !== null ? new Date(state.dateFrom) : null;
-      dateTo = state.dateTo !== null ? new Date(state.dateTo) : null;
+      dateFrom =
+        state.dateFrom !== null ? new SvelteDate(state.dateFrom) : null;
+      dateTo = state.dateTo !== null ? new SvelteDate(state.dateTo) : null;
       sort = { field: state.sortField, direction: state.sortDirection };
       unreadOnly = state.unreadOnly;
       needsAttentionOnly = state.needsAttentionOnly;
@@ -264,5 +292,7 @@ function createFilterStore(): {
     },
   };
 }
+
+export type FilterStore = ReturnType<typeof createFilterStore>;
 
 export const filterStore = createFilterStore();

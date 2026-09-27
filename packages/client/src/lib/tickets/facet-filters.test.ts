@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import type { TicketForServerFilter } from "./ticket-list-utils.js";
 import type {
@@ -5,8 +6,16 @@ import type {
   FacetContext,
   FacetDimension,
 } from "./facet-filters.js";
-import { matchesFilters, computeFacets } from "./facet-filters.js";
+import {
+  matchesFilters,
+  computeFacets,
+  countMatches,
+  facetFiltersOf,
+  NO_FACET_FILTERS,
+} from "./facet-filters.js";
+import { createFilterStore } from "$lib/stores/filters.svelte.js";
 import type { DisplayStatus } from "./display-status.js";
+import { filterRow as row } from "./test-helpers/filter-row.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -20,21 +29,6 @@ const JAN_10 = "2024-01-10T12:00:00Z";
 const JAN_15 = "2024-01-15T12:00:00Z";
 const JAN_20 = "2024-01-20T12:00:00Z";
 const JAN_25 = "2024-01-25T12:00:00Z";
-
-function row(
-  overrides: Partial<TicketForServerFilter> & { id: string },
-): TicketForServerFilter {
-  return {
-    status: "open",
-    onHold: false,
-    followUpCount: 0,
-    queueId: "q-general",
-    priority: "normal",
-    assignedTo: null,
-    createdAt: JAN_10,
-    ...overrides,
-  };
-}
 
 /**
  * The fixture set covers all four display statuses, two queues, four
@@ -105,26 +99,13 @@ function makeCtx(currentUserId: string | undefined = ME): FacetContext {
   };
 }
 
-function emptyFilters(): FacetFilterState {
-  return {
-    statuses: new Set<DisplayStatus>(),
-    queueIds: new Set<string>(),
-    priorities: new Set<string>(),
-    assigneeId: undefined,
-    dateFrom: null,
-    dateTo: null,
-    unreadOnly: false,
-    needsAttentionOnly: false,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // matchesFilters
 // ---------------------------------------------------------------------------
 
 describe("matchesFilters", () => {
   it("accepts every row when no filters are active", () => {
-    const filters = emptyFilters();
+    const filters = NO_FACET_FILTERS;
     const ctx = makeCtx();
     for (const r of ROWS) {
       expect(matchesFilters(r, filters, ctx)).toBe(true);
@@ -133,7 +114,7 @@ describe("matchesFilters", () => {
 
   it("filters by status using deriveDisplayStatus", () => {
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       statuses: new Set<DisplayStatus>(["new"]),
     };
     const ctx = makeCtx();
@@ -143,7 +124,7 @@ describe("matchesFilters", () => {
 
   it("filters by queue", () => {
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       queueIds: new Set(["q-support"]),
     };
     const ctx = makeCtx();
@@ -157,7 +138,7 @@ describe("matchesFilters", () => {
 
   it("filters by priority", () => {
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       priorities: new Set(["urgent"]),
     };
     const ctx = makeCtx();
@@ -167,7 +148,7 @@ describe("matchesFilters", () => {
 
   it("filters by assignee null (unassigned)", () => {
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       assigneeId: null,
     };
     const ctx = makeCtx();
@@ -182,7 +163,7 @@ describe("matchesFilters", () => {
 
   it("filters by assignee string (specific user)", () => {
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       assigneeId: ME,
     };
     const ctx = makeCtx();
@@ -196,7 +177,7 @@ describe("matchesFilters", () => {
 
   it("applies date range (dateFrom)", () => {
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       dateFrom: new Date(JAN_15),
     };
     const ctx = makeCtx();
@@ -213,7 +194,7 @@ describe("matchesFilters", () => {
 
   it("applies date range (dateTo)", () => {
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       dateTo: new Date(JAN_10),
     };
     const ctx = makeCtx();
@@ -223,7 +204,7 @@ describe("matchesFilters", () => {
 
   it("filters by unreadOnly", () => {
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       unreadOnly: true,
     };
     const ctx = makeCtx();
@@ -240,7 +221,7 @@ describe("matchesFilters", () => {
     // t-active-1: open, high, assigned to ME, but NOT unread -> no
     // t-active-2: open, urgent, assigned to ME, unread -> yes
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       needsAttentionOnly: true,
     };
     const ctx = makeCtx();
@@ -250,7 +231,7 @@ describe("matchesFilters", () => {
 
   it("skips the excluded dimension", () => {
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       statuses: new Set<DisplayStatus>(["new"]),
       priorities: new Set(["urgent"]),
     };
@@ -268,7 +249,7 @@ describe("matchesFilters", () => {
   it("applies date range even when its logical dimension is excluded", () => {
     // Date range has no FacetDimension, so excluding any dimension does not skip it
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       dateTo: new Date(JAN_10),
     };
     const ctx = makeCtx();
@@ -293,7 +274,7 @@ describe("matchesFilters", () => {
 
 describe("computeFacets", () => {
   it("reports correct totals with no filters", () => {
-    const facets = computeFacets(ROWS, emptyFilters(), makeCtx());
+    const facets = computeFacets(ROWS, NO_FACET_FILTERS, makeCtx());
     expect(facets.status).toEqual({ new: 2, active: 2, hold: 1, closed: 2 });
     expect(facets.priority).toEqual({ low: 2, normal: 2, high: 1, urgent: 2 });
     expect(facets.queue.get("q-general")).toBe(4);
@@ -307,7 +288,7 @@ describe("computeFacets", () => {
   describe("each dimension's facet ignores its own filter", () => {
     it("status facet still shows all four statuses when one status is selected", () => {
       const filters: FacetFilterState = {
-        ...emptyFilters(),
+        ...NO_FACET_FILTERS,
         statuses: new Set<DisplayStatus>(["new"]),
       };
       const facets = computeFacets(ROWS, filters, makeCtx());
@@ -320,7 +301,7 @@ describe("computeFacets", () => {
 
     it("priority facet still shows all priorities when one is selected", () => {
       const filters: FacetFilterState = {
-        ...emptyFilters(),
+        ...NO_FACET_FILTERS,
         priorities: new Set(["urgent"]),
       };
       const facets = computeFacets(ROWS, filters, makeCtx());
@@ -332,7 +313,7 @@ describe("computeFacets", () => {
 
     it("queue facet still shows both queues when one is selected", () => {
       const filters: FacetFilterState = {
-        ...emptyFilters(),
+        ...NO_FACET_FILTERS,
         queueIds: new Set(["q-general"]),
       };
       const facets = computeFacets(ROWS, filters, makeCtx());
@@ -342,7 +323,7 @@ describe("computeFacets", () => {
 
     it("assignee facet still shows both mine and unassigned when filtered to unassigned", () => {
       const filters: FacetFilterState = {
-        ...emptyFilters(),
+        ...NO_FACET_FILTERS,
         assigneeId: null,
       };
       const facets = computeFacets(ROWS, filters, makeCtx());
@@ -352,7 +333,7 @@ describe("computeFacets", () => {
 
     it("unread facet count is not reduced by the unreadOnly filter", () => {
       const filters: FacetFilterState = {
-        ...emptyFilters(),
+        ...NO_FACET_FILTERS,
         unreadOnly: true,
       };
       const facets = computeFacets(ROWS, filters, makeCtx());
@@ -362,7 +343,7 @@ describe("computeFacets", () => {
 
     it("needsAttention facet count is not reduced by needsAttentionOnly filter", () => {
       const filters: FacetFilterState = {
-        ...emptyFilters(),
+        ...NO_FACET_FILTERS,
         needsAttentionOnly: true,
       };
       const facets = computeFacets(ROWS, filters, makeCtx());
@@ -373,7 +354,7 @@ describe("computeFacets", () => {
   describe("each dimension's facet respects other active filters", () => {
     it("status facet only counts rows in the selected queue", () => {
       const filters: FacetFilterState = {
-        ...emptyFilters(),
+        ...NO_FACET_FILTERS,
         queueIds: new Set(["q-support"]),
       };
       const facets = computeFacets(ROWS, filters, makeCtx());
@@ -383,7 +364,7 @@ describe("computeFacets", () => {
 
     it("priority facet only counts rows matching the selected status", () => {
       const filters: FacetFilterState = {
-        ...emptyFilters(),
+        ...NO_FACET_FILTERS,
         statuses: new Set<DisplayStatus>(["active"]),
       };
       const facets = computeFacets(ROWS, filters, makeCtx());
@@ -398,7 +379,7 @@ describe("computeFacets", () => {
 
     it("unreadOnly narrows status and priority facets to unread rows only", () => {
       const filters: FacetFilterState = {
-        ...emptyFilters(),
+        ...NO_FACET_FILTERS,
         unreadOnly: true,
       };
       const facets = computeFacets(ROWS, filters, makeCtx());
@@ -416,7 +397,7 @@ describe("computeFacets", () => {
   describe("date range always applies and no dimension excludes it", () => {
     it("date range restricts all facet dimensions", () => {
       const filters: FacetFilterState = {
-        ...emptyFilters(),
+        ...NO_FACET_FILTERS,
         dateFrom: new Date(JAN_15),
         dateTo: new Date(JAN_20),
       };
@@ -429,7 +410,7 @@ describe("computeFacets", () => {
 
     it("status dimension exclusion does not bypass the date range", () => {
       const filters: FacetFilterState = {
-        ...emptyFilters(),
+        ...NO_FACET_FILTERS,
         statuses: new Set<DisplayStatus>(["new"]),
         dateTo: new Date(JAN_10),
       };
@@ -442,7 +423,7 @@ describe("computeFacets", () => {
 
   it("total equals the length of the fully filtered set", () => {
     const filters: FacetFilterState = {
-      ...emptyFilters(),
+      ...NO_FACET_FILTERS,
       statuses: new Set<DisplayStatus>(["active"]),
       queueIds: new Set(["q-support"]),
     };
@@ -529,32 +510,169 @@ describe("facet count matches its own filtered list length", () => {
     });
   }
 
-  assertFacetCountMatchesFilteredList("no filters", emptyFilters());
+  assertFacetCountMatchesFilteredList("no filters", NO_FACET_FILTERS);
 
   assertFacetCountMatchesFilteredList("one status selected (new)", {
-    ...emptyFilters(),
+    ...NO_FACET_FILTERS,
     statuses: new Set<DisplayStatus>(["new"]),
   });
 
   assertFacetCountMatchesFilteredList(
     "two statuses spanning the held boundary (new + hold)",
-    { ...emptyFilters(), statuses: new Set<DisplayStatus>(["new", "hold"]) },
+    { ...NO_FACET_FILTERS, statuses: new Set<DisplayStatus>(["new", "hold"]) },
   );
 
   assertFacetCountMatchesFilteredList("queue plus priority", {
-    ...emptyFilters(),
+    ...NO_FACET_FILTERS,
     queueIds: new Set(["q-support"]),
     priorities: new Set(["urgent"]),
   });
 
   assertFacetCountMatchesFilteredList("assignee unassigned", {
-    ...emptyFilters(),
+    ...NO_FACET_FILTERS,
     assigneeId: null,
   });
 
   assertFacetCountMatchesFilteredList("unreadOnly combined with a status", {
-    ...emptyFilters(),
+    ...NO_FACET_FILTERS,
     statuses: new Set<DisplayStatus>(["active"]),
     unreadOnly: true,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// base predicate
+// ---------------------------------------------------------------------------
+
+describe("base predicate", () => {
+  const ctx = makeCtx();
+  /** Open, not held, assigned to me: t-active-1 and t-active-2. */
+  const mineOpen = (r: TicketForServerFilter): boolean =>
+    r.status === "open" && !r.onHold && r.assignedTo === ME;
+
+  it("matchesFilters rejects a row outside the base whatever the exclusion", () => {
+    const outside = ROWS.find((r) => r.id === "t-new-1");
+    expect(outside).toBeDefined();
+    if (outside === undefined) return;
+    const dims: (FacetDimension | undefined)[] = [
+      undefined,
+      "status",
+      "queue",
+      "priority",
+      "assignee",
+      "unread",
+      "needsAttention",
+    ];
+    for (const dim of dims) {
+      expect(
+        matchesFilters(outside, NO_FACET_FILTERS, ctx, dim, mineOpen),
+      ).toBe(false);
+    }
+  });
+
+  it("option counts exclude rows outside the base", () => {
+    const facets = computeFacets(ROWS, NO_FACET_FILTERS, ctx, mineOpen);
+    expect(facets.status).toEqual({ new: 0, active: 2, hold: 0, closed: 0 });
+    expect(facets.priority).toEqual({
+      low: 0,
+      normal: 0,
+      high: 1,
+      urgent: 1,
+    });
+    expect(facets.queue.get("q-general")).toBe(1);
+    expect(facets.queue.get("q-support")).toBe(1);
+    expect(facets.assignee).toEqual({ mine: 2, unassigned: 0 });
+    expect(facets.unread).toBe(1);
+    // t-active-2 is urgent, mine and unread; t-active-1 is high and mine
+    // but read.
+    expect(facets.needsAttention).toBe(1);
+  });
+
+  it("option counts under a user filter still exclude rows outside the base", () => {
+    const filters: FacetFilterState = {
+      ...NO_FACET_FILTERS,
+      priorities: new Set(["urgent"]),
+    };
+    const facets = computeFacets(ROWS, filters, ctx, mineOpen);
+    // Without the base, t-closed-2 (urgent, mine, closed) would count here.
+    expect(facets.status).toEqual({ new: 0, active: 1, hold: 0, closed: 0 });
+    // The priority facet ignores its own filter but not the base.
+    expect(facets.priority).toEqual({
+      low: 0,
+      normal: 0,
+      high: 1,
+      urgent: 1,
+    });
+  });
+
+  it("total under base plus user filter equals the rows a list would show", () => {
+    const base = (r: TicketForServerFilter): boolean => r.status === "open";
+    const filters: FacetFilterState = {
+      ...NO_FACET_FILTERS,
+      queueIds: new Set(["q-support"]),
+    };
+    const facets = computeFacets(ROWS, filters, ctx, base);
+    const listed = ROWS.filter(
+      (r) => base(r) && matchesFilters(r, filters, ctx),
+    );
+    expect(facets.total).toBe(listed.length);
+    expect(facets.total).toBe(2);
+  });
+
+  it("an empty user filter under a base counts exactly the base", () => {
+    const facets = computeFacets(ROWS, NO_FACET_FILTERS, ctx, mineOpen);
+    expect(facets.total).toBe(ROWS.filter(mineOpen).length);
+    expect(facets.total).toBe(2);
+  });
+
+  it("an absent base leaves counts unchanged", () => {
+    const filters: FacetFilterState = {
+      ...NO_FACET_FILTERS,
+      statuses: new Set<DisplayStatus>(["new", "hold"]),
+    };
+    expect(computeFacets(ROWS, filters, ctx, undefined)).toEqual(
+      computeFacets(ROWS, filters, ctx),
+    );
+  });
+});
+
+describe("countMatches", () => {
+  const ctx = makeCtx();
+  const mineOpen = (r: TicketForServerFilter): boolean =>
+    r.status === "open" && !r.onHold && r.assignedTo === ME;
+
+  it("equals the facet total with and without a base", () => {
+    const filters: FacetFilterState = {
+      ...NO_FACET_FILTERS,
+      priorities: new Set(["high", "urgent"]),
+    };
+    expect(countMatches(ROWS, filters, ctx)).toBe(
+      computeFacets(ROWS, filters, ctx).total,
+    );
+    expect(countMatches(ROWS, filters, ctx, mineOpen)).toBe(
+      computeFacets(ROWS, filters, ctx, mineOpen).total,
+    );
+    expect(countMatches(ROWS, NO_FACET_FILTERS, ctx, mineOpen)).toBe(2);
+  });
+});
+
+describe("facetFiltersOf", () => {
+  it("reads every facet dimension off a filter store", () => {
+    const store = createFilterStore();
+    store.toggleStatus("hold");
+    store.toggleQueue("q-1");
+    store.togglePriority("urgent");
+    store.setAssignee(null);
+    store.setUnreadOnly(true);
+
+    const filters = facetFiltersOf(store);
+
+    expect([...filters.statuses]).toEqual(["hold"]);
+    expect([...filters.queueIds]).toEqual(["q-1"]);
+    expect([...filters.priorities]).toEqual(["urgent"]);
+    expect(filters.assigneeId).toBeNull();
+    expect(filters.unreadOnly).toBe(true);
+    expect(filters.needsAttentionOnly).toBe(false);
+    expect(filters.dateFrom).toBeNull();
   });
 });

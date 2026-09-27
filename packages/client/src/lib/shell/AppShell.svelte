@@ -95,7 +95,7 @@
   import SectionRail from "./SectionRail.svelte";
   import { getHoverSections, findRegistryEntry } from "./section-registry.js";
   import type { HoverRevealData } from "./types";
-  import { markNavigated } from "./navigation.js";
+  import { markNavigated, openTicketsForQueue } from "./navigation.js";
   import ShellSheet from "./ShellSheet.svelte";
   import ShellPanel from "./ShellPanel.svelte";
   import AvatarPanel from "$lib/components/admin/AvatarPanel.svelte";
@@ -122,6 +122,7 @@
     getPreviewLoader,
   } from "$lib/crypto/context.js";
   import { initRecentViews } from "$lib/search/recent-views.js";
+  import { initDashboardFilters } from "$lib/prefs/dashboard-filters.svelte.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
   import { getLocale, setLocale, type Locale } from "$lib/paraglide/runtime.js";
   import { savePreferredLocale } from "$lib/settings/preferred-locale.js";
@@ -273,8 +274,7 @@
           label: name ?? "...",
           count: Number(q.openCount),
           icon: "queue",
-          ontap: () =>
-            void goto(resolve(`/tickets?queue=${encodeURIComponent(q.id)}`)),
+          ontap: () => openTicketsForQueue(q.id),
         });
       }
     }
@@ -707,6 +707,23 @@
           );
         }
       },
+    });
+
+    // Dashboard section filters: per-user document mirrored to an
+    // encrypted envelope (user_pref_blobs, kind dashboard_filters), sealed
+    // and opened by the crypto Worker like the recently-viewed history.
+    initDashboardFilters({
+      fetchEnvelope: async () =>
+        (await trpc.prefBlobs.get.query({ kind: "dashboard_filters" }))
+          .envelope,
+      pushEnvelope: async (envelope) => {
+        await trpc.prefBlobs.put.mutate({
+          kind: "dashboard_filters",
+          envelope,
+        });
+      },
+      seal: async (dataB64) => bridge.sealSelfBlob(dataB64),
+      open: async (envelope) => bridge.openSelfBlob(envelope),
     });
 
     return () => {

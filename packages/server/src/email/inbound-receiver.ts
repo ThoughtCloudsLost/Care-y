@@ -38,6 +38,7 @@ import type { InboundEmailData, InboundEmailResult } from "./inbound-email.js";
 import { handleInboundEmail } from "./inbound-email.js";
 import { createDedupStore, type DedupStore } from "../telephony/dedup-store.js";
 import { createCleanupInterval } from "../utils/intervals.js";
+import { publishTicketChange } from "../tickets/ticket-change-channel.js";
 
 /** Advertised and enforced maximum message size (256 KiB, design section 4). */
 export const MAX_MESSAGE_BYTES = 262144;
@@ -114,6 +115,12 @@ export interface InboundReceiverDeps {
   ) => Promise<InboundEmailResult>;
   /** Injectable clock for rate-window tests. */
   readonly now?: () => number;
+  /**
+   * Told about the ticket once an ingest has committed. Defaults to a
+   * Postgres NOTIFY the API process relays to open views. Must not block
+   * the SMTP reply; a throw is logged and the message is still accepted.
+   */
+  readonly onTicketChanged?: (orgSchema: OrgSchema, ticketId: TicketId) => void;
 }
 
 export interface InboundReceiverOptions {
@@ -142,6 +149,23 @@ export function createInboundReceiver(
 ): InboundReceiver {
   const now = deps.now ?? Date.now;
   const ingest = deps.ingest ?? handleInboundEmail;
+  const onTicketChanged =
+    deps.onTicketChanged ??
+    ((orgSchema: OrgSchema, ticketId: TicketId): void => {
+      void publishTicketChange(deps.platformDb, orgSchema, ticketId);
+    });
+
+  /** The ingest has committed; a failure here must not fail the reply. */
+  function announceIngest(recipient: ResolvedRecipient): void {
+    try {
+      onTicketChanged(recipient.orgSchema, recipient.ticketId);
+    } catch (err: unknown) {
+      console.error(
+        "Inbound ticket change notice failed:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
 
   const ipCounters = new Map<string, WindowCounter>();
   const tokenCounters = new Map<string, WindowCounter>();
@@ -350,6 +374,7 @@ export function createInboundReceiver(
 
           const tDb = deps.getTenantDb(recipient.orgSchema);
           await ingest(tDb, recipient.ticketId, data);
+          announceIngest(recipient);
 
           if (dedupKey !== null) {
             dedup.markProcessed(dedupKey);

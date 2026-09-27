@@ -25,6 +25,8 @@
  * After transfer the main-thread ArrayBuffer is neutered (zero-length).
  */
 
+import type { MergeMatchKind } from "@care-y/shared";
+
 // ── Error codes ──────────────────────────────────────────────────────
 
 export type WorkerErrorCode =
@@ -583,7 +585,7 @@ export interface MergeScanIntakeResponse {
 export interface MergeCandidate {
   readonly clientIdA: string;
   readonly clientIdB: string;
-  readonly matchKind: "phone" | "email";
+  readonly matchKind: MergeMatchKind;
   /** The blind-index hash that produced the match, used to target the shared-line mutation. */
   readonly matchHash: string;
 }

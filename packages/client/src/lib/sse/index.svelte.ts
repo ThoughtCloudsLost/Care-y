@@ -32,8 +32,63 @@ export interface SSEListenerOptions {
 
 const MAX_BACKOFF_MS = 30_000;
 
+/**
+ * How long ticket_changed events collect before one invalidation pass runs.
+ * A burst (a run of inbound messages, a queue deleted with its tickets
+ * moved) then costs one refetch rather than one per event. The window
+ * starts at the first event and is not extended by later ones, so a
+ * steady stream still flushes every window.
+ */
+export const TICKET_CHANGED_FLUSH_MS = 300;
+
+interface PendingTicketChanges {
+  readonly ticketIds: Set<string>;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+// Keyed by client so separate caches never share a window.
+const pendingTicketChanges = new WeakMap<QueryClient, PendingTicketChanges>();
+
+function flushTicketChanges(
+  queryClient: QueryClient,
+  pending: PendingTicketChanges,
+): void {
+  pending.timer = null;
+  const ticketIds = [...pending.ticketIds];
+  pending.ticketIds.clear();
+  void queryClient.invalidateQueries({ queryKey: ticketsKeys.all });
+  for (const ticketId of ticketIds) {
+    void queryClient.invalidateQueries({ queryKey: ticketKeys.all(ticketId) });
+  }
+}
+
+function pendingFor(queryClient: QueryClient): PendingTicketChanges {
+  const existing = pendingTicketChanges.get(queryClient);
+  if (existing !== undefined) return existing;
+  const created: PendingTicketChanges = { ticketIds: new Set(), timer: null };
+  pendingTicketChanges.set(queryClient, created);
+  return created;
+}
+
+function queueTicketChanged(
+  ticketId: string | undefined,
+  queryClient: QueryClient,
+): void {
+  const pending = pendingFor(queryClient);
+  if (ticketId !== undefined) pending.ticketIds.add(ticketId);
+  if (pending.timer !== null) return;
+  pending.timer = setTimeout(() => {
+    flushTicketChanges(queryClient, pending);
+  }, TICKET_CHANGED_FLUSH_MS);
+}
+
 export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
   switch (event.type) {
+    // A ticket the viewer can open changed. Carries no detail, so every
+    // list and count refetches along with that ticket's own queries.
+    case "ticket_changed":
+      queueTicketChanged(event.ticketId, queryClient);
+      break;
     case "ticket_created":
     case "ticket_assigned":
     case "ticket_closed":
@@ -66,6 +121,19 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
         });
         void queryClient.invalidateQueries({
           queryKey: ticketsKeys.readStateSweep(),
+        });
+        // It also changes follow-up count and last activity: refresh the
+        // lists and the facet counts that label them.
+        void queryClient.invalidateQueries({
+          queryKey: ticketsKeys.lists(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ticketsKeys.facetIndex(),
+        });
+        // A message is an activity event: refresh the feed and every
+        // filtered view of it.
+        void queryClient.invalidateQueries({
+          queryKey: ticketsKeys.recentActivity(),
         });
       }
       break;

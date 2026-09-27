@@ -281,6 +281,7 @@
     class:tc-unread={isUnread}
     class:tc-closed={isClosed}
     data-testid="ticket-card-wrap"
+    data-ticket-id={ticketId}
   >
     <!-- Overlay button covers the surface for click/keyboard. Interactive
          islands sit above it via z-index so their clicks don't navigate. -->

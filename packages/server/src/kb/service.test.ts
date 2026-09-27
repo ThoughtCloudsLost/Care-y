@@ -6,6 +6,7 @@ import {
   createKBItemService,
   createKBVoteService,
   wilsonScore,
+  type KBCategoryRecord,
   type KBCategoryService,
   type KBItemService,
   type KBVoteService,
@@ -284,7 +285,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     }
   });
 
-  it("lists filtered by categoryId", async () => {
+  it("lists filtered by one category", async () => {
     const cat2 = await catSvc.create({
       encryptedName: encName("Other Category"),
       orgKeyGeneration: 1,
@@ -297,13 +298,114 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     });
 
     const filtered = await svc.list({
-      categoryId: cat2.id,
+      categoryIds: [cat2.id],
       limit: 50,
       sortBy: "created_at",
       sortDirection: "desc",
     });
     expect(filtered.items.length).toBe(1);
     expect(filtered.items[0]!.categoryId).toBe(cat2.id);
+    expect(filtered.total).toBe(1);
+  });
+
+  describe("several categories", () => {
+    /** Three fresh categories: two with articles to select, one to leave out. */
+    async function seedCategories(): Promise<{
+      selected: [KbCategoryId, KbCategoryId];
+      other: KbCategoryId;
+    }> {
+      const create = (name: string): Promise<KBCategoryRecord> =>
+        catSvc.create({ encryptedName: encName(name), orgKeyGeneration: 1 });
+      const a = await create("Multi A");
+      const b = await create("Multi B");
+      const other = await create("Multi Other");
+      // Two articles in each selected category, one outside the selection.
+      for (const id of [a.id, a.id, b.id, b.id, other.id]) {
+        await svc.create(TEST_AUTHOR, {
+          categoryId: id,
+          encryptedTitle: Buffer.from("multi-cat"),
+          encryptedBody: Buffer.from("body"),
+          orgKeyGeneration: 1,
+        });
+      }
+      return { selected: [a.id, b.id], other: other.id };
+    }
+
+    it("returns articles in any selected category", async () => {
+      const { selected, other } = await seedCategories();
+
+      const page = await svc.list({
+        categoryIds: selected,
+        limit: 50,
+        sortBy: "created_at",
+        sortDirection: "desc",
+      });
+
+      expect(page.items).toHaveLength(4);
+      expect(page.total).toBe(4);
+      expect(page.items.every((i) => selected.includes(i.categoryId))).toBe(
+        true,
+      );
+      expect(page.items.some((i) => i.categoryId === other)).toBe(false);
+    });
+
+    it("reports the full matching total on every page", async () => {
+      const { selected } = await seedCategories();
+      const query = {
+        categoryIds: selected,
+        limit: 3,
+        sortBy: "created_at",
+        sortDirection: "desc",
+      } as const;
+
+      const page1 = await svc.list(query);
+      const page2 = await svc.list({ ...query, cursor: page1.nextCursor! });
+
+      expect(page1.items).toHaveLength(3);
+      expect(page2.items).toHaveLength(1);
+      expect(page2.nextCursor).toBeNull();
+      expect(page1.total).toBe(4);
+      expect(page2.total).toBe(4);
+    });
+
+    it("treats an empty selection as no category filter", async () => {
+      await seedCategories();
+      const query = {
+        limit: 100,
+        sortBy: "created_at",
+        sortDirection: "desc",
+      } as const;
+
+      const unfiltered = await svc.list(query);
+      const empty = await svc.list({ ...query, categoryIds: [] });
+
+      expect(empty.total).toBe(unfiltered.total);
+      expect(empty.items.map((i) => i.id)).toEqual(
+        unfiltered.items.map((i) => i.id),
+      );
+    });
+
+    it("applies the other filters to the total alongside the categories", async () => {
+      const { selected } = await seedCategories();
+      const otherAuthor = "00000000-0000-4000-8000-00000000d001" as UserId;
+      await svc.create(otherAuthor, {
+        categoryId: selected[0],
+        encryptedTitle: Buffer.from("other-author"),
+        encryptedBody: Buffer.from("body"),
+        orgKeyGeneration: 1,
+      });
+
+      const page = await svc.list({
+        categoryIds: selected,
+        createdBy: otherAuthor,
+        limit: 1,
+        sortBy: "created_at",
+        sortDirection: "desc",
+      });
+
+      expect(page.total).toBe(1);
+      expect(page.items[0]!.createdBy).toBe(otherAuthor);
+    });
   });
 
   it("updates article fields", async () => {
@@ -376,28 +478,31 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     await expect(catSvc.delete(cat.id)).rejects.toThrow();
   });
 
-  it("listRecentlyUpdated returns encryptedTitle as Buffer, not plaintext string", async () => {
-    const cat = await catSvc.create({
-      encryptedName: encName("Encrypt Check"),
-      orgKeyGeneration: 1,
-    });
-    const ciphertext = Buffer.from([0xde, 0xad, 0xbe, 0xef, 0x01, 0x02]);
-    await svc.create(TEST_AUTHOR, {
-      categoryId: cat.id,
-      encryptedTitle: ciphertext,
-      encryptedBody: Buffer.from("body-cipher"),
-      orgKeyGeneration: 1,
-    });
+  it("category list counts the articles in each category", async () => {
+    const create = (name: string): Promise<KBCategoryRecord> =>
+      catSvc.create({ encryptedName: encName(name), orgKeyGeneration: 1 });
+    const two = await create("Count Two");
+    const empty = await create("Count Empty");
+    const emptied = await create("Count Emptied");
+    const created: KbItemId[] = [];
+    for (const id of [two.id, two.id, emptied.id]) {
+      const item = await svc.create(TEST_AUTHOR, {
+        categoryId: id,
+        encryptedTitle: Buffer.from("counted"),
+        encryptedBody: Buffer.from("body"),
+        orgKeyGeneration: 1,
+      });
+      created.push(item.id);
+    }
+    // A deleted article no longer counts toward its category.
+    await svc.delete(created[2]!);
 
-    const recent = await svc.listRecentlyUpdated(1);
-    expect(recent.length).toBeGreaterThanOrEqual(1);
-    const item = recent[0]!;
-
-    // encryptedTitle must be a Buffer (ciphertext), not a decoded string.
-    expect(Buffer.isBuffer(item.encryptedTitle)).toBe(true);
-
-    // The raw bytes must match what was stored (no transformation).
-    expect(item.encryptedTitle.equals(ciphertext)).toBe(true);
+    const counts = new Map(
+      (await catSvc.list()).map((c) => [c.id, c.articleCount]),
+    );
+    expect(counts.get(two.id)).toBe(2);
+    expect(counts.get(empty.id)).toBe(0);
+    expect(counts.get(emptied.id)).toBe(0);
   });
 
   // --- Excerpt tests ---
@@ -482,26 +587,6 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     expect(found.encryptedExcerpt!.toString()).toBe("detail-excerpt");
   });
 
-  it("listRecentlyUpdated returns encryptedExcerpt but not encryptedBody", async () => {
-    const cat = await catSvc.create({
-      encryptedName: encName("Recent Excerpt"),
-      orgKeyGeneration: 1,
-    });
-    await svc.create(TEST_AUTHOR, {
-      categoryId: cat.id,
-      encryptedTitle: Buffer.from("recent-test"),
-      encryptedBody: Buffer.from("recent-body"),
-      encryptedExcerpt: Buffer.from("recent-excerpt"),
-      orgKeyGeneration: 1,
-    });
-
-    const recent = await svc.listRecentlyUpdated(1);
-    expect(recent.length).toBeGreaterThanOrEqual(1);
-    const item = recent[0]!;
-    expect(item.encryptedExcerpt).not.toBeNull();
-    expect("encryptedBody" in item).toBe(false);
-  });
-
   // --- Sort + filter tests ---
 
   it("sorts by rating descending", async () => {
@@ -539,7 +624,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     });
 
     const page = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 10,
       sortBy: "rating",
       sortDirection: "desc",
@@ -574,7 +659,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     });
 
     const page = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 10,
       sortBy: "updated_at",
       sortDirection: "asc",
@@ -609,7 +694,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     });
 
     const page = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 50,
       sortBy: "created_at",
       sortDirection: "desc",
@@ -642,7 +727,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     });
 
     const page = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 50,
       sortBy: "created_at",
       sortDirection: "desc",
@@ -670,7 +755,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     const farFuture = new Date(Date.now() + 172_800_000).toISOString();
 
     const page = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 50,
       sortBy: "created_at",
       sortDirection: "desc",
@@ -684,7 +769,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     const nowIsh = new Date(Date.now() + 1_000).toISOString();
 
     const page2 = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 50,
       sortBy: "created_at",
       sortDirection: "desc",
@@ -734,7 +819,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     });
 
     const page = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 50,
       sortBy: "rating",
       sortDirection: "desc",
@@ -778,7 +863,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
 
     // Page through with limit 2, sorted by rating desc
     const page1 = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 2,
       sortBy: "rating",
       sortDirection: "desc",
@@ -787,7 +872,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     expect(page1.nextCursor).not.toBeNull();
 
     const page2 = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 2,
       sortBy: "rating",
       sortDirection: "desc",
@@ -796,7 +881,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     expect(page2.items).toHaveLength(2);
 
     const page3 = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 2,
       sortBy: "rating",
       sortDirection: "desc",
@@ -832,7 +917,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
 
     // Page through with limit 2 sorted by updated_at asc
     const page1 = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 2,
       sortBy: "updated_at",
       sortDirection: "asc",
@@ -842,7 +927,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     expect(page1.nextCursor!).toContain("|");
 
     const page2 = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 2,
       sortBy: "updated_at",
       sortDirection: "asc",
@@ -875,7 +960,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     }
 
     const page1 = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 1,
       sortBy: "created_at",
       sortDirection: "asc",
@@ -884,7 +969,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KBItemService (DB)", () => {
     expect(page1.nextCursor).not.toBeNull();
 
     const page2 = await svc.list({
-      categoryId: cat.id,
+      categoryIds: [cat.id],
       limit: 1,
       sortBy: "created_at",
       sortDirection: "asc",

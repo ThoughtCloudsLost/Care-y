@@ -21,6 +21,7 @@ vi.mock("./inbound-mms.js", async (importOriginal) => {
 
 import { handleInboundSms } from "./inbound-sms.js";
 import type { InboundSmsDeps } from "./inbound-sms.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 import type * as InboundMmsModule from "./inbound-mms.js";
 import type { TelephonyProvider, IncomingSmsData } from "./provider.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
@@ -479,6 +480,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(Buffer.from(decrypted).toString("utf-8")).toBe(
         "portal test message",
       );
+    }, 30_000);
+
+    it("announces the ticket once the message is on it", async () => {
+      const { deps, fixture } = await buildDbDeps();
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+
+      const smsData = makeSmsData({ body: "hello" });
+      const result = await handleInboundSms(smsData, {
+        ...deps,
+        onTicketChanged,
+      });
+
+      expect(result?.ticketId).toBe(fixture.ticketId);
+      expect(onTicketChanged).toHaveBeenCalledExactlyOnceWith(fixture.ticketId);
     }, 30_000);
 
     it("writes no portal_messages row when the client has no channel", async () => {

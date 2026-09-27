@@ -1,22 +1,20 @@
 import type { QueryClient } from "@tanstack/svelte-query";
 import { SvelteSet } from "svelte/reactivity";
 import { ticketsKeys } from "$lib/query/keys.js";
-import { optimisticMutation } from "$lib/utils/optimistic-mutation.js";
+import {
+  isPagedRows,
+  optimisticListsMutation,
+  patchPagedRow,
+  type PagedRows,
+} from "$lib/utils/optimistic-mutation.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
 import { getErrorMessage } from "$lib/components/query-error-messages.js";
 import { haptic } from "$lib/utils/haptic.js";
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
 
-interface TicketPage {
-  readonly id: string;
-  readonly onHold: boolean;
-  [key: string]: unknown;
-}
-
 export interface HoldActionDeps {
   readonly queryClient: QueryClient;
-  readonly getQueryKey: () => readonly unknown[];
   readonly holdMutate: (ticketId: string, onHold: boolean) => Promise<unknown>;
 }
 
@@ -26,7 +24,7 @@ export interface HoldActionState {
 }
 
 export function createHoldAction(deps: HoldActionDeps): HoldActionState {
-  const { queryClient, getQueryKey, holdMutate } = deps;
+  const { queryClient, holdMutate } = deps;
 
   const pendingHoldIds = new SvelteSet<string>();
 
@@ -44,18 +42,13 @@ export function createHoldAction(deps: HoldActionDeps): HoldActionState {
     pendingHoldIds.add(ticketId);
 
     try {
-      await optimisticMutation<{
-        pages: TicketPage[][];
-        pageParams: unknown[];
-      }>({
+      // Every cached list holding the row updates at once, so on the
+      // dashboard a held ticket leaves its lane and joins On hold together.
+      await optimisticListsMutation<PagedRows>({
         queryClient,
-        queryKey: getQueryKey(),
-        update: (old) => ({
-          ...old,
-          pages: old.pages.map((pg) =>
-            pg.map((t) => (t.id === ticketId ? { ...t, onHold } : t)),
-          ),
-        }),
+        queryKey: ticketsKeys.lists(),
+        isData: isPagedRows,
+        update: (old) => patchPagedRow(old, ticketId, { onHold }),
         mutate: async () => holdMutate(ticketId, onHold),
         onSuccess: () => {
           haptic();

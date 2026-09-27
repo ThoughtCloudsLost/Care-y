@@ -51,6 +51,7 @@ import { resolveInboundTicket } from "./resolve-inbound-ticket.js";
 import { createPhoneRepository } from "./models/phone-repo.js";
 import { createClientRepository } from "./models/client-repo.js";
 import type { PendingClient } from "../tickets/ticket-service.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 
 // ---------------------------------------------------------------------------
 // Dependency interface
@@ -114,6 +115,8 @@ export interface RouteQuarantineDeps {
   readonly orgSchema: OrgSchema;
   readonly pendingClients: Map<string, PendingClient>;
   readonly sealedBox: SealedBoxEncryptor;
+  /** Called with the target ticket id once the routing has committed. */
+  readonly onTicketChanged?: TicketChangeListener;
 }
 
 export interface RouteQuarantineResult {
@@ -526,6 +529,7 @@ export async function routeQuarantined(
     },
   });
 
+  deps.onTicketChanged?.(ticketId);
   return { ticketId, followUpId };
 }
 

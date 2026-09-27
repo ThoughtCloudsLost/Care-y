@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   notificationEventTypeSchema,
+  liveEventTypeSchema,
   sseEventSchema,
   systemSseEventSchema,
   pushSubscriptionInputSchema,
@@ -93,6 +94,42 @@ describe("sseEventSchema", () => {
         timestamp: "not-a-date",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("ticket_changed live event", () => {
+  const event = {
+    type: "ticket_changed",
+    ticketId: VALID_UUID,
+    queueId: VALID_UUID_2,
+    timestamp: VALID_ISO,
+  };
+
+  it("is a live event type", () => {
+    expect(liveEventTypeSchema.safeParse("ticket_changed").success).toBe(true);
+  });
+
+  it("is accepted on the SSE stream", () => {
+    expect(sseEventSchema.safeParse(event).success).toBe(true);
+  });
+
+  it("is rejected as a notification event type", () => {
+    expect(
+      notificationEventTypeSchema.safeParse("ticket_changed").success,
+    ).toBe(false);
+  });
+
+  it("carries only the metadata fields", () => {
+    const result = sseEventSchema.safeParse({ ...event, actorId: VALID_UUID });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(Object.keys(result.data).sort()).toEqual([
+        "queueId",
+        "ticketId",
+        "timestamp",
+        "type",
+      ]);
+    }
   });
 });
 

@@ -9,14 +9,20 @@
   import {
     createCountsQuery,
     createFacetIndexQuery,
+    createReadStateQueries,
+    ticketListQueryOptions,
   } from "$lib/tickets/queries.js";
   import {
     computeFacets,
+    facetFiltersOf,
     matchesFilters,
-    type FacetFilterState,
     type FacetContext,
   } from "$lib/tickets/facet-filters.js";
-  import { formatCount } from "$lib/tickets/format-count.js";
+  import {
+    buildTicketFilterPills,
+    ticketDatePillProps,
+    ticketFilterFields,
+  } from "$lib/tickets/ticket-filter-pills.js";
   import { untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { page } from "$app/state";
@@ -70,13 +76,11 @@
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
   import { newRepliesFirstStore } from "$lib/stores/new-replies-first.svelte.js";
   import {
+    collectKeyWraps,
     createListReadState,
-    fetchReadStateWindow,
-    fetchSweepToExhaustion,
   } from "$lib/tickets/create-list-read-state.svelte.js";
   import { sortNewRepliesFirst } from "$lib/tickets/new-replies-sort.js";
   import { isNeedsAttention } from "$lib/components/dashboard/filters.js";
-  import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { gestureMount } from "$lib/utils/gesture-focus.js";
@@ -88,7 +92,6 @@
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte.js";
   import {
     savedFilterStateSchema,
-    ticketPrioritySchema,
     type SavedFilterColor,
     type TicketPriority,
   } from "@care-y/shared";
@@ -104,7 +107,10 @@
   import EmptyState from "$lib/components/EmptyState.svelte";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import { createBulkActions } from "$lib/composables/ticket-list/create-bulk-actions.svelte.js";
-  import { createFilterDispatch } from "$lib/composables/create-filter-dispatch.svelte.js";
+  import {
+    createFilterDispatch,
+    filterBarHandlers,
+  } from "$lib/composables/create-filter-dispatch.svelte.js";
   import { createReactionsQuery } from "$lib/tickets/create-reactions-query.svelte.js";
   import {
     buildVolunteerMap,
@@ -128,14 +134,13 @@
     type TitleEntry,
     mergeSearchMatches,
     applySearchOrder,
-    buildDateRangeLabel,
     buildFilterSummary,
-    buildAssigneeOptions,
     isSortField,
-    isFilterStatus,
     resolveEmptyKind,
     showCaughtUpLine,
     resolveGridColumns,
+    estimateTicketCardHeight,
+    TICKET_CARD_VIRTUALIZE_THRESHOLD,
   } from "$lib/tickets/ticket-list-utils.js";
 
   // --- Context & services ---
@@ -176,13 +181,11 @@
   const multiSelect = createMultiSelect();
   const holdAction = createHoldAction({
     queryClient,
-    getQueryKey: () => ticketsKeys.list(filterStore.serverParams),
     holdMutate: async (ticketId, onHold) =>
       ticketRouter.update.mutate({ ticketId, onHold }),
   });
   const assignFlow = createAssignFlow({
     queryClient,
-    getQueryKey: () => ticketsKeys.list(filterStore.serverParams),
     assignMutate: async (ticketId, targetUserId) =>
       ticketRouter.assignTo.mutate({ ticketId, targetUserId }),
     resolveVolunteerName,
@@ -215,19 +218,9 @@
 
   // --- Queries ---
 
-  const ticketsQuery = createInfiniteQuery(() => ({
-    queryKey: ticketsKeys.list(filterStore.serverParams),
-    queryFn: async ({ pageParam }) =>
-      ticketRouter.list.query({
-        ...filterStore.serverParams,
-        cursor: pageParam,
-      }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) =>
-      lastPage.length >= filterStore.serverParams.limit
-        ? lastPage[lastPage.length - 1]?.id
-        : undefined,
-  }));
+  const ticketsQuery = createInfiniteQuery(() =>
+    ticketListQueryOptions(ticketRouter, filterStore.serverParams),
+  );
 
   const allTickets = $derived(ticketsQuery.data?.pages.flat() ?? []);
   type TicketRecord = (typeof allTickets)[number];
@@ -256,15 +249,6 @@
   const needsAttentionFilterOn = $derived(filterStore.needsAttentionOnly);
   const wantsPinned = $derived(newRepliesFirstStore.enabled || unreadFilterOn);
 
-  const readStateSweepQuery = createQuery(() => ({
-    queryKey: ticketsKeys.readStateSweep(),
-    queryFn: async () =>
-      fetchSweepToExhaustion(async (cursor) =>
-        ticketRouter.readStateSweep.query({ cursor }),
-      ),
-    enabled: isCryptoKeyed(),
-  }));
-
   // The window query covers every DISPLAYED row: the loaded window plus
   // pinned unread rows, so pinned rows get real per-ticket counts from
   // the 20-deep timestamp window rather than a made-up number. Pinned
@@ -274,31 +258,19 @@
   let pinnedWindowIds = $state<string[]>([]);
   const readStateIds = $derived([...loadedTicketIds, ...pinnedWindowIds]);
 
-  const readStateQuery = createQuery(() => ({
-    queryKey: ticketsKeys.readState(readStateIds),
-    queryFn: async () =>
-      fetchReadStateWindow(readStateIds, async (ids) =>
-        ticketRouter.listReadState.query({ ticketIds: ids }),
-      ),
-    enabled: isCryptoKeyed() && readStateIds.length > 0,
-  }));
+  const readState = createReadStateQueries(ticketRouter, () => readStateIds);
 
   // Cursor decrypts need each row's own key wrap: list rows carry one,
   // fetched pinned rows carry one, and sweep entries carry one for
   // tickets that have no row yet (so pinned ids never decrypt wrapless).
-  const keyWrapById = $derived.by(() => {
-    const map = new SvelteMap<string, TicketRecord["keyWrap"]>();
-    for (const entry of readStateSweepQuery.data ?? []) {
-      if (entry.keyWrap !== null) map.set(entry.ticketId, entry.keyWrap);
-    }
-    for (const t of pinnedRecords) map.set(t.id, t.keyWrap);
-    for (const t of allTickets) map.set(t.id, t.keyWrap);
-    return map;
-  });
+  // A closure, so pinnedRecords (declared below) is read on evaluation.
+  const keyWrapById = $derived.by(() =>
+    collectKeyWraps(readState.sweepQuery.data, pinnedRecords, allTickets),
+  );
 
   const listReadState = createListReadState({
-    windowQuery: readStateQuery,
-    sweepQuery: readStateSweepQuery,
+    windowQuery: readState.windowQuery,
+    sweepQuery: readState.sweepQuery,
     getKeyWrap: (ticketId) => keyWrapById.get(ticketId) ?? null,
     getUserId: () => currentUserId ?? "",
     ticketDecryptCache: ticketCache,
@@ -615,7 +587,7 @@
   const listItems = $derived.by(() => {
     const isUnreadFn = (id: string) => listReadState.isUnread(id);
     // Needs-attention membership narrows first (one rule with the
-    // dashboard bucket); the unread filter and sort then operate on
+    // dashboard lane); the unread filter and sort then operate on
     // the narrowed set. Pinned rows join the pool so an unread-but-
     // unloaded urgent ticket still qualifies.
     if (needsAttentionFilterOn) {
@@ -936,18 +908,10 @@
     if (searchStr === "" || searchStr === lastAppliedSearch) return;
 
     const params = page.url.searchParams;
-    const queueId = params.get("queue");
-    const filter = params.get("filter");
     const action = params.get("action");
     const savedFilterId = params.get("savedFilter");
 
-    if (
-      queueId === null &&
-      filter === null &&
-      action === null &&
-      savedFilterId === null
-    )
-      return;
+    if (action === null && savedFilterId === null) return;
 
     lastAppliedSearch = searchStr;
 
@@ -957,28 +921,6 @@
           (f) => f.id === savedFilterId,
         );
         if (record != null) dispatch.handleSavedFilterApply(record);
-      } else if (queueId !== null) {
-        filterStore.clearAll();
-        filterStore.toggleQueue(queueId);
-      } else if (filter === "my-open") {
-        filterStore.clearAll();
-        filterStore.toggleStatus("new");
-        filterStore.toggleStatus("active");
-        if (currentUserId !== undefined) {
-          filterStore.setAssignee(currentUserId);
-        }
-      } else if (filter === "unassigned") {
-        filterStore.clearAll();
-        filterStore.toggleStatus("new");
-        filterStore.toggleStatus("active");
-        filterStore.setAssignee(null);
-      } else if (filter === "needs-attention") {
-        // Client-side membership filter (same rule as the dashboard
-        // bucket); the status toggles narrow the server window to open.
-        filterStore.clearAll();
-        filterStore.toggleStatus("new");
-        filterStore.toggleStatus("active");
-        filterStore.setNeedsAttentionOnly(true);
       }
 
       if (action === "new-ticket") {
@@ -1028,16 +970,7 @@
   // Facet counts derived from the facet index query. The index lands
   // asynchronously; until it does, option labels render bare. Once
   // present, counts are floors when the index is incomplete.
-  const facetFilters: FacetFilterState = $derived({
-    statuses: filterStore.statuses,
-    queueIds: filterStore.queueIds,
-    priorities: filterStore.priorities,
-    assigneeId: filterStore.assigneeId,
-    dateFrom: filterStore.dateFrom,
-    dateTo: filterStore.dateTo,
-    unreadOnly: filterStore.unreadOnly,
-    needsAttentionOnly: filterStore.needsAttentionOnly,
-  });
+  const facetFilters = $derived(facetFiltersOf(filterStore));
 
   const facetCtx: FacetContext = $derived({
     currentUserId,
@@ -1051,193 +984,26 @@
   // Counts go bare until the index lands, and render as floors while it
   // is incomplete. Showing a number we know is short would be the same
   // defect this work is fixing.
-  function withCount(label: string, n: number): string {
-    if (facetIndexQuery.data === undefined) return label;
-    return `${label} (${formatCount(n, !facetIndexQuery.data.complete)})`;
-  }
-
-  // "Unread" rides the Status dropdown and "Needs attention" rides
-  // Priority: to a volunteer they ARE a status and a priority concern.
-  // Both toggle client-side membership flags, never filterStore.
-
-  const statusOptions = $derived([
-    {
-      value: "new",
-      label: withCount(m.tickets_filter_new(), facets.status.new),
-    },
-    {
-      value: "active",
-      label: withCount(m.tickets_filter_active(), facets.status.active),
-    },
-    {
-      value: "hold",
-      label: withCount(m.tickets_filter_hold(), facets.status.hold),
-    },
-    {
-      value: "closed",
-      label: withCount(m.tickets_filter_closed(), facets.status.closed),
-    },
-    {
-      value: "unread",
-      // Unread depends on read state; until the sweep settles the count
-      // would undercount, so it stays bare until both the facet index
-      // AND the sweep have landed.
-      label: listReadState.sweepSettled()
-        ? withCount(m.tickets_filter_unread(), facets.unread)
-        : m.tickets_filter_unread(),
-    },
-  ]);
-
-  const priorityOptions = $derived([
-    {
-      value: "low",
-      label: withCount(
-        m.tickets_filter_priority_low(),
-        facets.priority.low ?? 0,
-      ),
-    },
-    {
-      value: "normal",
-      label: withCount(
-        m.tickets_filter_priority_normal(),
-        facets.priority.normal ?? 0,
-      ),
-    },
-    {
-      value: "high",
-      label: withCount(
-        m.tickets_filter_priority_high(),
-        facets.priority.high ?? 0,
-      ),
-    },
-    {
-      value: "urgent",
-      label: withCount(
-        m.tickets_filter_priority_urgent(),
-        facets.priority.urgent ?? 0,
-      ),
-    },
-    {
-      value: "needs-attention",
-      label: withCount(
-        m.tickets_filter_needs_attention(),
-        facets.needsAttention,
-      ),
-    },
-  ]);
-
-  const statusSelected = $derived(
-    unreadFilterOn
-      ? new Set<string>([...filterStore.statuses, "unread"])
-      : filterStore.statuses,
-  );
-
-  const prioritySelected = $derived(
-    needsAttentionFilterOn
-      ? new Set<string>([...filterStore.priorities, "needs-attention"])
-      : filterStore.priorities,
-  );
-
-  const queueOptions = $derived(
-    (queuesQuery.data ?? []).map((q) => ({
-      value: q.id,
-      label: withCount(
-        orgCache.decrypt(`queue:${q.id}`, q.encryptedName, {
+  const ticketPills: PillDefinition[] = $derived(
+    buildTicketFilterPills({
+      filters: filterStore,
+      facets: facetIndexQuery.data === undefined ? undefined : facets,
+      facetsComplete: facetIndexQuery.data?.complete ?? false,
+      unreadCountReady: listReadState.sweepSettled(),
+      queues: (queuesQuery.data ?? []).map((q) => ({
+        id: q.id,
+        name: orgCache.decrypt(`queue:${q.id}`, q.encryptedName, {
           table: "queues",
           id: q.id,
-        }) ?? "...",
-        facets.queue.get(q.id) ?? 0,
-      ),
-    })),
-  );
-
-  const assigneeOptions = $derived(
-    buildAssigneeOptions(currentUserId, {
-      me: withCount(m.tickets_filter_me(), facets.assignee.mine),
-      unassigned: withCount(m.tickets_unassigned(), facets.assignee.unassigned),
+        }),
+      })),
+      queuesLoading: queuesQuery.isLoading,
+      currentUserId,
     }),
   );
 
-  const ticketPills: PillDefinition[] = $derived([
-    {
-      id: "status",
-      label: m.tickets_filter_status(),
-      mode: "multi",
-      options: statusOptions,
-      selected: statusSelected,
-    },
-    {
-      id: "queue",
-      label: m.tickets_filter_queue(withTerms()),
-      mode: "multi",
-      options: queueOptions,
-      selected: filterStore.queueIds,
-      loading: queuesQuery.isLoading,
-    },
-    {
-      id: "priority",
-      label: m.tickets_filter_priority(),
-      mode: "multi",
-      options: priorityOptions,
-      selected: prioritySelected,
-    },
-    {
-      id: "assignee",
-      label: m.tickets_filter_assignee(),
-      mode: "single",
-      options: assigneeOptions,
-      selected:
-        filterStore.assigneeId === null
-          ? "__unassigned__"
-          : (filterStore.assigneeId ?? null),
-    },
-    {
-      id: "date",
-      label: m.tickets_filter_date_range(),
-      mode: "date",
-      options: [],
-      selected: null,
-    },
-  ]);
-
   const dispatch = createFilterDispatch({
-    fields: {
-      status: {
-        type: "multi-toggle",
-        toggle: (v: string) => {
-          if (v === "unread") {
-            filterStore.setUnreadOnly(!filterStore.unreadOnly);
-          } else if (isFilterStatus(v)) {
-            filterStore.toggleStatus(v);
-          }
-        },
-      },
-      queue: {
-        type: "multi-toggle",
-        toggle: (v: string) => filterStore.toggleQueue(v),
-      },
-      priority: {
-        type: "multi-toggle",
-        toggle: (v: string) => {
-          if (v === "needs-attention") {
-            filterStore.setNeedsAttentionOnly(!filterStore.needsAttentionOnly);
-            return;
-          }
-          const parsed = ticketPrioritySchema.safeParse(v);
-          if (parsed.success) filterStore.togglePriority(parsed.data);
-        },
-      },
-      assignee: {
-        type: "single-select",
-        set: (v: string | null) =>
-          filterStore.setAssignee(v === "__unassigned__" ? null : v),
-      },
-      date: {
-        type: "date-range",
-        set: (from: Date | null, to: Date | null) =>
-          filterStore.setDateRange(from, to),
-      },
-    },
+    fields: ticketFilterFields(filterStore),
     sort: {
       validate: (v: string) => isSortField(v) || CLIENT_ONLY_SORT_FIELDS.has(v),
       set: (field: string, dir: "asc" | "desc") => {
@@ -1268,28 +1034,7 @@
     },
   });
 
-  const dateRangeActive = $derived(
-    filterStore.dateFrom !== null || filterStore.dateTo !== null,
-  );
-
-  const dateFromStr = $derived(
-    filterStore.dateFrom !== null
-      ? filterStore.dateFrom.toISOString().slice(0, 10)
-      : "",
-  );
-  const dateToStr = $derived(
-    filterStore.dateTo !== null
-      ? filterStore.dateTo.toISOString().slice(0, 10)
-      : "",
-  );
-
-  const dateRangeLabel = $derived(
-    buildDateRangeLabel(filterStore.dateFrom, filterStore.dateTo, {
-      from: m.tickets_filter_date_from(),
-      to: m.tickets_filter_date_to(),
-      range: m.tickets_filter_date_range(),
-    }),
-  );
+  const datePill = $derived(ticketDatePillProps(filterStore));
 
   const filterSummary = $derived(
     buildFilterSummary(
@@ -1307,13 +1052,7 @@
 
   // Virtualizer estimate per Inkwell presentation: compact ruled rows,
   // preview-bearing cards, multi-column grid cells.
-  const estimateHeight = $derived(
-    viewModeStore.mode === "list"
-      ? 72
-      : viewModeStore.mode === "cards"
-        ? 210
-        : 200,
-  );
+  const estimateHeight = $derived(estimateTicketCardHeight(viewModeStore.mode));
 
   const sortConfig: SortConfig = $derived({
     label: m.tickets_sort(),
@@ -1352,14 +1091,8 @@
   const filterPillsConfig: FilterPillsConfig = $derived({
     pills: ticketPills,
     activeCount: filterStore.activeCount,
-    dateFrom: dateFromStr,
-    dateTo: dateToStr,
-    dateActive: dateRangeActive,
-    dateLabel: dateRangeLabel,
-    ontoggle: dispatch.handlePillToggle,
-    onselect: dispatch.handlePillSelect,
-    ondatechange: dispatch.handlePillDateChange,
-    onclearall: dispatch.clearAll,
+    ...datePill,
+    ...filterBarHandlers(dispatch),
     oncreateshortcut: () => {
       savedFilterModalOpen = true;
     },
@@ -1593,7 +1326,7 @@
               items={sortedListItems}
               scrollContainer={scrollEl}
               {estimateHeight}
-              virtualizeThreshold={200}
+              virtualizeThreshold={TICKET_CARD_VIRTUALIZE_THRESHOLD}
               columns={gridColumns}
               getKey={(t: TicketRecord) => t.id}
               onloadmore={loadNextPage}

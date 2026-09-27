@@ -11,7 +11,8 @@
  *    the page and the registry).
  *  - Dashboard: buildDashboardSections (pure function taking boolean
  *    flags). The page calls it with live reactive values; the registry
- *    calls it with flags derived from the TanStack query cache.
+ *    calls it with flags derived from the TanStack query cache, and
+ *    lists every ticket lane.
  */
 
 import type { QueryClient } from "@tanstack/svelte-query";
@@ -31,7 +32,8 @@ import TicketMinus from "$lib/components/icons/TicketMinus.svelte";
 import TicketAlert from "$lib/components/icons/TicketAlert.svelte";
 import TicketPause from "$lib/components/icons/TicketPause.svelte";
 import { GitMerge } from "@lucide/svelte";
-import { ticketsKeys } from "$lib/query/keys.js";
+import { clientKeys } from "$lib/query/keys.js";
+import { undismissedPairs } from "$lib/tickets/pair-key.js";
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
 
@@ -207,6 +209,10 @@ export function buildDashboardSections(
  * Derive dashboard section flags from the TanStack query cache.
  * Used by the hover-reveal path when the dashboard is not the active
  * page. If data is not cached, conditional sections are omitted.
+ *
+ * Every ticket lane is listed. Where lanes sit side by side they keep
+ * their slot even when empty, and the hover list cannot know which
+ * arrangement the dashboard will open in.
  */
 function getDashboardFlagsFromCache(
   permissions: ReadonlySet<Permission>,
@@ -224,32 +230,30 @@ function getDashboardFlagsFromCache(
       checklistData.items.length > 0;
   }
 
+  // The same rule as the page: undismissed candidates from the session's
+  // merge scan, which runs only once the dashboard has loaded.
   let showMergeCandidates = false;
   if (canCall(permissions, "clients.mergeScanData")) {
-    const ticketData = queryClient.getQueryData(
-      ticketsKeys.list({ statuses: ["open"] }),
+    const scan = queryClient.getQueryData<{
+      candidates: readonly { clientIdA: string; clientIdB: string }[];
+    }>(clientKeys.mergeCandidates());
+    const dismissed = queryClient.getQueryData<ReadonlySet<string>>(
+      clientKeys.dismissals(),
     );
-    showMergeCandidates = ticketData != null;
+    showMergeCandidates =
+      scan != null &&
+      undismissedPairs(scan.candidates, dismissed ?? new Set<string>()).length >
+        0;
   }
 
-  const ticketPages = queryClient.getQueryData<{
-    pages: readonly { id: string }[][];
-  }>(ticketsKeys.list({ statuses: ["open"] }));
-  const showNeedsAttention = (ticketPages?.pages.flat().length ?? 0) > 0;
-
-  const countsData = queryClient.getQueryData<{ onHold?: number }>(
-    ticketsKeys.counts(),
-  );
-  const showKb = canCall(permissions, "kb.recentItems");
-
-  const showOnHold = countsData != null && (countsData.onHold ?? 0) > 0;
+  const showKb = canCall(permissions, "kb.listItems");
 
   return {
     showGettingStarted,
     showKb,
     showMergeCandidates,
-    showNeedsAttention,
-    showOnHold,
+    showNeedsAttention: true,
+    showOnHold: true,
   };
 }
 

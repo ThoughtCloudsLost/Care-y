@@ -30,6 +30,11 @@ import type { BlobCategory, BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { TelephonyError } from "../errors.js";
 import {
+  createTicketLiveEvents,
+  type TicketLiveEvents,
+} from "../tickets/ticket-live-events.js";
+import {
+  createMockSseService,
   createMockTelephonyProvider,
   createTestDb,
   createTestQueue,
@@ -351,6 +356,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       readonly callTracker?: CallTracker;
       readonly blobStore?: BlobStore;
       readonly jobQueue?: JobQueue;
+      readonly liveEvents?: TicketLiveEvents;
     }
 
     function makeDispatch(setup?: DispatchSetup): WebhookDispatch {
@@ -368,6 +374,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           dispatch: vi.fn().mockResolvedValue(undefined),
           dispatchTicketless: vi.fn().mockResolvedValue(undefined),
         },
+        liveEvents: setup?.liveEvents,
       });
     }
 
@@ -687,6 +694,46 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(row.call_status).toBe("completed");
         expect(row.call_duration_seconds).toBe(33);
         expect(row.created_by).toBe(fixture.userId);
+      });
+
+      it("tells the ticket's audience about the call, bound to the org", async () => {
+        const fixture = await createTestTicketFixture(dbFull.db, {
+          createUser: true,
+        });
+        const tracker = createCallTracker();
+        await tracker.track(
+          dbFull.schemaName as OrgSchema,
+          callSidSchema.parse("CA_STATUS_LIVE"),
+          {
+            ticketId: fixture.ticketId,
+            userId: fixture.userId,
+            direction: "outbound",
+            orgSchema: dbFull.schemaName as OrgSchema,
+            clientId: null,
+            createdAt: Date.now(),
+          },
+        );
+        const sse = createMockSseService();
+        const dispatch = makeDispatch({
+          callTracker: tracker,
+          liveEvents: createTicketLiveEvents({ sse }),
+        });
+
+        await dispatch.onStatusCallback!(ORG_FULL_ID, {
+          CallSid: "CA_STATUS_LIVE",
+          CallStatus: "completed",
+        });
+
+        await vi.waitFor(() => {
+          expect(sse.broadcast).toHaveBeenCalledTimes(1);
+        });
+        const [schema, recipients, event] = sse.broadcast.mock.calls[0] ?? [];
+        expect(schema).toBe(dbFull.schemaName);
+        expect(recipients).toEqual([fixture.userId]);
+        expect(event).toMatchObject({
+          type: "ticket_changed",
+          ticketId: fixture.ticketId,
+        });
       });
 
       it("records each remaining terminal status the provider can send", async () => {

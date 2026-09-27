@@ -14,7 +14,7 @@
 import crypto, { timingSafeEqual } from "node:crypto";
 import type { Kysely, Transaction } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import type { PortalChannelRow } from "./channel-service.js";
+import type { ChannelChangeDeps, PortalChannelRow } from "./channel-service.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import { hashChannelAuth } from "@care-y/crypto";
 import { normalizeUsername } from "@care-y/shared";
@@ -22,6 +22,7 @@ import { computeFakeSalt, computeFakeUuid } from "../auth/salt-defense.js";
 import { UsernameTakenError, StaleThreadError } from "./portal-errors.js";
 import { ValidationError } from "../errors.js";
 import { hasExactMessageCoverage } from "./message-coverage.js";
+import { announceClientTickets } from "../tickets/ticket-live-events.js";
 import type {
   ClientId,
   ClientAccountId,
@@ -582,13 +583,15 @@ export async function changePassword(
  * Reset (volunteer-mediated): delete client_accounts row (cascades
  * sessions), revoke the account channel (do NOT delete the channel row)
  * and delete its portal_messages, set tier back to 'sms_email'.
- * One transaction. No-op-safe when no account exists.
+ * One transaction. No-op-safe when no account exists. Every ticket of the
+ * client is announced once a reset commits.
  */
 export async function resetAccount(
   db: Kysely<TenantDatabase>,
   clientId: ClientId,
+  deps?: ChannelChangeDeps,
 ): Promise<void> {
-  await db.transaction().execute(async (trx) => {
+  const reset = await db.transaction().execute(async (trx) => {
     // Find the account (if any)
     const account = await trx
       .selectFrom("client_accounts")
@@ -597,7 +600,7 @@ export async function resetAccount(
       .executeTakeFirst();
 
     if (!account) {
-      return;
+      return false;
     }
 
     // Delete the account row (cascades sessions via FK)
@@ -636,7 +639,11 @@ export async function resetAccount(
       .set({ communication_tier: "sms_email" })
       .where("id", "=", clientId)
       .execute();
+    return true;
   });
+  if (reset) {
+    await announceClientTickets(db, clientId, deps?.onTicketChanged);
+  }
 }
 
 // ---------------------------------------------------------------------------

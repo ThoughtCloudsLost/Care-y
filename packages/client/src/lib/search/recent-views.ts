@@ -1,11 +1,11 @@
 /**
  * Recently-viewed entities (tickets, KB articles) for the search overlay.
  *
- * The list lives in memory (SvelteMap, cleared through CacheRegistry on
- * logout and idle teardown) and is mirrored to the server as a single
- * self-blob envelope on user_recent_views, sealed to the user's own
- * vol_public. The server stores ciphertext only; other volunteers can
- * never read it; history survives reloads and devices.
+ * The list lives in memory (a synced self-blob document, cleared through
+ * CacheRegistry on logout and idle teardown) and is mirrored to the server
+ * as a single self-blob envelope on user_recent_views, sealed to the
+ * user's own vol_public. The server stores ciphertext only; other
+ * volunteers can never read it; history survives reloads and devices.
  *
  * The payload holds entity IDs and timestamps only, never titles. The
  * overlay re-resolves IDs through the live search providers, so entries
@@ -16,12 +16,13 @@
  * push overwrites the envelope (accepted reset, documented in the ADR).
  */
 
-import { SvelteMap } from "svelte/reactivity";
-import { cacheRegistry } from "$lib/crypto/cache-registry.js";
 import {
-  uint8ArrayToBase64,
-  base64ToUint8Array,
-} from "$lib/utils/buffer-encoding.js";
+  createSyncedSelfBlob,
+  decodeSelfBlobPayload,
+  encodeSelfBlobPayload,
+  type SelfBlobEnvelope,
+  type SelfBlobTransport,
+} from "$lib/prefs/synced-self-blob.svelte.js";
 
 export type RecentViewType = "ticket" | "article";
 
@@ -32,21 +33,9 @@ export interface RecentViewEntry {
   readonly viewedAt: number;
 }
 
-export interface RecentViewsEnvelope {
-  readonly ephemeralPoint: string;
-  readonly nonce: string;
-  readonly wrappedPayload: string;
-}
+export type RecentViewsEnvelope = SelfBlobEnvelope;
 
-export interface RecentViewsDeps {
-  /** Fetch the stored envelope; null when the user has none. */
-  readonly fetchEnvelope: () => Promise<RecentViewsEnvelope | null>;
-  /** Store an envelope (last write wins). */
-  readonly pushEnvelope: (envelope: RecentViewsEnvelope) => Promise<void>;
-  /** Seal a base64 payload to the user's own vol_public (Worker self-blob). */
-  readonly seal: (dataB64: string) => Promise<RecentViewsEnvelope>;
-  /** Open a self-blob envelope; rejects when unopenable (e.g. rotated keys). */
-  readonly open: (envelope: RecentViewsEnvelope) => Promise<string>;
+export interface RecentViewsDeps extends SelfBlobTransport {
   /** Ensure raw ticket rows for these IDs are in the query cache. */
   readonly prefetchTickets: (ids: readonly string[]) => Promise<void>;
   /** Injectable clock for tests. */
@@ -57,7 +46,6 @@ export interface RecentViewsDeps {
 
 const MAX_PER_TYPE = 10;
 const MAX_TOTAL = 20;
-const DEFAULT_PUSH_DELAY_MS = 4_000;
 const PAYLOAD_VERSION = 1;
 
 interface RecentViewsPayload {
@@ -78,10 +66,21 @@ function isRecentViewEntry(value: unknown): value is RecentViewEntry {
   );
 }
 
+function entriesFromJson(json: unknown): readonly RecentViewEntry[] {
+  if (typeof json !== "object" || json === null) return [];
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by typeof+null check above
+  const obj = json as Record<string, unknown>;
+  if (obj.v !== PAYLOAD_VERSION || !Array.isArray(obj.entries)) return [];
+  return obj.entries.filter(isRecentViewEntry);
+}
+
+function toPayload(entries: readonly RecentViewEntry[]): RecentViewsPayload {
+  return { v: PAYLOAD_VERSION, entries };
+}
+
 /** Serialize entries to the base64 payload sealed into the envelope. */
 export function serializePayload(entries: readonly RecentViewEntry[]): string {
-  const payload: RecentViewsPayload = { v: PAYLOAD_VERSION, entries };
-  return uint8ArrayToBase64(new TextEncoder().encode(JSON.stringify(payload)));
+  return encodeSelfBlobPayload(toPayload(entries));
 }
 
 /**
@@ -91,16 +90,44 @@ export function serializePayload(entries: readonly RecentViewEntry[]): string {
  */
 export function parsePayload(dataB64: string): readonly RecentViewEntry[] {
   try {
-    const json = new TextDecoder().decode(base64ToUint8Array(dataB64));
-    const parsed: unknown = JSON.parse(json);
-    if (typeof parsed !== "object" || parsed === null) return [];
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- guarded by typeof+null check above
-    const obj = parsed as Record<string, unknown>;
-    if (obj.v !== PAYLOAD_VERSION || !Array.isArray(obj.entries)) return [];
-    return obj.entries.filter(isRecentViewEntry);
+    return entriesFromJson(decodeSelfBlobPayload(dataB64));
   } catch {
     return [];
   }
+}
+
+function entryKey(entry: RecentViewEntry): string {
+  return `${entry.type}:${entry.id}`;
+}
+
+/** Most recently viewed first. Stable, so ties keep insertion order. */
+function sortEntries(
+  entries: readonly RecentViewEntry[],
+): readonly RecentViewEntry[] {
+  return [...entries].sort((a, b) => b.viewedAt - a.viewedAt);
+}
+
+/**
+ * Drop the oldest entries beyond the per-type and total caps. The input
+ * is in insertion order (one entry per entity) and so is the result.
+ */
+function applyCaps(
+  entries: readonly RecentViewEntry[],
+): readonly RecentViewEntry[] {
+  let tickets = 0;
+  let articles = 0;
+  let total = 0;
+  const dropped: string[] = [];
+  for (const entry of sortEntries(entries)) {
+    total += 1;
+    const typeCount =
+      entry.type === "ticket" ? (tickets += 1) : (articles += 1);
+    if (typeCount > MAX_PER_TYPE || total > MAX_TOTAL) {
+      dropped.push(entryKey(entry));
+    }
+  }
+  if (dropped.length === 0) return entries;
+  return entries.filter((e) => !dropped.includes(entryKey(e)));
 }
 
 export interface RecentViews {
@@ -120,103 +147,39 @@ export interface RecentViews {
 
 export function createRecentViews(deps: RecentViewsDeps): RecentViews {
   const now = deps.now ?? Date.now;
-  const pushDelayMs = deps.pushDelayMs ?? DEFAULT_PUSH_DELAY_MS;
 
-  // Keyed by `${type}:${id}`. SvelteMap so reads inside $derived are
-  // tracked and the overlay updates as views are recorded.
-  const byKey = new SvelteMap<string, RecentViewEntry>();
-
-  let hydration: "idle" | "pending" | "done" = "idle";
-  let pushTimer: ReturnType<typeof setTimeout> | null = null;
-  let pushing = false;
-  let dirty = false;
-
-  function sorted(): readonly RecentViewEntry[] {
-    return [...byKey.values()].sort((a, b) => b.viewedAt - a.viewedAt);
-  }
-
-  function applyCaps(): void {
-    let tickets = 0;
-    let articles = 0;
-    let total = 0;
-    for (const entry of sorted()) {
-      total += 1;
-      const typeCount =
-        entry.type === "ticket" ? (tickets += 1) : (articles += 1);
-      if (typeCount > MAX_PER_TYPE || total > MAX_TOTAL) {
-        byKey.delete(`${entry.type}:${entry.id}`);
-      }
-    }
-  }
-
-  function schedulePush(): void {
-    dirty = true;
-    if (pushTimer !== null) clearTimeout(pushTimer);
-    pushTimer = setTimeout(() => {
-      pushTimer = null;
-      void doPush();
-    }, pushDelayMs);
-  }
-
-  async function doPush(): Promise<void> {
-    if (pushing || !dirty) return;
-    pushing = true;
-    dirty = false;
-    try {
-      const envelope = await deps.seal(serializePayload(sorted()));
-      await deps.pushEnvelope(envelope);
-    } catch (err: unknown) {
-      // Recovery path: keep the history local for this session and retry
-      // on the next recorded view. No IDs in the log (activity metadata).
-      dirty = true;
-      console.warn(
-        "[recent-views] push failed:",
-        err instanceof Error ? err.message : "unknown error",
-      );
-    } finally {
-      pushing = false;
-      if (dirty && pushTimer === null) schedulePush();
-    }
-  }
-
-  async function hydrate(): Promise<void> {
-    let serverEntries: readonly RecentViewEntry[] = [];
-    try {
-      const envelope = await deps.fetchEnvelope();
-      if (envelope) {
-        try {
-          serverEntries = parsePayload(await deps.open(envelope));
-        } catch {
-          // Unopenable envelope (vol keys rotated by a password change).
-          // Start fresh; the next push overwrites it.
-          serverEntries = [];
-        }
-      }
-    } catch (err: unknown) {
-      // Fetch failed. Mark done so the reactive $effect does not retry
-      // in a tight loop. The next initRecentViews call (re-login, effect
-      // re-run) resets hydration via clear().
-      hydration = "done";
-      console.warn(
-        "[recent-views] hydration failed:",
-        err instanceof Error ? err.message : "unknown error",
-      );
-      return;
-    }
-
+  // The document is the entry list in insertion order, one entry per
+  // entity; readers sort by viewedAt. Registered with CacheRegistry by
+  // the helper.
+  const blob = createSyncedSelfBlob<readonly RecentViewEntry[]>({
+    cacheName: "RecentViews",
+    logTag: "recent-views",
+    fetchEnvelope: deps.fetchEnvelope,
+    pushEnvelope: deps.pushEnvelope,
+    seal: deps.seal,
+    open: deps.open,
+    parse: entriesFromJson,
+    serialize: (entries) => toPayload(sortEntries(entries)),
+    defaultValue: () => [],
+    pushDelayMs: deps.pushDelayMs,
     // Merge under local entries: anything recorded this session is newer
     // than the stored copy of the same entity.
-    for (const entry of serverEntries) {
-      const key = `${entry.type}:${entry.id}`;
-      if (!byKey.has(key)) byKey.set(key, entry);
-    }
-    applyCaps();
-    hydration = "done";
-
-    const ticketIds = sorted()
-      .filter((e) => e.type === "ticket")
-      .map((e) => e.id);
-    if (ticketIds.length > 0) {
+    merge: (local, remote) => {
+      const merged = [...local];
+      const seen = merged.map(entryKey);
+      for (const entry of remote) {
+        const key = entryKey(entry);
+        if (seen.includes(key)) continue;
+        seen.push(key);
+        merged.push(entry);
+      }
+      return applyCaps(merged);
+    },
+    onHydrated: (entries) => {
+      const ticketIds = sortEntries(entries)
+        .filter((e) => e.type === "ticket")
+        .map((e) => e.id);
+      if (ticketIds.length === 0) return;
       deps.prefetchTickets(ticketIds).catch((err: unknown) => {
         // Unresolved entries are simply not rendered; nothing to repair.
         console.warn(
@@ -224,52 +187,38 @@ export function createRecentViews(deps: RecentViewsDeps): RecentViews {
           err instanceof Error ? err.message : "unknown error",
         );
       });
-    }
-
-    // Local views recorded before hydration completed are not in the
-    // stored envelope yet; push the merged list.
-    if (dirty) void doPush();
-  }
+    },
+  });
 
   return {
     get entries(): readonly RecentViewEntry[] {
-      return sorted();
+      return sortEntries(blob.value);
     },
 
     entriesOf(type: RecentViewType): readonly RecentViewEntry[] {
-      return sorted().filter((e) => e.type === type);
+      return sortEntries(blob.value).filter((e) => e.type === type);
     },
 
     record(type: RecentViewType, id: string): void {
       if (id.length === 0) return;
-      byKey.delete(`${type}:${id}`);
-      byKey.set(`${type}:${id}`, { type, id, viewedAt: now() });
-      applyCaps();
-      schedulePush();
+      blob.update((current) =>
+        applyCaps([
+          ...current.filter((e) => e.type !== type || e.id !== id),
+          { type, id, viewedAt: now() },
+        ]),
+      );
     },
 
     ensureHydrated(): void {
-      if (hydration !== "idle") return;
-      hydration = "pending";
-      void hydrate();
+      blob.ensureHydrated();
     },
 
     async flush(): Promise<void> {
-      if (pushTimer !== null) {
-        clearTimeout(pushTimer);
-        pushTimer = null;
-      }
-      await doPush();
+      await blob.flush();
     },
 
     clear(): void {
-      byKey.clear();
-      hydration = "idle";
-      dirty = false;
-      if (pushTimer !== null) {
-        clearTimeout(pushTimer);
-        pushTimer = null;
-      }
+      blob.clear();
     },
   };
 }
@@ -282,10 +231,10 @@ let instance: RecentViews | null = null;
 
 export function initRecentViews(deps: RecentViewsDeps): RecentViews {
   // Re-init (AppShell effect re-run) discards the old instance; clear it
-  // so a stale debounce timer cannot push an outdated envelope.
+  // so a stale debounce timer cannot push an outdated envelope. The new
+  // instance registers itself with CacheRegistry under the same name.
   instance?.clear();
   instance = createRecentViews(deps);
-  cacheRegistry.register("RecentViews", instance);
   return instance;
 }
 

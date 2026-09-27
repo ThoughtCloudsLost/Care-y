@@ -22,7 +22,6 @@ import type {
   KBItemPage,
   KBVoteRecord,
   KBAuthorRecord,
-  KBItemSummary,
 } from "../kb/service.js";
 import { RoleId, KB_ATTACHMENT_MAX_BYTES } from "@care-y/shared";
 import type {
@@ -61,7 +60,6 @@ function createMockItemSvc(): KBItemService {
     list: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
-    listRecentlyUpdated: vi.fn(),
     listAuthors: vi.fn(),
     listBodies: vi.fn(),
   };
@@ -301,12 +299,15 @@ describe("KB Category routes", () => {
   });
 
   it("volunteer can list categories", async () => {
-    vi.mocked(mockCatSvc.list).mockResolvedValue([MOCK_CATEGORY]);
+    vi.mocked(mockCatSvc.list).mockResolvedValue([
+      { ...MOCK_CATEGORY, articleCount: 4 },
+    ]);
     const caller = buildVolunteerCaller();
 
     const result = await caller.listCategories();
     expect(result).toHaveLength(1);
     expect(typeof result[0]!.encryptedName).toBe("string");
+    expect(result[0]!.articleCount).toBe(4);
   });
 
   it("manager can update a category", async () => {
@@ -405,6 +406,24 @@ describe("KB Article routes", () => {
     expect(mockItemSvc.list).toHaveBeenCalledOnce();
   });
 
+  it("passes every selected category to the service and returns its total", async () => {
+    vi.mocked(mockItemSvc.list).mockResolvedValue({
+      ...MOCK_ITEM_PAGE,
+      total: 12,
+    });
+    const caller = buildVolunteerCaller();
+    const second = "660e8400-e29b-41d4-a716-446655440001";
+
+    const result = await caller.listItems({
+      categoryIds: [VALID_UUID, second],
+    });
+
+    expect(mockItemSvc.list).toHaveBeenCalledWith(
+      expect.objectContaining({ categoryIds: [VALID_UUID, second] }),
+    );
+    expect(result.total).toBe(12);
+  });
+
   it("volunteer can update an article", async () => {
     vi.mocked(mockItemSvc.update).mockResolvedValue(MOCK_ITEM);
     const caller = buildVolunteerCaller();
@@ -491,36 +510,6 @@ describe("KB listAuthors route", () => {
       Buffer.from("enc-name-1").toString("base64url"),
     );
     expect(mockItemSvc.listAuthors).toHaveBeenCalledOnce();
-  });
-});
-
-// --- Recent items tests ---
-
-describe("KB recentItems route", () => {
-  it("volunteer can fetch recently updated items with default limit", async () => {
-    const mockRecent: KBItemSummary[] = [
-      {
-        id: MOCK_ITEM_ID,
-        categoryId: MOCK_CATEGORY_ID,
-        encryptedTitle: Buffer.from("title-1"),
-        encryptedExcerpt: null,
-        createdBy: USER_ID,
-        voteUpCount: 3,
-        voteDownCount: 0,
-        rating: 3,
-        createdAt: NOW,
-        updatedAt: NOW,
-      },
-    ];
-    vi.mocked(mockItemSvc.listRecentlyUpdated).mockResolvedValue(mockRecent);
-    const caller = buildVolunteerCaller();
-
-    const result = await caller.recentItems({ limit: 2 });
-
-    expect(result).toHaveLength(1);
-    expect(result[0]!.id).toBe(VALID_UUID);
-    expect(typeof result[0]!.encryptedTitle).toBe("string");
-    expect(mockItemSvc.listRecentlyUpdated).toHaveBeenCalledWith(2);
   });
 });
 

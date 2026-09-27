@@ -19,6 +19,7 @@ import {
   createTestUser,
   createTestQueue,
   createTestTicketFixture,
+  createTestTicketForClient,
   createTestClientFixture,
   seedOrgPublicKey,
   testSealedBox,
@@ -28,6 +29,8 @@ import {
   mockReq,
   mockRes,
   expectTrpcError,
+  createMockSseService,
+  type TestClientTicketsFixture,
   type TestDb,
 } from "../test-utils.js";
 import {
@@ -84,6 +87,7 @@ import { createReadCursorService } from "../tickets/read-cursor-service.js";
 import { createAuditService } from "../tickets/audit.js";
 import { createSearchService } from "../tickets/search.js";
 import { createNoteTypeService } from "../tickets/note-type-service.js";
+import { createTicketLiveEvents } from "../tickets/ticket-live-events.js";
 import { createSecretsEncryptor, deriveSecretsKey } from "../config/secrets.js";
 import type { BlobStore } from "../storage/store.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
@@ -194,15 +198,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         createTicketAccess: (db) => createTicketAccessChecker(db),
         createTicketSvc: (db, access, getQueues, deps) =>
           createTicketService(db, access, getQueues, deps),
-        createFollowUpSvc: (db, access) => createFollowUpService(db, access),
-        createMergeSvc: (db) => createMergeService(db),
+        createFollowUpSvc: (db, access, deps) =>
+          createFollowUpService(db, access, deps),
+        createMergeSvc: (db, deps) => createMergeService(db, deps),
         createPresetSvc: (db) => createPresetService(db),
         createDependencySvc: (db, access) =>
           createDependencyService(db, access),
         createMediaSvc: (db, bs, access) => createMediaService(db, bs, access),
-        createQueueSvc: (db) => createQueueService(db),
-        createAssignmentSvc: (db, access, shift) =>
-          createAssignmentService(db, access, shift),
+        createQueueSvc: (db, deps) => createQueueService(db, deps),
+        createAssignmentSvc: (db, access, shift, deps) =>
+          createAssignmentService(db, access, shift, deps),
         createWatchersSvc: (db, access) => createWatchersService(db, access),
         createQueuePermissionsSvc: (db) => createQueuePermissionsService(db),
         createReadCursorSvc: (db, access) =>
@@ -700,6 +705,329 @@ describe.skipIf(!process.env.DATABASE_URL)(
           onHold: false,
         });
         expect(released.onHold).toBe(false);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // Live ticket events
+    // -----------------------------------------------------------------------
+
+    describe("Live ticket events", () => {
+      /**
+       * A caller whose router emits through a mock SSE service, plus a
+       * second queue member and an outsider to check the recipient set.
+       */
+      async function setupLive() {
+        const fixture = await setupUserWithTicket();
+        const peer = await createTestUser(tenantDb);
+        await tenantDb
+          .insertInto("queue_assignments")
+          .values({ queue_id: fixture.queueId, user_id: peer.id })
+          .execute();
+        const outsider = await createTestUser(tenantDb);
+        const sse = createMockSseService();
+        const caller = createAuthedCaller(fixture.user, {
+          deps: { liveEvents: createTicketLiveEvents({ sse }) },
+        });
+        return { ...fixture, peer, outsider, sse, caller };
+      }
+
+      type Live = Awaited<ReturnType<typeof setupLive>>;
+
+      async function expectTicketChanged(live: Live): Promise<void> {
+        await vi.waitFor(() => {
+          expect(live.sse.broadcast).toHaveBeenCalled();
+        });
+        const calls = live.sse.broadcast.mock.calls;
+        for (const [schema, recipients, event] of calls) {
+          expect(schema).toBe(orgContext.orgSchema);
+          expect(event).toMatchObject({
+            type: "ticket_changed",
+            ticketId: live.ticketId,
+            queueId: live.queueId,
+          });
+          expect(recipients).toContain(live.user.id);
+          expect(recipients).toContain(live.peer.id);
+          expect(recipients).not.toContain(live.outsider.id);
+        }
+      }
+
+      /** A fresh Secure Link registration for upgrade and regenerate. */
+      function secureLinkInput(ticketId: TicketId) {
+        return {
+          ticketId,
+          channelId: channelSecretSchema.parse(randomBytes(24).toString("hex")),
+          authHash: Buffer.alloc(32, 0xab).toString("base64url"),
+          clientPublic: Buffer.alloc(32, 0xcd).toString("base64url"),
+          hasPassphrase: false,
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0x01).toString("base64url"),
+            nonce: Buffer.alloc(24, 0x02).toString("base64url"),
+            ciphertext: Buffer.alloc(64, 0x03).toString("base64url"),
+          },
+        };
+      }
+
+      /** Seeds an active Secure Link channel and the matching tier. */
+      async function seedActiveSecureLink(clientId: ClientId): Promise<void> {
+        await seedSecureLinkChannel(clientId);
+        await tenantDb
+          .updateTable("clients")
+          .set({ communication_tier: "secure_link" })
+          .where("id", "=", clientId)
+          .execute();
+      }
+
+      const mutations: [string, (live: Live) => Promise<unknown>][] = [
+        [
+          "update (hold)",
+          async ({ caller, ticketId }) =>
+            caller.tickets.update({ ticketId, onHold: true }),
+        ],
+        [
+          "update (priority)",
+          async ({ caller, ticketId }) =>
+            caller.tickets.update({ ticketId, priority: "urgent" }),
+        ],
+        [
+          "close",
+          async ({ caller, ticketId }) => caller.tickets.close({ ticketId }),
+        ],
+        [
+          "take",
+          async ({ caller, ticketId }) => caller.tickets.take({ ticketId }),
+        ],
+        [
+          "assignTo",
+          async ({ caller, ticketId, peer }) =>
+            caller.tickets.assignTo({ ticketId, targetUserId: peer.id }),
+        ],
+        [
+          "createFollowUp",
+          async ({ caller, ticketId }) =>
+            caller.tickets.createFollowUp({
+              id: crypto.randomUUID() as FollowupId,
+              ticketId,
+              encryptedContent: testEncryptedContent(),
+              source: "volunteer",
+              type: "internal_note",
+              isPrivate: false,
+              mentionedPseudonyms: [],
+            }),
+        ],
+        [
+          "revokeReplyToken",
+          async ({ caller, ticketId }) => {
+            await tenantDb
+              .insertInto("email_reply_tokens")
+              .values({
+                ticket_id: ticketId,
+                token_hash: `live-${randomUUID()}` as ReplyTokenHash,
+              })
+              .execute();
+            return caller.tickets.revokeReplyToken({ ticketId });
+          },
+        ],
+      ];
+
+      it.each(mutations)(
+        "%s tells everyone with access and no one else",
+        async (_name, run) => {
+          const live = await setupLive();
+          await run(live);
+          await expectTicketChanged(live);
+        },
+      );
+
+      /**
+       * Gives the live client a second ticket and puts another client's
+       * ticket in the same queue.
+       */
+      async function addClientTickets(
+        live: Live,
+      ): Promise<TestClientTicketsFixture> {
+        const secondTicketId = await createTestTicketForClient(
+          tenantDb,
+          live.clientId,
+          live.queueId,
+        );
+        const other = await createTestTicketFixture(tenantDb, {
+          queueId: live.queueId,
+        });
+        return {
+          clientId: live.clientId,
+          queueId: live.queueId,
+          ticketIds: [live.ticketId, secondTicketId],
+          otherTicketId: other.ticketId,
+        };
+      }
+
+      async function expectClientTicketsChanged(
+        live: Live,
+        tickets: TestClientTicketsFixture,
+      ): Promise<void> {
+        await vi.waitFor(() => {
+          expect(live.sse.broadcast).toHaveBeenCalledTimes(
+            tickets.ticketIds.length,
+          );
+        });
+        const announced = live.sse.broadcast.mock.calls.map(
+          ([schema, recipients, event]) => {
+            expect(schema).toBe(orgContext.orgSchema);
+            expect(event).toMatchObject({
+              type: "ticket_changed",
+              queueId: live.queueId,
+            });
+            expect(recipients).toContain(live.user.id);
+            expect(recipients).toContain(live.peer.id);
+            expect(recipients).not.toContain(live.outsider.id);
+            return event.type === "ticket_changed" ? event.ticketId : null;
+          },
+        );
+        expect(announced).toHaveLength(tickets.ticketIds.length);
+        expect(announced).toEqual(
+          expect.arrayContaining([...tickets.ticketIds]),
+        );
+        expect(announced).not.toContain(tickets.otherTicketId);
+      }
+
+      // Tier, channel and account state belong to the client, so every
+      // ticket of the client shows the change.
+      const clientMutations: [string, (live: Live) => Promise<unknown>][] = [
+        [
+          "upgradeToSecureLink",
+          async ({ caller, ticketId }) =>
+            caller.tickets.upgradeToSecureLink(secureLinkInput(ticketId)),
+        ],
+        [
+          "regenerateSecureLink",
+          async ({ caller, ticketId, clientId }) => {
+            await seedActiveSecureLink(clientId);
+            return caller.tickets.regenerateSecureLink(
+              secureLinkInput(ticketId),
+            );
+          },
+        ],
+        [
+          "revokeSecureLink",
+          async ({ caller, ticketId, clientId }) => {
+            await seedActiveSecureLink(clientId);
+            return caller.tickets.revokeSecureLink({ ticketId });
+          },
+        ],
+        [
+          "resetClientAccount",
+          async ({ caller, ticketId, clientId }) => {
+            await tenantDb
+              .updateTable("clients")
+              .set({ communication_tier: "account" })
+              .where("id", "=", clientId)
+              .execute();
+            await seedSecureLinkChannel(clientId, { kind: "account" });
+            await seedClientAccount(clientId);
+            return caller.tickets.resetClientAccount({ ticketId });
+          },
+        ],
+      ];
+
+      it.each(clientMutations)(
+        "%s tells everyone with access about every ticket of the client",
+        async (_name, run) => {
+          const live = await setupLive();
+          const tickets = await addClientTickets(live);
+          await run(live);
+          await expectClientTicketsChanged(live, tickets);
+        },
+      );
+
+      it("reopen and release emit too", async () => {
+        const live = await setupLive();
+        await live.caller.tickets.take({ ticketId: live.ticketId });
+        await live.caller.tickets.release({ ticketId: live.ticketId });
+        await live.caller.tickets.close({ ticketId: live.ticketId });
+        live.sse.broadcast.mockClear();
+
+        await live.caller.tickets.reopen({
+          ticketId: live.ticketId,
+          newKeyGeneration: randomUUID() as KeyGeneration,
+        });
+
+        await expectTicketChanged(live);
+      });
+
+      it("a no-op update emits nothing", async () => {
+        const live = await setupLive();
+        await live.caller.tickets.update({ ticketId: live.ticketId });
+        // Give a stray emit time to land before asserting its absence.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(live.sse.broadcast).not.toHaveBeenCalled();
+      });
+
+      it("revoking reply links when none are live emits nothing", async () => {
+        const live = await setupLive();
+        const result = await live.caller.tickets.revokeReplyToken({
+          ticketId: live.ticketId,
+        });
+        expect(result.revokedCount).toBe(0);
+        // Give a stray emit time to land before asserting its absence.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(live.sse.broadcast).not.toHaveBeenCalled();
+      });
+
+      it("a failing broadcast does not fail the mutation", async () => {
+        const live = await setupLive();
+        live.sse.broadcast.mockImplementation(() => {
+          throw new Error("stream closed");
+        });
+        const errors = vi.spyOn(console, "error").mockImplementation(() => {
+          // silenced
+        });
+        try {
+          const updated = await live.caller.tickets.update({
+            ticketId: live.ticketId,
+            onHold: true,
+          });
+          expect(updated.onHold).toBe(true);
+          await vi.waitFor(() => {
+            expect(errors).toHaveBeenCalled();
+          });
+        } finally {
+          errors.mockRestore();
+        }
+      });
+
+      it("deleting a queue announces every ticket it moved", async () => {
+        const live = await setupLive();
+        const target = await createTestQueue(tenantDb);
+        await tenantDb
+          .insertInto("queue_assignments")
+          .values({ queue_id: target.id, user_id: live.peer.id })
+          .execute();
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const adminCaller = createAuthedCaller(admin, {
+          deps: {
+            liveEvents: createTicketLiveEvents({ sse: live.sse }),
+          },
+        });
+
+        await adminCaller.tickets.deleteQueue({
+          queueId: live.queueId,
+          reassignTo: target.id,
+        });
+
+        await vi.waitFor(() => {
+          expect(live.sse.broadcast).toHaveBeenCalledTimes(1);
+        });
+        const [, recipients, event] = live.sse.broadcast.mock.calls[0] ?? [];
+        expect(event).toMatchObject({
+          type: "ticket_changed",
+          ticketId: live.ticketId,
+          queueId: target.id,
+        });
+        // The new queue's member hears of it; the old queue no longer exists.
+        expect(recipients).toEqual([live.peer.id]);
       });
     });
 
@@ -3007,6 +3335,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             .selectFrom("audit_log")
             .select(["event_type", "actor_id", "ticket_id"])
             .where("event_type", "=", "reply_token_revoked")
+            .where("ticket_id", "=", fixture.ticketId)
             .executeTakeFirst();
 
           expect(auditRow).toBeDefined();
@@ -4375,6 +4704,70 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         expect(result.entries).toHaveLength(5);
         expect(result.lastHourCount).toBe(7);
+      });
+
+      it("applies kinds and queueIds to both the entries and the count", async () => {
+        // Admins hold VIEW_AUDIT_LOG (outside-queue rows) and MANAGE_QUEUES
+        // (queue org events), so every row kind is in scope.
+        const { user, ticketId, queueId } = await setupUserWithTicket(
+          RoleId.ADMIN,
+        );
+        const foreign = await createTestTicketFixture(tenantDb);
+        const auditSvc = createAuditService(tenantDb);
+        await auditSvc.log({
+          eventType: "ticket_created",
+          actorId: user.id,
+          ticketId,
+        });
+        await auditSvc.log({
+          eventType: "ticket_created",
+          actorId: user.id,
+          ticketId: foreign.ticketId,
+        });
+        await auditSvc.log({ eventType: "queue_created", actorId: user.id });
+        const caller = createAuthedCaller(user);
+
+        const own = await caller.tickets.recentActivity({
+          limit: 10,
+          queueIds: [queueId],
+        });
+        expect(own.lastHourCount).toBe(1);
+        expect(own.entries).toHaveLength(1);
+        expect(own.entries[0]).toMatchObject({ kind: "ticket", ticketId });
+
+        const outside = await caller.tickets.recentActivity({
+          limit: 10,
+          queueIds: [foreign.queueId],
+        });
+        expect(outside.lastHourCount).toBe(1);
+        expect(outside.entries).toHaveLength(1);
+        expect(outside.entries[0]).toMatchObject({
+          kind: "ticket_outside_queues",
+          queueId: foreign.queueId,
+        });
+
+        const orgOnly = await caller.tickets.recentActivity({
+          limit: 10,
+          kinds: ["org"],
+        });
+        expect(orgOnly.entries.length).toBeGreaterThan(0);
+        expect(orgOnly.entries.every((r) => r.kind === "org")).toBe(true);
+      });
+
+      it("never widens a volunteer's feed to a queue outside their own", async () => {
+        const { user } = await setupUserWithTicket();
+        const foreign = await createTestTicketFixture(tenantDb);
+        await createAuditService(tenantDb).log({
+          eventType: "ticket_created",
+          actorId: user.id,
+          ticketId: foreign.ticketId,
+        });
+
+        const caller = createAuthedCaller(user);
+        const result = await caller.tickets.recentActivity({
+          queueIds: [foreign.queueId],
+        });
+        expect(result).toEqual({ entries: [], lastHourCount: 0 });
       });
     });
 

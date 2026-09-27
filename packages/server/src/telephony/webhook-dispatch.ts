@@ -18,6 +18,7 @@ import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { NotificationService } from "../notifications/service.js";
+import type { TicketLiveEvents } from "../tickets/ticket-live-events.js";
 import type { WebhookDispatch } from "../routes/webhooks.js";
 import { createSealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { createPhoneRepository } from "./models/phone-repo.js";
@@ -97,6 +98,8 @@ export interface WebhookDispatchDeps {
   readonly webhookBaseUrl: string;
   readonly callTracker: CallTracker;
   readonly notificationService: NotificationService;
+  /** Live ticket-change events for tickets the inbound handlers write. */
+  readonly liveEvents?: TicketLiveEvents;
 }
 
 /**
@@ -155,6 +158,7 @@ export function createWebhookDispatch(
         orgId,
         orgSchema: org.orgSchema,
         defaultLocale: "en-US",
+        onTicketChanged: deps.liveEvents?.forTenant(org.tDb, org.orgSchema),
       });
 
       return null; // No TwiML response (auto-reply sent via API)
@@ -185,6 +189,7 @@ export function createWebhookDispatch(
           sealedBox: org.sealedBox,
           orgSlug: org.orgSlug,
           notificationService: deps.notificationService,
+          onTicketChanged: deps.liveEvents?.forTenant(org.tDb, org.orgSchema),
         });
         return null;
       }
@@ -230,6 +235,7 @@ export function createWebhookDispatch(
         callTracker: deps.callTracker,
         getTenantDb: tenantDb,
         intakeQueueId: org.intakeQueueId,
+        onTicketChanged: deps.liveEvents?.forTenant(org.tDb, org.orgSchema),
       });
     },
   };

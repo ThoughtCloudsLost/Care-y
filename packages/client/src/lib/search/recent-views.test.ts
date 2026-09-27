@@ -7,25 +7,16 @@ import {
   type RecentViewsDeps,
   type RecentViewsEnvelope,
 } from "./recent-views.js";
+import {
+  createFakeSelfBlobTransport,
+  envelopeOf,
+} from "$mocks/fake-self-blob-transport.js";
 
-/**
- * Fake deps: seal is the identity on the payload (wrappedPayload carries
- * the base64 payload verbatim) so envelope contents stay inspectable
- * without crypto. The clock is injectable per the testing reference.
- */
+/** The shared fake transport plus an injectable clock. */
 function makeHarness(overrides?: Partial<RecentViewsDeps>) {
   let time = 1_000;
   const deps: RecentViewsDeps = {
-    fetchEnvelope: vi.fn(async () => null),
-    pushEnvelope: vi.fn(async () => undefined),
-    seal: vi.fn(async (dataB64: string) => ({
-      ephemeralPoint: "ep",
-      nonce: "n",
-      wrappedPayload: dataB64,
-    })),
-    open: vi.fn(async (envelope: RecentViewsEnvelope) =>
-      Promise.resolve(envelope.wrappedPayload),
-    ),
+    ...createFakeSelfBlobTransport(),
     prefetchTickets: vi.fn(async () => undefined),
     now: () => time,
     pushDelayMs: 100,
@@ -40,12 +31,11 @@ function makeHarness(overrides?: Partial<RecentViewsDeps>) {
   };
 }
 
-function envelopeOf(entries: readonly RecentViewEntry[]): RecentViewsEnvelope {
-  return {
-    ephemeralPoint: "ep",
-    nonce: "n",
-    wrappedPayload: serializePayload(entries),
-  };
+/** Envelope the fake transport opens as a version 1 entries payload. */
+function entriesEnvelope(
+  entries: readonly RecentViewEntry[],
+): RecentViewsEnvelope {
+  return envelopeOf({ v: 1, entries });
 }
 
 afterEach(() => {
@@ -185,7 +175,7 @@ describe("debounced push", () => {
 describe("ensureHydrated", () => {
   it("merges server entries under newer local ones", async () => {
     vi.useFakeTimers();
-    const server = envelopeOf([
+    const server = entriesEnvelope([
       { type: "ticket", id: "t-local", viewedAt: 50 },
       { type: "article", id: "a-server", viewedAt: 60 },
     ]);
@@ -221,7 +211,7 @@ describe("ensureHydrated", () => {
     vi.useFakeTimers();
     const { store, deps } = makeHarness({
       fetchEnvelope: vi.fn(async () =>
-        envelopeOf([{ type: "ticket", id: "t-old", viewedAt: 10 }]),
+        entriesEnvelope([{ type: "ticket", id: "t-old", viewedAt: 10 }]),
       ),
       open: vi.fn(async () => Promise.reject(new Error("UNWRAP_FAILED"))),
     });
@@ -263,7 +253,7 @@ describe("ensureHydrated", () => {
     vi.useFakeTimers();
     const { store, deps } = makeHarness({
       fetchEnvelope: vi.fn(async () =>
-        envelopeOf([
+        entriesEnvelope([
           { type: "ticket", id: "t-1", viewedAt: 10 },
           { type: "article", id: "a-1", viewedAt: 20 },
           { type: "ticket", id: "t-2", viewedAt: 30 },
@@ -281,7 +271,7 @@ describe("ensureHydrated", () => {
     vi.useFakeTimers();
     const { store, deps } = makeHarness({
       fetchEnvelope: vi.fn(async () =>
-        envelopeOf([{ type: "article", id: "a-server", viewedAt: 5 }]),
+        entriesEnvelope([{ type: "article", id: "a-server", viewedAt: 5 }]),
       ),
     });
 

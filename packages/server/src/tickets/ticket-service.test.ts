@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import {
   createTestDb,
   createTestUser,
@@ -22,6 +22,7 @@ import {
   type TicketAccessChecker,
 } from "./access.js";
 import { createQueuePermissionsService } from "./queue-permissions.js";
+import type { TicketChangeListener } from "./ticket-live-events.js";
 import { createDependencyService } from "./dependency-service.js";
 import {
   NotFoundError,
@@ -2771,6 +2772,36 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       });
       return { userId, ticketId: ticket.id, keyGeneration: keyGen };
     }
+
+    it("announces the ticket after the edit commits, not before a rejection", async () => {
+      const { userId, ticketId, keyGeneration } = await createContentFixture();
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+      const qps = createQueuePermissionsService(testDb.db);
+      const live = createTicketService(
+        testDb.db,
+        access,
+        (id) => qps.getUserQueues(id),
+        { onTicketChanged },
+      );
+
+      await expect(
+        live.updateContent(userId, {
+          ticketId,
+          actorId: userId,
+          encryptedTitle: Buffer.from("stale"),
+          keyGeneration: newKeyGeneration(),
+        }),
+      ).rejects.toThrow();
+      expect(onTicketChanged).not.toHaveBeenCalled();
+
+      await live.updateContent(userId, {
+        ticketId,
+        actorId: userId,
+        encryptedTitle: Buffer.from("fresh"),
+        keyGeneration,
+      });
+      expect(onTicketChanged).toHaveBeenCalledExactlyOnceWith(ticketId);
+    });
 
     it("title-only update leaves encrypted_description byte-identical", async () => {
       const { userId, ticketId, keyGeneration } = await createContentFixture();

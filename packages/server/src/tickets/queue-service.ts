@@ -13,7 +13,8 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError, ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
-import type { QueueId } from "@care-y/shared";
+import type { QueueId, TicketId } from "@care-y/shared";
+import type { TicketChangeListener } from "./ticket-live-events.js";
 
 export interface QueueRecord {
   readonly id: QueueId;
@@ -95,7 +96,7 @@ function toRecord(row: QueueRow, counts: QueueCounts = {}): QueueRecord {
 async function reassignTickets(
   tx: Kysely<TenantDatabase>,
   params: { fromQueueId: QueueId; toQueueId: QueueId },
-): Promise<void> {
+): Promise<TicketId[]> {
   const target = await tx
     .selectFrom("queues")
     .select("id")
@@ -104,14 +105,24 @@ async function reassignTickets(
   if (!target) {
     throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
   }
-  await tx
+  const moved = await tx
     .updateTable("tickets")
     .set({ queue_id: params.toQueueId })
     .where("queue_id", "=", params.fromQueueId)
+    .returning("id")
     .execute();
+  return moved.map((r) => r.id);
 }
 
-export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
+export interface QueueServiceDeps {
+  /** Called once per ticket a queue delete moved, after the delete commits. */
+  readonly onTicketChanged?: TicketChangeListener;
+}
+
+export function createQueueService(
+  db: Kysely<TenantDatabase>,
+  deps?: QueueServiceDeps,
+): QueueService {
   return {
     async create(input) {
       const { max } = await db
@@ -261,7 +272,7 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
     },
 
     async delete(queueId, reassignTo) {
-      await db.transaction().execute(async (tx) => {
+      const moved = await db.transaction().execute(async (tx) => {
         const queueCount = await tx
           .selectFrom("queues")
           .select(db.fn.countAll<string>().as("count"))
@@ -285,11 +296,12 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
           .where("queue_id", "=", queueId)
           .executeTakeFirstOrThrow();
 
+        let reassigned: TicketId[] = [];
         if (Number(ticketCount.count) > 0) {
           if (reassignTo === undefined) {
             throw new ValidationError(ErrorCode.QUEUE_HAS_TICKETS);
           }
-          await reassignTickets(tx, {
+          reassigned = await reassignTickets(tx, {
             fromQueueId: queueId,
             toQueueId: reassignTo,
           });
@@ -304,7 +316,9 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
           .where("queue_id", "=", queueId)
           .execute();
         await tx.deleteFrom("queues").where("id", "=", queueId).execute();
+        return reassigned;
       });
+      for (const ticketId of moved) deps?.onTicketChanged?.(ticketId);
     },
   };
 }

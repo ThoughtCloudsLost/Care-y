@@ -43,3 +43,10 @@ export const PORTAL_ATTACHMENTS_PER_MESSAGE = 5;
  * window is full, the true count may be higher than what was returned.
  */
 export const READ_STATE_TIMESTAMPS_PER_TICKET = 20;
+
+/**
+ * Most ids one filter request may name (queues, categories). Far above any
+ * real organization's count, so it only bounds the work a single request
+ * can ask of the server.
+ */
+export const FILTER_ID_LIST_MAX = 200;

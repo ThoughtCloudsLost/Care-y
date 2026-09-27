@@ -2,7 +2,7 @@
 // No UPDATE or DELETE operations. Manager+ can query.
 // Stores pseudonyms only, never PII (names, phone numbers, ticket content).
 
-import type { Kysely } from "kysely";
+import type { Expression, ExpressionBuilder, Kysely, SqlBool } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type {
   AuditEventType,
@@ -12,6 +12,7 @@ import type {
   TicketId,
   ClientId,
   QueueId,
+  DashboardActivityKind,
 } from "@care-y/shared";
 import { toCount } from "../db/query-utils.js";
 
@@ -90,6 +91,17 @@ export interface RecentActivityScope {
    * outside `ownQueueIds` come back as `ticket_outside_queues`.
    */
   readonly allQueues: boolean;
+  /**
+   * Viewer filter on feed kinds: "ticket" covers `ticket` and
+   * `ticket_outside_queues` rows. Absent or empty means every kind.
+   */
+  readonly kinds?: readonly DashboardActivityKind[];
+  /**
+   * Viewer filter on queues: ticket rows outside these queues and every org
+   * row (org events have no queue) are left out. Absent or empty means no
+   * filter. It only narrows the scope above, never widens it.
+   */
+  readonly queueIds?: readonly QueueId[];
 }
 
 export interface RecentActivityQuery extends RecentActivityScope {
@@ -128,6 +140,34 @@ export interface AuditService {
   countRecentActivity(query: RecentActivityCountQuery): Promise<number>;
 }
 
+/**
+ * The `query` filters as one WHERE expression, shared by the page query and
+ * the `total` count so the two can never disagree. No filters yields a
+ * condition that is always true.
+ */
+function auditLogFilterWhere(
+  eb: ExpressionBuilder<TenantDatabase, "audit_log">,
+  filters: AuditLogQueryInput,
+): Expression<SqlBool> {
+  const conditions: Expression<SqlBool>[] = [];
+  if (filters.eventType !== undefined) {
+    conditions.push(eb("event_type", "=", filters.eventType));
+  }
+  if (filters.actorId !== undefined) {
+    conditions.push(eb("actor_id", "=", filters.actorId));
+  }
+  if (filters.ticketId !== undefined) {
+    conditions.push(eb("ticket_id", "=", filters.ticketId));
+  }
+  if (filters.dateFrom !== undefined) {
+    conditions.push(eb("created_at", ">=", new Date(filters.dateFrom)));
+  }
+  if (filters.dateTo !== undefined) {
+    conditions.push(eb("created_at", "<=", new Date(filters.dateTo)));
+  }
+  return eb.and(conditions);
+}
+
 export function createAuditService(db: Kysely<TenantDatabase>): AuditService {
   return {
     async log(entry) {
@@ -149,7 +189,13 @@ export function createAuditService(db: Kysely<TenantDatabase>): AuditService {
     },
 
     async query(input) {
-      let query = db
+      const countResult = await db
+        .selectFrom("audit_log")
+        .where((eb) => auditLogFilterWhere(eb, input))
+        .select(db.fn.countAll().as("count"))
+        .executeTakeFirstOrThrow();
+
+      const entries = await db
         .selectFrom("audit_log")
         .select([
           "id",
@@ -158,45 +204,8 @@ export function createAuditService(db: Kysely<TenantDatabase>): AuditService {
           "ticket_id as ticketId",
           "metadata",
           "created_at as createdAt",
-        ]);
-
-      if (input.eventType !== undefined) {
-        query = query.where("event_type", "=", input.eventType);
-      }
-      if (input.actorId !== undefined) {
-        query = query.where("actor_id", "=", input.actorId);
-      }
-      if (input.ticketId !== undefined) {
-        query = query.where("ticket_id", "=", input.ticketId);
-      }
-      if (input.dateFrom !== undefined) {
-        query = query.where("created_at", ">=", new Date(input.dateFrom));
-      }
-      if (input.dateTo !== undefined) {
-        query = query.where("created_at", "<=", new Date(input.dateTo));
-      }
-
-      const countQuery = db
-        .selectFrom("audit_log")
-        .$call((qb) => {
-          let q = qb;
-          if (input.eventType !== undefined)
-            q = q.where("event_type", "=", input.eventType);
-          if (input.actorId !== undefined)
-            q = q.where("actor_id", "=", input.actorId);
-          if (input.ticketId !== undefined)
-            q = q.where("ticket_id", "=", input.ticketId);
-          if (input.dateFrom !== undefined)
-            q = q.where("created_at", ">=", new Date(input.dateFrom));
-          if (input.dateTo !== undefined)
-            q = q.where("created_at", "<=", new Date(input.dateTo));
-          return q;
-        })
-        .select(db.fn.countAll().as("count"));
-
-      const countResult = await countQuery.executeTakeFirstOrThrow();
-
-      const entries = await query
+        ])
+        .where((eb) => auditLogFilterWhere(eb, input))
         .orderBy("created_at", "desc")
         .limit(input.pageSize)
         .offset((input.page - 1) * input.pageSize)
@@ -236,11 +245,24 @@ export function createAuditService(db: Kysely<TenantDatabase>): AuditService {
 // these checks rather than trusting the caller to have checked.
 function hasTicketScope(scope: RecentActivityScope): boolean {
   if (scope.ticketEventTypes.length === 0) return false;
+  if (!kindRequested(scope, "ticket")) return false;
   return scope.allQueues || scope.ownQueueIds.length > 0;
 }
 
 function hasOrgScope(scope: RecentActivityScope): boolean {
-  return scope.orgEventTypes.length > 0;
+  if (scope.orgEventTypes.length === 0) return false;
+  if (!kindRequested(scope, "org")) return false;
+  // Org events have no queue, so any queue filter leaves them all out.
+  return (scope.queueIds ?? []).length === 0;
+}
+
+/** An absent or empty `kinds` filter requests every kind. */
+function kindRequested(
+  scope: RecentActivityScope,
+  kind: DashboardActivityKind,
+): boolean {
+  const kinds = scope.kinds ?? [];
+  return kinds.length === 0 || kinds.includes(kind);
 }
 
 /**
@@ -261,6 +283,11 @@ function recentTicketActivityRows(
     .where("al.event_type", "in", [...scope.ticketEventTypes]);
   if (!scope.allQueues) {
     builder = builder.where("t.queue_id", "in", [...scope.ownQueueIds]);
+  }
+  // ANDed with the membership clause above, so the viewer's queue filter
+  // narrows the feed and a queue outside it matches nothing.
+  if (scope.queueIds !== undefined && scope.queueIds.length > 0) {
+    builder = builder.where("t.queue_id", "in", [...scope.queueIds]);
   }
   return builder;
 }

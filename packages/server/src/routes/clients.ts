@@ -38,16 +38,21 @@ import {
   deleteClientInputSchema,
   phoneHashSchema,
 } from "@care-y/shared";
-import type { OrgId, ClientId, UserId } from "@care-y/shared";
+import type { OrgId, OrgSchema, ClientId, UserId } from "@care-y/shared";
 import type { ClientService } from "../clients/client-service.js";
 import type { EmailService } from "../clients/email-service.js";
 import type { DismissalService } from "../clients/dismissal-service.js";
 import type { MergeScanService } from "../clients/merge-scan-service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+import type {
+  TicketChangeListener,
+  TicketLiveEvents,
+} from "../tickets/ticket-live-events.js";
 import { phoneForViewer, emailForViewer } from "../utils/sql.js";
 import { ForbiddenError, InternalError } from "../errors.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { OrgContext } from "../trpc/context.js";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -55,13 +60,19 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 export interface ClientRouterDeps {
+  /**
+   * The listener, when given, is told about every ticket of a client whose
+   * alias or contact details a write changed.
+   */
   readonly createClientSvc: (
     db: Kysely<TenantDatabase>,
     orgId: OrgId,
+    onTicketChanged?: TicketChangeListener,
   ) => ClientService;
   readonly createEmailSvc: (
     db: Kysely<TenantDatabase>,
     orgId: OrgId,
+    onTicketChanged?: TicketChangeListener,
   ) => EmailService;
   readonly fieldEncryptor: FieldEncryptor;
   /**
@@ -87,7 +98,8 @@ export interface ClientRouterDeps {
     ((db: Kysely<TenantDatabase>) => MergeScanService) | null;
   /**
    * Full client purge: opens a transaction, calls the pii-retention
-   * purgeClient cascade, and logs an audit event (counts only).
+   * purgeClient cascade, and logs an audit event (counts only). Everyone
+   * who could open one of the client's tickets is told it changed.
    * Wired in index.ts where blobStore, jobQueue, and auditSvc are in scope.
    */
   readonly purgeClientAndAudit: (
@@ -95,7 +107,10 @@ export interface ClientRouterDeps {
     clientId: ClientId,
     orgId: OrgId,
     actorId: UserId,
+    orgSchema: OrgSchema,
   ) => Promise<{ ticketsPurged: number; blobsDeleted: number }>;
+  /** Live ticket-change events to everyone who can open a changed ticket. */
+  readonly liveEvents?: TicketLiveEvents;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +134,15 @@ const deleteClientsProcedure = permissionProcedure(Permission.DELETE_CLIENTS);
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createClientRouter(deps: ClientRouterDeps) {
+  /**
+   * The request's live-event listener: services call it after a committed
+   * write that changes what a ticket shows. Undefined when live events are
+   * not wired.
+   */
+  function ticketChanged(org: OrgContext): TicketChangeListener | undefined {
+    return deps.liveEvents?.forTenant(org.tenantDb, org.orgSchema);
+  }
+
   return router({
     /**
      * Paginated client list with search and sort.
@@ -229,7 +253,11 @@ export function createClientRouter(deps: ClientRouterDeps) {
       .input(updateAliasInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
+          const svc = deps.createClientSvc(
+            ctx.org.tenantDb,
+            ctx.org.orgId,
+            ticketChanged(ctx.org),
+          );
           await svc.updateAlias(
             input.clientId,
             input.encryptedAlias,
@@ -297,7 +325,11 @@ export function createClientRouter(deps: ClientRouterDeps) {
           }
         }
 
-        const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
+        const svc = deps.createClientSvc(
+          ctx.org.tenantDb,
+          ctx.org.orgId,
+          ticketChanged(ctx.org),
+        );
         const result = await svc.updatePhone(
           input.clientId,
           input.phoneNumber,
@@ -521,7 +553,11 @@ export function createClientRouter(deps: ClientRouterDeps) {
           }
         }
 
-        const emailSvc = deps.createEmailSvc(ctx.org.tenantDb, ctx.org.orgId);
+        const emailSvc = deps.createEmailSvc(
+          ctx.org.tenantDb,
+          ctx.org.orgId,
+          ticketChanged(ctx.org),
+        );
         const result = await emailSvc.updateEmail(
           input.clientId,
           input.emailAddress,
@@ -567,6 +603,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
             input.clientId,
             ctx.org.orgId,
             ctx.user.id,
+            ctx.org.orgSchema,
           );
 
           return {

@@ -2,6 +2,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { CallTracker } from "./call-tracker.js";
 import { resolveInboundTicket } from "./resolve-inbound-ticket.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 import type { OrgSchema, QueueId } from "@care-y/shared";
 import { callSidSchema } from "@care-y/shared";
 
@@ -9,6 +10,8 @@ export interface CallStatusDeps {
   readonly callTracker: CallTracker;
   readonly getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>;
   readonly intakeQueueId: QueueId | null;
+  /** Called with the ticket id once the call follow-up is written. */
+  readonly onTicketChanged?: TicketChangeListener;
 }
 
 const TERMINAL_STATUSES = new Set([
@@ -89,4 +92,6 @@ export async function handleCallStatus(
         duration !== null && !Number.isNaN(duration) ? duration : null,
     })
     .execute();
+
+  deps.onTicketChanged?.(ticketId);
 }

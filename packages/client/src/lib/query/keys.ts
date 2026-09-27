@@ -22,10 +22,17 @@ export const authKeys = {
 export const ticketsKeys = {
   all: ["tickets"] as const,
   lists: () => [...ticketsKeys.all, "list"] as const,
-  list: (params: Record<string, unknown>) =>
-    [...ticketsKeys.lists(), params] as const,
+  list: (params: object) => [...ticketsKeys.lists(), params] as const,
   counts: () => [...ticketsKeys.all, "counts"] as const,
-  recentActivity: () => [...ticketsKeys.all, "recentActivity"] as const,
+  /** The dashboard feed. Without a filter, the root of every filtered key. */
+  recentActivity: (
+    filter?: Record<string, unknown>,
+  ):
+    | readonly ["tickets", "recentActivity"]
+    | readonly ["tickets", "recentActivity", Record<string, unknown>] =>
+    filter === undefined
+      ? ([...ticketsKeys.all, "recentActivity"] as const)
+      : ([...ticketsKeys.all, "recentActivity", filter] as const),
   myQueues: () => [...ticketsKeys.all, "myQueues"] as const,
   dashboardInfo: () => [...ticketsKeys.all, "dashboardInfo"] as const,
 
@@ -102,7 +109,12 @@ export const kbKeys = {
   item: (articleId: string) => [...kbKeys.all, "item", articleId] as const,
   categories: () => [...kbKeys.all, "categories"] as const,
   authors: () => [...kbKeys.all, "authors"] as const,
-  recentItems: () => [...kbKeys.all, "recentItems"] as const,
+  /**
+   * The dashboard's KB section: a single listItems page. Under items() so
+   * article changes refresh it, and apart from the library's paged lists.
+   */
+  dashboardItems: (params: Record<string, unknown>) =>
+    [...kbKeys.items(), "dashboard", params] as const,
   attachments: (articleId: string) =>
     [...kbKeys.all, "attachments", articleId] as const,
   vote: (articleId: string) => [...kbKeys.all, "vote", articleId] as const,

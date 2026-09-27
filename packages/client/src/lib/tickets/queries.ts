@@ -6,7 +6,13 @@
  * a reactive query instance.
  */
 
-import { createQuery, type CreateQueryResult } from "@tanstack/svelte-query";
+import {
+  createQuery,
+  type CreateInfiniteQueryOptions,
+  type CreateQueryResult,
+  type InfiniteData,
+  type QueryKey,
+} from "@tanstack/svelte-query";
 import type { TRPCClient } from "@trpc/client";
 import type { AppRouter } from "@care-y/server";
 import {
@@ -16,8 +22,91 @@ import {
   noteTypeKeys,
 } from "$lib/query/keys";
 import type { TicketForServerFilter } from "$lib/tickets/ticket-list-utils.js";
+import type { TicketListServerParams } from "$lib/stores/filters.svelte.js";
+import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
+import {
+  fetchReadStateWindow,
+  fetchSweepToExhaustion,
+  type ReadStateWindow,
+  type SweepReadStateEntry,
+} from "$lib/tickets/create-list-read-state.svelte.js";
 
 export type TicketRouter = NonNullable<TRPCClient<AppRouter>["tickets"]>;
+
+/** One row of a tickets.list page. */
+export type TicketListRow = Awaited<
+  ReturnType<TicketRouter["list"]["query"]>
+>[number];
+
+export type TicketListQueryOptions = CreateInfiniteQueryOptions<
+  TicketListRow[],
+  Error,
+  InfiniteData<TicketListRow[]>,
+  QueryKey,
+  string | undefined
+>;
+
+/**
+ * Options for a paged tickets.list query. The key sits under
+ * ticketsKeys.lists(), where shell search, the detail view and the
+ * list-wide optimistic updates find the rows. Paging follows the last
+ * row's id while pages come back full.
+ */
+export function ticketListQueryOptions(
+  ticketRouter: TicketRouter,
+  params: TicketListServerParams,
+): TicketListQueryOptions {
+  return {
+    queryKey: ticketsKeys.list(params),
+    queryFn: async ({ pageParam }) =>
+      ticketRouter.list.query({ ...params, cursor: pageParam }),
+    initialPageParam: undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.length >= params.limit
+        ? lastPage[lastPage.length - 1]?.id
+        : undefined,
+  };
+}
+
+export interface ReadStateQueries {
+  /** Every cursor row the user holds, paged to exhaustion. */
+  readonly sweepQuery: CreateQueryResult<SweepReadStateEntry[]>;
+  /** Per-ticket read state for the ids the list displays. */
+  readonly windowQuery: CreateQueryResult<ReadStateWindow>;
+}
+
+/**
+ * The two read-state queries a ticket list feeds to createListReadState.
+ * Both wait for the crypto session, since cursors decrypt in the Worker.
+ * `windowIds` is every row the list displays.
+ */
+export function createReadStateQueries(
+  ticketRouter: TicketRouter,
+  windowIds: () => readonly string[],
+): ReadStateQueries {
+  const sweepQuery = createQuery(() => ({
+    queryKey: ticketsKeys.readStateSweep(),
+    queryFn: async () =>
+      fetchSweepToExhaustion(async (cursor) =>
+        ticketRouter.readStateSweep.query({ cursor }),
+      ),
+    enabled: isCryptoKeyed(),
+  }));
+
+  const windowQuery = createQuery(() => {
+    const ids = windowIds();
+    return {
+      queryKey: ticketsKeys.readState(ids),
+      queryFn: async () =>
+        fetchReadStateWindow(ids, async (batch) =>
+          ticketRouter.listReadState.query({ ticketIds: batch }),
+        ),
+      enabled: isCryptoKeyed() && ids.length > 0,
+    };
+  });
+
+  return { sweepQuery, windowQuery };
+}
 type VolunteersData = Awaited<
   ReturnType<TicketRouter["listVolunteers"]["query"]>
 >;

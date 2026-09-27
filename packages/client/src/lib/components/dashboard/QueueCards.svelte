@@ -59,10 +59,7 @@
   {ontoggle}
 >
   {#if loading}
-    <div
-      class="queue-grid skeleton-pulse"
-      style:grid-template-columns="repeat(3, 1fr)"
-    >
+    <div class="queue-grid skeleton-pulse">
       {#each [1, 2, 3] as n (n)}
         <div class="queue-tile queue-tile-placeholder">
           <DecryptPlaceholder length={8} />
@@ -71,10 +68,7 @@
       {/each}
     </div>
   {:else if queues.length > 0}
-    <div
-      class="queue-grid"
-      style:grid-template-columns="repeat({Math.min(queues.length, 3)}, 1fr)"
-    >
+    <div class="queue-grid">
       {#each queues as queue (queue.id)}
         <button
           type="button"
@@ -102,10 +96,18 @@
 </CollapsibleSection>
 
 <style>
+  /* Columns follow the grid's own width, wherever the section sits: at
+     most three tiles across, each at least 92px (three still fit the
+     narrowest phone). auto-fit drops the unused tracks, so one or two
+     queues share the full width. */
   .queue-grid {
     display: grid;
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(max(92px, calc((100% - 2 * var(--space-lg)) / 3)), 1fr)
+    );
     gap: var(--space-lg);
-    padding: 0.25rem var(--page-pad-x) var(--space-lg);
+    padding: 0.25rem var(--section-inset, var(--page-pad-x)) var(--space-lg);
   }
 
   /* Inkwell tile: hairline-bordered card, no shadow. */
@@ -168,7 +170,7 @@
   }
 
   .no-queues {
-    padding: 0 var(--page-pad-x) var(--space-lg);
+    padding: 0 var(--section-inset, var(--page-pad-x)) var(--space-lg);
     font-size: var(--text-base);
     color: var(--muted);
   }

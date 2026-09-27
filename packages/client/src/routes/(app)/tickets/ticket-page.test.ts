@@ -251,8 +251,9 @@ let currentActiveCount = 0;
 
 vi.mock(
   "$lib/stores/filters.svelte.js",
-  () =>
+  async (importOriginal) =>
     ({
+      ...(await importOriginal<typeof FiltersNS>()),
       filterStore: {
         serverParams: {
           sortBy: "date",

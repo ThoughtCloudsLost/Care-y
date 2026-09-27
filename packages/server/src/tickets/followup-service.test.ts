@@ -15,6 +15,7 @@ import {
   type TicketAccessChecker,
 } from "./access.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
+import type { TicketChangeListener } from "./ticket-live-events.js";
 import * as crypto from "node:crypto";
 import {
   newFollowupId,
@@ -261,6 +262,53 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     const allIds = [...page1.map((f) => f.id), ...page2.map((f) => f.id)];
     expect(new Set(allIds).size).toBe(3);
     expect(new Set(allIds)).toEqual(new Set(ids));
+  });
+
+  // --- Live ticket events ---
+
+  it("announces the ticket on create, note edit and note delete", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+    const live = createFollowUpService(testDb.db, access, { onTicketChanged });
+
+    const fu = await live.create(userId, {
+      id: newFollowupId(),
+      ticketId,
+      encryptedContent: Buffer.from("live-note"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+    expect(onTicketChanged).toHaveBeenLastCalledWith(ticketId);
+
+    await live.updateInternalNote(userId, fu.id, Buffer.from("edited"));
+    expect(onTicketChanged).toHaveBeenLastCalledWith(ticketId);
+
+    await live.softDeleteInternalNote(userId, fu.id, false);
+    expect(onTicketChanged).toHaveBeenLastCalledWith(ticketId);
+    expect(onTicketChanged).toHaveBeenCalledTimes(3);
+  });
+
+  it("announces nothing when a note edit is rejected", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const otherUser = await createTestUser(testDb.db);
+    const fu = await svc.create(userId, {
+      id: newFollowupId(),
+      ticketId,
+      encryptedContent: Buffer.from("note"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+    });
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+    const live = createFollowUpService(testDb.db, access, { onTicketChanged });
+
+    await expect(
+      live.updateInternalNote(otherUser.id, fu.id, Buffer.from("edited")),
+    ).rejects.toThrow();
+    expect(onTicketChanged).not.toHaveBeenCalled();
   });
 
   // --- updateInternalNote ---

@@ -3,11 +3,13 @@
  * CollapsibleSection component tests.
  *
  * Verifies heading with count, aria-expanded, toggle callback,
- * conditional content rendering, and DecryptPlaceholder count badge.
+ * conditional content rendering, DecryptPlaceholder count badge, the
+ * header action and filter row slots, and the non-collapsible form.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { createRawSnippet } from "svelte";
 import CollapsibleSection from "./CollapsibleSection.svelte";
 
 // IntersectionObserver stub for DecryptPlaceholder
@@ -179,6 +181,22 @@ describe("CollapsibleSection", () => {
     expect(button.textContent).toContain("5 of 30");
   });
 
+  it("marks a floor total with a plus", () => {
+    render(CollapsibleSection, {
+      props: {
+        heading: "Unassigned",
+        count: 5,
+        totalCount: 30,
+        totalCountIsFloor: true,
+        expanded: false,
+        ontoggle: vi.fn(),
+      },
+    });
+
+    const button = screen.getByRole("button");
+    expect(button.textContent).toContain("5 of 30+");
+  });
+
   it("renders heading and icon regardless of loading state", () => {
     render(CollapsibleSection, {
       props: {
@@ -191,5 +209,114 @@ describe("CollapsibleSection", () => {
 
     const button = screen.getByRole("button");
     expect(button.textContent).toContain("Urgent");
+  });
+
+  it("puts the count in the toggle's accessible name", () => {
+    render(CollapsibleSection, {
+      props: {
+        heading: "Unassigned",
+        count: 5,
+        totalCount: 30,
+        expanded: false,
+        ontoggle: vi.fn(),
+      },
+    });
+
+    expect(
+      screen.getByRole("button", { name: /Unassigned.*5 of 30/ }),
+    ).toBeTruthy();
+  });
+
+  it("renders the header action beside the toggle", () => {
+    const headerAction = createRawSnippet(() => ({
+      render: () => `<button type="button">Filter Unassigned</button>`,
+    }));
+    render(CollapsibleSection, {
+      props: {
+        heading: "Unassigned",
+        expanded: false,
+        ontoggle: vi.fn(),
+        headerAction,
+      },
+    });
+
+    const action = screen.getByRole("button", { name: "Filter Unassigned" });
+    expect(action.closest(".section-header")).toBeTruthy();
+  });
+
+  it("keeps the filter row outside the collapsible region", () => {
+    const filterRow = createRawSnippet(() => ({
+      render: () => `<div data-testid="filter-row">pills</div>`,
+    }));
+    render(CollapsibleSection, {
+      props: {
+        heading: "Unassigned",
+        expanded: true,
+        ontoggle: vi.fn(),
+        filterRow,
+      },
+    });
+
+    const row = screen.getByTestId("filter-row");
+    expect(row.closest('[role="region"]')).toBeNull();
+  });
+
+  it("shows the filter row while the section is collapsed", () => {
+    const filterRow = createRawSnippet(() => ({
+      render: () => `<div data-testid="filter-row">pills</div>`,
+    }));
+    const { container } = render(CollapsibleSection, {
+      props: {
+        heading: "Unassigned",
+        expanded: false,
+        ontoggle: vi.fn(),
+        filterRow,
+      },
+    });
+
+    expect(container.querySelector('[role="region"]')).toBeNull();
+    expect(screen.getByTestId("filter-row")).toBeTruthy();
+  });
+
+  describe("not collapsible", () => {
+    function renderStatic(): HTMLElement {
+      const { container } = render(CollapsibleSection, {
+        props: {
+          heading: "My Tickets",
+          count: 4,
+          expanded: false,
+          ontoggle: vi.fn(),
+          collapsible: false,
+        },
+      });
+      return container;
+    }
+
+    it("renders a heading with no toggle", () => {
+      const container = renderStatic();
+      expect(screen.queryByRole("button")).toBeNull();
+      expect(
+        screen.getByRole("heading", { level: 2, name: /My Tickets.*4/ }),
+      ).toBeTruthy();
+      expect(container.querySelector(".toggle-chevron")).toBeNull();
+    });
+
+    it("always shows the body", () => {
+      const container = renderStatic();
+      expect(container.querySelector("#my-tickets-region")).toBeTruthy();
+    });
+
+    // With no toggle there is nothing for a region to be controlled by;
+    // the heading names the section, and a lane body that scrolls on its
+    // own takes the region role without repeating the name.
+    it("does not make the body a region", () => {
+      const container = renderStatic();
+      expect(container.querySelector('[role="region"]')).toBeNull();
+      expect(
+        container
+          .querySelector("#my-tickets-region")
+          ?.hasAttribute("aria-labelledby"),
+      ).toBe(false);
+    });
   });
 });

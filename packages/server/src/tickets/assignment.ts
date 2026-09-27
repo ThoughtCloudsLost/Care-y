@@ -13,6 +13,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { ShiftProvider } from "./shift-provider.js";
 import type { TicketAccessChecker } from "./access.js";
+import type { TicketChangeListener } from "./ticket-live-events.js";
 import { ForbiddenError, NotFoundError, TicketError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { TicketId, UserId } from "@care-y/shared";
@@ -44,10 +45,16 @@ export interface AssignmentService {
   ): Promise<void>;
 }
 
+export interface AssignmentServiceDeps {
+  /** Called with the ticket id after each committed assignment change. */
+  readonly onTicketChanged?: TicketChangeListener;
+}
+
 export function createAssignmentService(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
   shiftProvider: ShiftProvider,
+  deps?: AssignmentServiceDeps,
 ): AssignmentService {
   async function countOpenTickets(
     userIds: UserId[],
@@ -156,6 +163,7 @@ export function createAssignmentService(
       await createSystemFollowUp(ticketId, "volunteer_assigned", {
         userId: chosen,
       });
+      deps?.onTicketChanged?.(ticketId);
       return { assignedTo: chosen };
     },
 
@@ -189,6 +197,7 @@ export function createAssignmentService(
       }
 
       await createSystemFollowUp(ticketId, "volunteer_assigned", { userId });
+      deps?.onTicketChanged?.(ticketId);
     },
 
     async release(userId, ticketId) {
@@ -212,6 +221,7 @@ export function createAssignmentService(
         .execute();
 
       await createSystemFollowUp(ticketId, "volunteer_unassigned", { userId });
+      deps?.onTicketChanged?.(ticketId);
     },
 
     async assignTo(actorId, ticketId, targetUserId) {
@@ -259,6 +269,7 @@ export function createAssignmentService(
           userId: ticket.assigned_to,
         });
       }
+      deps?.onTicketChanged?.(ticketId);
     },
   };
 }

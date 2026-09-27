@@ -222,6 +222,7 @@ function buildDeps(
     accountSaltLimiter: null,
     accountLoginLimiter: null,
     oprfService: null,
+    liveEvents: null,
     ...overrides,
   };
 }

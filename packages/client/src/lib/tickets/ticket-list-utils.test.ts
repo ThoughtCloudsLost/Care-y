@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { ticketSortFieldSchema, type ReactionSummary } from "@care-y/shared";
+import type * as Runtime from "$lib/paraglide/runtime.js";
 import {
   isFilterStatus,
   isSortField,
@@ -14,11 +15,28 @@ import {
   resolveEmptyKind,
   showCaughtUpLine,
   resolveGridColumns,
+  estimateTicketCardHeight,
   GRID_CARD_MIN_WIDTH,
   VALID_STATUSES,
   SORT_FIELDS,
 } from "./ticket-list-utils.js";
 import type { DisplayStatus } from "./display-status.js";
+
+// vi.mock required: the compiled Paraglide messages read the active locale
+// through the runtime's getLocale() at call time, and there is no seam to
+// spy on from the message module itself. Spreading importOriginal keeps
+// every other runtime export real.
+let mockLocale = "en";
+vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof Runtime>()),
+  getLocale: () => mockLocale,
+}));
+
+// Restore in a hook, not at the end of the test body: a test that fails
+// partway would otherwise leave the locale switched for everything after it.
+afterEach(() => {
+  mockLocale = "en";
+});
 
 describe("isFilterStatus", () => {
   it.each(["new", "active", "hold", "closed"])("returns true for '%s'", (v) => {
@@ -351,6 +369,8 @@ describe("buildDateRangeLabel", () => {
   });
 });
 
+// Labels come from the English messages, and the queue term from the
+// default terminology the test setup provides.
 describe("buildFilterSummary", () => {
   it("returns 'No filters' when nothing active", () => {
     expect(
@@ -366,7 +386,7 @@ describe("buildFilterSummary", () => {
     ).toBe("No filters");
   });
 
-  it("includes statuses", () => {
+  it("names statuses by their pill labels", () => {
     expect(
       buildFilterSummary(
         new Set(["new", "active"]),
@@ -377,10 +397,10 @@ describe("buildFilterSummary", () => {
         false,
         false,
       ),
-    ).toBe("new, active");
+    ).toBe("New, Active");
   });
 
-  it("includes priorities", () => {
+  it("names priorities by their labels", () => {
     expect(
       buildFilterSummary(
         new Set(),
@@ -391,10 +411,10 @@ describe("buildFilterSummary", () => {
         false,
         false,
       ),
-    ).toBe("high");
+    ).toBe("High");
   });
 
-  it("includes queue count with pluralization", () => {
+  it("counts queues in the configured term, singular and plural", () => {
     expect(
       buildFilterSummary(
         new Set(),
@@ -430,12 +450,26 @@ describe("buildFilterSummary", () => {
         false,
         false,
       ),
-    ).toBe("assigned");
+    ).toBe("Assignee");
   });
 
-  it("does not include assignee when null", () => {
+  it("names the Unassigned filter when assignee is null", () => {
     expect(
       buildFilterSummary(new Set(), new Set(), 0, null, false, false, false),
+    ).toBe("Unassigned");
+  });
+
+  it("omits assignee when there is no assignee filter", () => {
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        false,
+        false,
+        false,
+      ),
     ).toBe("No filters");
   });
 
@@ -450,7 +484,7 @@ describe("buildFilterSummary", () => {
         false,
         false,
       ),
-    ).toBe("date range");
+    ).toBe("Date");
   });
 
   it("joins multiple parts", () => {
@@ -464,7 +498,7 @@ describe("buildFilterSummary", () => {
         false,
         false,
       ),
-    ).toBe("new, high, 2 queues, assigned, date range");
+    ).toBe("New, High, 2 queues, Assignee, Date");
   });
 
   it("includes Unread when unreadOnly is true", () => {
@@ -506,7 +540,35 @@ describe("buildFilterSummary", () => {
         true,
         true,
       ),
-    ).toBe("new, Unread, Needs attention");
+    ).toBe("New, Unread, Needs attention");
+  });
+
+  it("reads in the active locale, the queue term still the org's own", () => {
+    mockLocale = "es";
+    expect(
+      buildFilterSummary(
+        new Set(["hold"]),
+        new Set(["urgent"]),
+        2,
+        "u1",
+        true,
+        true,
+        true,
+      ),
+    ).toBe(
+      "En espera, Urgente, 2 queues, Asignado, Fecha, Sin leer, Necesita atención",
+    );
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        false,
+        false,
+        false,
+      ),
+    ).toBe("Sin filtros");
   });
 });
 
@@ -652,5 +714,13 @@ describe("resolveGridColumns", () => {
     expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 2)).toBe(2);
     expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 3)).toBe(3);
     expect(resolveGridColumns(1280)).toBe(4);
+  });
+});
+
+describe("estimateTicketCardHeight", () => {
+  it("guesses a short row for list mode and a tall card otherwise", () => {
+    expect(estimateTicketCardHeight("list")).toBe(72);
+    expect(estimateTicketCardHeight("cards")).toBe(210);
+    expect(estimateTicketCardHeight("grid")).toBe(200);
   });
 });

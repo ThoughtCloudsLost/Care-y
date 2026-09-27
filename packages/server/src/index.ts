@@ -28,7 +28,7 @@ import type {
 import { createServer } from "node:http";
 import { hkdfSync } from "node:crypto";
 import { createHTTPHandler } from "@trpc/server/adapters/standalone";
-import { db, tenantDb } from "./db/db.js";
+import { db, pgConnectionConfig, tenantDb } from "./db/db.js";
 import { sql } from "kysely";
 import { getEnv, type EnvVars } from "./env.js";
 import { createOrgService } from "./org/service.js";
@@ -112,8 +112,14 @@ import { createWebhookDispatch } from "./telephony/webhook-dispatch.js";
 import { createTicketAccessChecker } from "./tickets/access.js";
 import {
   createTicketService,
+  listTicketIdsForClients,
   type PendingClient,
 } from "./tickets/ticket-service.js";
+import { createTicketLiveEvents } from "./tickets/ticket-live-events.js";
+import {
+  createPgNotificationClient,
+  createTicketChangeNoticeListener,
+} from "./tickets/ticket-change-listener.js";
 import { createFollowUpService } from "./tickets/followup-service.js";
 import { portalReplyChannelKey } from "./routes/client-portal.js";
 import { createReadCursorService } from "./tickets/read-cursor-service.js";
@@ -546,6 +552,18 @@ const notificationService = createNotificationService({
   getReachabilityForUsers,
 });
 
+// Live ticket-change events share the SSE stream but not the outbox.
+const ticketLiveEvents = createTicketLiveEvents({ sse: sseService });
+
+// Inbound email is ingested in its own process, which has no SSE streams.
+// Its ticket changes reach this process as Postgres notices.
+const ticketChangeNotices = createTicketChangeNoticeListener({
+  createClient: () => createPgNotificationClient(pgConnectionConfig),
+  getTenantDb: tenantDb,
+  liveEvents: ticketLiveEvents,
+});
+await ticketChangeNotices.start();
+
 const createContext = createContextFactory({
   orgService,
   hasher,
@@ -705,6 +723,7 @@ const appRouter = createAppRouter({
       windowMs: RATE_WINDOW_1M,
       maxRequests: RATE_RESEED_BLOB_MAX,
     }),
+    liveEvents: ticketLiveEvents,
   },
   kbDeps: {
     createCategorySvc: createKBCategoryService,
@@ -793,6 +812,7 @@ const appRouter = createAppRouter({
     }),
     // Channel OPRF deps (ADR-091)
     oprfService,
+    liveEvents: ticketLiveEvents,
   },
   brandingDeps: {
     blobStore,
@@ -817,9 +837,10 @@ const appRouter = createAppRouter({
   voicemailQuarantineDeps: {
     blobStore,
     pendingClients,
+    liveEvents: ticketLiveEvents,
   },
   clientDeps: {
-    createClientSvc: (tDb, orgId) =>
+    createClientSvc: (tDb, orgId, onTicketChanged) =>
       createClientService({
         db: tDb,
         audit: createAuditService(tDb),
@@ -827,14 +848,16 @@ const appRouter = createAppRouter({
         indexer,
         mergeService: createMergeService(tDb),
         orgId,
+        onTicketChanged,
       }),
-    createEmailSvc: (tDb, orgId) =>
+    createEmailSvc: (tDb, orgId, onTicketChanged) =>
       createEmailService({
         db: tDb,
         audit: createAuditService(tDb),
         encryptor,
         indexer,
         orgId,
+        onTicketChanged,
       }),
     fieldEncryptor: encryptor,
     async isAssignedToClientTicket(tDb, clientId, userId) {
@@ -848,12 +871,19 @@ const appRouter = createAppRouter({
     },
     createDismissalSvc: (tDb) => createDismissalService(tDb),
     createMergeScanSvc: (tDb) => createMergeScanService(tDb),
-    async purgeClientAndAudit(tDb, clientId, orgId, actorId) {
+    async purgeClientAndAudit(tDb, clientId, orgId, actorId, orgSchema) {
+      // Resolved before the purge: afterwards no row says who could see them.
+      const emitRemoved = await ticketLiveEvents.captureRemovals(
+        tDb,
+        orgSchema,
+        await listTicketIdsForClients(tDb, [clientId]),
+      );
       const result = await tDb
         .transaction()
         .execute(async (trx) =>
           purgeClient(trx, clientId, blobStore, jobQueue, orgId),
         );
+      emitRemoved();
       const auditSvc = createAuditService(tDb);
       void auditSvc.log({
         eventType: "client_deleted",
@@ -869,6 +899,7 @@ const appRouter = createAppRouter({
         blobsDeleted: result.blobsDeleted,
       };
     },
+    liveEvents: ticketLiveEvents,
   },
   devDeps: env.NODE_ENV !== "production" ? { blobStore } : null,
 });
@@ -951,7 +982,8 @@ registerNotificationSmsHandler(jobQueue, {
 registerEscalationHandler(jobQueue, async () => {
   const schemas = await listActiveOrgSchemas();
   for (const schema of schemas) {
-    await escalateTenantTickets(tenantDb(schema));
+    const tDb = tenantDb(schema);
+    await escalateTenantTickets(tDb, ticketLiveEvents.forTenant(tDb, schema));
   }
 });
 
@@ -994,10 +1026,16 @@ registerPortalExpiryHandler(jobQueue, async () => {
 
 registerShareCleanupHandler(jobQueue, tenantDb, listActiveOrgSchemas);
 
-registerPiiRetentionHandler(jobQueue, tenantDb, blobStore, async () => {
-  const orgs = await listActiveOrgSchemasWithSlugs();
-  return orgs.map((o) => ({ id: o.id, schema: o.schema }));
-});
+registerPiiRetentionHandler(
+  jobQueue,
+  tenantDb,
+  blobStore,
+  async () => {
+    const orgs = await listActiveOrgSchemasWithSlugs();
+    return orgs.map((o) => ({ id: o.id, schema: o.schema }));
+  },
+  ticketLiveEvents,
+);
 
 // Notification outbox drain: polls tenant outbox tables for durable
 // intake notification dispatch (~5 second interval).
@@ -1055,6 +1093,7 @@ const webhookDispatch = createWebhookDispatch({
   webhookBaseUrl: env.WEBHOOK_BASE_URL,
   callTracker,
   notificationService,
+  liveEvents: ticketLiveEvents,
 });
 
 // --- Webhook handler ---
@@ -1345,6 +1384,7 @@ async function shutdown(signal: string): Promise<void> {
   zeroAllPendingCalls(pendingCalls);
   zeroAllPendingClients(pendingClients);
   await jobQueue.stop();
+  await ticketChangeNotices.stop();
   await db.destroy();
   process.exit(0);
 }

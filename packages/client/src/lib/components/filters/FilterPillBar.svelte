@@ -1,19 +1,13 @@
 <script lang="ts">
-  import {
-    Button,
-    Link,
-    Icon,
-    List,
-    ListItem,
-    ListInput,
-    Checkbox,
-  } from "konsta/svelte";
+  import type { Snippet } from "svelte";
+  import { Button, List, ListItem, ListInput, Checkbox } from "konsta/svelte";
   import { Bookmark, Check } from "@lucide/svelte";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import Skeleton from "$lib/components/Skeleton.svelte";
   import FilterPill from "./FilterPill.svelte";
+  import BadgedIconButton from "./BadgedIconButton.svelte";
   import type { PillDefinition } from "./filter-types.js";
 
   interface Props {
@@ -37,6 +31,8 @@
     onclearall: () => void;
     /** Called when the create-shortcut button is tapped */
     oncreateshortcut?: () => void;
+    /** Rendered at the start of the bar, before the pills. */
+    leading?: Snippet;
     // i18n label overrides (defaults to ticket-style labels from messages)
     filterLabel?: string;
     allLabel?: string;
@@ -59,6 +55,7 @@
     ondatechange,
     onclearall,
     oncreateshortcut,
+    leading,
     filterLabel,
     allLabel,
     clearLabel,
@@ -190,15 +187,17 @@
 
 <div class="filter-pill-bar" role="toolbar" aria-label={resolvedFilterLabel}>
   {#if activeCount > 0 && oncreateshortcut}
-    <Link
-      iconOnly
-      role="button"
-      class="bookmark-link"
-      aria-label={resolvedCreateShortcutLabel}
-      onclick={() => oncreateshortcut()}
+    <BadgedIconButton
+      label={resolvedCreateShortcutLabel}
+      count={activeCount}
+      onclick={oncreateshortcut}
     >
-      <Icon badge={String(activeCount)}><Bookmark size={18} /></Icon>
-    </Link>
+      <Bookmark size={18} aria-hidden="true" />
+    </BadgedIconButton>
+  {/if}
+
+  {#if leading}
+    {@render leading()}
   {/if}
 
   <div class="pill-scroll">
@@ -345,10 +344,6 @@
 
   .pill-scroll::-webkit-scrollbar {
     display: none;
-  }
-
-  :global(.bookmark-link) {
-    flex-shrink: 0;
   }
 
   .popover-scroll {

@@ -15,6 +15,7 @@ import { type Kysely, sql } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { ValidationError } from "../errors.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 import type {
   ShareId,
   TicketId,
@@ -84,6 +85,7 @@ export interface ShareStatusRow {
 export async function createShare(
   db: Kysely<TenantDatabase>,
   input: CreateShareRow,
+  deps?: { readonly onTicketChanged?: TicketChangeListener },
 ): Promise<{ expiresAt: Date }> {
   // Verify the ticket exists before opening the transaction
   const ticket = await db
@@ -131,6 +133,7 @@ export async function createShare(
     return link.expires_at;
   });
 
+  deps?.onTicketChanged?.(input.ticketId);
   return { expiresAt };
 }
 

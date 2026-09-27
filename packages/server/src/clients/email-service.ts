@@ -18,6 +18,10 @@ import type {
 } from "../crypto/field-encryptor.js";
 import { NotFoundError, ConflictError } from "../errors.js";
 import { isPgUniqueViolation } from "../db/pg-errors.js";
+import {
+  announceClientTickets,
+  type TicketChangeListener,
+} from "../tickets/ticket-live-events.js";
 import { ErrorCode, emailHashSchema } from "@care-y/shared";
 import type {
   ClientId,
@@ -70,6 +74,8 @@ export interface EmailServiceDeps {
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
   readonly orgId: OrgId;
+  /** Told about each ticket of a client whose email changed. */
+  readonly onTicketChanged?: TicketChangeListener;
 }
 
 export function createEmailService(deps: EmailServiceDeps): EmailService {
@@ -166,6 +172,7 @@ export function createEmailService(deps: EmailServiceDeps): EmailService {
           await trx.deleteFrom("emails").where("id", "=", oldEmailId).execute();
         }
       });
+      void announceClientTickets(db, clientId, deps.onTicketChanged);
 
       await audit.log({
         eventType: "client_email_changed",

@@ -6,7 +6,7 @@
  */
 
 import crypto from "node:crypto";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { Kysely } from "kysely";
 import { getSodium } from "@care-y/crypto";
 import type { TenantDatabase } from "../db/types.js";
@@ -26,7 +26,9 @@ import {
 import {
   createTestDb,
   createTestClientFixture,
+  createTestClientTicketsFixture,
   createTestTicketFixture,
+  expectClientTicketsAnnounced,
   noopEncryptor,
   fakeTriple,
   type TestDb,
@@ -40,6 +42,7 @@ import {
   addPassphrase,
   type ChannelRegistration,
 } from "./channel-service.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 import {
   ChannelAlreadyActiveError,
   PassphraseAlreadySetError,
@@ -507,6 +510,67 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
         .where("id", "=", clientId)
         .executeTakeFirstOrThrow();
       expect(afterSecond.communication_tier).toBe("secure_link");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Client ticket announcements
+  // -----------------------------------------------------------------------
+
+  describe("client ticket announcements", () => {
+    it("createChannel announces every ticket of the client", async () => {
+      const fixture = await createTestClientTicketsFixture(db);
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+
+      await createChannel(db, fixture.clientId, makeRegistration(), {
+        onTicketChanged,
+      });
+
+      expectClientTicketsAnnounced(onTicketChanged, fixture);
+    });
+
+    it("createChannel announces nothing when the constraint rejects it", async () => {
+      const fixture = await createTestClientTicketsFixture(db);
+      await createChannel(db, fixture.clientId, makeRegistration());
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+
+      await expect(
+        createChannel(db, fixture.clientId, makeRegistration(), {
+          onTicketChanged,
+        }),
+      ).rejects.toThrow(ChannelAlreadyActiveError);
+      expect(onTicketChanged).not.toHaveBeenCalled();
+    });
+
+    it("regenerateChannel announces every ticket of the client", async () => {
+      const fixture = await createTestClientTicketsFixture(db);
+      await createChannel(db, fixture.clientId, makeRegistration());
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+
+      await regenerateChannel(db, fixture.clientId, makeRegistration(), {
+        onTicketChanged,
+      });
+
+      expectClientTicketsAnnounced(onTicketChanged, fixture);
+    });
+
+    it("revokeChannel announces every ticket of the client after a revocation", async () => {
+      const fixture = await createTestClientTicketsFixture(db);
+      await createChannel(db, fixture.clientId, makeRegistration());
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+
+      await revokeChannel(db, fixture.clientId, { onTicketChanged });
+
+      expectClientTicketsAnnounced(onTicketChanged, fixture);
+    });
+
+    it("revokeChannel announces nothing when no channel was active", async () => {
+      const fixture = await createTestClientTicketsFixture(db);
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+
+      await revokeChannel(db, fixture.clientId, { onTicketChanged });
+
+      expect(onTicketChanged).not.toHaveBeenCalled();
     });
   });
 

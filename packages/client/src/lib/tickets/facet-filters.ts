@@ -34,6 +34,18 @@ export interface FacetFilterState {
   readonly needsAttentionOnly: boolean;
 }
 
+/** No dimension filtered: with a base, it matches exactly the base's rows. */
+export const NO_FACET_FILTERS: FacetFilterState = {
+  statuses: new Set(),
+  queueIds: new Set(),
+  priorities: new Set(),
+  assigneeId: undefined,
+  dateFrom: null,
+  dateTo: null,
+  unreadOnly: false,
+  needsAttentionOnly: false,
+};
+
 export interface FacetContext {
   readonly currentUserId: string | undefined;
   readonly isUnread: (ticketId: string) => boolean;
@@ -51,16 +63,47 @@ export interface TicketFacets {
 }
 
 /**
+ * The facet dimensions of a filter store, as a plain object. Build it
+ * inside a $derived: the object is rebuilt when a single-value field
+ * changes, and the multi-select sets pass through live, so their
+ * contents are tracked wherever the counts read them.
+ */
+export function facetFiltersOf(store: FacetFilterState): FacetFilterState {
+  return {
+    statuses: store.statuses,
+    queueIds: store.queueIds,
+    priorities: store.priorities,
+    assigneeId: store.assigneeId,
+    dateFrom: store.dateFrom,
+    dateTo: store.dateTo,
+    unreadOnly: store.unreadOnly,
+    needsAttentionOnly: store.needsAttentionOnly,
+  };
+}
+
+/**
+ * A fixed membership rule applied beneath the user's filters, such as a
+ * dashboard lane's "open and assigned to me". It is never part of the
+ * user's filter state, so an empty set there still means "no filter".
+ */
+export type FacetBase = (row: TicketForServerFilter) => boolean;
+
+/**
  * Returns true when the row passes every active filter dimension,
  * except the one named by `exclude` (which is skipped entirely).
  * Date range applies unconditionally regardless of the `exclude` argument.
+ * When `base` is given the row must also satisfy it; `exclude` never
+ * skips the base.
  */
 export function matchesFilters(
   row: TicketForServerFilter,
   filters: FacetFilterState,
   ctx: FacetContext,
   exclude?: FacetDimension,
+  base?: FacetBase,
 ): boolean {
+  if (base !== undefined && !base(row)) return false;
+
   // Status
   if (exclude !== "status" && filters.statuses.size > 0) {
     const ds = deriveDisplayStatus(row.status, row.onHold, row.followUpCount);
@@ -112,13 +155,33 @@ export function matchesFilters(
 }
 
 /**
+ * Rows passing every active filter and the base, in one pass. Equal to
+ * `computeFacets(...).total` for the same inputs, without the per-option
+ * passes, for callers that need the count but not the option counts.
+ */
+export function countMatches(
+  rows: readonly TicketForServerFilter[],
+  filters: FacetFilterState,
+  ctx: FacetContext,
+  base?: FacetBase,
+): number {
+  let total = 0;
+  for (const row of rows) {
+    if (matchesFilters(row, filters, ctx, undefined, base)) total++;
+  }
+  return total;
+}
+
+/**
  * Computes facet counts for every dimension, excluding each dimension's
- * own filter from its own counts.
+ * own filter from its own counts. When `base` is given, every count and
+ * `total` include only rows inside it.
  */
 export function computeFacets(
   rows: readonly TicketForServerFilter[],
   filters: FacetFilterState,
   ctx: FacetContext,
+  base?: FacetBase,
 ): TicketFacets {
   // Status facet. Counted into a Map and then spelled out, the same way
   // the queue facet below works. Tallying into a plain object needs a
@@ -127,7 +190,7 @@ export function computeFacets(
   // whether or not any row matched.
   const statusTally = new Map<DisplayStatus, number>();
   for (const row of rows) {
-    if (matchesFilters(row, filters, ctx, "status")) {
+    if (matchesFilters(row, filters, ctx, "status", base)) {
       const ds = deriveDisplayStatus(row.status, row.onHold, row.followUpCount);
       statusTally.set(ds, (statusTally.get(ds) ?? 0) + 1);
     }
@@ -143,7 +206,7 @@ export function computeFacets(
   // a row carrying anything else has no option to be counted under.
   const priorityTally = new Map<string, number>();
   for (const row of rows) {
-    if (matchesFilters(row, filters, ctx, "priority")) {
+    if (matchesFilters(row, filters, ctx, "priority", base)) {
       priorityTally.set(
         row.priority,
         (priorityTally.get(row.priority) ?? 0) + 1,
@@ -160,7 +223,7 @@ export function computeFacets(
   // Queue facet
   const queue = new Map<string, number>();
   for (const row of rows) {
-    if (matchesFilters(row, filters, ctx, "queue")) {
+    if (matchesFilters(row, filters, ctx, "queue", base)) {
       queue.set(row.queueId, (queue.get(row.queueId) ?? 0) + 1);
     }
   }
@@ -169,7 +232,7 @@ export function computeFacets(
   let mine = 0;
   let unassigned = 0;
   for (const row of rows) {
-    if (matchesFilters(row, filters, ctx, "assignee")) {
+    if (matchesFilters(row, filters, ctx, "assignee", base)) {
       if (row.assignedTo === null) unassigned++;
       if (
         ctx.currentUserId !== undefined &&
@@ -183,7 +246,10 @@ export function computeFacets(
   // Unread facet
   let unreadCount = 0;
   for (const row of rows) {
-    if (matchesFilters(row, filters, ctx, "unread") && ctx.isUnread(row.id)) {
+    if (
+      matchesFilters(row, filters, ctx, "unread", base) &&
+      ctx.isUnread(row.id)
+    ) {
       unreadCount++;
     }
   }
@@ -192,17 +258,11 @@ export function computeFacets(
   let needsAttentionCount = 0;
   for (const row of rows) {
     if (
-      matchesFilters(row, filters, ctx, "needsAttention") &&
+      matchesFilters(row, filters, ctx, "needsAttention", base) &&
       isNeedsAttention(row, ctx.currentUserId, ctx.isUnread)
     ) {
       needsAttentionCount++;
     }
-  }
-
-  // Total (no exclusion)
-  let total = 0;
-  for (const row of rows) {
-    if (matchesFilters(row, filters, ctx)) total++;
   }
 
   return {
@@ -212,6 +272,7 @@ export function computeFacets(
     assignee: { mine, unassigned },
     unread: unreadCount,
     needsAttention: needsAttentionCount,
-    total,
+    // Total (no exclusion)
+    total: countMatches(rows, filters, ctx, base),
   };
 }

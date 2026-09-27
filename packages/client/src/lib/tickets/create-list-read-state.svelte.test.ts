@@ -9,6 +9,7 @@ import {
 } from "$lib/crypto/ticket-decrypt-cache.js";
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
 import {
+  collectKeyWraps,
   createListReadState,
   fetchReadStateWindow,
   fetchSweepToExhaustion,
@@ -636,5 +637,49 @@ describe("fetchSweepToExhaustion", () => {
       Promise.resolve({ items: [], nextCursor: null }),
     );
     expect(items).toEqual([]);
+  });
+});
+
+describe("collectKeyWraps", () => {
+  const wrap = (tag: string): TicketKeyWrap => ({
+    ephemeralPoint: `ep-${tag}`,
+    nonce: `n-${tag}`,
+    wrappedKey: `k-${tag}`,
+  });
+
+  function wrapOnlyEntry(
+    ticketId: string,
+    keyWrap: TicketKeyWrap | null,
+  ): SweepReadStateEntry {
+    return {
+      ticketId,
+      encryptedReadCursor: "cursor",
+      latestActivityAt: null,
+      keyWrap,
+    };
+  }
+
+  it("takes wraps from the sweep for tickets with no row", () => {
+    const map = collectKeyWraps([wrapOnlyEntry("t1", wrap("sweep"))]);
+    expect(map.get("t1")).toEqual(wrap("sweep"));
+  });
+
+  it("skips sweep entries without a wrap", () => {
+    const map = collectKeyWraps([wrapOnlyEntry("t1", null)]);
+    expect(map.has("t1")).toBe(false);
+  });
+
+  it("lets a row's own wrap win, later row sets over earlier ones", () => {
+    const map = collectKeyWraps(
+      [wrapOnlyEntry("t1", wrap("sweep"))],
+      [{ id: "t1", keyWrap: wrap("pinned") }],
+      [{ id: "t1", keyWrap: wrap("list") }],
+    );
+    expect(map.get("t1")).toEqual(wrap("list"));
+  });
+
+  it("works before the sweep lands", () => {
+    const map = collectKeyWraps(undefined, [{ id: "t1", keyWrap: null }]);
+    expect(map.get("t1")).toBeNull();
   });
 });

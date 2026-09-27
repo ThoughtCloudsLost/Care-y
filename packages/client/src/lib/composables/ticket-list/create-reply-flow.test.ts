@@ -141,6 +141,19 @@ describe("createReplyFlow", () => {
       });
       spy.mockRestore();
     });
+
+    // A first reply moves the ticket from New to Active, so the facet
+    // counts that label status filters must refresh too.
+    it("invalidates the facet index", () => {
+      const spy = vi.spyOn(qc, "invalidateQueries");
+      const flow = make();
+      flow.handleReplySent("t1");
+
+      expect(spy).toHaveBeenCalledWith({
+        queryKey: ["tickets", "facetIndex"],
+      });
+      spy.mockRestore();
+    });
   });
 
   describe("dismiss", () => {

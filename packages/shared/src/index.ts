@@ -300,6 +300,8 @@ export {
   uploadAttachmentInputSchema,
   ticketListInputSchema,
   recentFollowUpsInputSchema,
+  RECENT_FOLLOW_UPS_MAX_TICKET_IDS,
+  recentActivityInputSchema,
   listReadStateInputSchema,
   sweepReadStateInputSchema,
   ticketFacetIndexInputSchema,
@@ -342,6 +344,7 @@ export {
   type UploadAttachmentInput,
   type TicketListInput,
   type RecentFollowUpsInput,
+  type RecentActivityInput,
   type ListReadStateInput,
   type SweepReadStateInput,
   type TicketFacetIndexInput,
@@ -509,6 +512,8 @@ export {
   type SseEvent,
   type SystemSseEvent,
   type AnySseEvent,
+  liveEventTypeSchema,
+  type LiveEventType,
   type PushSubscriptionInput,
   type UnsubscribePushInput,
   type MetadataSearchInput,
@@ -828,7 +833,10 @@ export {
 } from "./schemas/intake-ticket-composition.js";
 
 // --- Protocol limits ---
-export { READ_STATE_TIMESTAMPS_PER_TICKET } from "./schemas/limits.js";
+export {
+  READ_STATE_TIMESTAMPS_PER_TICKET,
+  FILTER_ID_LIST_MAX,
+} from "./schemas/limits.js";
 
 // --- Branded identifier types (ADR-074) ---
 // Schemas are exported for wire boundaries so tRPC inputs arrive branded.
@@ -1059,3 +1067,42 @@ export {
   CLIENT_CHANNEL_PERMISSIONS,
   type ClientChannel,
 } from "./channel-permissions.js";
+
+// --- Per-user preference document schemas ---
+export {
+  prefBlobKindSchema,
+  prefBlobEnvelopeSchema,
+  prefBlobGetInputSchema,
+  prefBlobPutInputSchema,
+  PREF_BLOB_MAX_PAYLOAD_BYTES,
+  type PrefBlobKind,
+  type PrefBlobEnvelopeInput,
+  type PrefBlobGetInput,
+  type PrefBlobPutInput,
+} from "./schemas/pref-blobs.js";
+
+// --- Self-blob envelope schema factory ---
+export {
+  selfBlobEnvelopeSchema,
+  type SelfBlobEnvelopeSchema,
+} from "./schemas/self-blob.js";
+
+// --- Dashboard filters preference document ---
+export {
+  dashboardLaneIdSchema,
+  laneFilterStateSchema,
+  dashboardActivityKindSchema,
+  dashboardActivityFilterSchema,
+  mergeMatchKindSchema,
+  dashboardKbFilterSchema,
+  dashboardMergeFilterSchema,
+  dashboardFiltersDocumentSchema,
+  type DashboardLaneId,
+  type LaneFilterState,
+  type DashboardActivityKind,
+  type DashboardActivityFilter,
+  type MergeMatchKind,
+  type DashboardKbFilter,
+  type DashboardMergeFilter,
+  type DashboardFiltersDocument,
+} from "./schemas/pref-blobs.js";

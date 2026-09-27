@@ -1,4 +1,5 @@
 import { deriveDisplayStatus, type DisplayStatus } from "./display-status.js";
+import { priorityLabel } from "./priority-labels.js";
 import {
   ticketSortFieldSchema,
   type TicketSortField,
@@ -6,6 +7,10 @@ import {
   type ReactionSummary,
 } from "@care-y/shared";
 import type { FuzzyMatch } from "$lib/search/fuzzy.js";
+import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
+import * as m from "$lib/paraglide/messages.js";
+import { withTerms } from "$lib/terminology/with-terms.js";
+import { joinFilterSummary } from "$lib/utils/filter-summary.js";
 
 export type FilterStatus = DisplayStatus;
 export type SortField = TicketSortField;
@@ -189,6 +194,23 @@ export function buildDateRangeLabel(
   return labels.range;
 }
 
+// The status pill's option labels, in pill order. Map lookup rather
+// than object indexing, per the lint security rules.
+export const STATUS_FILTER_LABELS: ReadonlyMap<string, () => string> = new Map<
+  string,
+  () => string
+>([
+  ["new", m.tickets_filter_new],
+  ["active", m.tickets_filter_active],
+  ["hold", m.tickets_filter_hold],
+  ["closed", m.tickets_filter_closed],
+]);
+
+/**
+ * The save-filter dialog's preview of the active ticket filters. Statuses
+ * and priorities read as their pill labels; filters with no nameable value
+ * (a chosen assignee, a date range) read as the pill's own label.
+ */
 export function buildFilterSummary(
   statuses: ReadonlySet<string>,
   priorities: ReadonlySet<string>,
@@ -199,16 +221,30 @@ export function buildFilterSummary(
   needsAttentionOnly: boolean,
 ): string {
   const parts: string[] = [];
-  if (statuses.size > 0) parts.push([...statuses].join(", "));
-  if (priorities.size > 0) parts.push([...priorities].join(", "));
-  if (queueCount > 0) {
-    parts.push(`${String(queueCount)} queue${queueCount > 1 ? "s" : ""}`);
+  for (const status of statuses) {
+    parts.push(STATUS_FILTER_LABELS.get(status)?.() ?? status);
   }
-  if (assigneeId !== null && assigneeId !== undefined) parts.push("assigned");
-  if (hasDateRange) parts.push("date range");
-  if (unreadOnly) parts.push("Unread");
-  if (needsAttentionOnly) parts.push("Needs attention");
-  return parts.length > 0 ? parts.join(", ") : "No filters";
+  for (const priority of priorities) parts.push(priorityLabel(priority));
+  if (queueCount > 0) {
+    parts.push(
+      queueCount === 1
+        ? m.tickets_filter_summary_queues_one(withTerms({ count: queueCount }))
+        : m.tickets_filter_summary_queues_other(
+            withTerms({ count: queueCount }),
+          ),
+    );
+  }
+  // Undefined is "no assignee filter"; null is the Unassigned option, which
+  // is an active filter and uses the assignee pill's own label for it.
+  if (assigneeId === null) {
+    parts.push(m.tickets_unassigned());
+  } else if (assigneeId !== undefined) {
+    parts.push(m.tickets_filter_assignee());
+  }
+  if (hasDateRange) parts.push(m.tickets_filter_date_range());
+  if (unreadOnly) parts.push(m.tickets_filter_unread());
+  if (needsAttentionOnly) parts.push(m.tickets_filter_needs_attention());
+  return joinFilterSummary(parts);
 }
 
 export type TicketListEmptyKind =
@@ -272,6 +308,20 @@ export const GRID_CARD_MIN_WIDTH = 320;
  */
 export function resolveGridColumns(containerWidth: number): number {
   return Math.max(2, Math.floor(containerWidth / GRID_CARD_MIN_WIDTH));
+}
+
+/**
+ * Card count at which a ticket card list switches to virtualized
+ * rendering. Cards are heavy (previews, decrypts), so lower than the
+ * VirtualList default.
+ */
+export const TICKET_CARD_VIRTUALIZE_THRESHOLD = 200;
+
+/** First-guess card height in px per view mode, before rows are measured. */
+export function estimateTicketCardHeight(viewMode: ViewMode): number {
+  if (viewMode === "list") return 72;
+  if (viewMode === "cards") return 210;
+  return 200;
 }
 
 export interface AssigneeOptionLabels {

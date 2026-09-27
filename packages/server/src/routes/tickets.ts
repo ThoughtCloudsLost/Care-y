@@ -141,12 +141,25 @@ import type {
   FollowUpService,
   FollowUpServiceDeps,
 } from "../tickets/followup-service.js";
-import type { MergeService } from "../tickets/merge-service.js";
+import type {
+  MergeService,
+  MergeServiceDeps,
+} from "../tickets/merge-service.js";
 import type { PresetService } from "../tickets/preset-service.js";
 import type { DependencyService } from "../tickets/dependency-service.js";
 import type { MediaService } from "../tickets/media-service.js";
-import type { QueueService } from "../tickets/queue-service.js";
-import type { AssignmentService } from "../tickets/assignment.js";
+import type {
+  QueueService,
+  QueueServiceDeps,
+} from "../tickets/queue-service.js";
+import type {
+  AssignmentService,
+  AssignmentServiceDeps,
+} from "../tickets/assignment.js";
+import type {
+  TicketChangeListener,
+  TicketLiveEvents,
+} from "../tickets/ticket-live-events.js";
 import type { WatchersService } from "../tickets/watchers.js";
 import type { QueuePermissionsService } from "../tickets/queue-permissions.js";
 import type { SearchService } from "../tickets/search.js";
@@ -215,6 +228,7 @@ import {
   updateTicketInputSchema,
   ticketListInputSchema,
   recentFollowUpsInputSchema,
+  recentActivityInputSchema,
   listReadStateInputSchema,
   sweepReadStateInputSchema,
   ticketFacetIndexInputSchema,
@@ -354,7 +368,10 @@ export interface TicketRouterDeps {
   ) => FollowUpService;
   /** Portal message service deps for dual-copy follow-up creation. */
   readonly followUpServiceDeps?: FollowUpServiceDeps;
-  readonly createMergeSvc: (tDb: OrgContext["tenantDb"]) => MergeService;
+  readonly createMergeSvc: (
+    tDb: OrgContext["tenantDb"],
+    deps?: MergeServiceDeps,
+  ) => MergeService;
   readonly createPresetSvc: (tDb: OrgContext["tenantDb"]) => PresetService;
   readonly createDependencySvc: (
     tDb: OrgContext["tenantDb"],
@@ -365,12 +382,16 @@ export interface TicketRouterDeps {
     blobStore: BlobStore,
     access: TicketAccessChecker,
   ) => MediaService;
-  readonly createQueueSvc: (tDb: OrgContext["tenantDb"]) => QueueService;
+  readonly createQueueSvc: (
+    tDb: OrgContext["tenantDb"],
+    deps?: QueueServiceDeps,
+  ) => QueueService;
   // Workflow deps
   readonly createAssignmentSvc: (
     tDb: OrgContext["tenantDb"],
     access: TicketAccessChecker,
     shiftProvider: ShiftProvider,
+    deps?: AssignmentServiceDeps,
   ) => AssignmentService;
   readonly createWatchersSvc: (
     tDb: OrgContext["tenantDb"],
@@ -397,6 +418,8 @@ export interface TicketRouterDeps {
   // Portal reseed rate limiters (per-user, authenticated)
   readonly reseedLimiter?: RateLimiter;
   readonly reseedBlobLimiter?: RateLimiter;
+  // Live ticket-change events to everyone who can open a changed ticket
+  readonly liveEvents?: TicketLiveEvents;
 }
 
 function buildSearchRoutes(
@@ -554,13 +577,22 @@ function buildAuditRoutes(
 export function createTicketRouter(deps: TicketRouterDeps) {
   // Per-request ticket service factory. Wires access checker + queue scoping
   // so every handler gets a correctly-scoped service without repeating the setup.
+  /**
+   * The request's live-event listener: services call it after a committed
+   * write to a ticket. Undefined when live events are not wired.
+   */
+  function ticketChanged(org: OrgContext): TicketChangeListener | undefined {
+    return deps.liveEvents?.forTenant(org.tenantDb, org.orgSchema);
+  }
+
   function ticketSvc(
-    tDb: OrgContext["tenantDb"],
+    org: OrgContext,
     sealedBox?: SealedBoxEncryptor,
   ): {
     access: TicketAccessChecker;
     svc: TicketService;
   } {
+    const tDb = org.tenantDb;
     const access = deps.createTicketAccess(tDb);
     const qps = deps.createQueuePermissionsSvc(tDb);
     const svc = deps.createTicketSvc(
@@ -571,19 +603,32 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         pendingClients: deps.pendingClients,
         fieldEncryptor: deps.fieldEncryptor,
         sealedBox,
+        onTicketChanged: ticketChanged(org),
       },
     );
     return { access, svc };
   }
 
   /** Creates a tenant-scoped assignment service with shift provider wiring. */
-  function assignmentSvc(tDb: OrgContext["tenantDb"]): AssignmentService {
+  function assignmentSvc(org: OrgContext): AssignmentService {
+    const tDb = org.tenantDb;
     const access = deps.createTicketAccess(tDb);
     const qp = deps.createQueuePermissionsSvc(tDb);
     const shift = createStubShiftProvider(async (qId) =>
       qp.getQueueMembers(qId),
     );
-    return deps.createAssignmentSvc(tDb, access, shift);
+    return deps.createAssignmentSvc(tDb, access, shift, {
+      onTicketChanged: ticketChanged(org),
+    });
+  }
+
+  /** Follow-up service for the writes: startup deps plus the live listener. */
+  function followUpWriteSvc(org: OrgContext): FollowUpService {
+    const access = deps.createTicketAccess(org.tenantDb);
+    return deps.createFollowUpSvc(org.tenantDb, access, {
+      ...deps.followUpServiceDeps,
+      onTicketChanged: ticketChanged(org),
+    });
   }
 
   /** Creates a tenant-scoped media service backed by the shared blob store. */
@@ -768,7 +813,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // --- Ticket CRUD ---
     create: openCasesProcedure.input(createTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb, ctx.org.sealedBox);
+        const { svc } = ticketSvc(ctx.org, ctx.org.sealedBox);
         const ticket = await svc.create(ctx.user.id, {
           id: input.id,
           clientId: input.clientId,
@@ -809,14 +854,14 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(resolveCreateTargetInputSchema)
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const { svc } = ticketSvc(ctx.org);
           return svc.getCreateTarget(input.clientId);
         }),
       ),
 
     get: viewCasesProcedure.input(z.object({ ticketId: ticketIdSchema })).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb);
+        const { svc } = ticketSvc(ctx.org);
         const ticket = await svc.findById(input.ticketId, ctx.user.id);
         const viewer = await resolveContactViewer(ctx.org, ctx.user.roleId);
         return applyContactFormatting(ticket, viewer, ctx.user.id);
@@ -825,7 +870,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     list: viewCasesProcedure.input(ticketListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb);
+        const { svc } = ticketSvc(ctx.org);
         const tickets = await svc.list(ctx.user.id, input);
         const viewer = await resolveContactViewer(ctx.org, ctx.user.roleId);
         return tickets.map((t) =>
@@ -836,7 +881,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     recentFollowUps: viewCasesProcedure.input(recentFollowUpsInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb);
+        const { svc } = ticketSvc(ctx.org);
         const result = await svc.recentFollowUps(ctx.user.id, input);
         const wirePreviews = Object.fromEntries(
           Object.entries(result.previews).map(
@@ -858,7 +903,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     listReadState: viewCasesProcedure.input(listReadStateInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb);
+        const { svc } = ticketSvc(ctx.org);
         const stateMap = await svc.listReadState(ctx.user.id, input);
         return Object.fromEntries(
           Object.entries(stateMap).map(
@@ -876,7 +921,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     readStateSweep: viewCasesProcedure.input(sweepReadStateInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb);
+        const { svc } = ticketSvc(ctx.org);
         const sweep = await svc.sweepReadState(ctx.user.id, input);
         return {
           ...sweep,
@@ -890,7 +935,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     counts: viewCasesProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb);
+        const { svc } = ticketSvc(ctx.org);
         return svc.counts(ctx.user.id);
       }),
     ),
@@ -900,14 +945,14 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // why the filter counts it feeds are computed in the browser.
     facetIndex: viewCasesProcedure.input(ticketFacetIndexInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb);
+        const { svc } = ticketSvc(ctx.org);
         return svc.facetIndex(ctx.user.id, input);
       }),
     ),
 
     searchClients: viewCasesProcedure.input(searchClientsInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb);
+        const { svc } = ticketSvc(ctx.org);
         const results = await svc.searchClients(
           input.query,
           input.limit,
@@ -928,7 +973,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     update: changeCaseStatusProcedure.input(updateTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb);
+        const { svc } = ticketSvc(ctx.org);
         // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; field extraction from Zod-validated input is wire-format mapping, not business logic
         const updated = await svc.update(ctx.user.id, {
           ticketId: input.ticketId,
@@ -949,7 +994,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(z.object({ ticketId: ticketIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { svc, access } = ticketSvc(ctx.org.tenantDb);
+          const { svc, access } = ticketSvc(ctx.org);
           const ticket = await svc.close(ctx.user.id, input.ticketId);
           // Delete read cursors for closed ticket (no post-closure read state)
           const readCursorSvc = deps.createReadCursorSvc(
@@ -979,7 +1024,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       )
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const { svc } = ticketSvc(ctx.org);
           const ticket = await svc.reopen(
             ctx.user.id,
             input.ticketId,
@@ -1028,12 +1073,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               throw new ForbiddenError(ErrorCode.INSUFFICIENT_ROLE);
             }
           }
-          const access = deps.createTicketAccess(ctx.org.tenantDb);
-          const svc = deps.createFollowUpSvc(
-            ctx.org.tenantDb,
-            access,
-            deps.followUpServiceDeps,
-          );
+          const svc = followUpWriteSvc(ctx.org);
           const portalCopy = input.portalCopy
             ? {
                 ephemeralPoint: Buffer.from(
@@ -1072,7 +1112,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             })),
           });
           // Look up ticket for notification context
-          const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+          const { svc: tSvc } = ticketSvc(ctx.org);
           const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
           const hasMentions = input.mentionedPseudonyms.length > 0;
           const eventType = hasMentions ? "mention" : "followup_added";
@@ -1222,8 +1262,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(updateInternalNoteInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const access = deps.createTicketAccess(ctx.org.tenantDb);
-          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          const svc = followUpWriteSvc(ctx.org);
           const { record, previousNoteTypeId } = await svc.updateInternalNote(
             ctx.user.id,
             input.followUpId,
@@ -1238,7 +1277,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             input.noteTypeId !== previousNoteTypeId;
 
           if (typeChanged) {
-            const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+            const { svc: tSvc } = ticketSvc(ctx.org);
             const ticket = await tSvc.findById(record.ticketId, ctx.user.id);
             enqueueLifecycleNotification(
               ctx,
@@ -1261,8 +1300,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(deleteInternalNoteInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const access = deps.createTicketAccess(ctx.org.tenantDb);
-          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          const svc = followUpWriteSvc(ctx.org);
           // Your own notes are yours to delete. Reaching somebody else's
           // takes DELETE_OTHERS_NOTES; the service decides which case
           // applies from the note's author.
@@ -1381,7 +1419,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // --- Dependencies ---
     addDependency: linkCasesProcedure.input(addDependencyInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { access } = ticketSvc(ctx.org.tenantDb);
+        const { access } = ticketSvc(ctx.org);
         const svc = deps.createDependencySvc(ctx.org.tenantDb, access);
         return svc.add({
           userId: ctx.user.id,
@@ -1395,7 +1433,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(addDependencyInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { access } = ticketSvc(ctx.org.tenantDb);
+          const { access } = ticketSvc(ctx.org);
           const svc = deps.createDependencySvc(ctx.org.tenantDb, access);
           await svc.remove({
             userId: ctx.user.id,
@@ -1417,7 +1455,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // --- Client Merge ---
     mergeClients: mergeClientsProcedure.input(mergeClientsInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createMergeSvc(ctx.org.tenantDb);
+        const svc = deps.createMergeSvc(ctx.org.tenantDb, {
+          onTicketChanged: ticketChanged(ctx.org),
+        });
         const result = await svc.merge({
           primaryClientId: input.primaryClientId,
           secondaryClientId: input.secondaryClientId,
@@ -1442,7 +1482,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     undoMerge: mergeClientsProcedure.input(undoMergeInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createMergeSvc(ctx.org.tenantDb);
+        const svc = deps.createMergeSvc(ctx.org.tenantDb, {
+          onTicketChanged: ticketChanged(ctx.org),
+        });
         const result = await svc.undoMerge({
           mergeEventId: input.mergeEventId,
           encryptedSnapshot: Buffer.from(input.encryptedSnapshot, "base64"),
@@ -1700,7 +1742,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     deleteQueue: manageQueuesProcedure.input(deleteQueueInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createQueueSvc(ctx.org.tenantDb);
+        const svc = deps.createQueueSvc(ctx.org.tenantDb, {
+          onTicketChanged: ticketChanged(ctx.org),
+        });
         await svc.delete(input.queueId, input.reassignTo);
         audit(ctx.org.tenantDb, {
           eventType: "queue_deleted",
@@ -1714,10 +1758,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // --- Assignment ---
     assign: assignCasesProcedure.input(assignTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = assignmentSvc(ctx.org.tenantDb);
+        const svc = assignmentSvc(ctx.org);
         const result = await svc.assignRoundRobin(input.ticketId);
         if (result.assignedTo !== null) {
-          const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+          const { svc: tSvc } = ticketSvc(ctx.org);
           const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
           auditAndNotify(ctx, "ticket_assigned", ticket, {
             eventType: "ticket_assigned",
@@ -1732,9 +1776,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     take: claimCasesProcedure.input(takeTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = assignmentSvc(ctx.org.tenantDb);
+        const svc = assignmentSvc(ctx.org);
         await svc.take(ctx.user.id, input.ticketId);
-        const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+        const { svc: tSvc } = ticketSvc(ctx.org);
         const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
         auditAndNotify(ctx, "ticket_assigned", ticket, {
           eventType: "ticket_assigned",
@@ -1747,7 +1791,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     release: claimCasesProcedure.input(releaseTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = assignmentSvc(ctx.org.tenantDb);
+        const svc = assignmentSvc(ctx.org);
         await svc.release(ctx.user.id, input.ticketId);
         audit(ctx.org.tenantDb, {
           eventType: "ticket_assigned",
@@ -1760,9 +1804,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     assignTo: assignCasesProcedure.input(assignToInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const svc = assignmentSvc(ctx.org.tenantDb);
+        const svc = assignmentSvc(ctx.org);
         await svc.assignTo(ctx.user.id, input.ticketId, input.targetUserId);
-        const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
+        const { svc: tSvc } = ticketSvc(ctx.org);
         const ticket = await tSvc.findById(input.ticketId, ctx.user.id);
         auditAndNotify(ctx, "ticket_assigned", ticket, {
           eventType: "ticket_assigned",
@@ -1956,63 +2000,59 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     // --- Dashboard: activity feed (queue and permission scoped) ---
-    recentActivity: viewCasesProcedure
-      .input(
-        z
-          .object({ limit: z.number().int().min(1).max(10).default(5) })
-          .default({ limit: 5 }),
-      )
-      .query(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const tDb = ctx.org.tenantDb;
-          // Without the audit service no audit rows are ever written, so an
-          // empty feed is the accurate answer rather than a failure. Matches
-          // the no-op behaviour of the audit() helper above.
-          if (!deps.createAuditSvc) return { entries: [], lastHourCount: 0 };
+    recentActivity: viewCasesProcedure.input(recentActivityInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const tDb = ctx.org.tenantDb;
+        // Without the audit service no audit rows are ever written, so an
+        // empty feed is the accurate answer rather than a failure. Matches
+        // the no-op behaviour of the audit() helper above.
+        if (!deps.createAuditSvc) return { entries: [], lastHourCount: 0 };
 
-          const permissions = isValidRoleId(ctx.user.roleId)
-            ? await getEffectivePermissions(
-                tDb,
-                ctx.org.orgSchema,
-                ctx.user.roleId,
-              )
-            : new Set<Permission>();
-          const scope = resolveFeedScope(permissions);
-          const qps = deps.createQueuePermissionsSvc(tDb);
-          const ownQueueIds = await qps.getUserQueues(ctx.user.id);
+        const permissions = isValidRoleId(ctx.user.roleId)
+          ? await getEffectivePermissions(
+              tDb,
+              ctx.org.orgSchema,
+              ctx.user.roleId,
+            )
+          : new Set<Permission>();
+        const qps = deps.createQueuePermissionsSvc(tDb);
+        // List and count share one scope, so the viewer's filters apply to
+        // both identically.
+        const scope = {
+          ...resolveFeedScope(permissions),
+          ownQueueIds: await qps.getUserQueues(ctx.user.id),
+          kinds: input.kinds,
+          queueIds: input.queueIds,
+        };
 
-          const auditSvc = deps.createAuditSvc(tDb);
-          const since = new Date(Date.now() - FEED_SUMMARY_WINDOW_MS);
-          const [entries, lastHourCount] = await Promise.all([
-            auditSvc.listRecentActivity({
-              ...scope,
-              ownQueueIds,
-              limit: input.limit,
-            }),
-            auditSvc.countRecentActivity({ ...scope, ownQueueIds, since }),
-          ]);
-          return {
-            entries: entries.map((e) => {
-              switch (e.kind) {
-                case "ticket":
-                  return {
-                    ...e,
-                    encryptedClientAlias: b64(e.encryptedClientAlias),
-                    encryptedQueueName: b64(e.encryptedQueueName),
-                  };
-                case "ticket_outside_queues":
-                  return {
-                    ...e,
-                    encryptedQueueName: b64(e.encryptedQueueName),
-                  };
-                case "org":
-                  return e;
-              }
-            }),
-            lastHourCount,
-          };
-        }),
-      ),
+        const auditSvc = deps.createAuditSvc(tDb);
+        const since = new Date(Date.now() - FEED_SUMMARY_WINDOW_MS);
+        const [entries, lastHourCount] = await Promise.all([
+          auditSvc.listRecentActivity({ ...scope, limit: input.limit }),
+          auditSvc.countRecentActivity({ ...scope, since }),
+        ]);
+        return {
+          entries: entries.map((e) => {
+            switch (e.kind) {
+              case "ticket":
+                return {
+                  ...e,
+                  encryptedClientAlias: b64(e.encryptedClientAlias),
+                  encryptedQueueName: b64(e.encryptedQueueName),
+                };
+              case "ticket_outside_queues":
+                return {
+                  ...e,
+                  encryptedQueueName: b64(e.encryptedQueueName),
+                };
+              case "org":
+                return e;
+            }
+          }),
+          lastHourCount,
+        };
+      }),
+    ),
 
     // --- Dashboard: queue membership with open ticket counts ---
     myQueues: viewCasesProcedure.query(
@@ -2074,7 +2114,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(updateTicketContentInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const { svc } = ticketSvc(ctx.org);
           const record = await svc.updateContent(ctx.user.id, {
             ticketId: input.ticketId,
             actorId: ctx.user.id,
@@ -2227,7 +2267,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(upgradeToSecureLinkInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const { svc } = ticketSvc(ctx.org);
           // findById asserts ticket access for the caller
           await assertSecureLinkEnabled(ctx.org.tenantDb);
           const ticket = await svc.findById(input.ticketId, ctx.user.id);
@@ -2249,7 +2289,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           };
 
           try {
-            await createChannel(ctx.org.tenantDb, clientId, reg);
+            await createChannel(ctx.org.tenantDb, clientId, reg, {
+              onTicketChanged: ticketChanged(ctx.org),
+            });
           } catch (err: unknown) {
             if (err instanceof ChannelAlreadyActiveError) {
               throw new ForbiddenError(ErrorCode.PORTAL_CHANNEL_EXISTS);
@@ -2283,7 +2325,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       )
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const { svc } = ticketSvc(ctx.org);
           const ticket = await svc.findById(input.ticketId, ctx.user.id);
 
           // portalCapable is server-computed from the portal_channels
@@ -2307,7 +2349,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             },
           };
 
-          await regenerateChannel(ctx.org.tenantDb, ticket.clientId, reg);
+          await regenerateChannel(ctx.org.tenantDb, ticket.clientId, reg, {
+            onTicketChanged: ticketChanged(ctx.org),
+          });
 
           audit(ctx.org.tenantDb, {
             eventType: "portal_channel_regenerated",
@@ -2322,7 +2366,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(z.object({ ticketId: ticketIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const { svc } = ticketSvc(ctx.org);
           const ticket = await svc.findById(input.ticketId, ctx.user.id);
 
           // portalCapable check gates revocation on channel existence.
@@ -2330,7 +2374,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             throw new NotFoundError(ErrorCode.PORTAL_CHANNEL_NOT_FOUND);
           }
 
-          await revokeChannel(ctx.org.tenantDb, ticket.clientId);
+          await revokeChannel(ctx.org.tenantDb, ticket.clientId, {
+            onTicketChanged: ticketChanged(ctx.org),
+          });
 
           audit(ctx.org.tenantDb, {
             eventType: "portal_channel_revoked",
@@ -2347,8 +2393,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(updateOutboundMessageInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const access = deps.createTicketAccess(ctx.org.tenantDb);
-          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          const svc = followUpWriteSvc(ctx.org);
           const portalCopy = input.portalCopy
             ? {
                 ephemeralPoint: Buffer.from(
@@ -2381,7 +2426,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(resetClientAccountInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const { svc } = ticketSvc(ctx.org);
           const ticket = await svc.findById(input.ticketId, ctx.user.id);
 
           const hasAccount = await clientHasAccount(
@@ -2392,7 +2437,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             throw new NotFoundError(ErrorCode.ACCOUNT_NOT_FOUND);
           }
 
-          await resetAccount(ctx.org.tenantDb, ticket.clientId);
+          await resetAccount(ctx.org.tenantDb, ticket.clientId, {
+            onTicketChanged: ticketChanged(ctx.org),
+          });
 
           audit(ctx.org.tenantDb, {
             eventType: "client_account_reset",
@@ -2588,12 +2635,14 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(z.object({ ticketId: ticketIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const { svc } = ticketSvc(ctx.org);
           // Assert the caller can access this ticket
           await svc.findById(input.ticketId, ctx.user.id);
+          // The ticket is announced when a live token was revoked.
           const revoked = await revokeTokensForTicket(
             ctx.org.tenantDb,
             input.ticketId,
+            { onTicketChanged: ticketChanged(ctx.org) },
           );
           audit(ctx.org.tenantDb, {
             eventType: "reply_token_revoked",

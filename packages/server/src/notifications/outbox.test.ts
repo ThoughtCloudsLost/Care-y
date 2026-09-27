@@ -495,6 +495,43 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .execute();
     });
 
+    it("never dispatches a live-only ticket_changed row", async () => {
+      // ticket_changed is not an outbox event type, so nothing in the
+      // codebase can enqueue it. A row carrying it anyway must not reach
+      // the notification service.
+      const ticketId = await createTicketRow();
+      await testDb.db
+        .insertInto("notification_outbox")
+        .values({
+          event_type: "ticket_changed",
+          ticket_id: ticketId,
+          queue_id: queueId,
+          max_attempts: 1,
+        })
+        .execute();
+
+      const dispatch = vi
+        .fn<NotificationService["dispatch"]>()
+        .mockResolvedValue(undefined);
+      await drainOutbox(testDb.db, {
+        ...makeDrainDeps({ dispatch }),
+        orgSchema: testDb.schemaName as OrgSchema,
+      });
+
+      // Other tests' pending rows may drain in the same pass; none of the
+      // dispatches may be this row or carry the live-only type.
+      expect(dispatch.mock.calls.map((c) => c[5])).not.toContain(ticketId);
+      expect(dispatch.mock.calls.map((c) => c[4])).not.toContain(
+        "ticket_changed",
+      );
+      const row = await testDb.db
+        .selectFrom("notification_outbox")
+        .select("status")
+        .where("ticket_id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+      expect(row.status).not.toBe("completed");
+    });
+
     it("cascade delete removes outbox rows when ticket is deleted", async () => {
       const ticketId = await createTicketRow();
 

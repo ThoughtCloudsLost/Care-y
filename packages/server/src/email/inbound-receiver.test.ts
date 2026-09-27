@@ -13,6 +13,7 @@ import {
   createInboundReceiver,
   MAX_MESSAGE_BYTES,
   parseReplyAddress,
+  type InboundReceiverDeps,
 } from "./inbound-receiver.js";
 import { mintToken, revokeTokensForTicket } from "./reply-token-service.js";
 import {
@@ -20,12 +21,14 @@ import {
   deriveReplyTokenIndexKey,
 } from "../crypto/field-encryptor.js";
 import {
+  captureTicketChangeNotices,
   createTestDb,
   createTestTicketFixture,
   TEST_OPS_KEY,
   type TestDb,
   type TestTicketFixture,
 } from "../test-utils.js";
+import { handleInboundEmail } from "./inbound-email.js";
 import { getSodium } from "@care-y/crypto";
 import type {
   FollowupId,
@@ -396,6 +399,114 @@ describe.skipIf(!process.env.DATABASE_URL)("inbound SMTP receiver", () => {
       probe.close();
     } finally {
       await failing.close();
+    }
+  });
+
+  // --- Ticket change notices ---
+
+  /** One accepted delivery on the given port; returns the DATA reply. */
+  async function deliver(atPort: number, label: string): Promise<string> {
+    const { token } = await mintToken(db, fixture.ticketId, hasher);
+    const probe = await session(atPort);
+    await probe.cmd("MAIL FROM:<client@example.org>");
+    await probe.cmd(`RCPT TO:<reply-${token}@${domain}>`);
+    await probe.cmd("DATA");
+    probe.raw(mailMessage(`${label}-${crypto.randomUUID()}@probe.local`));
+    const reply = await probe.reply();
+    probe.close();
+    return reply;
+  }
+
+  /** A receiver on its own port, with the given deps overridden. */
+  async function receiverWith(
+    overrides: Partial<InboundReceiverDeps>,
+  ): Promise<{ port: number; close: () => Promise<void> }> {
+    const receiver = createInboundReceiver(
+      {
+        platformDb: testDb.platformDb,
+        getTenantDb: () => db,
+        replyTokenHasher: hasher,
+        now,
+        ...overrides,
+      },
+      { port: 0 },
+    );
+    return { port: await receiver.listen(), close: () => receiver.close() };
+  }
+
+  it("announces the ticket after the ingest has committed", async () => {
+    const order: string[] = [];
+    const announced: [OrgSchema, TicketId][] = [];
+    const rcv = await receiverWith({
+      ingest: async (tDb, ticketId, data) => {
+        const result = await handleInboundEmail(tDb, ticketId, data);
+        order.push("ingest");
+        return result;
+      },
+      onTicketChanged: (orgSchema, ticketId) => {
+        order.push("announce");
+        announced.push([orgSchema, ticketId]);
+      },
+    });
+    try {
+      expect(await deliver(rcv.port, "announce")).toMatch(/^250 /);
+      expect(order).toEqual(["ingest", "announce"]);
+      expect(announced).toEqual([[testDb.schemaName, fixture.ticketId]]);
+    } finally {
+      await rcv.close();
+    }
+  });
+
+  it("announces nothing when the ingest fails", async () => {
+    const onTicketChanged = vi.fn();
+    const rcv = await receiverWith({
+      ingest: () => Promise.reject(new Error("simulated ingest failure")),
+      onTicketChanged,
+    });
+    try {
+      expect(await deliver(rcv.port, "no-announce")).toMatch(/^451 /);
+      expect(onTicketChanged).not.toHaveBeenCalled();
+    } finally {
+      await rcv.close();
+    }
+  });
+
+  it("still answers 250 when the announcement throws", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {
+      // silenced
+    });
+    const rcv = await receiverWith({
+      onTicketChanged: () => {
+        throw new Error("notify failed");
+      },
+    });
+    try {
+      expect(await deliver(rcv.port, "announce-throws")).toMatch(/^250 /);
+      expect(errors).toHaveBeenCalledTimes(1);
+      const logged = errors.mock.calls.flat().map(String).join(" ");
+      expect(logged).not.toContain(fixture.ticketId);
+      expect(logged).not.toContain(testDb.schemaName);
+    } finally {
+      errors.mockRestore();
+      await rcv.close();
+    }
+  });
+
+  it("publishes a Postgres notice by default", async () => {
+    const capture = await captureTicketChangeNotices();
+    try {
+      expect(await deliver(port, "notice")).toMatch(/^250 /);
+      await vi.waitFor(() => {
+        const notices: unknown[] = capture.payloads.map((p): unknown =>
+          JSON.parse(p),
+        );
+        expect(notices).toContainEqual({
+          orgSchema: testDb.schemaName,
+          ticketId: fixture.ticketId,
+        });
+      });
+    } finally {
+      await capture.close();
     }
   });
 

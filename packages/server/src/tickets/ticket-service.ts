@@ -40,6 +40,7 @@ import type {
   PhoneMatchHash,
 } from "@care-y/shared";
 import type { TicketAccessChecker } from "./access.js";
+import type { TicketChangeListener } from "./ticket-live-events.js";
 import {
   NotFoundError,
   ConflictError,
@@ -485,6 +486,8 @@ export interface TicketServiceDeps {
   readonly pendingClients?: Map<string, PendingClient>;
   readonly fieldEncryptor?: FieldEncryptor;
   readonly sealedBox?: SealedBoxEncryptor;
+  /** Called with the ticket id after each committed write. */
+  readonly onTicketChanged?: TicketChangeListener;
 }
 
 export function createTicketService(
@@ -551,7 +554,7 @@ export function createTicketService(
     },
 
     async create(userId, input) {
-      return db.transaction().execute(async (trx) => {
+      const created = await db.transaction().execute(async (trx) => {
         // Resolve clientId from token if needed
         let clientId: ClientId;
 
@@ -677,6 +680,8 @@ export function createTicketService(
 
         return ticket;
       });
+      deps?.onTicketChanged?.(created.id);
+      return created;
     },
 
     async findById(ticketId, userId) {
@@ -1293,6 +1298,7 @@ export function createTicketService(
         );
       }
 
+      deps?.onTicketChanged?.(input.ticketId);
       return toRecord(row);
     },
 
@@ -1320,6 +1326,7 @@ export function createTicketService(
       if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_CLOSED);
 
       await createSystemFollowUp(db, ticketId, "status_closed");
+      deps?.onTicketChanged?.(ticketId);
       return toRecord(row);
     },
 
@@ -1340,6 +1347,7 @@ export function createTicketService(
       if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_OPEN);
 
       await createSystemFollowUp(db, ticketId, "status_opened");
+      deps?.onTicketChanged?.(ticketId);
       return toRecord(row);
     },
 
@@ -1757,7 +1765,7 @@ export function createTicketService(
     ): Promise<TicketRecord> {
       await access.assertAccess(userId, input.ticketId);
 
-      return db.transaction().execute(async (trx) => {
+      const updated = await db.transaction().execute(async (trx) => {
         const existing = await trx
           .selectFrom("tickets")
           .selectAll()
@@ -1822,8 +1830,28 @@ export function createTicketService(
 
         return toRecord(row);
       });
+      deps?.onTicketChanged?.(input.ticketId);
+      return updated;
     },
   };
+}
+
+/**
+ * Every ticket belonging to any of the given clients, whatever its status.
+ * Used where a client-level write (merge, undo, purge) changes what those
+ * tickets show and each one has to be announced.
+ */
+export async function listTicketIdsForClients(
+  db: Kysely<TenantDatabase>,
+  clientIds: readonly ClientId[],
+): Promise<TicketId[]> {
+  if (clientIds.length === 0) return [];
+  const rows = await db
+    .selectFrom("tickets")
+    .select("id")
+    .where("client_id", "in", [...clientIds])
+    .execute();
+  return rows.map((r) => r.id);
 }
 
 // ---------------------------------------------------------------------------

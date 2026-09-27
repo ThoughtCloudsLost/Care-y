@@ -7,7 +7,7 @@ import type * as ToastNS from "$lib/stores/toast.svelte.js";
 import type * as HapticNS from "$lib/utils/haptic.js";
 import type * as MessagesNS from "$lib/paraglide/messages.js";
 import type * as WithTermsNS from "$lib/terminology/with-terms.js";
-import type * as OptimisticNS from "$lib/utils/optimistic-mutation.js";
+import { ticketsKeys } from "$lib/query/keys.js";
 
 vi.mock(
   "$lib/stores/toast.svelte.js",
@@ -32,52 +32,87 @@ vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
   ),
 );
 
-let lastOptimisticOpts: Record<string, unknown> = {};
-vi.mock("$lib/utils/optimistic-mutation.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof OptimisticNS>()),
-  optimisticMutation: vi.fn(async (opts: Record<string, unknown>) => {
-    lastOptimisticOpts = opts;
-    await (opts.mutate as () => Promise<unknown>)();
-    (opts.onSuccess as () => void)();
-  }),
-}));
-
 function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
 }
 
+interface Paged {
+  pages: { id: string; onHold: boolean }[][];
+  pageParams: unknown[];
+}
+
+// Two lists holding the same ticket, as two dashboard lanes do.
+const LANE_A = ticketsKeys.list({ lane: "a" });
+const LANE_B = ticketsKeys.list({ lane: "b" });
+
+function seed(qc: QueryClient): void {
+  qc.setQueryData<Paged>(LANE_A, {
+    pages: [[{ id: "t1", onHold: false }]],
+    pageParams: [undefined],
+  });
+  qc.setQueryData<Paged>(LANE_B, {
+    pages: [[{ id: "t2", onHold: false }], [{ id: "t1", onHold: false }]],
+    pageParams: [undefined, "t2"],
+  });
+}
+
+function heldIn(qc: QueryClient, key: readonly unknown[]): string[] {
+  return (qc.getQueryData<Paged>(key)?.pages.flat() ?? [])
+    .filter((t) => t.onHold)
+    .map((t) => t.id);
+}
+
 describe("createHoldAction", () => {
   let holdMutate: Mock<(ticketId: string, onHold: boolean) => Promise<unknown>>;
   let qc: QueryClient;
-  const queryKey = ["tickets", "list", { status: "open" }];
 
   beforeEach(() => {
     vi.clearAllMocks();
-    lastOptimisticOpts = {};
     holdMutate = vi
       .fn<(id: string, onHold: boolean) => Promise<unknown>>()
       .mockResolvedValue(undefined);
     qc = makeQueryClient();
+    seed(qc);
   });
 
   function make() {
-    return createHoldAction({
-      queryClient: qc,
-      getQueryKey: () => queryKey,
-      holdMutate,
-    });
+    return createHoldAction({ queryClient: qc, holdMutate });
   }
 
-  it("calls optimisticMutation with correct queryKey from deps", async () => {
-    const { optimisticMutation } =
-      await import("$lib/utils/optimistic-mutation.js");
-    const action = make();
-    await action.handleHold("t1", false);
+  it("holds the ticket in every cached list at once", async () => {
+    // Observe the lists mid-mutation: the optimistic write lands before
+    // the server answers.
+    let seenDuringMutate: string[][] = [];
+    holdMutate.mockImplementationOnce(async () => {
+      seenDuringMutate = [heldIn(qc, LANE_A), heldIn(qc, LANE_B)];
+      return undefined;
+    });
 
-    expect(optimisticMutation).toHaveBeenCalledOnce();
-    expect(lastOptimisticOpts.queryKey).toEqual(queryKey);
+    await make().handleHold("t1", false);
+
+    expect(seenDuringMutate).toEqual([["t1"], ["t1"]]);
+  });
+
+  it("rolls every list back when the server refuses", async () => {
+    holdMutate.mockRejectedValueOnce(new ClientError("network"));
+
+    await make().handleHold("t1", false);
+
+    expect(heldIn(qc, LANE_A)).toEqual([]);
+    expect(heldIn(qc, LANE_B)).toEqual([]);
+  });
+
+  it("invalidates the lists and the facet index on success", async () => {
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+
+    await make().handleHold("t1", false);
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ticketsKeys.lists() });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ticketsKeys.facetIndex(),
+    });
   });
 
   it("calls holdMutate with ticketId and toggled onHold value", async () => {
@@ -91,10 +126,7 @@ describe("createHoldAction", () => {
   });
 
   it("prevents double-tap while a hold is pending", async () => {
-    let resolveFirst: () => void;
-    const firstPromise = new Promise<void>((r) => {
-      resolveFirst = r;
-    });
+    let resolveFirst: () => void = () => undefined;
     holdMutate.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -104,14 +136,11 @@ describe("createHoldAction", () => {
         }),
     );
 
-    // Suppress unhandled rejection from the deferred promise
-    void firstPromise.catch(() => undefined);
-
     const action = make();
     const first = action.handleHold("t1", false);
     const second = action.handleHold("t1", false);
 
-    resolveFirst!();
+    resolveFirst();
     await first;
     await second;
 
@@ -128,71 +157,44 @@ describe("createHoldAction", () => {
   });
 
   it("clears pending state after failure", async () => {
-    const { optimisticMutation } =
-      await import("$lib/utils/optimistic-mutation.js");
-    (optimisticMutation as Mock).mockImplementationOnce(
-      async (opts: Record<string, unknown>) => {
-        lastOptimisticOpts = opts;
-        await (opts.mutate as () => Promise<unknown>)();
-        throw new ClientError("network");
-      },
-    );
+    holdMutate.mockRejectedValueOnce(new ClientError("network"));
 
     const action = make();
-    await action.handleHold("t1", false).catch(() => undefined);
+    await action.handleHold("t1", false);
 
     expect(action.isPending("t1")).toBe(false);
   });
 
   it("shows held toast on success when placing on hold", async () => {
     const { toastStore } = await import("$lib/stores/toast.svelte.js");
-    const action = make();
-    await action.handleHold("t1", false);
+    await make().handleHold("t1", false);
 
     expect(toastStore.show).toHaveBeenCalledWith("Held");
   });
 
   it("shows unheld toast on success when removing hold", async () => {
     const { toastStore } = await import("$lib/stores/toast.svelte.js");
-    const action = make();
-    await action.handleHold("t1", true);
+    await make().handleHold("t1", true);
 
     expect(toastStore.show).toHaveBeenCalledWith("Unheld");
   });
 
   it("shows error toast on error", async () => {
-    const { optimisticMutation } =
-      await import("$lib/utils/optimistic-mutation.js");
-    (optimisticMutation as Mock).mockImplementationOnce(
-      async (opts: Record<string, unknown>) => {
-        lastOptimisticOpts = opts;
-        await (opts.mutate as () => Promise<unknown>)();
-        (opts.onError as (err: unknown) => void)(new ClientError("network"));
-      },
-    );
+    holdMutate.mockRejectedValueOnce(new ClientError("network"));
     const { toastStore } = await import("$lib/stores/toast.svelte.js");
 
-    const action = make();
-    await action.handleHold("t1", false);
+    await make().handleHold("t1", false);
 
     expect(toastStore.show).toHaveBeenCalledWith("Error", 3000);
   });
 
   it("shows the permission message when the server refuses the hold", async () => {
-    const { optimisticMutation } =
-      await import("$lib/utils/optimistic-mutation.js");
-    (optimisticMutation as Mock).mockImplementationOnce(
-      async (opts: Record<string, unknown>) => {
-        lastOptimisticOpts = opts;
-        (opts.onError as (err: unknown) => void)(
-          new Error(ErrorCode.INSUFFICIENT_PERMISSIONS),
-        );
-      },
+    holdMutate.mockRejectedValueOnce(
+      new Error(ErrorCode.INSUFFICIENT_PERMISSIONS),
     );
     const { toastStore } = await import("$lib/stores/toast.svelte.js");
 
-    const action = make();
-    await action.handleHold("t1", false);
+    await make().handleHold("t1", false);
 
     expect(toastStore.show).toHaveBeenCalledWith("No permission", 3000);
   });

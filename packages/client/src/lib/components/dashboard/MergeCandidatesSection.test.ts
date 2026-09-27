@@ -185,4 +185,17 @@ describe("MergeCandidatesSection", () => {
 
     expect(container2.textContent).toContain("Truncated notice text");
   });
+
+  // The page keeps the section while any candidate is undismissed, so an
+  // empty list means the section's filter matched none of them.
+  it("says nothing matched when the filtered list is empty", () => {
+    const { container } = render(MergeCandidatesSection, {
+      props: defaultProps({ candidates: [] }),
+    });
+
+    expect(screen.getByRole("status").textContent).toContain(
+      "No results found.",
+    );
+    expect(container.querySelector(".candidate-actions")).toBeNull();
+  });
 });

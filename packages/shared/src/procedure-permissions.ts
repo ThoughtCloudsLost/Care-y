@@ -195,7 +195,6 @@ export const PROCEDURE_PERMISSIONS = {
   "kb.updateItem": Permission.EDIT_KNOWLEDGE_BASE,
   "kb.deleteItem": Permission.DELETE_KNOWLEDGE_BASE_ARTICLES,
   "kb.listAuthors": Permission.VIEW_KNOWLEDGE_BASE,
-  "kb.recentItems": Permission.VIEW_KNOWLEDGE_BASE,
   "kb.listBodies": Permission.VIEW_KNOWLEDGE_BASE,
   "kb.castVote": Permission.VIEW_KNOWLEDGE_BASE,
   "kb.removeVote": Permission.VIEW_KNOWLEDGE_BASE,

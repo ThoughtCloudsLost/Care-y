@@ -27,6 +27,8 @@ import type { JobQueue } from "./queue.js";
 import type { OrgSchema, OrgId, TicketId, ClientId } from "@care-y/shared";
 import { registerRecurringHandler } from "./ensure-recurring.js";
 import { enqueueLogDeletion } from "./log-deletion.js";
+import { listTicketIdsForClients } from "../tickets/ticket-service.js";
+import type { TicketLiveEvents } from "../tickets/ticket-live-events.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -156,20 +158,10 @@ export async function purgeClient(
   let logDeletionsEnqueued = 0;
 
   // 1. Purge all tickets for this client
-  const tickets = await trx
-    .selectFrom("tickets")
-    .select("id")
-    .where("client_id", "=", clientId)
-    .execute();
+  const ticketIds = await listTicketIdsForClients(trx, [clientId]);
 
-  for (const ticket of tickets) {
-    const counts = await purgeTicket(
-      trx,
-      ticket.id,
-      blobStore,
-      jobQueue,
-      orgId,
-    );
+  for (const ticketId of ticketIds) {
+    const counts = await purgeTicket(trx, ticketId, blobStore, jobQueue, orgId);
     ticketsPurged++;
     blobsDeleted += counts.blobsDeleted;
     logDeletionsEnqueued += counts.logDeletionsEnqueued;
@@ -282,12 +274,16 @@ export interface TenantPurgeResult {
  *
  * After purging eligible tickets, identifies clients whose entire ticket
  * set was purged (no remaining tickets) and purges those clients.
+ *
+ * With `live`, everyone who could open a purged ticket is told it changed
+ * once the purge commits, so closed lists and counts drop it.
  */
 export async function purgeTenant(
   tDb: Kysely<TenantDatabase>,
   blobStore: BlobStore,
   jobQueue: JobQueue,
   orgId: OrgId,
+  live?: { readonly events: TicketLiveEvents; readonly orgSchema: OrgSchema },
 ): Promise<TenantPurgeResult> {
   // Read retention config
   const config = await tDb
@@ -323,6 +319,17 @@ export async function purgeTenant(
   let totalBlobsDeleted = 0;
   let totalLogDeletions = 0;
   let totalClientsPurged = 0;
+
+  // Recipients are resolved now: after the delete no row is left to say
+  // who could see these tickets.
+  const emitRemoved =
+    live === undefined
+      ? (): void => undefined
+      : await live.events.captureRemovals(
+          tDb,
+          live.orgSchema,
+          purgeableTickets.map((t) => t.ticketId),
+        );
 
   // Collect unique client IDs whose tickets are being purged
   const affectedClientIds = new Set<ClientId>();
@@ -373,6 +380,8 @@ export async function purgeTenant(
     }
   });
 
+  emitRemoved();
+
   return {
     ticketsPurged: totalTicketsPurged,
     clientsPurged: totalClientsPurged,
@@ -397,6 +406,7 @@ export function registerPiiRetentionHandler(
   getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>,
   blobStore: BlobStore,
   listActiveOrgs: () => Promise<readonly { id: OrgId; schema: OrgSchema }[]>,
+  liveEvents?: TicketLiveEvents,
 ): void {
   registerRecurringHandler(
     jobQueue,
@@ -407,7 +417,15 @@ export function registerPiiRetentionHandler(
       for (const org of orgs) {
         try {
           const tDb = getTenantDb(org.schema);
-          const result = await purgeTenant(tDb, blobStore, jobQueue, org.id);
+          const result = await purgeTenant(
+            tDb,
+            blobStore,
+            jobQueue,
+            org.id,
+            liveEvents === undefined
+              ? undefined
+              : { events: liveEvents, orgSchema: org.schema },
+          );
 
           if (result.ticketsPurged > 0 || result.clientsPurged > 0) {
             console.log(

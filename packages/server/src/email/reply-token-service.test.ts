@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   mintToken,
   resolveToken,
@@ -82,5 +82,29 @@ describe.skipIf(!process.env.DATABASE_URL)("reply-token-service", () => {
     // All tokens were revoked in the previous test
     const count = await revokeTokensForTicket(db, fixture.ticketId);
     expect(count).toBe(0);
+  });
+
+  it("revokeTokensForTicket announces the ticket when it revoked something", async () => {
+    await mintToken(db, fixture.ticketId, hasher);
+    const onTicketChanged = vi.fn();
+
+    const count = await revokeTokensForTicket(db, fixture.ticketId, {
+      onTicketChanged,
+    });
+
+    expect(count).toBe(1);
+    expect(onTicketChanged).toHaveBeenCalledTimes(1);
+    expect(onTicketChanged).toHaveBeenCalledWith(fixture.ticketId);
+  });
+
+  it("revokeTokensForTicket announces nothing when no token was live", async () => {
+    const onTicketChanged = vi.fn();
+
+    const count = await revokeTokensForTicket(db, fixture.ticketId, {
+      onTicketChanged,
+    });
+
+    expect(count).toBe(0);
+    expect(onTicketChanged).not.toHaveBeenCalled();
   });
 });

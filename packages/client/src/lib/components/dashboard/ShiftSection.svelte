@@ -18,7 +18,7 @@
   interface ShiftSectionProps {
     shift: ShiftInfo | null;
     loading?: boolean;
-    /** Open tickets assigned to the viewer (the myOpen bucket length). */
+    /** Open tickets assigned to the viewer, whatever the lane filters. */
     myOpenCount: number;
   }
 
@@ -144,7 +144,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: var(--space-md) var(--page-pad-x) 0;
+    margin: var(--space-md) var(--section-inset, var(--page-pad-x)) 0;
     padding: 11px 14px;
     border: 1px solid var(--hair);
     border-radius: 10px;

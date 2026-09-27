@@ -7,24 +7,44 @@ import type {
   TicketLikeRecord,
 } from "$lib/tickets/ticket-card-props.js";
 import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
+import { DASHBOARD_LANE_CAP } from "$lib/tickets/dashboard-lanes.js";
 import type * as CryptoContextModule from "$lib/crypto/context.js";
 import type * as SvelteQueryModule from "@tanstack/svelte-query";
 import type * as ShellContextModule from "$lib/shell/context.js";
 
 // TicketCard (and its TicketPreview child) observe the viewport and their
-// container; jsdom has neither observer.
+// container; jsdom has neither observer. Observed elements are recorded
+// with their callbacks so a test can bring the list's end into view.
+const observed: {
+  el: Element;
+  cb: (entries: { isIntersecting: boolean }[]) => void;
+}[] = [];
+
 vi.stubGlobal(
   "IntersectionObserver",
-  vi.fn(function (this: {
-    observe: () => void;
-    disconnect: () => void;
-    unobserve: () => void;
-  }) {
-    this.observe = vi.fn();
+  vi.fn(function (
+    this: {
+      observe: (el: Element) => void;
+      disconnect: () => void;
+      unobserve: () => void;
+    },
+    cb: (entries: { isIntersecting: boolean }[]) => void,
+  ) {
+    this.observe = vi.fn((el: Element) => {
+      observed.push({ el, cb });
+    });
     this.disconnect = vi.fn();
     this.unobserve = vi.fn();
   }),
 );
+
+/** Bring the list's bottom sentinel into view. */
+function reachListEnd(container: HTMLElement): boolean {
+  const sentinel = container.querySelector("[data-sentinel='bottom']");
+  const entry = observed.find((o) => o.el === sentinel);
+  entry?.cb([{ isIntersecting: true }]);
+  return entry !== undefined;
+}
 
 vi.stubGlobal(
   "ResizeObserver",
@@ -90,6 +110,7 @@ vi.mock("$lib/shell/context.js", async (importOriginal) => ({
 }));
 
 beforeEach(() => {
+  observed.length = 0;
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-03-31T12:00:00Z"));
 });
@@ -180,14 +201,139 @@ describe("TicketPreviewList", () => {
     expect(cards.length).toBe(3);
   });
 
-  it("packs an even two rows in grid mode (cap of six)", () => {
+  it("applies the same cap in grid mode", () => {
     const { container } = render(TicketPreviewList, {
-      props: { tickets: makeRecords(8), mapper, viewMode: "grid" },
+      props: {
+        tickets: makeRecords(8),
+        mapper,
+        viewMode: "grid",
+        maxVisible: 3,
+      },
     });
     const cards = container.querySelectorAll(
       "[data-testid='ticket-card-wrap']",
     );
-    expect(cards.length).toBe(6);
+    expect(cards.length).toBe(3);
+  });
+
+  it("caps at the dashboard lane cap when no cap is given", () => {
+    const { container } = render(TicketPreviewList, {
+      props: {
+        tickets: makeRecords(DASHBOARD_LANE_CAP + 2),
+        mapper,
+        viewMode: LIST,
+      },
+    });
+    const cards = container.querySelectorAll(
+      "[data-testid='ticket-card-wrap']",
+    );
+    expect(cards.length).toBe(DASHBOARD_LANE_CAP);
+  });
+
+  it("shows every row when uncapped", () => {
+    const { container } = render(TicketPreviewList, {
+      props: {
+        tickets: makeRecords(12),
+        mapper,
+        viewMode: LIST,
+        maxVisible: null,
+      },
+    });
+    const cards = container.querySelectorAll(
+      "[data-testid='ticket-card-wrap']",
+    );
+    expect(cards.length).toBe(12);
+  });
+
+  it("loads more at the list end when uncapped", () => {
+    const onloadmore = vi.fn();
+    const { container } = render(TicketPreviewList, {
+      props: {
+        tickets: makeRecords(3),
+        mapper,
+        viewMode: LIST,
+        maxVisible: null,
+        onloadmore,
+      },
+    });
+    expect(reachListEnd(container)).toBe(true);
+    expect(onloadmore).toHaveBeenCalledOnce();
+  });
+
+  it("does not page a capped list", () => {
+    const onloadmore = vi.fn();
+    const { container } = render(TicketPreviewList, {
+      props: {
+        tickets: makeRecords(3),
+        mapper,
+        viewMode: LIST,
+        maxVisible: 3,
+        onloadmore,
+      },
+    });
+    expect(reachListEnd(container)).toBe(false);
+    expect(onloadmore).not.toHaveBeenCalled();
+  });
+
+  it("renders a failed fetch below the rows already loaded, with retry", async () => {
+    const onretry = vi.fn();
+    const { container } = render(TicketPreviewList, {
+      props: {
+        tickets: makeRecords(2),
+        mapper,
+        viewMode: LIST,
+        error: new Error("page failed"),
+        onretry,
+      },
+    });
+    expect(
+      container.querySelectorAll("[data-testid='ticket-card-wrap']").length,
+    ).toBe(2);
+    await fireEvent.click(screen.getByText("Try again"));
+    expect(onretry).toHaveBeenCalledOnce();
+  });
+
+  it("shows the error instead of the empty state when nothing loaded", () => {
+    render(TicketPreviewList, {
+      props: {
+        tickets: [],
+        mapper,
+        viewMode: LIST,
+        error: new Error("first page failed"),
+        onretry: vi.fn(),
+      },
+    });
+    expect(screen.queryByText("Nothing here right now")).toBeNull();
+    expect(screen.getByText("Try again")).toBeTruthy();
+  });
+
+  it("marks a floor total in the 'see all' label", () => {
+    render(TicketPreviewList, {
+      props: {
+        tickets: makeRecords(5),
+        mapper,
+        viewMode: LIST,
+        maxVisible: 3,
+        totalCount: 12,
+        countIsFloor: true,
+        onseeall: vi.fn(),
+      },
+    });
+    expect(screen.getByText("See all (12+)")).toBeTruthy();
+  });
+
+  it("passes idPrefix through the page-scroller path unchanged", () => {
+    const scroller = document.createElement("div");
+    const { container } = render(TicketPreviewList, {
+      props: {
+        tickets: makeRecords(2),
+        mapper,
+        viewMode: "table",
+        idPrefix: "ticket-on-hold",
+        scrollContainer: scroller,
+      },
+    });
+    expect(container.querySelector("#ticket-on-hold-1")).toBeTruthy();
   });
 
   it("applies the mode class to the list container", () => {
@@ -305,5 +451,118 @@ describe("TicketPreviewList", () => {
     // Second click flips to ascending; the unassigned row still sits last.
     await fireEvent.click(header);
     expect(cellTexts()).toEqual(["Ann", "Zoe", ""]);
+  });
+
+  // A ticket can sit in two dashboard sections at once; each section's
+  // prefix keeps the table row ids unique on the page.
+  it("passes idPrefix through to the table row ids", () => {
+    const { container } = render(TicketPreviewList, {
+      props: {
+        tickets: makeRecords(2),
+        mapper,
+        viewMode: "table",
+        idPrefix: "ticket-needs-attention",
+      },
+    });
+    expect(container.querySelector("#ticket-needs-attention-1")).toBeTruthy();
+    expect(container.querySelector("#ticket-needs-attention-2")).toBeTruthy();
+    expect(container.querySelector("#ticket-1")).toBeNull();
+  });
+
+  it("keeps the ticket-<id> row id when no idPrefix is given", () => {
+    const { container } = render(TicketPreviewList, {
+      props: { tickets: makeRecords(2), mapper, viewMode: "table" },
+    });
+    expect(container.querySelector("#ticket-1")).toBeTruthy();
+  });
+
+  describe("scrolling in its own body", () => {
+    it("makes the body a focusable region named by the given heading", () => {
+      const { container } = render(TicketPreviewList, {
+        props: {
+          tickets: makeRecords(3),
+          mapper,
+          viewMode: LIST,
+          maxVisible: null,
+          scrollRegionLabelledBy: "my-tickets-heading",
+        },
+      });
+      const body = container.querySelector(".preview-body");
+      expect(body?.getAttribute("role")).toBe("region");
+      expect(body?.getAttribute("tabindex")).toBe("0");
+      expect(body?.getAttribute("aria-labelledby")).toBe("my-tickets-heading");
+      expect(body?.classList.contains("own-scroll")).toBe(true);
+    });
+
+    it("pages against the body, not the page", () => {
+      const onloadmore = vi.fn();
+      const page = document.createElement("div");
+      const { container } = render(TicketPreviewList, {
+        props: {
+          tickets: makeRecords(3),
+          mapper,
+          viewMode: LIST,
+          maxVisible: null,
+          scrollContainer: page,
+          scrollRegionLabelledBy: "my-tickets-heading",
+          onloadmore,
+        },
+      });
+      const body = container.querySelector(".preview-body");
+      const sentinel = container.querySelector("[data-sentinel='bottom']");
+      expect(body?.contains(sentinel ?? null)).toBe(true);
+      expect(reachListEnd(container)).toBe(true);
+      expect(onloadmore).toHaveBeenCalledOnce();
+    });
+
+    it("keeps the same body element as a plain block while the page scrolls", () => {
+      const { container } = render(TicketPreviewList, {
+        props: { tickets: makeRecords(3), mapper, viewMode: LIST },
+      });
+      const body = container.querySelector(".preview-body");
+      expect(body).toBeTruthy();
+      expect(body?.hasAttribute("role")).toBe(false);
+      expect(body?.hasAttribute("tabindex")).toBe(false);
+      expect(body?.hasAttribute("aria-labelledby")).toBe(false);
+    });
+
+    it("keeps 'See all' outside the body, where a lane lines it up", () => {
+      const { container } = render(TicketPreviewList, {
+        props: {
+          tickets: makeRecords(3),
+          mapper,
+          viewMode: LIST,
+          maxVisible: null,
+          totalCount: 10,
+          scrollRegionLabelledBy: "my-tickets-heading",
+          onseeall: vi.fn(),
+        },
+      });
+      const seeAll = screen.getByRole("button", { name: /see all/i });
+      expect(container.querySelector(".preview-body")?.contains(seeAll)).toBe(
+        false,
+      );
+    });
+  });
+
+  it("tags each rendered ticket with its id, in every view", () => {
+    const cards = render(TicketPreviewList, {
+      props: { tickets: makeRecords(2), mapper, viewMode: LIST },
+    });
+    expect(
+      [...cards.container.querySelectorAll("[data-ticket-id]")].map((el) =>
+        el.getAttribute("data-ticket-id"),
+      ),
+    ).toEqual(["1", "2"]);
+    cards.unmount();
+
+    const table = render(TicketPreviewList, {
+      props: { tickets: makeRecords(2), mapper, viewMode: "table" },
+    });
+    expect(
+      [...table.container.querySelectorAll("tr[data-ticket-id]")].map((el) =>
+        el.getAttribute("data-ticket-id"),
+      ),
+    ).toEqual(["1", "2"]);
   });
 });

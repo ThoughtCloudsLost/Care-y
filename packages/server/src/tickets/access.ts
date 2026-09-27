@@ -19,7 +19,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { ForbiddenError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
-import type { TicketId, UserId } from "@care-y/shared";
+import type { QueueId, TicketId, UserId } from "@care-y/shared";
 
 export interface TicketAccessChecker {
   assertAccess(userId: UserId, ticketId: TicketId): Promise<void>;
@@ -77,4 +77,50 @@ export function createTicketAccessChecker(
   }
 
   return { assertAccess, canAccess };
+}
+
+/** Who can open a ticket, and the queue it currently sits in. */
+export interface TicketAudience {
+  readonly queueId: QueueId;
+  readonly userIds: readonly UserId[];
+}
+
+/**
+ * The set form of canAccess: every user the three checks above admit for
+ * one ticket (assignee, ticket watchers, members of the ticket's queue).
+ * Returns null when the ticket does not exist.
+ *
+ * Anything that tells users about a ticket without them asking for it
+ * resolves its recipients here, so a user who cannot open the ticket never
+ * learns it exists. A change to the rule in canAccess must change this too;
+ * the tests hold the two to the same answer.
+ */
+export async function resolveTicketAudience(
+  db: Kysely<TenantDatabase>,
+  ticketId: TicketId,
+): Promise<TicketAudience | null> {
+  const ticket = await db
+    .selectFrom("tickets")
+    .select(["assigned_to", "queue_id"])
+    .where("id", "=", ticketId)
+    .executeTakeFirst();
+
+  if (!ticket) return null;
+
+  const rows = await db
+    .selectFrom("ticket_watchers")
+    .select("user_id")
+    .where("ticket_id", "=", ticketId)
+    .union(
+      db
+        .selectFrom("queue_assignments")
+        .select("user_id")
+        .where("queue_id", "=", ticket.queue_id),
+    )
+    .execute();
+
+  const userIds = new Set<UserId>(rows.map((r) => r.user_id));
+  if (ticket.assigned_to !== null) userIds.add(ticket.assigned_to);
+
+  return { queueId: ticket.queue_id, userIds: [...userIds] };
 }

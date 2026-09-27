@@ -10,6 +10,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import { SvelteSet } from "svelte/reactivity";
+import { createRawSnippet } from "svelte";
 
 // vi.mock required: $lib/paraglide/messages.js is a Paraglide-generated module
 // that may not resolve correctly in the vitest Vite alias chain. Spread
@@ -570,5 +571,38 @@ describe("FilterPillBar popover interaction", () => {
 
     // Should show the pill's own label as fallback
     expect(container.textContent).toContain("Date");
+  });
+
+  it("renders the leading snippet before the pills, after the bookmark", () => {
+    const leading = createRawSnippet(() => ({
+      render: () => `<button type="button" data-testid="leading">Lead</button>`,
+    }));
+    const { container } = render(FilterPillBar, {
+      pills: makePills(),
+      activeCount: 1,
+      ontoggle: noop,
+      onselect: noop,
+      ondatechange: noop,
+      onclearall: noop,
+      oncreateshortcut: noop,
+      leading,
+    });
+
+    const bar = container.querySelector("[role='toolbar']");
+    const lead = container.querySelector("[data-testid='leading']");
+    const bookmark = container.querySelector(
+      "[aria-label='Save filter shortcut']",
+    );
+    const pillScroll = container.querySelector(".pill-scroll");
+    expect(lead?.parentElement).toBe(bar);
+    if (lead === null || bookmark === null || pillScroll === null) {
+      throw new Error("bar did not render its parts");
+    }
+    expect(bookmark.compareDocumentPosition(lead)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(lead.compareDocumentPosition(pillScroll)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FILTER_ID_LIST_MAX } from "./limits.js";
 import {
   createKbCategoryInputSchema,
   updateKbCategoryInputSchema,
@@ -186,23 +187,48 @@ describe("updateKbItemInputSchema", () => {
 });
 
 describe("kbItemListInputSchema", () => {
+  it("rejects more category ids than the filter cap", () => {
+    const categoryIds = Array.from({ length: FILTER_ID_LIST_MAX + 1 }, () =>
+      crypto.randomUUID(),
+    );
+    expect(kbItemListInputSchema.safeParse({ categoryIds }).success).toBe(
+      false,
+    );
+  });
+
   it("accepts minimal input (defaults apply)", () => {
     const result = kbItemListInputSchema.safeParse({});
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.limit).toBe(50);
-      expect(result.data.categoryId).toBeUndefined();
+      expect(result.data.categoryIds).toBeUndefined();
       expect(result.data.cursor).toBeUndefined();
     }
   });
 
   it("accepts full input with category filter and cursor", () => {
     const result = kbItemListInputSchema.safeParse({
-      categoryId: VALID_UUID,
+      categoryIds: [VALID_UUID],
       limit: 25,
       cursor: "2026-03-24T00:00:00.000Z|550e8400-e29b-41d4-a716-446655440000",
     });
     expect(result.success).toBe(true);
+  });
+
+  it("accepts several categories and an empty selection", () => {
+    const several = kbItemListInputSchema.safeParse({
+      categoryIds: [VALID_UUID, "660e8400-e29b-41d4-a716-446655440001"],
+    });
+    expect(several.success).toBe(true);
+    expect(kbItemListInputSchema.safeParse({ categoryIds: [] }).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects a category id that is not a UUID", () => {
+    expect(
+      kbItemListInputSchema.safeParse({ categoryIds: ["not-a-uuid"] }).success,
+    ).toBe(false);
   });
 
   it("rejects limit below 1", () => {

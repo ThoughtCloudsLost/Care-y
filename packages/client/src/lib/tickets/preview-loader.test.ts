@@ -13,6 +13,7 @@ import {
   type PreviewQueryResult,
 } from "./preview-loader.svelte.js";
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
+import { RECENT_FOLLOW_UPS_MAX_TICKET_IDS } from "@care-y/shared";
 
 const KEY_WRAP = {
   ephemeralPoint: "ep",
@@ -183,6 +184,70 @@ describe("createPreviewLoader", () => {
 
       expect(loader.get("t-1")).toHaveLength(1);
       expect(loader.get("t-2")).toEqual([]);
+    });
+
+    it("sets empty arrays when an eager load fails instead of rejecting", async () => {
+      queryMock.mockRejectedValueOnce(new Error("network error"));
+
+      await expect(loader.eagerLoad(["t-1"])).resolves.toBeUndefined();
+      expect(loader.get("t-1")).toEqual([]);
+    });
+  });
+
+  // The recentFollowUps schema rejects more than 50 IDs, so a larger
+  // list must go out as several requests or every preview blanks.
+  describe("chunking", () => {
+    const ids = Array.from({ length: 120 }, (_, i) => `t-${i}`);
+
+    function requestedChunks(): string[][] {
+      return queryMock.mock.calls.map((call) => call[0] as string[]);
+    }
+
+    it("splits an eager load over the schema max into requests of at most 50", async () => {
+      await loader.eagerLoad(ids);
+
+      const chunks = requestedChunks();
+      expect(chunks).toHaveLength(3);
+      for (const c of chunks) {
+        expect(c.length).toBeLessThanOrEqual(RECENT_FOLLOW_UPS_MAX_TICKET_IDS);
+      }
+      expect(chunks.flat()).toEqual(ids);
+    });
+
+    it("splits an observed batch over the schema max into requests of at most 50", async () => {
+      for (const id of ids) loader.observe(id);
+      await vi.advanceTimersByTimeAsync(60);
+
+      const chunks = requestedChunks();
+      expect(chunks).toHaveLength(3);
+      for (const c of chunks) {
+        expect(c.length).toBeLessThanOrEqual(RECENT_FOLLOW_UPS_MAX_TICKET_IDS);
+      }
+      expect(chunks.flat()).toEqual(ids);
+    });
+
+    it("keeps other chunks' previews when one eager chunk fails", async () => {
+      queryMock.mockRejectedValueOnce(new Error("network error"));
+
+      await loader.eagerLoad(ids);
+
+      // First chunk failed: its tickets fall back to empty.
+      expect(loader.get("t-0")).toEqual([]);
+      expect(loader.get("t-49")).toEqual([]);
+      // Later chunks still carry their previews.
+      expect(loader.get("t-50")).toHaveLength(1);
+      expect(loader.get("t-119")).toHaveLength(1);
+    });
+
+    it("keeps other chunks' previews when one observed chunk fails", async () => {
+      queryMock.mockRejectedValueOnce(new Error("network error"));
+
+      for (const id of ids) loader.observe(id);
+      await vi.advanceTimersByTimeAsync(60);
+
+      expect(loader.get("t-0")).toEqual([]);
+      expect(loader.get("t-50")).toHaveLength(1);
+      expect(loader.get("t-119")).toHaveLength(1);
     });
   });
 

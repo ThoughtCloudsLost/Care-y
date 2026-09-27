@@ -25,3 +25,16 @@ export function labelToggleInput(node: HTMLElement, label: string): void {
   const input = node.querySelector<HTMLInputElement>('input[type="checkbox"]');
   if (input) input.setAttribute("aria-label", label);
 }
+
+/**
+ * Move focus to a jump target (a section, a heading) without scrolling.
+ * An element that is not focusable on its own gets tabindex -1, so
+ * script can focus it while it stays out of the tab order; a control
+ * that already takes focus (a button) is left as it is.
+ */
+export function focusJumpTarget(el: HTMLElement): void {
+  if (!el.hasAttribute("tabindex") && el.tabIndex < 0) {
+    el.setAttribute("tabindex", "-1");
+  }
+  el.focus({ preventScroll: true });
+}

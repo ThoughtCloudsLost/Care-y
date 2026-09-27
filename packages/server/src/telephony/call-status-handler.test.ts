@@ -4,6 +4,7 @@ import {
   type CallStatusDeps,
 } from "./call-status-handler.js";
 import { createCallTracker, type TrackedCall } from "./call-tracker.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 import type {
   OrgSchema,
   TicketId,
@@ -111,6 +112,36 @@ describe("handleCallStatus", () => {
       call_status: "no_answer",
       call_duration_seconds: null,
     });
+  });
+
+  it("announces the ticket once the call follow-up is written", async () => {
+    const tracker = createCallTracker();
+    await tracker.track(TEST_ORG_SCHEMA, "CA321" as CallSid, makeTracked());
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+    const deps = { ...makeDeps(tracker), onTicketChanged };
+
+    await handleCallStatus(
+      TEST_ORG_SCHEMA,
+      { CallSid: "CA321", CallStatus: "completed" },
+      deps,
+    );
+
+    expect(deps.inserts).toHaveLength(1);
+    expect(onTicketChanged).toHaveBeenCalledExactlyOnceWith(TEST_TICKET_ID);
+  });
+
+  it("announces nothing when no follow-up is written", async () => {
+    const tracker = createCallTracker();
+    await tracker.track(TEST_ORG_SCHEMA, "CA654" as CallSid, makeTracked());
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+
+    await handleCallStatus(
+      TEST_ORG_SCHEMA,
+      { CallSid: "CA654", CallStatus: "ringing" },
+      { ...makeDeps(tracker), onTicketChanged },
+    );
+
+    expect(onTicketChanged).not.toHaveBeenCalled();
   });
 
   it("ignores non-terminal statuses", async () => {

@@ -1,12 +1,14 @@
 /**
- * Centralized back navigation for shell routes.
+ * Centralized navigation for shell routes.
  *
- * Uses browser history when available (user navigated within the app).
- * Falls back to a default route when this is the first page in the session
- * (deep link, bookmark, or fresh tab).
+ * Back navigation uses browser history when available (user navigated
+ * within the app). It falls back to a default route when this is the first
+ * page in the session (deep link, bookmark, or fresh tab).
  */
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
+import { emptyLaneFilterState } from "$lib/prefs/dashboard-filters.svelte.js";
+import { filterStore } from "$lib/stores/filters.svelte.js";
 
 /**
  * Whether the user has performed at least one in-app navigation.
@@ -51,4 +53,19 @@ export function shellBack(fallbackRoute: AppRoute = "/"): void {
   } else {
     void goto(resolve(fallbackRoute));
   }
+}
+
+/**
+ * Opens the tickets page showing one queue. Every other filter is cleared
+ * and the current sort kept. The queue travels as filter state, never in
+ * the URL.
+ */
+export function openTicketsForQueue(queueId: string): void {
+  filterStore.applyState({
+    ...emptyLaneFilterState(),
+    queueIds: [queueId],
+    sortField: filterStore.sort.field,
+    sortDirection: filterStore.sort.direction,
+  });
+  void goto(resolve("/tickets"));
 }

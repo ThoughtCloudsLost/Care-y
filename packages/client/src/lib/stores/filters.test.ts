@@ -439,3 +439,45 @@ describe("filterStore", () => {
     });
   });
 });
+
+describe("createFilterStore", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("creates stores that do not share state", async () => {
+    const { createFilterStore } = await import("./filters.svelte.ts");
+    const a = createFilterStore();
+    const b = createFilterStore();
+
+    a.toggleStatus("hold");
+    a.toggleQueue("q-1");
+    a.togglePriority("urgent");
+    a.setAssignee(null);
+    a.setUnreadOnly(true);
+    a.setSort("date", "asc");
+
+    expect(b.statuses.size).toBe(0);
+    expect(b.queueIds.size).toBe(0);
+    expect(b.priorities.size).toBe(0);
+    expect(b.assigneeId).toBeUndefined();
+    expect(b.unreadOnly).toBe(false);
+    expect(b.sort).toEqual({ field: "last_activity", direction: "desc" });
+    expect(b.activeCount).toBe(0);
+    expect(b.serverParams.onHold).toBeUndefined();
+    expect(a.serverParams.onHold).toBe(true);
+
+    b.clearAll();
+    expect(a.statuses.has("hold")).toBe(true);
+  });
+
+  it("creates stores independent of the filterStore singleton", async () => {
+    const { createFilterStore, filterStore } =
+      await import("./filters.svelte.ts");
+    const lane = createFilterStore();
+
+    lane.toggleStatus("new");
+
+    expect(filterStore.statuses.size).toBe(0);
+  });
+});

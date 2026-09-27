@@ -21,6 +21,10 @@ import type {
   MergeService,
   MergeEventRecord,
 } from "../tickets/merge-service.js";
+import {
+  announceClientTickets,
+  type TicketChangeListener,
+} from "../tickets/ticket-live-events.js";
 import { NotFoundError, ConflictError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { TicketStatus } from "@care-y/shared";
@@ -158,6 +162,8 @@ export interface ClientServiceDeps {
   readonly indexer: BlindIndexer;
   readonly mergeService: MergeService;
   readonly orgId: OrgId;
+  /** Told about each ticket of a client whose alias or phone changed. */
+  readonly onTicketChanged?: TicketChangeListener;
 }
 
 export function createClientService(deps: ClientServiceDeps): ClientService {
@@ -412,6 +418,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         }
         throw err;
       }
+      void announceClientTickets(db, clientId, deps.onTicketChanged);
 
       // Metadata carries the client id only. Aliases are operator-supplied free
       // text, so both the old and new value may name a real person, and the
@@ -524,6 +531,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         //    would produce false duplicate matches)
         await trx.deleteFrom("phones").where("id", "=", oldPhoneId).execute();
       });
+      void announceClientTickets(db, clientId, deps.onTicketChanged);
 
       await audit.log({
         eventType: "client_phone_changed",

@@ -78,6 +78,12 @@ const UNGATED_PROCEDURES: Record<string, string> = {
   "recentViews.put":
     "caller writes their own recently-viewed history (authedProcedure)",
 
+  // --- prefBlobs: self-service ---
+  "prefBlobs.get":
+    "caller reads their own sealed preference document (authedProcedure)",
+  "prefBlobs.put":
+    "caller writes their own sealed preference document (authedProcedure)",
+
   // --- twoFactor: enrollment and verification ---
   "twoFactor.status":
     "2FA enrollment status for the caller's own session (authedProcedure)",

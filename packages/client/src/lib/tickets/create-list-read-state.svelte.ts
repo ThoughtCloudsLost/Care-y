@@ -25,6 +25,7 @@
  */
 
 import type { CreateQueryResult } from "@tanstack/svelte-query";
+import { SvelteMap } from "svelte/reactivity";
 import { READ_STATE_TIMESTAMPS_PER_TICKET } from "@care-y/shared";
 import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
 import type {
@@ -54,7 +55,7 @@ export interface SweepReadStatePage {
   readonly nextCursor: string | null;
 }
 
-// ── Fetch helpers (the page wires these into its createQuery calls) ──
+// ── Fetch helpers (createReadStateQueries in queries.ts wires these) ──
 
 /** tickets.listReadState accepts at most 50 ids per call. */
 export const READ_STATE_BATCH_LIMIT = 50;
@@ -91,6 +92,29 @@ export async function fetchSweepToExhaustion(
     cursor = page.nextCursor ?? undefined;
   } while (cursor !== undefined);
   return items;
+}
+
+/**
+ * Key wraps by ticket id for window cursor decrypts. Sweep entries
+ * supply wraps for tickets with no loaded row; each row set then
+ * overrides them in order, so a row's own wrap wins. Build it inside a
+ * $derived so it follows the sweep and the rows.
+ */
+export function collectKeyWraps(
+  sweep: readonly SweepReadStateEntry[] | undefined,
+  ...rowSets: readonly Iterable<{
+    readonly id: string;
+    readonly keyWrap: TicketKeyWrap | null;
+  }>[]
+): SvelteMap<string, TicketKeyWrap | null> {
+  const map = new SvelteMap<string, TicketKeyWrap | null>();
+  for (const entry of sweep ?? []) {
+    if (entry.keyWrap !== null) map.set(entry.ticketId, entry.keyWrap);
+  }
+  for (const rows of rowSets) {
+    for (const row of rows) map.set(row.id, row.keyWrap);
+  }
+  return map;
 }
 
 // ── Composable ──

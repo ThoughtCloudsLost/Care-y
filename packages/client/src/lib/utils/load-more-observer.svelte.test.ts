@@ -54,6 +54,16 @@ describe("loadMoreObserver", () => {
     expect(stub.options()).toEqual({ rootMargin: "200px" });
   });
 
+  it("uses the given root with the same lookahead", () => {
+    const stub = stubIntersectionObserver();
+    const root = {} as unknown as HTMLElement;
+
+    loadMoreObserver(vi.fn(), root)(el);
+
+    expect(stub.options()).toEqual({ root, rootMargin: "200px" });
+    expect(stub.options()?.root).toBe(root);
+  });
+
   it("calls onloadmore when the sentinel intersects", () => {
     const stub = stubIntersectionObserver();
     const onloadmore = vi.fn();

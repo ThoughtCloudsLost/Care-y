@@ -31,6 +31,7 @@ import { createAccount } from "./account-service.js";
 import { storeClientCopy } from "./portal-message-service.js";
 import type { EciesTripleBuffers } from "./portal-message-service.js";
 import { enqueueNotification } from "../notifications/outbox.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 import type {
   TicketId,
   FollowupId,
@@ -177,6 +178,8 @@ export async function createIntakeTicket(
     readonly orgSchema: OrgSchema;
     readonly orgSlug: OrgSlug;
     readonly accountServiceDeps?: AccountServiceDeps;
+    /** Called with the new ticket id after the intake commits. */
+    readonly onTicketChanged?: TicketChangeListener;
   },
   input: IntakeTicketInput,
 ): Promise<IntakeTicketResult> {
@@ -394,6 +397,7 @@ export async function createIntakeTicket(
     return { ticketId: input.ticketId, clientAlias: alias };
   });
 
+  deps.onTicketChanged?.(result.ticketId);
   return result;
 }
 

@@ -3,7 +3,7 @@
   import TicketPlus from "$lib/components/icons/TicketPlus.svelte";
   import TicketCheck from "$lib/components/icons/TicketCheck.svelte";
   import TicketX from "$lib/components/icons/TicketX.svelte";
-  import type { Component } from "svelte";
+  import type { Component, Snippet } from "svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -51,6 +51,10 @@
     expanded: boolean;
     ontoggle: () => void;
     ontap?: (ticketId: string) => void;
+    /** Passed to the section header (the filter button). */
+    headerAction?: Snippet;
+    /** Passed to the section (the filter row). */
+    filterRow?: Snippet;
   }
 
   let {
@@ -60,6 +64,8 @@
     expanded,
     ontoggle,
     ontap,
+    headerAction,
+    filterRow,
   }: ActivitySectionProps = $props();
 
   const summary = $derived(
@@ -142,6 +148,8 @@
   {loading}
   {expanded}
   {ontoggle}
+  {headerAction}
+  {filterRow}
 >
   {#if loading}
     <div class="activity-content skeleton-pulse">
@@ -197,7 +205,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
-    padding: 0 var(--page-pad-x) 0.25rem;
+    padding: 0 var(--section-inset, var(--page-pad-x)) 0.25rem;
   }
 
   .activity-summary {
@@ -272,7 +280,7 @@
   }
 
   .no-activity {
-    padding: 0 1rem 0.5rem;
+    padding: 0 var(--section-inset, var(--page-pad-x)) 0.5rem;
     font-size: var(--text-base);
     color: var(--muted);
   }

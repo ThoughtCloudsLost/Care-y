@@ -29,9 +29,12 @@
     ManageConfig,
   } from "$lib/shell/types.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { buildDateRangeLabel } from "$lib/tickets/ticket-list-utils.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { kbKeys } from "$lib/query/keys.js";
+  import { invalidateKbArticles } from "$lib/query/invalidate-kb-articles.js";
+  import { buildKbFilterSummary } from "$lib/utils/kb-filter-summary.js";
   import {
     getOrgDecryptCache,
     getCurrentUserId,
@@ -57,7 +60,14 @@
   } from "@care-y/shared";
   import { canCall } from "$lib/auth/procedure-gates.js";
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
-  import type { PillDefinition } from "$lib/components/filters/filter-types.js";
+  import type {
+    NamedOptionSource,
+    PillDefinition,
+  } from "$lib/components/filters/filter-types.js";
+  import {
+    buildKbAuthorPill,
+    buildKbCategoryPill,
+  } from "$lib/components/library/kb-filter-pills.js";
   import CreateSavedFilter from "$lib/components/filters/CreateSavedFilter.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
   import ArticleCard from "$lib/components/library/ArticleCard.svelte";
@@ -184,16 +194,6 @@
     articlesQuery.data?.pages.flatMap((p) => p.items) ?? [],
   );
 
-  // Client-side category post-filter: when multiple categories are selected,
-  // the server receives no categoryId filter (it only supports one). We
-  // filter client-side instead.
-  const filteredArticles = $derived.by(() => {
-    if (kbFilterStore.categoryIds.size <= 1) return allArticles;
-    return allArticles.filter((a) =>
-      kbFilterStore.categoryIds.has(a.categoryId),
-    );
-  });
-
   type CardViewMode = "list" | "cards" | "grid";
   function isCardViewMode(v: string): v is CardViewMode {
     return v === "list" || v === "cards" || v === "grid";
@@ -210,15 +210,13 @@
     scrollContainer: () => scrollEl,
   });
 
-  const filteredArticleIds = $derived(
-    new Set(filteredArticles.map((a) => a.id)),
-  );
+  const articleIds = $derived(new Set(allArticles.map((a) => a.id)));
 
   const titleMatchIds = $derived.by((): KbItemId[] => {
     if (overlay.term == null) return [];
     const ids: KbItemId[] = [];
     const haystack: string[] = [];
-    for (const article of filteredArticles) {
+    for (const article of allArticles) {
       const title = orgCache.decrypt(
         `kb-item:${article.id}`,
         article.encryptedTitle,
@@ -257,7 +255,7 @@
     const merged = [...titleMatchIds];
     for (const id of cms) {
       const kbId = kbItemIdSchema.parse(id);
-      if (!seen.has(kbId) && filteredArticleIds.has(kbId)) {
+      if (!seen.has(kbId) && articleIds.has(kbId)) {
         merged.push(kbId);
       }
     }
@@ -274,14 +272,14 @@
 
   const displayItems = $derived.by(() => {
     if (!overlay.active || overlay.term == null || overlay.term.length < 2) {
-      return filteredArticles;
+      return allArticles;
     }
     const matchSet = new Set(searchMatches);
     if (!useMatchOrder) {
-      return filteredArticles.filter((a) => matchSet.has(a.id));
+      return allArticles.filter((a) => matchSet.has(a.id));
     }
-    const idToArticle = new Map(filteredArticles.map((a) => [a.id, a]));
-    const sorted: typeof filteredArticles = [];
+    const idToArticle = new Map(allArticles.map((a) => [a.id, a]));
+    const sorted: typeof allArticles = [];
     for (const id of searchMatches) {
       const a = idToArticle.get(id);
       if (a != null) sorted.push(a);
@@ -405,7 +403,7 @@
     toastStore.show(m.library_move_all_success({ count: String(moved) }));
     pendingAction = false;
     exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: kbKeys.items() });
+    invalidateKbArticles(queryClient);
   }
 
   function handleBulkDelete(): void {
@@ -443,7 +441,7 @@
     toastStore.show(m.library_delete_all_success({ count: String(deleted) }));
     pendingAction = false;
     exitMultiSelect();
-    void queryClient.invalidateQueries({ queryKey: kbKeys.items() });
+    invalidateKbArticles(queryClient);
   }
 
   function handleBulkExport(): void {
@@ -550,10 +548,12 @@
   });
 
   // --- Filter pill definitions ---
-  const categoryOptions = $derived(
+  // Categories with their decrypted names, for the category pill and the
+  // move sheet.
+  const categorySources: NamedOptionSource[] = $derived(
     (categoriesQuery.data ?? []).map((c: CategoryRecord) => ({
-      value: c.id,
-      label: orgCache.decrypt(`kb-cat:${c.id}`, c.encryptedName) ?? "...",
+      id: c.id,
+      name: categoryNameMap.get(c.id) ?? null,
     })),
   );
 
@@ -569,22 +569,16 @@
     return r >= 0.5 ? "high" : "positive";
   });
 
-  const authorOptions = $derived(
-    [...authorNameMap.entries()].map(([id, name]) => ({
-      value: id,
-      label: name,
-    })),
+  const authorSources: NamedOptionSource[] = $derived(
+    [...authorNameMap.entries()].map(([id, name]) => ({ id, name })),
   );
 
   const kbPills: PillDefinition[] = $derived([
-    {
-      id: "category",
-      label: m.library_filter_category(),
-      mode: "multi",
-      options: categoryOptions,
-      selected: kbFilterStore.categoryIds,
-      loading: categoriesQuery.isLoading,
-    },
+    buildKbCategoryPill(
+      categorySources,
+      kbFilterStore.categoryIds,
+      categoriesQuery.isLoading,
+    ),
     {
       id: "rating",
       label: m.library_filter_rating(),
@@ -592,13 +586,7 @@
       options: ratingOptions,
       selected: ratingSelected,
     },
-    {
-      id: "author",
-      label: m.library_filter_author(),
-      mode: "single",
-      options: authorOptions,
-      selected: kbFilterStore.createdBy ?? null,
-    },
+    buildKbAuthorPill(authorSources, kbFilterStore.createdBy ?? null),
     {
       id: "date",
       label: m.library_filter_date_range(),
@@ -617,15 +605,13 @@
   const dateToStr = $derived(
     kbFilterStore.dateTo?.toISOString().slice(0, 10) ?? "",
   );
-  const dateRangeLabel = $derived.by(() => {
-    const from = kbFilterStore.dateFrom;
-    const to = kbFilterStore.dateTo;
-    if (from !== null && to !== null)
-      return `${from.toLocaleDateString()} - ${to.toLocaleDateString()}`;
-    if (from !== null) return `From ${from.toLocaleDateString()}`;
-    if (to !== null) return `To ${to.toLocaleDateString()}`;
-    return m.library_filter_date_range();
-  });
+  const dateRangeLabel = $derived(
+    buildDateRangeLabel(kbFilterStore.dateFrom, kbFilterStore.dateTo, {
+      from: m.tickets_filter_date_from(),
+      to: m.tickets_filter_date_to(),
+      range: m.library_filter_date_range(),
+    }),
+  );
 
   const filterPillsConfig: FilterPillsConfig = $derived({
     pills: kbPills,
@@ -644,18 +630,14 @@
     },
   });
 
-  const filterSummary = $derived.by(() => {
-    const parts: string[] = [];
-    if (kbFilterStore.categoryIds.size > 0) {
-      const count = kbFilterStore.categoryIds.size;
-      parts.push(`${String(count)} categor${count > 1 ? "ies" : "y"}`);
-    }
-    if (kbFilterStore.minRating !== undefined) parts.push("rated");
-    if (kbFilterStore.createdBy !== undefined) parts.push("by author");
-    if (kbFilterStore.dateFrom !== null || kbFilterStore.dateTo !== null)
-      parts.push("date range");
-    return parts.length > 0 ? parts.join(", ") : "No filters";
-  });
+  const filterSummary = $derived(
+    buildKbFilterSummary({
+      categoryCount: kbFilterStore.categoryIds.size,
+      rated: kbFilterStore.minRating !== undefined,
+      byAuthor: kbFilterStore.createdBy !== undefined,
+      dateRange: dateRangeActive,
+    }),
+  );
 
   function handleCreateSavedFilter(meta: {
     encryptedName: string;
@@ -668,8 +650,12 @@
 
   let savedFilterModalOpen = $state(false);
 
-  // Stats row.
-  const articleCount = $derived(filteredArticles.length);
+  // Stats row. Every page carries the server's count of all matching
+  // articles, so the number does not depend on how many pages have loaded.
+  // Null until the first page arrives.
+  const articleCount = $derived(
+    articlesQuery.data?.pages.at(-1)?.total ?? null,
+  );
 
   function handleArticleTap(articleId: string): void {
     haptic();
@@ -686,23 +672,12 @@
     }
   }
 
-  // Categories for move sheet (exclude selected articles' current category).
-  const moveCategoryOptions = $derived(
-    (categoriesQuery.data ?? []).map((c: CategoryRecord) => ({
-      id: c.id,
-      name: categoryNameMap.get(c.id) ?? null,
-    })),
-  );
-
-  // Categories for manage sheet (with article counts).
-  // Only computed when the sheet is open to avoid re-counting on every
-  // infinite scroll page load. Returns empty when closed (sheet is hidden).
+  // Categories for manage sheet. The article counts come from the server,
+  // so they cover every article, not only the loaded pages. Only computed
+  // when the sheet is open, so descriptions are not decrypted for a hidden
+  // sheet. Returns empty when closed.
   const manageCategoryOptions = $derived.by(() => {
     if (!categorySheetOpen) return [];
-    const countMap = new SvelteMap<string, number>();
-    for (const a of allArticles) {
-      countMap.set(a.categoryId, (countMap.get(a.categoryId) ?? 0) + 1);
-    }
     return (categoriesQuery.data ?? []).map((c: CategoryRecord) => ({
       id: c.id,
       name: categoryNameMap.get(c.id) ?? null,
@@ -710,7 +685,7 @@
         c.encryptedDescription !== null && c.encryptedDescription !== ""
           ? orgCache.decrypt(`kb-cat-desc:${c.id}`, c.encryptedDescription)
           : null,
-      articleCount: countMap.get(c.id) ?? 0,
+      articleCount: c.articleCount,
     }));
   });
 
@@ -804,7 +779,7 @@
 {/snippet}
 
 {#snippet libraryStats()}
-  {#if !articlesQuery.isLoading}
+  {#if articleCount !== null}
     <span class="stat-item">
       {m.library_stats_count({ count: String(articleCount) })}
     </span>
@@ -994,7 +969,7 @@
 
 <MoveCategorySheet
   opened={moveSheetOpen}
-  categories={moveCategoryOptions}
+  categories={categorySources}
   ondismiss={() => {
     moveSheetOpen = false;
   }}

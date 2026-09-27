@@ -1,7 +1,10 @@
 <script lang="ts">
   import { List, ListItem, Button, Chip, Block } from "konsta/svelte";
+  import type { Snippet } from "svelte";
   import { GitMerge } from "@lucide/svelte";
   import CollapsibleSection from "./CollapsibleSection.svelte";
+  import EmptyState from "$lib/components/EmptyState.svelte";
+  import { mergeMatchLabel } from "./section-filters.js";
   import type { MergeCandidate } from "$lib/workers/crypto-protocol.js";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -17,6 +20,10 @@
     onreview: (clientIdA: string, clientIdB: string) => void;
     truncated: boolean;
     onsharedline: (matchHash: string) => void;
+    /** Passed to the section header (the filter button). */
+    headerAction?: Snippet;
+    /** Passed to the section (the filter row). */
+    filterRow?: Snippet;
   }
 
   let {
@@ -28,15 +35,11 @@
     onreview,
     truncated,
     onsharedline,
+    headerAction,
+    filterRow,
   }: MergeCandidatesSectionProps = $props();
 
   const visibleCandidates = $derived(candidates.slice(0, MAX_VISIBLE));
-
-  function matchLabel(kind: "phone" | "email"): string {
-    return kind === "phone"
-      ? m.mergeCandidates_match_phone()
-      : m.mergeCandidates_match_email();
-  }
 </script>
 
 <CollapsibleSection
@@ -47,6 +50,8 @@
   iconColor="var(--care)"
   {expanded}
   {ontoggle}
+  {headerAction}
+  {filterRow}
 >
   <Block class="merge-candidates-notice">
     <p class="notice-text">{m.mergeCandidates_coverage_notice()}</p>
@@ -56,47 +61,54 @@
       <p class="notice-text">{m.mergeCandidates_truncated_notice()}</p>
     </Block>
   {/if}
-  <List strong inset>
-    {#each visibleCandidates as candidate (candidate.clientIdA + ":" + candidate.clientIdB)}
-      {@const aliasA = resolveAlias(candidate.clientIdA) ?? "..."}
-      {@const aliasB = resolveAlias(candidate.clientIdB) ?? "..."}
-      <ListItem title={m.mergeCandidates_pair({ aliasA, aliasB })}>
-        {#snippet subtitle()}
-          <Chip class="match-chip" outline>
-            {matchLabel(candidate.matchKind)}
-          </Chip>
-        {/snippet}
-        {#snippet after()}
-          <span class="candidate-actions">
-            <Button
-              small
-              outline
-              onclick={() => onreview(candidate.clientIdA, candidate.clientIdB)}
-            >
-              {m.mergeCandidates_review()}
-            </Button>
-            <Button
-              small
-              clear
-              onclick={() =>
-                ondismiss(candidate.clientIdA, candidate.clientIdB)}
-            >
-              {m.mergeCandidates_dismiss()}
-            </Button>
-            {#if candidate.matchKind === "phone"}
+  <!-- The section shows only while candidates exist, so an empty list
+       here means the section's filter matched none of them. -->
+  {#if candidates.length === 0}
+    <EmptyState title={m.empty_no_results()} />
+  {:else}
+    <List strong inset>
+      {#each visibleCandidates as candidate (candidate.clientIdA + ":" + candidate.clientIdB)}
+        {@const aliasA = resolveAlias(candidate.clientIdA) ?? "..."}
+        {@const aliasB = resolveAlias(candidate.clientIdB) ?? "..."}
+        <ListItem title={m.mergeCandidates_pair({ aliasA, aliasB })}>
+          {#snippet subtitle()}
+            <Chip class="match-chip" outline>
+              {mergeMatchLabel(candidate.matchKind)}
+            </Chip>
+          {/snippet}
+          {#snippet after()}
+            <span class="candidate-actions">
+              <Button
+                small
+                outline
+                onclick={() =>
+                  onreview(candidate.clientIdA, candidate.clientIdB)}
+              >
+                {m.mergeCandidates_review()}
+              </Button>
               <Button
                 small
                 clear
-                onclick={() => onsharedline(candidate.matchHash)}
+                onclick={() =>
+                  ondismiss(candidate.clientIdA, candidate.clientIdB)}
               >
-                {m.mergeCandidates_shared_line()}
+                {m.mergeCandidates_dismiss()}
               </Button>
-            {/if}
-          </span>
-        {/snippet}
-      </ListItem>
-    {/each}
-  </List>
+              {#if candidate.matchKind === "phone"}
+                <Button
+                  small
+                  clear
+                  onclick={() => onsharedline(candidate.matchHash)}
+                >
+                  {m.mergeCandidates_shared_line()}
+                </Button>
+              {/if}
+            </span>
+          {/snippet}
+        </ListItem>
+      {/each}
+    </List>
+  {/if}
 </CollapsibleSection>
 
 <style>
