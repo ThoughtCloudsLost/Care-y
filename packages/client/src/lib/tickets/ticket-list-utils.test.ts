@@ -19,6 +19,8 @@ import {
   GRID_CARD_MIN_WIDTH,
   VALID_STATUSES,
   SORT_FIELDS,
+  LANE_GRID_CARD_MAX_WIDTH,
+  resolveLaneGridColumns,
 } from "./ticket-list-utils.js";
 import type { DisplayStatus } from "./display-status.js";
 
@@ -80,14 +82,33 @@ describe("filterByDisplayStatus", () => {
   // One ticket per display status, so each selection has exactly one
   // correct answer and the four are visibly mutually exclusive.
   const tickets = [
-    { id: "new", status: "open" as const, onHold: false, followUpCount: 0 },
-    { id: "active", status: "open" as const, onHold: false, followUpCount: 3 },
-    { id: "hold", status: "open" as const, onHold: true, followUpCount: 1 },
+    {
+      id: "new",
+      status: "open" as const,
+      onHold: false,
+      followUpCount: 0,
+      hasResponse: false,
+    },
+    {
+      id: "active",
+      status: "open" as const,
+      onHold: false,
+      followUpCount: 3,
+      hasResponse: true,
+    },
+    {
+      id: "hold",
+      status: "open" as const,
+      onHold: true,
+      followUpCount: 1,
+      hasResponse: true,
+    },
     {
       id: "closed",
       status: "closed" as const,
       onHold: false,
       followUpCount: 5,
+      hasResponse: true,
     },
   ];
 
@@ -697,6 +718,23 @@ describe("showCaughtUpLine", () => {
 
   it("hides on an empty list (the full empty state owns that)", () => {
     expect(showCaughtUpLine({ ...base, listCount: 0 })).toBe(false);
+  });
+});
+
+describe("resolveLaneGridColumns", () => {
+  const GAP = 6;
+
+  it("keeps the two column floor in a narrow lane", () => {
+    expect(resolveLaneGridColumns(0, GAP)).toBe(2);
+    expect(resolveLaneGridColumns(390, GAP)).toBe(2);
+  });
+
+  it("adds a column each time another capped card fits", () => {
+    const perCard = LANE_GRID_CARD_MAX_WIDTH + GAP;
+    expect(resolveLaneGridColumns(perCard * 3 - GAP, GAP)).toBe(3);
+    expect(resolveLaneGridColumns(perCard * 3 - GAP - 1, GAP)).toBe(2);
+    // A two-across lane at 1920 is about 783px wide: three cards.
+    expect(resolveLaneGridColumns(783, GAP)).toBe(3);
   });
 });
 

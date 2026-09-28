@@ -2,8 +2,8 @@ import type { TicketForServerFilter } from "../ticket-list-utils.js";
 
 /**
  * A ticket row for filter and facet tests. Defaults to a New ticket: open,
- * not held, no follow-ups, unassigned, normal priority, in the general
- * queue, created 2024-01-10.
+ * not held, no follow-ups and no response, unassigned, normal priority, in
+ * the general queue, created 2024-01-10.
  */
 export function filterRow(
   overrides: Partial<TicketForServerFilter> & { id: string },
@@ -12,6 +12,7 @@ export function filterRow(
     status: "open",
     onHold: false,
     followUpCount: 0,
+    hasResponse: false,
     queueId: "q-general",
     priority: "normal",
     assignedTo: null,

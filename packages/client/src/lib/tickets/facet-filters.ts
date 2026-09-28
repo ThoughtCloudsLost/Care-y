@@ -106,7 +106,7 @@ export function matchesFilters(
 
   // Status
   if (exclude !== "status" && filters.statuses.size > 0) {
-    const ds = deriveDisplayStatus(row.status, row.onHold, row.followUpCount);
+    const ds = deriveDisplayStatus(row.status, row.onHold, row.hasResponse);
     if (!filters.statuses.has(ds)) return false;
   }
 
@@ -191,7 +191,7 @@ export function computeFacets(
   const statusTally = new Map<DisplayStatus, number>();
   for (const row of rows) {
     if (matchesFilters(row, filters, ctx, "status", base)) {
-      const ds = deriveDisplayStatus(row.status, row.onHold, row.followUpCount);
+      const ds = deriveDisplayStatus(row.status, row.onHold, row.hasResponse);
       statusTally.set(ds, (statusTally.get(ds) ?? 0) + 1);
     }
   }

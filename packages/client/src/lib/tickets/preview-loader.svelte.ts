@@ -28,13 +28,21 @@ export interface RawFollowUpPreview {
   readonly source: string;
   readonly type: string;
   readonly encryptedContent: string;
+  /** The ticket's canonical wrap; null for a pending-convergence row. */
   readonly keyWrap: TicketKeyWrap | null;
+  /** A pending-convergence row's own tk_temp wrap, null otherwise. */
+  readonly followUpKeyWrap: TicketKeyWrap | null;
+  /** A pending portal client reply's sealed tk_temp, null otherwise. */
+  readonly portalWrap: string | null;
   readonly createdAt: string;
   readonly hasRecording: boolean;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
   readonly noteTypeId: string | null;
   readonly eventParams: Record<string, unknown> | null;
+  /** Call outcome for phone_call rows, null otherwise. */
+  readonly callStatus: string | null;
+  readonly callDurationSeconds: number | null;
 }
 
 export interface PreviewQueryResult {

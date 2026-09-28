@@ -7,7 +7,10 @@
   "exports": {
     ".": "./src/index.ts",
     "./paraglide/messages.js": "./src/paraglide/messages.js",
-    "./paraglide/runtime.js": "./src/paraglide/runtime.js"
+    "./paraglide/runtime.js": "./src/paraglide/runtime.js",
+    "./dev/seed-stories.js": "./src/dev/seed-stories.ts",
+    "./dev/seed-handbook-ticket.js": "./src/dev/seed-handbook-ticket.ts",
+    "./dev/assets/*": "./src/dev/assets/*"
   },
   "scripts": {
     "build:paraglide": "node scripts/compile-paraglide.js",

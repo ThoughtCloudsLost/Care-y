@@ -116,6 +116,7 @@ function makeRecord(id: string): TicketLikeRecord {
     createdAt: "2026-03-31T11:30:00Z",
     lastActivityAt: null,
     followUpCount: 1,
+    hasResponse: true,
     queueSortOrder: 1,
   };
 }

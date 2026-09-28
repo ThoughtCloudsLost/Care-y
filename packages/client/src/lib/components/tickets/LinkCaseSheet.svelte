@@ -126,7 +126,7 @@
         >
           {#snippet media()}
             <StatusMark
-              status={deriveDisplayStatus(t.status, t.onHold, t.followUpCount)}
+              status={deriveDisplayStatus(t.status, t.onHold, t.hasResponse)}
             />
           {/snippet}
           {#snippet title()}

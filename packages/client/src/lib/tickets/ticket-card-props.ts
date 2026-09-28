@@ -37,6 +37,7 @@ export interface TicketLikeRecord {
   readonly createdAt: string;
   readonly lastActivityAt: string | null;
   readonly followUpCount: number;
+  readonly hasResponse: boolean;
   readonly queueSortOrder: number;
 }
 
@@ -115,7 +116,7 @@ export function mapTicketDisplayFields(
       table: "queues",
       id: t.queueId,
     }),
-    displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
+    displayStatus: deriveDisplayStatus(t.status, t.onHold, t.hasResponse),
     priority: t.priority,
     titleResult: resolveAsyncDecrypt(
       deps.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),

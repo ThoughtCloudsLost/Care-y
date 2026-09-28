@@ -159,6 +159,7 @@ function makeRecord(id: string): TicketLikeRecord {
     createdAt: "2026-03-31T11:30:00Z",
     lastActivityAt: "2026-03-31T11:45:00Z",
     followUpCount: 1,
+    hasResponse: true,
     queueSortOrder: 1,
   };
 }
@@ -243,6 +244,20 @@ describe("TicketPreviewList", () => {
       "[data-testid='ticket-card-wrap']",
     );
     expect(cards.length).toBe(12);
+  });
+
+  it("never offers See all when uncapped, since it pages to every row", () => {
+    render(TicketPreviewList, {
+      props: {
+        tickets: makeRecords(3),
+        mapper,
+        viewMode: LIST,
+        maxVisible: null,
+        totalCount: 40,
+        onseeall: vi.fn(),
+      },
+    });
+    expect(screen.queryByText(/See all/)).toBeNull();
   });
 
   it("loads more at the list end when uncapped", () => {
@@ -532,9 +547,8 @@ describe("TicketPreviewList", () => {
           tickets: makeRecords(3),
           mapper,
           viewMode: LIST,
-          maxVisible: null,
+          maxVisible: 2,
           totalCount: 10,
-          scrollRegionLabelledBy: "my-tickets-heading",
           onseeall: vi.fn(),
         },
       });

@@ -37,6 +37,7 @@ export interface TicketForFilter {
   readonly status: TicketStatus;
   readonly onHold: boolean;
   readonly followUpCount: number;
+  readonly hasResponse: boolean;
 }
 
 /**
@@ -58,7 +59,7 @@ export function filterByDisplayStatus<T extends TicketForFilter>(
   if (selected.size === 0) return tickets;
 
   return tickets.filter((t) =>
-    selected.has(deriveDisplayStatus(t.status, t.onHold, t.followUpCount)),
+    selected.has(deriveDisplayStatus(t.status, t.onHold, t.hasResponse)),
   );
 }
 
@@ -308,6 +309,27 @@ export const GRID_CARD_MIN_WIDTH = 320;
  */
 export function resolveGridColumns(containerWidth: number): number {
   return Math.max(2, Math.floor(containerWidth / GRID_CARD_MIN_WIDTH));
+}
+
+/**
+ * Widest a grid card grows in a dashboard lane. Lanes add columns as they
+ * widen instead of stretching cards; a narrow lane still shrinks them.
+ */
+export const LANE_GRID_CARD_MAX_WIDTH = 240;
+
+/**
+ * Grid columns for a dashboard lane: as many cards of at most
+ * LANE_GRID_CARD_MAX_WIDTH as fit with `gap` between them, never fewer
+ * than two (the grid's floor, as in resolveGridColumns).
+ */
+export function resolveLaneGridColumns(
+  containerWidth: number,
+  gap: number,
+): number {
+  return Math.max(
+    2,
+    Math.floor((containerWidth + gap) / (LANE_GRID_CARD_MAX_WIDTH + gap)),
+  );
 }
 
 /**

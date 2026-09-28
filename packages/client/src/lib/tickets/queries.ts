@@ -196,7 +196,8 @@ export interface FacetIndexData {
 
 /**
  * Fetches every ticket's plaintext metadata (status, priority, queue, assignee,
- * date, follow-up count) in paginated sweeps and returns it as a flat array.
+ * date, follow-up count, response flag) in paginated sweeps and returns it as
+ * a flat array.
  * The consuming code (computeFacets in facet-filters.ts) uses these rows to
  * derive filter option counts entirely in the browser.
  *

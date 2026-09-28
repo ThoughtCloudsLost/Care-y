@@ -305,6 +305,7 @@ function makeTicket(overrides: Record<string, unknown> = {}) {
     queueSortOrder: 1,
     lastActivityAt: null as string | null,
     followUpCount: 0,
+    hasResponse: false,
     assignedDisplayName: null as {
       type: "Buffer";
       data: number[];
@@ -701,6 +702,7 @@ describe("Ticket list page", () => {
           status: "open",
           onHold: false,
           followUpCount: 0,
+          hasResponse: false,
           queueId: "queue-001",
           priority: "normal",
           assignedTo: null,
@@ -733,6 +735,7 @@ describe("Ticket list page", () => {
           status: "open",
           onHold: false,
           followUpCount: 0,
+          hasResponse: false,
           queueId: "queue-001",
           priority: "high",
           assignedTo: "user-001",
@@ -743,6 +746,7 @@ describe("Ticket list page", () => {
           status: "closed",
           onHold: false,
           followUpCount: 3,
+          hasResponse: true,
           queueId: "queue-002",
           priority: "normal",
           assignedTo: null,

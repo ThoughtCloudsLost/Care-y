@@ -386,6 +386,7 @@
   "dashboard_shift_volunteers": "{count} en turno",
   "dashboard_shift_no_shift": "Sin turno activo",
   "dashboard_shift_end": "Terminar turno",
+  "dashboard_shift_start": "Iniciar turno",
   "dashboard_shift_open_with_you_one": "{count} abierto contigo",
   "dashboard_shift_open_with_you_other": "{count} abiertos contigo",
   "dashboard_queues_heading": "{Queues}",

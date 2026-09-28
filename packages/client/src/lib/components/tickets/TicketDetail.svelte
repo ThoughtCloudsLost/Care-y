@@ -1319,16 +1319,7 @@
 {#snippet chatPlaceholder()}
   <TicketPlaceholder {fillerCount}>
     {#each orderedPreviews as fu (fu.id)}
-      {@const previewResult = resolveAsyncDecrypt(
-        followUpCache.decryptContent(
-          fu.id,
-          ticketId,
-          followupSlot(fu.id),
-          fu.keyWrap,
-          fu.encryptedContent,
-        ),
-        fu.keyWrap !== null,
-      )}
+      {@const previewResult = followUpCache.decryptPreview(ticketId, fu)}
       <div class="fu-wrapper">
         <FollowUpBubble
           followUp={fu}

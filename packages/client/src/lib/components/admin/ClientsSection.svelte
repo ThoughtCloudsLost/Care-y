@@ -818,7 +818,7 @@
                     status={deriveDisplayStatus(
                       ticket.status,
                       ticket.onHold,
-                      ticket.followUpCount,
+                      ticket.hasResponse,
                     )}
                   />
                 {/snippet}

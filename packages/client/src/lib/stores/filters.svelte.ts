@@ -8,7 +8,7 @@
  * partition every ticket: `close` clears the hold server-side, which
  * keeps every held ticket open, and a held ticket counts as neither New
  * nor Active. The server stores "open"/"closed" plus an onHold boolean,
- * and "New" vs "Active" comes from followUpCount (see display-status.ts).
+ * and "New" vs "Active" comes from hasResponse (see display-status.ts).
  *
  * Status is multi-select, and the server input cannot express every
  * selection: ("open" | "closed")[] plus one onHold boolean describes an

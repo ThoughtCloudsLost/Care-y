@@ -287,4 +287,47 @@ describe("FollowUpDecryptCache", () => {
       expect(mockDecrypt).toHaveBeenCalledOnce();
     });
   });
+
+  describe("decryptPreview", () => {
+    const preview = {
+      id: FOLLOW_UP_ID,
+      encryptedContent: ENCRYPTED_CONTENT,
+      keyWrap: null,
+      followUpKeyWrap: null,
+      portalWrap: null,
+    };
+
+    it("reads a server written row through its own wrap, not as denied", async () => {
+      const pending = { ...preview, followUpKeyWrap: FOLLOW_UP_KEY_WRAP };
+      expect(cache.decryptPreview(TICKET_ID, pending).status).toBe("loading");
+      expect(mockDecrypt).not.toHaveBeenCalled();
+      expect(mockDecryptAndRewrap).toHaveBeenCalledWith(
+        FOLLOW_UP_ID,
+        TICKET_ID,
+        FOLLOW_UP_KEY_WRAP.ephemeralPoint,
+        FOLLOW_UP_KEY_WRAP.nonce,
+        FOLLOW_UP_KEY_WRAP.wrappedKey,
+        ENCRYPTED_CONTENT,
+      );
+
+      await cache.whenSettled();
+      expect(cache.decryptPreview(TICKET_ID, pending)).toEqual({
+        status: "ready",
+        value: "Rewrap-decrypted content",
+      });
+    });
+
+    it("reads a pending portal reply through its seal", () => {
+      const pending = { ...preview, portalWrap: PORTAL_WRAP };
+      expect(cache.decryptPreview(TICKET_ID, pending).status).toBe("loading");
+      expect(mockDecryptPortalReply).toHaveBeenCalledOnce();
+    });
+
+    it("is denied only when the row carries no key material at all", () => {
+      expect(cache.decryptPreview(TICKET_ID, preview).status).toBe("denied");
+      expect(mockDecrypt).not.toHaveBeenCalled();
+      expect(mockDecryptAndRewrap).not.toHaveBeenCalled();
+      expect(mockDecryptPortalReply).not.toHaveBeenCalled();
+    });
+  });
 });

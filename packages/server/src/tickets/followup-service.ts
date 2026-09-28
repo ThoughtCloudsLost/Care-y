@@ -224,7 +224,7 @@ export interface FollowUpService {
  * Returns a Map keyed by key_generation UUID. Only wraps for the requesting
  * volunteer (userId) are returned, matching the single-user decrypt use case.
  */
-async function fetchFollowUpKeyWraps(
+export async function fetchFollowUpKeyWraps(
   db: Kysely<TenantDatabase>,
   userId: UserId,
   rows: readonly { key_generation?: KeyGeneration | null }[],
@@ -260,7 +260,7 @@ async function fetchFollowUpKeyWraps(
  * the intakeWrap inclusion rule: present only when a pending sealed wrap
  * exists for convergence.
  */
-async function fetchPortalWraps(
+export async function fetchPortalWraps(
   db: Kysely<TenantDatabase>,
   rows: readonly { id: FollowupId; key_generation?: KeyGeneration | null }[],
 ): Promise<Map<FollowupId, string>> {

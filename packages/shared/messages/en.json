@@ -386,6 +386,7 @@
   "dashboard_shift_volunteers": "{count} on shift",
   "dashboard_shift_no_shift": "No active shift",
   "dashboard_shift_end": "End shift",
+  "dashboard_shift_start": "Start shift",
   "dashboard_shift_open_with_you_one": "{count} open with you",
   "dashboard_shift_open_with_you_other": "{count} open with you",
   "dashboard_queues_heading": "{Queues}",

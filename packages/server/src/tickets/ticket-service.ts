@@ -54,6 +54,8 @@ import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { maskPhone } from "../utils/sql.js";
 import { createDependencyService } from "./dependency-service.js";
 import { createReadCursorService } from "./read-cursor-service.js";
+import { hasResponse } from "./has-response.js";
+import { fetchFollowUpKeyWraps, fetchPortalWraps } from "./followup-service.js";
 import {
   ErrorCode,
   aliasHashSchema,
@@ -90,6 +92,12 @@ export interface TicketListRecord extends TicketRecord {
   readonly queueSortOrder: number;
   readonly lastActivityAt: Date | null;
   readonly followUpCount: number;
+  /**
+   * True once a volunteer has replied or reached out, or a call was
+   * answered. System events and internal notes do not count. New and
+   * Active are derived from this, not from followUpCount.
+   */
+  readonly hasResponse: boolean;
   /** Org-key encrypted display name of the assigned volunteer, or null if unassigned. */
   readonly assignedDisplayName: Buffer | null;
 }
@@ -132,12 +140,24 @@ export interface FollowUpPreview {
   readonly type: string;
   readonly encryptedContent: Buffer;
   readonly createdAt: Date;
+  /** The ticket's canonical wrap; null for a pending-convergence row. */
   readonly keyWrap: TicketKeyWrap | null;
+  /**
+   * The row's own tk_temp wrap for this volunteer, present only on a
+   * pending-convergence row (non-null key_generation). Same wrap the
+   * detail list sends as its follow-up keyWrap.
+   */
+  readonly followUpKeyWrap: TicketKeyWrap | null;
+  /** Sealed tk_temp of a pending portal client reply, as in the detail list. */
+  readonly portalWrap: string | null;
   readonly hasRecording: boolean;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
   readonly noteTypeId: NoteTypeId | null;
   readonly eventParams: Record<string, unknown> | null;
+  /** Call outcome for phone_call rows, null otherwise. */
+  readonly callStatus: string | null;
+  readonly callDurationSeconds: number | null;
 }
 
 export interface RecentFollowUpsResult {
@@ -196,6 +216,7 @@ export interface TicketFacetRow {
   readonly queueId: QueueId;
   readonly createdAt: Date;
   readonly followUpCount: number;
+  readonly hasResponse: boolean;
 }
 
 export interface TicketFacetIndexResult {
@@ -370,6 +391,7 @@ interface EnrichedTicketRow extends BaseTicketRow {
   queue_sort_order: number;
   last_activity_at: Date | null;
   followup_count: string | number | bigint | null;
+  has_response: boolean | 0 | 1;
   assigned_display_name: Buffer | null;
 }
 
@@ -402,6 +424,7 @@ function toListRecord(row: EnrichedTicketRow): TicketListRecord {
     queueSortOrder: row.queue_sort_order,
     lastActivityAt: row.last_activity_at,
     followUpCount: Number(row.followup_count),
+    hasResponse: Boolean(row.has_response),
     assignedDisplayName: row.assigned_display_name,
   };
 }
@@ -750,6 +773,8 @@ export function createTicketService(
             .select((sb) => sb.fn.countAll().as("cnt"))
             .whereRef("f.ticket_id", "=", "t.id")
             .as("followup_count"),
+          // Whether anyone has responded yet; see has-response.ts.
+          hasResponse(eb.ref("t.id")).as("has_response"),
         ])
         .where("t.id", "=", ticketId)
         .executeTakeFirst();
@@ -818,6 +843,7 @@ export function createTicketService(
             .select((sb) => sb.fn.countAll().as("cnt"))
             .whereRef("f.ticket_id", "=", "t.id")
             .as("followup_count"),
+          hasResponse(eb.ref("t.id")).as("has_response"),
         ])
         .where("t.queue_id", "in", [...accessibleQueues]);
 
@@ -1082,22 +1108,10 @@ export function createTicketService(
         };
       }
 
-      // Left join follow-up counts so we can distinguish new (0 follow-ups)
-      // from active (1+ follow-ups) within open tickets.
+      // New and Active split open work on whether anyone has responded,
+      // the same rule the list, facet index and client apply (hasResponse).
       const rows = await db
         .selectFrom("tickets as t")
-        .leftJoin(
-          (eb) =>
-            eb
-              .selectFrom("followups")
-              .select([
-                "followups.ticket_id",
-                (sb) => sb.fn.countAll().as("fu_count"),
-              ])
-              .groupBy("followups.ticket_id")
-              .as("fc"),
-          (join) => join.onRef("fc.ticket_id", "=", "t.id"),
-        )
         .where("t.queue_id", "in", [...queueIds])
         .select((eb) => {
           // New, Active, Hold and Closed partition every ticket. `close`
@@ -1110,19 +1124,15 @@ export function createTicketService(
             eb("t.status", "=", "open"),
             eb("t.on_hold", "=", false),
           ]);
-          const followUps = eb.fn.coalesce("fc.fu_count", eb.lit(0));
+          const responded = hasResponse(eb.ref("t.id"));
           const countWhen = (
             condition: Expression<SqlBool>,
           ): ReturnType<typeof eb.fn.sum> =>
             eb.fn.sum(eb.case().when(condition).then(1).else(0).end());
 
           return [
-            countWhen(eb.and([openWork, eb(followUps, "=", 0)])).as(
-              "new_count",
-            ),
-            countWhen(eb.and([openWork, eb(followUps, ">", 0)])).as(
-              "active_count",
-            ),
+            countWhen(eb.and([openWork, eb.not(responded)])).as("new_count"),
+            countWhen(eb.and([openWork, responded])).as("active_count"),
             countWhen(eb("t.status", "=", "closed")).as("closed_count"),
             // The hold arm is the mirror of openWork: still open, but held.
             countWhen(
@@ -1194,13 +1204,14 @@ export function createTicketService(
           "t.assigned_to",
           "t.queue_id",
           "t.created_at",
-          // Same correlated count `list` returns, so New and Active
-          // resolve identically on both paths.
           eb
             .selectFrom("followups as f")
             .select((sb) => sb.fn.countAll().as("cnt"))
             .whereRef("f.ticket_id", "=", "t.id")
             .as("followup_count"),
+          // Same helper `list` uses, so New and Active resolve
+          // identically on both paths.
+          hasResponse(eb.ref("t.id")).as("has_response"),
         ])
         .where("t.queue_id", "in", [...accessibleQueues])
         .$if(afterId !== undefined, (qb) => {
@@ -1220,6 +1231,7 @@ export function createTicketService(
         queueId: row.queue_id,
         createdAt: row.created_at,
         followUpCount: Number(row.followup_count ?? 0),
+        hasResponse: Boolean(row.has_response),
       }));
 
       // Paging ends when a page comes back short. The browser also stops
@@ -1376,6 +1388,8 @@ export function createTicketService(
           eb.ref("f.note_type_id").as("note_type_id"),
           eb.ref("f.event_params").as("event_params"),
           eb.ref("f.key_generation").as("key_generation"),
+          eb.ref("f.call_status").as("call_status"),
+          eb.ref("f.call_duration_seconds").as("call_duration_seconds"),
           eb.fn
             .agg<number>("row_number")
             .over((ob) =>
@@ -1451,6 +1465,8 @@ export function createTicketService(
           "ranked_f.note_type_id",
           "ranked_f.event_params",
           "ranked_f.key_generation",
+          "ranked_f.call_status",
+          "ranked_f.call_duration_seconds",
           "tkw.ephemeral_point",
           "tkw.nonce",
           "tkw.wrapped_key",
@@ -1461,8 +1477,17 @@ export function createTicketService(
         .orderBy("ranked_f.created_at", "desc")
         .execute();
 
+      const [followUpWraps, portalWraps] = await Promise.all([
+        fetchFollowUpKeyWraps(db, userId, rows),
+        fetchPortalWraps(db, rows),
+      ]);
+
       const previews: Record<string, FollowUpPreview[]> = {};
       for (const row of rows) {
+        const ownWrap =
+          row.key_generation == null
+            ? undefined
+            : followUpWraps.get(row.key_generation);
         const preview: FollowUpPreview = {
           id: row.id,
           ticketId: row.ticket_id,
@@ -1474,17 +1499,29 @@ export function createTicketService(
           // encrypted under tk_temp, not the canonical tk; attaching the
           // ticket wrap would make the list preview decrypt with the
           // wrong key and poison the shared client cache with an error
-          // sentinel before the detail's sealed-wrap path can run. The
-          // preview shows a placeholder until convergence instead.
+          // sentinel. Such a row carries its own tk_temp wrap (or portal
+          // seal) instead, and the client decrypts it the way the detail
+          // does.
           keyWrap:
             row.key_generation == null
               ? buildKeyWrap(row.ephemeral_point, row.nonce, row.wrapped_key)
               : null,
+          followUpKeyWrap:
+            ownWrap === undefined
+              ? null
+              : buildKeyWrap(
+                  ownWrap.ephemeralPoint,
+                  ownWrap.nonce,
+                  ownWrap.wrappedKey,
+                ),
+          portalWrap: portalWraps.get(row.id) ?? null,
           hasRecording: Boolean(row.has_recording),
           hasImage: Boolean(row.has_image),
           hasFile: Boolean(row.has_file),
           noteTypeId: row.note_type_id ?? null,
           eventParams: row.event_params ?? null,
+          callStatus: row.call_status ?? null,
+          callDurationSeconds: row.call_duration_seconds ?? null,
         };
         const list = previews[row.ticket_id];
         if (list) {

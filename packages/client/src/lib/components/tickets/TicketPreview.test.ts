@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import TicketPreview from "./TicketPreview.svelte";
 
@@ -50,6 +51,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   ...(await importOriginal<typeof CryptoContextModule>()),
   getFollowUpDecryptCache: () => ({
     decryptContent: mockDecryptContent,
+    decryptPreview: FollowUpDecryptCache.prototype.decryptPreview,
     deleteByPrefix: mockDeleteByPrefix,
   }),
   getOrgDecryptCache: () => ({
@@ -82,12 +84,16 @@ function makeFollowUp(
       nonce: "BBBB",
       wrappedKey: "CCCC",
     },
+    followUpKeyWrap: null,
+    portalWrap: null,
     createdAt: "2026-04-05T12:00:00Z",
     hasRecording: false,
     hasImage: false,
     hasFile: false,
     noteTypeId: null,
     eventParams: null,
+    callStatus: null,
+    callDurationSeconds: null,
     ...overrides,
   };
 }
@@ -132,6 +138,24 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(container.textContent).toContain("Hello, test message");
   });
 
+  it("renders an inbound email's body text rather than its JSON payload", () => {
+    mockDecryptContent.mockReturnValue(
+      JSON.stringify({
+        subject: "Re: Follow-up 749124",
+        text: "Thanks, that time works",
+        from: "sender@example.com",
+        droppedAttachments: 0,
+      }),
+    );
+    const fu = makeFollowUp({ source: "client", type: "email_inbound" });
+    const { container } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
+    });
+    const text = container.querySelector(".mini-text");
+    expect(text?.textContent).toBe("Thanks, that time works");
+    expect(container.textContent).not.toContain('"subject"');
+  });
+
   it("right-aligns volunteer mini-bubbles (sent)", () => {
     mockDecryptContent.mockReturnValue("Volunteer reply");
     const fu = makeFollowUp({ source: "volunteer" });
@@ -165,6 +189,38 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(mockDecryptContent).not.toHaveBeenCalled();
     // Should not be in a directional bubble row
     expect(container.querySelector("[data-direction]")).toBeNull();
+  });
+
+  it("renders an answered inbound call as the call label, not a bubble", () => {
+    const fu = makeFollowUp({
+      source: "client",
+      type: "phone_call",
+      callStatus: "completed",
+      callDurationSeconds: 95,
+    });
+    const { container } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
+    });
+    const callEl = container.querySelector("[data-type='system']");
+    expect(callEl?.textContent).toContain("Inbound call (1:35)");
+    // A call has no message body: no bubble row and no decrypt attempt.
+    expect(container.querySelector(".mini-bubble")).toBeNull();
+    expect(container.querySelector("[data-direction]")).toBeNull();
+    expect(mockDecryptContent).not.toHaveBeenCalled();
+  });
+
+  it("renders a missed call with the no-answer label", () => {
+    const fu = makeFollowUp({
+      source: "client",
+      type: "phone_call",
+      callStatus: "no_answer",
+    });
+    const { container } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
+    });
+    const callEl = container.querySelector("[data-type='system']");
+    expect(callEl?.textContent).toContain("No answer");
+    expect(container.querySelector(".mini-bubble")).toBeNull();
   });
 
   it("renders long decrypted text content", () => {

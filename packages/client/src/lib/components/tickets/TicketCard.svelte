@@ -16,8 +16,9 @@
   islands for anything interactive above the overlay.
 
   Status is a shape (StatusMark), color is priority (PriorityStamp),
-  unread is its own channel (bold title + NewPill). The row/card side
-  column shows at most two of [stamp, pill, time], in that order.
+  unread is its own channel (bold title + NewPill). The stamp owns the
+  alias line's right edge; the pill sits under it on the title line, so
+  the stamp holds still whether or not the ticket is unread.
 -->
 <script lang="ts">
   import { Checkbox } from "konsta/svelte";
@@ -191,6 +192,12 @@
   </span>
 {/snippet}
 
+{#snippet newPill()}
+  {#if isUnread}<span class="r-pill"
+      ><NewPill count={unreadCount} isFloor={unreadCountIsFloor} /></span
+    >{/if}
+{/snippet}
+
 {#snippet head(includeMeta: boolean)}
   <div class="head" class:head-select={multiSelectActive}>
     {#if multiSelectActive}
@@ -205,15 +212,14 @@
     <span class="head-main">
       <span class="r-alias-row">
         <span class="r-alias">{@render hl(clientAlias ?? "...")}</span>
-        <span class="r-side">
-          {#if priority !== "normal"}<PriorityStamp {priority} />{/if}
-          {#if isUnread}<NewPill
-              count={unreadCount}
-              isFloor={unreadCountIsFloor}
-            />{/if}
-        </span>
+        {#if priority !== "normal"}<span class="r-side"
+            ><PriorityStamp {priority} /></span
+          >{/if}
       </span>
-      <span class="r-title">{@render titleBlock()}</span>
+      <span class="r-title-row">
+        <span class="r-title">{@render titleBlock()}</span>
+        {@render newPill()}
+      </span>
       {#if includeMeta}
         {@render metaRow()}
       {/if}
@@ -376,7 +382,10 @@
         <span class="row-top-stamp"><PriorityStamp {priority} /></span>
       </div>
       <div class="content-group">
-        <div class="row-title">{@render titleBlock()}</div>
+        <div class="r-title-row">
+          <div class="row-title">{@render titleBlock()}</div>
+          {@render newPill()}
+        </div>
       </div>
       <div class="preview-window" data-preview>
         <TicketPreview
@@ -397,7 +406,6 @@
         <span class="meta-right">
           <span class="r-time num">{relativeTime}</span>
           {#if msgLabel}<span class="grid-msgs">· {msgLabel}</span>{/if}
-          <NewPill count={unreadCount} isFloor={unreadCountIsFloor} />
         </span>
       </div>
     {/if}
@@ -491,6 +499,27 @@
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
+  }
+
+  /* The new pill sits under the priority stamp, beside the title, so an
+     unread ticket never shifts the stamp. */
+  .r-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    min-width: 0;
+  }
+
+  .r-title-row > .r-title,
+  .r-title-row > .row-title {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .r-pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    margin-top: 2px;
   }
 
   .r-title {

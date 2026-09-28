@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Regenerates the demo audio clips in src/assets. macOS only (say + afconvert).
-#   demo-voicemail-en.m4a  - voicemail clip played by seeded ticket voicemails
-#   demo-greeting-en.m4a   - English phone greeting for the admin Greetings demo
+# Regenerates the demo audio clips. macOS only (say + afconvert).
+#   ../shared/src/dev/assets/seed-voicemail-en.m4a  - voicemail clip played by
+#     seeded ticket voicemails (dev seed and demo)
+#   src/assets/demo-greeting-en.m4a  - English phone greeting for the admin
+#     Greetings demo
 # The measured voicemail duration must be kept in sync with
-# DEMO_VOICEMAIL_DURATION_S (see src/lib/media-assets.ts).
+# SEED_VOICEMAIL_DURATION_S (see ../shared/src/dev/seed-stories.ts).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-mkdir -p src/assets
+mkdir -p src/assets ../shared/src/dev/assets
 
 generate() {
   local voice="$1" text="$2" out="$3"
@@ -23,7 +25,7 @@ generate() {
 # "Carey" (not "CARE-Y") so the voice says the name instead of "care why".
 generate "Samantha" \
   "This is an example voicemail, generated for the Carey interactive handbook." \
-  "src/assets/demo-voicemail-en.m4a"
+  "../shared/src/dev/assets/seed-voicemail-en.m4a"
 
 # Matches the seeded English answer greeting on the crisis line.
 generate "Samantha" \

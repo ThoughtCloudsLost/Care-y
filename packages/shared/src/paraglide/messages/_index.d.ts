@@ -933,6 +933,7 @@ export * from "./dashboard_shift_no_shift.js";
 export * from "./dashboard_shift_not_started.js";
 export * from "./dashboard_shift_open_with_you_one.js";
 export * from "./dashboard_shift_open_with_you_other.js";
+export * from "./dashboard_shift_start.js";
 export * from "./dashboard_shift_volunteers.js";
 export * from "./dashboard_status_closed.js";
 export * from "./dashboard_status_on_hold.js";

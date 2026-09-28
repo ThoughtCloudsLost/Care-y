@@ -16,6 +16,20 @@ import {
   newAttachmentId,
 } from "@care-y/shared";
 import {
+  buildSeedStories,
+  originFollowUps,
+  messageFollowUp,
+  messageStepContent,
+  SEED_VOICEMAIL_DURATION_S,
+  type SeedStory,
+} from "@care-y/shared/dev/seed-stories.js";
+import {
+  SEED_HANDBOOK_TICKET,
+  generateSeedPng,
+  generateSeedTextFile,
+  type SeedHandbookAuthor,
+} from "@care-y/shared/dev/seed-handbook-ticket.js";
+import {
   generateContentKey,
   encryptContent,
   buildContentAad,
@@ -157,6 +171,8 @@ export async function seedTestTickets(
     priority: TicketPriority;
     assignedTo: UserId | null;
     onHold: boolean;
+    /** Defaults to open. Closed tickets end with a status_closed follow-up. */
+    status?: "open" | "closed";
     withKeyWrap: boolean;
     createdAgo: number; // minutes ago
     followUps: FollowUpDef[];
@@ -204,37 +220,6 @@ export async function seedTestTickets(
     return Buffer.concat([header, data]);
   }
 
-  /** Valid 64x64 cyan PNG (178 bytes). Visible on both light and dark. */
-  function generatePng(): Buffer {
-    // Generated programmatically: 64x64 RGB, solid #00CCBB.
-    // CRC32 checksums computed correctly for all chunks.
-    const hex =
-      "89504e470d0a1a0a0000000d49484452000000400000" +
-      "00400802000000250be6890000007949444154789ced" +
-      "cf410900300cc0c0fab7340b1355117b1c8340045c66" +
-      "eef93b2f68400b1ad08206b4a0012d68400b1ad08206" +
-      "b4a0012d68400b1ad08206b4a0012d68400b1ad08206" +
-      "b4a0012d68400b1ad08206b4a0012d68400b1ad08206" +
-      "b4a0012d68400b1ad08206b4a0012d68400b1ad08206" +
-      "b4e0ad050ceb71698b8b2a940000000049454e44ae42" +
-      "6082";
-    return Buffer.from(hex, "hex");
-  }
-
-  /** Small text file for attachment testing. */
-  function generateTextFile(): Buffer {
-    return Buffer.from(
-      "CARE-Y Safety Plan Template\n\n" +
-        "1. Warning signs that a crisis may be developing\n" +
-        "2. Internal coping strategies\n" +
-        "3. People and social settings that provide distraction\n" +
-        "4. People I can ask for help\n" +
-        "5. Professionals or agencies I can contact during a crisis\n" +
-        "6. Making the environment safe\n",
-      "utf-8",
-    );
-  }
-
   const me = userId;
 
   // Reacting user for seeded note reactions: prefer another active user
@@ -248,390 +233,62 @@ export async function seedTestTickets(
     .executeTakeFirst();
   const reactingUserId = otherUser?.id ?? me;
 
-  const ticketDefs: TicketDef[] = [
-    // --- MY TICKETS (assigned to me) ---
-    {
-      title: "Help with housing",
-      description: "Client needs housing referral and support",
-      queue: "Housing",
-      // High matches the priority_changed event in the thread below.
-      priority: "high",
-      // One unread client reply (the check-in text minutes ago). The
-      // thread's final exchange is the newest activity of any seeded
-      // ticket, so under the default recent-activity sort the story
-      // ticket stays on top even after the unread pill clears.
-      unreadSince: 15,
+  // The handbook story ticket, built from the shared definition the client
+  // dev seed also replays. "other" is the reacting user, so the first
+  // shift's messages, the handoff and the note reaction name another
+  // volunteer.
+  function handbookTicketDef(): TicketDef {
+    const def = SEED_HANDBOOK_TICKET;
+    const resolve = (who: SeedHandbookAuthor): UserId =>
+      who === "me" ? me : reactingUserId;
+    return {
+      title: def.title,
+      description: def.description,
+      queue: def.queue,
+      priority: def.priority,
+      unreadSince: def.unreadSince,
       assignedTo: me,
       onHold: false,
       withKeyWrap: true,
-      createdAgo: 4320, // 3 days
-      followUps: [
-        // Day 1: intake conversation and the shelter list. The first
-        // shift's volunteer (another roster user when available) handles
-        // this stretch; the seeded volunteer takes over at the handoff
-        // below, which is why the reassignment events name two people.
-        {
-          content: "Volunteer assigned",
-          source: "system",
-          type: "volunteer_assigned",
-          eventParams: { userId: reactingUserId },
-          agoMinutes: 4310,
-        },
-        {
-          content: "I need help finding a place to stay",
-          source: "client",
-          agoMinutes: 4300,
-        },
-        {
-          content:
-            "My sister said I can only stay with her through the weekend",
-          source: "client",
-          agoMinutes: 4297,
-        },
-        {
-          content: "I can look into shelters in your area",
-          source: "volunteer",
-          authorId: reactingUserId,
-          agoMinutes: 4200,
-        },
-        {
-          content:
-            "Is it ok if I text you a list, or would a call work better?",
-          source: "volunteer",
-          authorId: reactingUserId,
-          agoMinutes: 4197,
-        },
-        {
-          content: "Texting is fine",
-          source: "client",
-          agoMinutes: 4190,
-        },
-        // The list itself, pasted from the library's housing referral
-        // contacts article the way a volunteer actually sends it.
-        {
-          content:
-            "Here is the list we keep: the city emergency shelter is walk-in, open 24/7. The family shelter takes families with children but needs a referral, which we can provide. The east side shelter's intake desk is open 10am to 8pm, call right at 10 for same-day beds",
-          source: "volunteer",
-          type: "sms_outbound",
-          authorId: reactingUserId,
-          agoMinutes: 4180,
-        },
-        {
-          content: "Got it, I will look through these tonight",
-          source: "client",
-          type: "sms_inbound",
-          agoMinutes: 4150,
-        },
-        {
-          content:
-            "First call went well, client is safe through the weekend. Texted the shelter list, will follow up tomorrow.",
-          source: "volunteer",
-          type: "internal_note",
-          isPrivate: true,
-          authorId: reactingUserId,
-          agoMinutes: 4140,
-        },
-        // Day 2: waitlist news. The hold starts only once the client is
-        // waiting days on the shelter's callback, not mid-conversation.
-        {
-          content:
-            "Two of them were full but the one on the east side said to call back after 10",
-          source: "client",
-          agoMinutes: 2900,
-        },
-        {
-          content:
-            "That one usually has space midweek. Call right at 10 and mention our support line referred you",
-          source: "volunteer",
-          authorId: reactingUserId,
-          agoMinutes: 2880,
-        },
-        {
-          content:
-            "I left my name with their intake office, they said it could be a day or two before they call back",
-          source: "client",
-          agoMinutes: 2500,
-        },
-        {
-          content:
-            "Sounds good. I will put the ticket on hold until you hear from them, just text us when you do",
-          source: "volunteer",
-          authorId: reactingUserId,
-          agoMinutes: 2490,
-        },
-        {
-          content: "Put on hold",
-          source: "system",
-          type: "hold_placed",
-          agoMinutes: 2485,
-        },
-        {
-          content: "They called back! I have an intake meeting tomorrow at 9",
-          source: "client",
-          type: "sms_inbound",
-          agoMinutes: 2100,
-        },
-        {
-          content: "Hold removed",
-          source: "system",
-          type: "hold_removed",
-          agoMinutes: 2090,
-        },
-        {
-          content:
-            "That is great news. Text me after the meeting and let me know how it went",
-          source: "volunteer",
-          authorId: reactingUserId,
-          agoMinutes: 2085,
-        },
-        // Shift change: the first volunteer hands off to the seeded
-        // volunteer, so the unassign/assign pair names two people.
-        {
-          content: "Volunteer unassigned",
-          source: "system",
-          type: "volunteer_unassigned",
-          eventParams: { userId: reactingUserId },
-          agoMinutes: 1800,
-        },
-        {
-          content: "Volunteer assigned",
-          source: "system",
-          type: "volunteer_assigned",
-          eventParams: { userId: me },
-          agoMinutes: 1790,
-        },
-        {
-          content:
-            "Hi, I am covering this shift and picking up your case. I have read through the thread, no need to repeat anything",
-          source: "volunteer",
-          agoMinutes: 1780,
-        },
-        // The client texted from a second phone, which opened a separate
-        // ticket. The two messages below precede the merge event, exactly
-        // where merged-in messages land in the timeline.
-        {
-          content: "It is me, I am on my way to the intake meeting",
-          source: "client",
-          type: "sms_inbound",
-          agoMinutes: 1700,
-        },
-        {
-          content: "Do I need to bring anything besides the letter?",
-          source: "client",
-          type: "sms_inbound",
-          agoMinutes: 1695,
-        },
-        {
-          content: "Sorry, I think I texted you from my work phone earlier",
-          source: "client",
-          type: "sms_inbound",
-          agoMinutes: 1610,
-        },
-        {
-          content: "",
-          source: "system",
-          type: "merge_note",
-          agoMinutes: 1600,
-        },
-        {
-          content:
-            "No problem at all, I pulled those messages into this conversation. The letter and your ID are all you need",
-          source: "volunteer",
-          agoMinutes: 1595,
-        },
-        {
-          content: "The intake worker was really kind",
-          source: "client",
-          agoMinutes: 1445,
-        },
-        {
-          content: "Thank you, any help is appreciated",
-          source: "client",
-          agoMinutes: 1440,
-        },
-        {
-          content:
-            "Glad it went well. I am raising the priority so the weekend shift keeps an eye on this until you are settled",
-          source: "volunteer",
-          agoMinutes: 1435,
-        },
-        {
-          content: "Priority changed to high",
-          source: "system",
-          type: "priority_changed",
-          eventParams: { to: "high" },
-          agoMinutes: 1430,
-        },
-        // Closed after intake looked settled, reopened when the bed fell through
-        {
-          content:
-            "Glad the intake went well. I will close this for now, text us any time",
-          source: "volunteer",
-          agoMinutes: 725,
-        },
-        {
-          content: "Status changed to closed",
-          source: "system",
-          type: "status_closed",
-          agoMinutes: 720,
-        },
-        {
-          content:
-            "The bed fell through. They gave it away because I was at work and missed their call",
-          source: "client",
-          type: "sms_inbound",
-          agoMinutes: 365,
-        },
-        {
-          content: "Status changed to open",
-          source: "system",
-          type: "status_opened",
-          agoMinutes: 360,
-        },
-        // Call attempts and the media cluster stay at the recent end
-        // of the thread: the conversation is virtualized and the story
-        // walk highlights these elements, so they must be inside the
-        // mounted window. The narrative runs from a missed call and a
-        // text through the client's voicemail into a completed call
-        // that sorts out a held bed, confirmed by photo and checklist.
-        {
-          content: "",
-          source: "volunteer",
-          type: "phone_call",
-          callStatus: "no_answer",
-          agoMinutes: 340,
-        },
-        {
-          content: "Just tried to call you. I am on until 9 tonight",
-          source: "volunteer",
-          type: "sms_outbound",
-          agoMinutes: 338,
-        },
-        {
-          content: "",
-          source: "client",
-          type: "voicemail",
-          agoMinutes: 320,
-          media: [{ kind: "recording" }],
-        },
-        {
-          content: "",
-          source: "volunteer",
-          type: "phone_call",
-          callStatus: "completed",
-          callDurationSeconds: 340,
-          agoMinutes: 300,
-        },
-        {
-          content:
-            "Client sounds stressed but steadier after we spoke. The east side shelter is holding a bed until 8pm if they bring the referral letter.",
-          source: "volunteer",
-          type: "internal_note",
-          isPrivate: true,
-          agoMinutes: 290,
-          reactions: [{ reaction: "acknowledge", agoMinutes: 280 }],
-        },
-        {
-          content: "This is the letter they gave me at the desk",
-          source: "client",
-          agoMinutes: 240,
-          media: [{ kind: "image", contentType: "image/jpeg" }],
-        },
-        {
-          content:
-            "That is the referral confirmation, you are all set for tonight",
-          source: "volunteer",
-          agoMinutes: 235,
-        },
-        // email_inbound: client replied by email instead of SMS (seeds the
-        // bubble renderer and caution affordance for dev and e2e).
-        {
-          content: JSON.stringify({
-            subject: "Re: your appointment",
-            text: "Thank you, I have the letter and my ID ready. Do I need anything else for tonight?",
-            from: "maria.l@example.org",
-            droppedAttachments: 0,
-          }),
-          source: "client",
-          type: "email_inbound",
-          agoMinutes: 220,
-        },
-        {
-          content:
-            "Attached the housing checklist we went over. Bring your ID and the letter",
-          source: "volunteer",
-          agoMinutes: 180,
-          media: [
-            {
-              kind: "file",
-              filename: "housing-checklist.txt",
-              contentType: "text/plain",
-            },
-          ],
-        },
-        // email_outbound: volunteer follows up by email with bed
-        // confirmation details. Content is JSON.stringify({ subject, doc })
-        // where doc is a minimal ProseMirror doc, matching the shape the
-        // email compose editor produces.
-        {
-          content: JSON.stringify({
-            subject: "Bed confirmation for tonight",
-            doc: {
-              type: "doc",
-              content: [
-                {
-                  type: "paragraph",
-                  content: [
-                    {
-                      type: "text",
-                      text: "The east side shelter confirmed a bed for you tonight. Check in is between 6pm and 8pm at the front desk.",
-                    },
-                  ],
-                },
-                {
-                  type: "paragraph",
-                  content: [
-                    {
-                      type: "text",
-                      text: "Bring the referral letter and your ID. Let me know if you need anything else before then.",
-                    },
-                  ],
-                },
-              ],
-            },
-          }),
-          source: "volunteer",
-          type: "email_outbound",
-          agoMinutes: 120,
-        },
-        // email_inbound: client replies by email. droppedAttachments: 1 so
-        // the dropped-attachment notice renders in the bubble. The from
-        // value matches the seeded email address on this client.
-        {
-          content: JSON.stringify({
-            subject: "Re: Bed confirmation for tonight",
-            text: "Got it, I will be there by 7. I tried to attach a photo of the letter but it would not go through.",
-            from: "maria.l@example.org",
-            droppedAttachments: 1,
-          }),
-          source: "client",
-          type: "email_inbound",
-          agoMinutes: 90,
-        },
-        {
-          content:
-            "Checked in a few minutes ago. Thank you for staying on this",
-          source: "client",
-          type: "sms_inbound",
-          agoMinutes: 5,
-        },
-        {
-          content: "Really glad to hear it. I will check in with you tomorrow",
-          source: "volunteer",
-          agoMinutes: 2,
-        },
-      ],
-    },
+      createdAgo: def.createdAgo,
+      followUps: def.followUps.map((fu) => ({
+        content: fu.content,
+        source: fu.source,
+        ...(fu.type !== undefined ? { type: fu.type } : {}),
+        ...(fu.isPrivate !== undefined ? { isPrivate: fu.isPrivate } : {}),
+        agoMinutes: fu.agoMinutes,
+        ...(fu.media !== undefined
+          ? { media: fu.media.map((media) => ({ ...media })) }
+          : {}),
+        ...(fu.eventParams !== undefined
+          ? {
+              eventParams:
+                "user" in fu.eventParams
+                  ? { userId: resolve(fu.eventParams.user) }
+                  : { to: fu.eventParams.to },
+            }
+          : {}),
+        ...(fu.callStatus !== undefined ? { callStatus: fu.callStatus } : {}),
+        ...(fu.callDurationSeconds !== undefined
+          ? { callDurationSeconds: fu.callDurationSeconds }
+          : {}),
+        // Seeded reactions are always stamped with the reacting user.
+        ...(fu.reactions !== undefined
+          ? {
+              reactions: fu.reactions.map((r) => ({
+                reaction: r.reaction,
+                agoMinutes: r.agoMinutes,
+              })),
+            }
+          : {}),
+        ...(fu.author !== undefined ? { authorId: resolve(fu.author) } : {}),
+      })),
+    };
+  }
+
+  const ticketDefs: TicketDef[] = [
+    // --- MY TICKETS (assigned to me) ---
+    handbookTicketDef(),
     {
       title: "Follow-up on legal aid referral",
       description: "Client was referred to legal aid last week",
@@ -1129,322 +786,172 @@ export async function seedTestTickets(
     },
   ];
 
-  // Generate additional tickets programmatically to test
-  // virtual scrolling with large lists. Uses a simple
-  // deterministic seed so re-runs produce the same data.
+  // Generated tickets: a month of ordinary work from the shared story
+  // generator, the same stories the client-side dev seeder replays. The
+  // volume also exercises virtual scrolling on long lists.
   // Skipped when handcraftedOnly is set (E2E tests use only the 14 above).
   const GENERATED_COUNT = options?.handcraftedOnly === true ? 0 : 106;
-  const queuesArr = ["Intake", "Crisis", "Housing"] as const;
-  const priorities: TicketPriority[] = [
-    "low",
-    "normal",
-    "normal",
-    "high",
-    "urgent",
-  ];
-  // Full titles (no numeric suffixes): repeats across a long list read
-  // as routine work, the way a real queue looks.
-  const titlePool = [
-    "Referral request",
-    "Follow-up needed",
-    "New intake call",
-    "Callback requested",
-    "Help with benefits paperwork",
-    "Ride needed to medical appointment",
-    "Safety check-in",
-    "Housing waitlist question",
-    "Question about court paperwork",
-    "Prescription refill help",
-    "Utility shutoff notice",
-    "School enrollment question",
-    "Childcare resource request",
-    "Job search support",
-    "Food assistance question",
-    "ID replacement help",
-    "Counseling referral request",
-    "Interpreter needed for appointment",
-    "Insurance paperwork question",
-    "Weekly check-in call",
-    "Left voicemail after hours",
-    "Text conversation follow-up",
-    "Needs updated resource list",
-    "Rent assistance question",
-  ];
-  const descriptionPool = [
-    "Phone intake from the main line",
-    "Client texted the support line",
-    "Voicemail left after hours",
-    "Follow-up from an earlier call",
-    "Client asked about available resources",
-    "Case opened during evening shift",
-    "Transferred from the crisis line",
-    "Client asked for a callback",
-  ];
-  const clientMessages = [
-    "I need some help please",
-    "Can someone call me back when you get a chance?",
-    "I have a question about my case",
-    "When is my next appointment? I lost the paper I wrote it on",
-    "I wanted to follow up on what we talked about last time",
-    "Is there anyone available to talk today?",
-    "Something came up and I have new information to share",
-    "Things have changed since we last spoke",
-  ];
-  const volMessages = [
-    "I will look into this for you and get back to you tomorrow",
-    "Checking with the team now, hang tight",
-    "Left you a voicemail, will try again tomorrow morning",
-    "I passed your info along to the agency we talked about",
-    "Scheduled a follow-up call for next week, does Tuesday work?",
-    "Updated your file with the new details you sent",
-  ];
 
-  // Simple deterministic hash for reproducible "random" values.
-  function seedHash(i: number, salt: number): number {
-    let h = (i * 2654435761 + salt * 40503) >>> 0;
-    h = ((h ^ (h >>> 16)) * 2246822507) >>> 0;
-    h = ((h ^ (h >>> 13)) * 3266489909) >>> 0;
-    return (h ^ (h >>> 16)) >>> 0;
-  }
+  function storyToTicketDef(story: SeedStory): TicketDef {
+    const { origin } = story;
+    const assignStep = story.steps.find((s) => s.kind === "assign");
+    const assignee =
+      assignStep?.kind !== "assign"
+        ? null
+        : assignStep.to === "me"
+          ? me
+          : reactingUserId;
+    // Every volunteer follow-up belongs to whoever took the ticket, which
+    // is also who answered the call on call-opened stories.
+    const authorId =
+      assignee !== null && assignee !== me ? assignee : undefined;
 
-  for (let g = 0; g < GENERATED_COUNT; g++) {
-    const h0 = seedHash(g, 0);
-    const h1 = seedHash(g, 1);
-    const h2 = seedHash(g, 2);
-    const h3 = seedHash(g, 3);
-    const h4 = seedHash(g, 4);
-
-    const queue = queuesArr[h0 % queuesArr.length];
-    const priority = priorities[h1 % priorities.length];
-    const title = titlePool[h2 % titlePool.length];
-    const description = descriptionPool[h4 % descriptionPool.length];
-    if (
-      queue === undefined ||
-      priority === undefined ||
-      title === undefined ||
-      description === undefined
-    )
-      continue;
-
-    // 40% assigned to me, 60% unassigned
-    const assigned = h3 % 5 < 2 ? me : null;
-    // 15% on hold (only if assigned)
-    const hold = assigned !== null && h4 % 7 === 0;
-
-    // Created 30 min to 30 days ago. The 180-follow-up pagination ticket
-    // (g === 0) is pinned old: a long history reads as weeks of work, and
-    // its newest message must not outrank the story ticket's fresh
-    // activity under the default recent-activity sort.
-    const ageMinutes = g === 0 ? 20160 : 30 + (h0 % 43200);
-
-    // 0-4 follow-ups (first generated ticket gets 180 for pagination/feature testing)
-    const fuCount = g === 0 ? 180 : h1 % 5;
+    // The follow-ups that opened the ticket (none for a ticket a volunteer
+    // opened). A voicemail after a missed call lands a minute after the
+    // call, kept strictly before the first step.
     const followUps: FollowUpDef[] = [];
-
-    if (g === 0) {
-      // 180 follow-ups matching production data shapes.
-      // Client media (MMS/voicemail): no filename (Twilio
-      // doesn't provide one). Volunteer attachments: filename
-      // (picked from device). Voicemail content: empty or
-      // transcription. System events: exact server strings.
-      const totalAge = ageMinutes;
-      for (let f = 0; f < 180; f++) {
-        const fuAge = Math.max(
-          1,
-          totalAge - Math.floor((totalAge * (f + 1)) / 181),
+    const firstStepAgo = story.steps.at(0)?.agoMinutes;
+    originFollowUps(origin.kind).forEach((shape, k) => {
+      if (shape.type === "phone_call") {
+        followUps.push({
+          content: "",
+          source: shape.source,
+          type: shape.type,
+          callStatus:
+            origin.callDurationSeconds !== undefined
+              ? "completed"
+              : "no_answer",
+          ...(origin.callDurationSeconds !== undefined
+            ? { callDurationSeconds: origin.callDurationSeconds }
+            : {}),
+          agoMinutes: origin.agoMinutes,
+        });
+      } else if (shape.type === "voicemail") {
+        const agoMinutes = Math.min(
+          origin.agoMinutes,
+          Math.max(
+            origin.agoMinutes - k,
+            firstStepAgo !== undefined ? firstStepAgo + 1 : 1,
+          ),
         );
-        const fh = seedHash(0, 10 + f);
-        const isClient = fh % 2 === 0;
-        const msgs = isClient ? clientMessages : volMessages;
+        followUps.push({
+          content: "Voicemail recording",
+          source: shape.source,
+          type: shape.type,
+          media: [
+            { kind: "recording", durationSeconds: SEED_VOICEMAIL_DURATION_S },
+          ],
+          agoMinutes,
+        });
+      } else {
+        followUps.push({
+          content: origin.content,
+          source: shape.source,
+          type: shape.type,
+          agoMinutes: origin.agoMinutes,
+        });
+      }
+    });
 
-        if (f === 3) {
+    let priority = story.initialPriority;
+    let onHold = false;
+    let status: "open" | "closed" = "open";
+    let lastVolunteerMessageAgo: number | undefined;
+    for (const step of story.steps) {
+      switch (step.kind) {
+        case "message": {
+          const shape = messageFollowUp(story.channel, step.from);
           followUps.push({
-            content: "Assigned to Alice",
-            source: "system",
-            type: "volunteer_assigned",
-            eventParams: { userId: me },
-            agoMinutes: fuAge,
+            content: messageStepContent(story, step),
+            source: shape.source,
+            type: shape.type,
+            agoMinutes: step.agoMinutes,
+            ...(shape.source === "volunteer" && authorId !== undefined
+              ? { authorId }
+              : {}),
           });
-        } else if (f === 10) {
+          if (step.from === "volunteer") {
+            lastVolunteerMessageAgo = step.agoMinutes;
+          }
+          break;
+        }
+        case "note":
           followUps.push({
-            content: "Priority changed to high",
+            content: step.content,
+            source: "volunteer",
+            type: "internal_note",
+            isPrivate: true,
+            agoMinutes: step.agoMinutes,
+            ...(authorId !== undefined ? { authorId } : {}),
+          });
+          break;
+        case "priority":
+          followUps.push({
+            content: `Priority changed to ${step.to}`,
             source: "system",
             type: "priority_changed",
-            eventParams: { to: "high", from: "normal" },
-            agoMinutes: fuAge,
+            eventParams: { from: priority, to: step.to },
+            agoMinutes: step.agoMinutes,
           });
-        } else if (f === 20) {
+          priority = step.to;
+          break;
+        case "assign":
+          followUps.push({
+            content: "Volunteer assigned",
+            source: "system",
+            type: "volunteer_assigned",
+            eventParams: { userId: step.to === "me" ? me : reactingUserId },
+            agoMinutes: step.agoMinutes,
+          });
+          break;
+        case "hold":
           followUps.push({
             content: "Put on hold",
             source: "system",
             type: "hold_placed",
-            agoMinutes: fuAge,
+            agoMinutes: step.agoMinutes,
           });
-        } else if (f === 30) {
+          onHold = true;
+          break;
+        case "close":
           followUps.push({
             content: "Status changed to closed",
             source: "system",
             type: "status_closed",
-            agoMinutes: fuAge,
+            agoMinutes: step.agoMinutes,
           });
-        } else if (f === 31) {
-          followUps.push({
-            content: "Status changed to open",
-            source: "system",
-            type: "status_opened",
-            agoMinutes: fuAge,
-          });
-        } else if (f === 40) {
-          followUps.push({
-            content: "Assigned to Bob",
-            source: "system",
-            type: "volunteer_assigned",
-            eventParams: { userId: me },
-            agoMinutes: fuAge,
-          });
-        } else if (f === 5 || f === 55 || f === 120) {
-          const noteText =
-            f === 5
-              ? "Client seems anxious, approach carefully"
-              : f === 55
-                ? "Coordinating with housing team on this"
-                : "Supervisor reviewed, approved next steps";
-          followUps.push({
-            content: noteText,
-            source: "volunteer",
-            type: "internal_note",
-            isPrivate: true,
-            agoMinutes: fuAge,
-          });
-        } else if (f === 8) {
-          // Client voicemail (inbound call, no transcription)
-          followUps.push({
-            content: "",
-            source: "client",
-            type: "voicemail",
-            agoMinutes: fuAge,
-            media: [{ kind: "recording", durationSeconds: 12 }],
-          });
-        } else if (f === 25) {
-          // Volunteer voicemail (outbound call)
-          followUps.push({
-            content: "",
-            source: "volunteer",
-            agoMinutes: fuAge,
-            media: [{ kind: "recording", durationSeconds: 30 }],
-          });
-        } else if (f === 65) {
-          // Client voicemail with transcription
-          followUps.push({
-            content:
-              "Hi, I wanted to talk about the appointment next week, I am not sure I can make it because my ride fell through and I need to figure out another way to get there",
-            source: "client",
-            agoMinutes: fuAge,
-            media: [{ kind: "recording", durationSeconds: 90 }],
-          });
-        } else if (f === 12) {
-          // Client MMS image only (no text, no filename from Twilio)
-          followUps.push({
-            content: "",
-            source: "client",
-            agoMinutes: fuAge,
-            media: [{ kind: "image", contentType: "image/jpeg" }],
-          });
-        } else if (f === 35) {
-          // Client MMS image with text body
-          followUps.push({
-            content: "Here is a photo of the document you asked for",
-            source: "client",
-            agoMinutes: fuAge,
-            media: [{ kind: "image", contentType: "image/jpeg" }],
-          });
-        } else if (f === 50) {
-          // Volunteer sends image (from device, has filename)
-          followUps.push({
-            content: "Attached the resource guide",
-            source: "volunteer",
-            agoMinutes: fuAge,
-            media: [
-              {
-                kind: "image",
-                filename: "resource-guide.jpg",
-                contentType: "image/jpeg",
-              },
-            ],
-          });
-        } else if (f === 15) {
-          // Client file via MMS (no filename from Twilio)
-          followUps.push({
-            content: "",
-            source: "client",
-            agoMinutes: fuAge,
-            media: [{ kind: "file", contentType: "application/pdf" }],
-          });
-        } else if (f === 45) {
-          // Volunteer file (from device, has filename)
-          followUps.push({
-            content: "Here are the referral instructions",
-            source: "volunteer",
-            agoMinutes: fuAge,
-            media: [
-              {
-                kind: "file",
-                filename: "referral-instructions.docx",
-                contentType:
-                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-              },
-            ],
-          });
-        } else if (f === 100) {
-          // Client MMS with multiple media (no filenames)
-          followUps.push({
-            content: "",
-            source: "client",
-            agoMinutes: fuAge,
-            media: [
-              { kind: "image", contentType: "image/png" },
-              { kind: "file", contentType: "application/pdf" },
-            ],
-          });
-        } else {
-          const msg = msgs[fh % msgs.length] ?? "Message";
-          followUps.push({
-            content: msg,
-            source: isClient ? "client" : "volunteer",
-            agoMinutes: fuAge,
-          });
-        }
-      }
-    } else {
-      for (let f = 0; f < fuCount; f++) {
-        const fh = seedHash(g, 10 + f);
-        const isClient = fh % 2 === 0;
-        const msgs = isClient ? clientMessages : volMessages;
-        const msg = msgs[fh % msgs.length] ?? "Message";
-        // Space follow-ups evenly within the ticket's age
-        const fuAge = Math.max(
-          1,
-          ageMinutes - Math.floor((ageMinutes * (f + 1)) / (fuCount + 1)),
-        );
-        followUps.push({
-          content: msg,
-          source: isClient ? "client" : "volunteer",
-          agoMinutes: fuAge,
-        });
+          status = "closed";
+          break;
       }
     }
 
-    ticketDefs.push({
-      title,
-      description,
-      queue,
+    // Open tickets assigned to me read up to my last reply, so any client
+    // message after it shows as unread.
+    const unreadSince =
+      assignStep?.kind === "assign" &&
+      assignStep.to === "me" &&
+      !onHold &&
+      status === "open"
+        ? lastVolunteerMessageAgo
+        : undefined;
+
+    return {
+      title: story.title,
+      description: story.description,
+      queue: story.queue,
       priority,
-      assignedTo: assigned,
-      onHold: hold,
+      assignedTo: assignee,
+      onHold,
+      status,
       withKeyWrap: true,
-      createdAgo: ageMinutes,
+      createdAgo: origin.agoMinutes,
       followUps,
-    });
+      ...(unreadSince !== undefined ? { unreadSince } : {}),
+    };
+  }
+
+  for (const story of buildSeedStories(GENERATED_COUNT)) {
+    ticketDefs.push(storyToTicketDef(story));
   }
 
   const createdIds: string[] = [];
@@ -1512,6 +1019,7 @@ export async function seedTestTickets(
         assigned_to: def.assignedTo,
         on_hold: def.onHold,
         priority: def.priority,
+        ...(def.status !== undefined ? { status: def.status } : {}),
         created_at: createdAt,
       })
       .returning("id")
@@ -1670,13 +1178,16 @@ export async function seedTestTickets(
                   imageAssetIdx % assets.documentImages.length
                 ];
               if (imgAsset === undefined) {
-                raw = generatePng();
+                raw = Buffer.from(generateSeedPng());
               } else {
                 raw = Buffer.from(imgAsset.bytes);
                 imageAssetIdx++;
               }
             } else {
-              raw = media.kind === "image" ? generatePng() : generateTextFile();
+              raw =
+                media.kind === "image"
+                  ? Buffer.from(generateSeedPng())
+                  : Buffer.from(generateSeedTextFile());
             }
             const attachmentId = newAttachmentId();
 

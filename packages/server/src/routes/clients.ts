@@ -228,6 +228,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
             keyGeneration: t.keyGeneration,
             onHold: t.onHold,
             followUpCount: t.followUpCount,
+            hasResponse: t.hasResponse,
           })),
           // The snapshot is org-key ciphertext the client produced at merge
           // time. It travels back out as base64 so undoMerge can round-trip it.

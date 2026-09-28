@@ -10,6 +10,7 @@
     estimateHeight = 200,
     overscan = 3,
     columns = 1,
+    columnTrack,
     virtualizeThreshold = 500,
     _forceVirtualize = false,
     getKey,
@@ -22,6 +23,12 @@
     estimateHeight?: number;
     overscan?: number;
     columns?: number;
+    /**
+     * CSS track size for each grid column. Defaults to an equal share of
+     * the row; a capped track keeps cards their own size and leaves the
+     * rest of the row empty.
+     */
+    columnTrack?: string;
     /**
      * Item count before switching from flat to virtualized rendering.
      * Lower for complex items (cards with images), higher for simple items.
@@ -375,6 +382,7 @@
           data-virtual="row"
           data-grid={!isSingleCol || undefined}
           style:--virtual-columns={columns}
+          style:--virtual-column-track={columnTrack}
           style:top="{rowData.top}px"
           use:bindRow={rowData.row}
         >
@@ -395,6 +403,7 @@
         data-virtual="row"
         data-grid={!isSingleCol || undefined}
         style:--virtual-columns={columns}
+        style:--virtual-column-track={columnTrack}
         use:bindRow={rowData.row}
       >
         {#each rowData.items as vi (getKey(vi.item))}
@@ -433,7 +442,10 @@
 
   .virtual-row-grid {
     display: grid;
-    grid-template-columns: repeat(var(--virtual-columns, 1), 1fr);
+    grid-template-columns: repeat(
+      var(--virtual-columns, 1),
+      var(--virtual-column-track, 1fr)
+    );
     gap: var(--space-md);
   }
 

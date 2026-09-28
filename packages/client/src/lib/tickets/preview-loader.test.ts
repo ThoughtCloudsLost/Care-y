@@ -28,12 +28,16 @@ function makePreview(id: string): RawFollowUpPreview {
     type: "message",
     encryptedContent: "AQID",
     keyWrap: KEY_WRAP,
+    followUpKeyWrap: null,
+    portalWrap: null,
     createdAt: "2026-04-01T00:00:00Z",
     hasRecording: false,
     hasImage: false,
     hasFile: false,
     noteTypeId: null,
     eventParams: null,
+    callStatus: null,
+    callDurationSeconds: null,
   };
 }
 

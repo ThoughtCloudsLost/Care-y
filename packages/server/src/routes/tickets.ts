@@ -316,6 +316,7 @@ export interface TicketWireRecord {
   readonly queueSortOrder: number;
   readonly lastActivityAt: Date | null;
   readonly followUpCount: number;
+  readonly hasResponse: boolean;
   readonly assignedDisplayName: string | null;
   readonly keyWrap: TicketKeyWrap | null;
   readonly intakeWrap: string | null;

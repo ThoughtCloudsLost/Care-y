@@ -9,7 +9,6 @@
 -->
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
-  import { followupSlot } from "@care-y/crypto";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getCryptoBridge,
@@ -24,7 +23,6 @@
     canUseInline,
   } from "$lib/auth/procedure-gates.js";
   import type { ReactionSummary, ReactionType } from "@care-y/shared";
-  import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
   import { requireRouter } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -389,16 +387,7 @@
             <!-- eslint-disable @typescript-eslint/no-unsafe-argument -- svelte-eslint cannot narrow GroupedFollowUp in {:else} blocks; isFollowUpGroup guard above guarantees entry is a RawFollowUpPreview here -->
           {:else}
             {@const fu = entry}
-            {@const fuResult = resolveAsyncDecrypt(
-              followUpCache.decryptContent(
-                fu.id,
-                ticketId,
-                followupSlot(fu.id),
-                fu.keyWrap,
-                fu.encryptedContent,
-              ),
-              fu.keyWrap !== null,
-            )}
+            {@const fuResult = followUpCache.decryptPreview(ticketId, fu)}
             <FollowUpBubble
               followUp={fu}
               result={fuResult}

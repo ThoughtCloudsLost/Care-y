@@ -1,13 +1,15 @@
 // Committed narrative media assets for the seeded story ticket.
 // Regeneration: scripts/generate-voicemail-audio.sh (audio, macOS) and
 // scripts/generate-doc-images/screenshot.mjs (images).
-import voicemailUrl from "../assets/demo-voicemail-en.m4a?url";
+import voicemailUrl from "@care-y/shared/dev/assets/seed-voicemail-en.m4a?url";
+import { SEED_VOICEMAIL_DURATION_S } from "@care-y/shared/dev/seed-stories.js";
 import greetingEnUrl from "../assets/demo-greeting-en.m4a?url";
 import housingNoticeUrl from "../assets/demo-doc-housing-notice.jpg?url";
 import appointmentCardUrl from "../assets/demo-doc-appointment-card.jpg?url";
 
-// Measured from the generated clip (4.48 s); keep in sync when regenerating.
-export const DEMO_VOICEMAIL_DURATION_S = 5;
+// The seed voicemail clip is shared with the dev seed; its duration lives
+// next to it in @care-y/shared.
+export const DEMO_VOICEMAIL_DURATION_S = SEED_VOICEMAIL_DURATION_S;
 
 export const DEMO_VOICEMAIL_URL: string = voicemailUrl;
 

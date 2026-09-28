@@ -10,7 +10,12 @@
  * from production builds entirely.
  */
 import { trpc } from "$lib/trpc/index.js";
-import { sealForOrgKey, encode, followupSlot } from "@care-y/crypto";
+import {
+  sealForOrgKey,
+  encode,
+  followupSlot,
+  cursorSlot,
+} from "@care-y/crypto";
 import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
 import { ClientError, RelayError } from "$lib/errors.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
@@ -19,9 +24,27 @@ import {
   RoleId,
   newTicketId,
   newFollowupId,
+  newAttachmentId,
+  portalContentTypeSchema,
   type EscalationTarget,
   type RoleIdValue,
+  type TicketPriority,
 } from "@care-y/shared";
+import {
+  buildSeedStories,
+  originFollowUps,
+  messageFollowUp,
+  messageStepContent,
+  SEED_VOICEMAIL_DURATION_S,
+  type SeedTimelinePoint,
+} from "@care-y/shared/dev/seed-stories.js";
+import {
+  SEED_HANDBOOK_TICKET,
+  generateSeedPng,
+  generateSeedTextFile,
+  type SeedHandbookFollowUp,
+} from "@care-y/shared/dev/seed-handbook-ticket.js";
+import seedVoicemailUrl from "@care-y/shared/dev/assets/seed-voicemail-en.m4a?url";
 
 // ── ProseMirror JSON helpers ─────────────────────────────────────────
 // Build doc.toJSON()-compatible nodes for KB article bodies.
@@ -117,12 +140,27 @@ function link(href: string): PmMark {
 // ── Seed data definitions ────────────────────────────────────────────
 
 const SEED_TICKET_COUNT = 120;
-const FOLLOWUP_TICKET_COUNT = 35;
 
+/** The seeded org's name and colors, as in the README screenshots. */
+const SEED_ORG_NAME = "CARE-Y";
+const SEED_BRAND_PRIMARY = "#016782";
+const SEED_BRAND_ACCENT = "#FFA57D";
+
+/** Handbook ticket client's phone, outside the story range (+1555001NNNN). */
+const HANDBOOK_CLIENT_PHONE = "+15550029999";
+/**
+ * Name for the handbook's client photo. An MMS carries none, but the
+ * upload requires one.
+ */
+const HANDBOOK_PHOTO_FILENAME = "photo.jpg";
+
+// Escalation is off (0 days). Seeded tickets are backdated up to 30 days,
+// so any threshold would have the recurring escalation job raise dozens of
+// them at once on its next run, all stamped "now".
 const QUEUES = [
-  { name: "Intake", escalateDays: 3, color: "blue", icon: "phone" },
-  { name: "Crisis", escalateDays: 1, color: "red", icon: "triangle-alert" },
-  { name: "Housing", escalateDays: 5, color: "green", icon: "house" },
+  { name: "Intake", escalateDays: 0, color: "blue", icon: "phone" },
+  { name: "Crisis", escalateDays: 0, color: "red", icon: "triangle-alert" },
+  { name: "Housing", escalateDays: 0, color: "green", icon: "house" },
 ] as const;
 
 const KB_CATEGORIES = ["Procedures", "Resources", "Safety"] as const;
@@ -210,100 +248,7 @@ const SEED_USERS: readonly SeedUserDef[] = [
 
 const SEED_PASSWORD = "dev-password-1234!";
 
-// ── Ticket template pools ───────────────────────────────────────────
-
-const TITLE_POOL = [
-  "Caller needs emergency housing referral",
-  "Follow-up on custody hearing preparation",
-  "Active safety concern reported",
-  "New caller requesting general information",
-  "Benefits application assistance needed",
-  "Caller requesting legal aid referral",
-  "Shelter placement follow-up",
-  "Transportation assistance for medical appointment",
-  "Caller needs help with protective order paperwork",
-  "Employment program referral requested",
-  "Child care subsidy application help",
-  "Caller reporting landlord retaliation",
-  "Mental health crisis intervention needed",
-  "Insurance enrollment assistance",
-  "Caller needs food bank and pantry locations",
-  "Domestic violence safety planning",
-  "Immigration legal consultation referral",
-  "Utility shutoff prevention assistance",
-  "School enrollment help for displaced family",
-  "Caller seeking substance abuse treatment options",
-];
-
-const DESC_POOL = [
-  "Caller reports being unhoused for two weeks. Has valid ID and is currently staying at a temporary shelter. Needs connection to transitional housing program.",
-  "Returning caller. Custody hearing scheduled for next month. Needs legal aid referral updated with new court date. Previously connected with family law legal aid.",
-  "Caller describes escalating conflict at home. Safety plan was created during previous call but caller reports the situation has changed. Requesting crisis volunteer connection.",
-  "First-time caller asking about available services. Wants to understand what kind of help is available before deciding next steps. No immediate safety concerns reported.",
-  "Caller needs help navigating benefits application process. Has difficulty with online forms due to limited internet access. Requested callback with step-by-step guidance.",
-  "Caller was referred by a community partner. Seeking legal representation for upcoming hearing. Has documentation ready but needs help understanding the process.",
-  "Caller placed in emergency shelter last week. Checking on timeline for transitional housing placement. Reports feeling safe at current location.",
-  "Caller has medical appointment across town next Tuesday. No personal vehicle and public transit route requires three transfers. Requesting ride assistance.",
-  "Caller needs to file a protective order but is unsure of the process. Has police report number from recent incident. Asking about court filing requirements.",
-  "Caller recently lost employment and is seeking job placement assistance. Has previous experience in food service. Interested in job training programs.",
-  "Caller is a single parent needing child care assistance to maintain employment. Currently on a waitlist for state subsidy. Asking about bridge programs.",
-  "Caller's landlord has initiated eviction proceedings after caller reported code violations. Believes this is retaliatory. Needs tenant rights legal aid.",
-  "Caller expressing suicidal ideation. Currently in a safe location but reports feeling overwhelmed by housing instability. Requesting immediate crisis support.",
-  "Caller's insurance coverage lapsed during a recent move. Open enrollment is approaching and they need help understanding their options.",
-  "Caller is new to the area and has three children. Needs locations for food banks that serve families and have weekend hours.",
-  "Caller has left a dangerous living situation and is staying with a friend temporarily. Needs help creating a safety plan and understanding legal options.",
-  "Caller is undocumented and seeking legal advice about available protections. Has been in the country for eight years and has US-citizen children.",
-  "Caller received a shutoff notice for electricity. Payment is overdue by 60 days. Asking about emergency assistance programs and payment plans.",
-  "Caller's family was displaced and children need to be enrolled in a new school district. Needs help understanding residency requirements and transfer process.",
-  "Caller is interested in treatment options for substance use. Has tried outpatient programs before. Asking about inpatient and residential programs.",
-];
-
-const CLIENT_MSG_POOL = [
-  "I need to update my phone number, can someone help?",
-  "Can someone call me back? I have new information about my case.",
-  "Thank you for the help last time. I have a follow-up question.",
-  "My situation has changed since we last talked. I need to speak with someone.",
-  "I received a letter I do not understand. Can someone explain it?",
-  "Is there someone available who speaks Spanish?",
-  "I missed my appointment. Can it be rescheduled?",
-  "The shelter gave me a referral to call this number.",
-  "I need help filling out some forms before my deadline.",
-  "Things have gotten worse since our last call. Please call me back.",
-  "I found the paperwork you mentioned. What do I do with it?",
-  "My court date was moved. I need to let my advocate know.",
-  "Can I get a copy of the information you sent me?",
-  "I want to thank the person who helped me last week.",
-  "I have a question about the program I was referred to.",
-];
-
-const VOL_REPLY_POOL = [
-  "I have updated your case file with the new information. We will follow up within 48 hours.",
-  "Connecting you with our housing team for next steps.",
-  "I have scheduled a callback for tomorrow between 10am and 12pm.",
-  "Your referral has been sent to the legal aid clinic. They should contact you within 3 business days.",
-  "I have noted your updated contact information in the system.",
-  "A specialist will review your case and reach out by end of day.",
-  "The documents you need are available at the courthouse on 4th Street. Ask for the self-help center.",
-  "I have escalated your case to our crisis team for immediate attention.",
-  "Your appointment has been rescheduled for next Thursday at 2pm.",
-  "I have added the new details to your file. Your assigned advocate will follow up.",
-  "The program you are asking about has openings. I will send you the enrollment information.",
-  "I spoke with the partner agency and they confirmed your referral is active.",
-  "Your case has been transferred to a specialist who handles this type of request.",
-  "I left a message with the organization. They typically respond within 24 hours.",
-  "I have documented your concern. A supervisor will review this within one business day.",
-];
-
-const INTERNAL_NOTE_POOL = [
-  "Caller sounded distressed but confirmed they are in a safe location. Monitoring.",
-  "Verified caller identity against existing records. Information matches.",
-  "Contacted partner agency directly. They confirmed availability for this week.",
-  "Discussed case in team standup. Consensus is to escalate to manager review.",
-  "Previous volunteer left detailed notes. Continuing from where they left off.",
-  "Language barrier noted. Arranged interpreter for next callback.",
-  "Caller has called three times this week. Consider assigning a dedicated advocate.",
-  "Documentation from court received via fax. Scanned and attached to ticket.",
-];
+// ── Preset replies ──────────────────────────────────────────────────
 
 const PRESET_REPLIES = [
   {
@@ -323,40 +268,6 @@ const PRESET_REPLIES = [
     body: "We have scheduled a callback. If you need to reach us before then, please call our main line.",
   },
 ];
-
-// ── Ticket generation ───────────────────────────────────────────────
-
-type TicketPriority = "low" | "normal" | "high" | "urgent";
-
-interface TicketDef {
-  title: string;
-  description: string;
-  phone: string;
-  priority: TicketPriority;
-  queueIndex: number;
-}
-
-function generateTicket(index: number): TicketDef {
-  const priorities: TicketPriority[] = [
-    "normal",
-    "normal",
-    "normal",
-    "normal",
-    "normal",
-    "normal",
-    "high",
-    "high",
-    "low",
-    "urgent",
-  ];
-  return {
-    title: TITLE_POOL.at(index % TITLE_POOL.length) ?? "",
-    description: DESC_POOL.at(index % DESC_POOL.length) ?? "",
-    phone: `+1555001${String(index + 1).padStart(4, "0")}`,
-    priority: priorities.at(index % priorities.length) ?? "normal",
-    queueIndex: index % 3,
-  };
-}
 
 const KB_ARTICLES: readonly {
   category: string;
@@ -1066,6 +977,15 @@ function seal(plaintext: string, orgPublicKey: Uint8Array): string {
   return encode(sealForOrgKey(encoder.encode(plaintext), orgPublicKey));
 }
 
+/** The shared seed voicemail clip, base64 encoded for the dev procedures. */
+async function loadSeedVoicemail(): Promise<string> {
+  const res = await fetch(seedVoicemailUrl);
+  if (!res.ok) {
+    throw new ClientError("Seed voicemail clip failed to load");
+  }
+  return encode(new Uint8Array(await res.arrayBuffer()));
+}
+
 interface PhoneLookupResult {
   found: boolean;
   token?: string;
@@ -1213,6 +1133,32 @@ export async function devSeedData(
   }
   console.log("[dev-seed] Queue assignments complete");
 
+  // Inbound calls and routed quarantine voicemails open tickets in the
+  // intake queue, which a real org sets on the admin queues screen.
+  const intakeQueue = queues.at(0);
+  if (intakeQueue !== undefined) {
+    const orgRouter = trpc.org as unknown as Record<string, any>;
+    await orgRouter.setIntakeQueue.mutate({ queueId: intakeQueue.id });
+  }
+
+  // ── Step 2b: Branding ───────────────────────────────────────────────
+  // The org's name and its brand and accent colors, set the way the
+  // settings pages set them.
+  progress("Setting branding...");
+  const brandingRouter = trpc.branding as unknown as Record<string, any>;
+  await brandingRouter.saveBrandingField.mutate({
+    field: "name",
+    value: SEED_ORG_NAME,
+  });
+  await brandingRouter.saveBrandingField.mutate({
+    field: "primary_color",
+    value: SEED_BRAND_PRIMARY,
+  });
+  await brandingRouter.saveBrandingField.mutate({
+    field: "accent_color",
+    value: SEED_BRAND_ACCENT,
+  });
+
   // ── Step 3: KB Categories ───────────────────────────────────────────
   progress("Creating KB categories...");
   for (const name of KB_CATEGORIES) {
@@ -1269,24 +1215,28 @@ export async function devSeedData(
     console.log(`[dev-seed] Created KB article: ${article.title}`);
   }
 
-  // ── Step 6: Tickets ─────────────────────────────────────────────────
-  const ticketIds: string[] = [];
-  for (let i = 0; i < SEED_TICKET_COUNT; i++) {
-    if (i % 10 === 0) {
-      progress(
-        `Creating tickets (${String(i)}/${String(SEED_TICKET_COUNT)})...`,
-      );
-    }
+  // ── Ticket helpers ──────────────────────────────────────────────────
+  // Shared by the story replay and the handbook story ticket below, so
+  // both go through the same create, write and read-state code.
 
-    const ticket = generateTicket(i);
-    const lookup = await phoneLookup(ticket.phone);
-
+  /** Creates a ticket the way the new-ticket screen does. Returns its id. */
+  const createTicket = async (
+    lookup: PhoneLookupResult,
+    def: {
+      readonly queue: string;
+      readonly title: string;
+      readonly description: string;
+      readonly priority: TicketPriority;
+    },
+  ): Promise<string> => {
     // Seeding assumes a reset DB (step 0), so every create is fresh and
     // the minted id is the id the row will get (AAD binding, ADR-053).
     const mintedTicketId = newTicketId();
 
-    const targetQueue = queues[ticket.queueIndex];
-    if (!targetQueue) continue;
+    const targetQueue = queues[QUEUES.findIndex((q) => q.name === def.queue)];
+    if (!targetQueue) {
+      throw new ClientError("Seed queue not found: " + def.queue);
+    }
 
     // Fetch queue member public keys for the wrap floor
     const recipients = (await ticketRouter.listQueueMemberPublicKeys.query({
@@ -1296,8 +1246,8 @@ export async function devSeedData(
     const encrypted = await bridge.createTicketEncryption(
       mintedTicketId,
       [
-        { name: "title", plaintext: ticket.title },
-        { name: "description", plaintext: ticket.description },
+        { name: "title", plaintext: def.title },
+        { name: "description", plaintext: def.description },
       ],
       recipients,
     );
@@ -1308,7 +1258,7 @@ export async function devSeedData(
       return field.ciphertext;
     };
 
-    const result = (await ticketRouter.create.mutate({
+    const created = (await ticketRouter.create.mutate({
       id: mintedTicketId,
       ...(lookup.found
         ? { clientId: lookup.clientId }
@@ -1316,46 +1266,30 @@ export async function devSeedData(
       queueId: targetQueue.id,
       encryptedTitle: findField("title"),
       encryptedDescription: findField("description"),
-      priority: ticket.priority,
+      priority: def.priority,
       keyGeneration: encrypted.keyGeneration,
       keyWraps: encrypted.keyWraps,
     })) as { id: string };
-    ticketIds.push(result.id);
+    return created.id;
+  };
 
-    if (i % 10 === 0) {
-      console.log(
-        `[dev-seed] Created ticket ${String(i + 1)}/${String(SEED_TICKET_COUNT)}`,
-      );
-    }
-  }
-  console.log(`[dev-seed] Created ${String(ticketIds.length)} tickets`);
-
-  // ── Step 7: Followup timelines ──────────────────────────────────────
-  progress("Adding followup messages...");
-  const followupTickets = ticketIds.slice(0, FOLLOWUP_TICKET_COUNT);
-
-  for (let ti = 0; ti < followupTickets.length; ti++) {
-    const ticketId = followupTickets.at(ti);
-    if (ticketId === undefined) continue;
-
-    if (ti % 10 === 0) {
-      progress(
-        `Adding followups (${String(ti)}/${String(followupTickets.length)})...`,
-      );
-    }
-
+  /**
+   * Caches the viewer's copy of the ticket key for follow-up encryption.
+   * The create path zeroes its content key, so the seed unwraps its own.
+   * Returns the ticket's key generation.
+   */
+  const cacheTicketKey = async (ticketId: string): Promise<string> => {
     const ticketData = (await ticketRouter.get.query({ ticketId })) as {
+      keyGeneration: string;
       keyWrap: {
         ephemeralPoint: string;
         nonce: string;
         wrappedKey: string;
       } | null;
     };
-
     if (!ticketData.keyWrap) {
-      continue;
+      throw new ClientError("Seed ticket has no key wrap for the viewer");
     }
-
     await bridge.unwrapTk(
       ticketId,
       ticketId,
@@ -1363,150 +1297,530 @@ export async function devSeedData(
       ticketData.keyWrap.nonce,
       ticketData.keyWrap.wrappedKey,
     );
+    return ticketData.keyGeneration;
+  };
 
-    const followupCount = 2 + (ti % 5);
-    for (let fi = 0; fi < followupCount; fi++) {
-      const isClientMsg = fi % 3 === 0;
-      const isInternalNote = fi % 5 === 0 && !isClientMsg;
+  /** Writes one follow-up through createFollowUp. Returns its id. */
+  const writeFollowUp = async (
+    ticketId: string,
+    kind: { type: string; source: string },
+    content: string,
+    options?: {
+      readonly noteTypeId?: string;
+      readonly attachments?: readonly { attachmentId: string }[];
+    },
+  ): Promise<string> => {
+    const followUpId = newFollowupId();
+    const encryptedContent = await bridge.encrypt(
+      ticketId,
+      followupSlot(followUpId),
+      content,
+    );
+    await ticketRouter.createFollowUp.mutate({
+      id: followUpId,
+      ticketId,
+      encryptedContent,
+      source: kind.source,
+      type: kind.type,
+      isPrivate: kind.type === "internal_note",
+      mentionedPseudonyms: [],
+      ...(options?.noteTypeId !== undefined
+        ? { noteTypeId: options.noteTypeId }
+        : {}),
+      ...(options?.attachments !== undefined
+        ? { attachments: options.attachments }
+        : {}),
+    });
+    return followUpId;
+  };
 
-      let source: string;
-      let type: string;
-      let content: string;
-      let noteTypeId: string | undefined;
+  /** How many follow-ups the ticket has, as the timeline lists them. */
+  const countFollowUps = async (ticketId: string): Promise<number> => {
+    const written = (await ticketRouter.listFollowUps.query({
+      ticketId,
+      limit: 500,
+    })) as { followUps: readonly unknown[] };
+    return written.followUps.length;
+  };
 
-      if (isClientMsg) {
-        source = "client";
-        type = "sms_inbound";
-        content =
-          CLIENT_MSG_POOL.at((ti * 3 + fi) % CLIENT_MSG_POOL.length) ?? "";
-      } else if (isInternalNote && noteTypeIds.length > 0) {
-        source = "volunteer";
-        type = "internal_note";
-        content =
-          INTERNAL_NOTE_POOL.at((ti + fi) % INTERNAL_NOTE_POOL.length) ?? "";
-        noteTypeId = noteTypeIds[0];
-      } else {
-        source = "volunteer";
-        type = "message";
-        content =
-          VOL_REPLY_POOL.at((ti * 2 + fi) % VOL_REPLY_POOL.length) ?? "";
-      }
+  /**
+   * Marks the ticket read up to `minutesAgo` for the viewer, so client
+   * messages after it show as unread.
+   */
+  const writeReadCursor = async (
+    ticketId: string,
+    minutesAgo: number,
+  ): Promise<void> => {
+    const readUpTo = new Date(Date.now() - minutesAgo * 60_000);
+    const encryptedReadCursor = await bridge.encrypt(
+      ticketId,
+      cursorSlot(adminId),
+      JSON.stringify({ readUpTo: readUpTo.toISOString() }),
+    );
+    // updateReadCursor only updates; getReadCursor creates the row first.
+    await ticketRouter.getReadCursor.query({ ticketId });
+    await ticketRouter.updateReadCursor.mutate({
+      ticketId,
+      encryptedReadCursor,
+    });
+  };
 
-      const followUpId = newFollowupId();
-      const encryptedContent = await bridge.encrypt(
-        ticketId,
-        followupSlot(followUpId),
-        content,
-      );
-      await ticketRouter.createFollowUp.mutate({
-        id: followUpId,
-        ticketId,
-        encryptedContent,
-        source,
-        type,
-        isPrivate: isInternalNote,
-        mentionedPseudonyms: [],
-        ...(noteTypeId !== undefined ? { noteTypeId } : {}),
-      });
-    }
+  // ── Step 6: Ticket stories ──────────────────────────────────────────
+  // Each story is replayed through the production mutations, then the dev
+  // timeline procedure spreads the written follow-ups across its times.
+  const stories = buildSeedStories(SEED_TICKET_COUNT);
+  const userIdValues = Object.values(seededUserIds).filter((id) => id !== "");
+  let otherAssignCount = 0;
+  const voicemailAudio = await loadSeedVoicemail();
+  const quarantineRouter = trpc.voicemailQuarantine as unknown as
+    Record<string, any> | undefined;
 
-    // Email exchange on the first ticket: an outbound volunteer email and
-    // the client's emailed reply. Seeds the email bubble renderers and the
-    // inbound caution affordance without a live SMTP round trip.
-    if (ti === 0) {
-      const emailPair = [
-        {
-          source: "volunteer",
-          type: "email_outbound",
-          content: JSON.stringify({
-            subject: "Your appointment",
-            doc: {
-              type: "doc",
-              content: [
-                p(
-                  t(
-                    "Your intake appointment is confirmed for Thursday at 2pm. Bring the referral letter and your ID.",
-                  ),
-                ),
-              ],
-            },
-          }),
-        },
-        {
-          source: "client",
-          type: "email_inbound",
-          content: JSON.stringify({
-            subject: "Re: Your appointment",
-            text: "Thank you, I have the letter and my ID ready. Do I need anything else?",
-            from: "client@example.org",
-            droppedAttachments: 0,
-          }),
-        },
-      ];
-      for (const fu of emailPair) {
-        const emailFollowUpId = newFollowupId();
-        const encrypted = await bridge.encrypt(
-          ticketId,
-          followupSlot(emailFollowUpId),
-          fu.content,
-        );
-        await ticketRouter.createFollowUp.mutate({
-          id: emailFollowUpId,
-          ticketId,
-          encryptedContent: encrypted,
-          source: fu.source,
-          type: fu.type,
-          isPrivate: false,
-          mentionedPseudonyms: [],
-        });
-      }
-    }
-  }
+  // Pending quarantine entries: the ones the admin quarantine screen keeps
+  // showing, plus one per quarantine story, routed below the way an admin
+  // routes them.
+  progress("Seeding quarantined voicemails...");
+  const quarantineResult = (await devRouter.seedQuarantine.mutate({
+    audio: voicemailAudio,
+    durationSeconds: SEED_VOICEMAIL_DURATION_S,
+    routable: stories.filter((s) => s.origin.kind === "quarantine").length,
+  })) as { count: number; routableIds: string[] };
   console.log(
-    `[dev-seed] Added followups to ${String(followupTickets.length)} tickets`,
+    `[dev-seed] Quarantine: ${String(quarantineResult.count)} entries seeded`,
   );
+  let routedCount = 0;
 
-  // ── Step 8: Ticket state variety ────────────────────────────────────
-  progress("Varying ticket states...");
-  const userIdValues = Object.values(seededUserIds);
+  for (let i = 0; i < stories.length; i++) {
+    const story = stories[i];
+    if (story === undefined) continue;
 
-  for (let i = 0; i < Math.min(20, ticketIds.length); i++) {
-    await ticketRouter.take.mutate({ ticketId: ticketIds[i] });
+    if (i % 10 === 0) {
+      progress(`Seeding tickets (${String(i)}/${String(stories.length)})...`);
+    }
+
+    const phone = `+1555001${String(i + 1).padStart(4, "0")}`;
+    const lookup = await phoneLookup(phone);
+
+    // A quarantine story's ticket is created by routing a pending
+    // quarantined voicemail, as an admin would. Every other ticket is
+    // created the way the app and the inbound channels create it.
+    const { origin } = story;
+    const points: SeedTimelinePoint[] = [];
+    let ticketId: string;
+    if (origin.kind === "quarantine") {
+      const quarantineId = quarantineResult.routableIds.at(routedCount);
+      if (quarantineRouter === undefined || quarantineId === undefined) {
+        throw new ClientError("No quarantined voicemail left to route");
+      }
+      routedCount++;
+      const routed = (await quarantineRouter.route.mutate({
+        quarantineId,
+        target: lookup.found
+          ? { type: "clientId", clientId: lookup.clientId }
+          : { type: "clientToken", clientToken: lookup.token },
+        audioData: voicemailAudio,
+        durationSeconds: SEED_VOICEMAIL_DURATION_S,
+      })) as { ticketId: string };
+      ticketId = routed.ticketId;
+      // Routing writes the voicemail follow-up. Count what it wrote so the
+      // timeline points line up one to one.
+      const written = await countFollowUps(ticketId);
+      for (let k = 0; k < written; k++) {
+        points.push({ minutesAgo: origin.agoMinutes });
+      }
+    } else {
+      ticketId = await createTicket(lookup, {
+        queue: story.queue,
+        title: story.title,
+        description: story.description,
+        priority: story.initialPriority,
+      });
+    }
+
+    const keyGeneration = await cacheTicketKey(ticketId);
+
+    // Routing titles the ticket from the server's generic text. Rename it
+    // through the content edit a volunteer would use, so it carries the
+    // story's title and description. This writes an audit row only, no
+    // follow-up, so the timeline points above still match one to one.
+    if (origin.kind === "quarantine") {
+      await ticketRouter.updateContent.mutate({
+        ticketId,
+        encryptedTitle: await bridge.encrypt(ticketId, "title", story.title),
+        encryptedDescription: await bridge.encrypt(
+          ticketId,
+          "description",
+          story.description,
+        ),
+        keyGeneration,
+      });
+    }
+
+    // One point per follow-up, in insertion order: the origin follow-ups
+    // (none for a ticket staff opened), then one per step (each step's
+    // mutation writes exactly one follow-up). A call with a duration was
+    // answered; one without it was missed, matching how the server seeder
+    // writes the same stories. A voicemail follows its missed call a
+    // minute later, through the production recording path.
+    if (origin.kind !== "quarantine") {
+      for (const [k, shape] of originFollowUps(origin.kind).entries()) {
+        if (shape.type === "voicemail") {
+          await devRouter.seedVoicemail.mutate({
+            ticketId,
+            audio: voicemailAudio,
+            durationSeconds: SEED_VOICEMAIL_DURATION_S,
+          });
+          points.push({ minutesAgo: origin.agoMinutes - k });
+        } else if (shape.type === "phone_call") {
+          await writeFollowUp(ticketId, shape, "");
+          points.push(
+            origin.callDurationSeconds !== undefined
+              ? {
+                  minutesAgo: origin.agoMinutes,
+                  callStatus: "completed",
+                  callDurationSeconds: origin.callDurationSeconds,
+                }
+              : { minutesAgo: origin.agoMinutes, callStatus: "no_answer" },
+          );
+        } else {
+          await writeFollowUp(ticketId, shape, origin.content);
+          points.push({ minutesAgo: origin.agoMinutes });
+        }
+      }
+    }
+
+    let viewerOwns = false;
+    let lastReplyAgoMinutes: number | undefined;
+    for (const step of story.steps) {
+      switch (step.kind) {
+        case "message":
+          if (step.from === "volunteer") lastReplyAgoMinutes = step.agoMinutes;
+          await writeFollowUp(
+            ticketId,
+            messageFollowUp(story.channel, step.from),
+            messageStepContent(story, step),
+          );
+          break;
+        case "note":
+          await writeFollowUp(
+            ticketId,
+            { type: "internal_note", source: "volunteer" },
+            step.content,
+            { noteTypeId: noteTypeIds[0] },
+          );
+          break;
+        case "priority":
+          await ticketRouter.update.mutate({ ticketId, priority: step.to });
+          break;
+        case "assign":
+          viewerOwns = step.to === "me";
+          if (step.to === "me") {
+            await ticketRouter.take.mutate({ ticketId });
+          } else {
+            const targetUserId =
+              userIdValues[otherAssignCount % userIdValues.length];
+            if (targetUserId === undefined) {
+              throw new ClientError("No seeded users to assign tickets to");
+            }
+            otherAssignCount++;
+            await ticketRouter.assignTo.mutate({ ticketId, targetUserId });
+          }
+          break;
+        case "hold":
+          await ticketRouter.update.mutate({ ticketId, onHold: true });
+          break;
+        case "close":
+          await ticketRouter.update.mutate({ ticketId, status: "closed" });
+          break;
+      }
+      points.push({ minutesAgo: step.agoMinutes });
+    }
+
+    await devRouter.applySeedTimeline.mutate({
+      ticketId,
+      createdMinutesAgo: origin.agoMinutes,
+      points,
+    });
+
+    // Tickets that end up with the viewer read up to the viewer's last
+    // reply, so client messages after it show as unread.
+    if (viewerOwns && lastReplyAgoMinutes !== undefined) {
+      await writeReadCursor(ticketId, lastReplyAgoMinutes);
+    }
+
+    if (i % 10 === 0) {
+      console.log(
+        `[dev-seed] Seeded ticket ${String(i + 1)}/${String(stories.length)}`,
+      );
+    }
+  }
+  console.log(`[dev-seed] Seeded ${String(stories.length)} ticket stories`);
+
+  // ── Step 6b: Handbook story ticket ──────────────────────────────────
+  // The ticket the handbook walkthrough follows, replayed through the same
+  // mutations as the stories. The merge rows are left out: the replay has
+  // no second ticket to merge in.
+  progress("Seeding the handbook story ticket...");
+  const handbook = SEED_HANDBOOK_TICKET;
+  // The volunteer who works the first shift and reacts to the note: the
+  // same pool the stories draw someone else from.
+  const handbookOtherId = userIdValues.at(0);
+  if (handbookOtherId === undefined) {
+    throw new ClientError("No seeded users to hand the handbook ticket over");
+  }
+  const handbookTicketId = await createTicket(
+    await phoneLookup(HANDBOOK_CLIENT_PHONE),
+    {
+      queue: handbook.queue,
+      title: handbook.title,
+      description: handbook.description,
+      priority: handbook.initialPriority,
+    },
+  );
+  // Reopening below mints a new key generation but keeps the same ticket
+  // key, so this cached copy encrypts every later follow-up.
+  await cacheTicketKey(handbookTicketId);
+
+  // Anything the create itself wrote lands at the ticket's creation.
+  const handbookPoints: SeedTimelinePoint[] = [];
+  let handbookWritten = await countFollowUps(handbookTicketId);
+  for (let k = 0; k < handbookWritten; k++) {
+    handbookPoints.push({ minutesAgo: handbook.createdAgo });
   }
 
-  for (let i = 20; i < Math.min(35, ticketIds.length); i++) {
-    const targetUserId = userIdValues[i % userIdValues.length];
-    if (targetUserId !== undefined && targetUserId !== "") {
-      await ticketRouter.assignTo.mutate({
-        ticketId: ticketIds[i],
-        targetUserId,
+  /** One point per follow-up the last mutation wrote, all at `point`. */
+  const recordHandbookPoints = async (
+    point: SeedTimelinePoint,
+  ): Promise<void> => {
+    const count = await countFollowUps(handbookTicketId);
+    for (let k = handbookWritten; k < count; k++) {
+      handbookPoints.push({ ...point });
+    }
+    handbookWritten = count;
+  };
+
+  const reopenHandbookTicket = async (
+    row: SeedHandbookFollowUp,
+  ): Promise<void> => {
+    // The client texting back reopens the ticket in production, through
+    // the inbound path, which keeps the key generation. A volunteer's
+    // manual reopen would also bump it and lock the ticket.
+    await devRouter.reopenAsClient.mutate({ ticketId: handbookTicketId });
+    await recordHandbookPoints({ minutesAgo: row.agoMinutes });
+  };
+
+  /**
+   * Uploads a message's files the way the composer does, before the
+   * message that carries them. Returns the links for createFollowUp.
+   */
+  const uploadHandbookMedia = async (
+    row: SeedHandbookFollowUp,
+  ): Promise<{ attachmentId: string }[]> => {
+    const links: { attachmentId: string }[] = [];
+    for (const media of row.media ?? []) {
+      const contentType = portalContentTypeSchema.safeParse(media.contentType);
+      if (media.kind === "recording" || !contentType.success) {
+        throw new ClientError(
+          `Handbook ${media.kind} (${String(media.contentType)}) is not an uploadable attachment`,
+        );
+      }
+      const bytes =
+        media.kind === "image" ? generateSeedPng() : generateSeedTextFile();
+      const data = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(data).set(bytes);
+      const attachmentId = newAttachmentId();
+      const result = await bridge.encryptAttachment(
+        handbookTicketId,
+        attachmentId,
+        media.filename ?? HANDBOOK_PHOTO_FILENAME,
+        data,
+      );
+      await ticketRouter.uploadAttachment.mutate({
+        ticketId: handbookTicketId,
+        attachmentId,
+        blob: encode(new Uint8Array(result.blob)),
+        sizeBytes: result.blob.byteLength,
+        contentType: contentType.data,
+        fileKeyWrap: result.fileKeyWrap,
+        encryptedFilename: result.encryptedFilename,
       });
+      links.push({ attachmentId });
+    }
+    return links;
+  };
+
+  const handbookRows = handbook.followUps.filter((fu) => fu.mergedIn !== true);
+  const reopenedEarly = new Set<SeedHandbookFollowUp>();
+  let handbookClosed = false;
+  for (const [idx, row] of handbookRows.entries()) {
+    const type = row.type ?? "message";
+    const byOther = row.source === "volunteer" && row.author === "other";
+
+    // The app writes nothing on a closed ticket, so the reopen that
+    // follows a message in the story runs before it. The timeline still
+    // places the message first.
+    if (handbookClosed && row.source !== "system") {
+      const reopenRow = handbookRows
+        .slice(idx + 1)
+        .find((r) => r.type === "status_opened");
+      if (reopenRow === undefined) {
+        throw new ClientError("Handbook message on a closed ticket");
+      }
+      await reopenHandbookTicket(reopenRow);
+      reopenedEarly.add(reopenRow);
+      handbookClosed = false;
+    }
+
+    switch (type) {
+      case "volunteer_assigned":
+        if (
+          row.eventParams !== undefined &&
+          "user" in row.eventParams &&
+          row.eventParams.user === "other"
+        ) {
+          await ticketRouter.assignTo.mutate({
+            ticketId: handbookTicketId,
+            targetUserId: handbookOtherId,
+          });
+        } else {
+          await ticketRouter.take.mutate({ ticketId: handbookTicketId });
+        }
+        await recordHandbookPoints({ minutesAgo: row.agoMinutes });
+        break;
+      case "volunteer_unassigned":
+        // take refuses a ticket someone else holds, so the handoff clears
+        // the assignment first and the assign row after it takes over.
+        await ticketRouter.assignTo.mutate({
+          ticketId: handbookTicketId,
+          targetUserId: null,
+        });
+        await recordHandbookPoints({ minutesAgo: row.agoMinutes });
+        break;
+      case "hold_placed":
+      case "hold_removed":
+        await ticketRouter.update.mutate({
+          ticketId: handbookTicketId,
+          onHold: type === "hold_placed",
+        });
+        await recordHandbookPoints({ minutesAgo: row.agoMinutes });
+        break;
+      case "priority_changed":
+        await ticketRouter.update.mutate({
+          ticketId: handbookTicketId,
+          priority:
+            row.eventParams !== undefined && "to" in row.eventParams
+              ? row.eventParams.to
+              : handbook.priority,
+        });
+        await recordHandbookPoints({ minutesAgo: row.agoMinutes });
+        break;
+      case "status_closed":
+        await ticketRouter.update.mutate({
+          ticketId: handbookTicketId,
+          status: "closed",
+        });
+        handbookClosed = true;
+        await recordHandbookPoints({ minutesAgo: row.agoMinutes });
+        break;
+      case "status_opened":
+        if (!reopenedEarly.has(row)) {
+          await reopenHandbookTicket(row);
+          handbookClosed = false;
+        }
+        break;
+      case "voicemail":
+        await devRouter.seedVoicemail.mutate({
+          ticketId: handbookTicketId,
+          audio: voicemailAudio,
+          durationSeconds: SEED_VOICEMAIL_DURATION_S,
+        });
+        await recordHandbookPoints({ minutesAgo: row.agoMinutes });
+        break;
+      case "phone_call":
+        await writeFollowUp(handbookTicketId, { type, source: row.source }, "");
+        await recordHandbookPoints({
+          minutesAgo: row.agoMinutes,
+          ...(row.callStatus !== undefined
+            ? { callStatus: row.callStatus }
+            : {}),
+          ...(row.callDurationSeconds !== undefined
+            ? { callDurationSeconds: row.callDurationSeconds }
+            : {}),
+          ...(byOther ? { createdBy: handbookOtherId } : {}),
+        });
+        break;
+      case "internal_note": {
+        const noteId = await writeFollowUp(
+          handbookTicketId,
+          { type, source: row.source },
+          row.content,
+          { noteTypeId: noteTypeIds[0] },
+        );
+        // The seeding account reacts as itself; the timeline point
+        // re-stamps the reaction to the volunteer who left it.
+        const reactions = row.reactions ?? [];
+        if (reactions.length > 1) {
+          throw new ClientError("Handbook note has more than one reaction");
+        }
+        const reaction = reactions.at(0);
+        if (reaction !== undefined) {
+          await ticketRouter.toggleReaction.mutate({
+            followUpId: noteId,
+            reaction: reaction.reaction,
+          });
+        }
+        await recordHandbookPoints({
+          minutesAgo: row.agoMinutes,
+          ...(byOther ? { createdBy: handbookOtherId } : {}),
+          ...(reaction !== undefined
+            ? {
+                reaction: {
+                  userId: handbookOtherId,
+                  minutesAgo: reaction.agoMinutes,
+                },
+              }
+            : {}),
+        });
+        break;
+      }
+      case "queue_changed":
+      case "merge_note":
+      case "share_link":
+      case "contact_correction":
+        // Merge rows are skipped above; the others never occur in the
+        // handbook thread.
+        throw new ClientError(`Handbook row type not replayed: ${type}`);
+      case "message":
+      case "sms_outbound":
+      case "sms_inbound":
+      case "email_outbound":
+      case "email_inbound": {
+        // Messages on every channel. Email content is the JSON payload
+        // the email handlers store, written as given.
+        const attachments = await uploadHandbookMedia(row);
+        await writeFollowUp(
+          handbookTicketId,
+          { type, source: row.source },
+          row.content,
+          attachments.length > 0 ? { attachments } : undefined,
+        );
+        await recordHandbookPoints({
+          minutesAgo: row.agoMinutes,
+          ...(byOther ? { createdBy: handbookOtherId } : {}),
+        });
+        break;
+      }
     }
   }
 
-  for (let i = 80; i < Math.min(90, ticketIds.length); i++) {
-    await ticketRouter.update.mutate({
-      ticketId: ticketIds[i],
-      status: "closed",
-    });
-  }
+  await devRouter.applySeedTimeline.mutate({
+    ticketId: handbookTicketId,
+    createdMinutesAgo: handbook.createdAgo,
+    points: handbookPoints,
+  });
+  await writeReadCursor(handbookTicketId, handbook.unreadSince);
+  console.log("[dev-seed] Seeded the handbook story ticket");
 
-  for (let i = 50; i < Math.min(58, ticketIds.length); i++) {
-    await ticketRouter.update.mutate({
-      ticketId: ticketIds[i],
-      onHold: true,
-    });
-  }
-
-  for (let i = 60; i < Math.min(65, ticketIds.length); i++) {
-    await ticketRouter.update.mutate({
-      ticketId: ticketIds[i],
-      priority: "urgent",
-    });
-  }
-  console.log("[dev-seed] Ticket state variety applied");
-
-  // ── Step 9: Preset replies ──────────────────────────────────────────
+  // ── Step 7: Preset replies ──────────────────────────────────────────
   progress("Creating preset replies...");
   for (const preset of PRESET_REPLIES) {
     await ticketRouter.createPreset.mutate({
@@ -1516,7 +1830,7 @@ export async function devSeedData(
     console.log(`[dev-seed] Created preset reply: ${preset.title}`);
   }
 
-  // ── Step 10: KB votes ───────────────────────────────────────────────
+  // ── Step 8: KB votes ────────────────────────────────────────────────
   progress("Adding KB votes...");
   for (let i = 0; i < Math.min(4, articleIds.length); i++) {
     await kbRouter.castVote.mutate({
@@ -1526,7 +1840,40 @@ export async function devSeedData(
   }
   console.log("[dev-seed] KB votes cast");
 
-  // ── Step 11: Telephony Config ───────────────────────────────────────
+  // ── Step 8b: Backdate org setup ─────────────────────────────────────
+  // Everything above was stamped "now". Move the org's setup to just
+  // before the oldest ticket story, so the org reads as set up first.
+  progress("Backdating org setup...");
+  await devRouter.backdateOrgSetup.mutate({ minutesAgo: 43_500 });
+  console.log("[dev-seed] Org setup backdated");
+
+  // ── Step 8c: Recent admin edits ─────────────────────────────────────
+  // Two ordinary admin changes through the same mutations the admin pages
+  // use, so the activity feed opens with org events alongside ticket ones.
+  // They land "now", after the backdated setup.
+  progress("Recording recent admin edits...");
+  const housingQueue = queues.at(2);
+  const housingDef = QUEUES.at(2);
+  if (housingQueue !== undefined && housingDef !== undefined) {
+    await ticketRouter.updateQueue.mutate({
+      queueId: housingQueue.id,
+      encryptedColor: seal(housingDef.color, orgPublicKey),
+      encryptedIcon: seal(housingDef.icon, orgPublicKey),
+    });
+  }
+  const safetyNoteTypeId = noteTypeIds.at(2);
+  if (noteTypesRouter && safetyNoteTypeId !== undefined) {
+    await noteTypesRouter.update.mutate({
+      id: safetyNoteTypeId,
+      encryptedDescription: seal(
+        "Use when a client may be in danger. Alerts admins and managers.",
+        orgPublicKey,
+      ),
+    });
+  }
+  console.log("[dev-seed] Recent admin edits recorded");
+
+  // ── Step 9: Telephony Config ────────────────────────────────────────
   const telAdmin = trpc.telephonyAdmin as
     Record<string, { mutate: () => Promise<{ skipped: boolean }> }> | undefined;
   const seedTel = telAdmin?.devSeedTelephony;
@@ -1534,16 +1881,6 @@ export async function devSeedData(
     const result = await seedTel.mutate();
     console.log(
       `[dev-seed] Telephony config: ${result.skipped ? "already exists" : "seeded"}`,
-    );
-  }
-
-  // ── Step 12: Quarantine Entries ──────────────────────────────────────
-  if (devRouter.seedQuarantine != null) {
-    const result = (await devRouter.seedQuarantine.mutate()) as {
-      count: number;
-    };
-    console.log(
-      `[dev-seed] Quarantine: ${String(result.count)} entries seeded`,
     );
   }
 

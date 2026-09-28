@@ -20,7 +20,11 @@ import {
 import { nodes, marks } from "./prosemirror-schema.js";
 import { sanitizeArticleHtml } from "$lib/utils/render-article.js";
 import { proseMirrorDocSchema } from "@care-y/shared";
-import type { ProseMirrorDocJSON } from "@care-y/shared";
+import type { EmailInboundPayload, ProseMirrorDocJSON } from "@care-y/shared";
+import {
+  isEmailInbound,
+  isEmailOutbound,
+} from "$lib/tickets/follow-up-utils.js";
 
 // ---------------------------------------------------------------------------
 // Email schema (trimmed node/mark subset)
@@ -98,6 +102,28 @@ export interface ParsedEmailOutbound {
  * callers can fall back to plain-text rendering.
  */
 export function parseEmailOutbound(raw: string): ParsedEmailOutbound | null {
+  const payload = readOutboundPayload(raw);
+  if (payload === null) return null;
+  try {
+    const bodyHtml = emailDocToHtml(payload.doc);
+    return { subject: payload.subject, bodyHtml };
+  } catch {
+    return null;
+  }
+}
+
+/** Stored email_outbound payload with its doc shape-checked. */
+interface OutboundPayload {
+  readonly subject: string;
+  readonly doc: ProseMirrorDocJSON;
+}
+
+/**
+ * Read the `{ subject, doc }` JSON of a stored email_outbound payload.
+ * The doc is checked against the generic doc shape only; nodes outside
+ * the email schema still throw when a serializer builds the PM node.
+ */
+function readOutboundPayload(raw: string): OutboundPayload | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (
@@ -110,8 +136,39 @@ export function parseEmailOutbound(raw: string): ParsedEmailOutbound | null {
     const subject = typeof parsed.subject === "string" ? parsed.subject : "";
     const doc = proseMirrorDocSchema.safeParse(parsed.doc);
     if (!doc.success) return null;
-    const bodyHtml = emailDocToHtml(doc.data);
-    return { subject, bodyHtml };
+    return { subject, doc: doc.data };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stored email_inbound payload -> typed payload
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a decrypted email_inbound payload into a typed inbound email.
+ * Returns null for any malformed data so callers can fall back to
+ * plain-text rendering.
+ */
+export function parseEmailInbound(raw: string): EmailInboundPayload | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("text" in parsed) ||
+      !("from" in parsed)
+    )
+      return null;
+    const obj = parsed as Record<string, unknown>;
+    return {
+      subject: typeof obj.subject === "string" ? obj.subject : "",
+      text: typeof obj.text === "string" ? obj.text : "",
+      from: typeof obj.from === "string" ? obj.from : "",
+      droppedAttachments:
+        typeof obj.droppedAttachments === "number" ? obj.droppedAttachments : 0,
+    };
   } catch {
     return null;
   }
@@ -200,4 +257,34 @@ function inlineToText(node: PMNode): string {
     }
   });
   return parts.join("");
+}
+
+// ---------------------------------------------------------------------------
+// Stored email payload -> one-line preview text
+// ---------------------------------------------------------------------------
+
+/**
+ * Text a one-line preview shows for a decrypted follow-up. Email payloads
+ * are JSON, so their body text (or the subject when the body is blank)
+ * stands in for the raw payload. Other types, and email payloads that
+ * fail to parse, come back unchanged.
+ */
+export function emailPreviewText(type: string, raw: string): string {
+  if (isEmailInbound({ type })) {
+    const inbound = parseEmailInbound(raw);
+    if (inbound === null) return raw;
+    const text = inbound.text.trim();
+    return text !== "" ? text : inbound.subject;
+  }
+  if (isEmailOutbound({ type })) {
+    const outbound = readOutboundPayload(raw);
+    if (outbound === null) return raw;
+    try {
+      const text = emailDocToText(outbound.doc);
+      return text !== "" ? text : outbound.subject;
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
 }

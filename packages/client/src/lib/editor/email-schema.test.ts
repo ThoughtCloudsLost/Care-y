@@ -3,7 +3,8 @@
  * Tests for the trimmed email ProseMirror schema and its serializers.
  *
  * Covers emailDocToHtml and emailDocToText for marks (strong, em, link),
- * lists (bullet, ordered), hard breaks, and link labels.
+ * lists (bullet, ordered), hard breaks, and link labels. Also covers the
+ * stored-payload parsers and the one-line preview text derived from them.
  */
 
 import { describe, it, expect } from "vitest";
@@ -11,7 +12,9 @@ import type { ProseMirrorDocJSON } from "@care-y/shared";
 import {
   emailDocToHtml,
   emailDocToText,
+  emailPreviewText,
   emailSchema,
+  parseEmailInbound,
   parseEmailOutbound,
 } from "./email-schema.js";
 
@@ -420,5 +423,123 @@ describe("parseEmailOutbound", () => {
     const parsed = parseEmailOutbound(payload);
     expect(parsed?.subject).toBe("");
     expect(parsed?.bodyHtml).toContain("body");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseEmailInbound
+// ---------------------------------------------------------------------------
+
+describe("parseEmailInbound", () => {
+  it("parses a stored payload into its typed fields", () => {
+    const parsed = parseEmailInbound(
+      JSON.stringify({
+        subject: "Re: Follow-up 749124",
+        text: "Thanks, that works",
+        from: "sender@example.com",
+        droppedAttachments: 2,
+      }),
+    );
+    expect(parsed).toEqual({
+      subject: "Re: Follow-up 749124",
+      text: "Thanks, that works",
+      from: "sender@example.com",
+      droppedAttachments: 2,
+    });
+  });
+
+  it("defaults missing optional fields", () => {
+    const parsed = parseEmailInbound(
+      JSON.stringify({ text: "body", from: "sender@example.com" }),
+    );
+    expect(parsed?.subject).toBe("");
+    expect(parsed?.droppedAttachments).toBe(0);
+  });
+
+  it("returns null for malformed payloads", () => {
+    expect(parseEmailInbound("just a normal message")).toBeNull();
+    expect(parseEmailInbound(JSON.stringify({ text: "no from" }))).toBeNull();
+    expect(parseEmailInbound(JSON.stringify(null))).toBeNull();
+    expect(parseEmailInbound(JSON.stringify("string"))).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// emailPreviewText
+// ---------------------------------------------------------------------------
+
+describe("emailPreviewText", () => {
+  it("shows the trimmed body text of an inbound email", () => {
+    const raw = JSON.stringify({
+      subject: "Re: Follow-up 749124",
+      text: "  Thanks, that works\n",
+      from: "sender@example.com",
+      droppedAttachments: 0,
+    });
+    expect(emailPreviewText("email_inbound", raw)).toBe("Thanks, that works");
+  });
+
+  it("falls back to the subject when the inbound body is blank", () => {
+    const raw = JSON.stringify({
+      subject: "Re: Follow-up 749124",
+      text: "   ",
+      from: "sender@example.com",
+      droppedAttachments: 0,
+    });
+    expect(emailPreviewText("email_inbound", raw)).toBe("Re: Follow-up 749124");
+  });
+
+  it("shows the plain text of an outbound email's doc", () => {
+    const raw = JSON.stringify({
+      subject: "Follow-up 749124",
+      doc: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              { type: "text", text: "Here is an" },
+              { type: "text", marks: [{ type: "strong" }], text: " update" },
+            ],
+          },
+        ],
+      },
+    });
+    expect(emailPreviewText("email_outbound", raw)).toBe("Here is an update");
+  });
+
+  it("falls back to the subject when the outbound doc has no text", () => {
+    const raw = JSON.stringify({
+      subject: "Follow-up 749124",
+      doc: { type: "doc", content: [{ type: "paragraph" }] },
+    });
+    expect(emailPreviewText("email_outbound", raw)).toBe("Follow-up 749124");
+  });
+
+  it("passes non-email content through unchanged", () => {
+    const raw = JSON.stringify({ text: "looks like email", from: "x" });
+    expect(emailPreviewText("message", raw)).toBe(raw);
+    expect(emailPreviewText("message", "plain text")).toBe("plain text");
+  });
+
+  it("passes malformed email payloads through unchanged", () => {
+    expect(emailPreviewText("email_inbound", "not json")).toBe("not json");
+    expect(emailPreviewText("email_outbound", "not json")).toBe("not json");
+    const outsideSchema = JSON.stringify({
+      subject: "x",
+      doc: {
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "not allowed" }],
+          },
+        ],
+      },
+    });
+    expect(emailPreviewText("email_outbound", outsideSchema)).toBe(
+      outsideSchema,
+    );
   });
 });

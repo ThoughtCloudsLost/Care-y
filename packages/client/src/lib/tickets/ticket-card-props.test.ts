@@ -30,6 +30,7 @@ function makeRecord(
     createdAt: "2026-01-01T00:00:00Z",
     lastActivityAt: null,
     followUpCount: 0,
+    hasResponse: false,
     queueSortOrder: 1,
     ...overrides,
   };
@@ -57,12 +58,16 @@ function makePreview(id: string): RawFollowUpPreview {
     type: "internal_note",
     encryptedContent: "enc-content",
     keyWrap: null,
+    followUpKeyWrap: null,
+    portalWrap: null,
     createdAt: "2026-01-02T00:00:00Z",
     hasRecording: false,
     hasImage: false,
     hasFile: false,
     noteTypeId: null,
     eventParams: null,
+    callStatus: null,
+    callDurationSeconds: null,
   };
 }
 
@@ -158,9 +163,17 @@ describe("mapTicketDisplayFields", () => {
       mapTicketDisplayFields(makeRecord({ id: "a" }), deps).displayStatus,
     ).toBe("new");
     expect(
-      mapTicketDisplayFields(makeRecord({ id: "b", followUpCount: 2 }), deps)
-        .displayStatus,
+      mapTicketDisplayFields(
+        makeRecord({ id: "b", followUpCount: 2, hasResponse: true }),
+        deps,
+      ).displayStatus,
     ).toBe("active");
+    // Follow-ups without a response (the inbound message that opened the
+    // ticket) leave it New.
+    expect(
+      mapTicketDisplayFields(makeRecord({ id: "e", followUpCount: 1 }), deps)
+        .displayStatus,
+    ).toBe("new");
     expect(
       mapTicketDisplayFields(makeRecord({ id: "c", onHold: true }), deps)
         .displayStatus,

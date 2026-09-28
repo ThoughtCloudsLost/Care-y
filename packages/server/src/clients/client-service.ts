@@ -13,6 +13,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { keysetAfter } from "../db/keyset.js";
 import type { AuditService } from "../tickets/audit.js";
+import { hasResponse } from "../tickets/has-response.js";
 import type {
   FieldEncryptor,
   BlindIndexer,
@@ -68,8 +69,9 @@ export interface ClientTicketRecord {
   readonly createdAt: Date;
   readonly keyGeneration: KeyGeneration;
   readonly onHold: boolean;
-  /** Follow-up count, needed to derive the display status shape. */
   readonly followUpCount: number;
+  /** Whether anyone has responded yet, needed to tell New from Active. */
+  readonly hasResponse: boolean;
 }
 
 export interface ClientDetailRecord extends ClientListRecord {
@@ -341,13 +343,15 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
           "t.key_generation",
           "t.on_hold",
         ])
-        .select((eb) =>
+        .select((eb) => [
           eb
             .selectFrom("followups as f")
             .select((sb) => sb.fn.countAll().as("cnt"))
             .whereRef("f.ticket_id", "=", "t.id")
             .as("followup_count"),
-        )
+          // Same New/Active rule the ticket list uses.
+          hasResponse(eb.ref("t.id")).as("has_response"),
+        ])
         .where("t.client_id", "=", clientId)
         .orderBy("t.created_at", "desc")
         .execute();
@@ -379,6 +383,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
           keyGeneration: t.key_generation,
           onHold: t.on_hold,
           followUpCount: Number(t.followup_count ?? 0),
+          hasResponse: Boolean(t.has_response),
         })),
         mergeHistory,
       };

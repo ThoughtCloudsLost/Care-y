@@ -1,6 +1,8 @@
 <script lang="ts">
   import { SvelteDate } from "svelte/reactivity";
+  import { CalendarDays } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import CollapsibleSection from "./CollapsibleSection.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import { toastStore } from "$lib/stores/toast.svelte.js";
 
@@ -20,9 +22,17 @@
     loading?: boolean;
     /** Open tickets assigned to the viewer, whatever the lane filters. */
     myOpenCount: number;
+    expanded: boolean;
+    ontoggle: () => void;
   }
 
-  let { shift, loading = false, myOpenCount }: ShiftSectionProps = $props();
+  let {
+    shift,
+    loading = false,
+    myOpenCount,
+    expanded,
+    ontoggle,
+  }: ShiftSectionProps = $props();
 
   // Reactive countdown that ticks every minute.
   const now = new SvelteDate();
@@ -96,46 +106,64 @@
       : m.dashboard_shift_open_with_you_other({ count: myOpenCount }),
   );
 
-  function handleEndShift(): void {
-    // No shift backend yet; announce the deferral rather than faking a write.
+  // Outside an active shift the control offers to start one. There is no
+  // shift backend yet, so either action announces the deferral rather than
+  // faking a write.
+  function handleShiftAction(): void {
     toastStore.show(m.feature_coming_soon());
   }
 </script>
 
-<section class="shift" aria-label={m.dashboard_shift_heading()}>
-  <div class="shift-body">
-    <span class="shift-line">
-      <span class="dot" aria-hidden="true"></span>
-      {#if loading}
-        <span class="t"><InlineSkeleton width="22ch" /></span>
-      {:else}
-        <span class="t num">{timeDisplay}</span>
-      {/if}
-    </span>
-    {#if !loading}
-      <span class="t t-open num">{openWithYou}</span>
-    {/if}
-    {#if !loading && shift && shift.volunteers.length > 0}
-      <span
-        class="chips"
-        aria-label={m.dashboard_shift_volunteers({
-          count: shift.volunteersOnShift,
-        })}
-      >
-        {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
-          <span
-            class="chip"
-            class:chip-you={vol.isCurrentUser}
-            aria-hidden="true">{vol.initials}</span
-          >
-        {/each}
+<CollapsibleSection
+  heading={m.dashboard_shift_heading()}
+  icon={CalendarDays}
+  iconColor="var(--brand-accent)"
+  id="shift"
+  {expanded}
+  {ontoggle}
+>
+  <div class="shift">
+    <div class="shift-body">
+      <span class="shift-line">
+        <span class="dot" aria-hidden="true"></span>
+        {#if loading}
+          <span class="t"><InlineSkeleton width="22ch" /></span>
+        {:else}
+          <span class="t num">{timeDisplay}</span>
+        {/if}
       </span>
-    {/if}
+      {#if !loading}
+        <span class="t t-open num">{openWithYou}</span>
+      {/if}
+      {#if !loading && shift && shift.volunteers.length > 0}
+        <span
+          class="chips"
+          aria-label={m.dashboard_shift_volunteers({
+            count: shift.volunteersOnShift,
+          })}
+        >
+          {#each shift.volunteers as vol, i (`${vol.initials}${String(i)}`)}
+            <span
+              class="chip"
+              class:chip-you={vol.isCurrentUser}
+              aria-hidden="true">{vol.initials}</span
+            >
+          {/each}
+        </span>
+      {/if}
+    </div>
+    <button
+      type="button"
+      class="end"
+      disabled={loading}
+      onclick={handleShiftAction}
+    >
+      {shiftState === "active"
+        ? m.dashboard_shift_end()
+        : m.dashboard_shift_start()}
+    </button>
   </div>
-  <button type="button" class="end" disabled={loading} onclick={handleEndShift}>
-    {m.dashboard_shift_end()}
-  </button>
-</section>
+</CollapsibleSection>
 
 <style>
   /* End shift centers against the full band height; the body stacks
@@ -144,7 +172,9 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: var(--space-md) var(--section-inset, var(--page-pad-x)) 0;
+    /* The body spacing of QueueCards' grid, so the card lines up with its
+       neighbours in the band. */
+    margin: 0.25rem var(--section-inset, var(--page-pad-x)) var(--space-lg);
     padding: 11px 14px;
     border: 1px solid var(--hair);
     border-radius: 10px;

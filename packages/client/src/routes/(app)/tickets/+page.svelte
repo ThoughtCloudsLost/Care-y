@@ -650,7 +650,7 @@
     );
     return {
       ...t,
-      displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
+      displayStatus: deriveDisplayStatus(t.status, t.onHold, t.hasResponse),
       title: titleResult.status === "ready" ? titleResult.value : null,
       clientAlias: orgCache.decrypt(
         `client-alias:${t.clientId}`,

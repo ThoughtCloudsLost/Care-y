@@ -2,8 +2,13 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { BlobStore } from "../storage/store.js";
 import { createSealedBoxEncryptor } from "../crypto/sealed-box.js";
-import type { OrgSchema, ClientId } from "@care-y/shared";
+import type {
+  OrgSchema,
+  ClientId,
+  VoicemailQuarantineId,
+} from "@care-y/shared";
 import { recordingSidSchema, callSidSchema } from "@care-y/shared";
+import type { SeedQuarantineInput } from "@care-y/shared/dev/seed-stories.js";
 
 interface QuarantineEntry {
   readonly recordingSid: string;
@@ -49,6 +54,21 @@ const SEED_ENTRIES: readonly QuarantineEntry[] = [
   },
 ];
 
+/** A pending entry the dev seed routes into a new ticket, like an admin would. */
+function routableEntry(i: number): QuarantineEntry {
+  const n = String(i + 1).padStart(4, "0");
+  return {
+    recordingSid: `RE_SEED_route_${n}`,
+    callSid: `CA_SEED_route_${n}`,
+    reason: "unresolved_client",
+    callerNumber: `+1555003${n}`,
+    calledNumber: "+15550001111",
+    durationSeconds: 30,
+    clientId: null,
+    minutesAgo: 0,
+  };
+}
+
 function generateWav(durationSec: number): Buffer {
   const sampleRate = 8000;
   const numSamples = sampleRate * durationSec;
@@ -75,11 +95,18 @@ function generateWav(durationSec: number): Buffer {
   return Buffer.concat([header, data]);
 }
 
+/**
+ * Seeds pending quarantine entries: the fixed set the admin quarantine
+ * screen shows, plus `routable` more for the dev seed to route. Entries
+ * carry the given audio (the shared seed clip) when present, else
+ * synthetic audio.
+ */
 export async function seedQuarantineEntries(
   tDb: Kysely<TenantDatabase>,
   blobStore: BlobStore,
   orgSchema: OrgSchema,
-): Promise<{ count: number }> {
+  options?: SeedQuarantineInput,
+): Promise<{ count: number; routableIds: VoicemailQuarantineId[] }> {
   const orgConfig = await tDb
     .selectFrom("org_config")
     .select(["org_public_key", "current_key_generation"])
@@ -87,7 +114,7 @@ export async function seedQuarantineEntries(
 
   if (!orgConfig?.org_public_key) {
     console.log("[seed-quarantine] No org public key found, skipping");
-    return { count: 0 };
+    return { count: 0, routableIds: [] };
   }
 
   const sealedBox = createSealedBoxEncryptor(
@@ -96,8 +123,13 @@ export async function seedQuarantineEntries(
   );
 
   let count = 0;
+  const routableIds: VoicemailQuarantineId[] = [];
+  const routable = Array.from({ length: options?.routable ?? 0 }, (_, i) =>
+    routableEntry(i),
+  );
+  const routableSids = new Set(routable.map((e) => e.recordingSid));
 
-  for (const entry of SEED_ENTRIES) {
+  for (const entry of [...SEED_ENTRIES, ...routable]) {
     const parsedRecordingSid = recordingSidSchema.parse(entry.recordingSid);
     const parsedCallSid = callSidSchema.parse(entry.callSid);
 
@@ -109,8 +141,16 @@ export async function seedQuarantineEntries(
 
     if (existing) continue;
 
-    const rawAudio = generateWav(entry.durationSeconds);
+    const durationSeconds =
+      options?.audio !== undefined
+        ? (options.durationSeconds ?? entry.durationSeconds)
+        : entry.durationSeconds;
+    const rawAudio =
+      options?.audio !== undefined
+        ? Buffer.from(options.audio, "base64")
+        : generateWav(durationSeconds);
     const sealed = sealedBox.sealBuffer(rawAudio);
+    rawAudio.fill(0);
     const blobKey = await blobStore.put(orgSchema, "quarantine", sealed);
 
     const encryptedCaller = sealedBox.seal(entry.callerNumber);
@@ -118,14 +158,14 @@ export async function seedQuarantineEntries(
 
     const createdAt = new Date(Date.now() - entry.minutesAgo * 60 * 1000);
 
-    await tDb
+    const inserted = await tDb
       .insertInto("voicemail_quarantine")
       .values({
         recording_sid: parsedRecordingSid,
         call_sid: parsedCallSid,
         blob_key: blobKey,
         size_bytes: sealed.length,
-        duration_seconds: entry.durationSeconds,
+        duration_seconds: durationSeconds,
         reason: entry.reason,
         client_id: entry.clientId,
         encrypted_caller_number: encryptedCaller,
@@ -133,10 +173,12 @@ export async function seedQuarantineEntries(
         created_at: createdAt,
         org_key_generation: sealedBox.generation,
       })
-      .execute();
+      .returning("id")
+      .executeTakeFirstOrThrow();
 
+    if (routableSids.has(entry.recordingSid)) routableIds.push(inserted.id);
     count++;
   }
 
-  return { count };
+  return { count, routableIds };
 }

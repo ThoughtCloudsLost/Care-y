@@ -36,12 +36,17 @@
      * body always shows. `expanded` and `ontoggle` are then unused.
      */
     collapsible?: boolean;
+    /** Rendered at the right end of the header row, after the chevron. */
     headerExtra?: Snippet;
-    /** A control at the right of the header row, such as a filter button. */
+    /**
+     * A control in the header row just left of the count, such as a filter
+     * button.
+     */
     headerAction?: Snippet;
     /**
      * Rendered between the header and the body, outside the collapsible
-     * region, so it stays visible while the section is collapsed.
+     * region (a lane's subgrid gives it its own row). It shows only while
+     * the body does, so collapsing a section hides its filters too.
      */
     filterRow?: Snippet;
     children?: Snippet;
@@ -91,27 +96,19 @@
     {/if}
     <span id={headingId} class="secline-eb">{heading}</span>
     <span class="secline-rule" aria-hidden="true"></span>
-    {#if loading && count === undefined}
-      <span class="secline-cnt" aria-hidden="true">
-        <DecryptPlaceholder length={3} />
-      </span>
-    {:else if countText !== undefined}
-      <!-- The visible count sits apart from the heading text; the hidden
-           copy puts it in the toggle's or heading's accessible name. -->
-      <span class="secline-cnt" aria-hidden="true" data-count={count}
-        >{countText}</span
-      >
+    {#if countText !== undefined}
+      <!-- The visible count sits outside the toggle, past the header
+           action; this hidden copy puts it in the toggle's or heading's
+           accessible name. -->
       <span class="sr-only">{countText}</span>
-    {/if}
-    {#if collapsible}
-      <span class="toggle-chevron" class:expanded aria-hidden="true">
-        &#x276F;
-      </span>
     {/if}
   </span>
 {/snippet}
 
 <div class="collapsible-section">
+  <!-- The toggle's ::after stretches over the whole row, so a tap on the
+       count or the chevron toggles too. The action and extra controls sit
+       above it. -->
   <div class="section-header">
     {#if collapsible}
       <button
@@ -128,18 +125,32 @@
         {@render secline()}
       </h2>
     {/if}
-    {#if headerExtra !== undefined || headerAction !== undefined}
+    {#if headerAction}
+      <div class="header-action">
+        {@render headerAction()}
+      </div>
+    {/if}
+    {#if loading && count === undefined}
+      <span class="secline-cnt" aria-hidden="true">
+        <DecryptPlaceholder length={3} />
+      </span>
+    {:else if countText !== undefined}
+      <span class="secline-cnt" aria-hidden="true" data-count={count}
+        >{countText}</span
+      >
+    {/if}
+    {#if collapsible}
+      <span class="toggle-chevron" class:expanded aria-hidden="true">
+        &#x276F;
+      </span>
+    {/if}
+    {#if headerExtra}
       <div class="header-extra">
-        {#if headerExtra}
-          {@render headerExtra()}
-        {/if}
-        {#if headerAction}
-          {@render headerAction()}
-        {/if}
+        {@render headerExtra()}
       </div>
     {/if}
   </div>
-  {#if filterRow}
+  {#if filterRow && bodyShown}
     {@render filterRow()}
   {/if}
   {#if bodyShown}
@@ -165,17 +176,48 @@
     padding-top: var(--space-2xl);
   }
 
+  /* The row owns the secline's vertical padding and its right inset, so
+     the heading, the action, the count, and the chevron center on one
+     line and the last of them keeps the inset. The secline keeps only its
+     left inset. */
   .section-header {
+    position: relative;
     display: flex;
     align-items: center;
+    gap: 8px;
+    padding: 18px var(--section-inset, var(--page-pad-x)) 8px 0;
   }
 
+  .secline {
+    padding-top: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+  }
+
+  .section-toggle::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  .header-action,
   .header-extra {
+    position: relative;
+    z-index: 1;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    padding-right: var(--section-inset, var(--page-pad-x));
+  }
+
+  /* Zero height, so the action's 44px tap target centers on the count's
+     line and overflows the row evenly instead of growing it. */
+  .header-action {
+    height: 0;
+  }
+
+  .secline-cnt {
+    flex-shrink: 0;
   }
 
   .section-toggle,
@@ -210,6 +252,7 @@
 
   .toggle-chevron {
     display: inline-block;
+    flex-shrink: 0;
     font-size: 0.625rem;
     transition: transform 200ms ease;
     transform: rotate(90deg);

@@ -933,6 +933,31 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(result.previews[ticketId]).toHaveLength(2);
   });
 
+  it("recentFollowUps carries call status and duration for phone_call rows", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "client",
+        type: "phone_call",
+        encrypted_content: Buffer.from("call"),
+        call_status: "completed",
+        call_duration_seconds: 95,
+      })
+      .execute();
+
+    const result = await svc.recentFollowUps(userId, {
+      ticketIds: [ticketId],
+      perTicket: 3,
+    });
+    const call = result.previews[ticketId]?.[0];
+    expect(call).toBeDefined();
+    expect(call!.callStatus).toBe("completed");
+    expect(call!.callDurationSeconds).toBe(95);
+  });
+
   it("recentFollowUps returns empty for tickets outside user queues", async () => {
     const { ticketId } = await createTicketFixture();
     const outsider = await createTestUser(testDb.db);
@@ -988,8 +1013,9 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(withWrap!.keyWrap!.ephemeralPoint).not.toMatch(/[+/=]/);
   });
 
-  it("recentFollowUps returns null keyWrap for a pending-convergence follow-up", async () => {
+  it("recentFollowUps sends a pending-convergence row its own wrap, never the ticket wrap", async () => {
     const { userId, ticketId } = await createTicketFixture();
+    const pendingGeneration = newKeyGeneration();
 
     // A converged row and a pending row (non-null key_generation, i.e.
     // content encrypted under tk_temp such as a portal client reply).
@@ -1009,7 +1035,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         source: "client",
         type: "message",
         encrypted_content: Buffer.from("pending"),
-        key_generation: newKeyGeneration(),
+        key_generation: pendingGeneration,
       })
       .execute();
 
@@ -1019,6 +1045,9 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       .where("id", "=", ticketId)
       .executeTakeFirstOrThrow();
     await insertKeyWrap(ticketId, userId, ticketRow.key_generation);
+    // The tk_temp wrap createEncryptedFollowUp writes for a server
+    // written row such as a voicemail.
+    const ownWrap = await insertKeyWrap(ticketId, userId, pendingGeneration);
 
     const result = await svc.recentFollowUps(userId, {
       ticketIds: [ticketId],
@@ -1033,6 +1062,13 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(pending).toBeDefined();
     expect(pending!.keyWrap).toBeNull();
     expect(converged!.keyWrap).not.toBeNull();
+    // It carries its own wrap instead, so the preview can read it the
+    // way the detail timeline does rather than showing it as denied.
+    expect(pending!.followUpKeyWrap!.ephemeralPoint).toBe(
+      encode(new Uint8Array(ownWrap.ephemeralPoint)),
+    );
+    expect(pending!.portalWrap).toBeNull();
+    expect(converged!.followUpKeyWrap).toBeNull();
   });
 
   // --- recentFollowUps: latestClientType ---
@@ -2302,8 +2338,8 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
      * New, Active, Hold and Closed partition every ticket: a held ticket
      * is open and is neither New nor Active, and closing clears the hold.
      * Fixtures are written through the DB rather than the service so
-     * follow-up counts stay controlled (the service emits system
-     * follow-ups, which would move a ticket from New to Active).
+     * each ticket's follow-ups stay controlled. A staff reply is what
+     * moves a ticket from New to Active (hasResponse).
      */
     async function partitionFixtures(): Promise<{ userId: UserId }> {
       const base = await createTestTicketFixture(testDb.db, {
@@ -2313,7 +2349,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       const queueId = base.queueId;
 
       // T1 (base): open, not held, no follow-ups, unassigned, normal -> New
-      // T2: same but carrying a follow-up -> Active
+      // T2: same but carrying a staff reply -> Active
       const t2 = await createTestTicketFixture(testDb.db, { queueId });
       await testDb.db
         .insertInto("followups")
@@ -2444,6 +2480,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
           "assignedTo",
           "createdAt",
           "followUpCount",
+          "hasResponse",
           "id",
           "onHold",
           "priority",
@@ -2568,6 +2605,107 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       expect(result.items).toHaveLength(2);
       // nextCursor is allowed (and expected) to be non-null here
       expect(result.nextCursor).not.toBeNull();
+    });
+  });
+
+  describe("hasResponse", () => {
+    interface FollowupSeed {
+      readonly source: string;
+      readonly type: string;
+      readonly callStatus?: string;
+      readonly deleted?: boolean;
+    }
+
+    // Seeds one ticket and reads hasResponse back through findById, list
+    // and facetIndex, which must agree.
+    async function hasResponseAcrossReads(
+      seeds: readonly FollowupSeed[],
+    ): Promise<readonly boolean[]> {
+      const fix = await createTestTicketFixture(testDb.db, {
+        createUser: true,
+      });
+      const userId = fix.userId!;
+      for (const [i, seed] of seeds.entries()) {
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            ticket_id: fix.ticketId,
+            source: seed.source,
+            type: seed.type,
+            encrypted_content: Buffer.from(`fu-${i}`),
+            call_status: seed.callStatus ?? null,
+            deleted_at: seed.deleted === true ? new Date() : null,
+          })
+          .execute();
+      }
+
+      const got = await svc.findById(fix.ticketId, userId);
+      const listed = await svc.list(userId, {
+        queueIds: [fix.queueId],
+        limit: 100,
+      });
+      const indexed = await svc.facetIndex(userId, { limit: 500 });
+      const fromList = listed.find((t) => t.id === fix.ticketId);
+      const fromIndex = indexed.items.find((t) => t.id === fix.ticketId);
+      expect(fromList).toBeDefined();
+      expect(fromIndex).toBeDefined();
+      return [got.hasResponse, fromList!.hasResponse, fromIndex!.hasResponse];
+    }
+
+    it("is false for a ticket with no follow-ups", async () => {
+      expect(await hasResponseAcrossReads([])).toEqual([false, false, false]);
+    });
+
+    it("is false when only the inbound text that opened it exists", async () => {
+      expect(
+        await hasResponseAcrossReads([
+          { source: "client", type: "sms_inbound" },
+        ]),
+      ).toEqual([false, false, false]);
+    });
+
+    it("ignores system events and internal notes", async () => {
+      expect(
+        await hasResponseAcrossReads([
+          { source: "system", type: "volunteer_assigned" },
+          { source: "system", type: "hold_placed" },
+          { source: "system", type: "priority_changed" },
+          { source: "volunteer", type: "internal_note" },
+        ]),
+      ).toEqual([false, false, false]);
+    });
+
+    it("is true once a volunteer sends a message", async () => {
+      expect(
+        await hasResponseAcrossReads([
+          { source: "client", type: "sms_inbound" },
+          { source: "volunteer", type: "message" },
+        ]),
+      ).toEqual([true, true, true]);
+    });
+
+    it("is true for an answered inbound call", async () => {
+      expect(
+        await hasResponseAcrossReads([
+          { source: "client", type: "phone_call", callStatus: "completed" },
+        ]),
+      ).toEqual([true, true, true]);
+    });
+
+    it("is false for a missed inbound call", async () => {
+      expect(
+        await hasResponseAcrossReads([
+          { source: "client", type: "phone_call", callStatus: "no_answer" },
+        ]),
+      ).toEqual([false, false, false]);
+    });
+
+    it("ignores a deleted volunteer message", async () => {
+      expect(
+        await hasResponseAcrossReads([
+          { source: "volunteer", type: "message", deleted: true },
+        ]),
+      ).toEqual([false, false, false]);
     });
   });
 

@@ -35,7 +35,7 @@ const JAN_25 = "2024-01-25T12:00:00Z";
  * priorities, assigned/unassigned/assigned-to-me, and a spread of dates.
  */
 const ROWS: readonly TicketForServerFilter[] = [
-  // new: open, 0 follow-ups, unassigned, general queue
+  // new: open, nobody has responded, unassigned, general queue
   row({ id: "t-new-1", priority: "low", createdAt: JAN_05 }),
   row({
     id: "t-new-2",
@@ -44,10 +44,11 @@ const ROWS: readonly TicketForServerFilter[] = [
     queueId: "q-support",
   }),
 
-  // active: open, follow-ups > 0, assigned to me
+  // Active tickets are open and responded to, and these are assigned to me
   row({
     id: "t-active-1",
     followUpCount: 3,
+    hasResponse: true,
     priority: "high",
     assignedTo: ME,
     createdAt: JAN_15,
@@ -55,6 +56,7 @@ const ROWS: readonly TicketForServerFilter[] = [
   row({
     id: "t-active-2",
     followUpCount: 1,
+    hasResponse: true,
     priority: "urgent",
     assignedTo: ME,
     createdAt: JAN_20,
@@ -66,6 +68,7 @@ const ROWS: readonly TicketForServerFilter[] = [
     id: "t-hold-1",
     onHold: true,
     followUpCount: 2,
+    hasResponse: true,
     priority: "normal",
     assignedTo: "user-other",
     createdAt: JAN_15,
@@ -76,6 +79,7 @@ const ROWS: readonly TicketForServerFilter[] = [
     id: "t-closed-1",
     status: "closed",
     followUpCount: 5,
+    hasResponse: true,
     priority: "low",
     createdAt: JAN_25,
   }),
@@ -83,6 +87,7 @@ const ROWS: readonly TicketForServerFilter[] = [
     id: "t-closed-2",
     status: "closed",
     followUpCount: 1,
+    hasResponse: true,
     priority: "urgent",
     assignedTo: ME,
     createdAt: JAN_20,
@@ -120,6 +125,17 @@ describe("matchesFilters", () => {
     const ctx = makeCtx();
     const passing = ROWS.filter((r) => matchesFilters(r, filters, ctx));
     expect(passing.map((r) => r.id)).toEqual(["t-new-1", "t-new-2"]);
+  });
+
+  it("treats an open row with follow-ups but no response as New", () => {
+    // The inbound message that opened a ticket is a follow-up, so the
+    // count alone cannot decide New.
+    const filters: FacetFilterState = {
+      ...NO_FACET_FILTERS,
+      statuses: new Set<DisplayStatus>(["new"]),
+    };
+    const inbound = row({ id: "t-inbound", followUpCount: 1 });
+    expect(matchesFilters(inbound, filters, makeCtx())).toBe(true);
   });
 
   it("filters by queue", () => {

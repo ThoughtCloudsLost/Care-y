@@ -386,6 +386,7 @@
   "dashboard_shift_volunteers": "⟦{count} òn shìft •••⟧",
   "dashboard_shift_no_shift": "⟦Nò àctìvè shìft •••••⟧",
   "dashboard_shift_end": "⟦Ènd shìft •••⟧",
+  "dashboard_shift_start": "⟦Stàrt shìft ••••⟧",
   "dashboard_shift_open_with_you_one": "⟦{count} òpèn wìth yòù •••••⟧",
   "dashboard_shift_open_with_you_other": "⟦{count} òpèn wìth yòù •••••⟧",
   "dashboard_queues_heading": "⟦{Queues}⟧",

@@ -268,6 +268,10 @@ export const PROCEDURE_PERMISSIONS = {
   // --- dev ---
   "dev.resetSeedData": Permission.MANAGE_ROLES,
   "dev.seedQuarantine": Permission.MANAGE_ROLES,
+  "dev.applySeedTimeline": Permission.MANAGE_ROLES,
+  "dev.backdateOrgSetup": Permission.MANAGE_ROLES,
+  "dev.seedVoicemail": Permission.MANAGE_ROLES,
+  "dev.reopenAsClient": Permission.MANAGE_ROLES,
 } as const satisfies Record<string, Permission>;
 
 export type GatedProcedurePath = keyof typeof PROCEDURE_PERMISSIONS;

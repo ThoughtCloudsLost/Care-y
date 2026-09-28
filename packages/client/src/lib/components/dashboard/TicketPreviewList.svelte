@@ -7,7 +7,8 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import {
     estimateTicketCardHeight,
-    resolveGridColumns,
+    LANE_GRID_CARD_MAX_WIDTH,
+    resolveLaneGridColumns,
     TICKET_CARD_VIRTUALIZE_THRESHOLD,
   } from "$lib/tickets/ticket-list-utils.js";
   import { sortTickets } from "$lib/tickets/sort-tickets.js";
@@ -104,7 +105,8 @@
       (countIsFloor && totalCount !== undefined),
   );
   const hasError = $derived(error !== null && error !== undefined);
-  // Paging belongs to an uncapped list; a capped one ends at "See all".
+  // Paging belongs to an uncapped list; a capped one ends at "See all",
+  // which an uncapped list never shows (it reaches every row itself).
   const pageOnScroll = $derived(maxVisible === null ? onloadmore : undefined);
 
   // Grid columns track the section container width, floored at two so a
@@ -124,8 +126,16 @@
     return () => ro.disconnect();
   });
 
+  // Grid cards keep their own size: a widening lane gains columns, the
+  // rest of the row stays empty. GRID_GAP_PX is --space-md, the gap the
+  // grid rows use; container math cannot read the token.
+  const GRID_GAP_PX = 6;
+  const GRID_TRACK = `minmax(0, ${String(LANE_GRID_CARD_MAX_WIDTH)}px)`;
+
   const resolvedColumns = $derived(
-    viewMode === "grid" ? resolveGridColumns(containerWidth) : 1,
+    viewMode === "grid"
+      ? resolveLaneGridColumns(containerWidth, GRID_GAP_PX)
+      : 1,
   );
 
   // Reported out for a caller that rounds its cap to whole rows.
@@ -221,6 +231,7 @@
         class:mode-cards={viewMode === "cards"}
         class:mode-grid={viewMode === "grid"}
         style:--grid-cols={resolvedColumns}
+        style:--lane-grid-card-max="{LANE_GRID_CARD_MAX_WIDTH}px"
       >
         {#each Array(skeletonCount) as _, i (i)}
           <TicketCard loading={true} {viewMode} {...SKELETON_CARD_PROPS} />
@@ -261,6 +272,7 @@
             estimateHeight={estimateTicketCardHeight(viewMode)}
             virtualizeThreshold={TICKET_CARD_VIRTUALIZE_THRESHOLD}
             columns={resolvedColumns}
+            columnTrack={viewMode === "grid" ? GRID_TRACK : undefined}
             getKey={(t: TicketLikeRecord) => t.id}
             onloadmore={pageOnScroll}
           >
@@ -281,7 +293,7 @@
     {/if}
   {/if}
 </div>
-{#if !loading && hasMore && onseeall !== undefined}
+{#if !loading && maxVisible !== null && hasMore && onseeall !== undefined}
   <button type="button" class="see-all-link" onclick={onseeall}>
     {m.dashboard_see_all({ count: formatCount(displayCount, countIsFloor) })}
   </button>
@@ -330,7 +342,11 @@
   /* Skeleton-only; the live grid is VirtualList-column-driven. */
   .preview-list.mode-grid {
     display: grid;
-    grid-template-columns: repeat(var(--grid-cols, 2), minmax(0, 1fr));
+    grid-template-columns: repeat(
+      var(--grid-cols, 2),
+      minmax(0, var(--lane-grid-card-max))
+    );
+    gap: var(--space-md);
   }
 
   .see-all-link {

@@ -610,19 +610,17 @@
     lanes.some((lane) => lane.id === "on-hold" && laneStaysShown(lane)),
   );
 
-  // Band tiles in the row rule: Queues and Activity always, KB and Merge
-  // when shown.
-  const bandTileCount = $derived(
-    2 + (showKb ? 1 : 0) + (showMergeCandidates ? 1 : 0),
-  );
+  // The band's row rule counts Shift, Queues, and Activity always and KB
+  // when shown. Merge candidates spans the row below and is not a tile.
+  const bandTileCount = $derived(3 + (showKb ? 1 : 0));
 
   // Open tickets assigned to the viewer, whatever the lane's filters.
   const myOpenCount = $derived(
     lanes.find((lane) => lane.id === "my-tickets")?.baseCount ?? 0,
   );
 
-  // Page order: the context band (getting started, shift, then its tiles)
-  // first, then the ticket lanes in work-priority order.
+  // Page order: the context band (getting started, then its tiles with
+  // Shift first) first, then the ticket lanes in work-priority order.
   // buildDashboardSections is the single derivation for section ids, labels,
   // icons, and conditional inclusion. Both this page and the hover-reveal
   // registry call it.
@@ -662,7 +660,10 @@
         totalCountIsFloor: false,
       };
     }
-    if (lane.shownCount < lane.count || lane.countIsFloor) {
+    // "N of total" names rows a capped lane hides behind See all. An
+    // uncapped lane pages through every row, so it shows the total alone.
+    const capped = laneCap(lane.id) !== undefined;
+    if ((capped && lane.shownCount < lane.count) || lane.countIsFloor) {
       return {
         count: lane.shownCount,
         totalCount: lane.count,
@@ -833,6 +834,14 @@
   // --- Collapsible section state (all expanded except unassigned/on-hold) ---
   const collapsedSections = new SvelteSet<string>(["unassigned", "on-hold"]);
 
+  /**
+   * A section whose body is hidden. Side by side, lanes do not collapse,
+   * so a lane id left in the set from the stacked layout does not count.
+   */
+  function sectionCollapsed(id: string, collapsible: boolean): boolean {
+    return collapsible && collapsedSections.has(id);
+  }
+
   function toggleSection(id: string): void {
     if (collapsedSections.has(id)) {
       collapsedSections.delete(id);
@@ -842,8 +851,11 @@
   }
 
   // Navigation handlers (route file owns navigation per code standards).
+  // A ticket opened from the dashboard opens expanded: the flag keeps a
+  // desktop from folding it into the tickets page's split view, and a
+  // phone shows the detail full page either way.
   function handleTicketTap(ticketId: string): void {
-    void goto(resolve(`/tickets/${ticketId}`));
+    void goto(resolve(`/tickets/${ticketId}?full=1`));
   }
 
   function openTickets(): void {
@@ -1099,17 +1111,30 @@
   }
 </script>
 
+<!-- A collapsed section hides its filter row with its body, so the
+     button reads as closed there; pressing it opens the section with its
+     filters showing. -->
 {#snippet sectionFilterButton(
   toggle: SectionFilterToggle,
   section: string,
   activeCount: number,
+  sectionId: string,
+  collapsible: boolean,
 )}
+  {@const collapsed = sectionCollapsed(sectionId, collapsible)}
   <SectionFilterButton
     {section}
     {activeCount}
-    expanded={toggle.shown}
+    expanded={toggle.shown && !collapsed}
     controls={toggle.rowId}
-    ontoggle={() => toggle.toggle()}
+    ontoggle={() => {
+      if (collapsed) {
+        toggleSection(sectionId);
+        if (!toggle.shown) toggle.toggle();
+        return;
+      }
+      toggle.toggle();
+    }}
   />
 {/snippet}
 
@@ -1190,7 +1215,8 @@
     onClose={dismissExposureNotification}
   />
 
-  <!-- Context band: full-width strips, then the tiles. -->
+  <!-- Context band: getting started full width, then the tiles (Shift
+       first), then merge candidates across the full row below them. -->
   <div bind:this={bandEl} class="band">
     {#if showGettingStarted}
       <div id="section-getting-started" class="scroll-target">
@@ -1205,15 +1231,16 @@
       </div>
     {/if}
 
-    <div id="section-shift" class="scroll-target">
-      <ShiftSection
-        shift={shiftQuery.data?.shift ?? null}
-        loading={shiftQuery.isLoading}
-        {myOpenCount}
-      />
-    </div>
-
     <div class="band-tiles" data-tiles={bandTileCount}>
+      <div id="section-shift" class="scroll-target">
+        <ShiftSection
+          shift={shiftQuery.data?.shift ?? null}
+          loading={shiftQuery.isLoading}
+          {myOpenCount}
+          expanded={!collapsedSections.has("shift")}
+          ontoggle={() => toggleSection("shift")}
+        />
+      </div>
       <div id="section-queues" class="scroll-target">
         <QueueCards
           queues={queueProps}
@@ -1237,6 +1264,8 @@
               activityToggle,
               m.dashboard_activity_heading(),
               activityFilterConfig.activeCount,
+              "activity",
+              true,
             )}
           {/snippet}
           {#snippet filterRow()}
@@ -1264,6 +1293,8 @@
                 kbToggle,
                 m.dashboard_kb_heading(withTerms()),
                 kbFilterConfig.activeCount,
+                "kb",
+                true,
               )}
             {/snippet}
             {#snippet filterRow()}
@@ -1274,7 +1305,7 @@
       {/if}
 
       {#if showMergeCandidates}
-        <div id="section-merge-candidates" class="scroll-target">
+        <div id="section-merge-candidates" class="scroll-target band-wide">
           <MergeCandidatesSection
             candidates={mergeCandidates}
             expanded={!collapsedSections.has("merge-candidates")}
@@ -1290,6 +1321,8 @@
                 mergeToggle,
                 m.mergeCandidates_heading(),
                 mergeFilterConfig.activeCount,
+                "merge-candidates",
+                true,
               )}
             {/snippet}
             {#snippet filterRow()}
@@ -1338,6 +1371,8 @@
               lane.filterToggle,
               section.label(),
               lane.filters.activeCount,
+              lane.id,
+              arrangement.stacked,
             )}
           {/snippet}
           {#snippet filterRow()}
@@ -1489,10 +1524,10 @@
     container: dashboard / inline-size;
     box-sizing: border-box;
     width: 100%;
-    /* Past four comfortable lanes the dashboard stops growing and
-       centers. Also overrides the shell's reading-width cap on page
-       roots. */
-    max-width: 1680px;
+    /* The dashboard uses every pixel it is given (a wider window or a
+       zoomed-out page adds lanes and grid columns), so it overrides the
+       shell's reading-width cap on page roots. */
+    max-width: none;
     margin-inline: auto;
     padding: 0.25rem var(--page-pad-x) 1rem;
   }
@@ -1594,10 +1629,16 @@
   }
 
   /* ── Band tiles: 1, 2 across, or 4 across ──
-     Balanced rule: four tiles lay out 4 across or 2 x 2; three lay out
-     2 + 1 with the lone tile in the left half; never 3 across. Minimum
-     tile width 300px. A pinned-items tile joins these tiles as one more
-     grid item; it needs no slot of its own. */
+     The tiles are Shift (first), Queues, Activity, and the knowledge base
+     when shown. Balanced rule: four tiles lay out 4 across or 2 x 2;
+     three lay out 2 + 1 with the lone tile in the left half; never 3
+     across. Minimum tile width 300px. A pinned-items tile joins these
+     tiles as one more grid item; it needs no slot of its own. Merge
+     candidates is not a tile. It spans the full row below them. */
+
+  .band-wide {
+    grid-column: 1 / -1;
+  }
 
   /* 2 across: 2 x 300 + 1 x 24 = 624. */
   @container dashboard (min-width: 624px) {
@@ -1686,6 +1727,13 @@
     }
   }
 
+  /* Grid, 4 across: 4 x 520 + 3 x 24 = 2152. */
+  @container dashboard (min-width: 2152px) {
+    .lanes[data-view-mode="grid"] {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
   /* Table, 2 across: 2 x 640 + 1 x 24 = 1304. */
   @container dashboard (min-width: 1304px) {
     .lanes[data-view-mode="table"] {
@@ -1702,6 +1750,13 @@
       grid-template-columns:
         calc(50vw - var(--page-pad-x) - var(--grid-center-gap, 48px) / 2)
         minmax(0, 1fr);
+    }
+  }
+
+  /* Table, 4 across: 4 x 640 + 3 x 24 = 2632. */
+  @container dashboard (min-width: 2632px) {
+    .lanes[data-view-mode="table"] {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
   }
 </style>

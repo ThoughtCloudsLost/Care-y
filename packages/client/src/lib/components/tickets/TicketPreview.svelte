@@ -6,7 +6,8 @@
   reversed into chronological order (oldest on top). Caller bubbles
   sit left on paper with a hairline; the org side sits right on the
   brand tint; internal notes span full width on recessed paper; system
-  events stay centered muted lines derived from the type field. Text
+  events stay centered muted lines derived from the type field, and
+  calls share that line with the timeline's call label. Text
   truncated to one line (two in multiline mode). In fit mode (grid's
   fixed-height window) the stack bottom-anchors at a compact scale so
   the three most recent entries fit whole; an entry that still cannot
@@ -17,7 +18,6 @@
   raw crypto errors never surface as content.
 -->
 <script lang="ts">
-  import { followupSlot } from "@care-y/crypto";
   import {
     Mic,
     Image as ImageIcon,
@@ -31,10 +31,7 @@
     getFollowUpDecryptCache,
     getOrgDecryptCache,
   } from "$lib/crypto/context.js";
-  import {
-    resolveAsyncDecrypt,
-    isDecryptReady,
-  } from "$lib/crypto/decrypt-result.js";
+  import { isDecryptReady } from "$lib/crypto/decrypt-result.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createNoteTypesQuery } from "$lib/tickets/queries.js";
   import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
@@ -44,11 +41,14 @@
   import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
   import {
     followUpKind,
+    followUpRenderVariant,
     groupConsecutive,
     isFollowUpGroup,
     followUpGroupKey,
   } from "$lib/tickets/follow-up-utils.js";
   import { systemEventLabel } from "$lib/tickets/system-event-label.js";
+  import { formatCallLabel } from "$lib/tickets/call-label.js";
+  import { emailPreviewText } from "$lib/editor/email-schema.js";
 
   interface Props {
     ticketId: string;
@@ -233,15 +233,14 @@
           <div class="mini-system" data-type="system">
             {truncate(systemEventLabel(fu.type, fu.eventParams), 40)}
           </div>
+        {:else if followUpRenderVariant(fu) === "call"}
+          <!-- Calls carry no message body, so they render as the timeline's
+               call label rather than an empty bubble. -->
+          <div class="mini-system" data-type="system">
+            {truncate(formatCallLabel(fu), 40)}
+          </div>
         {:else}
-          {@const raw = followUpCache.decryptContent(
-            fu.id,
-            ticketId,
-            followupSlot(fu.id),
-            fu.keyWrap,
-            fu.encryptedContent,
-          )}
-          {@const result = resolveAsyncDecrypt(raw, fu.keyWrap !== null)}
+          {@const result = followUpCache.decryptPreview(ticketId, fu)}
           {@const content = isDecryptReady(result) ? result.value : undefined}
           {#if kind === "note"}
             {@const NoteIcon = resolveIcon(fu.noteTypeId)}
@@ -314,7 +313,9 @@
                   charsPerLine={20}
                   errorLabel={m.preview_unlock_failed()}
                 >
-                  {#if content}{@render miniText(content)}{/if}
+                  {#if content}{@render miniText(
+                      emailPreviewText(fu.type, content),
+                    )}{/if}
                 </DecryptPlaceholder>
                 {#if result.status === "error"}
                   <button

@@ -428,6 +428,7 @@ function makeTicket(overrides: Record<string, unknown> = {}) {
     queueSortOrder: 1,
     lastActivityAt: null as string | null,
     followUpCount: 0,
+    hasResponse: false,
     assignedDisplayName: null as { type: "Buffer"; data: number[] } | null,
     keyWrap: {
       ephemeralPoint: "AAAA",
@@ -858,7 +859,7 @@ describe("Dashboard activity feed", () => {
     expect(aliasKeys).toEqual(["client-alias:client-9"]);
   });
 
-  it("renders a ticket row that opens its ticket", async () => {
+  it("renders a ticket row that opens its ticket expanded", async () => {
     const { rows } = renderFeed();
     expect(rows).toHaveLength(3);
     const ticketRow = rows[0]!;
@@ -866,7 +867,7 @@ describe("Dashboard activity feed", () => {
     expect(ticketRow.textContent).toContain("Sparrow");
     expect(ticketRow.textContent).toContain("in Intake");
     await fireEvent.click(ticketRow);
-    expect(mockGoto).toHaveBeenCalledWith("/tickets/ticket-9");
+    expect(mockGoto).toHaveBeenCalledWith("/tickets/ticket-9?full=1");
   });
 
   it("renders an outside-queue row with its queue and no alias or tap", async () => {
@@ -1002,6 +1003,26 @@ describe("Dashboard section filters", () => {
     const clear = within(row).getByText("Clear all");
     await fireEvent.click(clear);
     expect(setActivity).toHaveBeenCalledWith({ kinds: [], queueIds: [] });
+  });
+
+  it("hides a collapsed section's filters, and the filter button reopens both", async () => {
+    const { container } = render(PageModule.default);
+    const filterButton = screen.getByRole("button", {
+      name: "Filter Activity",
+    });
+    await fireEvent.click(filterButton);
+    expect(container.querySelector("#activity-filters")).toBeTruthy();
+
+    // Collapse the section from its header toggle.
+    await fireEvent.click(
+      screen.getByRole("button", { name: /^Activity/, expanded: true }),
+    );
+    expect(container.querySelector("#activity-filters")).toBeNull();
+    expect(filterButton.getAttribute("aria-expanded")).toBe("false");
+
+    await fireEvent.click(filterButton);
+    expect(container.querySelector("#activity-filters")).toBeTruthy();
+    expect(filterButton.getAttribute("aria-expanded")).toBe("true");
   });
 
   it("opens a section's filter row from its filter button", async () => {

@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import { tick } from "svelte";
 import ReplySheet from "./ReplySheet.svelte";
@@ -166,6 +167,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   getFollowUpDecryptCache: () =>
     ({
       decryptContent: vi.fn().mockReturnValue("Decrypted preview content"),
+      decryptPreview: FollowUpDecryptCache.prototype.decryptPreview,
       seed: vi.fn(),
       deleteByPrefix: vi.fn(),
     }) as never,
@@ -333,12 +335,16 @@ function makePreview(
     type: "message",
     encryptedContent: "enc-content",
     keyWrap: { wrapped: true } as unknown as RawFollowUpPreview["keyWrap"],
+    followUpKeyWrap: null,
+    portalWrap: null,
     createdAt: "2026-07-10T12:00:00Z",
     hasRecording: false,
     hasImage: false,
     hasFile: false,
     noteTypeId: null,
     eventParams: null,
+    callStatus: null,
+    callDurationSeconds: null,
     ...overrides,
   };
 }
