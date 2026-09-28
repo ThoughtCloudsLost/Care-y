@@ -3,15 +3,16 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
-  import { createQuery } from "@tanstack/svelte-query";
+  import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { authKeys } from "$lib/query/keys.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { cacheRegistry } from "$lib/crypto/cache-registry.js";
   import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
   import { isCryptoSettled } from "$lib/crypto/crypto-settled.svelte.js";
   import { isAdminOrgKeyPolling } from "$lib/crypto/admin-org-key-poll.svelte.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
+  import { endStaffSession } from "$lib/auth/end-staff-session.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import * as m from "$lib/paraglide/messages.js";
   import { Page, Block, Preloader } from "konsta/svelte";
@@ -20,6 +21,7 @@
   import BrandingProvider from "$lib/providers/BrandingProvider.svelte";
   import AppShell from "$lib/shell/AppShell.svelte";
   import ToastRenderer from "$lib/shell/ToastRenderer.svelte";
+  import ReverifySheet from "$lib/components/auth/ReverifySheet.svelte";
   import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import { resolveNavContext, areaRoute } from "$lib/shell/nav-context.js";
   import type { TabId, AreaId } from "$lib/shell/types";
@@ -97,8 +99,11 @@
   });
 
   // ── Cross-tab state sync + idle timer ──────────────────────────────
+  const queryClient = useQueryClient();
+
   if (browser) {
     const bridge = getCryptoBridge();
+    const orgKeyManager = getOrgKeyManager();
 
     // When another tab zeroes keys (logout, idle timeout), redirect to login.
     // The reactive signal (isCryptoKeyed) is updated automatically by the
@@ -111,8 +116,9 @@
       }
     });
 
-    // Zeros keys across all tabs after 15 minutes of inactivity.
-    // Warning fires at the 10-minute mark (5 minutes before timeout).
+    // Ends the server session and zeros keys across all tabs after 15
+    // minutes of inactivity. Warning fires at the 10-minute mark (5
+    // minutes before timeout).
     const idleTimer = new IdleTimer({
       timeoutMs: 15 * 60 * 1000,
       warningMs: 5 * 60 * 1000,
@@ -120,9 +126,16 @@
         toastStore.show(m.session_idle_warning());
       },
       onTimeout: () => {
-        void bridge.zeroAll();
-        cacheRegistry.reset();
-        void goto(resolve("/login"));
+        void (async () => {
+          const { serverConfirmed } = await endStaffSession({
+            queryClient,
+            bridge,
+            orgKeyManager,
+          });
+          await goto(
+            resolve(serverConfirmed ? "/login" : "/login?signout=unconfirmed"),
+          );
+        })();
       },
     });
 
@@ -197,6 +210,10 @@
             onareatap={handleAreaTap}
           >
             {@render children()}
+            <ReverifySheet
+              onsessionended={() => void goto(resolve("/login"))}
+              onsignout={() => void goto(resolve("/logout"))}
+            />
           </AppShell>
         </BrandingProvider>
       </SSEProvider>

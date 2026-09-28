@@ -352,6 +352,9 @@ vi.mock("$lib/trpc/index.js", () => {
         accountLogout: {
           mutate: (...args: unknown[]) => mockAccountLogout(...args),
         },
+        accountSessionRenew: {
+          mutate: vi.fn().mockResolvedValue({}),
+        },
         accountReply: {
           mutate: (...args: unknown[]) => mockAccountReply(...args),
         },

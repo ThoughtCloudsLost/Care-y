@@ -25,6 +25,13 @@ export interface IdleTimerConfig {
   onWarning: () => void;
   /** Called when the timeout threshold is reached. */
   onTimeout: () => void;
+  /**
+   * Called on every human input event that resets the timer, never on
+   * start(). Lets a caller tie server-side session renewal to the same
+   * activity signal, so API traffic alone never keeps a session alive.
+   * Fires as often as input arrives; the caller throttles.
+   */
+  onActivity?: () => void;
   /** Injectable clock for testing. Defaults to Date.now. */
   now?: () => number;
 }
@@ -42,7 +49,7 @@ export class IdleTimer {
   private lastActivity: number;
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private warningFired = false;
-  private readonly config: Required<IdleTimerConfig>;
+  private readonly config: IdleTimerConfig & { now: () => number };
   private readonly boundReset: () => void;
 
   constructor(config: IdleTimerConfig) {
@@ -82,10 +89,14 @@ export class IdleTimer {
     }
   }
 
-  /** Reset activity timestamp. Called by event listeners on human input. */
+  /**
+   * Reset activity timestamp and report the activity. Called by event
+   * listeners on human input.
+   */
   reset(): void {
     this.lastActivity = this.config.now();
     this.warningFired = false;
+    this.config.onActivity?.();
   }
 
   /** Milliseconds remaining until timeout. 0 if already timed out. */

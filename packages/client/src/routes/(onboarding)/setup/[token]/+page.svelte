@@ -381,7 +381,10 @@
     </div>
   </Block>
 {:else if needsReauth}
-  <WizardReauth onauthenticated={handleReauthComplete} />
+  <WizardReauth
+    onauthenticated={handleReauthComplete}
+    onsessionended={() => void goto(resolve("/login"))}
+  />
 {:else if isReady}
   {#if step === 0}
     <SetupAccount {setupToken} oncomplete={handleAccountComplete} />

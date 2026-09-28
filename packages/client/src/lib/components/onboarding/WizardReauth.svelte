@@ -28,9 +28,11 @@
 
   interface Props {
     readonly onauthenticated: (data: { hasSeenBriefing: boolean }) => void;
+    /** The server destroyed the session after too many wrong 2FA guesses. */
+    readonly onsessionended: () => void;
   }
 
-  let { onauthenticated }: Props = $props();
+  let { onauthenticated, onsessionended }: Props = $props();
 
   const bridge = getCryptoBridge();
   const orgKeyManager = getOrgKeyManager();
@@ -128,7 +130,11 @@
   <Block>
     <p class="step-desc">{m.onboarding_reauth_twofa_message()}</p>
   </Block>
-  <TwoFactorChallenge methods={twofaMethods} onsuccess={finalize} />
+  <TwoFactorChallenge
+    methods={twofaMethods}
+    onsuccess={finalize}
+    {onsessionended}
+  />
 {:else}
   <BlockTitle medium>{m.onboarding_reauth_heading()}</BlockTitle>
   <Block>

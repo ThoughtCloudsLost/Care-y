@@ -215,6 +215,13 @@ export interface ClientPortalRouterDeps {
    * their next refetch.
    */
   readonly liveEvents: TicketLiveEvents | null;
+
+  /**
+   * Whether the client session cookie carries the Secure attribute. Set
+   * from the environment at startup (production), never from a request
+   * header a client or a misconfigured proxy could leave out.
+   */
+  readonly isSecureCookie: boolean;
 }
 
 const manageShareLinksProcedure = permissionProcedure(
@@ -690,13 +697,12 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           });
         }
 
-        const isSecure = ctx.req.headers["x-forwarded-proto"] === "https";
         ctx.res.setHeader(
           "Set-Cookie",
           buildClientSessionCookie(
             result.sessionToken,
             result.expiresAt,
-            isSecure,
+            deps.isSecureCookie,
           ),
         );
 
@@ -899,6 +905,53 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
         }
 
         ctx.res.setHeader("Set-Cookie", buildExpiredClientSessionCookie());
+
+        return {};
+      }),
+    ),
+
+    /**
+     * Slides the session's expiry one idle window forward. The client
+     * calls this only on human activity, so an open but unattended tab
+     * lets the session lapse on the server as well as on the device.
+     */
+    accountSessionRenew: orgProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => {
+        // Gate on valid session (throws UNAUTHORIZED if invalid)
+        await requireAccountSession(ctx);
+
+        const cookieHeader = ctx.req.headers.cookie ?? null;
+        const cookies = parseClientCookies(cookieHeader);
+        const sessionToken = cookies.get(CLIENT_SESSION_COOKIE);
+
+        // The gate above already rejected a missing cookie; an empty
+        // token here would only renew nothing, so it fails the same way.
+        const expiresAt =
+          sessionToken !== undefined && sessionToken !== ""
+            ? await accountService.renewSession(ctx.org.tenantDb, sessionToken)
+            : null;
+
+        // Null also covers a session that lapsed between the gate and
+        // the update: renewal never revives an expired row.
+        if (sessionToken === undefined || expiresAt === null) {
+          console.warn("Account session renewal failed", {
+            orgSlug: ctx.org.orgSlug,
+            reason: "session_invalid",
+          });
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: ACCOUNT_AUTH_FAILED_MSG,
+          });
+        }
+
+        ctx.res.setHeader(
+          "Set-Cookie",
+          buildClientSessionCookie(
+            sessionToken,
+            expiresAt,
+            deps.isSecureCookie,
+          ),
+        );
 
         return {};
       }),
@@ -1107,7 +1160,7 @@ const accountReplyInputSchema = portalReplyInputSchema.omit({
 /**
  * Builds a Set-Cookie header for the client session cookie.
  * HttpOnly, SameSite=Strict, Path=/, no Domain attribute (GAP-12).
- * Secure flag only when behind TLS.
+ * Secure flag from deps.isSecureCookie (production).
  */
 function buildClientSessionCookie(
   token: string,

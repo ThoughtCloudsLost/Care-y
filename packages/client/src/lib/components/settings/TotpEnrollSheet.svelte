@@ -8,6 +8,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import { getErrorMessageWithWait } from "$lib/components/error-message-with-wait.js";
   import encodeQR from "@paulmillr/qr";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
@@ -53,8 +54,8 @@
       await tick();
       const input = formEl?.querySelector("input");
       input?.focus();
-    } catch {
-      error = m.twofa_error_invalid_code();
+    } catch (err: unknown) {
+      error = getErrorMessageWithWait(err);
     } finally {
       loading = false;
     }
@@ -76,8 +77,8 @@
         error = m.twofa_error_invalid_code();
         announceToLiveRegion("assertive", error);
       }
-    } catch {
-      error = m.twofa_error_invalid_code();
+    } catch (err: unknown) {
+      error = getErrorMessageWithWait(err);
       announceToLiveRegion("assertive", error);
     } finally {
       verifying = false;

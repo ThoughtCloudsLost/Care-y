@@ -3,11 +3,14 @@
 
   Renders a method picker (when multiple methods), per-method verification
   forms, and alternative method switches. All tRPC verification calls are
-  internal. The parent provides enrolled methods and a success callback.
+  internal. The parent provides enrolled methods and a success callback,
+  plus an optional callback for when the server ends the session after
+  too many wrong guesses.
 
   Used by:
-    - /2fa page (post-login verification)
-    - setup/[token] page (inline reauth challenge)
+    - login page (post-login verification)
+    - WizardReauth (onboarding reauth challenge)
+    - ReverifySheet (mid-session re-verification)
 -->
 <script lang="ts">
   import { untrack } from "svelte";
@@ -18,7 +21,10 @@
   import { trpc } from "$lib/trpc/index.js";
   import { base64urlToBuffer, bufferToBase64url } from "$lib/utils/webauthn.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import { getErrorMessageWithWait } from "$lib/components/error-message-with-wait.js";
+  import { isUnauthorizedTrpcError } from "$lib/errors.js";
   import {
+    ErrorCode,
     TwoFactorMethod,
     RESEND_COOLDOWN_SMS_SECONDS,
     RESEND_COOLDOWN_EMAIL_SECONDS,
@@ -27,9 +33,12 @@
   let {
     methods,
     onsuccess,
+    onsessionended,
   }: {
     methods: string[];
     onsuccess: () => void | Promise<void>;
+    /** Called after the server destroys the session for too many wrong guesses. */
+    onsessionended?: () => void;
   } = $props();
 
   // --- State ---
@@ -145,10 +154,19 @@
     }
   }
 
+  // --- Server error handling ---
+
+  function showServerError(err: unknown): void {
+    error = getErrorMessageWithWait(err);
+    announceToLiveRegion("assertive", error);
+    if (err instanceof Error && err.message === ErrorCode.TWOFA_SESSION_ENDED) {
+      onsessionended?.();
+    }
+  }
+
   // --- WebAuthn error mapping ---
 
-  function mapWebAuthnError(err: unknown): string {
-    if (!(err instanceof DOMException)) return String(err);
+  function mapWebAuthnError(err: DOMException): string {
     switch (err.name) {
       case "NotAllowedError":
         return m.twofa_error_not_allowed();
@@ -178,9 +196,8 @@
         error = m.twofa_error_invalid_code();
         announceToLiveRegion("assertive", error);
       }
-    } catch {
-      error = m.twofa_error_invalid_code();
-      announceToLiveRegion("assertive", error);
+    } catch (err: unknown) {
+      showServerError(err);
     } finally {
       submitting = false;
     }
@@ -249,8 +266,12 @@
         await onsuccess();
       }
     } catch (err: unknown) {
-      error = mapWebAuthnError(err);
-      announceToLiveRegion("assertive", error);
+      if (err instanceof DOMException) {
+        error = mapWebAuthnError(err);
+        announceToLiveRegion("assertive", error);
+      } else {
+        showServerError(err);
+      }
     } finally {
       submitting = false;
     }
@@ -264,9 +285,8 @@
     try {
       await trpc.twoFactor.verify.emailSend.mutate();
       startResendCooldown(RESEND_COOLDOWN_EMAIL_SECONDS);
-    } catch {
-      error = m.twofa_error_invalid_code();
-      announceToLiveRegion("assertive", error);
+    } catch (err: unknown) {
+      showServerError(err);
     } finally {
       submitting = false;
     }
@@ -299,9 +319,8 @@
         error = m.twofa_error_invalid_code();
         announceToLiveRegion("assertive", error);
       }
-    } catch {
-      error = m.twofa_error_invalid_code();
-      announceToLiveRegion("assertive", error);
+    } catch (err: unknown) {
+      showServerError(err);
     } finally {
       submitting = false;
     }
@@ -315,9 +334,8 @@
     try {
       await trpc.twoFactor.verify.smsSend.mutate();
       startResendCooldown(RESEND_COOLDOWN_SMS_SECONDS);
-    } catch {
-      error = m.twofa_error_invalid_code();
-      announceToLiveRegion("assertive", error);
+    } catch (err: unknown) {
+      showServerError(err);
     } finally {
       submitting = false;
     }
@@ -336,9 +354,8 @@
         error = m.twofa_error_invalid_code();
         announceToLiveRegion("assertive", error);
       }
-    } catch {
-      error = m.twofa_error_invalid_code();
-      announceToLiveRegion("assertive", error);
+    } catch (err: unknown) {
+      showServerError(err);
     } finally {
       submitting = false;
     }
@@ -359,9 +376,8 @@
         error = m.twofa_error_invalid_code();
         announceToLiveRegion("assertive", error);
       }
-    } catch {
-      error = m.twofa_error_invalid_code();
-      announceToLiveRegion("assertive", error);
+    } catch (err: unknown) {
+      showServerError(err);
     } finally {
       submitting = false;
     }
@@ -375,11 +391,16 @@
     pushAttempts = 0;
     try {
       const result = await trpc.twoFactor.verify.pushSend.mutate();
+      if (!result.sent) {
+        error = m.twofa_error_push_no_devices();
+        announceToLiveRegion("assertive", error);
+        submitting = false;
+        return;
+      }
       pushChallengeId = result.challengeId;
       startPushPoll();
-    } catch {
-      error = m.twofa_error_push_timeout();
-      announceToLiveRegion("assertive", error);
+    } catch (err: unknown) {
+      showServerError(err);
       submitting = false;
     }
   }
@@ -396,10 +417,7 @@
     pushAttempts += 1;
 
     if (pushAttempts >= PUSH_MAX_ATTEMPTS) {
-      stopPushPoll();
-      error = m.twofa_error_push_timeout();
-      announceToLiveRegion("assertive", error);
-      submitting = false;
+      endPush(m.twofa_error_push_timeout());
       return;
     }
 
@@ -413,15 +431,35 @@
         return;
       }
       if (result.status === "denied") {
-        stopPushPoll();
-        error = m.twofa_error_push_denied();
-        announceToLiveRegion("assertive", error);
-        submitting = false;
+        endPush(m.twofa_error_push_denied());
         return;
       }
-    } catch {
+      if (result.status === "expired") {
+        endPush(m.twofa_error_push_timeout());
+        return;
+      }
+    } catch (err: unknown) {
+      // The session is gone, so no later poll can succeed. Stop here and
+      // hand off to the parent, or show why when it has no handler.
+      if (isUnauthorizedTrpcError(err)) {
+        stopPushPoll();
+        submitting = false;
+        if (onsessionended) {
+          onsessionended();
+        } else {
+          showServerError(err);
+        }
+        return;
+      }
       // Transient network error, skip this attempt
     }
+  }
+
+  function endPush(message: string): void {
+    stopPushPoll();
+    error = message;
+    announceToLiveRegion("assertive", error);
+    submitting = false;
   }
 
   function stopPushPoll(): void {

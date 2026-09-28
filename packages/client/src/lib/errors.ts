@@ -5,6 +5,8 @@
  * distinct name for reliable instanceof checks and structured error handling.
  */
 
+import { isTRPCClientError } from "@trpc/client";
+
 /** Base class for all client-side errors. */
 export class ClientError extends Error {
   constructor(message: string) {
@@ -51,6 +53,22 @@ export class RouterNotAvailableError extends ClientError {
     super(`${router} router unavailable`);
     this.name = "RouterNotAvailableError";
   }
+}
+
+/**
+ * True when a tRPC call failed because the server holds no valid session
+ * for it (data.code UNAUTHORIZED). Callers ending or renewing a session
+ * read this as "the session is already gone" rather than as a failure.
+ */
+export function isUnauthorizedTrpcError(err: unknown): boolean {
+  if (!isTRPCClientError(err)) return false;
+  const data: unknown = err.data;
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "code" in data &&
+    data.code === "UNAUTHORIZED"
+  );
 }
 
 /** Narrows a possibly-undefined router to its non-nullable type, or throws. */

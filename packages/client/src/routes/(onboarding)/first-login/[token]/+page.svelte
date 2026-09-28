@@ -181,12 +181,9 @@
     advanceStep();
   }
 
-  async function handleTwofaComplete(): Promise<void> {
-    try {
-      await trpc.twoFactor.enroll.markVerifiedOnFirstEnrollment.mutate();
-    } catch {
-      /* best-effort; session is functionally verified at this point */
-    }
+  // The server marks the session verified when the enrollment itself
+  // succeeds, so completing the step only advances the wizard.
+  function handleTwofaComplete(): void {
     advanceStep();
   }
 
@@ -233,7 +230,10 @@
     </div>
   </Block>
 {:else if needsReauth}
-  <WizardReauth onauthenticated={handleReauthComplete} />
+  <WizardReauth
+    onauthenticated={handleReauthComplete}
+    onsessionended={() => void goto(resolve("/login"))}
+  />
 {:else if isReady}
   {#if step === 0}
     <SetupInviteAccount {token} oncomplete={handleAccountComplete} />

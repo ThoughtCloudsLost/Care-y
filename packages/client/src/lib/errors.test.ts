@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { TRPCClientError } from "@trpc/client";
 import {
   ClientError,
   WebauthnError,
@@ -17,6 +18,7 @@ import {
   RateLimitError,
   BrandingError,
   requireRouter,
+  isUnauthorizedTrpcError,
 } from "./errors.js";
 import { OrgKeyNotLoadedError } from "./crypto/org-key.js";
 
@@ -183,5 +185,37 @@ describe("Client error hierarchy", () => {
         "telephony router unavailable",
       );
     });
+  });
+});
+
+function trpcErrorWithCode(code: string): Error {
+  return TRPCClientError.from({
+    error: { message: "failed", code: -32001, data: { code } },
+  });
+}
+
+describe("isUnauthorizedTrpcError", () => {
+  it("is true for a tRPC client error with data.code UNAUTHORIZED", () => {
+    expect(isUnauthorizedTrpcError(trpcErrorWithCode("UNAUTHORIZED"))).toBe(
+      true,
+    );
+  });
+
+  it("is false for other tRPC codes", () => {
+    expect(
+      isUnauthorizedTrpcError(trpcErrorWithCode("INTERNAL_SERVER_ERROR")),
+    ).toBe(false);
+  });
+
+  it("is false for a tRPC client error without data", () => {
+    expect(
+      isUnauthorizedTrpcError(TRPCClientError.from(new TypeError("x"))),
+    ).toBe(false);
+  });
+
+  it("is false for a plain object shaped like one", () => {
+    expect(isUnauthorizedTrpcError({ data: { code: "UNAUTHORIZED" } })).toBe(
+      false,
+    );
   });
 });

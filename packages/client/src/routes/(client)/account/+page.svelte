@@ -59,6 +59,7 @@
   import type { DerivationPhase } from "$lib/workers/portal-protocol.js";
   import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
+  import { createAccountSessionRenewer } from "$lib/portal/account-session-renewal.js";
   import PortalHint from "$lib/shell/PortalHint.svelte";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import PortalThread from "$lib/portal/PortalThread.svelte";
@@ -180,6 +181,21 @@
 
   function startIdleTimer(): void {
     idleTimer?.stop();
+
+    // The server window only slides on human activity, throttled; sign-in
+    // has just opened a fresh one.
+    const renewer = createAccountSessionRenewer({
+      renew: async () =>
+        requireRouter(
+          trpc.clientPortal,
+          "clientPortal",
+        ).accountSessionRenew.mutate(),
+      onUnauthorized: () => {
+        returnToLogin(m.account_signed_out());
+      },
+    });
+    renewer.markRenewed();
+
     idleTimer = new IdleTimer({
       timeoutMs: 15 * 60 * 1000,
       warningMs: 5 * 60 * 1000,
@@ -187,7 +203,11 @@
         announceToLiveRegion("polite", m.account_idle_warning());
       },
       onTimeout: () => {
+        revokeSession();
         returnToLogin(m.account_signed_out());
+      },
+      onActivity: () => {
+        renewer.onActivity();
       },
     });
     idleTimer.start();

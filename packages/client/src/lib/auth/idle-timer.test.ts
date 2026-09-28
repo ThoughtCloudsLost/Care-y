@@ -44,6 +44,7 @@ function createTimer(
     timeoutMs?: number;
     warningMs?: number;
     startTime?: number;
+    onActivity?: () => void;
   } = {},
 ): {
   timer: IdleTimer;
@@ -66,6 +67,9 @@ function createTimer(
     warningMs: overrides.warningMs ?? 5 * 60 * 1000,
     onWarning,
     onTimeout,
+    ...(overrides.onActivity !== undefined
+      ? { onActivity: overrides.onActivity }
+      : {}),
     now: () => clock.time,
   });
 
@@ -220,6 +224,64 @@ describe("IdleTimer", () => {
       advanceTime(clock, 30_000);
       expect(onTimeout).not.toHaveBeenCalled();
 
+      timer.stop();
+    });
+  });
+
+  describe("onActivity callback", () => {
+    it("fires once per human input event", () => {
+      const onActivity = vi.fn();
+      const { timer } = createTimer({ onActivity });
+      timer.start();
+
+      for (const type of ["mousemove", "keydown", "touchstart"]) {
+        for (const handler of addedListeners.get(type)!) {
+          handler(new Event(type));
+        }
+      }
+
+      expect(onActivity).toHaveBeenCalledTimes(3);
+      timer.stop();
+    });
+
+    it("does not fire on start", () => {
+      const onActivity = vi.fn();
+      const { timer } = createTimer({ onActivity });
+      timer.start();
+
+      expect(onActivity).not.toHaveBeenCalled();
+      timer.stop();
+    });
+
+    it("does not fire from the idle check, warning, or timeout", () => {
+      const onActivity = vi.fn();
+      const { timer, onWarning, onTimeout, clock } = createTimer({
+        timeoutMs: 60_000,
+        warningMs: 10_000,
+        onActivity,
+      });
+      timer.start();
+
+      // Two steps: advanceTime moves the clock before the interval ticks,
+      // so one 60s jump would skip straight past the warning.
+      advanceTime(clock, 50_000);
+      expect(onWarning).toHaveBeenCalledOnce();
+      advanceTime(clock, 10_000);
+      expect(onTimeout).toHaveBeenCalledOnce();
+      expect(onActivity).not.toHaveBeenCalled();
+    });
+
+    it("is optional (input without it still resets the timer)", () => {
+      const { timer, onTimeout, clock } = createTimer({ timeoutMs: 60_000 });
+      timer.start();
+
+      advanceTime(clock, 55_000);
+      for (const handler of addedListeners.get("mousedown")!) {
+        handler(new Event("mousedown"));
+      }
+      advanceTime(clock, 30_000);
+
+      expect(onTimeout).not.toHaveBeenCalled();
       timer.stop();
     });
   });
