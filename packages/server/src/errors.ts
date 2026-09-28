@@ -244,6 +244,17 @@ export class ChannelDisabledError extends ForbiddenError {
   }
 }
 
+/**
+ * Second-factor guesses refused by the per-user limiter. Deliberately not a
+ * RateLimitError: the error formatter forwards retryAfterSeconds for
+ * RateLimitError causes, and whoever is guessing a second factor already
+ * holds the password, so the wait window is withheld.
+ */
+export class SecondFactorLimitError extends AppError {
+  readonly code = "SECOND_FACTOR_LIMITED" as const;
+  readonly httpStatus = 429;
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }

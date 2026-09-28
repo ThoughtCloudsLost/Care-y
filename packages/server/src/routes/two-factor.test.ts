@@ -41,6 +41,7 @@ import {
   createPasswordHasher,
 } from "../auth/password.js";
 import { _resetEnvCache } from "../env.js";
+import { SecondFactorLimitError } from "../errors.js";
 import {
   createInMemoryRateLimiter,
   type RateLimiter,
@@ -972,7 +973,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ErrorCode.TWOFA_RATE_LIMITED,
         );
         // The wait window is withheld from whoever is guessing.
-        expect(err.cause).toBeUndefined();
+        expect(err.cause).toBeInstanceOf(SecondFactorLimitError);
+        expect(err.cause).not.toHaveProperty("retryAfterSeconds");
 
         // The refused call never reached verification, so it is not a guess.
         const row = await tenantDb

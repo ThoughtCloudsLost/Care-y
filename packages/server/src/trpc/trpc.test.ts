@@ -29,6 +29,7 @@ import {
   ValidationError,
   ConflictError,
   RateLimitError,
+  SecondFactorLimitError,
   InternalError,
 } from "../errors.js";
 import type { Context, OrgContext } from "./context.js";
@@ -107,6 +108,12 @@ describe("appErrorToTrpcCode", () => {
 
   it("maps RateLimitError to TOO_MANY_REQUESTS", () => {
     expect(appErrorToTrpcCode(new RateLimitError("x", 30))).toBe(
+      "TOO_MANY_REQUESTS",
+    );
+  });
+
+  it("maps SecondFactorLimitError to TOO_MANY_REQUESTS", () => {
+    expect(appErrorToTrpcCode(new SecondFactorLimitError("x"))).toBe(
       "TOO_MANY_REQUESTS",
     );
   });

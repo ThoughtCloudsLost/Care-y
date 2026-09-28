@@ -58,11 +58,11 @@ import {
 } from "../auth/push-challenge.js";
 import type { PushNotificationSender } from "../notifications/push.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
+import { createSecondFactorGuessGuard } from "../auth/second-factor-guess-guard.js";
 import {
   NotFoundError,
   TelephonyConfigError,
   SecretCryptoError,
-  ValidationError,
 } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import {
@@ -94,27 +94,6 @@ const WEBAUTHN_RP_NAME = "CARE-Y";
  * minimization: org name in the authenticator app would leak affiliation).
  */
 const TOTP_ISSUER = "CARE-Y";
-
-/** Failed 2FA guesses on one session before the session is ended. */
-const MAX_TWOFA_FAILURES_PER_SESSION = 5;
-
-/**
- * ValidationError codes a verify route can throw that describe account or
- * session state rather than a wrong guess. They do not count as failures.
- */
-const NON_GUESS_ERROR_CODES: ReadonlySet<string> = new Set([
-  ErrorCode.NO_ACTIVE_CODE,
-  ErrorCode.NO_BACKUP_CODES,
-  ErrorCode.TOTP_NOT_ENROLLED,
-  ErrorCode.WEBAUTHN_CHALLENGE_NOT_FOUND,
-]);
-
-/** True when a thrown verification error reports state, not a failed guess. */
-function isNonGuessError(err: unknown): boolean {
-  return (
-    err instanceof ValidationError && NON_GUESS_ERROR_CODES.has(err.message)
-  );
-}
 
 // --- Per-request service factory ---
 
@@ -250,14 +229,6 @@ function deriveOrigin(org: OrgContext): string {
 
 // --- Router factory ---
 
-/** Context fields the guess limiter reads. */
-interface GuessContext {
-  readonly org: OrgContext;
-  readonly session: SessionData;
-  readonly user: UserRecord;
-  readonly sessions: SessionRepository;
-}
-
 /**
  * Narrows the tRPC context after requireOrg + requireSession have run.
  * tRPC re-widens ctx to the base Context type when chaining middleware,
@@ -288,6 +259,10 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     const sessions = createTenantSessions(org, deps.tokenizer);
     const { twoFactor, emailCodes, smsCodes } =
       await createScopedTwoFactorServices(org, sessions, deps);
+    const guessGuard = createSecondFactorGuessGuard({
+      limiter: deps.verifyLimiter,
+      sessions,
+    });
     return next({
       ctx: {
         ...ctx,
@@ -298,6 +273,7 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
         twoFactor,
         emailCodes,
         smsCodes,
+        guessGuard,
       },
     });
   });
@@ -315,62 +291,6 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
    * change.
    */
   const enrollProcedure = twoFactorProcedure.use(requireSecondFactorIfEnrolled);
-
-  /**
-   * Counts one failed guess on the session. At the cap the session is
-   * deleted and the caller is signed out.
-   */
-  async function recordGuessFailure(ctx: GuessContext): Promise<void> {
-    const failures = await ctx.sessions.recordTwoFactorFailure(
-      ctx.session.token,
-    );
-    if (failures >= MAX_TWOFA_FAILURES_PER_SESSION) {
-      await ctx.sessions.deleteByToken(ctx.session.token);
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: ErrorCode.TWOFA_SESSION_ENDED,
-      });
-    }
-  }
-
-  /**
-   * Wraps a 2FA guess. Checks the per-user limiter first, then runs the
-   * verification. A guess fails when it returns false or throws, except
-   * for errors that report state rather than a wrong answer. Failed
-   * guesses count toward the per-session cap.
-   */
-  async function limitGuess(
-    ctx: GuessContext,
-    verify: () => Promise<boolean>,
-  ): Promise<boolean> {
-    const limit = deps.verifyLimiter.check(
-      `2fa:${ctx.org.orgId}:${ctx.user.id}`,
-    );
-    if (!limit.allowed) {
-      // No RateLimitError cause, so the error formatter forwards no
-      // retryAfterSeconds: whoever is guessing already holds the password,
-      // and the exact window would let them pace guesses at the limit.
-      throw new TRPCError({
-        code: "TOO_MANY_REQUESTS",
-        message: ErrorCode.TWOFA_RATE_LIMITED,
-      });
-    }
-
-    let valid: boolean;
-    try {
-      valid = await verify();
-    } catch (err: unknown) {
-      if (!isNonGuessError(err)) {
-        await recordGuessFailure(ctx);
-      }
-      throw err;
-    }
-
-    if (!valid) {
-      await recordGuessFailure(ctx);
-    }
-    return valid;
-  }
 
   /**
    * After an enrollment verification succeeds on a password-only session,
@@ -525,14 +445,19 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
   // === Verification sub-router ===
   // Post-login 2FA challenge. Uses twoFactorProcedure (session exists but
   // twofaVerified is false). On success, marks the session verified.
-  // Guess routes run through limitGuess (per-user limiter, per-session cap).
+  // Guess routes run through guessGuard (per-user limiter, per-session cap).
 
   const verifyRouter = router({
     /** TOTP: verify a 6-digit code from the user's authenticator app. */
     totp: twoFactorProcedure.input(totpVerifySchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const valid = await limitGuess(ctx, async () =>
-          ctx.twoFactor.verifyTotp(ctx.user.id, input.code),
+        const valid = await ctx.guessGuard.guard(
+          {
+            orgId: ctx.org.orgId,
+            userId: ctx.user.id,
+            sessionToken: ctx.session.token,
+          },
+          async () => ctx.twoFactor.verifyTotp(ctx.user.id, input.code),
         );
         if (valid) {
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
@@ -558,16 +483,23 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const origin = deriveOrigin(ctx.org);
-          await limitGuess(ctx, async () => {
-            await ctx.twoFactor.verifyWebauthnAssertion(
-              ctx.session.token,
-              input,
-              origin,
-              deriveRpId(),
-              ctx.user.id,
-            );
-            return true;
-          });
+          await ctx.guessGuard.guard(
+            {
+              orgId: ctx.org.orgId,
+              userId: ctx.user.id,
+              sessionToken: ctx.session.token,
+            },
+            async () => {
+              await ctx.twoFactor.verifyWebauthnAssertion(
+                ctx.session.token,
+                input,
+                origin,
+                deriveRpId(),
+                ctx.user.id,
+              );
+              return true;
+            },
+          );
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
           return { success: true as const };
         }),
@@ -585,8 +517,13 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     /** Email: verify the 6-digit code during login 2FA. */
     emailComplete: twoFactorProcedure.input(emailCodeVerifySchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const valid = await limitGuess(ctx, async () =>
-          ctx.emailCodes.verifyCode(ctx.user.id, input.code),
+        const valid = await ctx.guessGuard.guard(
+          {
+            orgId: ctx.org.orgId,
+            userId: ctx.user.id,
+            sessionToken: ctx.session.token,
+          },
+          async () => ctx.emailCodes.verifyCode(ctx.user.id, input.code),
         );
         if (valid) {
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
@@ -613,8 +550,13 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     /** SMS: verify the 6-digit code during login 2FA. */
     smsComplete: twoFactorProcedure.input(smsCodeVerifySchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const valid = await limitGuess(ctx, async () =>
-          ctx.twoFactor.verifySms(ctx.user.id, input.code),
+        const valid = await ctx.guessGuard.guard(
+          {
+            orgId: ctx.org.orgId,
+            userId: ctx.user.id,
+            sessionToken: ctx.session.token,
+          },
+          async () => ctx.twoFactor.verifySms(ctx.user.id, input.code),
         );
         if (valid) {
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
@@ -626,8 +568,13 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     /** Backup code: verify a one-time backup code during login 2FA. */
     backupCode: twoFactorProcedure.input(backupCodeVerifySchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const valid = await limitGuess(ctx, async () =>
-          ctx.twoFactor.checkBackupCode(ctx.user.id, input.code),
+        const valid = await ctx.guessGuard.guard(
+          {
+            orgId: ctx.org.orgId,
+            userId: ctx.user.id,
+            sessionToken: ctx.session.token,
+          },
+          async () => ctx.twoFactor.checkBackupCode(ctx.user.id, input.code),
         );
         if (valid) {
           await ctx.twoFactor.markSessionVerified(ctx.session.token);

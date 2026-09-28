@@ -21,6 +21,7 @@ import {
   ConflictError,
   RateLimitError,
   PowRequiredError,
+  SecondFactorLimitError,
 } from "../errors.js";
 
 /**
@@ -96,6 +97,7 @@ export function appErrorToTrpcCode(err: unknown): TRPCError["code"] {
   if (err instanceof ValidationError) return "BAD_REQUEST";
   if (err instanceof ConflictError) return "CONFLICT";
   if (err instanceof RateLimitError) return "TOO_MANY_REQUESTS";
+  if (err instanceof SecondFactorLimitError) return "TOO_MANY_REQUESTS";
   return "INTERNAL_SERVER_ERROR";
 }
 
