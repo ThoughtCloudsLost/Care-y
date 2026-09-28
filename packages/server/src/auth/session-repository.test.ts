@@ -387,4 +387,28 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     found = await repo.findByToken(session.token);
     expect(found!.webauthnChallenge).toBeNull();
   });
+
+  it("recordTwoFactorFailure counts up from zero, once per call", async () => {
+    const user = await createTestUser(testDb.db);
+    const session = await repo.create({
+      token: tok("tok-2fa-failures"),
+      userId: user.id,
+      ipAddress: "127.0.0.1",
+      userAgent: "test",
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    expect(await repo.recordTwoFactorFailure(session.token)).toBe(1);
+
+    // Parallel failures each get a distinct count.
+    const counts = await Promise.all([
+      repo.recordTwoFactorFailure(session.token),
+      repo.recordTwoFactorFailure(session.token),
+    ]);
+    expect(counts.sort((a, b) => a - b)).toEqual([2, 3]);
+  });
+
+  it("recordTwoFactorFailure returns 0 for a missing session", async () => {
+    expect(await repo.recordTwoFactorFailure(tok("tok-2fa-missing"))).toBe(0);
+  });
 });

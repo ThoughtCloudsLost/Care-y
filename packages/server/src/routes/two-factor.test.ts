@@ -36,9 +36,15 @@ import {
   type TestDb,
   type MockEmailSender,
 } from "../test-utils.js";
-import { createScryptHasher } from "../auth/password.js";
+import {
+  AUTH_ARGON2ID_TEST_PARAMS,
+  createPasswordHasher,
+} from "../auth/password.js";
 import { _resetEnvCache } from "../env.js";
-import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
+import {
+  createInMemoryRateLimiter,
+  type RateLimiter,
+} from "../ratelimit/rate-limiter.js";
 import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
 import { createAuthService, type UserRecord } from "../auth/service.js";
@@ -49,7 +55,7 @@ import type { Context, OrgContext } from "../trpc/context.js";
 import { createTwoFactorService } from "../auth/two-factor-service.js";
 import { createEmailCodeService } from "../auth/email-code.js";
 import { generateTotpCode, base32Decode } from "../auth/totp.js";
-import { TwoFactorMethod, RoleId } from "@care-y/shared";
+import { ErrorCode, TwoFactorMethod, RoleId } from "@care-y/shared";
 import type {
   SessionId,
   SessionToken,
@@ -63,12 +69,13 @@ import type {
   PushChallengeId,
 } from "@care-y/shared";
 import * as webauthnVerify from "../auth/webauthn/verify.js";
+import type { SendChallengeResult } from "../auth/push-challenge.js";
 
-/** Narrows the empty-string sentinel to a real PushChallengeId, throwing
- *  if no challenge was created. Copied from push-challenge.test.ts. */
-function requireChallengeId(c: PushChallengeId | ""): PushChallengeId {
-  if (c === "") throw new Error("expected a challenge to have been created");
-  return c;
+/** Narrows a push send result to its challenge ID, throwing if no push
+ *  was sent. Copied from push-challenge.test.ts. */
+function requireChallengeId(result: SendChallengeResult): PushChallengeId {
+  if (!result.sent) throw new Error("expected a challenge to have been sent");
+  return result.challengeId;
 }
 
 function makeTenantDbFactory(
@@ -89,7 +96,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const createdOrgIds: OrgId[] = [];
     const createdSchemas: OrgSchema[] = [];
 
-    const hasher = createScryptHasher();
+    const hasher = createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS);
     const loginLimiter = createInMemoryRateLimiter({
       windowMs: 60_000,
       maxRequests: 20,
@@ -147,7 +154,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     // --- Router + caller factories ---
 
-    function buildRouter(emailSender?: MockEmailSender) {
+    function buildRouter(
+      emailSender?: MockEmailSender,
+      verifyLimiter?: RateLimiter,
+    ) {
       mockEmail = emailSender ?? createMockEmailSender();
       const orgService = createOrgService(
         testDb.platformDb,
@@ -192,6 +202,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
           pushSender: null,
           pushHmacKey: null,
           totpReplayCache,
+          verifyLimiter:
+            verifyLimiter ??
+            createInMemoryRateLimiter({
+              windowMs: 60_000,
+              maxRequests: 1000,
+            }),
         },
         oprfDeps: createMockOprfDeps(),
         orgService,
@@ -218,8 +234,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       user: UserRecord,
       sessionToken: string,
       emailSender?: MockEmailSender,
+      verifyLimiter?: RateLimiter,
     ) {
-      const appRouter = buildRouter(emailSender);
+      const appRouter = buildRouter(emailSender, verifyLimiter);
       const factory = createCallerFactory(appRouter);
       const ctx: Context = {
         req: mockReq(),
@@ -286,6 +303,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
         displayName: `2FA User ${suffix}`,
         roleId: RoleId.VOLUNTEER,
       });
+    }
+
+    /** Valid registration input that passes the Zod schema. */
+    function fakeRegistrationInput(id: string) {
+      return {
+        id,
+        rawId: Buffer.from(id).toString("base64"),
+        type: "public-key" as const,
+        authenticatorAttachment: "platform" as const,
+        response: {
+          clientDataJSON: "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIn0",
+          attestationObject: "o2NmbXRkbm9uZQ",
+          authenticatorData: "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2M",
+          publicKey: "pQECAyYgASFYIJK-2epPEw0fHy8lsU-FFFMvYNaDkkXEn...",
+          publicKeyAlgorithm: -7,
+        },
+      };
     }
 
     /** Creates a TwoFactorService scoped to the test tenant DB. */
@@ -415,6 +449,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: user.role_id,
           isActive: user.is_active,
           hasSeenBriefing: user.has_seen_briefing,
+          mustChangePassword: user.must_change_password,
         };
 
         const { caller } = createAuthedCaller(
@@ -454,6 +489,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: user.role_id,
           isActive: user.is_active,
           hasSeenBriefing: user.has_seen_briefing,
+          mustChangePassword: user.must_change_password,
         };
 
         // Send the email to get the code
@@ -616,6 +652,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: user.role_id,
           isActive: user.is_active,
           hasSeenBriefing: user.has_seen_briefing,
+          mustChangePassword: user.must_change_password,
         };
 
         // Enroll email 2FA first (need the method registered)
@@ -701,6 +738,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: user.role_id,
           isActive: user.is_active,
           hasSeenBriefing: user.has_seen_briefing,
+          mustChangePassword: user.must_change_password,
         };
 
         // Enroll TOTP + EMAIL (two methods, so one can be removed)
@@ -743,58 +781,78 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     // =========================================================================
-    // 8. deriveOrigin helper
+    // 8. Enrollment gate
     // =========================================================================
 
-    // =========================================================================
-    // 8. markVerifiedOnFirstEnrollment
-    // =========================================================================
-
-    describe("enroll.markVerifiedOnFirstEnrollment", () => {
-      it("marks session verified when at least one method is enrolled", async () => {
-        const user = await registerUser("mark-verified-ok");
-        const session = await createTestSession(
-          tenantDb,
-          { user_id: user.id },
-          testFieldEncryptor,
-        );
-        const { caller } = createAuthedCaller(user, session.token);
-
-        const setup = await caller.twoFactor.enroll.totpSetup();
-        const secret = base32Decode(setup!.secret);
-        const validCode = generateTotpCode(secret, Date.now());
-        await caller.twoFactor.enroll.totpVerify({ code: validCode });
-
-        const result =
-          await caller.twoFactor.enroll.markVerifiedOnFirstEnrollment();
-        expect(result!.success).toBe(true);
-
+    describe("enrollment gate", () => {
+      /** Reads the session's 2FA flag straight from the DB. */
+      async function sessionVerifiedInDb(token: SessionToken) {
         const sessions = createDbSessionRepository(
           tenantDb,
           testSessionTokenizer,
           testSealedBox,
         );
-        const updatedSession = await sessions.findByToken(session.token);
-        expect(updatedSession!.twofaVerified).toBe(true);
-      });
+        return (await sessions.findByToken(token))?.twofaVerified;
+      }
 
-      it("rejects when no methods are enrolled", async () => {
-        const user = await registerUser("mark-verified-no-methods");
+      it("refuses every enroll route from a password-only session when a method is active", async () => {
+        const user = await registerUser("gate-refuse");
+        await enrollTotp(makeTwoFactorService(), user.id);
         const session = await createTestSession(
           tenantDb,
           { user_id: user.id },
           testFieldEncryptor,
         );
         const { caller } = createAuthedCaller(user, session.token);
+        const enroll = caller.twoFactor.enroll;
 
-        await expectTrpcError(
-          caller.twoFactor.enroll.markVerifiedOnFirstEnrollment(),
-          "PRECONDITION_FAILED",
-        );
+        // One entry per enroll route.
+        const attempts: (() => Promise<unknown>)[] = [
+          () => enroll.totpSetup(),
+          () => enroll.totpVerify({ code: "123456" }),
+          () => enroll.webauthnOptions(),
+          () => enroll.webauthnVerify(fakeRegistrationInput("gate-cred")),
+          () => enroll.emailSend({ email: "gate@example.com" }),
+          () => enroll.emailVerify({ code: "123456" }),
+          () => enroll.smsSend({ phone: "+15551110001" }),
+          () => enroll.smsVerify({ code: "123456" }),
+          () => enroll.pushVerify(),
+          () => enroll.backupCodes(),
+        ];
+
+        for (const call of attempts) {
+          await expectTrpcError(call(), "UNAUTHORIZED", "TWOFA_REQUIRED");
+        }
+
+        // No backup codes were minted and the TOTP secret is unchanged.
+        const backup = await tenantDb
+          .selectFrom("backup_codes")
+          .select("id")
+          .where("user_id", "=", user.id)
+          .execute();
+        expect(backup).toHaveLength(0);
+
+        const secrets = await tenantDb
+          .selectFrom("totp_secrets")
+          .select("verified")
+          .where("user_id", "=", user.id)
+          .execute();
+        expect(secrets).toEqual([{ verified: true }]);
+
+        expect(await sessionVerifiedInDb(session.token)).toBe(false);
       });
 
-      it("is idempotent when session is already verified", async () => {
-        const user = await registerUser("mark-verified-idempotent");
+      it("lets a verified session enroll when a method is active", async () => {
+        const user = await registerUser("gate-verified");
+        await enrollTotp(makeTwoFactorService(), user.id);
+
+        const caller = createVerifiedCaller(user, "gate-verified-token");
+        const result = await caller.twoFactor.enroll.backupCodes();
+        expect(result.codes).toHaveLength(8);
+      });
+
+      it("enrolls TOTP from a password-only session with no methods and marks it verified", async () => {
+        const user = await registerUser("gate-first");
         const session = await createTestSession(
           tenantDb,
           { user_id: user.id },
@@ -803,14 +861,152 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const { caller } = createAuthedCaller(user, session.token);
 
         const setup = await caller.twoFactor.enroll.totpSetup();
-        const secret = base32Decode(setup!.secret);
-        const validCode = generateTotpCode(secret, Date.now());
-        await caller.twoFactor.enroll.totpVerify({ code: validCode });
+        const secret = base32Decode(setup.secret);
+        const result = await caller.twoFactor.enroll.totpVerify({
+          code: generateTotpCode(secret, Date.now()),
+        });
 
-        await caller.twoFactor.enroll.markVerifiedOnFirstEnrollment();
-        const result =
-          await caller.twoFactor.enroll.markVerifiedOnFirstEnrollment();
-        expect(result!.success).toBe(true);
+        expect(result).toEqual({ success: true });
+        expect(await sessionVerifiedInDb(session.token)).toBe(true);
+      });
+
+      it("leaves the session unverified when first enrollment fails", async () => {
+        const user = await registerUser("gate-first-bad");
+        const session = await createTestSession(
+          tenantDb,
+          { user_id: user.id },
+          testFieldEncryptor,
+        );
+        const { caller } = createAuthedCaller(user, session.token);
+
+        await caller.twoFactor.enroll.totpSetup();
+        const result = await caller.twoFactor.enroll.totpVerify({
+          code: "000000",
+        });
+
+        expect(result).toEqual({ success: false });
+        expect(await sessionVerifiedInDb(session.token)).toBe(false);
+      });
+    });
+
+    // =========================================================================
+    // 8b. Guess limits on verify routes
+    // =========================================================================
+
+    describe("verify guess limits", () => {
+      it("ends the session after 5 wrong TOTP codes", async () => {
+        const user = await registerUser("guess-cap");
+        await enrollTotp(makeTwoFactorService(), user.id);
+        const session = await createTestSession(
+          tenantDb,
+          { user_id: user.id },
+          testFieldEncryptor,
+        );
+        const { caller } = createAuthedCaller(user, session.token);
+
+        for (let i = 0; i < 4; i++) {
+          const result = await caller.twoFactor.verify.totp({ code: "000000" });
+          expect(result).toEqual({ success: false });
+        }
+
+        await expectTrpcError(
+          caller.twoFactor.verify.totp({ code: "000000" }),
+          "UNAUTHORIZED",
+          "TWOFA_SESSION_ENDED",
+        );
+
+        // The session row is gone, so the next request's context lookup
+        // (validateSession) resolves no session: the 6th call is
+        // unauthenticated.
+        const sessions = createDbSessionRepository(
+          tenantDb,
+          testSessionTokenizer,
+          testSealedBox,
+        );
+        expect(await sessions.findByToken(session.token)).toBeNull();
+        const authService = createAuthService(
+          tenantDb,
+          hasher,
+          sessions,
+          testFieldEncryptor,
+          testSealedBox,
+          testBlindIndexer,
+          testSessionTokenizer,
+          orgContext.orgId,
+        );
+        expect(
+          await authService.validateSession(
+            session.token,
+            "127.0.0.1",
+            "test-agent",
+          ),
+        ).toBeNull();
+      });
+
+      it("refuses with TWOFA_RATE_LIMITED when the verify limiter is exhausted", async () => {
+        const user = await registerUser("guess-limited");
+        await enrollTotp(makeTwoFactorService(), user.id);
+        const session = await createTestSession(
+          tenantDb,
+          { user_id: user.id },
+          testFieldEncryptor,
+        );
+        const refusing: RateLimiter = {
+          check: () => ({
+            allowed: false,
+            remaining: 0,
+            retryAfterMs: 30_000,
+          }),
+          reset: vi.fn(),
+        };
+        const { caller } = createAuthedCaller(
+          user,
+          session.token,
+          undefined,
+          refusing,
+        );
+
+        const err = await expectTrpcError(
+          caller.twoFactor.verify.totp({ code: "000000" }),
+          "TOO_MANY_REQUESTS",
+          ErrorCode.TWOFA_RATE_LIMITED,
+        );
+        // The wait window is withheld from whoever is guessing.
+        expect(err.cause).toBeUndefined();
+
+        // The refused call never reached verification, so it is not a guess.
+        const row = await tenantDb
+          .selectFrom("sessions")
+          .select("twofa_failed_attempts")
+          .where("token", "=", session.token)
+          .executeTakeFirstOrThrow();
+        expect(row.twofa_failed_attempts).toBe(0);
+      });
+
+      it("does not count a state error (NO_ACTIVE_CODE) as a failed guess", async () => {
+        const user = await registerUser("guess-state");
+        const session = await createTestSession(
+          tenantDb,
+          { user_id: user.id },
+          testFieldEncryptor,
+        );
+        const { caller } = createAuthedCaller(user, session.token);
+
+        // No code was ever sent, so every attempt reports NO_ACTIVE_CODE.
+        for (let i = 0; i < 6; i++) {
+          await expectTrpcError(
+            caller.twoFactor.verify.emailComplete({ code: "123456" }),
+            "BAD_REQUEST",
+            ErrorCode.NO_ACTIVE_CODE,
+          );
+        }
+
+        const row = await tenantDb
+          .selectFrom("sessions")
+          .select("twofa_failed_attempts")
+          .where("token", "=", session.token)
+          .executeTakeFirstOrThrow();
+        expect(row.twofa_failed_attempts).toBe(0);
       });
     });
 
@@ -819,23 +1015,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // =========================================================================
 
     describe("deriveOrigin", () => {
-      /** Valid registration input that passes the Zod schema. */
-      function fakeRegistrationInput(id: string) {
-        return {
-          id,
-          rawId: Buffer.from(id).toString("base64"),
-          type: "public-key" as const,
-          authenticatorAttachment: "platform" as const,
-          response: {
-            clientDataJSON: "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIn0",
-            attestationObject: "o2NmbXRkbm9uZQ",
-            authenticatorData: "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2M",
-            publicKey: "pQECAyYgASFYIJK-2epPEw0fHy8lsU-FFFMvYNaDkkXEn...",
-            publicKeyAlgorithm: -7,
-          },
-        };
-      }
-
       /** Mock return value matching RegistrationResult type. */
       function fakeRegistrationResult(credId: string) {
         return {
@@ -1023,6 +1202,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
             pushSender: null,
             pushHmacKey: null,
             totpReplayCache,
+            verifyLimiter: createInMemoryRateLimiter({
+              windowMs: 60_000,
+              maxRequests: 1000,
+            }),
           },
           oprfDeps: createMockOprfDeps(),
           orgService,
@@ -1101,22 +1284,35 @@ describe.skipIf(!process.env.DATABASE_URL)(
       describe("verify.smsComplete", () => {
         it("returns success: true and marks session verified with valid SMS code", async () => {
           const user = await registerUser("sms-verify-ok");
+
+          // Enroll SMS on its own session: enrollment marks that session
+          // verified, and this test checks the login session.
+          const enrollSession = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const { caller: enrollCaller } = createSmsAuthedCaller(
+            user,
+            enrollSession.token,
+          );
+          await enrollCaller.twoFactor.enroll.smsSend({
+            phone: "+15559990003",
+          });
+          const enrollBody =
+            mockProvider.smsCalls[mockProvider.smsCalls.length - 1]?.body ?? "";
+          const enrollMatch = /(\d{6})/.exec(enrollBody);
+          expect(enrollMatch).not.toBeNull();
+          await enrollCaller.twoFactor.enroll.smsVerify({
+            code: enrollMatch![1] as string,
+          });
+
           const session = await createTestSession(
             tenantDb,
             { user_id: user.id },
             testFieldEncryptor,
           );
           const { caller } = createSmsAuthedCaller(user, session.token);
-
-          // Enroll SMS first
-          await caller.twoFactor.enroll.smsSend({ phone: "+15559990003" });
-          const enrollBody =
-            mockProvider.smsCalls[mockProvider.smsCalls.length - 1]?.body ?? "";
-          const enrollMatch = /(\d{6})/.exec(enrollBody);
-          expect(enrollMatch).not.toBeNull();
-          await caller.twoFactor.enroll.smsVerify({
-            code: enrollMatch![1] as string,
-          });
 
           // Send verification code
           await caller.twoFactor.verify.smsSend();
@@ -1141,22 +1337,34 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         it("returns success: false with invalid SMS code (session not marked verified)", async () => {
           const user = await registerUser("sms-verify-bad");
+
+          // Enroll SMS on its own session (see the success case above).
+          const enrollSession = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const { caller: enrollCaller } = createSmsAuthedCaller(
+            user,
+            enrollSession.token,
+          );
+          await enrollCaller.twoFactor.enroll.smsSend({
+            phone: "+15559990004",
+          });
+          const enrollBody =
+            mockProvider.smsCalls[mockProvider.smsCalls.length - 1]?.body ?? "";
+          const enrollMatch = /(\d{6})/.exec(enrollBody);
+          expect(enrollMatch).not.toBeNull();
+          await enrollCaller.twoFactor.enroll.smsVerify({
+            code: enrollMatch![1] as string,
+          });
+
           const session = await createTestSession(
             tenantDb,
             { user_id: user.id },
             testFieldEncryptor,
           );
           const { caller } = createSmsAuthedCaller(user, session.token);
-
-          // Enroll SMS
-          await caller.twoFactor.enroll.smsSend({ phone: "+15559990004" });
-          const enrollBody =
-            mockProvider.smsCalls[mockProvider.smsCalls.length - 1]?.body ?? "";
-          const enrollMatch = /(\d{6})/.exec(enrollBody);
-          expect(enrollMatch).not.toBeNull();
-          await caller.twoFactor.enroll.smsVerify({
-            code: enrollMatch![1] as string,
-          });
 
           // Send verification code then supply wrong code
           await caller.twoFactor.verify.smsSend();
@@ -1184,9 +1392,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("push-enabled routes", () => {
       const pushHmacKey = Buffer.alloc(32, 0xab);
 
-      /** Stub PushNotificationSender that records calls and resolves. */
+      /** Stub PushNotificationSender that records calls and reports delivery. */
       const mockPushSender = {
-        sendToUsers: vi.fn().mockResolvedValue(undefined),
+        sendToUsers: vi.fn().mockResolvedValue({ delivered: 1 }),
         removeSubscription: vi.fn().mockResolvedValue(undefined),
       };
 
@@ -1237,6 +1445,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
             pushSender: mockPushSender,
             pushHmacKey,
             totpReplayCache,
+            verifyLimiter: createInMemoryRateLimiter({
+              windowMs: 60_000,
+              maxRequests: 1000,
+            }),
           },
           oprfDeps: createMockOprfDeps(),
           orgService,
@@ -1339,7 +1551,21 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
           const result = await caller.twoFactor.verify.pushSend();
           expect(result.sent).toBe(true);
-          expect(result.challengeId).toBeTruthy();
+          expect(requireChallengeId(result)).toBeTruthy();
+        });
+
+        it("returns sent: false when the user has no push subscriptions", async () => {
+          const user = await registerUser("push-send-none");
+
+          const session = await createTestSession(
+            tenantDb,
+            { user_id: user.id },
+            testFieldEncryptor,
+          );
+          const caller = createPushAuthedCaller(user, session.token);
+
+          const result = await caller.twoFactor.verify.pushSend();
+          expect(result).toEqual({ sent: false });
         });
       });
 
@@ -1357,7 +1583,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
           const sendResult = await caller.twoFactor.verify.pushSend();
           const pollResult = await caller.twoFactor.verify.pushPoll({
-            challengeId: sendResult.challengeId,
+            challengeId: requireChallengeId(sendResult),
           });
 
           expect(pollResult.status).toBe("pending");
@@ -1387,7 +1613,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           const sendResult = await caller.twoFactor.verify.pushSend();
 
           // Approve it directly in the DB (simulates the approving device)
-          const challengeId = requireChallengeId(sendResult.challengeId);
+          const challengeId = requireChallengeId(sendResult);
           await tenantDb
             .updateTable("push_challenges")
             .set({ status: "approved" })
@@ -1396,7 +1622,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
           // Poll should see approved and mark session verified
           const pollResult = await caller.twoFactor.verify.pushPoll({
-            challengeId: sendResult.challengeId,
+            challengeId,
           });
           expect(pollResult.status).toBe("approved");
 
@@ -1435,7 +1661,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             verifiedSession.token,
           );
           const result = await verifiedCaller.twoFactor.verify.pushApprove({
-            challengeId: sendResult.challengeId,
+            challengeId: requireChallengeId(sendResult),
           });
 
           expect(result).toEqual({ success: true });
@@ -1465,7 +1691,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             verifiedSession.token,
           );
           const result = await verifiedCaller.twoFactor.verify.pushDeny({
-            challengeId: sendResult.challengeId,
+            challengeId: requireChallengeId(sendResult),
           });
 
           expect(result).toEqual({ success: true });
@@ -1528,6 +1754,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             public_key: "fakePubKeyBase64url",
             sign_count: 0,
             ordinal: 1,
+            algorithm: "ES256",
           })
           .execute();
 

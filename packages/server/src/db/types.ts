@@ -194,6 +194,7 @@ export interface UsersTable {
   role_id: RoleIdValue;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   has_seen_briefing: ColumnType<boolean, boolean | undefined, boolean>;
+  must_change_password: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 export interface SessionsTable {
@@ -208,6 +209,7 @@ export interface SessionsTable {
   expires_at: Date;
   twofa_verified: ColumnType<boolean, boolean | undefined, boolean>;
   webauthn_challenge: WebauthnChallenge | null;
+  twofa_failed_attempts: ColumnType<number, number | undefined, number>;
 }
 
 export interface OrgConfigTable {
@@ -319,6 +321,7 @@ export interface WebauthnCredentialsTable {
   backed_up: ColumnType<boolean, boolean | undefined, boolean>;
   aaguid: string | null;
   ordinal: number;
+  algorithm: "ES256" | "RS256";
 }
 
 // --- TOTP secrets ---
@@ -747,12 +750,10 @@ export interface InviteTokensTable {
   id: Generated<InviteTokenId>;
   token_hash: Buffer;
   invited_by: UserId;
-  encrypted_email: Buffer | null;
   role_id: RoleIdValue;
   expires_at: Date;
   consumed_at: Date | null;
   revoked_at: Date | null;
-  encrypted_token: Buffer | null;
   org_key_generation: Generated<number>;
   created_at: Generated<Date>;
 }

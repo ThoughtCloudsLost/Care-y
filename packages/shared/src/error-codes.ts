@@ -168,6 +168,20 @@ export const ErrorCode = {
   VOICE_DISABLED: "VOICE_DISABLED",
   SHARE_LINKS_DISABLED: "SHARE_LINKS_DISABLED",
   PORTAL_CHANNEL_DISABLED: "PORTAL_CHANNEL_DISABLED",
+
+  // --- Two-factor guess limits ---
+  /** Too many 2FA verification attempts for this user in the limiter window. */
+  TWOFA_RATE_LIMITED: "TWOFA_RATE_LIMITED",
+  /** The session was ended after too many failed 2FA guesses. */
+  TWOFA_SESSION_ENDED: "TWOFA_SESSION_ENDED",
+
+  // --- Password change ---
+  /** The account was created with a temporary password that must be replaced first. */
+  PASSWORD_CHANGE_REQUIRED: "PASSWORD_CHANGE_REQUIRED",
+  /** The new password is the same as the current one. */
+  PASSWORD_UNCHANGED: "PASSWORD_UNCHANGED",
+  /** A ticket key wrap was granted after the client fetched its list; refetch and retry. */
+  STALE_KEY_WRAPS: "STALE_KEY_WRAPS",
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];

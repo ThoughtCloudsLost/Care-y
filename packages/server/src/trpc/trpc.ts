@@ -11,6 +11,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import type { Context } from "./context.js";
 import { Permission, ErrorCode } from "@care-y/shared";
 import { hasPermissionForOrg } from "../auth/roles.js";
+import { hasActiveSecondFactor } from "../auth/two-factor-service.js";
 import {
   isAppError,
   AuthError,
@@ -176,6 +177,16 @@ const require2fa = middleware(async ({ ctx, next }) => {
     });
   }
 
+  // An account created by an administrator starts on a temporary password.
+  // Until the holder replaces it, only the sign-in and onboarding
+  // procedures (authedProcedure) are reachable.
+  if (ctx.user.mustChangePassword) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: ErrorCode.PASSWORD_CHANGE_REQUIRED,
+    });
+  }
+
   return next({
     ctx: { ...ctx, org: ctx.org, session: ctx.session, user: ctx.user },
   });
@@ -183,6 +194,36 @@ const require2fa = middleware(async ({ ctx, next }) => {
 
 /** Procedure that requires org + auth + completed 2FA verification. */
 export const authed2faProcedure = authedProcedure.use(require2fa);
+
+/**
+ * Middleware: a session that has not completed 2FA may proceed only while
+ * the account has no active second-factor method. Once one exists, the
+ * session must be 2FA-verified, otherwise a stolen password alone could
+ * act on the account (add a factor, mint backup codes, change the
+ * password). Same error shape as require2fa. Chain after requireSession.
+ */
+export const requireSecondFactorIfEnrolled = middleware(
+  async ({ ctx, next }) => {
+    if (!ctx.session || !ctx.user || !ctx.org) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: ErrorCode.NOT_AUTHENTICATED,
+      });
+    }
+
+    if (
+      !ctx.session.twofaVerified &&
+      (await hasActiveSecondFactor(ctx.org.tenantDb, ctx.user.id))
+    ) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: ErrorCode.TWOFA_REQUIRED,
+      });
+    }
+
+    return next();
+  },
+);
 
 /**
  * Creates a tRPC middleware that requires the authenticated user to have

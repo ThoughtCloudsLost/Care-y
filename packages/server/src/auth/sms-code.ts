@@ -7,8 +7,10 @@
  * Rate limiting is stricter than email because each SMS costs money:
  * max 1 code per 90 seconds per user, max 3 per hour.
  * Codes expire after 5 minutes and allow 3 verification attempts.
- * Rows are deleted on successful verification or when max attempts
- * are exhausted (ADR-017).
+ * A code is marked consumed on successful verification, when max attempts
+ * are exhausted, or when a newer code replaces it. Consumed rows stay
+ * until they fall out of the hourly window so the hourly limit counts
+ * every code sent in it.
  */
 
 import { randomInt } from "node:crypto";
@@ -38,16 +40,16 @@ const codeHasher = createCodeHasher();
 export interface SmsCodeService {
   /**
    * Generates a new code, hashes it, stores it, and sends it via SMS.
-   * Deletes any existing active codes for the user first.
+   * Marks any existing active codes for the user consumed first.
    * Enforces rate limiting (1/90s, 3/hour).
    * The caller ID (from number) is resolved via the phone purpose resolver.
    */
   sendCode(userId: UserId, phone: string): Promise<void>;
 
   /**
-   * Verifies a code. Increments attempt counter on failure.
-   * Deletes the code row on success or when max attempts exhausted.
-   * Returns true if the code is valid.
+   * Verifies a code. Every call claims one attempt before the hash check.
+   * Marks the code consumed on success or when max attempts are exhausted.
+   * Returns true if the code is valid and this call was the one to use it.
    */
   verifyCode(userId: UserId, code: string): Promise<boolean>;
 }
@@ -84,17 +86,23 @@ export function createSmsCodeService(
     }
   }
 
+  /**
+   * Codes created after the start of the hourly window have expires_at
+   * above this threshold. Since created_at = expires_at - EXPIRY_MS, a code
+   * created after hourAgo has expires_at > hourAgo + EXPIRY_MS.
+   */
+  function hourlyThreshold(now: Date): Date {
+    const hourAgo = now.getTime() - HOURLY_WINDOW_MS;
+    return new Date(hourAgo + EXPIRY_MS);
+  }
+
   /** Throws RateLimitError if the user has hit 3 codes in the last hour. */
   async function enforceHourlyLimit(userId: UserId, now: Date): Promise<void> {
-    const hourAgo = new Date(now.getTime() - HOURLY_WINDOW_MS);
-    // Since created_at = expires_at - EXPIRY_MS, a code created after hourAgo
-    // has expires_at > hourAgo + EXPIRY_MS
-    const hourlyThreshold = new Date(hourAgo.getTime() + EXPIRY_MS);
     const { count } = await db
       .selectFrom("sms_codes")
       .select(db.fn.countAll().as("count"))
       .where("user_id", "=", userId)
-      .where("expires_at", ">", hourlyThreshold)
+      .where("expires_at", ">", hourlyThreshold(now))
       .executeTakeFirstOrThrow();
 
     if (toCount({ count }) >= HOURLY_LIMIT) {
@@ -102,33 +110,79 @@ export function createSmsCodeService(
     }
   }
 
-  /** Replaces any active codes with a fresh one. Returns the plaintext code. */
+  /**
+   * Replaces any active codes with a fresh one. Returns the plaintext code.
+   *
+   * Rows older than the hourly window are deleted, which keeps the rows per
+   * user bounded. Remaining active codes are marked consumed rather than
+   * deleted so enforceHourlyLimit still counts them.
+   */
   async function replaceActiveCode(userId: UserId, now: Date): Promise<string> {
-    await db
-      .deleteFrom("sms_codes")
-      .where("user_id", "=", userId)
-      .where("consumed", "=", false)
-      .execute();
-
     const code = generateCode();
     const codeHash = await codeHasher.hashCode(code);
     const expiresAt = new Date(now.getTime() + EXPIRY_MS);
 
-    await db
-      .insertInto("sms_codes")
-      .values({
-        user_id: userId,
-        code_hash: codeHash,
-        expires_at: expiresAt,
-      })
-      .execute();
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .deleteFrom("sms_codes")
+        .where("user_id", "=", userId)
+        .where("expires_at", "<=", hourlyThreshold(now))
+        .execute();
+
+      await trx
+        .updateTable("sms_codes")
+        .set({ consumed: true })
+        .where("user_id", "=", userId)
+        .where("consumed", "=", false)
+        .execute();
+
+      await trx
+        .insertInto("sms_codes")
+        .values({
+          user_id: userId,
+          code_hash: codeHash,
+          expires_at: expiresAt,
+        })
+        .execute();
+    });
 
     return code;
   }
 
-  /** Deletes a code row by ID. Used on success and max-attempts exhaustion. */
-  async function deleteCodeById(codeId: SmsCodeId): Promise<void> {
-    await db.deleteFrom("sms_codes").where("id", "=", codeId).execute();
+  /**
+   * Marks a code consumed if no other request has. Returns false when the
+   * row was already consumed, so a concurrent caller cannot use it twice.
+   */
+  async function markConsumed(codeId: SmsCodeId): Promise<boolean> {
+    const result = await db
+      .updateTable("sms_codes")
+      .set({ consumed: true })
+      .where("id", "=", codeId)
+      .where("consumed", "=", false)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) > 0;
+  }
+
+  /**
+   * Claims one verification attempt on the row. The increment and the
+   * limit check run in one statement, so parallel requests cannot spend
+   * more than MAX_ATTEMPTS guesses on a code. Returns the attempt count
+   * after this claim.
+   */
+  async function claimAttempt(codeId: SmsCodeId): Promise<number> {
+    const claimed = await db
+      .updateTable("sms_codes")
+      .set((eb) => ({ attempts: eb("attempts", "+", 1) }))
+      .where("id", "=", codeId)
+      .where("consumed", "=", false)
+      .where("attempts", "<", MAX_ATTEMPTS)
+      .returning("attempts")
+      .executeTakeFirst();
+
+    if (!claimed) {
+      throw new ValidationError(ErrorCode.TOO_MANY_ATTEMPTS);
+    }
+    return claimed.attempts;
   }
 
   /** Finds the active (unconsumed, unexpired) code for a user, or throws. */
@@ -148,7 +202,7 @@ export function createSmsCodeService(
     }
 
     if (row.attempts >= MAX_ATTEMPTS) {
-      await deleteCodeById(row.id);
+      await markConsumed(row.id);
       throw new ValidationError(ErrorCode.TOO_MANY_ATTEMPTS);
     }
 
@@ -178,25 +232,18 @@ export function createSmsCodeService(
 
     async verifyCode(userId: UserId, code: string): Promise<boolean> {
       const row = await findActiveCodeOrThrow(userId);
+      const attempts = await claimAttempt(row.id);
       const valid = await codeHasher.verify(code, row.code_hash);
 
       if (valid) {
-        await deleteCodeById(row.id);
-        return true;
+        // Zero rows updated means a concurrent request used the code first.
+        return markConsumed(row.id);
       }
 
-      // Increment attempt counter; delete if max reached
-      const newAttempts = row.attempts + 1;
-      if (newAttempts >= MAX_ATTEMPTS) {
-        await deleteCodeById(row.id);
+      if (attempts >= MAX_ATTEMPTS) {
+        await markConsumed(row.id);
         throw new ValidationError(ErrorCode.TOO_MANY_ATTEMPTS);
       }
-
-      await db
-        .updateTable("sms_codes")
-        .set({ attempts: newAttempts })
-        .where("id", "=", row.id)
-        .execute();
 
       return false;
     },

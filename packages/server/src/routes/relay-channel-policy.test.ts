@@ -204,6 +204,7 @@ function makeDeps(
       markTwoFactorVerified: vi.fn(),
       clearTwoFactorVerified: vi.fn(),
       setWebauthnChallenge: vi.fn(),
+      recordTwoFactorFailure: vi.fn().mockResolvedValue(0),
     }),
     // care-y-ignore-next-line relay-buffer-zero -- test mock return value, not production plaintext
     resolveClientPhone: vi.fn().mockResolvedValue(Buffer.from("+15551234567")),

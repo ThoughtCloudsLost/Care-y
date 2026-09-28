@@ -35,17 +35,15 @@ function isChallengeStatus(value: string): value is ChallengeStatus {
   return CHALLENGE_STATUSES.has(value);
 }
 
-export interface SendChallengeResult {
-  /**
-   * The challenge row ID when a push was sent successfully. Empty string
-   * when the user has no push subscriptions (sent will be false).
-   * The empty string sentinel follows the same pattern as
-   * call-tracker's callSid field. Callers must check `sent` before
-   * using challengeId for polling.
-   */
-  readonly challengeId: PushChallengeId | "";
-  readonly sent: boolean;
-}
+/**
+ * Outcome of sending a push challenge. A challenge ID exists only when the
+ * push went out; `sent: false` means no device can receive it (no
+ * subscriptions, or delivery failed) and the caller should offer another
+ * method.
+ */
+export type SendChallengeResult =
+  | { readonly sent: true; readonly challengeId: PushChallengeId }
+  | { readonly sent: false };
 
 export interface PollChallengeResult {
   readonly status: ChallengeStatus;
@@ -54,8 +52,9 @@ export interface PollChallengeResult {
 export interface PushChallengeService {
   /**
    * Creates a challenge and sends a push to all of the user's subscribed devices.
-   * Returns the challenge ID for polling and whether the push was actually sent.
-   * If the user has no push subscriptions, returns {sent: false}.
+   * Returns the challenge ID for polling when the push was sent.
+   * If the user has no push subscriptions or delivery fails, returns
+   * {sent: false} and leaves no pending challenge behind.
    */
   sendChallenge(
     userId: UserId,
@@ -136,7 +135,7 @@ export function createPushChallengeService(
         .execute();
 
       if (subscriptions.length === 0) {
-        return { challengeId: "", sent: false };
+        return { sent: false };
       }
 
       // 2. Invalidate any existing pending challenges for this user+session
@@ -163,15 +162,28 @@ export function createPushChallengeService(
         .returning("id")
         .executeTakeFirstOrThrow();
 
-      // 4. Send push to all devices (fire-and-forget, failures are non-critical)
-      void pushSender.sendToUsers(db, [userId], 120).catch(() => {
-        // Push delivery failures are handled by PushNotificationSender
-        // (expired subscriptions auto-removed). The challenge ID was
-        // already returned; the user can still approve via the app
-        // if they happen to have it open.
-      });
+      // 4. Send push to all devices. If delivery fails outright or no
+      //    endpoint accepted the push, expire the new challenge so nothing is
+      //    left pending that no device will see, and report not sent so the
+      //    caller can offer another method.
+      let delivered: number;
+      try {
+        ({ delivered } = await pushSender.sendToUsers(db, [userId], 120));
+      } catch {
+        // A rejected send reached no device; handled below like zero delivered.
+        delivered = 0;
+      }
 
-      return { challengeId: result.id, sent: true };
+      if (delivered === 0) {
+        await db
+          .updateTable("push_challenges")
+          .set({ status: "expired" })
+          .where("id", "=", result.id)
+          .execute();
+        return { sent: false };
+      }
+
+      return { sent: true, challengeId: result.id };
     },
 
     async pollChallenge(challengeId, sessionToken) {

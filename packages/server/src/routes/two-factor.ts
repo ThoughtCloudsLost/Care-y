@@ -2,8 +2,14 @@
  * Two-factor authentication router.
  *
  * Three sub-routers:
- *  - enroll: enrollment flows (authedProcedure, no 2FA required yet)
- *  - verify: post-login 2FA challenge (authedProcedure, session not yet verified)
+ *  - enroll: enrollment flows (enrollProcedure). A password-only session
+ *    may enroll only while the account has no active method; once one
+ *    exists, adding or replacing a method needs a 2FA-verified session.
+ *    Each enrollment verification marks a password-only session verified
+ *    after it succeeds, since the account had no other factor to prove.
+ *  - verify: post-login 2FA challenge (authedProcedure, session not yet
+ *    verified). Guess routes share a per-user rate limiter and a
+ *    per-session failure cap that ends the session.
  *  - methods: management of enrolled methods (authed2faProcedure, requires verified session)
  *
  * Per-request services (TwoFactorService, EmailCodeService, SessionRepository)
@@ -20,6 +26,7 @@ import {
   middleware,
   authedProcedure,
   authed2faProcedure,
+  requireSecondFactorIfEnrolled,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
@@ -50,10 +57,12 @@ import {
   type PushChallengeService,
 } from "../auth/push-challenge.js";
 import type { PushNotificationSender } from "../notifications/push.js";
+import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import {
   NotFoundError,
   TelephonyConfigError,
   SecretCryptoError,
+  ValidationError,
 } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import {
@@ -86,9 +95,34 @@ const WEBAUTHN_RP_NAME = "CARE-Y";
  */
 const TOTP_ISSUER = "CARE-Y";
 
+/** Failed 2FA guesses on one session before the session is ended. */
+const MAX_TWOFA_FAILURES_PER_SESSION = 5;
+
+/**
+ * ValidationError codes a verify route can throw that describe account or
+ * session state rather than a wrong guess. They do not count as failures.
+ */
+const NON_GUESS_ERROR_CODES: ReadonlySet<string> = new Set([
+  ErrorCode.NO_ACTIVE_CODE,
+  ErrorCode.NO_BACKUP_CODES,
+  ErrorCode.TOTP_NOT_ENROLLED,
+  ErrorCode.WEBAUTHN_CHALLENGE_NOT_FOUND,
+]);
+
+/** True when a thrown verification error reports state, not a failed guess. */
+function isNonGuessError(err: unknown): boolean {
+  return (
+    err instanceof ValidationError && NON_GUESS_ERROR_CODES.has(err.message)
+  );
+}
+
 // --- Per-request service factory ---
 
-export interface TwoFactorRouterDeps {
+/**
+ * Deps for building the tenant-scoped 2FA services. The auth router's login
+ * path builds the same services without the verify-route limiter.
+ */
+export interface ScopedTwoFactorDeps {
   readonly emailSender: EmailSender;
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
@@ -99,6 +133,11 @@ export interface TwoFactorRouterDeps {
   readonly pushHmacKey: Buffer | null;
   /** Process-wide accepted-code cache; one instance shared by every router. */
   readonly totpReplayCache: TotpReplayCache;
+}
+
+export interface TwoFactorRouterDeps extends ScopedTwoFactorDeps {
+  /** Per-user limit on 2FA guesses across all verify routes. */
+  readonly verifyLimiter: RateLimiter;
 }
 
 interface ScopedServices {
@@ -120,7 +159,7 @@ interface ScopedServices {
 export async function createScopedTwoFactorServices(
   org: OrgContext,
   sessions: SessionRepository,
-  deps: TwoFactorRouterDeps,
+  deps: ScopedTwoFactorDeps,
 ): Promise<ScopedServices> {
   const emailCodes = createEmailCodeService(org.tenantDb, deps.emailSender);
 
@@ -211,6 +250,14 @@ function deriveOrigin(org: OrgContext): string {
 
 // --- Router factory ---
 
+/** Context fields the guess limiter reads. */
+interface GuessContext {
+  readonly org: OrgContext;
+  readonly session: SessionData;
+  readonly user: UserRecord;
+  readonly sessions: SessionRepository;
+}
+
 /**
  * Narrows the tRPC context after requireOrg + requireSession have run.
  * tRPC re-widens ctx to the base Context type when chaining middleware,
@@ -242,7 +289,16 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     const { twoFactor, emailCodes, smsCodes } =
       await createScopedTwoFactorServices(org, sessions, deps);
     return next({
-      ctx: { ...ctx, org, session, user, twoFactor, emailCodes, smsCodes },
+      ctx: {
+        ...ctx,
+        org,
+        session,
+        user,
+        sessions,
+        twoFactor,
+        emailCodes,
+        smsCodes,
+      },
     });
   });
 
@@ -251,30 +307,115 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
   const twoFactorProcedure = authedProcedure.use(injectServices);
   const twoFactor2faProcedure = authed2faProcedure.use(injectServices);
 
+  /**
+   * A password-only session may enroll only while the account has no
+   * active method. Otherwise a stolen password alone could add an
+   * attacker's factor or mint backup codes. The rule is
+   * requireSecondFactorIfEnrolled in trpc.ts, shared with the password
+   * change.
+   */
+  const enrollProcedure = twoFactorProcedure.use(requireSecondFactorIfEnrolled);
+
+  /**
+   * Counts one failed guess on the session. At the cap the session is
+   * deleted and the caller is signed out.
+   */
+  async function recordGuessFailure(ctx: GuessContext): Promise<void> {
+    const failures = await ctx.sessions.recordTwoFactorFailure(
+      ctx.session.token,
+    );
+    if (failures >= MAX_TWOFA_FAILURES_PER_SESSION) {
+      await ctx.sessions.deleteByToken(ctx.session.token);
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: ErrorCode.TWOFA_SESSION_ENDED,
+      });
+    }
+  }
+
+  /**
+   * Wraps a 2FA guess. Checks the per-user limiter first, then runs the
+   * verification. A guess fails when it returns false or throws, except
+   * for errors that report state rather than a wrong answer. Failed
+   * guesses count toward the per-session cap.
+   */
+  async function limitGuess(
+    ctx: GuessContext,
+    verify: () => Promise<boolean>,
+  ): Promise<boolean> {
+    const limit = deps.verifyLimiter.check(
+      `2fa:${ctx.org.orgId}:${ctx.user.id}`,
+    );
+    if (!limit.allowed) {
+      // No RateLimitError cause, so the error formatter forwards no
+      // retryAfterSeconds: whoever is guessing already holds the password,
+      // and the exact window would let them pace guesses at the limit.
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: ErrorCode.TWOFA_RATE_LIMITED,
+      });
+    }
+
+    let valid: boolean;
+    try {
+      valid = await verify();
+    } catch (err: unknown) {
+      if (!isNonGuessError(err)) {
+        await recordGuessFailure(ctx);
+      }
+      throw err;
+    }
+
+    if (!valid) {
+      await recordGuessFailure(ctx);
+    }
+    return valid;
+  }
+
+  /**
+   * After an enrollment verification succeeds on a password-only session,
+   * marks the session verified. The enrollment gate only lets such a
+   * session through when the account had no method, so the ceremony just
+   * completed is the account's second factor.
+   */
+  async function verifySessionAfterEnrollment(ctx: {
+    readonly session: SessionData;
+    readonly twoFactor: TwoFactorService;
+  }): Promise<void> {
+    if (!ctx.session.twofaVerified) {
+      await ctx.twoFactor.markSessionVerified(ctx.session.token);
+    }
+  }
+
   // === Enrollment sub-router ===
-  // Uses twoFactorProcedure (session exists, but 2FA not yet verified).
-  // The user must be able to enroll before they can verify.
+  // Uses enrollProcedure: open to a password-only session only while the
+  // account has no active method, so first enrollment during onboarding
+  // works and later changes need a verified session.
 
   const enrollRouter = router({
     /** TOTP: generate secret + otpauth URI for QR code display. */
-    totpSetup: twoFactorProcedure.mutation(
+    totpSetup: enrollProcedure.mutation(
       withErrorWrapping(async ({ ctx }) =>
         ctx.twoFactor.setupTotp(ctx.user.id),
       ),
     ),
 
     /** TOTP: verify the 6-digit code to confirm enrollment. */
-    totpVerify: twoFactorProcedure.input(totpVerifySchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => ({
-        success: await ctx.twoFactor.verifyTotpEnrollment(
+    totpVerify: enrollProcedure.input(totpVerifySchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const success = await ctx.twoFactor.verifyTotpEnrollment(
           ctx.user.id,
           input.code,
-        ),
-      })),
+        );
+        if (success) {
+          await verifySessionAfterEnrollment(ctx);
+        }
+        return { success };
+      }),
     ),
 
     /** WebAuthn: get registration options (challenge, RP config). */
-    webauthnOptions: twoFactorProcedure.mutation(
+    webauthnOptions: enrollProcedure.mutation(
       withErrorWrapping(async ({ ctx }) =>
         ctx.twoFactor.getWebauthnRegistrationOptions(
           ctx.session.token,
@@ -286,7 +427,7 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     ),
 
     /** WebAuthn: verify registration response from the browser. */
-    webauthnVerify: twoFactorProcedure
+    webauthnVerify: enrollProcedure
       .input(webauthnRegistrationResponseSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
@@ -298,12 +439,13 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
             deriveRpId(),
             ctx.user.id,
           );
+          await verifySessionAfterEnrollment(ctx);
           return { success: true as const };
         }),
       ),
 
     /** Email: store the notification email and send a verification code. */
-    emailSend: twoFactorProcedure.input(emailEnrollSchema).mutation(
+    emailSend: enrollProcedure.input(emailEnrollSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         await ctx.twoFactor.setNotificationEmail(ctx.user.id, input.email);
         await ctx.emailCodes.sendCode(ctx.user.id, input.email);
@@ -312,17 +454,21 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     ),
 
     /** Email: verify the 6-digit code to confirm email 2FA enrollment. */
-    emailVerify: twoFactorProcedure.input(emailCodeVerifySchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => ({
-        success: await ctx.twoFactor.verifyEmailEnrollment(
+    emailVerify: enrollProcedure.input(emailCodeVerifySchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const success = await ctx.twoFactor.verifyEmailEnrollment(
           ctx.user.id,
           input.code,
-        ),
-      })),
+        );
+        if (success) {
+          await verifySessionAfterEnrollment(ctx);
+        }
+        return { success };
+      }),
     ),
 
     /** SMS: register phone number and send a verification code. */
-    smsSend: twoFactorProcedure.input(smsEnrollSchema).mutation(
+    smsSend: enrollProcedure.input(smsEnrollSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         if (!ctx.smsCodes) {
           throw new TRPCError({
@@ -344,63 +490,50 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     ),
 
     /** SMS: verify the 6-digit code to confirm SMS 2FA enrollment. */
-    smsVerify: twoFactorProcedure.input(smsCodeVerifySchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => ({
-        success: await ctx.twoFactor.verifySmsEnrollment(
+    smsVerify: enrollProcedure.input(smsCodeVerifySchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const success = await ctx.twoFactor.verifySmsEnrollment(
           ctx.user.id,
           input.code,
-        ),
-      })),
+        );
+        if (success) {
+          await verifySessionAfterEnrollment(ctx);
+        }
+        return { success };
+      }),
     ),
 
     /** Push: send test push to verify device subscriptions work. Registers push method on success. */
-    pushVerify: twoFactorProcedure.mutation(
-      withErrorWrapping(async ({ ctx }) => ({
-        success: await ctx.twoFactor.enrollPushDevice(ctx.user.id),
-      })),
+    pushVerify: enrollProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => {
+        const success = await ctx.twoFactor.enrollPushDevice(ctx.user.id);
+        if (success) {
+          await verifySessionAfterEnrollment(ctx);
+        }
+        return { success };
+      }),
     ),
 
     /** Backup codes: generate 8 codes. Can be called to regenerate (replaces old set). */
-    backupCodes: twoFactorProcedure.mutation(
+    backupCodes: enrollProcedure.mutation(
       withErrorWrapping(async ({ ctx }) =>
         ctx.twoFactor.generateBackupCodes(ctx.user.id),
       ),
-    ),
-
-    /**
-     * Mark session as 2FA-verified after first enrollment during onboarding.
-     *
-     * Safe because enrollment already proves possession (TOTP code verified,
-     * WebAuthn ceremony completed, etc.). Only succeeds if at least one
-     * method is enrolled. Idempotent if session is already verified.
-     */
-    markVerifiedOnFirstEnrollment: twoFactorProcedure.mutation(
-      withErrorWrapping(async ({ ctx }) => {
-        const status = await ctx.twoFactor.getStatus(ctx.user.id);
-        if (status.methods.length === 0) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: ErrorCode.NO_METHODS_ENROLLED,
-          });
-        }
-        if (ctx.session.twofaVerified) {
-          return { success: true as const };
-        }
-        await ctx.twoFactor.markSessionVerified(ctx.session.token);
-        return { success: true as const };
-      }),
     ),
   });
 
   // === Verification sub-router ===
   // Post-login 2FA challenge. Uses twoFactorProcedure (session exists but
   // twofaVerified is false). On success, marks the session verified.
+  // Guess routes run through limitGuess (per-user limiter, per-session cap).
 
   const verifyRouter = router({
     /** TOTP: verify a 6-digit code from the user's authenticator app. */
     totp: twoFactorProcedure.input(totpVerifySchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const valid = await ctx.twoFactor.verifyTotp(ctx.user.id, input.code);
+        const valid = await limitGuess(ctx, async () =>
+          ctx.twoFactor.verifyTotp(ctx.user.id, input.code),
+        );
         if (valid) {
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
         }
@@ -425,12 +558,16 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const origin = deriveOrigin(ctx.org);
-          await ctx.twoFactor.verifyWebauthnAssertion(
-            ctx.session.token,
-            input,
-            origin,
-            deriveRpId(),
-          );
+          await limitGuess(ctx, async () => {
+            await ctx.twoFactor.verifyWebauthnAssertion(
+              ctx.session.token,
+              input,
+              origin,
+              deriveRpId(),
+              ctx.user.id,
+            );
+            return true;
+          });
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
           return { success: true as const };
         }),
@@ -448,7 +585,9 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     /** Email: verify the 6-digit code during login 2FA. */
     emailComplete: twoFactorProcedure.input(emailCodeVerifySchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const valid = await ctx.emailCodes.verifyCode(ctx.user.id, input.code);
+        const valid = await limitGuess(ctx, async () =>
+          ctx.emailCodes.verifyCode(ctx.user.id, input.code),
+        );
         if (valid) {
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
         }
@@ -474,7 +613,9 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     /** SMS: verify the 6-digit code during login 2FA. */
     smsComplete: twoFactorProcedure.input(smsCodeVerifySchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const valid = await ctx.twoFactor.verifySms(ctx.user.id, input.code);
+        const valid = await limitGuess(ctx, async () =>
+          ctx.twoFactor.verifySms(ctx.user.id, input.code),
+        );
         if (valid) {
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
         }
@@ -485,9 +626,8 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     /** Backup code: verify a one-time backup code during login 2FA. */
     backupCode: twoFactorProcedure.input(backupCodeVerifySchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const valid = await ctx.twoFactor.checkBackupCode(
-          ctx.user.id,
-          input.code,
+        const valid = await limitGuess(ctx, async () =>
+          ctx.twoFactor.checkBackupCode(ctx.user.id, input.code),
         );
         if (valid) {
           await ctx.twoFactor.markSessionVerified(ctx.session.token);
@@ -499,11 +639,7 @@ export function createTwoFactorRouter(deps: TwoFactorRouterDeps) {
     /** Push: send a challenge push to all subscribed devices. */
     pushSend: twoFactorProcedure.mutation(
       withErrorWrapping(async ({ ctx }) => {
-        const result = await ctx.twoFactor.sendPushChallenge(
-          ctx.user.id,
-          ctx.session.token,
-        );
-        return { challengeId: result.challengeId, sent: result.sent };
+        return ctx.twoFactor.sendPushChallenge(ctx.user.id, ctx.session.token);
       }),
     ),
 

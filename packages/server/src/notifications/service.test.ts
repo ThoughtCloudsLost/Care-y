@@ -67,9 +67,7 @@ function mockEmailSender(): NotificationEmailSender {
 
 function mockPushSender(): PushNotificationSender {
   return {
-    sendToUsers: vi.fn(async () => {
-      // mock stub
-    }),
+    sendToUsers: vi.fn(async () => ({ delivered: 0 })),
     removeSubscription: vi.fn(async () => {
       // mock stub
     }),

@@ -112,6 +112,7 @@ function mockSessionRepo(session: SessionData | null): SessionRepository {
     markTwoFactorVerified: vi.fn(),
     clearTwoFactorVerified: vi.fn(),
     setWebauthnChallenge: vi.fn(),
+    recordTwoFactorFailure: vi.fn().mockResolvedValue(0),
   };
 }
 

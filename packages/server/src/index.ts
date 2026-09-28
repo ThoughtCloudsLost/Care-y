@@ -32,7 +32,7 @@ import { db, pgConnectionConfig, tenantDb } from "./db/db.js";
 import { sql } from "kysely";
 import { getEnv, type EnvVars } from "./env.js";
 import { createOrgService } from "./org/service.js";
-import { createScryptHasher } from "./auth/password.js";
+import { createPasswordHasher } from "./auth/password.js";
 import {
   createInMemoryRateLimiter,
   assertSingleInstanceRateLimiting,
@@ -390,6 +390,13 @@ const RATE_RESEED_MAX = 120;
 // Blob conversion: heavier (re-stores full blobs). 30/min per user.
 const RATE_RESEED_BLOB_MAX = 30;
 
+// 2FA verify: 10 guesses per 15 minutes per user across every verify
+// route (TOTP, passkey, email, SMS, backup code). Sits on top of the
+// per-session failure cap in routes/two-factor.ts, which ends a session
+// after 5 failed guesses; this bounds a user across sessions.
+const RATE_TWOFA_VERIFY_WINDOW = RATE_WINDOW_15M;
+const RATE_TWOFA_VERIFY_MAX = 10;
+
 // --- Rate limiters ---
 
 const noopLimiter: RateLimiter = {
@@ -518,7 +525,7 @@ const blobStore: BlobStore = createBlobStore(
 );
 
 const orgService = createOrgService(db, tenantDb);
-const hasher = createScryptHasher();
+const hasher = createPasswordHasher();
 const { loginLimiter, saltLimiter } = createAuthRateLimiters();
 const emailSender = createEmailSender({
   host: env.SMTP_HOST,
@@ -661,6 +668,13 @@ const appRouter = createAppRouter({
     pushSender,
     pushHmacKey: pushChallengeHmacKey,
     totpReplayCache,
+    verifyLimiter:
+      getEnv().NODE_ENV === "development"
+        ? noopLimiter
+        : createInMemoryRateLimiter({
+            windowMs: RATE_TWOFA_VERIFY_WINDOW,
+            maxRequests: RATE_TWOFA_VERIFY_MAX,
+          }),
   },
   oprfDeps: { oprfService },
   keysDeps: { fieldEncryptor: encryptor, blobStore },
@@ -813,6 +827,7 @@ const appRouter = createAppRouter({
     // Channel OPRF deps (ADR-091)
     oprfService,
     liveEvents: ticketLiveEvents,
+    isSecureCookie: env.NODE_ENV === "production",
   },
   brandingDeps: {
     blobStore,
@@ -918,6 +933,9 @@ const cors = buildCorsHeaders(env.CORS_ORIGIN);
 const trpcHandler = createHTTPHandler({
   router: appRouter,
   createContext,
+  // The client sends queries as POST (methodOverride in the client link) so
+  // query input never rides in a URL that proxies and access logs record.
+  allowMethodOverride: true,
   // Every tRPC response is uncacheable: without an explicit Cache-Control,
   // browsers apply heuristic caching (RFC 9111 4.2.2, SEC-228), which
   // both serves stale threads and leaves ciphertext in disk caches.

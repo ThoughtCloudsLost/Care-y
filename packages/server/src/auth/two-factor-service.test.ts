@@ -44,6 +44,7 @@ import {
   TOTP_REPLAY_TTL_MS,
 } from "./totp-replay-cache.js";
 import {
+  ErrorCode,
   TwoFactorMethod,
   e164Schema,
   type OrgSchema,
@@ -165,6 +166,68 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .where("user_id", "=", user.id)
         .execute();
       expect(rows).toHaveLength(1);
+    });
+
+    it("setupTotp keeps the verified secret until the new one is confirmed", async () => {
+      const user = await createTestUser(db);
+      const oldSecret = await enrollTotp(twoFactor, user.id);
+
+      // Start re-enrollment: the confirmed secret must survive it.
+      const setup = await twoFactor.setupTotp(user.id);
+      const rows = await db
+        .selectFrom("totp_secrets")
+        .select(["verified"])
+        .where("user_id", "=", user.id)
+        .execute();
+      expect(rows).toHaveLength(2);
+      expect(rows.filter((r) => r.verified)).toHaveLength(1);
+
+      // The old secret still verifies at login while the new one is pending.
+      // Next time step: enrollment burned the current one (replay guard).
+      const oldCode = generateTotpCode(oldSecret, Date.now() + 30_000);
+      expect(await twoFactor.verifyTotp(user.id, oldCode)).toBe(true);
+
+      // Confirming the new secret replaces the old one.
+      const newSecret = base32Decode(setup.secret);
+      const newCode = generateTotpCode(newSecret, Date.now());
+      expect(await twoFactor.verifyTotpEnrollment(user.id, newCode)).toBe(true);
+
+      const after = await db
+        .selectFrom("totp_secrets")
+        .select(["verified"])
+        .where("user_id", "=", user.id)
+        .execute();
+      expect(after).toHaveLength(1);
+      expect(after[0]!.verified).toBe(true);
+
+      const status = await twoFactor.getStatus(user.id);
+      expect(status.methods.map((m) => m.type)).toEqual([TwoFactorMethod.TOTP]);
+    });
+  });
+
+  // --- hasActiveMethod ---
+
+  describe("hasActiveMethod", () => {
+    it("is false with no methods and true once one is active", async () => {
+      const user = await createTestUser(db);
+      expect(await twoFactor.hasActiveMethod(user.id)).toBe(false);
+
+      await registerMethodDirectly(db, user.id, TwoFactorMethod.EMAIL);
+      expect(await twoFactor.hasActiveMethod(user.id)).toBe(true);
+    });
+
+    it("ignores a pending (inactive) method", async () => {
+      const user = await createTestUser(db);
+      await db
+        .insertInto("two_factor_methods")
+        .values({
+          user_id: user.id,
+          method_type: TwoFactorMethod.SMS,
+          is_active: false,
+        })
+        .execute();
+
+      expect(await twoFactor.hasActiveMethod(user.id)).toBe(false);
     });
   });
 
@@ -355,6 +418,21 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       status = await twoFactor.getStatus(user.id);
       expect(status.backupCodesRemaining).toBe(7);
     });
+
+    it("accepts a code exactly once under parallel use", async () => {
+      const user = await createTestUser(db);
+      const { codes } = await twoFactor.generateBackupCodes(user.id);
+      const code = codes[0]!;
+
+      const results = await Promise.all([
+        twoFactor.checkBackupCode(user.id, code),
+        twoFactor.checkBackupCode(user.id, code),
+      ]);
+
+      expect(results.filter((r) => r)).toHaveLength(1);
+      const status = await twoFactor.getStatus(user.id);
+      expect(status.backupCodesRemaining).toBe(7);
+    });
   });
 
   // --- Method removal ---
@@ -464,6 +542,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
           backed_up: false,
           aaguid: "00000000-0000-0000-0000-000000000000",
           ordinal: 1,
+          algorithm: "ES256",
         })
         .execute();
 
@@ -567,6 +646,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       expect(creds[0]!.device_type).toBe("platform");
       expect(creds[0]!.backed_up).toBe(false);
       expect(creds[0]!.ordinal).toBe(1);
+      expect(creds[0]!.algorithm).toBe("ES256");
 
       // WebAuthn method should be active
       const status = await twoFactor.getStatus(user.id);
@@ -759,6 +839,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         fakeAuthentication("cred-assert-1"),
         "https://localhost",
         "localhost",
+        user.id,
       );
 
       spy.mockRestore();
@@ -796,6 +877,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         fakeAuthentication("cred-assert-clear"),
         "https://localhost",
         "localhost",
+        user.id,
       );
 
       spy.mockRestore();
@@ -814,6 +896,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
           fakeAuthentication("any-cred"),
           "https://localhost",
           "localhost",
+          user.id,
         ),
       ).rejects.toThrow(ValidationError);
     });
@@ -834,8 +917,179 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
           fakeAuthentication("nonexistent-cred"),
           "https://localhost",
           "localhost",
+          user.id,
         ),
       ).rejects.toThrow(ValidationError);
+    });
+
+    it("verifies against the algorithm stored for the credential", async () => {
+      const user = await createTestUser(db);
+      const session = await createTestSession(db, { user_id: user.id });
+
+      await db
+        .insertInto("webauthn_credentials")
+        .values({
+          user_id: user.id,
+          credential_id: cid("cred-assert-rs256"),
+          public_key: "fake-pk",
+          sign_count: 0,
+          transports: ["usb"],
+          ordinal: 1,
+          algorithm: "RS256",
+        })
+        .execute();
+
+      await twoFactor.getWebauthnAssertionOptions(
+        session.token,
+        user.id,
+        "localhost",
+      );
+
+      const spy = vi
+        .spyOn(webauthnVerify, "verifyAuthentication")
+        .mockResolvedValue(
+          fakeAuthenticationResult({ credentialId: "cred-assert-rs256" }),
+        );
+
+      await twoFactor.verifyWebauthnAssertion(
+        session.token,
+        fakeAuthentication("cred-assert-rs256"),
+        "https://localhost",
+        "localhost",
+        user.id,
+      );
+
+      expect(spy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ algorithm: "RS256" }),
+        expect.anything(),
+      );
+      spy.mockRestore();
+    });
+
+    it("refuses another user's credential on this user's session", async () => {
+      const userA = await createTestUser(db);
+      const userB = await createTestUser(db);
+      const sessionA = await createTestSession(db, { user_id: userA.id });
+
+      await insertWebauthnCredential(db, userB.id, cid("cred-assert-user-b"));
+
+      await twoFactor.getWebauthnAssertionOptions(
+        sessionA.token,
+        userA.id,
+        "localhost",
+      );
+
+      const spy = vi
+        .spyOn(webauthnVerify, "verifyAuthentication")
+        .mockResolvedValue(
+          fakeAuthenticationResult({
+            credentialId: "cred-assert-user-b",
+            signCount: 9,
+          }),
+        );
+
+      await expect(
+        twoFactor.verifyWebauthnAssertion(
+          sessionA.token,
+          fakeAuthentication("cred-assert-user-b"),
+          "https://localhost",
+          "localhost",
+          userA.id,
+        ),
+      ).rejects.toThrow(ErrorCode.UNKNOWN_CREDENTIAL);
+
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+
+      // User B's credential is untouched.
+      const cred = await db
+        .selectFrom("webauthn_credentials")
+        .select("sign_count")
+        .where("credential_id", "=", cid("cred-assert-user-b"))
+        .executeTakeFirstOrThrow();
+      expect(cred.sign_count).toBe(0);
+    });
+
+    it("refuses an assertion whose userHandle names a different user", async () => {
+      const userA = await createTestUser(db);
+      const userB = await createTestUser(db);
+      const session = await createTestSession(db, { user_id: userA.id });
+
+      await insertWebauthnCredential(db, userA.id, cid("cred-assert-handle"));
+
+      await twoFactor.getWebauthnAssertionOptions(
+        session.token,
+        userA.id,
+        "localhost",
+      );
+
+      const spy = vi
+        .spyOn(webauthnVerify, "verifyAuthentication")
+        .mockResolvedValue(
+          fakeAuthenticationResult({ credentialId: "cred-assert-handle" }),
+        );
+
+      const base = fakeAuthentication("cred-assert-handle");
+      const mismatched: AuthenticationResponseJSON = {
+        ...base,
+        response: {
+          ...base.response,
+          userHandle: Buffer.from(userB.id, "utf8").toString("base64url"),
+        },
+      };
+
+      await expect(
+        twoFactor.verifyWebauthnAssertion(
+          session.token,
+          mismatched,
+          "https://localhost",
+          "localhost",
+          userA.id,
+        ),
+      ).rejects.toThrow(ErrorCode.UNKNOWN_CREDENTIAL);
+
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
+
+    it("accepts an assertion whose userHandle names this user", async () => {
+      const user = await createTestUser(db);
+      const session = await createTestSession(db, { user_id: user.id });
+
+      await insertWebauthnCredential(db, user.id, cid("cred-assert-own"));
+
+      await twoFactor.getWebauthnAssertionOptions(
+        session.token,
+        user.id,
+        "localhost",
+      );
+
+      const spy = vi
+        .spyOn(webauthnVerify, "verifyAuthentication")
+        .mockResolvedValue(
+          fakeAuthenticationResult({ credentialId: "cred-assert-own" }),
+        );
+
+      const base = fakeAuthentication("cred-assert-own");
+      const matching: AuthenticationResponseJSON = {
+        ...base,
+        response: {
+          ...base.response,
+          userHandle: Buffer.from(user.id, "utf8").toString("base64url"),
+        },
+      };
+
+      await twoFactor.verifyWebauthnAssertion(
+        session.token,
+        matching,
+        "https://localhost",
+        "localhost",
+        user.id,
+      );
+
+      expect(spy).toHaveBeenCalled();
+      spy.mockRestore();
     });
   });
 
@@ -858,6 +1112,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
           backed_up: true,
           aaguid: "00000000-0000-0000-0000-000000000000",
           ordinal: 1,
+          algorithm: "ES256",
         })
         .execute();
 
@@ -886,6 +1141,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
           backed_up: false,
           aaguid: "00000000-0000-0000-0000-000000000000",
           ordinal: 2,
+          algorithm: "ES256",
         })
         .execute();
 
@@ -912,6 +1168,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
             backed_up: false,
             aaguid: "00000000-0000-0000-0000-000000000000",
             ordinal: 1,
+            algorithm: "ES256",
           },
           {
             user_id: user.id,
@@ -923,6 +1180,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
             backed_up: false,
             aaguid: "00000000-0000-0000-0000-000000000000",
             ordinal: 2,
+            algorithm: "ES256",
           },
         ])
         .execute();
@@ -957,6 +1215,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
             backed_up: false,
             aaguid: "00000000-0000-0000-0000-000000000000",
             ordinal: 1,
+            algorithm: "ES256",
           },
           {
             user_id: user.id,
@@ -968,6 +1227,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
             backed_up: false,
             aaguid: "00000000-0000-0000-0000-000000000000",
             ordinal: 2,
+            algorithm: "ES256",
           },
         ])
         .execute();
@@ -1010,6 +1270,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
           backed_up: false,
           aaguid: "00000000-0000-0000-0000-000000000000",
           ordinal: 1,
+          algorithm: "ES256",
         })
         .execute();
 
@@ -1051,6 +1312,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
           backed_up: false,
           aaguid: "00000000-0000-0000-0000-000000000000",
           ordinal: 1,
+          algorithm: "ES256",
         })
         .execute();
 
@@ -1082,6 +1344,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
             backed_up: false,
             aaguid: "00000000-0000-0000-0000-000000000000",
             ordinal: 1,
+            algorithm: "ES256",
           },
           {
             user_id: user.id,
@@ -1093,6 +1356,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
             backed_up: false,
             aaguid: "00000000-0000-0000-0000-000000000000",
             ordinal: 2,
+            algorithm: "ES256",
           },
         ])
         .execute();
