@@ -552,6 +552,9 @@ export async function buildServiceStubs(
 
       // Channel OPRF (ADR-091)
       oprfService,
+
+      // No SSE stream is served here, so there is no one to tell.
+      liveEvents: null,
     },
     clientDeps: null,
     escalationDeps: null,

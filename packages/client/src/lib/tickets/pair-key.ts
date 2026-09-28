@@ -15,3 +15,15 @@ export function pairKey(clientIdA: string, clientIdB: string): string {
     ? `${clientIdA}:${clientIdB}`
     : `${clientIdB}:${clientIdA}`;
 }
+
+/**
+ * The candidate pairs nobody has dismissed. The dashboard's merge section
+ * and the section rail's hover list both show exactly these.
+ */
+export function undismissedPairs<
+  T extends { readonly clientIdA: string; readonly clientIdB: string },
+>(candidates: readonly T[], dismissed: ReadonlySet<string>): T[] {
+  return candidates.filter(
+    (c) => !dismissed.has(pairKey(c.clientIdA, c.clientIdB)),
+  );
+}

@@ -143,6 +143,118 @@ describe("TicketTable", () => {
     });
   });
 
+  // --- Width-driven column hiding ---
+
+  // shared.css hides these classes by the wrap's own width (a container
+  // query on .data-table-wrap), so a table in a half-width pane or a
+  // dashboard lane drops columns the way a narrow screen does. jsdom does
+  // not evaluate the query; the markup it keys on is asserted here.
+  describe("column hiding by the table's width", () => {
+    it("renders inside the data-table wrap the container query measures", () => {
+      const { container } = render(TicketTable, defaults);
+      const wrap = container.querySelector(".data-table-wrap");
+      expect(wrap?.querySelector("table.data-table")).toBeTruthy();
+    });
+
+    it("marks queue and assignee to hide at medium width, activity and follow-ups at narrow", () => {
+      const { container } = render(TicketTable, defaults);
+      for (const col of ["col-queue", "col-assignee"]) {
+        const header = container.querySelector(`th.${col}`);
+        expect(header?.classList.contains("hide-medium")).toBe(true);
+      }
+      for (const col of ["col-activity", "col-msgs"]) {
+        const header = container.querySelector(`th.${col}`);
+        expect(header?.classList.contains("hide-narrow")).toBe(true);
+      }
+    });
+
+    // A cell hidden in the header but not in the rows (or the reverse)
+    // shifts every later column across once the width rule applies.
+    function hideClasses(cell: Element): string {
+      return [...cell.classList]
+        .filter((c) => c.startsWith("hide-"))
+        .sort()
+        .join(" ");
+    }
+
+    function columnSignature(row: Element): string[] {
+      return [...row.children].map((cell) => {
+        const col = [...cell.classList].find((c) => c.startsWith("col-"));
+        return `${col ?? ""}|${hideClasses(cell)}`;
+      });
+    }
+
+    function expectRowsMatchHeader(
+      container: HTMLElement,
+      rowSelector: string,
+    ): void {
+      const headerRow = container.querySelector("thead tr");
+      if (headerRow === null) throw new Error("no header row");
+      const expected = columnSignature(headerRow);
+      const rows = container.querySelectorAll(`tbody ${rowSelector}`);
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        expect(columnSignature(row)).toEqual(expected);
+      }
+    }
+
+    it("hides each data cell exactly as its column header hides", () => {
+      const { container } = render(TicketTable, defaults);
+      expectRowsMatchHeader(container, "tr.table-row");
+    });
+
+    it("hides each data cell exactly as its column header hides in select mode", () => {
+      const { container } = render(TicketTable, {
+        ...defaults,
+        multiSelectActive: true,
+        selectedIds: new Set<string>(),
+      });
+      expectRowsMatchHeader(container, "tr.table-row");
+    });
+
+    it("hides each skeleton cell exactly as its column header hides", () => {
+      const { container } = render(TicketTable, { ...defaults, loading: true });
+      expectRowsMatchHeader(container, "tr.skeleton-pulse");
+    });
+
+    it("keeps status, priority, client and title visible at every width", () => {
+      const { container } = render(TicketTable, defaults);
+      for (const col of [
+        "col-status",
+        "col-priority",
+        "col-client",
+        "col-title",
+      ]) {
+        for (const cell of container.querySelectorAll(`.${col}`)) {
+          expect(cell.classList.contains("hide-medium")).toBe(false);
+          expect(cell.classList.contains("hide-narrow")).toBe(false);
+        }
+      }
+    });
+  });
+
+  // --- Row element ids ---
+
+  // Search jump-to-row looks rows up by `ticket-<id>`; pages that render
+  // several tables pass their own prefix so ids stay unique.
+  describe("row ids", () => {
+    it("defaults row ids to ticket-<ticketId>", () => {
+      const { container } = render(TicketTable, defaults);
+      expect(container.querySelector("#ticket-t-001")).toBeTruthy();
+      expect(container.querySelector("#ticket-t-002")).toBeTruthy();
+    });
+
+    it("prefixes row ids with idPrefix when given", () => {
+      const { container } = render(TicketTable, {
+        ...defaults,
+        idPrefix: "ticket-my-tickets",
+      });
+      expect(container.querySelector("#ticket-my-tickets-t-001")).toBeTruthy();
+      expect(container.querySelector("#ticket-my-tickets-t-002")).toBeTruthy();
+      expect(container.querySelector("#ticket-t-001")).toBeNull();
+    });
+  });
+
   // --- Sort headers ---
 
   describe("sorting", () => {

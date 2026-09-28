@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pairKey } from "./pair-key.js";
+import { pairKey, undismissedPairs } from "./pair-key.js";
 
 describe("pairKey", () => {
   it("returns a:b when a < b", () => {
@@ -26,5 +26,22 @@ describe("pairKey", () => {
     const result = pairKey(a, b);
     expect(result).toBe(`${a}:${b}`);
     expect(pairKey(b, a)).toBe(result);
+  });
+});
+
+describe("undismissedPairs", () => {
+  const pairs = [
+    { clientIdA: "a", clientIdB: "b" },
+    { clientIdA: "c", clientIdB: "d" },
+  ];
+
+  it("drops a pair dismissed in either order", () => {
+    expect(undismissedPairs(pairs, new Set([pairKey("b", "a")]))).toEqual([
+      { clientIdA: "c", clientIdB: "d" },
+    ]);
+  });
+
+  it("keeps every pair when nothing is dismissed", () => {
+    expect(undismissedPairs(pairs, new Set())).toEqual(pairs);
   });
 });

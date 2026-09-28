@@ -184,7 +184,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
         const page = await svc.list({
-          categoryId: input.categoryId,
+          categoryIds: input.categoryIds,
           sortBy: input.sortBy,
           sortDirection: input.sortDirection,
           minRating: input.minRating,
@@ -261,21 +261,6 @@ export function createKbRouter(deps: KBRouterDeps) {
         }));
       }),
     ),
-
-    // --- Dashboard: recently updated ---
-    recentItems: kbReadProcedure
-      .input(z.object({ limit: z.number().int().min(1).max(5).default(2) }))
-      .query(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const svc = deps.createItemSvc(ctx.org.tenantDb);
-          const items = await svc.listRecentlyUpdated(input.limit);
-          return items.map((i) => ({
-            ...i,
-            encryptedTitle: b64(i.encryptedTitle),
-            encryptedExcerpt: b64n(i.encryptedExcerpt),
-          }));
-        }),
-      ),
 
     // --- Bulk body fetch (for full search) ---
     listBodies: kbReadProcedure.input(listKbBodiesInputSchema).query(

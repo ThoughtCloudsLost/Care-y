@@ -13,6 +13,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { handleRecordingComplete } from "./recording-handler.js";
 import type { RecordingHandlerDeps } from "./recording-handler.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 import type { TelephonyProvider } from "./provider.js";
 import {
   BlobStoreError,
@@ -267,6 +268,14 @@ describe("handleRecordingComplete", () => {
     expect(deps.provider.deleteCallLog).toHaveBeenCalledOnce();
   });
 
+  it("announces nothing for a quarantined recording", async () => {
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+
+    await handleRecordingComplete(body, { ...deps, onTicketChanged });
+
+    expect(onTicketChanged).not.toHaveBeenCalled();
+  });
+
   it("fetches call details for tracker_miss quarantine", async () => {
     await handleRecordingComplete(body, deps);
 
@@ -490,6 +499,42 @@ describe.skipIf(!process.env.DATABASE_URL)(
         notificationService: createMockNotificationService(),
       };
     }
+
+    it("announces the ticket once the voicemail is on it", async () => {
+      const fixture = await createTestTicketFixture(testDb.db);
+      const tracker = createCallTracker();
+      await tracker.track(
+        testDb.schemaName as OrgSchema,
+        callSidSchema.parse("CA_DB_LIVE"),
+        {
+          ticketId: fixture.ticketId,
+          userId: null,
+          direction: "inbound",
+          orgSchema: testDb.schemaName as OrgSchema,
+          clientId: fixture.clientId,
+          createdAt: Date.now(),
+        },
+      );
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+      const dbDeps = {
+        ...makeDbDeps({ callTracker: tracker }),
+        onTicketChanged,
+      };
+      vi.mocked(dbDeps.provider.getRecording).mockResolvedValueOnce(
+        Buffer.from("RIFF-fake-wav-audio"),
+      );
+
+      await handleRecordingComplete(
+        {
+          RecordingSid: "RE_DB_LIVE",
+          CallSid: "CA_DB_LIVE",
+          RecordingDuration: "5",
+        },
+        dbDeps,
+      );
+
+      expect(onTicketChanged).toHaveBeenCalledExactlyOnceWith(fixture.ticketId);
+    });
 
     it("fetches, encrypts, and stores the recording for a tracked ticket", async () => {
       const fixture = await createTestTicketFixture(testDb.db);

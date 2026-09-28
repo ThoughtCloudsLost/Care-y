@@ -40,6 +40,7 @@ import {
   type PortalReplyServiceInput,
 } from "./portal-message-service.js";
 import { NotFoundError } from "../errors.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 import {
   orgIdSchema,
   orgSchemaNameSchema,
@@ -516,6 +517,46 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .executeTakeFirst();
         expect(statusFu).toBeDefined();
         expect(statusFu?.source).toBe("system");
+      });
+
+      it("announces the ticket once the reply commits", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
+        const onTicketChanged = vi.fn<TicketChangeListener>();
+        const deps = { ...makeDeps(), onTicketChanged };
+
+        await clientReply(testDb.db, deps, channel, {
+          ticketId: fixture.ticketId,
+          followUpId: newFollowupId(),
+          keyGeneration: newKeyGeneration(),
+          encryptedContent: Buffer.from("live-reply"),
+          wrappedTkTemp: Buffer.alloc(80, 0xef),
+          selfCopy: fakeTriple(),
+        });
+
+        expect(onTicketChanged).toHaveBeenCalledExactlyOnceWith(
+          fixture.ticketId,
+        );
+      });
+
+      it("announces nothing when the reply is rejected", async () => {
+        const fixture1 = await createTestTicketFixture(testDb.db);
+        const fixture2 = await createTestTicketFixture(testDb.db);
+        const channel = await insertTestChannel(testDb.db, fixture1.clientId);
+        const onTicketChanged = vi.fn<TicketChangeListener>();
+        const deps = { ...makeDeps(), onTicketChanged };
+
+        await expect(
+          clientReply(testDb.db, deps, channel, {
+            ticketId: fixture2.ticketId,
+            followUpId: newFollowupId(),
+            keyGeneration: newKeyGeneration(),
+            encryptedContent: Buffer.from("wrong-ticket"),
+            wrappedTkTemp: Buffer.alloc(80, 0xef),
+            selfCopy: fakeTriple(),
+          }),
+        ).rejects.toThrow(NotFoundError);
+        expect(onTicketChanged).not.toHaveBeenCalled();
       });
 
       it("rejects reply to a ticket of another client", async () => {

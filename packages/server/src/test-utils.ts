@@ -634,6 +634,60 @@ export async function createTestTicketFixture(
   };
 }
 
+/** Inserts one more ticket for an existing client. Returns its id. */
+export async function createTestTicketForClient(
+  db: Kysely<TenantDatabase>,
+  clientId: ClientId,
+  queueId: QueueId,
+): Promise<TicketId> {
+  const ticket = await db
+    .insertInto("tickets")
+    .values({
+      client_id: clientId,
+      queue_id: queueId,
+      encrypted_title: noopEncryptor.encrypt("test-title"),
+      encrypted_description: noopEncryptor.encrypt("test-desc"),
+      key_generation: crypto.randomUUID() as KeyGeneration,
+    })
+    .returning("id")
+    .executeTakeFirstOrThrow();
+  return ticket.id;
+}
+
+export interface TestClientTicketsFixture {
+  readonly clientId: ClientId;
+  readonly queueId: QueueId;
+  /** Every ticket of the client. */
+  readonly ticketIds: readonly TicketId[];
+  /** A ticket of a different client in the same queue. */
+  readonly otherTicketId: TicketId;
+}
+
+/**
+ * A client with two tickets, plus a second client's ticket in the same
+ * queue. For checks that a client-wide write reaches every ticket of that
+ * client and no other.
+ */
+export async function createTestClientTicketsFixture(
+  db: Kysely<TenantDatabase>,
+): Promise<TestClientTicketsFixture> {
+  const fixture = await createTestTicketFixture(db);
+  const secondTicketId = await createTestTicketForClient(
+    db,
+    fixture.clientId,
+    fixture.queueId,
+  );
+  const other = await createTestTicketFixture(db, {
+    queueId: fixture.queueId,
+  });
+  return {
+    clientId: fixture.clientId,
+    queueId: fixture.queueId,
+    ticketIds: [fixture.ticketId, secondTicketId],
+    otherTicketId: other.ticketId,
+  };
+}
+
 export interface TestClientFixture {
   readonly phoneId: PhoneId;
   readonly clientId: ClientId;
@@ -765,6 +819,14 @@ export function mockRes(): MockResWithCookies {
 // ---------------------------------------------------------------------------
 
 import { expect, vi } from "vitest";
+import type { Mock } from "vitest";
+import type { SseService } from "./notifications/sse.js";
+import { createPgNotificationClient } from "./tickets/ticket-change-listener.js";
+import type { TicketChangeListener } from "./tickets/ticket-live-events.js";
+import {
+  TICKET_CHANGED_CHANNEL,
+  TICKET_CHANGED_LISTEN_STATEMENT,
+} from "./tickets/ticket-change-channel.js";
 import { TRPCError } from "@trpc/server";
 import type { EmailSender, EmailMessage } from "./email/email-sender.js";
 import type { JobQueue } from "./jobs/queue.js";
@@ -1512,4 +1574,74 @@ export async function insertTestChannel(
     .returningAll()
     .executeTakeFirstOrThrow();
   return row;
+}
+
+// ---------------------------------------------------------------------------
+// Mock SSE service
+// ---------------------------------------------------------------------------
+
+/** SseService with every method a vi.fn spy. No connection is ever opened. */
+export function createMockSseService(): SseService & {
+  readonly broadcast: Mock<SseService["broadcast"]>;
+} {
+  return {
+    connect: vi.fn(() => () => undefined),
+    broadcast: vi.fn<SseService["broadcast"]>(),
+    connectionCount: vi.fn(() => 0),
+    closeAll: vi.fn(),
+  };
+}
+
+/**
+ * Asserts the listener heard each ticket of the fixture's client once and
+ * no other ticket.
+ */
+export function expectClientTicketsAnnounced(
+  listener: Mock<TicketChangeListener>,
+  fixture: TestClientTicketsFixture,
+): void {
+  const announced = listener.mock.calls.map(([id]) => id);
+  expect([...announced].sort()).toEqual([...fixture.ticketIds].sort());
+  expect(announced).not.toContain(fixture.otherTicketId);
+}
+
+// ---------------------------------------------------------------------------
+// Ticket-change notice capture
+// ---------------------------------------------------------------------------
+
+/** A dedicated session collecting raw ticket-change notice payloads. */
+export interface TicketChangeNoticeCapture {
+  readonly payloads: readonly string[];
+  readonly errors: readonly Error[];
+  close(): Promise<void>;
+}
+
+/**
+ * Opens a session outside the test pool that LISTENs on the ticket-change
+ * channel and records every payload it receives. Close it in afterEach or
+ * a finally block.
+ */
+export async function captureTicketChangeNotices(): Promise<TicketChangeNoticeCapture> {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new TestSetupError("DATABASE_URL is not set");
+  }
+  const client = createPgNotificationClient({ connectionString });
+  const payloads: string[] = [];
+  const errors: Error[] = [];
+  client.onNotification((channel, payload) => {
+    if (channel === TICKET_CHANGED_CHANNEL && payload !== undefined) {
+      payloads.push(payload);
+    }
+  });
+  client.onError((err) => {
+    errors.push(err);
+  });
+  await client.connect();
+  await client.query(TICKET_CHANGED_LISTEN_STATEMENT);
+  return {
+    payloads,
+    errors,
+    close: async () => client.end(),
+  };
 }

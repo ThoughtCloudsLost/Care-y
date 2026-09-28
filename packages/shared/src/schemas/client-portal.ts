@@ -255,7 +255,9 @@ export type PortalBootstrapInput = z.infer<typeof portalBootstrapInputSchema>;
  * this bounds the claim rather than the bytes. It is still worth enforcing:
  * the reader picks how to render from the declared type, and nothing here
  * renders as script. SVG is deliberately absent, since an SVG opened
- * directly rather than through an `<img>` executes.
+ * directly rather than through an `<img>` executes. Plain text is safe
+ * for the same reason the documents are: non-image attachments are only
+ * ever saved through a download, never rendered in the app.
  */
 export const PORTAL_ALLOWED_CONTENT_TYPES = [
   "image/png",
@@ -263,6 +265,7 @@ export const PORTAL_ALLOWED_CONTENT_TYPES = [
   "image/gif",
   "image/webp",
   "application/pdf",
+  "text/plain",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ] as const;

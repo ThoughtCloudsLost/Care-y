@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
 import { render, cleanup } from "@testing-library/svelte";
 import type * as ErrorsModule from "$lib/errors.js";
 import type * as CryptoContextModule from "$lib/crypto/context.js";
@@ -107,6 +108,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => {
       decryptContent: vi
         .fn()
         .mockImplementation(() => followUpDecryptState.content),
+      decryptPreview: FollowUpDecryptCache.prototype.decryptPreview,
       get: vi.fn().mockReturnValue(undefined),
       has: vi.fn().mockReturnValue(false),
     }),

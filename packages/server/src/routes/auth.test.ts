@@ -29,7 +29,7 @@ import {
   registerMethodDirectly,
   type TestDb,
 } from "../test-utils.js";
-import { RoleId, TwoFactorMethod } from "@care-y/shared";
+import { Permission, RoleId, TwoFactorMethod } from "@care-y/shared";
 import type {
   SessionId,
   SessionToken,
@@ -44,6 +44,7 @@ import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
 import { createAuthService } from "../auth/service.js";
+import { invalidateRolePermissionCache } from "../auth/roles.js";
 import { createOrgService } from "../org/service.js";
 import { createAppRouter } from "./router.js";
 import { createCallerFactory } from "../trpc/trpc.js";
@@ -169,7 +170,8 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         createAuditSvc: () => ({
           log: vi.fn().mockResolvedValue(undefined),
           query: vi.fn().mockResolvedValue({ entries: [], nextCursor: null }),
-          listRecentForQueues: vi.fn().mockResolvedValue([]),
+          listRecentActivity: vi.fn().mockResolvedValue([]),
+          countRecentActivity: vi.fn().mockResolvedValue(0),
         }),
       },
       profileDeps: {
@@ -638,37 +640,157 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     );
   });
 
-  // --- Auth: hubStatus ---
+  // --- Auth: admin hub figures ---
 
-  it("auth.hubStatus returns communication counts", async () => {
-    const authService = makeAuthService(tenantDb);
-    const admin = await authService.register({
-      identifier: `hub-admin-${randomUUID().slice(0, 8)}`,
-      password: "hub-admin-password-long-enough",
-      displayName: "Hub Admin",
-      roleId: RoleId.ADMIN,
+  describe("admin hub figures", () => {
+    // Each figure is gated on the permission of the admin page it
+    // describes. Admin holds all seven keys by default; Volunteer holds none.
+    const hubFigures = [
+      {
+        procedure: "hubActiveUserCount",
+        expected: async (): Promise<unknown> => {
+          const row = await tenantDb
+            .selectFrom("users")
+            .select(tenantDb.fn.countAll<string>().as("c"))
+            .where("is_active", "=", true)
+            .executeTakeFirstOrThrow();
+          return { count: Number(row.c) };
+        },
+      },
+      {
+        procedure: "hubQueueCount",
+        expected: async (): Promise<unknown> => {
+          const row = await tenantDb
+            .selectFrom("queues")
+            .select(tenantDb.fn.countAll<string>().as("c"))
+            .executeTakeFirstOrThrow();
+          return { count: Number(row.c) };
+        },
+      },
+      {
+        procedure: "hubKeyStatus",
+        // beforeAll seeds the org public key.
+        expected: async (): Promise<unknown> => ({ status: "ok" }),
+      },
+      {
+        procedure: "hubRetention",
+        // beforeAll seeds org_config with no retention period.
+        expected: async (): Promise<unknown> => ({ retentionDays: null }),
+      },
+      {
+        procedure: "hubBlocklistCount",
+        expected: async (): Promise<unknown> => {
+          const row = await tenantDb
+            .selectFrom("phone_blocklist")
+            .select(tenantDb.fn.countAll<string>().as("c"))
+            .executeTakeFirstOrThrow();
+          return { count: Number(row.c) };
+        },
+      },
+      {
+        procedure: "hubGreetingCount",
+        expected: async (): Promise<unknown> => {
+          const row = await tenantDb
+            .selectFrom("phone_greetings")
+            .select(tenantDb.fn.countAll<string>().as("c"))
+            .executeTakeFirstOrThrow();
+          return { count: Number(row.c) };
+        },
+      },
+      {
+        procedure: "hubTemplateCount",
+        expected: async (): Promise<unknown> => {
+          const row = await tenantDb
+            .selectFrom("sms_responses")
+            .select(tenantDb.fn.countAll<string>().as("c"))
+            .executeTakeFirstOrThrow();
+          return { count: Number(row.c) };
+        },
+      },
+    ] as const;
+
+    for (const { procedure, expected } of hubFigures) {
+      it(`auth.${procedure} returns its figure to a holder of its permission`, async () => {
+        const authService = makeAuthService(tenantDb);
+        const admin = await authService.register({
+          identifier: `hub-admin-${randomUUID().slice(0, 8)}`,
+          password: "hub-admin-password-long-enough",
+          displayName: "Hub Admin",
+          roleId: RoleId.ADMIN,
+        });
+
+        const { caller } = createAuthedCaller(
+          admin,
+          `hub-token-${randomUUID()}`,
+          true,
+        );
+        const result = await caller.auth[procedure]();
+
+        expect(result).toEqual(await expected());
+      });
+
+      it(`auth.${procedure} refuses an account without its permission`, async () => {
+        const authService = makeAuthService(tenantDb);
+        const volunteer = await authService.register({
+          identifier: `hub-vol-${randomUUID().slice(0, 8)}`,
+          password: "hub-vol-password-long-enough",
+          displayName: "Hub Volunteer",
+          roleId: RoleId.VOLUNTEER,
+        });
+
+        const { caller } = createAuthedCaller(
+          volunteer,
+          `hub-vol-token-${randomUUID()}`,
+          true,
+        );
+
+        await expectTrpcError(caller.auth[procedure](), "FORBIDDEN");
+      });
+    }
+
+    it("auth.hubRetention answers an account with MANAGE_RETENTION but not MANAGE_ROLES", async () => {
+      const orgSchema = testDb.schemaName as OrgSchema;
+      await tenantDb
+        .insertInto("role_permission_overrides")
+        .values({
+          role_id: RoleId.MANAGER,
+          permission: Permission.MANAGE_RETENTION,
+          enabled: true,
+        })
+        .onConflict((oc) => oc.columns(["role_id", "permission"]).doNothing())
+        .execute();
+      invalidateRolePermissionCache(orgSchema);
+
+      try {
+        const authService = makeAuthService(tenantDb);
+        const manager = await authService.register({
+          identifier: `hub-mgr-${randomUUID().slice(0, 8)}`,
+          password: "hub-mgr-password-long-enough",
+          displayName: "Hub Manager",
+          roleId: RoleId.MANAGER,
+        });
+
+        const { caller } = createAuthedCaller(
+          manager,
+          `hub-mgr-token-${randomUUID()}`,
+          true,
+        );
+
+        // MANAGE_ROLES is locked to Admin, so the manager cannot hold it.
+        await expectTrpcError(caller.auth.getRolePermissions(), "FORBIDDEN");
+        expect(await caller.auth.hubRetention()).toEqual({
+          retentionDays: null,
+        });
+      } finally {
+        // The override would leak into later tests on this schema.
+        await tenantDb
+          .deleteFrom("role_permission_overrides")
+          .where("role_id", "=", RoleId.MANAGER)
+          .where("permission", "=", Permission.MANAGE_RETENTION)
+          .execute();
+        invalidateRolePermissionCache(orgSchema);
+      }
     });
-
-    const { caller } = createAuthedCaller(
-      admin,
-      `hub-token-${randomUUID()}`,
-      true,
-    );
-    const result = await caller.auth.hubStatus();
-
-    expect(result).toHaveProperty("activeUserCount");
-    expect(result).toHaveProperty("queueCount");
-    expect(result).toHaveProperty("keyStatus");
-    expect(result).toHaveProperty("retentionDays");
-    expect(result).toHaveProperty("blocklistCount");
-    expect(result).toHaveProperty("greetingCount");
-    expect(result).toHaveProperty("templateCount");
-    expect(typeof result.blocklistCount).toBe("number");
-    expect(typeof result.greetingCount).toBe("number");
-    expect(typeof result.templateCount).toBe("number");
-    expect(result.blocklistCount).toBeGreaterThanOrEqual(0);
-    expect(result.greetingCount).toBeGreaterThanOrEqual(0);
-    expect(result.templateCount).toBeGreaterThanOrEqual(0);
   });
 
   // --- Auth: login needsEnrollment flag ---

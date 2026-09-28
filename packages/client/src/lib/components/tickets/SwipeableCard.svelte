@@ -32,6 +32,8 @@
     ticketId: string;
     disabled?: boolean;
     onaction?: (ticketId: string, action: TicketQuickAction) => void;
+    /** Quick actions the account may use; the rest get no swipe zone. */
+    allowedActions: ReadonlySet<TicketQuickAction>;
     onlongpress?: (ticketId: string) => void;
     children: Snippet;
   }
@@ -40,6 +42,7 @@
     ticketId,
     disabled = false,
     onaction,
+    allowedActions,
     onlongpress,
     children,
   }: Props = $props();
@@ -47,6 +50,8 @@
   // ── Swipe actions per direction ──
   // Right swipe (left-to-right): reply (short), call (far)
   // Left swipe (right-to-left): assign (short), hold (far)
+  // Zones the account may not use drop out. A lone zone covers its whole
+  // direction, and a direction with no zones does not move at all.
   interface SwipeZone {
     action: TicketQuickAction;
     label: () => string;
@@ -78,6 +83,13 @@
     icon: Pause,
     color: "var(--k-color-orange, #ff9500)",
   };
+
+  const rightZones = $derived(
+    [RIGHT_NEAR, RIGHT_FAR].filter((zone) => allowedActions.has(zone.action)),
+  );
+  const leftZones = $derived(
+    [LEFT_NEAR, LEFT_FAR].filter((zone) => allowedActions.has(zone.action)),
+  );
 
   // ── Thresholds ──
   // The action indicator icon appears as soon as the card moves (no dead zone for visuals).
@@ -115,16 +127,22 @@
 
   const ICON_SHOW = 16; // px: icon appears almost immediately during drag
 
+  // Near zone below FAR_THRESHOLD, far zone at or beyond it. A lone zone
+  // stays active across the whole drag, so FAR_THRESHOLD switches nothing.
+  function zoneAt(zones: readonly SwipeZone[], abs: number): SwipeZone | null {
+    const [near, far] = zones;
+    if (near === undefined) return null;
+    if (far === undefined) return near;
+    return abs >= FAR_THRESHOLD ? far : near;
+  }
+
   // ── Derived: which zone is active based on current translateX ──
   // During confirm animation, use the locked zone instead of recalculating.
   const activeZone = $derived.by((): SwipeZone | null => {
     if (confirmedZone) return confirmedZone;
     const abs = Math.abs(translateX);
     if (abs < ICON_SHOW) return null;
-    if (translateX > 0) {
-      return abs >= FAR_THRESHOLD ? RIGHT_FAR : RIGHT_NEAR;
-    }
-    return abs >= FAR_THRESHOLD ? LEFT_FAR : LEFT_NEAR;
+    return zoneAt(translateX > 0 ? rightZones : leftZones, abs);
   });
 
   const willFireAction = $derived(
@@ -236,8 +254,11 @@
     didSwipe = true;
     peeked = null;
 
-    // Rubber-band: allow full range but clamp at MAX_TRANSLATE.
-    translateX = Math.max(-MAX_TRANSLATE, Math.min(MAX_TRANSLATE, dx));
+    // Rubber-band: allow full range but clamp at MAX_TRANSLATE. A direction
+    // with no zones clamps at 0, so the card stays put that way.
+    const minTranslate = leftZones.length > 0 ? -MAX_TRANSLATE : 0;
+    const maxTranslate = rightZones.length > 0 ? MAX_TRANSLATE : 0;
+    translateX = Math.max(minTranslate, Math.min(maxTranslate, dx));
   }
 
   function handlePointerUp(e: PointerEvent): void {
@@ -268,7 +289,7 @@
           translateX = 0;
         }, CONFIRM_HOLD);
       } else if (abs >= PEEK_THRESHOLD) {
-        // Peek: snap to show both action buttons side by side.
+        // Peek: snap to show the direction's action buttons side by side.
         const peekDir = translateX > 0 ? "right" : "left";
         peeked = peekDir;
         translateX = peekDir === "right" ? PEEK_SNAP : -PEEK_SNAP;
@@ -303,6 +324,9 @@
     confirmedZone = zone;
     confirming = true;
     peeked = null;
+    // The peek is spent; without releasing it the next pointerdown on any
+    // card reads as a peek dismissal and swallows that tap.
+    releasePeek(closePeekSelf);
     translateX = direction * MAX_TRANSLATE;
 
     setTimeout(() => {
@@ -396,33 +420,25 @@
     {@render children()}
   </div>
 
-  <!-- Peek mode: both action buttons visible at the exposed edge -->
+  <!-- Peek mode: the direction's action buttons visible at the exposed edge -->
   {#if peeked !== null}
-    {@const near = peeked === "right" ? RIGHT_NEAR : LEFT_NEAR}
-    {@const far = peeked === "right" ? RIGHT_FAR : LEFT_FAR}
+    {@const zones = peeked === "right" ? rightZones : leftZones}
     <div
       class="peek-tray"
       class:peek-tray--left={peeked === "right"}
       class:peek-tray--right={peeked === "left"}
     >
-      <button
-        type="button"
-        class="peek-btn"
-        style:background={near.color}
-        aria-label={near.label()}
-        onclick={() => handlePeekAction(near)}
-      >
-        <near.icon size={20} />
-      </button>
-      <button
-        type="button"
-        class="peek-btn"
-        style:background={far.color}
-        aria-label={far.label()}
-        onclick={() => handlePeekAction(far)}
-      >
-        <far.icon size={20} />
-      </button>
+      {#each zones as zone (zone.action)}
+        <button
+          type="button"
+          class="peek-btn"
+          style:background={zone.color}
+          aria-label={zone.label()}
+          onclick={() => handlePeekAction(zone)}
+        >
+          <zone.icon size={20} />
+        </button>
+      {/each}
     </div>
   {/if}
 </div>
@@ -489,7 +505,7 @@
     background: transparent;
   }
 
-  /* ── Peek tray (two buttons side by side at exposed edge) ── */
+  /* ── Peek tray (action buttons side by side at exposed edge) ── */
   .peek-tray {
     position: absolute;
     top: 0;

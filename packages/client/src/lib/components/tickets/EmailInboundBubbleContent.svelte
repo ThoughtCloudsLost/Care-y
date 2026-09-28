@@ -10,11 +10,11 @@
 -->
 <script lang="ts">
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
-  import type { EmailInboundPayload } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import EmailInboundCaution from "$lib/components/tickets/EmailInboundCaution.svelte";
   import EmailChannelChip from "$lib/components/tickets/EmailChannelChip.svelte";
+  import { parseEmailInbound } from "$lib/editor/email-schema.js";
 
   interface EmailInboundBubbleContentProps {
     result: DecryptResult;
@@ -23,37 +23,8 @@
 
   let { result, encryptedContent }: EmailInboundBubbleContentProps = $props();
 
-  /**
-   * Parse the decrypted JSON into a typed inbound email payload.
-   * Returns null for any malformed data (triggers plain-text fallback).
-   */
-  function parseInboundPayload(raw: string): EmailInboundPayload | null {
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (
-        typeof parsed !== "object" ||
-        parsed === null ||
-        !("text" in parsed) ||
-        !("from" in parsed)
-      )
-        return null;
-      const obj = parsed as Record<string, unknown>;
-      return {
-        subject: typeof obj.subject === "string" ? obj.subject : "",
-        text: typeof obj.text === "string" ? obj.text : "",
-        from: typeof obj.from === "string" ? obj.from : "",
-        droppedAttachments:
-          typeof obj.droppedAttachments === "number"
-            ? obj.droppedAttachments
-            : 0,
-      };
-    } catch {
-      return null;
-    }
-  }
-
   const payload = $derived(
-    result.status === "ready" ? parseInboundPayload(result.value) : null,
+    result.status === "ready" ? parseEmailInbound(result.value) : null,
   );
 </script>
 

@@ -28,6 +28,7 @@ import {
 } from "../telephony/voicemail-quarantine.js";
 import type { BlobStore } from "../storage/store.js";
 import type { PendingClient } from "../tickets/ticket-service.js";
+import type { TicketLiveEvents } from "../tickets/ticket-live-events.js";
 
 const manageVoicemailQuarantineProcedure = permissionProcedure(
   Permission.MANAGE_VOICEMAIL_QUARANTINE,
@@ -36,6 +37,8 @@ const manageVoicemailQuarantineProcedure = permissionProcedure(
 export interface VoicemailQuarantineRouterDeps {
   readonly blobStore: BlobStore;
   readonly pendingClients: Map<string, PendingClient>;
+  /** Live ticket-change events for the routed voicemail's ticket. */
+  readonly liveEvents?: TicketLiveEvents;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -75,6 +78,10 @@ export function createVoicemailQuarantineRouter(
             orgSchema: ctx.org.orgSchema,
             pendingClients,
             sealedBox: ctx.org.sealedBox,
+            onTicketChanged: deps.liveEvents?.forTenant(
+              ctx.org.tenantDb,
+              ctx.org.orgSchema,
+            ),
           };
           return routeQuarantined(routeDeps, input, ctx.user.id);
         }),

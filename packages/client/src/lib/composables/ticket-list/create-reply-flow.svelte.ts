@@ -61,6 +61,10 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     void deps.queryClient.invalidateQueries({
       queryKey: ticketsKeys.lists(),
     });
+    // A first reply moves a ticket from New to Active, a facet field.
+    void deps.queryClient.invalidateQueries({
+      queryKey: ticketsKeys.facetIndex(),
+    });
     invalidateReadState(deps.queryClient);
     void deps.eagerLoadPreviews([ticketId]);
   }

@@ -13,6 +13,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { keysetAfter } from "../db/keyset.js";
 import type { AuditService } from "../tickets/audit.js";
+import { hasResponse } from "../tickets/has-response.js";
 import type {
   FieldEncryptor,
   BlindIndexer,
@@ -21,6 +22,10 @@ import type {
   MergeService,
   MergeEventRecord,
 } from "../tickets/merge-service.js";
+import {
+  announceClientTickets,
+  type TicketChangeListener,
+} from "../tickets/ticket-live-events.js";
 import { NotFoundError, ConflictError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { TicketStatus } from "@care-y/shared";
@@ -64,8 +69,9 @@ export interface ClientTicketRecord {
   readonly createdAt: Date;
   readonly keyGeneration: KeyGeneration;
   readonly onHold: boolean;
-  /** Follow-up count, needed to derive the display status shape. */
   readonly followUpCount: number;
+  /** Whether anyone has responded yet, needed to tell New from Active. */
+  readonly hasResponse: boolean;
 }
 
 export interface ClientDetailRecord extends ClientListRecord {
@@ -158,6 +164,8 @@ export interface ClientServiceDeps {
   readonly indexer: BlindIndexer;
   readonly mergeService: MergeService;
   readonly orgId: OrgId;
+  /** Told about each ticket of a client whose alias or phone changed. */
+  readonly onTicketChanged?: TicketChangeListener;
 }
 
 export function createClientService(deps: ClientServiceDeps): ClientService {
@@ -335,13 +343,15 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
           "t.key_generation",
           "t.on_hold",
         ])
-        .select((eb) =>
+        .select((eb) => [
           eb
             .selectFrom("followups as f")
             .select((sb) => sb.fn.countAll().as("cnt"))
             .whereRef("f.ticket_id", "=", "t.id")
             .as("followup_count"),
-        )
+          // Same New/Active rule the ticket list uses.
+          hasResponse(eb.ref("t.id")).as("has_response"),
+        ])
         .where("t.client_id", "=", clientId)
         .orderBy("t.created_at", "desc")
         .execute();
@@ -373,6 +383,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
           keyGeneration: t.key_generation,
           onHold: t.on_hold,
           followUpCount: Number(t.followup_count ?? 0),
+          hasResponse: Boolean(t.has_response),
         })),
         mergeHistory,
       };
@@ -412,6 +423,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         }
         throw err;
       }
+      void announceClientTickets(db, clientId, deps.onTicketChanged);
 
       // Metadata carries the client id only. Aliases are operator-supplied free
       // text, so both the old and new value may name a real person, and the
@@ -524,6 +536,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         //    would produce false duplicate matches)
         await trx.deleteFrom("phones").where("id", "=", oldPhoneId).execute();
       });
+      void announceClientTickets(db, clientId, deps.onTicketChanged);
 
       await audit.log({
         eventType: "client_phone_changed",

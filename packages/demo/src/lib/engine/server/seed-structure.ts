@@ -708,7 +708,7 @@ export async function seedStructure(
       .execute();
   }
 
-  // 15. Phone blocklist (one entry so hubStatus.blocklistCount is non-zero)
+  // 15. Phone blocklist (one entry so auth.hubBlocklistCount is non-zero)
   await tenantDb
     .insertInto("phone_blocklist")
     .values({

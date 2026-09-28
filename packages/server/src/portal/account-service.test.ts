@@ -6,7 +6,7 @@
  */
 
 import crypto from "node:crypto";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { Kysely } from "kysely";
 import { getSodium, hashChannelAuth } from "@care-y/crypto";
 import type { TenantDatabase } from "../db/types.js";
@@ -21,7 +21,9 @@ import { channelSecretSchema, newClientAccountId } from "@care-y/shared";
 import {
   createTestDb,
   createTestClientFixture,
+  createTestClientTicketsFixture,
   createTestTicketFixture,
+  expectClientTicketsAnnounced,
   testBlindIndexer,
   noopEncryptor,
   TEST_ORG_ID,
@@ -43,6 +45,7 @@ import {
   type RewrappedMessageInput,
 } from "./account-service.js";
 import { UsernameTakenError, StaleThreadError } from "./portal-errors.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -896,6 +899,30 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
         .where("id", "=", clientId)
         .executeTakeFirstOrThrow();
       expect(client.communication_tier).toBe("sms_email");
+    });
+
+    it("announces every ticket of the client once a reset commits", async () => {
+      const fixture = await createTestClientTicketsFixture(db);
+      const reg = makeAccountReg({
+        authHash: Buffer.from(hashChannelAuth(crypto.randomBytes(32))),
+      });
+      await db.transaction().execute(async (trx) => {
+        await createAccount(trx, deps, fixture.clientId, reg);
+      });
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+
+      await resetAccount(db, fixture.clientId, { onTicketChanged });
+
+      expectClientTicketsAnnounced(onTicketChanged, fixture);
+    });
+
+    it("announces nothing when no account exists", async () => {
+      const fixture = await createTestClientTicketsFixture(db);
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+
+      await resetAccount(db, fixture.clientId, { onTicketChanged });
+
+      expect(onTicketChanged).not.toHaveBeenCalled();
     });
   });
 

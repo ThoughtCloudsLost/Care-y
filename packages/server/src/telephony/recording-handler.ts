@@ -28,6 +28,7 @@ import { TelephonyError } from "../errors.js";
 import { deleteOrEnqueue } from "./log-deletion-helpers.js";
 import { createEncryptedFollowUp } from "../tickets/server-followup-create.js";
 import { resolveInboundTicket } from "./resolve-inbound-ticket.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 import { quarantineRecording } from "./voicemail-quarantine.js";
 import type {
   OrgId,
@@ -59,6 +60,8 @@ export interface RecordingHandlerDeps {
   readonly sealedBox: SealedBoxEncryptor;
   readonly orgSlug: OrgSlug;
   readonly notificationService: NotificationService;
+  /** Called with the ticket id once the voicemail follow-up is written. */
+  readonly onTicketChanged?: TicketChangeListener;
 }
 
 export interface RecordingResult {
@@ -256,6 +259,8 @@ export async function handleRecordingComplete(
       ...(portalSeal !== undefined ? { portalSeal } : {}),
     },
   );
+
+  deps.onTicketChanged?.(ticketId);
 
   // M3: Delete the recording from the provider
   await deleteOrEnqueue(provider, jobQueue, {

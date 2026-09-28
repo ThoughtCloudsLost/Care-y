@@ -381,6 +381,7 @@ function makeDetail(
         keyGeneration: "1" as KeyGeneration,
         onHold: false,
         followUpCount: 0,
+        hasResponse: false,
       },
     ],
     mergeHistory: [],

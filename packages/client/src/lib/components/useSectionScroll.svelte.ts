@@ -1,5 +1,7 @@
 import { tick } from "svelte";
 import type { Component } from "svelte";
+import { offsetWithinScroller } from "$lib/utils/scroll-offset.js";
+import { focusJumpTarget } from "$lib/utils/a11y.js";
 
 export interface ScrollSection {
   readonly id: string;
@@ -15,7 +17,28 @@ export interface SectionScroll {
   readonly active: string;
   scrollTo(id: string): void;
   expandAndScroll(id: string, expand: () => void): Promise<void>;
+  /**
+   * Mark a section active without scrolling, for a jump to a section
+   * already in view (a lane on a page that does not scroll).
+   */
+  activate(id: string): void;
+  /**
+   * Mark a section active and focus it without scrolling, for a page
+   * that does not scroll (the dashboard's board).
+   */
+  focus(id: string): void;
+  /**
+   * Drop the room a jump added below the content, so a page that has
+   * stopped scrolling cannot scroll by it.
+   */
+  releaseScrollRoom(): void;
 }
+
+/**
+ * Tops within this many px count as one row. Sections laid out side by
+ * side share a row, and the first of them in section order is active.
+ */
+const SAME_ROW_PX = 1;
 
 function findScrollContainer(el: HTMLElement): HTMLElement {
   let node: HTMLElement | null = el.parentElement;
@@ -29,8 +52,12 @@ function findScrollContainer(el: HTMLElement): HTMLElement {
 
 let spacer: HTMLDivElement | null = null;
 
-function ensureScrollRoom(container: HTMLElement, desiredScroll: number): void {
+function releaseScrollRoom(): void {
   if (spacer) spacer.style.height = "0";
+}
+
+function ensureScrollRoom(container: HTMLElement, desiredScroll: number): void {
+  releaseScrollRoom();
 
   const maxScroll = container.scrollHeight - container.clientHeight;
   const deficit = desiredScroll - maxScroll;
@@ -85,17 +112,10 @@ export function createSectionScroll(
     const target = document.getElementById(`section-${id}`);
     if (!target) return;
 
-    if (!target.hasAttribute("tabindex")) {
-      target.setAttribute("tabindex", "-1");
-    }
-
     const container = findScrollContainer(target);
     const offsetPx = chromeOffsetPx(container);
 
-    const targetY =
-      target.getBoundingClientRect().top -
-      container.getBoundingClientRect().top +
-      container.scrollTop;
+    const targetY = offsetWithinScroller(target, container);
     const desiredScroll = Math.max(0, targetY - offsetPx);
 
     ensureScrollRoom(container, desiredScroll);
@@ -107,11 +127,11 @@ export function createSectionScroll(
 
     if (reducedMotion) {
       programmaticScroll = false;
-      target.focus({ preventScroll: true });
+      focusJumpTarget(target);
     } else {
       setTimeout(() => {
         programmaticScroll = false;
-        target.focus({ preventScroll: true });
+        focusJumpTarget(target);
       }, 1000);
     }
   }
@@ -133,23 +153,29 @@ export function createSectionScroll(
       if (el) elCache.set(section.id, el);
     }
 
+    const anchor: HTMLElement | undefined = elCache.values().next().value;
+
     function updateActive(): void {
       if (programmaticScroll) return;
       let current = sections[0]?.id;
 
       // Same chrome line the tap path scrolls to; a fixed threshold
       // here mis-highlights whenever the chrome is taller than it.
-      const anchor: HTMLElement | undefined = elCache.values().next().value;
       const offset =
         anchor !== undefined
           ? chromeOffsetPx(findScrollContainer(anchor))
           : offsetRem * 16;
 
+      // A later section takes over only from a lower row; one sharing the
+      // current section's row leaves the first of the row active.
+      let currentTop = Number.NEGATIVE_INFINITY;
       for (const section of sections) {
         const el = elCache.get(section.id);
         if (!el) continue;
-        if (el.getBoundingClientRect().top <= offset + SCROLL_SLOP) {
+        const top = el.getBoundingClientRect().top;
+        if (top <= offset + SCROLL_SLOP && top > currentTop + SAME_ROW_PX) {
           current = section.id;
+          currentTop = top;
         }
       }
 
@@ -161,7 +187,17 @@ export function createSectionScroll(
     updateActive();
 
     let ticking = false;
-    function onScroll(): void {
+    function onScroll(event: Event): void {
+      // A scroller inside a section (a lane that scrolls on its own)
+      // moves no section, so it leaves the active one alone.
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        anchor !== undefined &&
+        !target.contains(anchor)
+      ) {
+        return;
+      }
       if (!ticking) {
         ticking = true;
         requestAnimationFrame(() => {
@@ -200,5 +236,14 @@ export function createSectionScroll(
     },
     scrollTo,
     expandAndScroll,
+    activate(id: string): void {
+      active = id;
+    },
+    focus(id: string): void {
+      active = id;
+      const target = document.getElementById(`section-${id}`);
+      if (target) focusJumpTarget(target);
+    },
+    releaseScrollRoom,
   };
 }

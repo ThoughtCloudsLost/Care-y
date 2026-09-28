@@ -111,26 +111,25 @@ test.describe.serial("Mobile Layout Preserved (regression)", () => {
     await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
 
-    // The dashboard tags its sections with data-column for the desktop
-    // two-column layout; the desktop suite proves they sit side by side
-    // there.
-    const firstLeft = page.locator("[data-column='left']").first();
-    const firstRight = page.locator("[data-column='right']").first();
-    await expect(firstLeft).toBeVisible();
-    await expect(firstRight).toBeVisible();
+    // A band tile and the first ticket lane: the desktop suite proves
+    // lanes sit side by side on a wide dashboard.
+    const tile = page.locator("#section-queues");
+    const lane = page.locator("[data-lane]").first();
+    await expect(tile).toBeVisible();
+    await expect(lane).toBeVisible();
 
     const viewport = page.viewportSize();
     if (viewport == null) throw new E2eError("Viewport size unavailable");
 
     // Single-column proof by geometry: each section spans more than
     // half the viewport width (so two cannot fit side by side), and
-    // the right-column section stacks below the left-column one
-    // instead of sharing vertical space beside it.
-    const leftBox = await boxOf(firstLeft);
-    const rightBox = await boxOf(firstRight);
-    expect(leftBox.width).toBeGreaterThan(viewport.width / 2);
-    expect(rightBox.width).toBeGreaterThan(viewport.width / 2);
-    expect(rightBox.y).toBeGreaterThanOrEqual(leftBox.y + leftBox.height);
+    // the lane stacks below the tile instead of sharing vertical space
+    // beside it.
+    const tileBox = await boxOf(tile);
+    const laneBox = await boxOf(lane);
+    expect(tileBox.width).toBeGreaterThan(viewport.width / 2);
+    expect(laneBox.width).toBeGreaterThan(viewport.width / 2);
+    expect(laneBox.y).toBeGreaterThanOrEqual(tileBox.y + tileBox.height);
   });
 
   // ── Keyboard shortcuts not active at mobile ────────────────────────

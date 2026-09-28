@@ -7,6 +7,7 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { loadMoreObserver } from "$lib/utils/load-more-observer.svelte.js";
+  import { offsetWithinScroller } from "$lib/utils/scroll-offset.js";
   import { computeTableWindow } from "./ticket-table-window.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -31,6 +32,7 @@
     createdAt: Date;
     followUpCount: number;
     unreadCount: number;
+    unreadCountIsFloor?: boolean;
   }
 
   interface TicketTableProps {
@@ -61,6 +63,12 @@
     virtualizeThreshold?: number;
     /** Extra rows rendered beyond each edge of the visible range. */
     overscan?: number;
+    /**
+     * Prefix for each row's element id (`<idPrefix>-<ticketId>`). The
+     * default keeps the tickets page's search jump-to-row target; pages
+     * rendering several tables pass a per-table prefix so ids stay unique.
+     */
+    idPrefix?: string;
   }
 
   let {
@@ -84,6 +92,7 @@
     scrollContainer,
     virtualizeThreshold = 200,
     overscan = 6,
+    idPrefix = "ticket",
   }: TicketTableProps = $props();
 
   const columnHeaders = [
@@ -215,9 +224,7 @@
 
   function measureTbodyOffset(): void {
     if (!tbodyEl || !scrollContainer) return;
-    const tbodyTop = tbodyEl.getBoundingClientRect().top;
-    const scrollerTop = scrollContainer.getBoundingClientRect().top;
-    tbodyOffsetTop = tbodyTop - scrollerTop + scrollContainer.scrollTop;
+    tbodyOffsetTop = offsetWithinScroller(tbodyEl, scrollContainer);
   }
 
   function measureRowPitch(): void {
@@ -469,7 +476,8 @@
             {@const isCurrentTicket = selectedTicketId === row.ticketId}
             {@const activityDate = row.lastActivityAt ?? row.createdAt}
             <tr
-              id="ticket-{row.ticketId}"
+              id="{idPrefix}-{row.ticketId}"
+              data-ticket-id={row.ticketId}
               class="table-row search-target"
               class:match-active={isActive}
               class:row-current={isCurrentTicket}
@@ -559,12 +567,15 @@
                   <span class="unassigned-muted"></span>
                 {/if}
               </td>
-              <td class="col-activity cell-muted">
+              <td class="col-activity hide-narrow cell-muted">
                 {formatRelativeTime(activityDate)}
               </td>
               <td class="col-msgs hide-narrow cell-muted">
                 {#if row.unreadCount > 0}
-                  <NewPill count={row.unreadCount} />
+                  <NewPill
+                    count={row.unreadCount}
+                    isFloor={row.unreadCountIsFloor}
+                  />
                 {:else if row.followUpCount > 0}
                   {row.followUpCount}
                 {/if}
@@ -577,7 +588,7 @@
   </table>
   {#if onloadmore}
     <div
-      {@attach loadMoreObserver(onloadmore)}
+      {@attach loadMoreObserver(onloadmore, scrollContainer)}
       class="load-sentinel"
       aria-hidden="true"
     ></div>

@@ -16,6 +16,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { TicketPriority } from "@care-y/shared";
+import type { TicketChangeListener } from "./ticket-live-events.js";
 
 export const ESCALATION_QUEUE = "ticket-escalation";
 export const ESCALATION_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
@@ -40,9 +41,13 @@ const NEXT_PRIORITY: Partial<Record<TicketPriority, TicketPriority>> = {
  * 3. queue.escalate_days > 0
  * 4. ticket age > queue.escalate_days
  * 5. priority is not already 'urgent'
+ *
+ * `onTicketChanged` is called for each escalated ticket once its priority
+ * and system follow-up are written.
  */
 export async function escalateTenantTickets(
   db: Kysely<TenantDatabase>,
+  onTicketChanged?: TicketChangeListener,
 ): Promise<EscalationResult> {
   const staleTickets = await db
     .selectFrom("tickets")
@@ -89,6 +94,7 @@ export async function escalateTenantTickets(
       })
       .execute();
 
+    onTicketChanged?.(ticket.id);
     escalatedCount++;
   }
 

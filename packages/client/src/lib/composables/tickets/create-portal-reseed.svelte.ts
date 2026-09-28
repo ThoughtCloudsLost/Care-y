@@ -21,6 +21,7 @@ import { requireRouter } from "$lib/errors.js";
 import { trpc as defaultTrpc } from "$lib/trpc/index.js";
 import { encode } from "@care-y/crypto";
 import { fetchBlob as defaultFetchBlob } from "$lib/utils/fetch-blob.js";
+import { chunk } from "$lib/utils/chunk.js";
 import { SvelteSet } from "svelte/reactivity";
 
 // ── Chunk/batch constants ──────────────────────────────────────────────
@@ -223,15 +224,6 @@ function resolveTrpc(deps: PortalReseedDeps): TrpcSurface {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
-
-/** Chunk an array into sub-arrays of at most `size` elements. */
-function chunk<T>(arr: readonly T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    result.push(arr.slice(i, i + size));
-  }
-  return result;
-}
 
 /**
  * Detect a server "already converted" conflict from the tRPC error shape.

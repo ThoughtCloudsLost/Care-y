@@ -22,14 +22,14 @@ import { clientKeys } from "$lib/query/keys.js";
 import { trpc } from "$lib/trpc/index.js";
 import { getCryptoBridge } from "$lib/crypto/context.js";
 import { requireRouter } from "$lib/errors.js";
-import { pairKey } from "$lib/tickets/pair-key.js";
+import { pairKey, undismissedPairs } from "$lib/tickets/pair-key.js";
 import type {
   MergeCandidate,
   MergeScanClient,
   MergeScanIntakeResponse,
 } from "$lib/workers/crypto-protocol.js";
 
-/** Per-ticket row from the dashboard's ticket list query. */
+/** Per-ticket row from the dashboard's lane queries. */
 export interface TicketRef {
   readonly id: string;
   readonly clientId: string;
@@ -42,9 +42,9 @@ export interface TicketRef {
 }
 
 export interface MergeScanDeps {
-  /** Whether the dashboard's ticket query has loaded. */
+  /** Whether every dashboard lane has settled. */
   readonly dashboardReady: boolean;
-  /** All tickets from the dashboard query. */
+  /** Every ticket the dashboard lanes have loaded. */
   readonly tickets: readonly TicketRef[];
   /** Whether the session holds VIEW_CLIENTS permission. */
   readonly canViewClients: boolean;
@@ -273,11 +273,7 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
     dismissalsQuery.data ?? new SvelteSet<string>(),
   );
 
-  const undismissed = $derived(
-    candidates.filter(
-      (c) => !dismissedKeys.has(pairKey(c.clientIdA, c.clientIdB)),
-    ),
-  );
+  const undismissed = $derived(undismissedPairs(candidates, dismissedKeys));
 
   // Mutation: add a pair key to the dismissal blob and write back
   const dismissMutation = createMutation(() => ({

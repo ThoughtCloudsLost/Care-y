@@ -10,6 +10,7 @@ import type { RawFollowUpPreview } from "./preview-loader.svelte.js";
 import { DECRYPT_ERROR_SENTINEL } from "$lib/crypto/async-decrypt-cache.js";
 import * as m from "$lib/paraglide/messages.js";
 import type { ReactionSummary } from "@care-y/shared";
+import type { TicketQuickAction } from "$lib/components/tickets/ticket-types.js";
 
 function makeRecord(
   overrides: Partial<TicketLikeRecord> & { id: string },
@@ -29,6 +30,7 @@ function makeRecord(
     createdAt: "2026-01-01T00:00:00Z",
     lastActivityAt: null,
     followUpCount: 0,
+    hasResponse: false,
     queueSortOrder: 1,
     ...overrides,
   };
@@ -56,12 +58,16 @@ function makePreview(id: string): RawFollowUpPreview {
     type: "internal_note",
     encryptedContent: "enc-content",
     keyWrap: null,
+    followUpKeyWrap: null,
+    portalWrap: null,
     createdAt: "2026-01-02T00:00:00Z",
     hasRecording: false,
     hasImage: false,
     hasFile: false,
     noteTypeId: null,
     eventParams: null,
+    callStatus: null,
+    callDurationSeconds: null,
   };
 }
 
@@ -157,9 +163,17 @@ describe("mapTicketDisplayFields", () => {
       mapTicketDisplayFields(makeRecord({ id: "a" }), deps).displayStatus,
     ).toBe("new");
     expect(
-      mapTicketDisplayFields(makeRecord({ id: "b", followUpCount: 2 }), deps)
-        .displayStatus,
+      mapTicketDisplayFields(
+        makeRecord({ id: "b", followUpCount: 2, hasResponse: true }),
+        deps,
+      ).displayStatus,
     ).toBe("active");
+    // Follow-ups without a response (the inbound message that opened the
+    // ticket) leave it New.
+    expect(
+      mapTicketDisplayFields(makeRecord({ id: "e", followUpCount: 1 }), deps)
+        .displayStatus,
+    ).toBe("new");
     expect(
       mapTicketDisplayFields(makeRecord({ id: "c", onHold: true }), deps)
         .displayStatus,
@@ -262,10 +276,12 @@ describe("createCardPropsMapper", () => {
     return {
       ...makeFieldDeps(),
       unreadCount: () => 3,
+      unreadCountIsFloor: () => false,
       getPreview: () => undefined,
       previewReactionsMap: new Map<string, ReactionSummary[]>(),
       ontap: vi.fn(),
       onaction: vi.fn(),
+      allowedActions: new Set(),
       onencryptedhelp: vi.fn(),
       ...overrides,
     };
@@ -307,6 +323,33 @@ describe("createCardPropsMapper", () => {
       }),
     )(makeRecord({ id: "t1" }));
     expect(props.previewReactions).toEqual({ n1: summaries });
+  });
+
+  it("passes the allowed quick actions through to every card", () => {
+    const allowedActions = new Set<TicketQuickAction>(["reply", "take"]);
+    const props = createCardPropsMapper(makeMapperDeps({ allowedActions }))(
+      makeRecord({ id: "t1" }),
+    );
+    expect(props.allowedActions).toBe(allowedActions);
+  });
+
+  it("reads allowed actions through a getter at map time", () => {
+    let current: ReadonlySet<TicketQuickAction> = new Set(["reply"]);
+    const deps = makeMapperDeps();
+    const mapper = createCardPropsMapper({
+      ...deps,
+      get allowedActions() {
+        return current;
+      },
+    });
+    expect(mapper(makeRecord({ id: "t1" })).allowedActions).toEqual(
+      new Set(["reply"]),
+    );
+
+    current = new Set<TicketQuickAction>(["call"]);
+    expect(mapper(makeRecord({ id: "t1" })).allowedActions).toEqual(
+      new Set(["call"]),
+    );
   });
 
   it("wraps onselect so the callback receives the ticket id", () => {

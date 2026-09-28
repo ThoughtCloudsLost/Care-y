@@ -13,10 +13,14 @@ import {
   createMemoryBlobStore,
   seedOrgPublicKey,
   createTestTicketFixture,
+  createTestTicketForClient,
+  createTestUser,
+  createMockSseService,
   noopEncryptor,
   testSealedBox,
   TEST_ORG_ID,
 } from "../test-utils.js";
+import { createTicketLiveEvents } from "../tickets/ticket-live-events.js";
 import {
   findPurgeableTickets,
   purgeTenant,
@@ -28,11 +32,11 @@ import {
 } from "./pii-retention.js";
 import { newFollowupId, newAttachmentId, newRecordingId } from "@care-y/shared";
 import type {
+  OrgSchema,
   TicketId,
   ClientId,
   PhoneId,
   PhoneHash,
-  QueueId,
   KeyGeneration,
   BlobKey,
   CallSid,
@@ -180,26 +184,6 @@ async function closeTicket(
     .set({ status: "closed" })
     .where("id", "=", ticketId)
     .execute();
-}
-
-/** Create a second ticket for an existing client. */
-async function createTicketForClient(
-  db: TestDb["db"],
-  clientId: ClientId,
-  queueId: QueueId,
-): Promise<TicketId> {
-  const row = await db
-    .insertInto("tickets")
-    .values({
-      client_id: clientId,
-      queue_id: queueId,
-      encrypted_title: noopEncryptor.encrypt("extra-title"),
-      encrypted_description: noopEncryptor.encrypt("extra-desc"),
-      key_generation: crypto.randomUUID() as KeyGeneration,
-    })
-    .returning("id")
-    .executeTakeFirstOrThrow();
-  return row.id;
 }
 
 // ---------------------------------------------------------------------------
@@ -508,6 +492,45 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(phone).toBeUndefined();
     });
 
+    it("tells the purged tickets' audience once the purge commits", async () => {
+      await setRetention(testDb.db, 90);
+      const fixture = await createTestTicketFixture(testDb.db);
+      const member = await createTestUser(testDb.db);
+      await testDb.db
+        .insertInto("queue_assignments")
+        .values({ queue_id: fixture.queueId, user_id: member.id })
+        .execute();
+      await closeTicket(testDb.db, fixture.ticketId);
+      await insertFollowup(
+        testDb.db,
+        fixture.ticketId,
+        new Date(Date.now() - 100 * MS_PER_DAY),
+      );
+      const sse = createMockSseService();
+      const { jobQueue } = createMockJobQueue();
+
+      await purgeTenant(testDb.db, blobStore, jobQueue, TEST_ORG_ID, {
+        events: createTicketLiveEvents({ sse }),
+        orgSchema: testDb.schemaName as OrgSchema,
+      });
+
+      const gone = await testDb.db
+        .selectFrom("tickets")
+        .select("id")
+        .where("id", "=", fixture.ticketId)
+        .executeTakeFirst();
+      expect(gone).toBeUndefined();
+      const call = sse.broadcast.mock.calls.find(
+        ([, , event]) =>
+          "ticketId" in event && event.ticketId === fixture.ticketId,
+      );
+      expect(call?.[1]).toEqual([member.id]);
+      expect(call?.[2]).toMatchObject({
+        type: "ticket_changed",
+        queueId: fixture.queueId,
+      });
+    });
+
     it("keeps clients who have open tickets", async () => {
       await setRetention(testDb.db, 90);
       const fixture = await createTestTicketFixture(testDb.db);
@@ -521,7 +544,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
 
       // Ticket 2: open (default status)
-      const openTicketId = await createTicketForClient(
+      const openTicketId = await createTestTicketForClient(
         testDb.db,
         fixture.clientId,
         fixture.queueId,

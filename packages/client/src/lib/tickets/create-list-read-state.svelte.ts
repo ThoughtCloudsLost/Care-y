@@ -25,6 +25,8 @@
  */
 
 import type { CreateQueryResult } from "@tanstack/svelte-query";
+import { SvelteMap } from "svelte/reactivity";
+import { READ_STATE_TIMESTAMPS_PER_TICKET } from "@care-y/shared";
 import { isDecryptError } from "$lib/crypto/async-decrypt-cache.js";
 import type {
   TicketDecryptCache,
@@ -53,7 +55,7 @@ export interface SweepReadStatePage {
   readonly nextCursor: string | null;
 }
 
-// ── Fetch helpers (the page wires these into its createQuery calls) ──
+// ── Fetch helpers (createReadStateQueries in queries.ts wires these) ──
 
 /** tickets.listReadState accepts at most 50 ids per call. */
 export const READ_STATE_BATCH_LIMIT = 50;
@@ -92,6 +94,29 @@ export async function fetchSweepToExhaustion(
   return items;
 }
 
+/**
+ * Key wraps by ticket id for window cursor decrypts. Sweep entries
+ * supply wraps for tickets with no loaded row; each row set then
+ * overrides them in order, so a row's own wrap wins. Build it inside a
+ * $derived so it follows the sweep and the rows.
+ */
+export function collectKeyWraps(
+  sweep: readonly SweepReadStateEntry[] | undefined,
+  ...rowSets: readonly Iterable<{
+    readonly id: string;
+    readonly keyWrap: TicketKeyWrap | null;
+  }>[]
+): SvelteMap<string, TicketKeyWrap | null> {
+  const map = new SvelteMap<string, TicketKeyWrap | null>();
+  for (const entry of sweep ?? []) {
+    if (entry.keyWrap !== null) map.set(entry.ticketId, entry.keyWrap);
+  }
+  for (const rows of rowSets) {
+    for (const row of rows) map.set(row.id, row.keyWrap);
+  }
+  return map;
+}
+
 // ── Composable ──
 
 export interface ListReadStateConfig {
@@ -114,6 +139,17 @@ export interface ListReadState {
    * pill is a signal, not an audit, so a busier ticket reads "20 new".
    */
   unreadCount(ticketId: string): number;
+  /**
+   * True when the unread count is a floor rather than an exact figure.
+   *
+   * A full window of timestamps that are ALL newer than the decrypted
+   * cursor means the server may hold more unread replies beyond the
+   * window. The browser cannot know the true count without fetching
+   * further pages, which would leak per-ticket activity depth to the
+   * server. Returns false for tickets outside the window, without a
+   * cursor, or with the cursor inside the window.
+   */
+  unreadCountIsFloor(ticketId: string): boolean;
   /** Window-authoritative for loaded rows; falls back to the sweep set for unloaded tickets. */
   isUnread(ticketId: string): boolean;
   /** Global unread count from the sweep (truthful beyond the loaded window). */
@@ -265,6 +301,17 @@ export function createListReadState(
     return count;
   }
 
+  function unreadCountIsFloor(ticketId: string): boolean {
+    const entry = windowEntries.get(ticketId);
+    if (entry === undefined) return false;
+    const count = unreadCount(ticketId);
+    if (count === 0) return false;
+    return (
+      entry.followUpCreatedAt.length === READ_STATE_TIMESTAMPS_PER_TICKET &&
+      count === entry.followUpCreatedAt.length
+    );
+  }
+
   function isUnread(ticketId: string): boolean {
     // The window is authoritative for loaded rows (it has the 20-deep
     // timestamps); the sweep only vouches for tickets outside it.
@@ -276,6 +323,7 @@ export function createListReadState(
 
   return {
     unreadCount,
+    unreadCountIsFloor,
     isUnread,
     unreadTotal(): number {
       return sweep.unread.size;

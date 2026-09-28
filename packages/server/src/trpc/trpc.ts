@@ -286,6 +286,21 @@ export const infrastructureProcedure = permissionProcedure(
   Permission.MANAGE_INFRASTRUCTURE,
 );
 
+/** Creating, editing, reordering and deleting queues. */
+export const manageQueuesProcedure = permissionProcedure(
+  Permission.MANAGE_QUEUES,
+);
+
+/** Call greetings: recorded and spoken messages callers hear. */
+export const writeCallGreetingsProcedure = permissionProcedure(
+  Permission.WRITE_CALL_GREETINGS,
+);
+
+/** Automatic text replies sent to clients. */
+export const writeAutomaticRepliesProcedure = permissionProcedure(
+  Permission.WRITE_AUTOMATIC_REPLIES,
+);
+
 /**
  * Wraps a resolver function so that AppErrors thrown by the resolver are
  * caught and re-thrown as TRPCError with the correct code. Non-AppErrors

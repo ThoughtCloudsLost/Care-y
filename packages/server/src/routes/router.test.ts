@@ -37,6 +37,7 @@ const ALWAYS_MOUNTED = [
   "keys",
   "dashboard",
   "recentViews",
+  "prefBlobs",
 ];
 
 /** One key per router a caller may decline. */

@@ -28,10 +28,21 @@ export const notificationEventTypeSchema = z.enum([
 ]);
 export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 
+// --- Live event types (SSE only) ---
+
+/**
+ * Events that exist only on the SSE stream. They tell a connected viewer
+ * that a ticket it can see changed, so its lists and counts refetch. They
+ * never enter the outbox, preferences, push, email, or the notification
+ * feed, which is why they are not notification event types.
+ */
+export const liveEventTypeSchema = z.enum(["ticket_changed"]);
+export type LiveEventType = z.infer<typeof liveEventTypeSchema>;
+
 // --- SSE event schema (what the server sends over the SSE stream) ---
 
 export const sseEventSchema = z.object({
-  type: notificationEventTypeSchema,
+  type: z.union([notificationEventTypeSchema, liveEventTypeSchema]),
   ticketId: ticketIdSchema,
   queueId: queueIdSchema,
   timestamp: z.iso.datetime(),

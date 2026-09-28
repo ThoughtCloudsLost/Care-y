@@ -16,8 +16,9 @@
   islands for anything interactive above the overlay.
 
   Status is a shape (StatusMark), color is priority (PriorityStamp),
-  unread is its own channel (bold title + NewPill). The row/card side
-  column shows at most two of [stamp, pill, time], in that order.
+  unread is its own channel (bold title + NewPill). The stamp owns the
+  alias line's right edge; the pill sits under it on the title line, so
+  the stamp holds still whether or not the ticket is unread.
 -->
 <script lang="ts">
   import { Checkbox } from "konsta/svelte";
@@ -53,6 +54,7 @@
     lastActivityAt,
     followUpCount,
     unreadCount,
+    unreadCountIsFloor = false,
     previewFollowUps,
     previewReactions,
     selected = false,
@@ -61,6 +63,7 @@
     onfullopen,
     onselect,
     onaction,
+    allowedActions = new Set<TicketQuickAction>(),
     onencryptedhelp,
     loading = false,
     searchTerm = null,
@@ -71,6 +74,21 @@
   const isUnassigned = $derived(assignedName === null && !assignedIsSelf);
   const isUnread = $derived(unreadCount > 0);
   const isClosed = $derived(displayStatus === "closed");
+
+  // Each quick action renders only when the account may use it; the hold
+  // and owner buttons check the action they would fire.
+  const holdAction = $derived<TicketQuickAction>(
+    displayStatus === "hold" ? "unhold" : "hold",
+  );
+  const ownerAction = $derived<TicketQuickAction>(
+    isUnassigned ? "take" : "assign",
+  );
+  const showReply = $derived(allowedActions.has("reply"));
+  const showCall = $derived(allowedActions.has("call"));
+  const showHold = $derived(allowedActions.has(holdAction));
+  const showOwner = $derived(allowedActions.has(ownerAction));
+  const showContactGroup = $derived(showReply || showCall);
+  const showCaseGroup = $derived(showHold || showOwner);
 
   const activityDate = $derived(lastActivityAt ?? createdAt);
   const relativeTime = $derived(formatRelativeTime(activityDate));
@@ -174,6 +192,12 @@
   </span>
 {/snippet}
 
+{#snippet newPill()}
+  {#if isUnread}<span class="r-pill"
+      ><NewPill count={unreadCount} isFloor={unreadCountIsFloor} /></span
+    >{/if}
+{/snippet}
+
 {#snippet head(includeMeta: boolean)}
   <div class="head" class:head-select={multiSelectActive}>
     {#if multiSelectActive}
@@ -188,12 +212,14 @@
     <span class="head-main">
       <span class="r-alias-row">
         <span class="r-alias">{@render hl(clientAlias ?? "...")}</span>
-        <span class="r-side">
-          {#if priority !== "normal"}<PriorityStamp {priority} />{/if}
-          {#if isUnread}<NewPill count={unreadCount} />{/if}
-        </span>
+        {#if priority !== "normal"}<span class="r-side"
+            ><PriorityStamp {priority} /></span
+          >{/if}
       </span>
-      <span class="r-title">{@render titleBlock()}</span>
+      <span class="r-title-row">
+        <span class="r-title">{@render titleBlock()}</span>
+        {@render newPill()}
+      </span>
       {#if includeMeta}
         {@render metaRow()}
       {/if}
@@ -261,6 +287,7 @@
     class:tc-unread={isUnread}
     class:tc-closed={isClosed}
     data-testid="ticket-card-wrap"
+    data-ticket-id={ticketId}
   >
     <!-- Overlay button covers the surface for click/keyboard. Interactive
          islands sit above it via z-index so their clicks don't navigate. -->
@@ -290,53 +317,58 @@
       <div class="card-meta">
         {@render metaRow()}
       </div>
-      <div class="actions" data-testid="card-actions">
-        <span class="act-group">
-          <button
-            type="button"
-            class="act"
-            onclick={(e) => fireAction(e, "reply")}
-          >
-            {m.tickets_action_reply()}
-          </button>
-          <button
-            type="button"
-            class="act"
-            onclick={(e) => fireAction(e, "call")}
-          >
-            {m.tickets_action_call()}
-          </button>
-        </span>
-        <span class="act-group">
-          <button
-            type="button"
-            class="act act-quiet"
-            onclick={(e) =>
-              fireAction(e, displayStatus === "hold" ? "unhold" : "hold")}
-          >
-            {displayStatus === "hold"
-              ? m.tickets_action_unhold()
-              : m.tickets_action_hold()}
-          </button>
-          {#if isUnassigned}
-            <button
-              type="button"
-              class="act"
-              onclick={(e) => fireAction(e, "take")}
-            >
-              {m.tickets_action_take()}
-            </button>
-          {:else}
-            <button
-              type="button"
-              class="act"
-              onclick={(e) => fireAction(e, "assign")}
-            >
-              {m.tickets_action_assign()}
-            </button>
+      {#if showContactGroup || showCaseGroup}
+        <div class="actions" data-testid="card-actions">
+          {#if showContactGroup}
+            <span class="act-group">
+              {#if showReply}
+                <button
+                  type="button"
+                  class="act"
+                  onclick={(e) => fireAction(e, "reply")}
+                >
+                  {m.tickets_action_reply()}
+                </button>
+              {/if}
+              {#if showCall}
+                <button
+                  type="button"
+                  class="act"
+                  onclick={(e) => fireAction(e, "call")}
+                >
+                  {m.tickets_action_call()}
+                </button>
+              {/if}
+            </span>
           {/if}
-        </span>
-      </div>
+          {#if showCaseGroup}
+            <span class="act-group act-group-end">
+              {#if showHold}
+                <button
+                  type="button"
+                  class="act act-quiet"
+                  onclick={(e) => fireAction(e, holdAction)}
+                >
+                  {displayStatus === "hold"
+                    ? m.tickets_action_unhold()
+                    : m.tickets_action_hold()}
+                </button>
+              {/if}
+              {#if showOwner}
+                <button
+                  type="button"
+                  class="act"
+                  onclick={(e) => fireAction(e, ownerAction)}
+                >
+                  {isUnassigned
+                    ? m.tickets_action_take()
+                    : m.tickets_action_assign()}
+                </button>
+              {/if}
+            </span>
+          {/if}
+        </div>
+      {/if}
     {:else}
       <div class="row-top">
         {#if multiSelectActive}
@@ -350,7 +382,10 @@
         <span class="row-top-stamp"><PriorityStamp {priority} /></span>
       </div>
       <div class="content-group">
-        <div class="row-title">{@render titleBlock()}</div>
+        <div class="r-title-row">
+          <div class="row-title">{@render titleBlock()}</div>
+          {@render newPill()}
+        </div>
       </div>
       <div class="preview-window" data-preview>
         <TicketPreview
@@ -371,7 +406,6 @@
         <span class="meta-right">
           <span class="r-time num">{relativeTime}</span>
           {#if msgLabel}<span class="grid-msgs">· {msgLabel}</span>{/if}
-          <NewPill count={unreadCount} />
         </span>
       </div>
     {/if}
@@ -465,6 +499,27 @@
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
+  }
+
+  /* The new pill sits under the priority stamp, beside the title, so an
+     unread ticket never shifts the stamp. */
+  .r-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    min-width: 0;
+  }
+
+  .r-title-row > .r-title,
+  .r-title-row > .row-title {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .r-pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    margin-top: 2px;
   }
 
   .r-title {
@@ -595,6 +650,11 @@
   .act-group {
     display: flex;
     gap: 18px;
+  }
+
+  /* Keeps the case group on the right when the contact group is hidden. */
+  .act-group-end {
+    margin-left: auto;
   }
 
   .act {

@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { handleEvent, type SSEEvent } from "./index.svelte.js";
+import {
+  handleEvent,
+  TICKET_CHANGED_FLUSH_MS,
+  type SSEEvent,
+} from "./index.svelte.js";
 import type { QueryClient } from "@tanstack/svelte-query";
-import { notificationEventTypeSchema } from "@care-y/shared";
+import {
+  liveEventTypeSchema,
+  notificationEventTypeSchema,
+} from "@care-y/shared";
 
 function createMockQueryClient(): QueryClient {
   return {
@@ -154,6 +161,123 @@ describe("handleEvent", () => {
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["tickets", "readStateSweep"],
     });
+  });
+
+  // A new message changes follow-up count and last activity, so lists and
+  // facet counts must refresh without a manual reload.
+  it("invalidates ticket lists and the facet index on followup_added", () => {
+    handleEvent({ type: "followup_added", ticketId: "t-100" }, qc);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["tickets", "list"],
+    });
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["tickets", "facetIndex"],
+    });
+  });
+
+  // A message is an activity event. The unfiltered key is the prefix of
+  // every filtered feed key, so one invalidation reaches them all.
+  it("invalidates the activity feed prefix on followup_added", () => {
+    handleEvent({ type: "followup_added", ticketId: "t-100" }, qc);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["tickets", "recentActivity"],
+    });
+  });
+});
+
+describe("handleEvent ticket_changed", () => {
+  let qc: QueryClient;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    qc = createMockQueryClient();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function changed(ticketId: string): SSEEvent {
+    return { type: "ticket_changed", ticketId };
+  }
+
+  it("waits for the flush window before invalidating", () => {
+    handleEvent(changed("t-1"), qc);
+
+    expect(qc.invalidateQueries).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(TICKET_CHANGED_FLUSH_MS);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["tickets"],
+    });
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["ticket", "t-1"],
+    });
+  });
+
+  it("folds a burst inside one window into one invalidation pass", () => {
+    for (let i = 0; i < 20; i++) handleEvent(changed("t-1"), qc);
+    handleEvent(changed("t-2"), qc);
+    vi.advanceTimersByTime(TICKET_CHANGED_FLUSH_MS);
+
+    const calls = vi
+      .mocked(qc.invalidateQueries)
+      .mock.calls.map(([filters]) => filters?.queryKey);
+    expect(calls).toEqual([["tickets"], ["ticket", "t-1"], ["ticket", "t-2"]]);
+  });
+
+  it("does not extend the window for events arriving inside it", () => {
+    handleEvent(changed("t-1"), qc);
+    vi.advanceTimersByTime(TICKET_CHANGED_FLUSH_MS - 1);
+    handleEvent(changed("t-2"), qc);
+    vi.advanceTimersByTime(1);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["ticket", "t-2"],
+    });
+  });
+
+  it("starts a fresh window after a flush", () => {
+    handleEvent(changed("t-1"), qc);
+    vi.advanceTimersByTime(TICKET_CHANGED_FLUSH_MS);
+    vi.mocked(qc.invalidateQueries).mockClear();
+
+    handleEvent(changed("t-3"), qc);
+    expect(qc.invalidateQueries).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(TICKET_CHANGED_FLUSH_MS);
+
+    const calls = vi
+      .mocked(qc.invalidateQueries)
+      .mock.calls.map(([filters]) => filters?.queryKey);
+    expect(calls).toEqual([["tickets"], ["ticket", "t-3"]]);
+  });
+
+  it("keeps separate query clients in separate windows", () => {
+    const other = createMockQueryClient();
+    handleEvent(changed("t-1"), qc);
+    handleEvent(changed("t-9"), other);
+    vi.advanceTimersByTime(TICKET_CHANGED_FLUSH_MS);
+
+    expect(qc.invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ["ticket", "t-9"],
+    });
+    expect(other.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["ticket", "t-9"],
+    });
+  });
+
+  it("handles every liveEventTypeSchema value", () => {
+    for (const eventType of liveEventTypeSchema.options) {
+      const freshQc = createMockQueryClient();
+      handleEvent({ type: eventType, ticketId: "t-drift" }, freshQc);
+      vi.advanceTimersByTime(TICKET_CHANGED_FLUSH_MS);
+      expect(
+        freshQc.invalidateQueries,
+        `no cache invalidation for live event type "${eventType}"`,
+      ).toHaveBeenCalled();
+    }
   });
 });
 

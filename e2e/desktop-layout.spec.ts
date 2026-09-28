@@ -150,26 +150,69 @@ test.describe.serial("Desktop Responsive Layout", () => {
     await expect(lastFocusable).toBeFocused();
   });
 
-  // ── Dashboard two-column grid ──────────────────────────────────────
+  // ── Dashboard lanes ────────────────────────────────────────────────
 
-  test("dashboard renders two-column layout at desktop", async () => {
-    // Ensure we're on the dashboard.
+  /**
+   * Lane indexes grouped into rows by the top edge of each lane's heading
+   * (1px tolerance), each row ordered left to right. Lanes render in
+   * work-priority order, so a row-major layout reads [[0, 1], [2, 3]].
+   */
+  async function laneRows(): Promise<number[][]> {
+    const lanes = page.locator("[data-lane]");
+    await expect(lanes).toHaveCount(4);
+    const boxes: { index: number; x: number; y: number }[] = [];
+    for (const [index, lane] of (await lanes.all()).entries()) {
+      const box = await boxOf(lane.getByRole("heading", { level: 2 }).first());
+      boxes.push({ index, x: box.x, y: box.y });
+    }
+    const rows: { y: number; lanes: { index: number; x: number }[] }[] = [];
+    for (const box of boxes) {
+      const row = rows.find((r) => Math.abs(r.y - box.y) <= 1);
+      if (row === undefined) {
+        rows.push({ y: box.y, lanes: [box] });
+      } else {
+        row.lanes.push(box);
+      }
+    }
+    return rows
+      .sort((a, b) => a.y - b.y)
+      .map((r) => r.lanes.sort((a, b) => a.x - b.x).map((l) => l.index));
+  }
+
+  /** Run `body` at a viewport size, then put the suite's size back. */
+  async function atViewport(
+    size: { width: number; height: number },
+    body: () => Promise<void>,
+  ): Promise<void> {
+    const original = page.viewportSize();
+    if (original == null) throw new E2eError("Viewport size unavailable");
+    await page.setViewportSize(size);
+    try {
+      await body();
+    } finally {
+      await page.setViewportSize(original);
+    }
+  }
+
+  test("dashboard lays four lanes across a wide dashboard", async () => {
     await sidebar.locator('[data-sidebar-id="home"]').click();
     await expect(page).toHaveURL("/");
 
-    // Both columns render content.
-    const firstLeft = page.locator("[data-column='left']").first();
-    const firstRight = page.locator("[data-column='right']").first();
-    await expect(firstLeft).toBeVisible();
-    await expect(firstRight).toBeVisible();
+    await atViewport({ width: 1680, height: 1000 }, async () => {
+      // One row: every heading shares a top edge, in priority order.
+      await expect.poll(laneRows).toEqual([[0, 1, 2, 3]]);
+    });
+  });
 
-    // Two-column proof by geometry: the right column starts after the
-    // left column ends, and the columns share vertical space (side by
-    // side, not stacked as on mobile).
-    const leftBox = await boxOf(firstLeft);
-    const rightBox = await boxOf(firstRight);
-    expect(rightBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width);
-    expect(rightBox.y).toBeLessThan(leftBox.y + leftBox.height);
+  test("dashboard lays lanes two by two at a medium width", async () => {
+    await atViewport({ width: 1100, height: 900 }, async () => {
+      // Two rows of two, row-major: the headings in a row share a top
+      // edge, and the second row's lanes sit under the first row's.
+      await expect.poll(laneRows).toEqual([
+        [0, 1],
+        [2, 3],
+      ]);
+    });
   });
 
   // ── Ticket split view ──────────────────────────────────────────────

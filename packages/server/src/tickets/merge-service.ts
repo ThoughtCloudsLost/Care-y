@@ -12,6 +12,11 @@ import type { TenantDatabase } from "../db/types.js";
 import { MergeError, NotFoundError } from "../errors.js";
 import { createDependencyService } from "./dependency-service.js";
 import { purgeAndRevokeChannel } from "../portal/channel-service.js";
+import { listTicketIdsForClients } from "./ticket-service.js";
+import {
+  announceTickets,
+  type TicketChangeListener,
+} from "./ticket-live-events.js";
 import { ErrorCode } from "@care-y/shared";
 import type {
   ClientId,
@@ -226,14 +231,26 @@ async function reconcileChannels(
   }
 }
 
-export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
+export interface MergeServiceDeps {
+  /**
+   * Called once per ticket of either client after a merge or undo commits:
+   * the secondary's ticket may have closed, and the channel and tier moves
+   * change what both clients' tickets show.
+   */
+  readonly onTicketChanged?: TicketChangeListener;
+}
+
+export function createMergeService(
+  db: Kysely<TenantDatabase>,
+  deps?: MergeServiceDeps,
+): MergeService {
   return {
     async merge(input) {
       if (input.primaryClientId === input.secondaryClientId) {
         throw new MergeError(ErrorCode.CANNOT_MERGE_INTO_SELF);
       }
 
-      return db.transaction().execute(async (trx) => {
+      const result = await db.transaction().execute(async (trx) => {
         // Verify both clients exist
         const [primary, secondary] = await Promise.all([
           trx
@@ -292,9 +309,11 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
             throw new MergeError(ErrorCode.MERGE_UNRESOLVED_DEPS);
           }
 
+          // Clears the hold alongside the close, matching
+          // TicketService.close: a closed ticket must not stay flagged.
           await trx
             .updateTable("tickets")
-            .set({ status: "closed" })
+            .set({ status: "closed", on_hold: false })
             .where("id", "=", secondaryTicket.id)
             .execute();
 
@@ -317,12 +336,20 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
           input.keepChannelOf,
         );
 
-        return toRecord(event);
+        return {
+          record: toRecord(event),
+          affected: await listTicketIdsForClients(trx, [
+            input.primaryClientId,
+            input.secondaryClientId,
+          ]),
+        };
       });
+      announceTickets(deps?.onTicketChanged, result.affected);
+      return result.record;
     },
 
     async undoMerge(input) {
-      return db.transaction().execute(async (trx) => {
+      const result = await db.transaction().execute(async (trx) => {
         const event = await trx
           .selectFrom("client_merge_events")
           .selectAll()
@@ -354,8 +381,16 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
           .returningAll()
           .executeTakeFirstOrThrow();
 
-        return toRecord(updated);
+        return {
+          record: toRecord(updated),
+          affected: await listTicketIdsForClients(trx, [
+            event.primary_client_id,
+            event.secondary_client_id,
+          ]),
+        };
       });
+      announceTickets(deps?.onTicketChanged, result.affected);
+      return result.record;
     },
 
     async setUndoLock(mergeEventId, locked) {

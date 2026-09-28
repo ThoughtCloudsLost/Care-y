@@ -6,7 +6,7 @@
  */
 
 import crypto from "node:crypto";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { TestDb } from "../test-utils.js";
 import {
   createTestDb,
@@ -41,6 +41,7 @@ import {
 } from "@care-y/shared";
 import type { QueueId, OrgSchema, OrgSlug } from "@care-y/shared";
 import { resolveAuthedChannel, revokeChannel } from "./channel-service.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -164,6 +165,25 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     afterAll(async () => {
       await testDb.cleanup();
+    });
+
+    it("announces the new ticket after the intake commits", async () => {
+      const input = makeInput();
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+
+      await createIntakeTicket(
+        testDb.db,
+        {
+          sealedBox: testSealedBox,
+          orgId: TEST_ORG_ID,
+          orgSchema: testDb.schemaName as OrgSchema,
+          orgSlug: orgSlugIdSchema.parse("test-org"),
+          onTicketChanged,
+        },
+        input,
+      );
+
+      expect(onTicketChanged).toHaveBeenCalledExactlyOnceWith(input.ticketId);
     });
 
     it("creates client + ticket + follow-up + interim wrap in one transaction", async () => {

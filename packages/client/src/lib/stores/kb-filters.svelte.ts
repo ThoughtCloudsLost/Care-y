@@ -36,7 +36,7 @@ function createKbFilterStore(): {
   setSort(field: KbSortField, direction: SortDirection): void;
   readonly activeCount: number;
   readonly serverParams: {
-    categoryId?: string;
+    categoryIds?: string[];
     sortBy: KbSortField;
     sortDirection: SortDirection;
     minRating?: number;
@@ -69,24 +69,17 @@ function createKbFilterStore(): {
       (dateFrom !== null || dateTo !== null ? 1 : 0),
   );
 
-  // The listItems endpoint accepts a single categoryId, not an array.
-  // When multiple categories are selected, we omit the filter and
-  // post-filter client-side (same tradeoff tickets make for statuses).
-  // When exactly one is selected, we pass it for server-side filtering.
-  const serverParams = $derived.by(() => {
-    const singleCategoryId =
-      categoryIds.size === 1 ? [...categoryIds][0] : undefined;
-
-    return {
-      categoryId: singleCategoryId,
-      sortBy: sort.field,
-      sortDirection: sort.direction,
-      minRating,
-      createdBy,
-      createdAfter: dateFrom?.toISOString(),
-      createdBefore: dateTo?.toISOString(),
-      limit: 50,
-    };
+  // Every filter runs on the server, so the page's `total` counts every
+  // match rather than only the rows loaded so far.
+  const serverParams = $derived({
+    categoryIds: categoryIds.size > 0 ? [...categoryIds] : undefined,
+    sortBy: sort.field,
+    sortDirection: sort.direction,
+    minRating,
+    createdBy,
+    createdAfter: dateFrom?.toISOString(),
+    createdBefore: dateTo?.toISOString(),
+    limit: 50,
   });
 
   return {

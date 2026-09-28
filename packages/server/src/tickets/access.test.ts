@@ -9,6 +9,7 @@ import {
 } from "../test-utils.js";
 import {
   createTicketAccessChecker,
+  resolveTicketAudience,
   type TicketAccessChecker,
 } from "./access.js";
 import { ForbiddenError } from "../errors.js";
@@ -124,6 +125,58 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketAccessChecker (DB)", () => {
       expect(msg).not.toContain(ticketId);
       expect(msg).toBe("INSUFFICIENT_PERMISSIONS");
     }
+  });
+
+  describe("resolveTicketAudience", () => {
+    it("returns exactly the assignee, watchers and queue members", async () => {
+      const audience = await resolveTicketAudience(testDb.db, ticketId);
+      expect(audience).not.toBeNull();
+      expect(audience?.queueId).toBe(queueId);
+      expect([...(audience?.userIds ?? [])].sort()).toEqual(
+        [assignedUser, watcherUser, queueMember].sort(),
+      );
+    });
+
+    it("excludes users without access", async () => {
+      const audience = await resolveTicketAudience(testDb.db, ticketId);
+      expect(audience?.userIds).not.toContain(outsiderUser);
+    });
+
+    it("agrees with canAccess for every user", async () => {
+      const audience = await resolveTicketAudience(testDb.db, ticketId);
+      for (const userId of [
+        assignedUser,
+        queueMember,
+        watcherUser,
+        outsiderUser,
+      ]) {
+        expect(audience?.userIds.includes(userId)).toBe(
+          await access.canAccess(userId, ticketId),
+        );
+      }
+    });
+
+    it("lists a user once when they qualify more than one way", async () => {
+      await testDb.db
+        .insertInto("ticket_watchers")
+        .values({ ticket_id: ticketId, user_id: queueMember })
+        .execute();
+      try {
+        const audience = await resolveTicketAudience(testDb.db, ticketId);
+        const hits = audience?.userIds.filter((id) => id === queueMember);
+        expect(hits).toHaveLength(1);
+      } finally {
+        await testDb.db
+          .deleteFrom("ticket_watchers")
+          .where("ticket_id", "=", ticketId)
+          .where("user_id", "=", queueMember)
+          .execute();
+      }
+    });
+
+    it("returns null for a nonexistent ticket", async () => {
+      expect(await resolveTicketAudience(testDb.db, newTicketId())).toBeNull();
+    });
   });
 
   it("assigned volunteer retains access after queue removal", async () => {

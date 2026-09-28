@@ -6,7 +6,7 @@
  */
 
 import * as crypto from "node:crypto";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { createVoicemailQuarantineRouter } from "./voicemail-quarantine.js";
@@ -34,6 +34,10 @@ import type {
 import type { BlobStore, BlobCategory } from "../storage/store.js";
 import type { PendingClient } from "../tickets/ticket-service.js";
 import {
+  createTicketLiveEvents,
+  type TicketLiveEvents,
+} from "../tickets/ticket-live-events.js";
+import {
   mockReq,
   mockRes,
   expectTrpcError,
@@ -46,6 +50,7 @@ import {
   testSealedBox,
   type TestDb,
   stubTenantDbDefaultRoles,
+  createMockSseService,
 } from "../test-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -255,7 +260,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await testDb.cleanup();
     });
 
-    function buildDbCaller(overrideBlobStore?: BlobStore) {
+    function buildDbCaller(
+      overrideBlobStore?: BlobStore,
+      liveEvents?: TicketLiveEvents,
+    ) {
       const orgContext: OrgContext = {
         orgId: VQ_ORG_ID,
         orgSlug: "q-db-org" as OrgSlug,
@@ -292,6 +300,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const deps = {
         blobStore: overrideBlobStore ?? blobStore,
         pendingClients: new Map<string, PendingClient>(),
+        liveEvents,
       };
       const quarantineRouter = createVoicemailQuarantineRouter(deps);
       const appRouter = router({ voicemailQuarantine: quarantineRouter });
@@ -337,6 +346,38 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const fixture = await createTestClientFixture(db);
       return { phoneId: fixture.phoneId, clientId: fixture.clientId };
     }
+
+    it("routing tells the target ticket's audience it changed", async () => {
+      const localBlobStore = createMockBlobStore();
+      const sse = createMockSseService();
+      const caller = buildDbCaller(
+        localBlobStore,
+        createTicketLiveEvents({ sse }),
+      );
+      const fixture = await createTestTicketFixture(tDb, {
+        queueId: intakeQueue.id,
+        createUser: true,
+      });
+      const quarantineId = await seedQuarantineRow(localBlobStore);
+
+      await caller.voicemailQuarantine.route({
+        quarantineId,
+        target: { type: "ticketId", ticketId: fixture.ticketId },
+        audioData: Buffer.from("live-audio").toString("base64"),
+        durationSeconds: 3,
+      });
+
+      await vi.waitFor(() => {
+        expect(sse.broadcast).toHaveBeenCalledTimes(1);
+      });
+      const [, recipients, event] = sse.broadcast.mock.calls[0] ?? [];
+      expect(recipients).toContain(fixture.userId);
+      expect(event).toMatchObject({
+        type: "ticket_changed",
+        ticketId: fixture.ticketId,
+        queueId: intakeQueue.id,
+      });
+    });
 
     it("route-to-existing-ticket creates follow-up with voicemail recording", async () => {
       const localBlobStore = createMockBlobStore();
@@ -421,6 +462,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           (r.metadata as Record<string, unknown>).quarantineId === quarantineId,
       );
       expect(relevant).toBeDefined();
+      expect(relevant!.ticket_id).toBe(result.ticketId);
     }, 30_000);
 
     it("route-to-client creates intake ticket and follow-up", async () => {

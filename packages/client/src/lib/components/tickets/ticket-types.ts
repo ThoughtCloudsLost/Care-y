@@ -31,6 +31,7 @@ export interface TicketCardProps {
   readonly lastActivityAt: Date | null;
   readonly followUpCount: number;
   readonly unreadCount: number;
+  readonly unreadCountIsFloor?: boolean;
   /** undefined = not loaded from server yet */
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
   /** Reaction summaries keyed by follow-up ID (display-only in preview). */
@@ -41,6 +42,8 @@ export interface TicketCardProps {
   readonly onfullopen?: (ticketId: string) => void;
   readonly onselect?: (ticketId: string) => void;
   readonly onaction?: (ticketId: string, action: TicketQuickAction) => void;
+  /** Quick actions the account may use; the rest do not render. */
+  readonly allowedActions?: ReadonlySet<TicketQuickAction>;
   readonly onencryptedhelp?: () => void;
   readonly loading?: boolean;
   readonly searchTerm?: string | null;

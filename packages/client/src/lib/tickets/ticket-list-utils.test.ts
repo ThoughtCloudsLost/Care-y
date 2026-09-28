@@ -1,10 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { ticketSortFieldSchema, type ReactionSummary } from "@care-y/shared";
+import type * as Runtime from "$lib/paraglide/runtime.js";
 import {
   isFilterStatus,
   isSortField,
   filterByDisplayStatus,
-  matchesServerFilters,
   reactionsForTicket,
   matchTitles,
   mergeSearchMatches,
@@ -15,12 +15,30 @@ import {
   resolveEmptyKind,
   showCaughtUpLine,
   resolveGridColumns,
+  estimateTicketCardHeight,
   GRID_CARD_MIN_WIDTH,
   VALID_STATUSES,
   SORT_FIELDS,
-  type TicketForServerFilter,
-  type TicketServerFilterParams,
+  LANE_GRID_CARD_MAX_WIDTH,
+  resolveLaneGridColumns,
 } from "./ticket-list-utils.js";
+import type { DisplayStatus } from "./display-status.js";
+
+// vi.mock required: the compiled Paraglide messages read the active locale
+// through the runtime's getLocale() at call time, and there is no seam to
+// spy on from the message module itself. Spreading importOriginal keeps
+// every other runtime export real.
+let mockLocale = "en";
+vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof Runtime>()),
+  getLocale: () => mockLocale,
+}));
+
+// Restore in a hook, not at the end of the test body: a test that fails
+// partway would otherwise leave the locale switched for everything after it.
+afterEach(() => {
+  mockLocale = "en";
+});
 
 describe("isFilterStatus", () => {
   it.each(["new", "active", "hold", "closed"])("returns true for '%s'", (v) => {
@@ -61,41 +79,78 @@ describe("isSortField", () => {
 });
 
 describe("filterByDisplayStatus", () => {
+  // One ticket per display status, so each selection has exactly one
+  // correct answer and the four are visibly mutually exclusive.
   const tickets = [
-    { id: "1", status: "open", onHold: false, followUpCount: 0 },
-    { id: "2", status: "open", onHold: false, followUpCount: 3 },
-    { id: "3", status: "open", onHold: true, followUpCount: 1 },
-    { id: "4", status: "closed", onHold: false, followUpCount: 5 },
+    {
+      id: "new",
+      status: "open" as const,
+      onHold: false,
+      followUpCount: 0,
+      hasResponse: false,
+    },
+    {
+      id: "active",
+      status: "open" as const,
+      onHold: false,
+      followUpCount: 3,
+      hasResponse: true,
+    },
+    {
+      id: "hold",
+      status: "open" as const,
+      onHold: true,
+      followUpCount: 1,
+      hasResponse: true,
+    },
+    {
+      id: "closed",
+      status: "closed" as const,
+      onHold: false,
+      followUpCount: 5,
+      hasResponse: true,
+    },
   ];
 
-  it("returns all tickets when needsFilter is false", () => {
-    expect(filterByDisplayStatus(tickets, false, true)).toBe(tickets);
+  const select = (...s: DisplayStatus[]): ReadonlySet<DisplayStatus> =>
+    new Set(s);
+  const idsFor = (...s: DisplayStatus[]): string[] =>
+    filterByDisplayStatus(tickets, select(...s)).map((t) => t.id);
+
+  it("returns the same array when nothing is selected", () => {
+    expect(filterByDisplayStatus(tickets, select())).toBe(tickets);
   });
 
-  it("filters for new tickets (followUpCount === 0)", () => {
-    const result = filterByDisplayStatus(tickets, true, true);
-    const ids = result.map((t) => t.id);
-    expect(ids).toEqual(["1", "3", "4"]);
+  it("matches each display status to exactly its own ticket", () => {
+    expect(idsFor("new")).toEqual(["new"]);
+    expect(idsFor("active")).toEqual(["active"]);
+    expect(idsFor("hold")).toEqual(["hold"]);
+    expect(idsFor("closed")).toEqual(["closed"]);
   });
 
-  it("filters for active tickets (followUpCount > 0)", () => {
-    const result = filterByDisplayStatus(tickets, true, false);
-    const ids = result.map((t) => t.id);
-    expect(ids).toEqual(["2", "3", "4"]);
+  it("does not leak held or closed tickets into New or Active", () => {
+    // The previous implementation passed both through unconditionally,
+    // so selecting New returned held and closed tickets as well.
+    expect(idsFor("new")).not.toContain("hold");
+    expect(idsFor("new")).not.toContain("closed");
+    expect(idsFor("active")).not.toContain("hold");
   });
 
-  it("always passes through on-hold tickets", () => {
-    const result = filterByDisplayStatus(tickets, true, true);
-    expect(result.some((t) => t.id === "3")).toBe(true);
+  it("unions the selected statuses", () => {
+    expect(idsFor("new", "active")).toEqual(["new", "active"]);
+    // The two selections the server params cannot express.
+    expect(idsFor("new", "hold")).toEqual(["new", "hold"]);
+    expect(idsFor("closed", "hold")).toEqual(["hold", "closed"]);
   });
 
-  it("always passes through closed tickets", () => {
-    const result = filterByDisplayStatus(tickets, true, true);
-    expect(result.some((t) => t.id === "4")).toBe(true);
+  it("selecting all four returns every ticket", () => {
+    expect(idsFor("new", "active", "hold", "closed")).toHaveLength(
+      tickets.length,
+    );
   });
 
   it("handles empty array", () => {
-    expect(filterByDisplayStatus([], true, true)).toEqual([]);
+    expect(filterByDisplayStatus([], select("new"))).toEqual([]);
   });
 });
 
@@ -335,6 +390,8 @@ describe("buildDateRangeLabel", () => {
   });
 });
 
+// Labels come from the English messages, and the queue term from the
+// default terminology the test setup provides.
 describe("buildFilterSummary", () => {
   it("returns 'No filters' when nothing active", () => {
     expect(
@@ -350,7 +407,7 @@ describe("buildFilterSummary", () => {
     ).toBe("No filters");
   });
 
-  it("includes statuses", () => {
+  it("names statuses by their pill labels", () => {
     expect(
       buildFilterSummary(
         new Set(["new", "active"]),
@@ -361,10 +418,10 @@ describe("buildFilterSummary", () => {
         false,
         false,
       ),
-    ).toBe("new, active");
+    ).toBe("New, Active");
   });
 
-  it("includes priorities", () => {
+  it("names priorities by their labels", () => {
     expect(
       buildFilterSummary(
         new Set(),
@@ -375,10 +432,10 @@ describe("buildFilterSummary", () => {
         false,
         false,
       ),
-    ).toBe("high");
+    ).toBe("High");
   });
 
-  it("includes queue count with pluralization", () => {
+  it("counts queues in the configured term, singular and plural", () => {
     expect(
       buildFilterSummary(
         new Set(),
@@ -414,12 +471,26 @@ describe("buildFilterSummary", () => {
         false,
         false,
       ),
-    ).toBe("assigned");
+    ).toBe("Assignee");
   });
 
-  it("does not include assignee when null", () => {
+  it("names the Unassigned filter when assignee is null", () => {
     expect(
       buildFilterSummary(new Set(), new Set(), 0, null, false, false, false),
+    ).toBe("Unassigned");
+  });
+
+  it("omits assignee when there is no assignee filter", () => {
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        false,
+        false,
+        false,
+      ),
     ).toBe("No filters");
   });
 
@@ -434,7 +505,7 @@ describe("buildFilterSummary", () => {
         false,
         false,
       ),
-    ).toBe("date range");
+    ).toBe("Date");
   });
 
   it("joins multiple parts", () => {
@@ -448,7 +519,7 @@ describe("buildFilterSummary", () => {
         false,
         false,
       ),
-    ).toBe("new, high, 2 queues, assigned, date range");
+    ).toBe("New, High, 2 queues, Assignee, Date");
   });
 
   it("includes Unread when unreadOnly is true", () => {
@@ -490,43 +561,63 @@ describe("buildFilterSummary", () => {
         true,
         true,
       ),
-    ).toBe("new, Unread, Needs attention");
+    ).toBe("New, Unread, Needs attention");
+  });
+
+  it("reads in the active locale, the queue term still the org's own", () => {
+    mockLocale = "es";
+    expect(
+      buildFilterSummary(
+        new Set(["hold"]),
+        new Set(["urgent"]),
+        2,
+        "u1",
+        true,
+        true,
+        true,
+      ),
+    ).toBe(
+      "En espera, Urgente, 2 queues, Asignado, Fecha, Sin leer, Necesita atención",
+    );
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        false,
+        false,
+        false,
+      ),
+    ).toBe("Sin filtros");
   });
 });
 
 describe("buildAssigneeOptions", () => {
-  const labels = {
-    me: (count: string) => `Me (${count})`,
-    unassigned: (count: string) => `Unassigned (${count})`,
-  };
+  const labels = { me: "Me (5)", unassigned: "Unassigned (3)" };
 
-  it("includes 'me' option when currentUserId provided", () => {
-    const result = buildAssigneeOptions(
-      "user-1",
-      { mine: 5, unassigned: 3 },
-      labels,
-    );
-    expect(result).toEqual([
+  it("includes the 'me' option when a current user is known", () => {
+    expect(buildAssigneeOptions("user-1", labels)).toEqual([
       { value: "user-1", label: "Me (5)" },
       { value: "__unassigned__", label: "Unassigned (3)" },
     ]);
   });
 
-  it("omits 'me' option when no currentUserId", () => {
-    const result = buildAssigneeOptions(
-      undefined,
-      { mine: 0, unassigned: 7 },
-      labels,
-    );
-    expect(result).toEqual([
-      { value: "__unassigned__", label: "Unassigned (7)" },
+  it("omits the 'me' option when there is no current user", () => {
+    expect(buildAssigneeOptions(undefined, labels)).toEqual([
+      { value: "__unassigned__", label: "Unassigned (3)" },
     ]);
   });
 
-  it("handles undefined counts", () => {
-    const result = buildAssigneeOptions("user-1", undefined, labels);
-    expect(result[0]?.label).toBe("Me (0)");
-    expect(result[1]?.label).toBe("Unassigned (0)");
+  it("passes composed labels through untouched", () => {
+    // The caller formats counts, floors included, so anything it hands
+    // over reaches the option verbatim.
+    const result = buildAssigneeOptions("user-1", {
+      me: "Me (20+)",
+      unassigned: "Unassigned",
+    });
+    expect(result[0]?.label).toBe("Me (20+)");
+    expect(result[1]?.label).toBe("Unassigned");
   });
 });
 
@@ -630,6 +721,23 @@ describe("showCaughtUpLine", () => {
   });
 });
 
+describe("resolveLaneGridColumns", () => {
+  const GAP = 6;
+
+  it("keeps the two column floor in a narrow lane", () => {
+    expect(resolveLaneGridColumns(0, GAP)).toBe(2);
+    expect(resolveLaneGridColumns(390, GAP)).toBe(2);
+  });
+
+  it("adds a column each time another capped card fits", () => {
+    const perCard = LANE_GRID_CARD_MAX_WIDTH + GAP;
+    expect(resolveLaneGridColumns(perCard * 3 - GAP, GAP)).toBe(3);
+    expect(resolveLaneGridColumns(perCard * 3 - GAP - 1, GAP)).toBe(2);
+    // A two-across lane at 1920 is about 783px wide: three cards.
+    expect(resolveLaneGridColumns(783, GAP)).toBe(3);
+  });
+});
+
 describe("resolveGridColumns", () => {
   it("returns 2 before the container has been measured (width 0)", () => {
     expect(resolveGridColumns(0)).toBe(2);
@@ -647,223 +755,10 @@ describe("resolveGridColumns", () => {
   });
 });
 
-describe("matchesServerFilters", () => {
-  function record(
-    overrides: Partial<TicketForServerFilter> = {},
-  ): TicketForServerFilter {
-    return {
-      id: "t-1",
-      status: "open",
-      onHold: false,
-      followUpCount: 0,
-      queueId: "q-1",
-      priority: "normal",
-      assignedTo: "u-1",
-      createdAt: "2026-06-15T12:00:00.000Z",
-      ...overrides,
-    };
-  }
-
-  function params(
-    overrides: Partial<TicketServerFilterParams> = {},
-  ): TicketServerFilterParams {
-    return { ...overrides };
-  }
-
-  it("keeps all records when no filter dimensions are active", () => {
-    expect(matchesServerFilters(record(), params())).toBe(true);
-  });
-
-  it("excludes a record whose status is not in the active statuses set", () => {
-    expect(
-      matchesServerFilters(
-        record({ status: "open" }),
-        params({ statuses: ["closed"] }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record whose status is in the active statuses set", () => {
-    expect(
-      matchesServerFilters(
-        record({ status: "closed" }),
-        params({ statuses: ["open", "closed"] }),
-      ),
-    ).toBe(true);
-  });
-
-  it("treats an empty statuses array as no filter", () => {
-    expect(
-      matchesServerFilters(
-        record({ status: "open" }),
-        params({ statuses: [] }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes a non-hold record when onHold is true", () => {
-    expect(
-      matchesServerFilters(record({ onHold: false }), params({ onHold: true })),
-    ).toBe(false);
-  });
-
-  it("keeps an on-hold record when onHold is true", () => {
-    expect(
-      matchesServerFilters(record({ onHold: true }), params({ onHold: true })),
-    ).toBe(true);
-  });
-
-  it("excludes a record whose queue is not in the active queue set", () => {
-    expect(
-      matchesServerFilters(
-        record({ queueId: "q-2" }),
-        params({ queueIds: ["q-1", "q-3"] }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record whose queue matches one in the set", () => {
-    expect(
-      matchesServerFilters(
-        record({ queueId: "q-3" }),
-        params({ queueIds: ["q-1", "q-3"] }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes a record whose priority is not in the active priority set", () => {
-    expect(
-      matchesServerFilters(
-        record({ priority: "low" }),
-        params({ priorities: ["high", "urgent"] }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record whose priority matches one in the set", () => {
-    expect(
-      matchesServerFilters(
-        record({ priority: "high" }),
-        params({ priorities: ["high", "urgent"] }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes a record when assignedTo is a string and does not match", () => {
-    expect(
-      matchesServerFilters(
-        record({ assignedTo: "u-1" }),
-        params({ assignedTo: "u-2" }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record when assignedTo matches exactly", () => {
-    expect(
-      matchesServerFilters(
-        record({ assignedTo: "u-2" }),
-        params({ assignedTo: "u-2" }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes an assigned record when assignedTo is null (unassigned-only)", () => {
-    expect(
-      matchesServerFilters(
-        record({ assignedTo: "u-1" }),
-        params({ assignedTo: null }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps an unassigned record when assignedTo is null", () => {
-    expect(
-      matchesServerFilters(
-        record({ assignedTo: null }),
-        params({ assignedTo: null }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes a record created before the createdAfter boundary", () => {
-    expect(
-      matchesServerFilters(
-        record({ createdAt: "2026-05-01T00:00:00.000Z" }),
-        params({ createdAfter: "2026-06-01T00:00:00.000Z" }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record created at or after the createdAfter boundary", () => {
-    expect(
-      matchesServerFilters(
-        record({ createdAt: "2026-06-01T00:00:00.000Z" }),
-        params({ createdAfter: "2026-06-01T00:00:00.000Z" }),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes a record created after the createdBefore boundary", () => {
-    expect(
-      matchesServerFilters(
-        record({ createdAt: "2026-08-01T00:00:00.000Z" }),
-        params({ createdBefore: "2026-07-01T00:00:00.000Z" }),
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps a record created at or before the createdBefore boundary", () => {
-    expect(
-      matchesServerFilters(
-        record({ createdAt: "2026-07-01T00:00:00.000Z" }),
-        params({ createdBefore: "2026-07-01T00:00:00.000Z" }),
-      ),
-    ).toBe(true);
-  });
-
-  it("accepts Date objects for createdAt (superjson deserialization)", () => {
-    expect(
-      matchesServerFilters(
-        record({ createdAt: new Date("2026-06-15T12:00:00.000Z") }),
-        params({ createdAfter: "2026-06-01T00:00:00.000Z" }),
-      ),
-    ).toBe(true);
-  });
-
-  it("rejects when any single dimension fails (AND composition)", () => {
-    expect(
-      matchesServerFilters(
-        record({ status: "open", onHold: false, queueId: "q-2" }),
-        params({
-          statuses: ["open"],
-          onHold: true,
-          queueIds: ["q-2"],
-        }),
-      ),
-    ).toBe(false);
-  });
-
-  it("passes when all active dimensions match simultaneously", () => {
-    expect(
-      matchesServerFilters(
-        record({
-          status: "open",
-          onHold: true,
-          queueId: "q-1",
-          priority: "high",
-          assignedTo: "u-3",
-          createdAt: "2026-06-15T00:00:00.000Z",
-        }),
-        params({
-          statuses: ["open"],
-          onHold: true,
-          queueIds: ["q-1"],
-          priorities: ["high"],
-          assignedTo: "u-3",
-          createdAfter: "2026-06-01T00:00:00.000Z",
-          createdBefore: "2026-07-01T00:00:00.000Z",
-        }),
-      ),
-    ).toBe(true);
+describe("estimateTicketCardHeight", () => {
+  it("guesses a short row for list mode and a tall card otherwise", () => {
+    expect(estimateTicketCardHeight("list")).toBe(72);
+    expect(estimateTicketCardHeight("cards")).toBe(210);
+    expect(estimateTicketCardHeight("grid")).toBe(200);
   });
 });

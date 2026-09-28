@@ -6,8 +6,8 @@
  * Requires DATABASE_URL (runs inside Docker container).
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { randomBytes } from "node:crypto";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { randomBytes, randomInt } from "node:crypto";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import {
@@ -23,8 +23,10 @@ import {
   expectTrpcError,
   createMemoryBlobStore,
   createMockJobQueue,
+  createMockSseService,
   type TestDb,
 } from "../test-utils.js";
+import { createTicketLiveEvents } from "../tickets/ticket-live-events.js";
 import { purgeClient } from "../jobs/pii-retention.js";
 import { RoleId, type RoleIdValue } from "@care-y/shared";
 import type {
@@ -38,6 +40,7 @@ import type {
   OrgSchema,
   ClientId,
   QueueId,
+  TicketId,
   KeyGeneration,
   IdentifierHash,
   UsernameHash,
@@ -130,7 +133,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     function buildClientDeps(): ClientRouterDeps {
       return {
-        createClientSvc: (db, orgId) =>
+        createClientSvc: (db, orgId, onTicketChanged) =>
           createClientService({
             db,
             audit: createAuditService(db),
@@ -138,14 +141,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
             indexer: testNoopIndexer,
             mergeService: createMergeService(db),
             orgId,
+            onTicketChanged,
           }),
-        createEmailSvc: (db, orgId) =>
+        createEmailSvc: (db, orgId, onTicketChanged) =>
           createEmailService({
             db,
             audit: createAuditService(db),
             encryptor: noopEncryptor,
             indexer: testNoopIndexer,
             orgId,
+            onTicketChanged,
           }),
         fieldEncryptor: noopEncryptor,
         async isAssignedToClientTicket(db, clientId, userId) {
@@ -240,6 +245,31 @@ describe.skipIf(!process.env.DATABASE_URL)(
         user: null,
       };
       return factory(ctx);
+    }
+
+    /** Inserts a ticket for a client in a queue, assigned or not. */
+    async function createTicketForClient(
+      clientId: ClientId,
+      queueId: QueueId,
+      assignedTo: UserId | null,
+    ): Promise<TicketId> {
+      const keyGen = crypto.randomUUID() as KeyGeneration;
+      // care-y-ignore-next-line no-plaintext-db-write -- test fixture: encrypted_title and encrypted_description are dummy ciphertext blobs, not real PII
+      const ticket = await tenantDb
+        .insertInto("tickets")
+        .values({
+          client_id: clientId,
+          queue_id: queueId,
+          encrypted_title: Buffer.alloc(64, 0xaa),
+          encrypted_description: Buffer.alloc(64, 0xbb),
+          status: "open",
+          priority: "normal",
+          key_generation: keyGen,
+          assigned_to: assignedTo,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      return ticket.id;
     }
 
     // -----------------------------------------------------------------------
@@ -479,30 +509,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // -----------------------------------------------------------------------
 
     describe("updatePhone", () => {
-      async function createTicketForClient(
-        clientId: ClientId,
-        queueId: QueueId,
-        assignedTo: UserId | null,
-      ): Promise<string> {
-        const keyGen = crypto.randomUUID() as KeyGeneration;
-        // care-y-ignore-next-line no-plaintext-db-write -- test fixture: encrypted_title and encrypted_description are dummy ciphertext blobs, not real PII
-        const ticket = await tenantDb
-          .insertInto("tickets")
-          .values({
-            client_id: clientId,
-            queue_id: queueId,
-            encrypted_title: Buffer.alloc(64, 0xaa),
-            encrypted_description: Buffer.alloc(64, 0xbb),
-            status: "open",
-            priority: "normal",
-            key_generation: keyGen,
-            assigned_to: assignedTo,
-          })
-          .returning("id")
-          .executeTakeFirstOrThrow();
-        return ticket.id;
-      }
-
       it("succeeds for admin", async () => {
         const fixture = await createTestClientFixture(tenantDb);
         const admin = await createTestUser(tenantDb, {
@@ -1326,30 +1332,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // -----------------------------------------------------------------------
 
     describe("updateEmail", () => {
-      async function createTicketForClient(
-        clientId: ClientId,
-        queueId: QueueId,
-        assignedTo: UserId | null,
-      ): Promise<string> {
-        const keyGen = crypto.randomUUID() as KeyGeneration;
-        // care-y-ignore-next-line no-plaintext-db-write -- test fixture: encrypted_title and encrypted_description are dummy ciphertext blobs, not real PII
-        const ticket = await tenantDb
-          .insertInto("tickets")
-          .values({
-            client_id: clientId,
-            queue_id: queueId,
-            encrypted_title: Buffer.alloc(64, 0xaa),
-            encrypted_description: Buffer.alloc(64, 0xbb),
-            status: "open",
-            priority: "normal",
-            key_generation: keyGen,
-            assigned_to: assignedTo,
-          })
-          .returning("id")
-          .executeTakeFirstOrThrow();
-        return ticket.id;
-      }
-
       it("succeeds for admin", async () => {
         const fixture = await createTestClientFixture(tenantDb);
         const admin = await createTestUser(tenantDb, {
@@ -1732,6 +1714,120 @@ describe.skipIf(!process.env.DATABASE_URL)(
           }),
           "NOT_FOUND",
         );
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // Live ticket events
+    // -----------------------------------------------------------------------
+
+    describe("Live ticket events", () => {
+      /**
+       * A client with two tickets in one queue, a second client's ticket in
+       * the same queue, an admin caller whose router emits through a mock
+       * SSE service, and an outsider who cannot open any of them.
+       */
+      async function setupLive() {
+        const fixture = await createTestClientFixture(tenantDb);
+        const ticketIds = [
+          await createTicketForClient(fixture.clientId, fixture.queueId, null),
+          await createTicketForClient(fixture.clientId, fixture.queueId, null),
+        ];
+        const other = await createTestClientFixture(tenantDb, {
+          queueId: fixture.queueId,
+        });
+        const otherTicketId = await createTicketForClient(
+          other.clientId,
+          fixture.queueId,
+          null,
+        );
+        const outsider = await createTestUser(tenantDb);
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const sse = createMockSseService();
+        const caller = createAuthedCaller(admin, {
+          deps: { liveEvents: createTicketLiveEvents({ sse }) },
+        });
+        return { ...fixture, ticketIds, otherTicketId, outsider, sse, caller };
+      }
+
+      type Live = Awaited<ReturnType<typeof setupLive>>;
+
+      async function expectClientTicketsChanged(live: Live): Promise<void> {
+        await vi.waitFor(() => {
+          expect(live.sse.broadcast).toHaveBeenCalledTimes(
+            live.ticketIds.length,
+          );
+        });
+        const announced = live.sse.broadcast.mock.calls.map(
+          ([schema, recipients, event]) => {
+            expect(schema).toBe(orgContext.orgSchema);
+            expect(recipients).toContain(live.userId);
+            expect(recipients).not.toContain(live.outsider.id);
+            expect(event).toMatchObject({
+              type: "ticket_changed",
+              queueId: live.queueId,
+            });
+            return event.type === "ticket_changed" ? event.ticketId : null;
+          },
+        );
+        expect(announced).toHaveLength(live.ticketIds.length);
+        expect(announced).toEqual(expect.arrayContaining([...live.ticketIds]));
+        expect(announced).not.toContain(live.otherTicketId);
+      }
+
+      it("updateAlias announces every ticket of the client", async () => {
+        const live = await setupLive();
+        await live.caller.clients.updateAlias({
+          clientId: live.clientId,
+          encryptedAlias: Buffer.from(
+            `sealed-alias-${crypto.randomUUID()}`,
+          ).toString("base64"),
+          aliasHash: randomBytes(64).toString("hex"),
+        });
+        await expectClientTicketsChanged(live);
+      });
+
+      it("updatePhone announces every ticket of the client", async () => {
+        const live = await setupLive();
+        const result = await live.caller.clients.updatePhone({
+          clientId: live.clientId,
+          phoneNumber: `+1555${String(randomInt(1_000_000, 10_000_000))}`,
+        });
+        expect(result.success).toBe(true);
+        await expectClientTicketsChanged(live);
+      });
+
+      it("updateEmail announces every ticket of the client", async () => {
+        const live = await setupLive();
+        const result = await live.caller.clients.updateEmail({
+          clientId: live.clientId,
+          emailAddress: `live-${crypto.randomUUID().slice(0, 8)}@test.example`,
+        });
+        expect(result.success).toBe(true);
+        await expectClientTicketsChanged(live);
+      });
+
+      it("a phone update refused as a conflict announces nothing", async () => {
+        const live = await setupLive();
+        const phoneNumber = `+1556${String(randomInt(1_000_000, 10_000_000))}`;
+        const first = await createTestClientFixture(tenantDb);
+        await createAuthedCaller(
+          await createTestUser(tenantDb, {
+            overrides: { role_id: RoleId.ADMIN },
+          }),
+        ).clients.updatePhone({ clientId: first.clientId, phoneNumber });
+
+        const result = await live.caller.clients.updatePhone({
+          clientId: live.clientId,
+          phoneNumber,
+        });
+
+        expect(result.success).toBe(false);
+        // Give a stray emit time to land before asserting its absence.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(live.sse.broadcast).not.toHaveBeenCalled();
       });
     });
   },

@@ -828,11 +828,14 @@ html.glass-dark.light
    the hairline rule does the layout work, and the count sits quiet at
    the end of the line. Consumers with their own container geometry
    (recents) adopt the child classes only. */
+/* --section-inset: a container that owns the horizontal inset itself (the
+   dashboard's lanes and band) sets it to 0; everywhere else the line
+   keeps the page inset. */
 .secline {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 18px var(--page-pad-x) 8px;
+  padding: 18px var(--section-inset, var(--page-pad-x)) 8px;
 }
 
 .secline-eb {
@@ -921,9 +924,13 @@ html.glass-dark.light
    markup (one component per data type); a future table reuses these classes,
    never another table's component. Sortable headers render through
    SortHeader.svelte, which owns aria-sort. */
+/* The wrap is a size container, so column hiding follows the table's own
+   width: a table in a half-width pane or a dashboard lane drops columns
+   the way a narrow screen does. */
 .data-table-wrap {
   width: 100%;
   overflow-x: auto;
+  container: data-table / inline-size;
 }
 
 .data-table {
@@ -1032,13 +1039,14 @@ html.glass-dark.light
   height: 1px;
 }
 
-@media (max-width: 768px) {
+/* Same thresholds the viewport queries used, now measured on the wrap. */
+@container data-table (max-width: 768px) {
   .data-table .hide-medium {
     display: none;
   }
 }
 
-@media (max-width: 640px) {
+@container data-table (max-width: 640px) {
   .data-table .hide-narrow {
     display: none;
   }

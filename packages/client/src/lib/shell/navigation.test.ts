@@ -72,4 +72,30 @@ describe("navigation", () => {
       expect(mockGoto).not.toHaveBeenCalled();
     });
   });
+
+  describe("openTicketsForQueue", () => {
+    it("shows only the queue on the tickets page and keeps the sort", async () => {
+      const { openTicketsForQueue } = await import("./navigation.js");
+      const { filterStore } = await import("$lib/stores/filters.svelte.js");
+      filterStore.togglePriority("urgent");
+      filterStore.toggleQueue("queue-other");
+      filterStore.setSort("priority", "asc");
+
+      openTicketsForQueue("queue-007");
+
+      expect(filterStore.captureState()).toEqual({
+        statuses: [],
+        queueIds: ["queue-007"],
+        priorities: [],
+        assigneeId: undefined,
+        dateFrom: null,
+        dateTo: null,
+        sortField: "priority",
+        sortDirection: "asc",
+        unreadOnly: false,
+        needsAttentionOnly: false,
+      });
+      expect(mockGoto).toHaveBeenCalledWith("/tickets");
+    });
+  });
 });

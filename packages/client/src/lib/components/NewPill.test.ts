@@ -33,4 +33,21 @@ describe("NewPill", () => {
     await rerender({ count: 5 });
     expect(screen.getByText("5 new")).toBeTruthy();
   });
+
+  it("renders the at-least label when isFloor is true", () => {
+    render(NewPill, { props: { count: 20, isFloor: true } });
+    expect(screen.getByText("20+ new")).toBeTruthy();
+  });
+
+  it("renders the plain label by default (isFloor omitted)", () => {
+    render(NewPill, { props: { count: 3 } });
+    expect(screen.getByText("3 new")).toBeTruthy();
+  });
+
+  it("renders nothing when count is 0 even with isFloor true", () => {
+    const { container } = render(NewPill, {
+      props: { count: 0, isFloor: true },
+    });
+    expect(container.querySelector(".new-pill")).toBeNull();
+  });
 });

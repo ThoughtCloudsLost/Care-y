@@ -10,7 +10,7 @@
 import { z } from "zod";
 import { base64String } from "./validators.js";
 import { sortDirectionSchema } from "./tickets.js";
-import { KB_ATTACHMENT_MAX_BYTES } from "./limits.js";
+import { FILTER_ID_LIST_MAX, KB_ATTACHMENT_MAX_BYTES } from "./limits.js";
 
 export { KB_ATTACHMENT_MAX_BYTES } from "./limits.js";
 import {
@@ -65,7 +65,8 @@ export { sortDirectionSchema } from "./tickets.js";
 // --- Article listing (paginated) ---
 
 export const kbItemListInputSchema = z.object({
-  categoryId: kbCategoryIdSchema.optional(),
+  /** Items in any of these categories. Absent or empty means every category. */
+  categoryIds: z.array(kbCategoryIdSchema).max(FILTER_ID_LIST_MAX).optional(),
   sortBy: kbSortFieldSchema.default("created_at"),
   sortDirection: sortDirectionSchema.default("desc"),
   minRating: z.number().min(0).max(1).optional(),

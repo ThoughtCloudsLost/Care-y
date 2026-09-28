@@ -121,4 +121,134 @@ describe("createSectionScroll active tracking", () => {
     });
     dispose();
   });
+
+  it("keeps the first of the sections sharing a row active", () => {
+    // Lanes laid out side by side: beta and gamma share one row, both
+    // past the chrome line. The first of them in order stays active.
+    const sections = makeSections(["alpha", "beta", "gamma"]);
+    const { els } = buildDom(["alpha", "beta", "gamma"]);
+    const [alphaEl, betaEl, gammaEl] = ["alpha", "beta", "gamma"].map((id) =>
+      els.get(id),
+    );
+    if (!alphaEl || !betaEl || !gammaEl) throw new Error("missing section els");
+    setTop(alphaEl, -400);
+    setTop(betaEl, 20);
+    setTop(gammaEl, 20.5);
+
+    const dispose = $effect.root(() => {
+      const scroll = createSectionScroll(() => sections);
+      flushSync();
+      expect(scroll.active).toBe("beta");
+    });
+    dispose();
+  });
+
+  it("marks a section active without scrolling", () => {
+    const sections = makeSections(["alpha", "beta"]);
+    const { container, els } = buildDom(["alpha", "beta"]);
+    const alphaEl = els.get("alpha");
+    const betaEl = els.get("beta");
+    if (alphaEl === undefined || betaEl === undefined)
+      throw new Error("missing section els");
+    setTop(alphaEl, 0);
+    setTop(betaEl, 400);
+    const scrollTo = vi.fn();
+    container.scrollTo = scrollTo;
+
+    const dispose = $effect.root(() => {
+      const scroll = createSectionScroll(() => sections);
+      flushSync();
+      scroll.activate("beta");
+      expect(scroll.active).toBe("beta");
+      expect(scrollTo).not.toHaveBeenCalled();
+    });
+    dispose();
+  });
+
+  it("focuses a section without scrolling", () => {
+    const sections = makeSections(["alpha", "beta"]);
+    const { container, els } = buildDom(["alpha", "beta"]);
+    const alphaEl = els.get("alpha");
+    const betaEl = els.get("beta");
+    if (alphaEl === undefined || betaEl === undefined)
+      throw new Error("missing section els");
+    setTop(alphaEl, 0);
+    setTop(betaEl, 400);
+    const scrollTo = vi.fn();
+    container.scrollTo = scrollTo;
+
+    const dispose = $effect.root(() => {
+      const scroll = createSectionScroll(() => sections);
+      flushSync();
+      scroll.focus("beta");
+      expect(scroll.active).toBe("beta");
+      expect(document.activeElement).toBe(betaEl);
+      expect(betaEl.getAttribute("tabindex")).toBe("-1");
+      expect(scrollTo).not.toHaveBeenCalled();
+    });
+    dispose();
+  });
+
+  it("releases the room a jump added below the content", () => {
+    const sections = makeSections(["alpha", "beta"]);
+    const { container, els } = buildDom(["alpha", "beta"]);
+    const alphaEl = els.get("alpha");
+    const betaEl = els.get("beta");
+    if (alphaEl === undefined || betaEl === undefined)
+      throw new Error("missing section els");
+    setTop(alphaEl, 0);
+    setTop(betaEl, 1000);
+    // Only 100px of scroll exists; reaching beta needs more, so the jump
+    // adds room below the content.
+    Object.defineProperty(container, "scrollHeight", { value: 500 });
+    Object.defineProperty(container, "clientHeight", { value: 400 });
+    container.scrollTo = vi.fn();
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({ matches: true }) as MediaQueryList),
+    );
+
+    const dispose = $effect.root(() => {
+      const scroll = createSectionScroll(() => sections);
+      flushSync();
+      scroll.scrollTo("beta");
+      const spacer = container.lastElementChild;
+      if (!(spacer instanceof HTMLElement) || spacer === betaEl)
+        throw new Error("no room added");
+      expect(parseFloat(spacer.style.height)).toBeGreaterThan(0);
+
+      scroll.releaseScrollRoom();
+      expect(parseFloat(spacer.style.height)).toBe(0);
+    });
+    dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it("ignores scrolling inside a section", () => {
+    const sections = makeSections(["alpha", "beta"]);
+    const { els } = buildDom(["alpha", "beta"]);
+    const alphaEl = els.get("alpha");
+    const betaEl = els.get("beta");
+    if (alphaEl === undefined || betaEl === undefined)
+      throw new Error("missing section els");
+    setTop(alphaEl, 0);
+    setTop(betaEl, 400);
+    const inner = document.createElement("div");
+    betaEl.appendChild(inner);
+    const frame = vi.fn();
+    vi.stubGlobal("requestAnimationFrame", frame);
+
+    const dispose = $effect.root(() => {
+      createSectionScroll(() => sections);
+      flushSync();
+      // A lane body scrolling on its own moves no section.
+      inner.dispatchEvent(new Event("scroll"));
+      expect(frame).not.toHaveBeenCalled();
+      // The page scroller does.
+      document.dispatchEvent(new Event("scroll"));
+      expect(frame).toHaveBeenCalledOnce();
+    });
+    dispose();
+    vi.unstubAllGlobals();
+  });
 });

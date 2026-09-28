@@ -27,8 +27,8 @@ CARE-Y runs as a multi tenant hosted service or a self hosted single tenant inst
 All client data is encrypted in the team member's browser before it reaches the server. The server stores only ciphertext it cannot read.
 
 <div align="center">
-  <img src="docs/images/ios-pwa/care-y-home-dashboard.png" alt="CARE-Y dashboard showing shift status, queue counts, and priority tickets" width="200">
-  <img src="docs/images/ios-pwa/care-y-dark-mode.png" alt="CARE-Y dashboard in dark mode with table view and queue overview" width="200">
+  <img src="docs/images/ios-pwa/care-y-home-dashboard.png" alt="CARE-Y dashboard with shift status, queue cards, and recent activity" width="200">
+  <img src="docs/images/ios-pwa/care-y-dark-mode.png" alt="CARE-Y dashboard in dark mode with the Needs attention lane in compact rows" width="200">
 </div>
 
 ---
@@ -90,8 +90,8 @@ Entry types in the thread:
 All content entries (messages, notes, voicemails, emails, secure links, contact corrections) are encrypted with per-ticket keys and decrypted client-side. System events and call metadata are plaintext since they contain no client content.
 
 <div align="center">
-  <img src="docs/images/ios-pwa/care-y-ticket-list-filtered.png" alt="Ticket list with filter pills, priority badges, and message previews" width="200">
-  <img src="docs/images/ios-pwa/care-y-ticket-detail.png" alt="Ticket chat view with client messages, volunteer replies, and private notes" width="200">
+  <img src="docs/images/ios-pwa/care-y-ticket-list-filtered.png" alt="Ticket grid filtered to active high and urgent tickets, with new-message badges under the priority stamps" width="200">
+  <img src="docs/images/ios-pwa/care-y-ticket-detail.png" alt="Ticket chat view with case details open above client emails and volunteer replies" width="200">
 </div>
 <div align="center">
   <img src="docs/images/ios-pwa/care-y-desktop-tickets.png" alt="Desktop split view with ticket list and ticket detail side by side" width="100%">
@@ -154,7 +154,7 @@ Tickets go into org defined queues with priority levels and assignment workflows
 - **Escalation rules** fire notifications when tickets meet configurable conditions, such as time spent in queue or priority level, so nothing sits unhandled without someone being told about it.
 
 <div align="center">
-  <img src="docs/images/ios-pwa/care-y-desktop-dashboard.png" alt="Desktop dashboard with two-column layout, sidebar navigation, and table views" width="100%">
+  <img src="docs/images/ios-pwa/care-y-desktop-dashboard.png" alt="Desktop dashboard with shift, queue, activity and library tiles above four ticket lanes in cards view" width="100%">
 </div>
 
 ---

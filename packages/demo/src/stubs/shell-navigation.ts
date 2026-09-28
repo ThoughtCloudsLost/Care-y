@@ -9,6 +9,8 @@
 
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
+import { emptyLaneFilterState } from "$lib/prefs/dashboard-filters.svelte.js";
+import { filterStore } from "$lib/stores/filters.svelte.js";
 
 /**
  * No-op in the demo. The real module tracks afterNavigate calls
@@ -26,4 +28,19 @@ type AppRoute = `/${string}`;
  */
 export function shellBack(fallbackRoute: AppRoute = "/"): void {
   void goto(resolve(fallbackRoute));
+}
+
+/**
+ * Same as the real module: opens the tickets page showing one queue,
+ * with every other filter cleared and the current sort kept. It needs no
+ * change for the iframe, since goto already goes through the demo router.
+ */
+export function openTicketsForQueue(queueId: string): void {
+  filterStore.applyState({
+    ...emptyLaneFilterState(),
+    queueIds: [queueId],
+    sortField: filterStore.sort.field,
+    sortDirection: filterStore.sort.direction,
+  });
+  void goto(resolve("/tickets"));
 }

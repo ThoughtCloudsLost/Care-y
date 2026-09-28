@@ -66,14 +66,17 @@ test.describe.serial("Dashboard (Overview Tab)", () => {
   // ── Section heading labels (i18n) ─────────────────────────────────
 
   test("section headings display labels from i18n", async () => {
+    // A stacked lane heads with its collapse toggle; lanes side by side
+    // (a wide dashboard) head with a plain heading. Anchored: each
+    // section's filter button is named "Filter <heading>".
     const main = page.getByRole("main");
-    await expect(
-      main.getByRole("button", { name: /my tickets/i }),
-    ).toBeAttached();
-    await expect(
-      main.getByRole("button", { name: /unassigned/i }),
-    ).toBeAttached();
-    await expect(main.getByRole("button", { name: /on hold/i })).toBeAttached();
+    for (const name of [/^my tickets/i, /^unassigned/i, /^on hold/i]) {
+      await expect(
+        main
+          .getByRole("button", { name })
+          .or(main.getByRole("heading", { level: 2, name })),
+      ).toBeAttached();
+    }
   });
 
   // ── Notification slot ─────────────────────────────────────────────
@@ -90,30 +93,32 @@ test.describe.serial("Dashboard (Overview Tab)", () => {
 
   // ── Section "See all" navigation ────────────────────────────────────
 
-  test("'See all' link navigates to tickets with filter param", async ({}, testInfo) => {
+  test("'See all' link opens the tickets page filtered to the section", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     const unassignedSection = page.locator("#section-unassigned");
     await unassignedSection.scrollIntoViewIfNeeded();
 
-    // The unassigned section starts collapsed. Expand it first.
-    const heading = unassignedSection.getByRole("button", {
-      name: /unassigned/i,
+    // Stacked, the unassigned section starts collapsed: expand it first.
+    // Side by side, lanes do not collapse and have no toggle.
+    const toggle = unassignedSection.getByRole("button", {
+      name: /^unassigned/i,
     });
-    const isExpanded = await heading.getAttribute("aria-expanded");
-    if (isExpanded !== "true") {
-      await heading.click();
+    if (
+      (await toggle.count()) > 0 &&
+      (await toggle.getAttribute("aria-expanded")) !== "true"
+    ) {
+      await toggle.click();
     }
 
     const seeAll = unassignedSection.getByRole("button", { name: /see all/i });
     await expect(seeAll).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await seeAll.click();
-    // The tickets page consumes ?filter=unassigned, applies it to the
-    // filter store, then replaces the URL to /tickets (no query string).
+    // The section's filters travel in memory, never in the URL.
     await expect(page).toHaveURL(/\/tickets$/, { timeout: 10_000 });
   });
 
   // Navigate back to dashboard via Overview tab (SPA navigation, like a real user)
-  test("Overview tab navigates back from tickets filter", async () => {
+  test("Overview tab navigates back from the filtered tickets page", async () => {
     await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
   });

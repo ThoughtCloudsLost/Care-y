@@ -161,6 +161,14 @@ describe("es.json values differ from en.json", () => {
     ["tickets_title", "interpolation-only: {Tickets}"],
     ["tickets_filter_queue", "interpolation-only: {Queue}"],
     ["tickets_filter_count", "interpolation-only: {label} ({count})"],
+    [
+      "tickets_filter_summary_queues_one",
+      "interpolation-only: {count} {queue}",
+    ],
+    [
+      "tickets_filter_summary_queues_other",
+      "interpolation-only: {count} {queues}",
+    ],
     ["tickets_sort_queue", "interpolation-only: {Queue}"],
     ["dashboard_msg_count", "interpolation-only: {count} msg"],
     ["dashboard_queues_heading", "interpolation-only: {Queues}"],
@@ -277,11 +285,13 @@ describe("es.json values differ from en.json", () => {
       "code placeholder: XXXX-XXXX",
     ],
 
+    // Pure formatting, no words to translate
+    ["count_at_least", "number plus a trailing plus sign, no prose"],
+
     // Identical short words that are the same in both languages
     ["panel_general", "identical word: General"],
     ["admin_tab_org_general", "identical word: General"],
     ["ticket_new_priority_normal", "identical word: Normal"],
-    ["tickets_filter_priority_normal", "identical word: Normal"],
     ["intake_forms_config_priority_normal", "identical word: Normal"],
     ["admin_greetings_mode_audio", "identical word: Audio"],
     ["admin_queue_editor_color_label", "identical word: Color"],

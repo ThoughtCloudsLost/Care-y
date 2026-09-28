@@ -16,7 +16,10 @@ import {
   eciesTripleSchema,
   attachmentLinkSchema,
 } from "./client-portal.js";
-import { PORTAL_ATTACHMENTS_PER_MESSAGE } from "./limits.js";
+import {
+  FILTER_ID_LIST_MAX,
+  PORTAL_ATTACHMENTS_PER_MESSAGE,
+} from "./limits.js";
 import {
   ticketIdSchema,
   userIdSchema,
@@ -279,7 +282,7 @@ export type SortDirection = z.infer<typeof sortDirectionSchema>;
 
 export const ticketListInputSchema = z.object({
   statuses: z.array(ticketStatusSchema).optional(),
-  queueIds: z.array(queueIdSchema).optional(),
+  queueIds: z.array(queueIdSchema).max(FILTER_ID_LIST_MAX).optional(),
   priorities: z.array(ticketPrioritySchema).optional(),
   onHold: z.boolean().optional(),
   assignedTo: userIdSchema.nullable().optional(),
@@ -292,12 +295,41 @@ export const ticketListInputSchema = z.object({
 });
 export type TicketListInput = z.infer<typeof ticketListInputSchema>;
 
+/** Max ticket IDs per recentFollowUps request; callers chunk longer lists. */
+export const RECENT_FOLLOW_UPS_MAX_TICKET_IDS = 50;
+
 export const recentFollowUpsInputSchema = z.object({
-  ticketIds: z.array(ticketIdSchema).min(1).max(50),
+  ticketIds: z
+    .array(ticketIdSchema)
+    .min(1)
+    .max(RECENT_FOLLOW_UPS_MAX_TICKET_IDS),
   perTicket: z.number().int().min(1).max(5).default(3),
   types: z.array(followUpTypeSchema).optional(),
 });
 export type RecentFollowUpsInput = z.infer<typeof recentFollowUpsInputSchema>;
+
+/**
+ * Activity feed filter kinds. "ticket" covers every ticket event the viewer
+ * may see, those outside their queues too; "org" covers events with
+ * no ticket.
+ */
+export const dashboardActivityKindSchema = z.enum(["ticket", "org"]);
+
+export type DashboardActivityKind = z.infer<typeof dashboardActivityKindSchema>;
+
+/**
+ * Dashboard activity feed. `kinds` and `queueIds` only narrow the feed the
+ * caller's permissions and queues allow; an absent or empty list means no
+ * filter. A queue filter leaves out organization events, which have no queue.
+ */
+export const recentActivityInputSchema = z
+  .object({
+    limit: z.number().int().min(1).max(10).default(5),
+    kinds: z.array(dashboardActivityKindSchema).optional(),
+    queueIds: z.array(queueIdSchema).max(FILTER_ID_LIST_MAX).optional(),
+  })
+  .default({ limit: 5 });
+export type RecentActivityInput = z.infer<typeof recentActivityInputSchema>;
 
 /** Batched read-state lookup for the tickets list (cursor + reply times). */
 export const listReadStateInputSchema = z.object({
@@ -315,6 +347,26 @@ export const sweepReadStateInputSchema = z.object({
   limit: z.number().int().min(1).max(200).default(200),
 });
 export type SweepReadStateInput = z.infer<typeof sweepReadStateInputSchema>;
+
+/**
+ * Paginated metadata-only sweep over every ticket in the caller's
+ * accessible queues, scoped exactly as `list` is. The browser pages this
+ * to build a local index and computes filter option counts from it, so
+ * each count and the rows its option yields come out of one predicate.
+ *
+ * Counting cannot move to the server: two of the filter dimensions
+ * (unread, needs attention) are decided against an encrypted read cursor
+ * the server cannot compare, and handing it the answer would give up
+ * what that encryption protects.
+ *
+ * The projection carries no ciphertext and no PII. Every field is one
+ * `list` already returns per page.
+ */
+export const ticketFacetIndexInputSchema = z.object({
+  cursor: ticketIdSchema.optional(),
+  limit: z.number().int().min(1).max(500).default(500),
+});
+export type TicketFacetIndexInput = z.infer<typeof ticketFacetIndexInputSchema>;
 
 export const followUpListDirectionSchema = z.enum(["newer", "older"]);
 

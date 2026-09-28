@@ -23,6 +23,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { kbKeys } from "$lib/query/keys.js";
+  import { invalidateKbArticles } from "$lib/query/invalidate-kb-articles.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import {
     getNavbarOverrideCtx,
@@ -152,7 +153,7 @@
 
   function handleSaved(): void {
     guard.allowNavigation();
-    void queryClient.invalidateQueries({ queryKey: kbKeys.items() });
+    invalidateKbArticles(queryClient);
     void queryClient.invalidateQueries({
       queryKey: kbKeys.item(articleId),
     });

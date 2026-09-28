@@ -12,24 +12,37 @@
  * Two loading modes:
  * - eagerLoad(): for the first page of tickets (immediate batch fetch)
  * - observe(): for subsequent tickets entering the viewport (batched with delay)
+ *
+ * Both modes split their IDs into chunks the server schema accepts.
  */
 
 import { SvelteSet } from "svelte/reactivity";
 import type { SvelteMap } from "svelte/reactivity";
+import { RECENT_FOLLOW_UPS_MAX_TICKET_IDS } from "@care-y/shared";
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
 import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
+import { chunk } from "$lib/utils/chunk.js";
+
 export interface RawFollowUpPreview {
   readonly id: string;
   readonly source: string;
   readonly type: string;
   readonly encryptedContent: string;
+  /** The ticket's canonical wrap; null for a pending-convergence row. */
   readonly keyWrap: TicketKeyWrap | null;
+  /** A pending-convergence row's own tk_temp wrap, null otherwise. */
+  readonly followUpKeyWrap: TicketKeyWrap | null;
+  /** A pending portal client reply's sealed tk_temp, null otherwise. */
+  readonly portalWrap: string | null;
   readonly createdAt: string;
   readonly hasRecording: boolean;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
   readonly noteTypeId: string | null;
   readonly eventParams: Record<string, unknown> | null;
+  /** Call outcome for phone_call rows, null otherwise. */
+  readonly callStatus: string | null;
+  readonly callDurationSeconds: number | null;
 }
 
 export interface PreviewQueryResult {
@@ -88,33 +101,46 @@ export function createPreviewLoader(
     }, batchDelayMs);
   }
 
-  async function flushBatch(): Promise<void> {
-    if (pending.size === 0) return;
-    const batch = [...pending];
-    pending.clear();
-    for (const id of batch) inflight.add(id);
-
+  /**
+   * Fetch one chunk and store its results. A failed chunk sets empty
+   * arrays for its own IDs only, so the UI can show "No messages yet"
+   * rather than shimmer indefinitely; other chunks are unaffected.
+   */
+  async function loadChunk(ids: string[]): Promise<void> {
     try {
-      const result = await queryFn(batch);
+      const result = await queryFn(ids);
       // Ephemeral lookup, discarded after the loop. Not reactive state.
       // eslint-disable-next-line svelte/prefer-svelte-reactivity
       const resultsMap = new Map(Object.entries(result.previews));
       // eslint-disable-next-line svelte/prefer-svelte-reactivity
       const typesMap = new Map(Object.entries(result.latestClientType));
-      for (const ticketId of batch) {
+      for (const ticketId of ids) {
         rawPreviews.set(ticketId, resultsMap.get(ticketId) ?? []);
         latestClientTypeMap.set(ticketId, typesMap.get(ticketId) ?? null);
         loaded.add(ticketId);
       }
     } catch {
-      // On failure, set empty arrays so the UI can show "No messages yet"
-      // rather than shimmer indefinitely.
-      for (const id of batch) {
+      for (const id of ids) {
         if (!rawPreviews.has(id)) rawPreviews.set(id, []);
       }
     } finally {
-      for (const id of batch) inflight.delete(id);
+      for (const id of ids) inflight.delete(id);
     }
+  }
+
+  /** Request IDs in chunks the recentFollowUps schema accepts. */
+  async function loadInChunks(ids: string[]): Promise<void> {
+    for (const id of ids) inflight.add(id);
+    await Promise.all(
+      chunk(ids, RECENT_FOLLOW_UPS_MAX_TICKET_IDS).map(loadChunk),
+    );
+  }
+
+  async function flushBatch(): Promise<void> {
+    if (pending.size === 0) return;
+    const batch = [...pending];
+    pending.clear();
+    await loadInChunks(batch);
   }
 
   return {
@@ -140,22 +166,7 @@ export function createPreviewLoader(
         (id) => !loaded.has(id) && !inflight.has(id),
       );
       if (toLoad.length === 0) return;
-      for (const id of toLoad) inflight.add(id);
-      try {
-        const result = await queryFn(toLoad);
-        // Ephemeral lookup, discarded after the loop. Not reactive state.
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity
-        const resultsMap = new Map(Object.entries(result.previews));
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity
-        const typesMap = new Map(Object.entries(result.latestClientType));
-        for (const ticketId of toLoad) {
-          rawPreviews.set(ticketId, resultsMap.get(ticketId) ?? []);
-          latestClientTypeMap.set(ticketId, typesMap.get(ticketId) ?? null);
-          loaded.add(ticketId);
-        }
-      } finally {
-        for (const id of toLoad) inflight.delete(id);
-      }
+      await loadInChunks(toLoad);
     },
 
     /** Get raw encrypted preview data for a ticket. undefined = not loaded. */

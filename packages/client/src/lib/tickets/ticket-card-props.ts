@@ -37,6 +37,7 @@ export interface TicketLikeRecord {
   readonly createdAt: string;
   readonly lastActivityAt: string | null;
   readonly followUpCount: number;
+  readonly hasResponse: boolean;
   readonly queueSortOrder: number;
 }
 
@@ -53,10 +54,13 @@ export interface CardPropsMapperDeps {
   ) => string | undefined;
   readonly currentUserId: string;
   readonly unreadCount: (ticketId: string) => number;
+  readonly unreadCountIsFloor: (ticketId: string) => boolean;
   readonly getPreview: (ticketId: string) => RawFollowUpPreview[] | undefined;
   readonly previewReactionsMap: ReadonlyMap<string, ReactionSummary[]>;
   readonly ontap: (ticketId: string) => void;
   readonly onaction: (ticketId: string, action: TicketQuickAction) => void;
+  /** Quick actions the account may use; the card hides the rest. */
+  readonly allowedActions: ReadonlySet<TicketQuickAction>;
   readonly onencryptedhelp: () => void;
   readonly onselect?: (ticketId: string) => void;
   readonly onfullopen?: (ticketId: string) => void;
@@ -112,7 +116,7 @@ export function mapTicketDisplayFields(
       table: "queues",
       id: t.queueId,
     }),
-    displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
+    displayStatus: deriveDisplayStatus(t.status, t.onHold, t.hasResponse),
     priority: t.priority,
     titleResult: resolveAsyncDecrypt(
       deps.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
@@ -142,6 +146,7 @@ export function createCardPropsMapper(
       ...mapTicketDisplayFields(t, deps),
       queueAppearance: deps.queueAppearance?.(t.queueId),
       unreadCount: deps.unreadCount(t.id),
+      unreadCountIsFloor: deps.unreadCountIsFloor(t.id),
       previewFollowUps: previews,
       previewReactions: reactionsForTicket(previews, deps.previewReactionsMap),
       ontap: deps.ontap,
@@ -152,6 +157,7 @@ export function createCardPropsMapper(
           }
         : undefined,
       onaction: deps.onaction,
+      allowedActions: deps.allowedActions,
       onencryptedhelp: deps.onencryptedhelp,
     };
   };

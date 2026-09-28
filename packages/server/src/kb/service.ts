@@ -12,7 +12,13 @@
  * at login.
  */
 
-import { sql, type Kysely } from "kysely";
+import {
+  sql,
+  type Expression,
+  type ExpressionBuilder,
+  type Kysely,
+  type SqlBool,
+} from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
@@ -28,6 +34,11 @@ export interface KBCategoryRecord {
   readonly encryptedDescription: Buffer | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+}
+
+/** Category as listed, with the number of articles filed under it. */
+export interface KBCategoryListRecord extends KBCategoryRecord {
+  readonly articleCount: number;
 }
 
 // --- Item records ---
@@ -55,7 +66,18 @@ export interface KBItemRecord extends KBItemSummary {
 export interface KBItemPage {
   readonly items: KBItemSummary[];
   readonly nextCursor: string | null;
+  /** Every item matching the filters, across all pages. */
   readonly total: number;
+}
+
+/** Filters `list` applies to both its page and its `total`. */
+export interface KBItemListFilters {
+  /** Items in any of these categories. Absent or empty means every category. */
+  readonly categoryIds?: readonly KbCategoryId[];
+  readonly minRating?: number;
+  readonly createdBy?: UserId;
+  readonly createdAfter?: string;
+  readonly createdBefore?: string;
 }
 
 // --- Author records ---
@@ -85,7 +107,7 @@ export interface KBCategoryService {
     orgKeyGeneration: number;
   }): Promise<KBCategoryRecord>;
 
-  list(): Promise<KBCategoryRecord[]>;
+  list(): Promise<KBCategoryListRecord[]>;
 
   update(
     categoryId: KbCategoryId,
@@ -116,17 +138,14 @@ export interface KBItemService {
 
   findById(itemId: KbItemId): Promise<KBItemRecord>;
 
-  list(input: {
-    categoryId?: KbCategoryId;
-    sortBy: "created_at" | "updated_at" | "rating";
-    sortDirection: "asc" | "desc";
-    minRating?: number;
-    createdBy?: UserId;
-    createdAfter?: string;
-    createdBefore?: string;
-    limit: number;
-    cursor?: string;
-  }): Promise<KBItemPage>;
+  list(
+    input: KBItemListFilters & {
+      sortBy: "created_at" | "updated_at" | "rating";
+      sortDirection: "asc" | "desc";
+      limit: number;
+      cursor?: string;
+    },
+  ): Promise<KBItemPage>;
 
   update(
     itemId: KbItemId,
@@ -139,9 +158,6 @@ export interface KBItemService {
   ): Promise<KBItemRecord>;
 
   delete(itemId: KbItemId): Promise<void>;
-
-  /** Return the N most recently updated items, ordered by updated_at desc. */
-  listRecentlyUpdated(limit: number): Promise<KBItemSummary[]>;
 
   /** Return distinct authors who have written KB articles. */
   listAuthors(): Promise<KBAuthorRecord[]>;
@@ -280,12 +296,20 @@ export function createKBCategoryService(
     },
 
     async list() {
+      // Counts every article, the population an unfiltered item list
+      // totals. The left join keeps a category with no articles at zero.
       const rows = await db
         .selectFrom("kb_categories")
-        .selectAll()
-        .orderBy("sort_order", "asc")
+        .leftJoin("kb_items", "kb_items.category_id", "kb_categories.id")
+        .selectAll("kb_categories")
+        .select((eb) => eb.fn.count<number>("kb_items.id").as("article_count"))
+        .groupBy("kb_categories.id")
+        .orderBy("kb_categories.sort_order", "asc")
         .execute();
-      return rows.map(toCategoryRecord);
+      return rows.map((row) => ({
+        ...toCategoryRecord(row),
+        articleCount: row.article_count,
+      }));
     },
 
     async update(categoryId, input) {
@@ -357,6 +381,36 @@ export function createKBCategoryService(
   };
 }
 
+/**
+ * The `list` filters as one WHERE expression, shared by the page query and
+ * the `total` count so the two can never disagree. No filters yields a
+ * condition that is always true.
+ */
+function kbItemFilterWhere(
+  eb: ExpressionBuilder<TenantDatabase, "kb_items">,
+  filters: KBItemListFilters,
+): Expression<SqlBool> {
+  const conditions: Expression<SqlBool>[] = [];
+  // An empty `in ()` list is not valid SQL, and an empty selection means
+  // no category filter, so it adds no condition.
+  if (filters.categoryIds !== undefined && filters.categoryIds.length > 0) {
+    conditions.push(eb("category_id", "in", [...filters.categoryIds]));
+  }
+  if (filters.minRating !== undefined) {
+    conditions.push(eb("rating", ">=", filters.minRating));
+  }
+  if (filters.createdBy !== undefined) {
+    conditions.push(eb("created_by", "=", filters.createdBy));
+  }
+  if (filters.createdAfter !== undefined) {
+    conditions.push(eb("created_at", ">=", new Date(filters.createdAfter)));
+  }
+  if (filters.createdBefore !== undefined) {
+    conditions.push(eb("created_at", "<=", new Date(filters.createdBefore)));
+  }
+  return eb.and(conditions);
+}
+
 export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
   return {
     async create(createdBy, input) {
@@ -418,24 +472,10 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
       const sortBy = input.sortBy;
       const sortDir = input.sortDirection;
 
-      let query = db.selectFrom("kb_items").select(summaryColumns);
-
-      // --- Filters ---
-      if (input.categoryId !== undefined) {
-        query = query.where("category_id", "=", input.categoryId);
-      }
-      if (input.minRating !== undefined) {
-        query = query.where("rating", ">=", input.minRating);
-      }
-      if (input.createdBy !== undefined) {
-        query = query.where("created_by", "=", input.createdBy);
-      }
-      if (input.createdAfter !== undefined) {
-        query = query.where("created_at", ">=", new Date(input.createdAfter));
-      }
-      if (input.createdBefore !== undefined) {
-        query = query.where("created_at", "<=", new Date(input.createdBefore));
-      }
+      let query = db
+        .selectFrom("kb_items")
+        .select(summaryColumns)
+        .where((eb) => kbItemFilterWhere(eb, input));
 
       // --- Cursor keyset ---
       // Cursor format: "sortValue|id" where sortValue is ISO date or numeric rating.
@@ -510,33 +550,11 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         }
       }
 
-      let countQuery = db
+      const countRow = await db
         .selectFrom("kb_items")
-        .select((eb) => eb.fn.countAll<number>().as("total"));
-      if (input.categoryId !== undefined) {
-        countQuery = countQuery.where("category_id", "=", input.categoryId);
-      }
-      if (input.minRating !== undefined) {
-        countQuery = countQuery.where("rating", ">=", input.minRating);
-      }
-      if (input.createdBy !== undefined) {
-        countQuery = countQuery.where("created_by", "=", input.createdBy);
-      }
-      if (input.createdAfter !== undefined) {
-        countQuery = countQuery.where(
-          "created_at",
-          ">=",
-          new Date(input.createdAfter),
-        );
-      }
-      if (input.createdBefore !== undefined) {
-        countQuery = countQuery.where(
-          "created_at",
-          "<=",
-          new Date(input.createdBefore),
-        );
-      }
-      const countRow = await countQuery.executeTakeFirstOrThrow();
+        .select((eb) => eb.fn.countAll<number>().as("total"))
+        .where((eb) => kbItemFilterWhere(eb, input))
+        .executeTakeFirstOrThrow();
 
       return {
         items: pageRows.map(toItemSummary),
@@ -588,27 +606,6 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
       if (result.numDeletedRows === 0n) {
         throw new NotFoundError(ErrorCode.KB_ARTICLE_NOT_FOUND);
       }
-    },
-
-    async listRecentlyUpdated(limit) {
-      const rows = await db
-        .selectFrom("kb_items")
-        .select([
-          "id",
-          "category_id",
-          "encrypted_title",
-          "encrypted_excerpt",
-          "created_by",
-          "vote_up_count",
-          "vote_down_count",
-          "rating",
-          "created_at",
-          "updated_at",
-        ])
-        .orderBy("updated_at", "desc")
-        .limit(limit)
-        .execute();
-      return rows.map(toItemSummary);
     },
 
     async listAuthors() {

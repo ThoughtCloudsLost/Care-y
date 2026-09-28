@@ -107,6 +107,7 @@ import {
 } from "../portal/share-service.js";
 import { getSealedContactInfo } from "../portal/contact-exposure-service.js";
 import type { OprfEvaluateService } from "../crypto/oprf-evaluate-service.js";
+import type { TicketLiveEvents } from "../tickets/ticket-live-events.js";
 import {
   assertSecureLinkEnabled,
   assertShareLinksEnabled,
@@ -207,6 +208,13 @@ export interface ClientPortalRouterDeps {
   // Channel OPRF deps (appended by ADR-091)
   /** OPRF evaluate service for channel-scoped evaluations. */
   readonly oprfService: OprfEvaluateService | null;
+
+  /**
+   * Live ticket-change events for intake submissions, client replies and
+   * share links. Null sends none; volunteers' open views then catch up on
+   * their next refetch.
+   */
+  readonly liveEvents: TicketLiveEvents | null;
 }
 
 const manageShareLinksProcedure = permissionProcedure(
@@ -402,6 +410,10 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               orgSchema: ctx.org.orgSchema,
               orgSlug: ctx.org.orgSlug,
               accountServiceDeps: acctDeps,
+              onTicketChanged: deps.liveEvents?.forTenant(
+                ctx.org.tenantDb,
+                ctx.org.orgSchema,
+              ),
             },
             {
               ticketId: input.ticketId,
@@ -575,14 +587,23 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           await assertShareLinksEnabled(ctx.org.tenantDb);
-          const result = await createShare(ctx.org.tenantDb, {
-            shareId: input.shareId,
-            ticketId: input.ticketId,
-            ciphertext: Buffer.from(input.ciphertext, "base64"),
-            followUpId: input.followUpId,
-            encryptedFollowUp: Buffer.from(input.encryptedFollowUp, "base64"),
-            createdBy: ctx.session.userId,
-          });
+          const result = await createShare(
+            ctx.org.tenantDb,
+            {
+              shareId: input.shareId,
+              ticketId: input.ticketId,
+              ciphertext: Buffer.from(input.ciphertext, "base64"),
+              followUpId: input.followUpId,
+              encryptedFollowUp: Buffer.from(input.encryptedFollowUp, "base64"),
+              createdBy: ctx.session.userId,
+            },
+            {
+              onTicketChanged: deps.liveEvents?.forTenant(
+                ctx.org.tenantDb,
+                ctx.org.orgSchema,
+              ),
+            },
+          );
           return { expiresAt: result.expiresAt.toISOString() };
         }),
       ),
@@ -1467,6 +1488,10 @@ function buildPortalMessageDeps(
     orgSchema: ctx.org.orgSchema,
     orgSlug: ctx.org.orgSlug,
     blobStore: deps.blobStore,
+    onTicketChanged: deps.liveEvents?.forTenant(
+      ctx.org.tenantDb,
+      ctx.org.orgSchema,
+    ),
   };
 }
 

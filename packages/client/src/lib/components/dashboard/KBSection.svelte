@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import { BookOpen, FileText, ThumbsUp } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
@@ -19,18 +20,27 @@
 
   interface KBSectionProps {
     kbItems: KBItem[];
+    /** Articles matching the section's filters; the heading count. */
+    total?: number;
     loading?: boolean;
     expanded: boolean;
     ontoggle: () => void;
     ontap?: (itemId: string) => void;
+    /** Passed to the section header (the filter button). */
+    headerAction?: Snippet;
+    /** Passed to the section (the filter row). */
+    filterRow?: Snippet;
   }
 
   let {
     kbItems,
+    total,
     loading = false,
     expanded,
     ontoggle,
     ontap,
+    headerAction,
+    filterRow,
   }: KBSectionProps = $props();
 
   function voteCountLabel(count: number): string {
@@ -44,9 +54,12 @@
   heading={m.dashboard_kb_heading(withTerms())}
   icon={BookOpen}
   iconColor="var(--brand-accent)"
+  count={total}
   {loading}
   {expanded}
   {ontoggle}
+  {headerAction}
+  {filterRow}
 >
   {#if loading}
     <div class="kb-content skeleton-pulse">
@@ -118,7 +131,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
-    padding: 0 var(--page-pad-x) 0.25rem;
+    padding: 0 var(--section-inset, var(--page-pad-x)) 0.25rem;
   }
 
   .kb-summary {
@@ -185,7 +198,7 @@
   }
 
   .no-kb {
-    padding: 0 1rem 0.5rem;
+    padding: 0 var(--section-inset, var(--page-pad-x)) 0.5rem;
     font-size: var(--text-base);
     color: var(--muted);
   }

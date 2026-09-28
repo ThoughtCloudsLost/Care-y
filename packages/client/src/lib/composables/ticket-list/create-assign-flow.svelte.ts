@@ -1,14 +1,19 @@
 import type { QueryClient } from "@tanstack/svelte-query";
-import { optimisticMutation } from "$lib/utils/optimistic-mutation.js";
+import {
+  isPagedRows,
+  optimisticListsMutation,
+  patchPagedRow,
+  type PagedRows,
+} from "$lib/utils/optimistic-mutation.js";
 import { ticketsKeys } from "$lib/query/keys.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
+import { getErrorMessage } from "$lib/components/query-error-messages.js";
 import { haptic } from "$lib/utils/haptic.js";
 import * as m from "$lib/paraglide/messages.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
 
 export interface AssignFlowDeps {
   readonly queryClient: QueryClient;
-  readonly getQueryKey: () => readonly unknown[];
   readonly assignMutate: (
     ticketId: string,
     targetUserId: string | null,
@@ -45,20 +50,14 @@ export function createAssignFlow(deps: AssignFlowDeps): AssignFlowState {
     ticketId: string,
     targetUserId: string | null,
   ): Promise<void> {
-    await optimisticMutation<{
-      pages: { id: string; assignedTo: string | null }[][];
-      pageParams: unknown[];
-    }>({
+    // Every cached list holding the row updates at once, so a ticket
+    // moves between the dashboard's lanes as soon as it is assigned.
+    await optimisticListsMutation<PagedRows>({
       queryClient: deps.queryClient,
-      queryKey: deps.getQueryKey(),
-      update: (old) => ({
-        ...old,
-        pages: old.pages.map((pg) =>
-          pg.map((t) =>
-            t.id === ticketId ? { ...t, assignedTo: targetUserId } : t,
-          ),
-        ),
-      }),
+      queryKey: ticketsKeys.lists(),
+      isData: isPagedRows,
+      update: (old) =>
+        patchPagedRow(old, ticketId, { assignedTo: targetUserId }),
       mutate: async () => deps.assignMutate(ticketId, targetUserId),
       onSuccess: () => {
         haptic();
@@ -74,9 +73,12 @@ export function createAssignFlow(deps: AssignFlowDeps): AssignFlowState {
         void deps.queryClient.invalidateQueries({
           queryKey: ticketsKeys.lists(),
         });
+        void deps.queryClient.invalidateQueries({
+          queryKey: ticketsKeys.facetIndex(),
+        });
       },
-      onError: () => {
-        toastStore.show(m.error_generic(), 3000);
+      onError: (err) => {
+        toastStore.show(getErrorMessage(err), 3000);
       },
     });
   }

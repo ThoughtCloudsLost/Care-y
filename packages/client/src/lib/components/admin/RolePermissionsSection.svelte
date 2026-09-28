@@ -530,6 +530,12 @@
 
   <div class="protected-register-wrapper">
     <Register kind="careful">
+      {m.permission_view_reports_hint()}
+    </Register>
+  </div>
+
+  <div class="protected-register-wrapper">
+    <Register kind="careful">
       {m.permission_not_yet_built_hint()}
     </Register>
   </div>

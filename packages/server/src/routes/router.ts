@@ -60,6 +60,7 @@ import {
   type ClientPortalRouterDeps,
 } from "./client-portal.js";
 import { createSavedFiltersRouter } from "./saved-filters.js";
+import { createPrefBlobsRouter } from "./pref-blobs.js";
 
 function healthCheck(): { status: "ok" } {
   return { status: "ok" };
@@ -135,6 +136,7 @@ export function createAppRouter(deps: RouterDeps) {
     keys: keysRouter,
     dashboard: createDashboardRouter(),
     recentViews: createRecentViewsRouter(),
+    prefBlobs: createPrefBlobsRouter(),
     ...(deps.telephonyAdminDeps !== null
       ? {
           telephonyAdmin: createTelephonyAdminRouter(deps.telephonyAdminDeps),

@@ -7,10 +7,10 @@
  * creates repositories internally from the tenant-scoped DB.
  */
 
-import { Permission } from "@care-y/shared";
 import {
   router,
-  permissionProcedure,
+  writeCallGreetingsProcedure,
+  writeAutomaticRepliesProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import {
@@ -35,14 +35,6 @@ import type { BlobStore } from "../storage/store.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import { InternalError } from "../errors.js";
 import { TRPCError } from "@trpc/server";
-
-const writeCallGreetingsProcedure = permissionProcedure(
-  Permission.WRITE_CALL_GREETINGS,
-);
-
-const writeAutomaticRepliesProcedure = permissionProcedure(
-  Permission.WRITE_AUTOMATIC_REPLIES,
-);
 
 export interface TelephonyContentRouterDeps {
   readonly createService: (

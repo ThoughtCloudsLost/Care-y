@@ -26,7 +26,7 @@ export function summarizeAuditMetadata(
 /**
  * Known audit event types to label builders. Built once at module scope:
  * auditEventLabel runs per rendered row, so rebuilding the map per call
- * would allocate 24 closures per row per render.
+ * would allocate 51 closures per row per render.
  */
 type Terms = ReturnType<typeof withTerms> & Record<string, unknown>;
 
@@ -90,6 +90,19 @@ const EVENT_LABELS = new Map<string, (terms: Terms) => string>([
     (t) => m.audit_event_client_account_password_changed(t),
   ],
   ["client_account_reset", (t) => m.audit_event_client_account_reset(t)],
+  ["escalation_rule_created", () => m.audit_event_escalation_rule_created()],
+  ["escalation_rule_updated", () => m.audit_event_escalation_rule_updated()],
+  ["escalation_rule_deleted", () => m.audit_event_escalation_rule_deleted()],
+  ["role_permission_changed", () => m.audit_event_role_permission_changed()],
+  ["role_permissions_reset", () => m.audit_event_role_permissions_reset()],
+  ["builtin_default_toggled", () => m.audit_event_builtin_default_toggled()],
+  ["form_asset_uploaded", () => m.audit_event_form_asset_uploaded()],
+  ["client_email_changed", (t) => m.audit_event_client_email_changed(t)],
+  ["reply_token_revoked", () => m.audit_event_reply_token_revoked()],
+  ["client_deleted", (t) => m.audit_event_client_deleted(t)],
+  ["org_key_reseal", () => m.audit_event_org_key_reseal()],
+  ["org_key_reindex", () => m.audit_event_org_key_reindex()],
+  ["pii_retention_purge", () => m.audit_event_pii_retention_purge()],
 ]);
 
 /**

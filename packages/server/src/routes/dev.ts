@@ -8,6 +8,13 @@
 
 import { router, adminProcedure, withErrorWrapping } from "../trpc/trpc.js";
 import { createDevService } from "../dev/dev-service.js";
+import {
+  applySeedTimelineInputSchema,
+  backdateOrgSetupInputSchema,
+  seedQuarantineInputSchema,
+  reopenAsClientInputSchema,
+  seedVoicemailInputSchema,
+} from "@care-y/shared/dev/seed-stories.js";
 import type { BlobStore } from "../storage/store.js";
 
 export interface DevRouterDeps {
@@ -25,14 +32,48 @@ export function createDevRouter(deps: DevRouterDeps) {
       }),
     ),
 
-    seedQuarantine: adminProcedure.mutation(
-      withErrorWrapping(async ({ ctx }) => {
+    applySeedTimeline: adminProcedure
+      .input(applySeedTimelineInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) =>
+          createDevService(ctx.org.tenantDb).applySeedTimeline(input),
+        ),
+      ),
+
+    backdateOrgSetup: adminProcedure
+      .input(backdateOrgSetupInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) =>
+          createDevService(ctx.org.tenantDb).backdateOrgSetup(input),
+        ),
+      ),
+
+    seedVoicemail: adminProcedure.input(seedVoicemailInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) =>
+        createDevService(ctx.org.tenantDb).seedVoicemail(input, {
+          blobStore: deps.blobStore,
+          orgSchema: ctx.org.orgSchema,
+        }),
+      ),
+    ),
+
+    reopenAsClient: adminProcedure
+      .input(reopenAsClientInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) =>
+          createDevService(ctx.org.tenantDb).reopenAsClient(input),
+        ),
+      ),
+
+    seedQuarantine: adminProcedure.input(seedQuarantineInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
         const { seedQuarantineEntries } =
           await import("../dev/seed-quarantine.js");
         return seedQuarantineEntries(
           ctx.org.tenantDb,
           deps.blobStore,
           ctx.org.orgSchema,
+          input,
         );
       }),
     ),

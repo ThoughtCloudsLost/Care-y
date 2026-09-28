@@ -24,7 +24,13 @@ export const PROCEDURE_PERMISSIONS = {
   "auth.listUsers": Permission.MANAGE_USERS,
   "auth.setUserActive": Permission.MANAGE_USERS,
   "auth.getSoleHeldTicketCount": Permission.MANAGE_USERS,
-  "auth.hubStatus": Permission.MANAGE_ROLES,
+  "auth.hubActiveUserCount": Permission.MANAGE_USERS,
+  "auth.hubQueueCount": Permission.MANAGE_QUEUES,
+  "auth.hubKeyStatus": Permission.MANAGE_KEYS,
+  "auth.hubRetention": Permission.MANAGE_RETENTION,
+  "auth.hubBlocklistCount": Permission.MANAGE_INFRASTRUCTURE,
+  "auth.hubGreetingCount": Permission.WRITE_CALL_GREETINGS,
+  "auth.hubTemplateCount": Permission.WRITE_AUTOMATIC_REPLIES,
   "auth.getRolePermissions": Permission.MANAGE_ROLES,
   "auth.setRolePermission": Permission.MANAGE_ROLES,
   "auth.resetRolePermissions": Permission.MANAGE_ROLES,
@@ -98,6 +104,7 @@ export const PROCEDURE_PERMISSIONS = {
   "tickets.listReadState": Permission.VIEW_CASES,
   "tickets.readStateSweep": Permission.VIEW_CASES,
   "tickets.counts": Permission.VIEW_CASES,
+  "tickets.facetIndex": Permission.VIEW_CASES,
   "tickets.searchClients": Permission.VIEW_CASES,
   "tickets.update": Permission.CHANGE_CASE_STATUS,
   "tickets.close": Permission.CHANGE_CASE_STATUS,
@@ -188,7 +195,6 @@ export const PROCEDURE_PERMISSIONS = {
   "kb.updateItem": Permission.EDIT_KNOWLEDGE_BASE,
   "kb.deleteItem": Permission.DELETE_KNOWLEDGE_BASE_ARTICLES,
   "kb.listAuthors": Permission.VIEW_KNOWLEDGE_BASE,
-  "kb.recentItems": Permission.VIEW_KNOWLEDGE_BASE,
   "kb.listBodies": Permission.VIEW_KNOWLEDGE_BASE,
   "kb.castVote": Permission.VIEW_KNOWLEDGE_BASE,
   "kb.removeVote": Permission.VIEW_KNOWLEDGE_BASE,
@@ -262,6 +268,10 @@ export const PROCEDURE_PERMISSIONS = {
   // --- dev ---
   "dev.resetSeedData": Permission.MANAGE_ROLES,
   "dev.seedQuarantine": Permission.MANAGE_ROLES,
+  "dev.applySeedTimeline": Permission.MANAGE_ROLES,
+  "dev.backdateOrgSetup": Permission.MANAGE_ROLES,
+  "dev.seedVoicemail": Permission.MANAGE_ROLES,
+  "dev.reopenAsClient": Permission.MANAGE_ROLES,
 } as const satisfies Record<string, Permission>;
 
 export type GatedProcedurePath = keyof typeof PROCEDURE_PERMISSIONS;

@@ -180,6 +180,10 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   permission_view_intake_responses: () => "View intake responses",
   permission_view_intake_responses_hint: () =>
     "Granting this decides who receives decryption keys when a form is submitted. Revoking it later does not take back keys already issued.",
+  permission_view_reports_hint: () =>
+    "Also opens the call history, which covers every call the organization handled across all queues.",
+  permission_not_yet_built_hint: () =>
+    "View own shifts has nothing behind it yet. It is listed so its name stays settled, but granting it changes nothing until shift scheduling is built.",
   // Running the organization
   permission_manage_roles: () => "Manage roles",
   permission_manage_users: () => "Manage users",
@@ -534,6 +538,19 @@ describe("RolePermissionsSection", () => {
     ).toBeTruthy();
     // The register eyebrow
     expect(screen.getByText("Protected")).toBeTruthy();
+  });
+
+  it("renders VIEW_REPORTS hint register", async () => {
+    renderSection();
+    await vi.waitFor(() => {
+      expect(screen.getByText("View cases")).toBeTruthy();
+    });
+
+    expect(
+      screen.getByText(
+        "Also opens the call history, which covers every call the organization handled across all queues.",
+      ),
+    ).toBeTruthy();
   });
 
   it("shows reset to defaults button", async () => {

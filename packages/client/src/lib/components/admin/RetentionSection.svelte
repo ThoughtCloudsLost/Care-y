@@ -37,21 +37,21 @@
   const authRouter = trpc.auth;
   const queryClient = useQueryClient();
 
-  const hubStatusQuery = createQuery(() => ({
-    queryKey: adminKeys.hubStatus(),
-    queryFn: async () => authRouter.hubStatus.query(),
+  const retentionQuery = createQuery(() => ({
+    queryKey: adminKeys.hubRetention(),
+    queryFn: async () => authRouter.hubRetention.query(),
     staleTime: 60_000,
   }));
 
-  const serverDays = $derived(hubStatusQuery.data?.retentionDays ?? null);
+  const serverDays = $derived(retentionQuery.data?.retentionDays ?? null);
 
   let enabled = $state(false);
   let daysInput = $state("");
   let initialized = $state(false);
 
   $effect(() => {
-    if (hubStatusQuery.data && !initialized) {
-      const days = hubStatusQuery.data.retentionDays;
+    if (retentionQuery.data && !initialized) {
+      const days = retentionQuery.data.retentionDays;
       enabled = days !== null;
       daysInput = days !== null ? String(days) : "";
       initialized = true;
@@ -73,7 +73,9 @@
       authRouter.setPiiRetention.mutate({ days }),
     onSuccess: () => {
       haptic();
-      void queryClient.invalidateQueries({ queryKey: adminKeys.hubStatus() });
+      void queryClient.invalidateQueries({
+        queryKey: adminKeys.hubRetention(),
+      });
       toastStore.show(m.admin_retention_saved());
       announceToLiveRegion("polite", m.admin_retention_saved());
     },
@@ -132,7 +134,7 @@
 </script>
 
 <div class="retention-section">
-  {#if hubStatusQuery.isLoading}
+  {#if retentionQuery.isLoading}
     <Card raised contentWrap={false} class="retention-card">
       <div class="retention-inner">
         <div class="toggle-row">
@@ -141,10 +143,10 @@
         </div>
       </div>
     </Card>
-  {:else if hubStatusQuery.isError}
+  {:else if retentionQuery.isError}
     <QueryError
-      error={hubStatusQuery.error}
-      onretry={() => void hubStatusQuery.refetch()}
+      error={retentionQuery.error}
+      onretry={() => void retentionQuery.refetch()}
     />
   {:else}
     <Card raised contentWrap={false} class="retention-card">

@@ -7,13 +7,24 @@
  * key wrap (same key hierarchy as ticket titles).
  */
 
+import { followupSlot } from "@care-y/crypto";
 import { AsyncDecryptCache } from "./async-decrypt-cache.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { TicketKeyWrap } from "./ticket-decrypt-cache.js";
+import { resolveAsyncDecrypt, type DecryptResult } from "./decrypt-result.js";
 
 export interface FollowUpRewrapContext {
   readonly followUpKeyWrap: TicketKeyWrap;
   readonly ticketId: string;
+}
+
+/** The key material a list preview row carries (`tickets.recentFollowUps`). */
+export interface FollowUpPreviewKeys {
+  readonly id: string;
+  readonly encryptedContent: string;
+  readonly keyWrap: TicketKeyWrap | null;
+  readonly followUpKeyWrap: TicketKeyWrap | null;
+  readonly portalWrap: string | null;
 }
 
 export class FollowUpDecryptCache extends AsyncDecryptCache {
@@ -85,6 +96,33 @@ export class FollowUpDecryptCache extends AsyncDecryptCache {
       // Ticket id, not the follow-up cache key: every row of one ticket
       // shares the same unwrapped ticket key in the Worker.
       ticketId,
+    );
+  }
+
+  /**
+   * Decrypt a list preview row. A pending-convergence row has no ticket
+   * wrap; it carries its own tk_temp wrap or a portal seal and takes the
+   * same unwrap-and-rewrap path as the detail timeline, so a server
+   * written follow-up (a voicemail, a portal reply) reads before any
+   * volunteer has opened the ticket.
+   */
+  decryptPreview(ticketId: string, fu: FollowUpPreviewKeys): DecryptResult {
+    const raw = this.decryptContent(
+      fu.id,
+      ticketId,
+      followupSlot(fu.id),
+      fu.keyWrap,
+      fu.encryptedContent,
+      fu.followUpKeyWrap === null
+        ? undefined
+        : { followUpKeyWrap: fu.followUpKeyWrap, ticketId },
+      fu.portalWrap,
+    );
+    return resolveAsyncDecrypt(
+      raw,
+      fu.keyWrap !== null ||
+        fu.followUpKeyWrap !== null ||
+        fu.portalWrap !== null,
     );
   }
 }

@@ -208,13 +208,15 @@ describe("computeRange", () => {
 class MockIntersectionObserver {
   static instances: MockIntersectionObserver[] = [];
   callback: IntersectionObserverCallback;
+  options: IntersectionObserverInit | undefined;
   elements: Element[] = [];
 
   constructor(
     callback: IntersectionObserverCallback,
-    _options?: IntersectionObserverInit,
+    options?: IntersectionObserverInit,
   ) {
     this.callback = callback;
+    this.options = options;
     MockIntersectionObserver.instances.push(this);
   }
 
@@ -262,6 +264,17 @@ class MockResizeObserver {
   disconnect(): void {
     this.elements = [];
   }
+}
+
+/** The observer watching the sentinel at one end of the list. */
+function sentinelObserver(
+  end: "top" | "bottom",
+): MockIntersectionObserver | undefined {
+  return MockIntersectionObserver.instances.find(
+    (obs) =>
+      obs.elements.length > 0 &&
+      (obs.elements[0] as HTMLElement).dataset.sentinel === end,
+  );
 }
 
 /** Get all rendered test-item text contents from the DOM. */
@@ -323,7 +336,7 @@ describe("VirtualList component", () => {
     });
 
     const rendered = getRenderedItems(container);
-    // 300px viewport / 50px per item = 6 visible items (items 0-5).
+    // 300px viewport / 50px per item = 6 visible items, item-0 to item-5.
     expect(rendered).toContain("item-0");
     expect(rendered).toContain("item-5");
     expect(rendered).not.toContain("item-10");
@@ -369,7 +382,7 @@ describe("VirtualList component", () => {
       },
     });
 
-    // Initially: items 0-5 visible (300px / 50px).
+    // Initially item-0 to item-5 are visible (300px / 50px).
     let rendered = getRenderedItems(container);
     expect(rendered).toContain("item-0");
     expect(rendered).not.toContain("item-20");
@@ -432,17 +445,13 @@ describe("VirtualList component", () => {
       },
     });
 
-    const sentinelObserver = MockIntersectionObserver.instances.find(
-      (obs) =>
-        obs.elements.length > 0 &&
-        (obs.elements[0] as HTMLElement).dataset.sentinel === "bottom",
-    );
-    expect(sentinelObserver).toBeDefined();
+    const bottomObserver = sentinelObserver("bottom");
+    expect(bottomObserver).toBeDefined();
 
-    sentinelObserver?.trigger(true);
+    bottomObserver?.trigger(true);
     expect(onloadmore).toHaveBeenCalledOnce();
 
-    sentinelObserver?.trigger(false);
+    bottomObserver?.trigger(false);
     expect(onloadmore).toHaveBeenCalledOnce();
   });
 
@@ -460,13 +469,9 @@ describe("VirtualList component", () => {
       },
     });
 
-    const sentinelObserver = MockIntersectionObserver.instances.find(
-      (obs) =>
-        obs.elements.length > 0 &&
-        (obs.elements[0] as HTMLElement).dataset.sentinel === "bottom",
-    );
+    const bottomObserver = sentinelObserver("bottom");
 
-    sentinelObserver?.trigger(false);
+    bottomObserver?.trigger(false);
     expect(onloadmore).not.toHaveBeenCalled();
   });
 
@@ -548,11 +553,7 @@ describe("VirtualList component", () => {
 
     // The top sentinel observer is a separate IntersectionObserver instance
     // that observes the .scroll-sentinel--top element.
-    const topSentinelObserver = MockIntersectionObserver.instances.find(
-      (obs) =>
-        obs.elements.length > 0 &&
-        (obs.elements[0] as HTMLElement).dataset.sentinel === "top",
-    );
+    const topSentinelObserver = sentinelObserver("top");
     expect(topSentinelObserver).toBeDefined();
 
     topSentinelObserver?.trigger(true);
@@ -576,5 +577,86 @@ describe("VirtualList component", () => {
 
     const topSentinel = container.querySelector("[data-sentinel='top']");
     expect(topSentinel).toBeNull();
+  });
+
+  it("observes the bottom sentinel against the scroll container", () => {
+    render(VirtualListHarness, {
+      props: {
+        items: makeItems(10),
+        scrollContainer,
+        estimateHeight: 50,
+        overscan: 0,
+        columns: 1,
+        onloadmore: vi.fn(),
+      },
+    });
+
+    const bottomObserver = sentinelObserver("bottom");
+    expect(bottomObserver?.options?.root).toBe(scrollContainer);
+    expect(bottomObserver?.options?.rootMargin).toBe("200px");
+  });
+
+  it("observes the bottom sentinel against the viewport without a scroll container", () => {
+    render(VirtualListHarness, {
+      props: {
+        items: makeItems(10),
+        estimateHeight: 50,
+        overscan: 0,
+        columns: 1,
+        onloadmore: vi.fn(),
+      },
+    });
+
+    const bottomObserver = sentinelObserver("bottom");
+    expect(bottomObserver).toBeDefined();
+    expect(bottomObserver?.options).toEqual({ rootMargin: "200px" });
+  });
+
+  it("windows a list offset within its scroller as an offset-free list scrolled by the offset", async () => {
+    const items = makeItems(100);
+    const props = {
+      items,
+      scrollContainer,
+      estimateHeight: 50,
+      overscan: 0,
+      columns: 1,
+    };
+
+    // Offset-free: the list starts the scroller, scrolled to 1000.
+    const plain = render(VirtualListHarness, { props });
+    Object.defineProperty(scrollContainer, "scrollTop", { value: 1000 });
+    scrollContainer.dispatchEvent(new Event("scroll"));
+    await tick();
+    const expected = getRenderedIndices(plain.container);
+    cleanup();
+
+    // Offset: 400px of other content sits above the list inside the
+    // scroller, scrolled 400px further.
+    const OFFSET = 400;
+    Object.defineProperty(scrollContainer, "scrollTop", { value: 0 });
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: HTMLElement): DOMRect {
+        const top =
+          this.dataset.virtual === "container"
+            ? OFFSET - scrollContainer.scrollTop
+            : 0;
+        return { top } as DOMRect;
+      });
+    try {
+      const offset = render(VirtualListHarness, { props });
+      await tick();
+      Object.defineProperty(scrollContainer, "scrollTop", {
+        value: 1000 + OFFSET,
+      });
+      scrollContainer.dispatchEvent(new Event("scroll"));
+      await tick();
+
+      expect(expected.length).toBeGreaterThan(0);
+      expect(expected).toContain(20);
+      expect(getRenderedIndices(offset.container)).toEqual(expected);
+    } finally {
+      rectSpy.mockRestore();
+    }
   });
 });

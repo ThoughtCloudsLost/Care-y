@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import {
   createTestDb,
   createTestQueue,
@@ -7,6 +7,7 @@ import {
   type TestDb,
 } from "../test-utils.js";
 import { escalateTenantTickets } from "./escalation.js";
+import type { TicketChangeListener } from "./ticket-live-events.js";
 import type { QueueId, TicketId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("escalateTenantTickets (DB)", () => {
@@ -65,6 +66,27 @@ describe.skipIf(!process.env.DATABASE_URL)("escalateTenantTickets (DB)", () => {
       .where("id", "=", ticketId)
       .executeTakeFirstOrThrow();
     expect(ticket.priority).toBe("normal");
+  });
+
+  it("announces each ticket it escalates and no other", async () => {
+    const queue = await createTestQueue(testDb.db, { escalateDays: 2 });
+    const stale = await insertTicketWithAge({
+      queueId: queue.id,
+      ageDays: 4,
+      priority: "low",
+    });
+    const fresh = await insertTicketWithAge({
+      queueId: queue.id,
+      ageDays: 0,
+      priority: "low",
+    });
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+
+    await escalateTenantTickets(testDb.db, onTicketChanged);
+
+    const announced = onTicketChanged.mock.calls.map(([id]) => id);
+    expect(announced).toContain(stale);
+    expect(announced).not.toContain(fresh);
   });
 
   it("escalates through the full ladder: normal -> high -> urgent", async () => {

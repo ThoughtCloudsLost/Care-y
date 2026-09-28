@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { QueryClient } from "@tanstack/svelte-query";
-import { optimisticMutation } from "./optimistic-mutation.js";
+import {
+  isPagedRows,
+  optimisticListsMutation,
+  patchPagedRow,
+  type PagedRows,
+} from "./optimistic-mutation.js";
+import { ticketsKeys } from "$lib/query/keys.js";
 
 function makeClient(): QueryClient {
   return new QueryClient({
@@ -8,114 +14,190 @@ function makeClient(): QueryClient {
   });
 }
 
-const KEY = ["test", "items"];
-
 interface Item {
   id: string;
   active: boolean;
 }
 
-describe("optimisticMutation", () => {
-  it("applies optimistic update and calls onSuccess on success", async () => {
-    const qc = makeClient();
-    const initial: Item[] = [
-      { id: "a", active: false },
-      { id: "b", active: true },
-    ];
-    qc.setQueryData(KEY, initial);
+describe("isPagedRows", () => {
+  it("accepts pages of rows carrying string ids", () => {
+    expect(
+      isPagedRows({ pages: [[{ id: "a" }], []], pageParams: [null, "c1"] }),
+    ).toBe(true);
+  });
 
+  it("rejects a plain array of rows", () => {
+    expect(isPagedRows([{ id: "a" }])).toBe(false);
+  });
+
+  it("rejects pages without pageParams", () => {
+    expect(isPagedRows({ pages: [[{ id: "a" }]] })).toBe(false);
+  });
+
+  it("rejects a row without a string id", () => {
+    expect(isPagedRows({ pages: [[{ id: 1 }]], pageParams: [null] })).toBe(
+      false,
+    );
+  });
+
+  it("rejects undefined data", () => {
+    expect(isPagedRows(undefined)).toBe(false);
+  });
+});
+
+describe("patchPagedRow", () => {
+  it("patches only the matching row on every page", () => {
+    const data = {
+      pages: [
+        [
+          { id: "a", onHold: false },
+          { id: "b", onHold: false },
+        ],
+        [{ id: "a", onHold: false }],
+      ],
+      pageParams: [null, "c1"],
+    };
+    expect(patchPagedRow(data, "a", { onHold: true })).toEqual({
+      pages: [
+        [
+          { id: "a", onHold: true },
+          { id: "b", onHold: false },
+        ],
+        [{ id: "a", onHold: true }],
+      ],
+      pageParams: [null, "c1"],
+    });
+  });
+
+  it("never rewrites the row id", () => {
+    const data = { pages: [[{ id: "a" }]], pageParams: [null] };
+    expect(patchPagedRow(data, "a", { id: "z" }).pages[0]?.[0]?.id).toBe("a");
+  });
+});
+
+describe("optimisticListsMutation", () => {
+  interface Paged {
+    pages: Item[][];
+    pageParams: unknown[];
+  }
+
+  const activateA = (old: PagedRows): PagedRows =>
+    patchPagedRow(old, "a", { active: true });
+
+  const LANE_ONE = ticketsKeys.list({ lane: "one" });
+  const LANE_TWO = ticketsKeys.list({ lane: "two" });
+
+  function seed(qc: QueryClient): void {
+    qc.setQueryData<Paged>(LANE_ONE, {
+      pages: [[{ id: "a", active: false }]],
+      pageParams: [null],
+    });
+    qc.setQueryData<Paged>(LANE_TWO, {
+      pages: [[{ id: "b", active: false }], [{ id: "a", active: false }]],
+      pageParams: [null, "cursor-1"],
+    });
+  }
+
+  it("applies the update to every list query under the key", async () => {
+    const qc = makeClient();
+    seed(qc);
     const onSuccess = vi.fn();
 
-    await optimisticMutation<Item[]>({
+    await optimisticListsMutation<PagedRows>({
       queryClient: qc,
-      queryKey: KEY,
-      update: (old) =>
-        old.map((i) => (i.id === "a" ? { ...i, active: true } : i)),
+      queryKey: ticketsKeys.lists(),
+      isData: isPagedRows,
+      update: activateA,
       mutate: () => Promise.resolve(),
       onSuccess,
     });
 
-    const result = qc.getQueryData<Item[]>(KEY);
-    expect(result).toEqual([
-      { id: "a", active: true },
-      { id: "b", active: true },
+    expect(qc.getQueryData<Paged>(LANE_ONE)?.pages).toEqual([
+      [{ id: "a", active: true }],
+    ]);
+    expect(qc.getQueryData<Paged>(LANE_TWO)?.pages).toEqual([
+      [{ id: "b", active: false }],
+      [{ id: "a", active: true }],
     ]);
     expect(onSuccess).toHaveBeenCalledOnce();
   });
 
-  it("rolls back to snapshot on mutation failure", async () => {
+  it("rolls every list query back on mutation failure", async () => {
     const qc = makeClient();
-    const initial: Item[] = [{ id: "a", active: false }];
-    qc.setQueryData(KEY, initial);
-
+    seed(qc);
     const onError = vi.fn();
     const err = new Error("network");
 
-    await optimisticMutation<Item[]>({
+    await optimisticListsMutation<PagedRows>({
       queryClient: qc,
-      queryKey: KEY,
-      update: (old) => old.map((i) => ({ ...i, active: true })),
+      queryKey: ticketsKeys.lists(),
+      isData: isPagedRows,
+      update: activateA,
       mutate: () => Promise.reject(err),
       onError,
     });
 
-    const result = qc.getQueryData<Item[]>(KEY);
-    expect(result).toEqual([{ id: "a", active: false }]);
+    expect(qc.getQueryData<Paged>(LANE_ONE)?.pages).toEqual([
+      [{ id: "a", active: false }],
+    ]);
+    expect(qc.getQueryData<Paged>(LANE_TWO)?.pages).toEqual([
+      [{ id: "b", active: false }],
+      [{ id: "a", active: false }],
+    ]);
     expect(onError).toHaveBeenCalledWith(err);
   });
 
-  it("preserves undefined cache without crashing", async () => {
+  it("leaves queries outside the key untouched", async () => {
     const qc = makeClient();
+    seed(qc);
+    const facetKey = ticketsKeys.facetIndex();
+    const facetData: Paged = {
+      pages: [[{ id: "a", active: false }]],
+      pageParams: [null],
+    };
+    qc.setQueryData<Paged>(facetKey, facetData);
 
-    await optimisticMutation<Item[]>({
+    await optimisticListsMutation<PagedRows>({
       queryClient: qc,
-      queryKey: KEY,
-      update: (old) => [...old, { id: "x", active: true }],
+      queryKey: ticketsKeys.lists(),
+      isData: isPagedRows,
+      update: activateA,
       mutate: () => Promise.resolve(),
     });
 
-    expect(qc.getQueryData(KEY)).toBeUndefined();
+    expect(qc.getQueryData(facetKey)).toBe(facetData);
   });
 
-  it("works with paginated data shapes", async () => {
+  it("leaves a list query of another shape untouched", async () => {
     const qc = makeClient();
-    interface Paginated {
-      pages: Item[][];
-      pageParams: unknown[];
-    }
-    const initial: Paginated = {
-      pages: [[{ id: "a", active: false }], [{ id: "b", active: true }]],
-      pageParams: [null, "cursor-1"],
-    };
-    qc.setQueryData(KEY, initial);
+    seed(qc);
+    const flatKey = ticketsKeys.list({ source: "fullSearch" });
+    const flatData: Item[] = [{ id: "a", active: false }];
+    qc.setQueryData(flatKey, flatData);
+    const before = qc.getQueryState(flatKey)?.dataUpdatedAt;
 
-    await optimisticMutation<Paginated>({
+    await optimisticListsMutation<PagedRows>({
       queryClient: qc,
-      queryKey: KEY,
-      update: (old) => ({
-        ...old,
-        pages: old.pages.map((pg) =>
-          pg.map((t) => (t.id === "a" ? { ...t, active: true } : t)),
-        ),
-      }),
+      queryKey: ticketsKeys.lists(),
+      isData: isPagedRows,
+      update: activateA,
       mutate: () => Promise.resolve(),
     });
 
-    const result = qc.getQueryData<Paginated>(KEY);
-    expect(result?.pages[0]?.[0]?.active).toBe(true);
-    expect(result?.pages[1]?.[0]?.active).toBe(true);
+    expect(qc.getQueryData(flatKey)).toBe(flatData);
+    expect(qc.getQueryState(flatKey)?.dataUpdatedAt).toBe(before);
   });
 
   it("does not roll back when onSuccess throws", async () => {
     const qc = makeClient();
-    const initial: Item[] = [{ id: "a", active: false }];
-    qc.setQueryData(KEY, initial);
+    seed(qc);
 
     await expect(
-      optimisticMutation<Item[]>({
+      optimisticListsMutation<PagedRows>({
         queryClient: qc,
-        queryKey: KEY,
-        update: (old) => old.map((i) => ({ ...i, active: true })),
+        queryKey: ticketsKeys.lists(),
+        isData: isPagedRows,
+        update: activateA,
         mutate: () => Promise.resolve(),
         onSuccess: () => {
           throw new Error("toast crash");
@@ -123,7 +205,8 @@ describe("optimisticMutation", () => {
       }),
     ).rejects.toThrow("toast crash");
 
-    const result = qc.getQueryData<Item[]>(KEY);
-    expect(result).toEqual([{ id: "a", active: true }]);
+    expect(qc.getQueryData<Paged>(LANE_ONE)?.pages).toEqual([
+      [{ id: "a", active: true }],
+    ]);
   });
 });

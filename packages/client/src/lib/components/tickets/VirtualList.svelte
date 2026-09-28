@@ -1,6 +1,8 @@
 <script lang="ts" generics="T">
   import type { Snippet } from "svelte";
   import { buildPrefixSums, computeRange } from "./virtual-list-engine.js";
+  import { loadMoreObserver } from "$lib/utils/load-more-observer.svelte.js";
+  import { offsetWithinScroller } from "$lib/utils/scroll-offset.js";
 
   let {
     items,
@@ -8,6 +10,7 @@
     estimateHeight = 200,
     overscan = 3,
     columns = 1,
+    columnTrack,
     virtualizeThreshold = 500,
     _forceVirtualize = false,
     getKey,
@@ -20,6 +23,12 @@
     estimateHeight?: number;
     overscan?: number;
     columns?: number;
+    /**
+     * CSS track size for each grid column. Defaults to an equal share of
+     * the row; a capped track keeps cards their own size and leaves the
+     * rest of the row empty.
+     */
+    columnTrack?: string;
     /**
      * Item count before switching from flat to virtualized rendering.
      * Lower for complex items (cards with images), higher for simple items.
@@ -96,6 +105,11 @@
   let measuredCount = $state(0);
   let scrollTop = $state(0);
   let containerHeight = $state(0);
+  // Distance from the top of the scroller's content to the top of this
+  // list. Zero when the list starts the scroller; non-zero when other
+  // content sits above it (a list inside a dashboard lane).
+  let listOffsetTop = $state(0);
+  let containerEl: HTMLDivElement | undefined = $state();
 
   const rowCount = $derived(Math.ceil(items.length / columns));
 
@@ -133,10 +147,13 @@
     virtualized ? buildPrefixSums(heights, rowCount, avgHeight) : [0],
   );
 
+  // The scroller's scrollTop measures from the top of its content, the
+  // prefix sums from the top of this list, so the list's own offset is
+  // subtracted to put both in list coordinates.
   const visibleRange = $derived(
     virtualized
       ? computeRange(
-          scrollTop,
+          scrollTop - listOffsetTop,
           containerHeight,
           prefixSums,
           items,
@@ -176,6 +193,25 @@
       el.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(rafId);
     };
+  });
+
+  // --- List offset within the scroller (virtualized mode only) ---
+  // Measured when virtualization engages (the container mounts), then on
+  // scroller and parent resizes, since content above the list can change
+  // height. Mirrors TicketTable's tbody offset measurement.
+  $effect(() => {
+    if (!virtualized || !scrollContainer || !containerEl) return;
+    const scroller = scrollContainer;
+    const listEl = containerEl;
+    const measure = (): void => {
+      listOffsetTop = offsetWithinScroller(listEl, scroller);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(scroller);
+    const parent = wrapperEl?.parentElement;
+    if (parent) ro.observe(parent);
+    return () => ro.disconnect();
   });
 
   // --- ResizeObserver (active in BOTH modes) ---
@@ -285,37 +321,6 @@
     };
   }
 
-  // --- Sentinels for infinite scroll (both modes) ---
-  let sentinelEl: HTMLDivElement | undefined = $state();
-  let topSentinelEl: HTMLDivElement | undefined = $state();
-
-  $effect(() => {
-    if (!sentinelEl || !onloadmore) return;
-    const cb = onloadmore;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting === true) cb();
-      },
-      { rootMargin: "200px" },
-    );
-    io.observe(sentinelEl);
-    return () => io.disconnect();
-  });
-
-  // Top sentinel: fires onloadprevious when user scrolls to the top.
-  $effect(() => {
-    if (!topSentinelEl || !onloadprevious) return;
-    const cb = onloadprevious;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting === true) cb();
-      },
-      { rootMargin: "200px" },
-    );
-    io.observe(topSentinelEl);
-    return () => io.disconnect();
-  });
-
   // Group visible items by row for rendering (virtualized mode only).
   // Each row carries its absolute `top` offset from the prefix sums.
   const visibleRows = $derived.by(() => {
@@ -352,7 +357,7 @@
   <!-- Top sentinel: fires onloadprevious when scrolled into view -->
   {#if onloadprevious}
     <div
-      bind:this={topSentinelEl}
+      {@attach loadMoreObserver(onloadprevious)}
       class="scroll-sentinel scroll-sentinel--top"
       aria-hidden="true"
       data-sentinel="top"
@@ -364,6 +369,7 @@
          Absolutely positioned rows inside a fixed-height container.
          Heights come from real measurements collected during flat mode. -->
     <div
+      bind:this={containerEl}
       class="virtual-container"
       data-virtual="container"
       style:height="{totalHeight}px"
@@ -376,6 +382,7 @@
           data-virtual="row"
           data-grid={!isSingleCol || undefined}
           style:--virtual-columns={columns}
+          style:--virtual-column-track={columnTrack}
           style:top="{rowData.top}px"
           use:bindRow={rowData.row}
         >
@@ -396,6 +403,7 @@
         data-virtual="row"
         data-grid={!isSingleCol || undefined}
         style:--virtual-columns={columns}
+        style:--virtual-column-track={columnTrack}
         use:bindRow={rowData.row}
       >
         {#each rowData.items as vi (getKey(vi.item))}
@@ -405,9 +413,11 @@
     {/each}
   {/if}
 
-  <!-- Infinite scroll sentinel (both modes) -->
+  <!-- Infinite scroll sentinel (both modes). Observed against the
+       scroller when there is one, so the lookahead holds inside a
+       scroller nested in the page. -->
   <div
-    bind:this={sentinelEl}
+    {@attach onloadmore && loadMoreObserver(onloadmore, scrollContainer)}
     class="scroll-sentinel"
     aria-hidden="true"
     data-sentinel="bottom"
@@ -432,7 +442,10 @@
 
   .virtual-row-grid {
     display: grid;
-    grid-template-columns: repeat(var(--virtual-columns, 1), 1fr);
+    grid-template-columns: repeat(
+      var(--virtual-columns, 1),
+      var(--virtual-column-track, 1fr)
+    );
     gap: var(--space-md);
   }
 

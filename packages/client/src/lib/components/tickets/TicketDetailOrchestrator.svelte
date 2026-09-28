@@ -90,9 +90,15 @@
     getCryptoBridge,
     getOrgDecryptCache,
     getCurrentUserId,
+    getCurrentPermissions,
     getFollowUpDecryptCache,
     getTicketDecryptCache,
   } from "$lib/crypto/context.js";
+  import {
+    canCall,
+    canUseChannel,
+    canUseInline,
+  } from "$lib/auth/procedure-gates.js";
   import {
     createVolunteersQuery,
     createParticipantsQuery,
@@ -105,6 +111,7 @@
   } from "$lib/tickets/resolve-volunteer.js";
   import { requireRouter } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { getErrorMessage } from "$lib/components/query-error-messages.js";
   import { createSendMessage } from "$lib/composables/ticket-detail/create-send-message.svelte.js";
   import { createAttachmentUpload } from "$lib/composables/ticket-detail/create-attachment-upload.svelte.js";
   import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
@@ -298,6 +305,30 @@
 
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
+  const permissionsGetter = getCurrentPermissions();
+  const permissions = $derived(permissionsGetter());
+
+  // Compose menu channels: the client can receive on it, the org has it
+  // switched on, and the account may send on it.
+  const canReplyToClient = $derived(
+    ticket?.portalCapable === true &&
+      channelPolicy.secureLinkEnabled &&
+      canUseChannel(permissions, "portal"),
+  );
+  const canTextClient = $derived(
+    ticket?.hasPhone === true &&
+      channelPolicy.smsEnabled &&
+      canUseChannel(permissions, "sms"),
+  );
+  const canEmailClient = $derived(
+    ticket?.hasEmail === true &&
+      channelPolicy.emailEnabled &&
+      canUseChannel(permissions, "email"),
+  );
+  const canAttachFile = $derived(
+    canReplyToClient && canCall(permissions, "tickets.uploadAttachment"),
+  );
+  const canAddNote = $derived(canUseInline(permissions, "writeCaseNotes"));
 
   const readCursor = createReadCursor({
     getTicketId: () => ticketId,
@@ -413,8 +444,8 @@
       await ticketRouter.revokeReplyToken.mutate({ ticketId });
       revokeTokenDialogOpen = false;
       toastStore.show(m.revoke_reply_token_success(), 3000);
-    } catch {
-      toastStore.show(m.error_generic(), 3000);
+    } catch (err: unknown) {
+      toastStore.show(getErrorMessage(err), 3000);
     } finally {
       revokeTokenPending = false;
     }
@@ -1389,8 +1420,8 @@
           queryKey: ticketsKeys.lists(),
         });
       })
-      .catch(() => {
-        toastStore.show(m.error_generic(), 3000);
+      .catch((err: unknown) => {
+        toastStore.show(getErrorMessage(err), 3000);
       });
   }}
   onprioritydismiss={() => {
@@ -1409,8 +1440,8 @@
           queryKey: ticketsKeys.lists(),
         });
       })
-      .catch(() => {
-        toastStore.show(m.error_generic(), 3000);
+      .catch((err: unknown) => {
+        toastStore.show(getErrorMessage(err), 3000);
       });
   }}
   onqueuedismiss={() => {
@@ -1429,33 +1460,34 @@
           queryKey: ticketsKeys.lists(),
         });
       })
-      .catch(() => {
-        toastStore.show(m.error_generic(), 3000);
+      .catch((err: unknown) => {
+        toastStore.show(getErrorMessage(err), 3000);
       });
   }}
   oncallaction={handleCallAction}
   oncalldismiss={closeCallSheet}
   oncomposedismiss={closeComposeActions}
-  onreply={ticket?.portalCapable === true && channelPolicy.secureLinkEnabled
-    ? () => compose?.activateReply()
-    : undefined}
-  ontextclient={ticket?.hasPhone === true && channelPolicy.smsEnabled
+  onreply={canReplyToClient ? () => compose?.activateReply() : undefined}
+  ontextclient={canTextClient
     ? () => {
         exposureHint.show("sms");
         compose?.activateSms();
       }
     : undefined}
-  onemailclient={ticket?.hasEmail === true && channelPolicy.emailEnabled
+  onemailclient={canEmailClient
     ? () => {
         emailComposeOpen = true;
       }
     : undefined}
-  onattach={(file: File) => {
-    // Activate reply mode so the volunteer sees the compose bar with
-    // the pending attachment chip.
-    compose?.activateReply();
-    void attachmentUpload.attach(file);
-  }}
+  onattach={canAttachFile
+    ? (file: File) => {
+        // Activate reply mode so the volunteer sees the compose bar with
+        // the pending attachment chip.
+        compose?.activateReply();
+        void attachmentUpload.attach(file);
+      }
+    : undefined}
+  {canAddNote}
   ondraftset={(body: string) => {
     setDraftForMode(ticketId, "reply", body);
     compose?.activateReply();

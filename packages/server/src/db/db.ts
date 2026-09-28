@@ -10,9 +10,18 @@ pg.types.setTypeParser(pg.types.builtins.INT8, (val: string) =>
   parseInt(val, 10),
 );
 
+/**
+ * Connection settings shared by the pool and by any dedicated client that
+ * must hold one session open. LISTEN registers the current session only,
+ * so a listener cannot use a pooled connection.
+ */
+export const pgConnectionConfig: pg.ClientConfig = {
+  connectionString: process.env.DATABASE_URL,
+};
+
 const dialect = new PostgresDialect({
   pool: new pg.Pool({
-    connectionString: process.env.DATABASE_URL,
+    ...pgConnectionConfig,
     max: 10,
   }),
 });

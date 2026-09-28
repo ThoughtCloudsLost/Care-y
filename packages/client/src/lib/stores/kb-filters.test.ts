@@ -133,7 +133,7 @@ describe("kbFilterStore", () => {
     it("includes sort defaults and limit when no filters active", async () => {
       const store = await getStore();
       expect(store.serverParams).toEqual({
-        categoryId: undefined,
+        categoryIds: undefined,
         sortBy: "created_at",
         sortDirection: "desc",
         minRating: undefined,
@@ -144,17 +144,24 @@ describe("kbFilterStore", () => {
       });
     });
 
-    it("passes single categoryId for server-side filtering", async () => {
+    it("passes a single selected category to the server", async () => {
       const store = await getStore();
       store.toggleCategory("cat-1");
-      expect(store.serverParams.categoryId).toBe("cat-1");
+      expect(store.serverParams.categoryIds).toEqual(["cat-1"]);
     });
 
-    it("omits categoryId when multiple selected (post-filter client-side)", async () => {
+    it("passes every selected category to the server", async () => {
       const store = await getStore();
       store.toggleCategory("cat-1");
       store.toggleCategory("cat-2");
-      expect(store.serverParams.categoryId).toBeUndefined();
+      expect(store.serverParams.categoryIds).toEqual(["cat-1", "cat-2"]);
+    });
+
+    it("omits categoryIds again once the last category is cleared", async () => {
+      const store = await getStore();
+      store.toggleCategory("cat-1");
+      store.toggleCategory("cat-1");
+      expect(store.serverParams.categoryIds).toBeUndefined();
     });
 
     it("reflects sort changes", async () => {

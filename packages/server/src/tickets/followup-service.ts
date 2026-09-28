@@ -9,6 +9,7 @@
 import type { Kysely, SelectQueryBuilder } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
+import type { TicketChangeListener } from "./ticket-live-events.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import { mediaExistsSelects } from "./query-helpers.js";
 import {
@@ -223,7 +224,7 @@ export interface FollowUpService {
  * Returns a Map keyed by key_generation UUID. Only wraps for the requesting
  * volunteer (userId) are returned, matching the single-user decrypt use case.
  */
-async function fetchFollowUpKeyWraps(
+export async function fetchFollowUpKeyWraps(
   db: Kysely<TenantDatabase>,
   userId: UserId,
   rows: readonly { key_generation?: KeyGeneration | null }[],
@@ -259,7 +260,7 @@ async function fetchFollowUpKeyWraps(
  * the intakeWrap inclusion rule: present only when a pending sealed wrap
  * exists for convergence.
  */
-async function fetchPortalWraps(
+export async function fetchPortalWraps(
   db: Kysely<TenantDatabase>,
   rows: readonly { id: FollowupId; key_generation?: KeyGeneration | null }[],
 ): Promise<Map<FollowupId, string>> {
@@ -440,6 +441,11 @@ export interface FollowUpServiceDeps {
    * portalMessageDeps.
    */
   readonly onPortalOrgReply?: (channelRowId: ChannelRowId) => void;
+  /**
+   * Called with the ticket id after a follow-up is created, edited or
+   * deleted. Request-scoped: the caller binds it to the tenant.
+   */
+  readonly onTicketChanged?: TicketChangeListener;
 }
 
 export function createFollowUpService(
@@ -561,6 +567,7 @@ export function createFollowUpService(
         deps?.onPortalOrgReply?.(resolvedChannel.id);
       }
 
+      deps?.onTicketChanged?.(input.ticketId);
       return toRecord(row);
     },
 
@@ -929,6 +936,7 @@ export function createFollowUpService(
         .executeTakeFirst();
 
       if (!row) throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_OWNED);
+      deps?.onTicketChanged?.(existing.ticket_id);
       return {
         record: toRecord(row),
         previousNoteTypeId: existing.note_type_id ?? null,
@@ -963,6 +971,7 @@ export function createFollowUpService(
         .set({ deleted_at: new Date() })
         .where("id", "=", followUpId)
         .execute();
+      deps?.onTicketChanged?.(existing.ticket_id);
     },
 
     async listParticipants(userId, ticketId) {
@@ -1153,6 +1162,7 @@ export function createFollowUpService(
         return updated;
       });
 
+      deps?.onTicketChanged?.(existing.ticket_id);
       return toRecord(row);
     },
   };

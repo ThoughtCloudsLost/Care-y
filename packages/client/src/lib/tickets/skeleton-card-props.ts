@@ -19,6 +19,7 @@ export function makeSkeletonCardProps(): DataCardProps {
     lastActivityAt: null,
     followUpCount: 0,
     unreadCount: 0,
+    unreadCountIsFloor: false,
     previewFollowUps: undefined,
     ontap: () => {
       /* loading skeleton, no-op */

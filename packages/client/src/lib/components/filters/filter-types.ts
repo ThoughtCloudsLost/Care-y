@@ -5,6 +5,15 @@ export interface FilterOption {
   readonly label: string;
 }
 
+/**
+ * A record a pill option is built from: its id and decrypted name. A null
+ * name is still decrypting.
+ */
+export interface NamedOptionSource {
+  readonly id: string;
+  readonly name: string | null;
+}
+
 export interface PillDefinition {
   readonly id: string;
   readonly label: string;

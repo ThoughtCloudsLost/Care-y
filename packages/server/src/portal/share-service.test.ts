@@ -25,6 +25,7 @@ import {
 } from "./share-service.js";
 import { newShareId, newFollowupId, newTicketId } from "@care-y/shared";
 import type { TicketId, UserId, OrgSchema } from "@care-y/shared";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -137,6 +138,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .executeTakeFirst();
 
       expect(shareRow).toBeUndefined();
+    });
+
+    it("announces the ticket after the share commits", async () => {
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+
+      await createShare(testDb.db, makeShareInput(ticketId), {
+        onTicketChanged,
+      });
+
+      expect(onTicketChanged).toHaveBeenCalledExactlyOnceWith(ticketId);
     });
 
     it("throws ShareTicketNotFoundError for a nonexistent ticket", async () => {

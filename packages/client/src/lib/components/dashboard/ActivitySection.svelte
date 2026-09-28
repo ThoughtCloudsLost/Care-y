@@ -3,39 +3,80 @@
   import TicketPlus from "$lib/components/icons/TicketPlus.svelte";
   import TicketCheck from "$lib/components/icons/TicketCheck.svelte";
   import TicketX from "$lib/components/icons/TicketX.svelte";
-  import type { Component } from "svelte";
+  import type { Component, Snippet } from "svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
+  import { auditEventLabel } from "$lib/admin/audit-log-labels.js";
+  import { auditEventTypeSchema } from "@care-y/shared";
   import CollapsibleSection from "./CollapsibleSection.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
-  interface ActivityItem {
-    id: string;
-    eventType: string;
-    ticketId: string | null;
-    clientAlias: string | null;
-    queueName: string | null;
-    createdAt: Date | string;
-  }
+  /**
+   * One feed row. `ticket` rows open their ticket; `ticket_outside_queues`
+   * rows name only the queue; `org` rows carry no ticket at all. A null
+   * alias or queue name means decryption is still pending.
+   */
+  type ActivityItem =
+    | {
+        kind: "ticket";
+        id: string;
+        eventType: string;
+        ticketId: string;
+        clientAlias: string | null;
+        queueName: string | null;
+        createdAt: Date | string;
+      }
+    | {
+        kind: "ticket_outside_queues";
+        id: string;
+        eventType: string;
+        queueName: string | null;
+        createdAt: Date | string;
+      }
+    | {
+        kind: "org";
+        id: string;
+        eventType: string;
+        createdAt: Date | string;
+      };
 
   interface ActivitySectionProps {
     activity: ActivityItem[];
+    /** Every visible event in the past hour, not only the rows shown. */
+    lastHourCount: number;
     loading?: boolean;
     expanded: boolean;
     ontoggle: () => void;
     ontap?: (ticketId: string) => void;
+    /** Passed to the section header (the filter button). */
+    headerAction?: Snippet;
+    /** Passed to the section (the filter row). */
+    filterRow?: Snippet;
   }
 
   let {
     activity,
+    lastHourCount,
     loading = false,
     expanded,
     ontoggle,
     ontap,
+    headerAction,
+    filterRow,
   }: ActivitySectionProps = $props();
+
+  const summary = $derived(
+    lastHourCount === 1
+      ? m.dashboard_activity_summary_one({ count: lastHourCount })
+      : m.dashboard_activity_summary_other({ count: lastHourCount }),
+  );
+
+  const AUDIT_EVENT_TYPES: ReadonlySet<string> = new Set(
+    auditEventTypeSchema.options,
+  );
 
   function eventLabel(eventType: string): string {
     switch (eventType) {
@@ -50,7 +91,9 @@
       case "mention":
         return m.dashboard_activity_mention();
       default:
-        return m.dashboard_activity_unknown();
+        return AUDIT_EVENT_TYPES.has(eventType)
+          ? auditEventLabel(eventType)
+          : m.dashboard_activity_unknown();
     }
   }
 
@@ -71,6 +114,33 @@
   }
 </script>
 
+{#snippet rowContent(item: ActivityItem)}
+  {@const EventIcon = eventIcon(item.eventType)}
+  <span class="activity-icon-gutter" aria-hidden="true">
+    <EventIcon size={13} />
+  </span>
+  <span class="activity-event">{eventLabel(item.eventType)}</span>
+  {#if item.kind === "ticket"}
+    <span class="activity-alias">{item.clientAlias ?? "..."}</span>
+  {/if}
+  {#if item.kind !== "org"}
+    <span class="activity-queue"
+      >{m.dashboard_activity_in_queue(
+        withTerms({
+          queueName: item.queueName ?? "...",
+        }),
+      )}</span
+    >
+  {/if}
+  <span class="activity-time">
+    {formatRelativeTime(
+      item.createdAt instanceof Date
+        ? item.createdAt
+        : new Date(item.createdAt),
+    )}
+  </span>
+{/snippet}
+
 <CollapsibleSection
   heading={m.dashboard_activity_heading()}
   icon={Activity}
@@ -78,6 +148,8 @@
   {loading}
   {expanded}
   {ontoggle}
+  {headerAction}
+  {filterRow}
 >
   {#if loading}
     <div class="activity-content skeleton-pulse">
@@ -99,42 +171,27 @@
   {:else if activity.length > 0}
     <div class="activity-content">
       <div class="activity-summary">
-        <span>{m.dashboard_activity_summary({ count: activity.length })}</span>
+        <span>{summary}</span>
       </div>
 
       <div class="activity-surface">
         {#each activity.slice(0, 5) as item (item.id)}
-          {@const EventIcon = eventIcon(item.eventType)}
-          <div
-            class="activity-row touch-feedback"
-            role="button"
-            tabindex="0"
-            onclick={() => item.ticketId !== null && ontap?.(item.ticketId)}
-            aria-disabled={item.ticketId === null}
-            onkeydown={onKeyActivate(() => {
-              if (item.ticketId !== null) ontap?.(item.ticketId);
-            })}
-          >
-            <span class="activity-icon-gutter" aria-hidden="true">
-              <EventIcon size={13} />
-            </span>
-            <span class="activity-event">{eventLabel(item.eventType)}</span>
-            <span class="activity-alias">{item.clientAlias ?? "..."}</span>
-            <span class="activity-queue"
-              >{m.dashboard_activity_in_queue(
-                withTerms({
-                  queueName: item.queueName ?? "...",
-                }),
-              )}</span
+          {#if item.kind === "ticket"}
+            {@const ticketId = item.ticketId}
+            <div
+              class="activity-row activity-row-link touch-feedback"
+              role="button"
+              tabindex="0"
+              onclick={() => ontap?.(ticketId)}
+              onkeydown={onKeyActivate(() => ontap?.(ticketId))}
             >
-            <span class="activity-time">
-              {formatRelativeTime(
-                item.createdAt instanceof Date
-                  ? item.createdAt
-                  : new Date(item.createdAt),
-              )}
-            </span>
-          </div>
+              {@render rowContent(item)}
+            </div>
+          {:else}
+            <div class="activity-row">
+              {@render rowContent(item)}
+            </div>
+          {/if}
         {/each}
       </div>
     </div>
@@ -148,7 +205,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
-    padding: 0 var(--page-pad-x) 0.25rem;
+    padding: 0 var(--section-inset, var(--page-pad-x)) 0.25rem;
   }
 
   .activity-summary {
@@ -176,6 +233,9 @@
     color: var(--muted);
     padding: var(--space-lg) var(--page-pad-x);
     border-bottom: 1px solid var(--hair);
+  }
+
+  .activity-row-link {
     cursor: pointer;
   }
 
@@ -220,7 +280,7 @@
   }
 
   .no-activity {
-    padding: 0 1rem 0.5rem;
+    padding: 0 var(--section-inset, var(--page-pad-x)) 0.5rem;
     font-size: var(--text-base);
     color: var(--muted);
   }

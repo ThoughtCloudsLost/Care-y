@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FILTER_ID_LIST_MAX } from "./limits.js";
 import {
   ticketStatusSchema,
   ticketPrioritySchema,
@@ -8,6 +9,7 @@ import {
   createFollowUpInputSchema,
   resolveCreateTargetInputSchema,
   ticketListInputSchema,
+  recentActivityInputSchema,
   uploadAttachmentInputSchema,
   mergeClientsInputSchema,
   createQueueInputSchema,
@@ -278,6 +280,13 @@ describe("updateTicketInputSchema", () => {
 });
 
 describe("ticketListInputSchema", () => {
+  it("rejects more queue ids than the filter cap", () => {
+    const queueIds = Array.from({ length: FILTER_ID_LIST_MAX + 1 }, () =>
+      crypto.randomUUID(),
+    );
+    expect(ticketListInputSchema.safeParse({ queueIds }).success).toBe(false);
+  });
+
   it("defaults limit to 50", () => {
     const result = ticketListInputSchema.safeParse({});
     expect(result.success).toBe(true);
@@ -298,6 +307,60 @@ describe("ticketListInputSchema", () => {
 
   it("rejects limit above 100", () => {
     expect(ticketListInputSchema.safeParse({ limit: 200 }).success).toBe(false);
+  });
+});
+
+describe("recentActivityInputSchema", () => {
+  it("rejects more queue ids than the filter cap", () => {
+    const queueIds = Array.from({ length: FILTER_ID_LIST_MAX + 1 }, () =>
+      crypto.randomUUID(),
+    );
+    expect(recentActivityInputSchema.safeParse({ queueIds }).success).toBe(
+      false,
+    );
+  });
+
+  it("defaults to five entries and no filters when input is omitted", () => {
+    expect(recentActivityInputSchema.parse(undefined)).toEqual({ limit: 5 });
+  });
+
+  it("accepts kind and queue filters", () => {
+    const result = recentActivityInputSchema.safeParse({
+      kinds: ["ticket", "org"],
+      queueIds: [VALID_UUID, VALID_UUID_2],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({
+        limit: 5,
+        kinds: ["ticket", "org"],
+        queueIds: [VALID_UUID, VALID_UUID_2],
+      });
+    }
+  });
+
+  it("accepts empty filter lists", () => {
+    expect(
+      recentActivityInputSchema.safeParse({ kinds: [], queueIds: [] }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an unknown kind", () => {
+    expect(
+      recentActivityInputSchema.safeParse({ kinds: ["queue"] }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a queue id that is not a UUID", () => {
+    expect(
+      recentActivityInputSchema.safeParse({ queueIds: ["not-a-uuid"] }).success,
+    ).toBe(false);
+  });
+
+  it("rejects limit above 10", () => {
+    expect(recentActivityInputSchema.safeParse({ limit: 11 }).success).toBe(
+      false,
+    );
   });
 });
 

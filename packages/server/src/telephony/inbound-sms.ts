@@ -36,6 +36,7 @@ import { enqueueLogDeletion } from "../jobs/log-deletion.js";
 import { TelephonyError } from "../errors.js";
 import { encryptString } from "./crypto-helpers.js";
 import { resolveOrCreateTicket } from "../tickets/server-ticket-create.js";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 import {
   createEncryptedFollowUp,
   createFollowUpWithTk,
@@ -69,6 +70,8 @@ export interface InboundSmsDeps {
   readonly orgId: OrgId;
   readonly orgSchema: OrgSchema;
   readonly defaultLocale: string;
+  /** Called with the ticket id once the message is on the ticket. */
+  readonly onTicketChanged?: TicketChangeListener;
 }
 
 /**
@@ -207,6 +210,9 @@ export async function handleInboundSms(
       copyResult.portalCopy,
     );
   }
+
+  // The ticket and its new follow-up are committed: tell open views.
+  deps.onTicketChanged?.(ticketResult.ticketId);
 
   // 8. Send auto-reply
   const autoReply = await selectAutoReply(

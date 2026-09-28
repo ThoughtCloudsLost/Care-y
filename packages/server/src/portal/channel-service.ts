@@ -20,6 +20,10 @@ import {
   PassphraseCountMismatchError,
 } from "./portal-errors.js";
 import { hasExactMessageCoverage } from "./message-coverage.js";
+import {
+  announceClientTickets,
+  type TicketChangeListener,
+} from "../tickets/ticket-live-events.js";
 import { PORTAL_SURFACE_KINDS } from "@care-y/shared";
 import type {
   ClientId,
@@ -42,6 +46,14 @@ export interface ChannelRegistration {
     readonly nonce: Buffer;
     readonly ciphertext: Buffer;
   };
+}
+
+/**
+ * A tier or channel change shows on every ticket of the client, so each
+ * of them is announced once the change commits.
+ */
+export interface ChannelChangeDeps {
+  readonly onTicketChanged?: TicketChangeListener;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,12 +143,14 @@ export async function purgeAndRevokeChannel(
  *
  * Throws ChannelAlreadyActiveError when the partial unique index
  * rejects a second active channel for the same client. The constraint
- * is the authority; no pre-check-then-insert.
+ * is the authority; no pre-check-then-insert. Every ticket of the client
+ * is announced after the commit.
  */
 export async function createChannel(
   db: Kysely<TenantDatabase>,
   clientId: ClientId,
   reg: ChannelRegistration,
+  deps?: ChannelChangeDeps,
 ): Promise<void> {
   try {
     await db.transaction().execute(async (trx) => {
@@ -154,18 +168,21 @@ export async function createChannel(
     }
     throw err;
   }
+  await announceClientTickets(db, clientId, deps?.onTicketChanged);
 }
 
 /**
  * Regenerate a channel: revoke the old active channel (if any), purge
  * its portal carriers (messages, attachments, recordings), and insert
  * a new registration. All in one transaction. No-op-safe when no
- * active channel exists (plain create).
+ * active channel exists (plain create). Every ticket of the client is
+ * announced after the commit.
  */
 export async function regenerateChannel(
   db: Kysely<TenantDatabase>,
   clientId: ClientId,
   reg: ChannelRegistration,
+  deps?: ChannelChangeDeps,
 ): Promise<void> {
   await db.transaction().execute(async (trx) => {
     // Kind-agnostic: regeneration replaces any active channel regardless of kind
@@ -189,18 +206,21 @@ export async function regenerateChannel(
 
     await insertChannel(trx, clientId, reg);
   });
+  await announceClientTickets(db, clientId, deps?.onTicketChanged);
 }
 
 /**
  * Revoke the active channel, purge its portal carriers (messages,
  * attachments, recordings), and reset the client's tier back to
- * sms_email. No-op if no active channel exists.
+ * sms_email. No-op if no active channel exists. Every ticket of the
+ * client is announced once a revocation commits.
  */
 export async function revokeChannel(
   db: Kysely<TenantDatabase>,
   clientId: ClientId,
+  deps?: ChannelChangeDeps,
 ): Promise<void> {
-  await db.transaction().execute(async (trx) => {
+  const revoked = await db.transaction().execute(async (trx) => {
     // Kind-agnostic: revocation applies to any active channel regardless of kind
     const active = await trx
       .selectFrom("portal_channels")
@@ -209,17 +229,21 @@ export async function revokeChannel(
       .where("status", "=", "active")
       .executeTakeFirst();
 
-    if (active) {
-      await purgeAndRevokeChannel(trx, active.id);
+    if (!active) return false;
 
-      // Only reset tier when a channel was actually revoked
-      await trx
-        .updateTable("clients")
-        .set({ communication_tier: "sms_email" })
-        .where("id", "=", clientId)
-        .execute();
-    }
+    await purgeAndRevokeChannel(trx, active.id);
+
+    // Only reset tier when a channel was actually revoked
+    await trx
+      .updateTable("clients")
+      .set({ communication_tier: "sms_email" })
+      .where("id", "=", clientId)
+      .execute();
+    return true;
   });
+  if (revoked) {
+    await announceClientTickets(db, clientId, deps?.onTicketChanged);
+  }
 }
 
 /**

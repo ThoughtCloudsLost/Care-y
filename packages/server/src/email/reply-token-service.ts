@@ -25,6 +25,7 @@ import type { ReplyTokenHasher } from "../crypto/field-encryptor.js";
 import { ReplyTokenError } from "../errors.js";
 import { encodeBase32Lower } from "./base32.js";
 import type { TicketId, ReplyTokenId } from "@care-y/shared";
+import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 
 /**
  * Generates a fresh 128-bit random token as 26-char lowercase base32.
@@ -107,11 +108,13 @@ export async function resolveToken(
 
 /**
  * Revokes all unrevoked tokens for a ticket. Subsequent resolveToken calls
- * for those tokens will fail.
+ * for those tokens will fail. The ticket is announced when at least one
+ * token was revoked.
  */
 export async function revokeTokensForTicket(
   tDb: Kysely<TenantDatabase>,
   ticketId: TicketId,
+  deps?: { readonly onTicketChanged?: TicketChangeListener },
 ): Promise<number> {
   const result = await tDb
     .updateTable("email_reply_tokens")
@@ -125,5 +128,7 @@ export async function revokeTokensForTicket(
   for (const r of result) {
     total += r.numUpdatedRows;
   }
-  return Number(total);
+  const revoked = Number(total);
+  if (revoked > 0) deps?.onTicketChanged?.(ticketId);
+  return revoked;
 }

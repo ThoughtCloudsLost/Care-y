@@ -99,6 +99,7 @@ import type {
   ReplyTokenId,
   ReplyTokenHash,
   InboundEmailDomainId,
+  PrefBlobKind,
 } from "@care-y/shared";
 
 export interface OrgsTable {
@@ -767,6 +768,18 @@ export interface UserRecentViewsTable {
   wrapped_payload: Buffer;
 }
 
+// --- Per-user preference documents (encrypted blobs, one per kind) ---
+// ECIES envelope sealed to the user's own vol_public, keyed by
+// (user_id, kind). The server stores ciphertext only.
+// No timestamp column (metadata minimization, ADR-018).
+export interface UserPrefBlobsTable {
+  user_id: UserId;
+  kind: PrefBlobKind;
+  ephemeral_point: Buffer; // ristretto255, 32 bytes
+  nonce: Buffer; // 24 bytes
+  wrapped_payload: Buffer;
+}
+
 // --- Voicemail quarantine ---
 
 export interface VoicemailQuarantineTable {
@@ -1138,4 +1151,6 @@ export interface TenantDatabase {
   notification_outbox: NotificationOutboxTable;
   // Email reply tokens (inbound email attribution)
   email_reply_tokens: EmailReplyTokensTable;
+  // Per-user preference documents
+  user_pref_blobs: UserPrefBlobsTable;
 }

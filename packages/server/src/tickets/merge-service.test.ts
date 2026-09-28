@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import {
   createTestDb,
   seedOrgPublicKey,
@@ -9,6 +9,7 @@ import {
 } from "../test-utils.js";
 import { createMergeService, type MergeService } from "./merge-service.js";
 import { createDependencyService } from "./dependency-service.js";
+import type { TicketChangeListener } from "./ticket-live-events.js";
 import { MergeError, NotFoundError } from "../errors.js";
 import * as crypto from "node:crypto";
 import type {
@@ -108,6 +109,90 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       .executeTakeFirstOrThrow();
 
     expect(ticket.status).toBe("closed");
+  });
+
+  it("merge clears the hold on the secondary's ticket", async () => {
+    const a = await createClientWithTicket();
+    const b = await createClientWithTicket();
+
+    await testDb.db
+      .updateTable("tickets")
+      .set({ on_hold: true })
+      .where("id", "=", b.ticketId)
+      .execute();
+
+    await svc.merge({
+      primaryClientId: a.clientId,
+      secondaryClientId: b.clientId,
+      encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
+    });
+
+    const ticket = await testDb.db
+      .selectFrom("tickets")
+      .select(["status", "on_hold"])
+      .where("id", "=", b.ticketId)
+      .executeTakeFirstOrThrow();
+
+    // Closing is the other half of the hold partition: a closed ticket
+    // carrying on_hold would inflate the hold count forever.
+    expect(ticket.status).toBe("closed");
+    expect(ticket.on_hold).toBe(false);
+  });
+
+  it("merge announces every ticket of both clients after commit", async () => {
+    const a = await createClientWithTicket();
+    const b = await createClientWithTicket();
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+    const live = createMergeService(testDb.db, { onTicketChanged });
+
+    await live.merge({
+      primaryClientId: a.clientId,
+      secondaryClientId: b.clientId,
+      encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
+    });
+
+    const announced = onTicketChanged.mock.calls.map(([id]) => id);
+    expect(announced.sort()).toEqual([a.ticketId, b.ticketId].sort());
+  });
+
+  it("undoMerge announces every ticket of both clients", async () => {
+    const a = await createClientWithTicket();
+    const b = await createClientWithTicket();
+    const event = await svc.merge({
+      primaryClientId: a.clientId,
+      secondaryClientId: b.clientId,
+      encryptedSnapshot: Buffer.from("snap"),
+      orgKeyGeneration: 1,
+    });
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+    const live = createMergeService(testDb.db, { onTicketChanged });
+
+    await live.undoMerge({
+      mergeEventId: event.id,
+      encryptedSnapshot: Buffer.from("snap-2"),
+      orgKeyGeneration: 1,
+    });
+
+    const announced = onTicketChanged.mock.calls.map(([id]) => id);
+    expect(announced.sort()).toEqual([a.ticketId, b.ticketId].sort());
+  });
+
+  it("a rejected merge announces nothing", async () => {
+    const a = await createClientWithTicket();
+    const onTicketChanged = vi.fn<TicketChangeListener>();
+    const live = createMergeService(testDb.db, { onTicketChanged });
+
+    await expect(
+      live.merge({
+        primaryClientId: a.clientId,
+        secondaryClientId: a.clientId,
+        encryptedSnapshot: Buffer.from("snap"),
+        orgKeyGeneration: 1,
+      }),
+    ).rejects.toBeInstanceOf(MergeError);
+    expect(onTicketChanged).not.toHaveBeenCalled();
   });
 
   it("merge rejects self-merge", async () => {

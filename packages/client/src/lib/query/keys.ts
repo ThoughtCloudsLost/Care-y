@@ -22,10 +22,17 @@ export const authKeys = {
 export const ticketsKeys = {
   all: ["tickets"] as const,
   lists: () => [...ticketsKeys.all, "list"] as const,
-  list: (params: Record<string, unknown>) =>
-    [...ticketsKeys.lists(), params] as const,
+  list: (params: object) => [...ticketsKeys.lists(), params] as const,
   counts: () => [...ticketsKeys.all, "counts"] as const,
-  recentActivity: () => [...ticketsKeys.all, "recentActivity"] as const,
+  /** The dashboard feed. Without a filter, the root of every filtered key. */
+  recentActivity: (
+    filter?: Record<string, unknown>,
+  ):
+    | readonly ["tickets", "recentActivity"]
+    | readonly ["tickets", "recentActivity", Record<string, unknown>] =>
+    filter === undefined
+      ? ([...ticketsKeys.all, "recentActivity"] as const)
+      : ([...ticketsKeys.all, "recentActivity", filter] as const),
   myQueues: () => [...ticketsKeys.all, "myQueues"] as const,
   dashboardInfo: () => [...ticketsKeys.all, "dashboardInfo"] as const,
 
@@ -37,6 +44,7 @@ export const ticketsKeys = {
   readState: (ticketIds: readonly string[]) =>
     [...ticketsKeys.readStates(), ticketIds] as const,
   readStateSweep: () => [...ticketsKeys.all, "readStateSweep"] as const,
+  facetIndex: () => [...ticketsKeys.all, "facetIndex"] as const,
   // Unread-but-unloaded tickets fetched by id (tickets.get) so the sort
   // can pin them above the loaded window and the unread filter can show
   // them. Lives under the list namespace: it is list presentation data.
@@ -101,7 +109,12 @@ export const kbKeys = {
   item: (articleId: string) => [...kbKeys.all, "item", articleId] as const,
   categories: () => [...kbKeys.all, "categories"] as const,
   authors: () => [...kbKeys.all, "authors"] as const,
-  recentItems: () => [...kbKeys.all, "recentItems"] as const,
+  /**
+   * The dashboard's KB section: a single listItems page. Under items() so
+   * article changes refresh it, and apart from the library's paged lists.
+   */
+  dashboardItems: (params: Record<string, unknown>) =>
+    [...kbKeys.items(), "dashboard", params] as const,
   attachments: (articleId: string) =>
     [...kbKeys.all, "attachments", articleId] as const,
   vote: (articleId: string) => [...kbKeys.all, "vote", articleId] as const,
@@ -111,7 +124,13 @@ export const adminKeys = {
   all: ["admin"] as const,
   users: () => [...adminKeys.all, "users"] as const,
   orgGeneral: () => [...adminKeys.all, "orgGeneral"] as const,
-  hubStatus: () => [...adminKeys.all, "hubStatus"] as const,
+  hubActiveUserCount: () => [...adminKeys.all, "hubActiveUserCount"] as const,
+  hubQueueCount: () => [...adminKeys.all, "hubQueueCount"] as const,
+  hubKeyStatus: () => [...adminKeys.all, "hubKeyStatus"] as const,
+  hubRetention: () => [...adminKeys.all, "hubRetention"] as const,
+  hubBlocklistCount: () => [...adminKeys.all, "hubBlocklistCount"] as const,
+  hubGreetingCount: () => [...adminKeys.all, "hubGreetingCount"] as const,
+  hubTemplateCount: () => [...adminKeys.all, "hubTemplateCount"] as const,
   branding: () => [...adminKeys.all, "branding"] as const,
   blocklist: () => [...adminKeys.all, "blocklist"] as const,
   greetings: () => [...adminKeys.all, "greetings"] as const,

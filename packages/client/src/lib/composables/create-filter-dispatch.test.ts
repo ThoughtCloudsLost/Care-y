@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   createFilterDispatch,
+  filterBarHandlers,
   type FilterDispatchConfig,
 } from "./create-filter-dispatch.svelte.js";
 import type { SavedFilterRecord } from "@care-y/shared";
@@ -329,6 +330,18 @@ describe("createFilterDispatch", () => {
       expect(() => {
         d.handleSavedFilterToggleShare("id");
       }).not.toThrow();
+    });
+  });
+});
+
+describe("filterBarHandlers", () => {
+  it("maps the dispatch onto the filter bar's callbacks", () => {
+    const dispatch = createFilterDispatch({ fields: {}, clearAll: vi.fn() });
+    expect(filterBarHandlers(dispatch)).toEqual({
+      ontoggle: dispatch.handlePillToggle,
+      onselect: dispatch.handlePillSelect,
+      ondatechange: dispatch.handlePillDateChange,
+      onclearall: dispatch.clearAll,
     });
   });
 });

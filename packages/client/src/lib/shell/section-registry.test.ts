@@ -78,6 +78,7 @@ describe("section-registry", () => {
     it("includes core sections with all flags false", () => {
       const sections = buildDashboardSections({
         showGettingStarted: false,
+        showKb: true,
         showMergeCandidates: false,
         showNeedsAttention: false,
         showOnHold: false,
@@ -94,6 +95,7 @@ describe("section-registry", () => {
     it("omits conditional sections when all flags false", () => {
       const sections = buildDashboardSections({
         showGettingStarted: false,
+        showKb: true,
         showMergeCandidates: false,
         showNeedsAttention: false,
         showOnHold: false,
@@ -108,6 +110,7 @@ describe("section-registry", () => {
     it("includes getting-started when flag is true", () => {
       const sections = buildDashboardSections({
         showGettingStarted: true,
+        showKb: true,
         showMergeCandidates: false,
         showNeedsAttention: false,
         showOnHold: false,
@@ -118,6 +121,7 @@ describe("section-registry", () => {
     it("includes merge-candidates when flag is true", () => {
       const sections = buildDashboardSections({
         showGettingStarted: false,
+        showKb: true,
         showMergeCandidates: true,
         showNeedsAttention: false,
         showOnHold: false,
@@ -128,6 +132,7 @@ describe("section-registry", () => {
     it("includes needs-attention when flag is true", () => {
       const sections = buildDashboardSections({
         showGettingStarted: false,
+        showKb: true,
         showMergeCandidates: false,
         showNeedsAttention: true,
         showOnHold: false,
@@ -138,6 +143,7 @@ describe("section-registry", () => {
     it("includes on-hold when flag is true", () => {
       const sections = buildDashboardSections({
         showGettingStarted: false,
+        showKb: true,
         showMergeCandidates: false,
         showNeedsAttention: false,
         showOnHold: true,
@@ -148,15 +154,39 @@ describe("section-registry", () => {
     it("includes all conditional sections when all flags true", () => {
       const sections = buildDashboardSections({
         showGettingStarted: true,
+        showKb: true,
         showMergeCandidates: true,
         showNeedsAttention: true,
         showOnHold: true,
       });
       const ids = sections.map((s) => s.id);
       expect(ids).toContain("getting-started");
+      expect(ids).toContain("kb");
       expect(ids).toContain("merge-candidates");
       expect(ids).toContain("needs-attention");
       expect(ids).toContain("on-hold");
+    });
+
+    it("includes kb when showKb is true", () => {
+      const sections = buildDashboardSections({
+        showGettingStarted: false,
+        showKb: true,
+        showMergeCandidates: false,
+        showNeedsAttention: false,
+        showOnHold: false,
+      });
+      expect(sections.some((s) => s.id === "kb")).toBe(true);
+    });
+
+    it("omits kb when showKb is false", () => {
+      const sections = buildDashboardSections({
+        showGettingStarted: false,
+        showKb: false,
+        showMergeCandidates: false,
+        showNeedsAttention: false,
+        showOnHold: false,
+      });
+      expect(sections.some((s) => s.id === "kb")).toBe(false);
     });
   });
 
@@ -248,14 +278,61 @@ describe("section-registry", () => {
       expect(sections.some((s) => s.id === "getting-started")).toBe(false);
     });
 
-    it("includes on-hold in hover when counts cache has onHold > 0", () => {
+    it("lists all four ticket lanes on hover with nothing cached", () => {
+      const qc = createMockQueryClient();
+      const sections = getHoverSections("/", new Set<Permission>(), qc);
+      const ids = sections.map((s) => s.id);
+      expect(ids).toEqual(
+        expect.arrayContaining([
+          "needs-attention",
+          "my-tickets",
+          "unassigned",
+          "on-hold",
+        ]),
+      );
+    });
+
+    it("includes merge-candidates in hover when the scan found an undismissed pair", () => {
       const cache = {
-        [JSON.stringify(["tickets", "counts"])]: { onHold: 3 },
+        [JSON.stringify(["clients", "mergeCandidates"])]: {
+          candidates: [
+            { clientIdA: "a", clientIdB: "b" },
+            { clientIdA: "c", clientIdB: "d" },
+          ],
+          truncated: false,
+        },
+        [JSON.stringify(["clients", "dismissals"])]: new Set(["a:b"]),
       };
       const qc = createMockQueryClient(cache);
-      const perms = new Set<Permission>();
+      const perms = new Set([Permission.VIEW_CLIENTS]);
       const sections = getHoverSections("/", perms, qc);
-      expect(sections.some((s) => s.id === "on-hold")).toBe(true);
+      expect(sections.some((s) => s.id === "merge-candidates")).toBe(true);
+    });
+
+    it("omits merge-candidates in hover when every pair is dismissed", () => {
+      const cache = {
+        [JSON.stringify(["clients", "mergeCandidates"])]: {
+          candidates: [{ clientIdA: "a", clientIdB: "b" }],
+          truncated: false,
+        },
+        [JSON.stringify(["clients", "dismissals"])]: new Set(["a:b"]),
+      };
+      const qc = createMockQueryClient(cache);
+      const perms = new Set([Permission.VIEW_CLIENTS]);
+      const sections = getHoverSections("/", perms, qc);
+      expect(sections.some((s) => s.id === "merge-candidates")).toBe(false);
+    });
+
+    it("omits merge-candidates in hover without the view-clients permission", () => {
+      const cache = {
+        [JSON.stringify(["clients", "mergeCandidates"])]: {
+          candidates: [{ clientIdA: "a", clientIdB: "b" }],
+          truncated: false,
+        },
+      };
+      const qc = createMockQueryClient(cache);
+      const sections = getHoverSections("/", new Set<Permission>(), qc);
+      expect(sections.some((s) => s.id === "merge-candidates")).toBe(false);
     });
   });
 });

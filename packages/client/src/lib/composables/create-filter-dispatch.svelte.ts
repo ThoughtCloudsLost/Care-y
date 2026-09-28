@@ -188,3 +188,21 @@ export function createFilterDispatch(
     handleCreateSavedFilter,
   };
 }
+
+/** The filter bar callbacks a dispatch provides. */
+export interface FilterBarHandlers {
+  readonly ontoggle: (pillId: string, value: string) => void;
+  readonly onselect: (pillId: string, value: string | null) => void;
+  readonly ondatechange: (from: Date | null, to: Date | null) => void;
+  readonly onclearall: () => void;
+}
+
+/** A dispatch's handlers under the filter bar's callback names. */
+export function filterBarHandlers(dispatch: FilterDispatch): FilterBarHandlers {
+  return {
+    ontoggle: dispatch.handlePillToggle,
+    onselect: dispatch.handlePillSelect,
+    ondatechange: dispatch.handlePillDateChange,
+    onclearall: dispatch.clearAll,
+  };
+}
