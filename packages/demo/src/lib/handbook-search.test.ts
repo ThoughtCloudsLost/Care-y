@@ -11,6 +11,9 @@ import { getSub } from "./scroll-sections.js";
 const EN = "en";
 const ES = "es";
 
+/** A seam label present in the EN corpus (case-fold body, line 2). */
+const FOLD_LABEL = "The fold store and drag handling.";
+
 /** The corpus resolves through paraglide's GLOBAL locale; the locale
  *  argument is a cache key and reactivity signal. Tests that need ES
  *  text must switch the global. */
@@ -116,26 +119,27 @@ describe("searchEntries", () => {
 
   it("label filter narrows to entries carrying the label", () => {
     const all = searchEntries("", EN, {
-      labels: ["What folding records."],
+      labels: [FOLD_LABEL],
       limit: 100,
     });
     expect(all.length).toBeGreaterThan(0);
     for (const hit of all) {
-      expect(hit.labels).toContain("What folding records.");
+      expect(hit.labels).toContain(FOLD_LABEL);
     }
   });
 
   it("empty query with labels returns entries in taxonomy order", () => {
     const hits = searchEntries("", EN, {
-      labels: ["What folding records."],
+      labels: [FOLD_LABEL],
       limit: 100,
     });
     // Zero scores throughout; order is the corpus walk order, which is
     // stable across calls.
     const again = searchEntries("", EN, {
-      labels: ["What folding records."],
+      labels: [FOLD_LABEL],
       limit: 100,
     });
+    expect(hits.length).toBeGreaterThan(0);
     expect(hits.map((h) => h.subSlug)).toEqual(again.map((h) => h.subSlug));
     expect(hits.every((h) => h.score === 0)).toBe(true);
   });

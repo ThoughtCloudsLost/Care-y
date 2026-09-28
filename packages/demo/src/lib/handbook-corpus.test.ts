@@ -4,6 +4,7 @@ import {
   getCorpusEntry,
   invalidateCorpusCache,
 } from "./handbook-corpus.js";
+import { SECTIONS } from "./scroll-sections.js";
 
 // Tests run against the EN catalog (paraglide resolves EN by default
 // in the test environment).
@@ -24,14 +25,15 @@ describe("handbook-corpus", () => {
   });
 
   it("a known key/line resolves with the expected label", () => {
-    // demo_narrative_topic_case_fold_body line 1 starts with **What folding records.**
+    // demo_narrative_topic_case_fold_body line 2 starts with
+    // **The fold store and drag handling.**
     const entry = getCorpusEntry(
       LOCALE,
       "demo_narrative_topic_case_fold_body",
-      1,
+      2,
     );
     expect(entry).not.toBeNull();
-    expect(entry!.label).toBe("What folding records.");
+    expect(entry!.label).toBe("The fold store and drag handling.");
     expect(entry!.plainText.length).toBeGreaterThan(0);
     expect(entry!.sectionId).toBe("ticket-detail");
     expect(entry!.subSlug).toBe("case-fold");
@@ -83,14 +85,21 @@ describe("handbook-corpus", () => {
   it("deep-dive entries appear in the corpus when catalog keys are present", () => {
     const corpus = buildCorpus(LOCALE);
     const deepDiveEntries = corpus.filter((e) => e.sectionId === "deep-dive");
-    // Section-level entries (the desc) carry a null subSlug by design;
-    // each of the 8 deep-dive bodies must be indexed under its slug.
+    // A bold label on its own line (introducing a list) carries an
+    // empty plainText by design, so each line must carry a label or
+    // body text, not necessarily both.
     for (const entry of deepDiveEntries) {
-      expect(entry.plainText.length).toBeGreaterThan(0);
+      expect(
+        (entry.label ?? "").length + entry.plainText.length,
+      ).toBeGreaterThan(0);
     }
+    // Section-level entries (the desc) carry a null subSlug by design;
+    // every deep-dive body in SECTIONS must be indexed under its slug.
     const slugs = new Set(
       deepDiveEntries.map((e) => e.subSlug).filter((s) => s !== null),
     );
-    expect(slugs.size).toBe(8);
+    const deepDive = SECTIONS.find((s) => s.id === "deep-dive");
+    expect(deepDive).toBeDefined();
+    expect(slugs).toEqual(new Set(deepDive!.subs.map((s) => s.slug)));
   });
 });

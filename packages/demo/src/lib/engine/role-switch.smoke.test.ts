@@ -21,7 +21,23 @@ import { RoleId, Permission } from "@care-y/shared";
 // and setSignedInRole's returned array causes a loud failure.
 const VOLUNTEER_PERMISSIONS: readonly Permission[] = [
   Permission.VIEW_CASES,
+  Permission.OPEN_CASES,
+  Permission.EDIT_CASE_SUMMARY,
   Permission.WRITE_CASE_NOTES,
+  Permission.CHANGE_CASE_STATUS,
+  Permission.LINK_CASES,
+  Permission.CLAIM_CASES,
+  Permission.ASSIGN_CASES,
+  Permission.DOWNLOAD_CASE_MEDIA,
+  Permission.SEND_CLIENT_SMS,
+  Permission.SEND_CLIENT_MEDIA,
+  Permission.SEND_CLIENT_EMAIL,
+  Permission.CALL_CLIENTS,
+  Permission.MESSAGE_CLIENTS_IN_PORTAL,
+  Permission.MANAGE_SHARE_LINKS,
+  Permission.MANAGE_PORTAL_CHANNEL,
+  Permission.RESET_CLIENT_LOGIN,
+  Permission.REVOKE_REPLY_LINKS,
   Permission.VIEW_KNOWLEDGE_BASE,
   Permission.EDIT_KNOWLEDGE_BASE,
   Permission.VIEW_OWN_SHIFTS,
@@ -123,9 +139,9 @@ describe("setSignedInRole", () => {
   it("switching to MANAGER gives an intermediate permission set", async () => {
     const permissions = await engine.setSignedInRole(RoleId.MANAGER);
 
-    // Manager has VIEW_REPORTS but not MANAGE_ROLES.
+    // Manager has VIEW_REPORTS but not the admin-only user and role keys.
     expect(permissions).toContain(Permission.VIEW_REPORTS);
-    expect(permissions).toContain(Permission.MANAGE_USERS);
+    expect(permissions).not.toContain(Permission.MANAGE_USERS);
     expect(permissions).not.toContain(Permission.MANAGE_ROLES);
     expect(permissions).not.toContain(Permission.MANAGE_KEYS);
 

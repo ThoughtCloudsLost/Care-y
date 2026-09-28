@@ -183,6 +183,10 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "tickets/kanban-board": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
 
   // -- ticket-detail --
   "ticket-detail/case-header": {
@@ -639,7 +643,27 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "deep-dive/organization-key-lifecycle": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "deep-dive/the-trust-boundary": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "deep-dive/deployment": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "deep-dive/verifying-the-code": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "deep-dive/what-the-network-sees": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "deep-dive/on-the-device": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
