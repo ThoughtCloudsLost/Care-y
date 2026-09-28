@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Cross-cutting entries that cover the protection model in depth. They explain encryption, key derivation, the trust boundary, retention, permissions, the tele..." |
+* | "The deep dives cover what CARE-Y is, encryption, key derivation, the organization key lifecycle, the trust boundary, deployment, verifying the code, what the..." |
 *
 * @param {Demo_Section_Deepdive_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

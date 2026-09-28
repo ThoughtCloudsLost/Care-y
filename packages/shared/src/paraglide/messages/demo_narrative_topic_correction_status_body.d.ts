@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A contact correction reaches the unified case thread as its own kind of follow-up, carrying the phone number or the email address a client says is theirs now..." |
+* | "A contact correction appears in the unified case thread as its own follow-up type. It carries the phone number or email address a client reports as current. ..." |
 *
 * @param {Demo_Narrative_Topic_Correction_Status_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

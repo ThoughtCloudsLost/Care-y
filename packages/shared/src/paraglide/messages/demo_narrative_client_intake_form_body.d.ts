@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The intake page takes a request for help from someone who has no account and no prior relationship to the organization, which is why it asks for nothing befo..." |
+* | "The intake page accepts a request for help from a visitor with no account and no existing relationship to the organization. Nothing is asked before the form ..." |
 *
 * @param {Demo_Narrative_Client_Intake_Form_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

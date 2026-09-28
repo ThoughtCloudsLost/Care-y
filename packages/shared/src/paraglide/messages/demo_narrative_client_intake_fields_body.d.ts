@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A published form carries its own questions, and the page renders whatever field set the organization saved in place of the built-in one. Text, long text, dro..." |
+* | "Each organization can replace the built-in form with one carrying its own fields. The data field types are text, text area, dropdown, checkboxes, checkbox, d..." |
 *
 * @param {Demo_Narrative_Client_Intake_Fields_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

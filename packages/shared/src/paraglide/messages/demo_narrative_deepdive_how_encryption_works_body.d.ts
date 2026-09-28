@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A client's messages and the notes written about them are encrypted in the user's browser before they leave the device, and the server holds only the result. ..." |
+* | "A client's messages and the notes written about them are encrypted in the browser before they leave the device, and the server holds only the result. The ser..." |
 *
 * @param {Demo_Narrative_Deepdive_How_Encryption_Works_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

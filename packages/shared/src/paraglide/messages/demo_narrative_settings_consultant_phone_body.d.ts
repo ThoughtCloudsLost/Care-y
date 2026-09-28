@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A user who takes calls on a personal phone registers the number here, and a code sent to that number has to come back before any call is bridged to it. [[#te..." |
+* | "The user registers a personal phone number for receiving forwarded calls. A verification code sent to that number must be confirmed before the server will co..." |
 *
 * @param {Demo_Narrative_Settings_Consultant_Phone_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

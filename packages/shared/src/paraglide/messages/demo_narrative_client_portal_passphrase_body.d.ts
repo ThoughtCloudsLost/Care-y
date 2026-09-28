@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A link created with a passphrase asks for the five spoken words before any message is decrypted, and the organization holds no copy of them to lose or hand o..." |
+* | "When a secure link carries a passphrase, the client enters it before any message is decrypted. The passphrase exists only in the browser of the user who crea..." |
 *
 * @param {Demo_Narrative_Client_Portal_Passphrase_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,0 +1,61 @@
+/* eslint-disable */
+import { getLocale, experimentalStaticLocale } from '../runtime.js';
+
+/** @typedef {import('../runtime.js').LocalizedString} LocalizedString */
+
+/** @typedef {{}} Demo_Narrative_Deepdive_Verifying_The_Code_BodyInputs */
+
+const en_demo_narrative_deepdive_verifying_the_code_body = /** @type {(inputs: Demo_Narrative_Deepdive_Verifying_The_Code_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`The server delivers the JavaScript that encrypts and decrypts data in the browser. A server that is seized or coerced could deliver modified code that sends keys or plaintext elsewhere. CARE-Y separates the code source (the application server, which an attacker could control) from the trust source (the project's GitHub Releases, which the server operator cannot control). The browser's service worker checks each update against a signed manifest before it runs. [[#deep-dive #encryption #trust-boundary]]
+**What does the manifest contain?** Each release publishes a manifest listing the SHA-384 hash of every JavaScript and CSS file in the build. The manifest is signed with the project's Ed25519 release key. The maintainer holds that key and signs outside the CI pipeline, so a compromised pipeline can produce a build but cannot produce a signed one. [[#deep-dive #encryption #keys]]
+**How does the browser check it?** The app installs as a PWA whose service worker prompts the user before accepting an update. When a new service worker installs, it fetches the signed manifest, verifies the signature against a public key built into the app, and compares hashes against the files it has precached. A mismatch causes the new service worker to be discarded. The previous verified service worker keeps serving. A warning that cannot be dismissed appears when verification fails, when the signature is invalid, or when no signed manifest exists for the running version. The warning is rendered by the known-good cached code. [[#deep-dive #encryption #failure-states]]
+**Why are builds reproducible?** Anyone can rebuild a release from source and compare the file hashes against the published manifest. The build runs in a pinned Docker image with deterministic Vite settings. [[#deep-dive #trust-boundary]]
+**Where does this protection stop?** [[#deep-dive #trust-boundary]]
+- The first visit on any device runs code that nothing has checked, because no service worker exists until that visit installs one. Every end-to-end encrypted web application shares this limitation. [[#deep-dive #trust-boundary]]
+- An attacker who controls both the CARE-Y server and the project's GitHub release infrastructure could serve a matching fake manifest. The design turns a single-target attack into one that requires compromising two independent systems. [[#deep-dive #trust-boundary]]
+- A self-hosted instance running its own legitimate modifications triggers the warning unless it publishes its own signed manifest. [[#deep-dive #failure-states]]
+[Deployment](#deep-dive/deployment) covers the version check defaults and the two deployment types. [How encryption works](#deep-dive/how-encryption-works) covers what the delivered code protects. [[#deep-dive]]
+**The service worker and the precache.** \`packages/client/src/service-worker.ts\` precaches all build artifacts and static files on install, serves known assets cache-first, and clears caches from previous versions on activation. [[#deep-dive #server-holds]]`)
+};
+
+const es_demo_narrative_deepdive_verifying_the_code_body = /** @type {(inputs: Demo_Narrative_Deepdive_Verifying_The_Code_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`El servidor entrega el JavaScript que cifra y descifra datos en el navegador. Un servidor incautado o coaccionado podría entregar código modificado que envíe claves o texto plano a otro lugar. CARE-Y separa la fuente del código (el servidor de la aplicación, que un atacante podría controlar) de la fuente de confianza (las versiones publicadas en GitHub del proyecto, que el operador del servidor no controla). El service worker del navegador verifica cada actualización contra un manifiesto firmado antes de ejecutarla. [[#deep-dive #encryption #trust-boundary]]
+**¿Qué contiene el manifiesto?** Cada versión publica un manifiesto con el hash SHA-384 de cada archivo JavaScript y CSS del build. El manifiesto está firmado con la clave Ed25519 de publicación del proyecto. El mantenedor custodia esa clave y firma fuera del pipeline de CI, de modo que un pipeline comprometido puede producir un build pero no puede producir uno firmado. [[#deep-dive #encryption #keys]]
+**¿Cómo lo verifica el navegador?** La aplicación se instala como PWA y su service worker pide confirmación antes de aceptar una actualización. Cuando se instala un nuevo service worker, obtiene el manifiesto firmado, verifica la firma contra una clave pública incorporada en la aplicación y compara los hashes con los archivos precacheados. Una discrepancia descarta el service worker nuevo. El service worker verificado anterior sigue sirviendo. Una advertencia que no se puede descartar aparece cuando la verificación falla, cuando la firma es inválida o cuando no existe un manifiesto firmado para la versión en ejecución. La advertencia la muestra el código verificado en caché. [[#deep-dive #encryption #failure-states]]
+**¿Por qué son reproducibles los builds?** Cualquier persona puede reconstruir una versión desde el código fuente y comparar los hashes de archivos con el manifiesto publicado. El build se ejecuta en una imagen Docker fija con configuración determinista de Vite. [[#deep-dive #trust-boundary]]
+**¿Dónde se detiene esta protección?** [[#deep-dive #trust-boundary]]
+- La primera visita en cualquier dispositivo ejecuta código que nada ha verificado, porque no existe service worker hasta que esa visita instala uno. Toda aplicación web con cifrado de extremo a extremo comparte esta limitación. [[#deep-dive #trust-boundary]]
+- Un atacante que controle tanto el servidor de CARE-Y como la infraestructura de versiones en GitHub del proyecto podría servir un manifiesto falso coincidente. El diseño convierte un ataque de objetivo único en uno que requiere comprometer dos sistemas independientes. [[#deep-dive #trust-boundary]]
+- Una instancia autoalojada que ejecuta sus propias modificaciones legítimas activa la advertencia salvo que publique su propio manifiesto firmado. [[#deep-dive #failure-states]]
+[Despliegue](#deep-dive/deployment) trata los valores por defecto de la verificación de versión y los dos tipos de despliegue. [Cómo funciona el cifrado](#deep-dive/how-encryption-works) trata lo que protege el código entregado. [[#deep-dive]]
+**El service worker y la precaché.** \`packages/client/src/service-worker.ts\` precachea todos los artefactos del build y archivos estáticos en la instalación, sirve los recursos conocidos con prioridad de caché y limpia las cachés de versiones anteriores durante la activación. [[#deep-dive #server-holds]]`)
+};
+
+const en_xa2_demo_narrative_deepdive_verifying_the_code_body = /** @type {(inputs: Demo_Narrative_Deepdive_Verifying_The_Code_BodyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`⟦Thè sèrvèr dèlìvèrs thè JàvàScrìpt thàt èncrypts ànd dècrypts dàtà ìn thè bròwsèr. À sèrvèr thàt ìs sèìzèd òr còèrcèd còùld dèlìvèr mòdìfìèd còdè thàt sènds kèys òr plàìntèxt èlsèwhèrè. CÀRÈ-Y sèpàràtès thè còdè sòùrcè (thè àpplìcàtìòn sèrvèr, whìch àn àttàckèr còùld còntròl) fròm thè trùst sòùrcè (thè pròjèct's GìtHùb Rèlèàsès, whìch thè sèrvèr òpèràtòr cànnòt còntròl). Thè bròwsèr's sèrvìcè wòrkèr chècks èàch ùpdàtè àgàìnst à sìgnèd mànìfèst bèfòrè ìt rùns. [[#dèèp-dìvè #èncryptìòn #trùst-bòùndàry]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt dòès thè mànìfèst còntàìn? ••••••••••** Èàch rèlèàsè pùblìshès à mànìfèst lìstìng thè SHÀ-384 hàsh òf èvèry JàvàScrìpt ànd CSS fìlè ìn thè bùìld. Thè mànìfèst ìs sìgnèd wìth thè pròjèct's Èd25519 rèlèàsè kèy. Thè màìntàìnèr hòlds thàt kèy ànd sìgns òùtsìdè thè CÌ pìpèlìnè, sò à còmpròmìsèd pìpèlìnè càn pròdùcè à bùìld bùt cànnòt pròdùcè à sìgnèd ònè. [[#dèèp-dìvè #èncryptìòn #kèys]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Hòw dòès thè bròwsèr chèck ìt? •••••••••** Thè àpp ìnstàlls às à PWÀ whòsè sèrvìcè wòrkèr pròmpts thè ùsèr bèfòrè àccèptìng àn ùpdàtè. Whèn à nèw sèrvìcè wòrkèr ìnstàlls, ìt fètchès thè sìgnèd mànìfèst, vèrìfìès thè sìgnàtùrè àgàìnst à pùblìc kèy bùìlt ìntò thè àpp, ànd còmpàrès hàshès àgàìnst thè fìlès ìt hàs prècàchèd. À mìsmàtch càùsès thè nèw sèrvìcè wòrkèr tò bè dìscàrdèd. Thè prèvìòùs vèrìfìèd sèrvìcè wòrkèr kèèps sèrvìng. À wàrnìng thàt cànnòt bè dìsmìssèd àppèàrs whèn vèrìfìcàtìòn fàìls, whèn thè sìgnàtùrè ìs ìnvàlìd, òr whèn nò sìgnèd mànìfèst èxìsts fòr thè rùnnìng vèrsìòn. Thè wàrnìng ìs rèndèrèd by thè knòwn-gòòd càchèd còdè. [[#dèèp-dìvè #èncryptìòn #fàìlùrè-stàtès]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Why àrè bùìlds rèpròdùcìblè? •••••••••** Ànyònè càn rèbùìld à rèlèàsè fròm sòùrcè ànd còmpàrè thè fìlè hàshès àgàìnst thè pùblìshèd mànìfèst. Thè bùìld rùns ìn à pìnnèd Dòckèr ìmàgè wìth dètèrmìnìstìc Vìtè sèttìngs. [[#dèèp-dìvè #trùst-bòùndàry]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whèrè dòès thìs pròtèctìòn stòp? ••••••••••** [[#dèèp-dìvè #trùst-bòùndàry]]
+- Thè fìrst vìsìt òn àny dèvìcè rùns còdè thàt nòthìng hàs chèckèd, bècàùsè nò sèrvìcè wòrkèr èxìsts ùntìl thàt vìsìt ìnstàlls ònè. Èvèry ènd-tò-ènd èncryptèd wèb àpplìcàtìòn shàrès thìs lìmìtàtìòn. [[#dèèp-dìvè #trùst-bòùndàry]]
+- Àn àttàckèr whò còntròls bòth thè CÀRÈ-Y sèrvèr ànd thè pròjèct's GìtHùb rèlèàsè ìnfràstrùctùrè còùld sèrvè à màtchìng fàkè mànìfèst. Thè dèsìgn tùrns à sìnglè-tàrgèt àttàck ìntò ònè thàt rèqùìrès còmpròmìsìng twò ìndèpèndènt systèms. [[#dèèp-dìvè #trùst-bòùndàry]]
+- À sèlf-hòstèd ìnstàncè rùnnìng ìts òwn lègìtìmàtè mòdìfìcàtìòns trìggèrs thè wàrnìng ùnlèss ìt pùblìshès ìts òwn sìgnèd mànìfèst. [[#dèèp-dìvè #fàìlùrè-stàtès]]
+[Dèplòymènt](#dèèp-dìvè/dèplòymènt) còvèrs thè vèrsìòn chèck dèfàùlts ànd thè twò dèplòymènt typès. [Hòw èncryptìòn wòrks](#dèèp-dìvè/hòw-èncryptìòn-wòrks) còvèrs whàt thè dèlìvèrèd còdè pròtècts. [[#dèèp-dìvè]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Thè sèrvìcè wòrkèr ànd thè prècàchè. •••••••••••** \`pàckàgès/clìènt/src/sèrvìcè-wòrkèr.ts\` prècàchès àll bùìld àrtìfàcts ànd stàtìc fìlès òn ìnstàll, sèrvès knòwn àssèts càchè-fìrst, ànd clèàrs càchès fròm prèvìòùs vèrsìòns òn àctìvàtìòn. [[#dèèp-dìvè #sèrvèr-hòlds]] ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+};
+
+/**
+* | output |
+* | --- |
+* | "The server delivers the JavaScript that encrypts and decrypts data in the browser. A server that is seized or coerced could deliver modified code that sends ..." |
+*
+* @param {Demo_Narrative_Deepdive_Verifying_The_Code_BodyInputs} inputs
+* @param {{ locale?: "en" | "es" | "en-XA" }} options
+* @returns {LocalizedString}
+*/
+export const demo_narrative_deepdive_verifying_the_code_body = /** @type {((inputs?: Demo_Narrative_Deepdive_Verifying_The_Code_BodyInputs, options?: { locale?: "en" | "es" | "en-XA" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Demo_Narrative_Deepdive_Verifying_The_Code_BodyInputs, { locale?: "en" | "es" | "en-XA" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "es") return es_demo_narrative_deepdive_verifying_the_code_body(inputs)
+	if (locale === "en-XA") return en_xa2_demo_narrative_deepdive_verifying_the_code_body(inputs)
+	return en_demo_narrative_deepdive_verifying_the_code_body(inputs)
+});

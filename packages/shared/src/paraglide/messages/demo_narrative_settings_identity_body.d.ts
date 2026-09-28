@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An account carries a display name that other accounts see on its work and a username that signs it in, and the two are held under different protections becau..." |
+* | "The user has a display name visible on their work and a username used to sign in. The display name is encrypted in the browser before it reaches the server. ..." |
 *
 * @param {Demo_Narrative_Settings_Identity_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

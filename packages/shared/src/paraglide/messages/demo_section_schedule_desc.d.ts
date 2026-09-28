@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The schedule page manages recurring shifts, coverage assignments, and a calendar that reads by day, week, or month. Shift times and coverage assignments are ..." |
+* | "The schedule page manages recurring shifts, coverage assignments, and a calendar that reads by day, week, or month. Shift data is encrypted at rest. Automati..." |
 *
 * @param {Demo_Section_Schedule_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

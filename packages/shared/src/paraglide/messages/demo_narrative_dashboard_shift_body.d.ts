@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The shift line shows a shift window, time remaining, volunteer initials, and a count of open tickets assigned to the user. Shift scheduling is in development..." |
+* | "The shift summary shows the active shift window, time remaining, and how many open tickets are assigned to the user. [[#schedule #privacy]] **Open-ticket cou..." |
 *
 * @param {Demo_Narrative_Dashboard_Shift_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

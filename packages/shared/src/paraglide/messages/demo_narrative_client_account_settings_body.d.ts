@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An account's controls become available only once the client has signed in, so the drawer holds nothing for anyone who opens the page without a password. [[#p..." |
+* | "The drawer entries for managing an account require a sign-in. A client who opens the page without a password sees nothing in the drawer. [Change password](#c..." |
 *
 * @param {Demo_Narrative_Client_Account_Settings_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

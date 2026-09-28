@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The unified case thread carries everything said on a ticket in one sequence: what the client sent, what the organization sent back, the notes written about i..." |
+* | "The unified case thread gathers everything said on a ticket into one sequence. It holds what the client sent, what the organization sent back, the notes writ..." |
 *
 * @param {Demo_Narrative_Topic_Conversation_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

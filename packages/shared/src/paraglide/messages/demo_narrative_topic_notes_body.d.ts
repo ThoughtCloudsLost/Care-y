@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An internal note records what the organization wants remembered about a ticket without sending anything to the client. The note is sealed with the same ticke..." |
+* | "An internal note records what the organization wants to remember about a ticket. Nothing from a note reaches the client. The note is encrypted with the ticke..." |
 *
 * @param {Demo_Narrative_Topic_Notes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

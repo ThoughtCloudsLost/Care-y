@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An account returns the client to the same conversation on every visit, so closing the browser and coming back days later needs a password rather than a link ..." |
+* | "An account gives the client a password-based way to reopen the same conversation on every visit. The encryption is the same as a secure link, and only the so..." |
 *
 * @param {Demo_Narrative_Client_Account_Thread_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

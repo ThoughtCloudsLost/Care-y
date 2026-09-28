@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Searching inside a ticket matches against the text already decrypted in the browser. No search term is sent to the server, no result is reported back, and th..." |
+* | "Searching inside a ticket matches against the text already decrypted in the browser. No search term is sent to the server. No result is reported back. Each r..." |
 *
 * @param {Demo_Narrative_Topic_Deep_Search_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A share link opens once, and the read is settled by a single conditional update, so one reader among several racing gets the content while the ciphertext col..." |
+* | "Each share link can be opened once. The first open gets the message and the server deletes it at that moment, so a second open gets an already-opened state i..." |
 *
 * @param {Demo_Narrative_Client_Share_One_Time_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

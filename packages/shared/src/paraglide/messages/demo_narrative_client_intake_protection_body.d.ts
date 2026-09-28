@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The page states what it protects before the visitor types anything, because the decision it asks for is whether typing here is safe at all. Every value is en..." |
+* | "The browser encrypts the visitor's answers and contact details before anything leaves the device. The server receives ciphertext and holds no key that can op..." |
 *
 * @param {Demo_Narrative_Client_Intake_Protection_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The portal thread gathers the client's own messages, the organization's replies, voicemails, call entries, files and contact corrections into one timeline or..." |
+* | "The portal thread merges the client's messages, the organization's replies, voicemails, call log entries, files and contact corrections into one sequence ord..." |
 *
 * @param {Demo_Narrative_Client_Portal_Thread_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

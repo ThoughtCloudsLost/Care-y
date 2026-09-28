@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The ticket list shows counts across every queue the account can access, plus a count of tickets carrying replies the account has not read. The status counts ..." |
+* | "The ticket list shows counts across the queues the account can access, plus a count of tickets carrying replies the account has not read. The status counts a..." |
 *
 * @param {Demo_Narrative_Topic_List_Stats_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

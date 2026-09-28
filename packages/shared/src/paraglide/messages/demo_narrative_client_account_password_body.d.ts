@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Changing the password keeps the conversation and ends every other session, and the new password must be at least eight characters. [[#keys #portal]] **Why a ..." |
+* | "The client's encryption keys derive from the password, so changing the password rebuilds the keys and re-encrypts the conversation. A minimum of eight charac..." |
 *
 * @param {Demo_Narrative_Client_Account_Password_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

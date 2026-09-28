@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A share link follow-up in the thread carries the state of its link: waiting, opened, or expired. [[#portal]] **Three states, two fields.** The share record h..." |
+* | "Each share link follow-up in the thread reports whether its link is waiting, opened, or expired. [[#portal]] **Three states, two fields.** The share record s..." |
 *
 * @param {Demo_Narrative_Topic_Share_Status_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

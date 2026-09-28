@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A form can be given a closing date, after which it stops accepting submissions and shows a closing message in place of its questions. [[#portal #failure-stat..." |
+* | "A form whose closing date has passed replaces its fields with the organization's closing message. When no closing message has been written, a built-in notice..." |
 *
 * @param {Demo_Narrative_Client_Intake_Closed_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

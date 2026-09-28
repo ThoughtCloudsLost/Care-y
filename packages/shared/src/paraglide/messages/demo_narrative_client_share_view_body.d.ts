@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Opening a share link fetches one encrypted message from the server and decrypts it on the reader's own device, with no account, no sign-in and nothing to ins..." |
+* | "A share link delivers one encrypted message to a reader who has no account, no sign-in and nothing installed. The server hands over the scrambled message wit..." |
 *
 * @param {Demo_Narrative_Client_Share_View_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

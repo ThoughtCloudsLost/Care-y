@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Deepdive_DescInputs */
 
 const en_demo_section_deepdive_desc = /** @type {(inputs: Demo_Section_Deepdive_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cross-cutting entries that cover the protection model in depth. They explain encryption, key derivation, the trust boundary, retention, permissions, the telephony relay and the portal channels, and feature entries link to them for the mechanisms behind what each screen shows.`)
+	return /** @type {LocalizedString} */ (`The deep dives cover what CARE-Y is, encryption, key derivation, the organization key lifecycle, the trust boundary, deployment, verifying the code, what the network sees, what stays on the device, the permission system, the telephony relay, the portal channel lifecycle and data retention. Feature entries throughout the handbook link here for mechanism details they reference but do not repeat.`)
 };
 
 const es_demo_section_deepdive_desc = /** @type {(inputs: Demo_Section_Deepdive_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Entradas transversales que cubren el modelo de protección en profundidad. Explican el cifrado, la derivación de claves, la frontera de confianza, la retención, los permisos, el relay de telefonía y los canales del portal, y las entradas de funciones enlazan a ellas para conocer los mecanismos detrás de lo que muestra cada pantalla.`)
+	return /** @type {LocalizedString} */ (`Las entradas de esta sección cubren qué es CARE-Y, el cifrado, la derivación de claves, el ciclo de vida de la clave de la organización, la frontera de confianza, el despliegue, la verificación del código, lo que ve la red, lo que queda en el dispositivo, el sistema de permisos, el relay de telefonía, el ciclo de vida del canal del portal y la retención de datos. Las entradas de funciones en todo el manual enlazan aquí para los detalles de mecanismo que referencian pero no repiten.`)
 };
 
 const en_xa2_demo_section_deepdive_desc = /** @type {(inputs: Demo_Section_Deepdive_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Cròss-cùttìng èntrìès thàt còvèr thè pròtèctìòn mòdèl ìn dèpth. Thèy èxplàìn èncryptìòn, kèy dèrìvàtìòn, thè trùst bòùndàry, rètèntìòn, pèrmìssìòns, thè tèlèphòny rèlày ànd thè pòrtàl chànnèls, ànd fèàtùrè èntrìès lìnk tò thèm fòr thè mèchànìsms bèhìnd whàt èàch scrèèn shòws. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Thè dèèp dìvès còvèr whàt CÀRÈ-Y ìs, èncryptìòn, kèy dèrìvàtìòn, thè òrgànìzàtìòn kèy lìfècyclè, thè trùst bòùndàry, dèplòymènt, vèrìfyìng thè còdè, whàt thè nètwòrk sèès, whàt stàys òn thè dèvìcè, thè pèrmìssìòn systèm, thè tèlèphòny rèlày, thè pòrtàl chànnèl lìfècyclè ànd dàtà rètèntìòn. Fèàtùrè èntrìès thròùghòùt thè hàndbòòk lìnk hèrè fòr mèchànìsm dètàìls thèy rèfèrèncè bùt dò nòt rèpèàt. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Cross-cutting entries that cover the protection model in depth. They explain encryption, key derivation, the trust boundary, retention, permissions, the tele..." |
+* | "The deep dives cover what CARE-Y is, encryption, key derivation, the organization key lifecycle, the trust boundary, deployment, verifying the code, what the..." |
 *
 * @param {Demo_Section_Deepdive_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

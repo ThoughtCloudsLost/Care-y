@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The built-in form asks how the organization should reach the visitor and accepts a refusal, with a phone number, an email address and an option to send nothi..." |
+* | "The default form accepts a phone number, an email address, or a refusal as the visitor's contact preference. The answer is encrypted alongside the submission..." |
 *
 * @param {Demo_Narrative_Client_Intake_Contact_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

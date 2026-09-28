@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The security briefing shown once during onboarding can be reopened at any time, and reopening it records nothing: the flag that remembers whether an account ..." |
+* | "The security briefing is part of onboarding and can be reopened from settings at any time. Reopening it does not write the seen flag. The flag is set only on..." |
 *
 * @param {Demo_Narrative_Settings_Security_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

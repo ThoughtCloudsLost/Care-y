@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The account page opens on a sign-in form whenever the tab holds no keys, which covers a first visit, a reload and a return after a timeout, because the keys ..." |
+* | "The sign-in form asks for a username and a password. It appears on a first visit, after a reload, and after the idle timeout or a closed tab clears the keys,..." |
 *
 * @param {Demo_Narrative_Client_Account_Sign_In_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

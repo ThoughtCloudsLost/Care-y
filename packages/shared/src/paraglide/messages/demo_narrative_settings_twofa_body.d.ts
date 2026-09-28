@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Every second-factor method an account uses is enrolled and removed from settings, and an account can hold several at once with each one working on its own. [..." |
+* | "The user enrolls and removes second-factor methods from settings. An account can hold several active methods at once, and each one works independently. [Two ..." |
 *
 * @param {Demo_Narrative_Settings_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

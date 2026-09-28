@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The privacy notice page explains what data the organization collects, how long it is retained, and what encryption protections apply." |
+* | "The privacy notice is a static page of fixed text shared by every organization, with the organization name as the only value filled in per deployment. It sta..." |
 *
 * @param {Demo_Section_Client_Privacy_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

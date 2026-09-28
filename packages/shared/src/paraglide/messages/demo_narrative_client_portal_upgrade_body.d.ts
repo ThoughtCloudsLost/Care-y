@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A client on a secure link can raise their own protection without asking anyone in the organization, by adding a spoken passphrase to the link or by moving to..." |
+* | "A client on a secure link can strengthen protection without involving the organization, either by adding a passphrase or by creating an account. [[#portal #p..." |
 *
 * @param {Demo_Narrative_Client_Portal_Upgrade_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

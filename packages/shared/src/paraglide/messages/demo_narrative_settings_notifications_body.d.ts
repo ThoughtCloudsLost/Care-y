@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A switch for each pairing of an event and a delivery channel decides what reaches the user and how, across nine events and three channels. An account with no..." |
+* | "Each event type has a separate switch for push, email and text message, and the user controls which channels carry which events. The in-app feed delivers all..." |
 *
 * @param {Demo_Narrative_Settings_Notifications_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

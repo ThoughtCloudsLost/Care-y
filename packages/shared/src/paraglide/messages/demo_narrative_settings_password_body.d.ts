@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Changing a password re-runs the derivation a sign-in runs, because the password is where the account's encryption keys come from. The browser derives a secon..." |
+* | "A password change rebuilds the encryption keys from the new password and re-wraps every sealed copy those keys protect. The browser derives both the old and ..." |
 *
 * @param {Demo_Narrative_Settings_Password_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

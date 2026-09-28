@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "An SMS template is the text of an automatic reply, written once per language an organization serves. Auto-reply is sent to every inbound text. Error response..." |
+* | "An SMS template is the text of an automatic reply, written once per language an organization serves. An organization can write an auto-reply template and an ..." |
 *
 * @param {Demo_Narrative_Admin_Sms_Templates_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

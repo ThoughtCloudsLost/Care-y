@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Submitting encrypts every answer in the browser, composes the case title and body from them there as well, and sends ciphertext the server has no key for. Th..." |
+* | "The browser encrypts every answer, composes the ticket title and body from them, and sends only ciphertext to the server. The server creates the ticket, assi..." |
 *
 * @param {Demo_Narrative_Client_Intake_Submit_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

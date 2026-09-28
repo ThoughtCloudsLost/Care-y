@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A client's safest channel depends on their phone, their situation, and who else might be looking at their screen, so CARE-Y offers three and lets the client ..." |
+* | "A client's safest channel depends on their phone, their situation, and who else might see their screen. CARE-Y offers three tiers and lets the client move up..." |
 *
 * @param {Demo_Narrative_Deepdive_Portal_Channel_Lifecycle_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

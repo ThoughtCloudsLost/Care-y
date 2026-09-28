@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When the content appears, the page tells the reader in one short notice that the link itself carried the key, that the server cannot read the message, and th..." |
+* | "The share page tells the reader that the link carried the decryption key, that the server cannot read the content, and that the link works only once. The not..." |
 *
 * @param {Demo_Narrative_Client_Share_Exposure_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

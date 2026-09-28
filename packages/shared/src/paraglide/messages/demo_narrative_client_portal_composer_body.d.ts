@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A reply is encrypted in the browser before it is sent, so what the server receives and stores is ciphertext it cannot open, and the client can write up to 5,..." |
+* | "The client encrypts each reply in the browser before sending it. The server receives and stores ciphertext it cannot open. [[#portal #encryption]] **Who can ..." |
 *
 * @param {Demo_Narrative_Client_Portal_Composer_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

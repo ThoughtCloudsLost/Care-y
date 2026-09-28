@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Email sent and received on a ticket sits in the same thread as texts, portal replies, and notes. Email is the one channel whose content is readable by every ..." |
+* | "Email sent and received on a ticket appears in the same thread as texts, portal replies, and notes. Email is the only channel whose content every mail server..." |
 *
 * @param {Demo_Narrative_Topic_Email_Thread_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

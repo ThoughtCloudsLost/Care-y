@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The intake form is the public entry point for people seeking help. Every organization has a built-in default form, and administrators can publish custom form..." |
+* | "The intake form is where someone without an account asks for help. A built-in default ships with every organization, and custom forms can replace it with dif..." |
 *
 * @param {Demo_Section_Client_Intake_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

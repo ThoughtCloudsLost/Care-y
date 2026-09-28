@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A quick exit control is on every client-facing page, from the intake form through the portal, the account and a one-time share link. The control has no visib..." |
+* | "Every client-facing page has a quick exit control, from the intake form and the portal through the account page, the privacy notice, and a share link. The co..." |
 *
 * @param {Demo_Narrative_Client_Quick_Exit_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
