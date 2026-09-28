@@ -1,6 +1,5 @@
 import { defineConfig } from "vitest/config";
-import type { Alias } from "vite";
-import { demoAliases, serverHealthAliases, serverRedirectPlugin } from "./vite";
+import { nodeEngineAliases, serverRedirectPlugin } from "./vite";
 
 /**
  * Standalone vitest config for CI smoke tests that boot the demo engine
@@ -11,25 +10,10 @@ import { demoAliases, serverHealthAliases, serverRedirectPlugin } from "./vite";
  * (not jsdom) because PGlite and server code expect Node APIs.
  */
 
-function buildAliases(): Alias[] {
-  const serverAliases: Alias[] = serverHealthAliases.map((sa) => ({
-    find: sa.find,
-    replacement: sa.replacement,
-  }));
-
-  const demoBase = demoAliases();
-
-  return [
-    ...serverAliases,
-    ...demoBase,
-    { find: "buffer", replacement: "buffer/" },
-  ];
-}
-
 export default defineConfig({
   plugins: [serverRedirectPlugin()],
   resolve: {
-    alias: buildAliases(),
+    alias: nodeEngineAliases(),
   },
   test: {
     name: "demo-smoke",

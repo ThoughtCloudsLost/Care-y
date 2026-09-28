@@ -22,6 +22,8 @@ node_modules/
 dist/
 dist-health/
 build/
+packages/demo/.seed-snapshot/
+packages/demo/.seed-snapshot.staging-*/
 .svelte-kit/
 .vite/
 

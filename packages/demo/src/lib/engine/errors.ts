@@ -13,3 +13,15 @@ export class DemoEngineError extends Error {
     this.name = "DemoEngineError";
   }
 }
+
+/**
+ * Raised by the Node seed snapshot builder when a build step fails or
+ * produces something the snapshot cannot carry. The builder fails loud
+ * and writes no partial snapshot.
+ */
+export class SeedSnapshotBuildError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "SeedSnapshotBuildError";
+  }
+}

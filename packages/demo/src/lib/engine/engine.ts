@@ -6,85 +6,52 @@
  * Split into two entry points:
  *   - bootDemoEngine(): shared boot sequence, returns DemoEngineResult
  *   - runHealthProofs(): health-only proof battery over the engine
+ *
+ * The building blocks (migrations, crypto services, admin keys, the
+ * fabricated session, the portal seed) live in engine-core.ts, which the
+ * Node seed snapshot builder composes too.
  */
 
 // Globals (Buffer, process.env, trpc isServer signal) MUST evaluate
 // before every other import; ESM hoisting makes a first-position import
 // the only reliable ordering.
-import { FAKE_OPS_KEY_HEX } from "./server/globals-init.js";
+import "./server/globals-init.js";
 
 import { DemoEngineError } from "./errors.js";
 import { Buffer } from "buffer";
-import _sodium from "libsodium-wrappers-sumo";
 import { PGlite } from "@electric-sql/pglite";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { isTrpcServerError } from "./caller-adapter.js";
 import { TRPCClientError } from "@trpc/client";
-import {
-  RoleId,
-  type RoleIdValue,
-  type Permission,
-  type OrgSchema,
-  type UserId,
-  type SessionId,
-  type SessionToken,
-  type IpToken,
-  type UaToken,
-  type BlobKey,
-  type TicketId,
-  type RecordingId,
-  type AttachmentId,
-  type KbAttachmentId,
-} from "@care-y/shared";
+import type { RoleIdValue, Permission, TicketId } from "@care-y/shared";
 
 import { initDb, db, tenantDb } from "./server/db-shim.js";
-import { markSodiumReady } from "./server/node-crypto-shim.js";
 import {
-  createPlatformMigrator,
-  createTenantMigrator,
   getPlatformMigrationCount,
   getTenantMigrationCount,
 } from "./server/schema-utils-shim.js";
-import {
-  deriveKeys,
-  createFieldEncryptor,
-  createBlindIndexer,
-} from "./server/field-encryptor-shim.js";
-import {
-  deriveSecretsKey,
-  createSecretsEncryptor,
-} from "./server/secrets-shim.js";
 import { createSealedBoxEncryptor } from "./server/sealed-box-shim.js";
-import { hkdfSync, createHmac } from "./server/node-crypto-shim.js";
+import { seedStructure, DEMO_ORG_SCHEMA } from "./server/seed-structure.js";
 import {
-  seedStructure,
-  DEMO_ORG_SCHEMA,
-  DEMO_ORG_SLUG,
-  DEMO_ADMIN_PASSWORD,
-  DEMO_CLIENT_USERNAME,
-  DEMO_CLIENT_PASSWORD,
-} from "./server/seed-structure.js";
-import {
-  deriveDemoOprfScalar,
-  deriveDemoVolPublic,
-  wrapOrgKeyForVolunteer,
-} from "./server/demo-keys.js";
+  timeMs,
+  noopLimiter,
+  createMapBlobStore,
+  initEngineSodium,
+  migrateEngineDatabase,
+  deriveEngineCryptoServices,
+  seedAdminKeys,
+  denyTicketAccess,
+  seedEnginePortal,
+  createEngineSession,
+  createEngineBlobResolver,
+  type HealthTimings,
+} from "./engine-core.js";
 
 import type { TenantDatabase } from "../../../../server/src/db/types.js";
-import type {
-  BlobStore,
-  BlobCategory,
-} from "../../../../server/src/storage/store.js";
+import type { BlobStore } from "../../../../server/src/storage/store.js";
 import type { DemoBlobResolver } from "../../stubs/fetch-blob.js";
-import type { RateLimiter } from "../../../../server/src/ratelimit/rate-limiter.js";
-import type {
-  Context,
-  OrgContext,
-} from "../../../../server/src/trpc/context.js";
-import type { SessionData } from "../../../../server/src/auth/session-repository.js";
-import type { UserRecord } from "../../../../server/src/auth/service.js";
-import type { SessionTokenizer } from "../../../../server/src/crypto/session-tokenizer.js";
+import type { Context } from "../../../../server/src/trpc/context.js";
 import type { PlatformDatabase } from "../../../../server/src/db/types.js";
 import type { SeedStructureResult } from "./server/seed-structure.js";
 import type { ProcedureProxy } from "./proc-proxy.js";
@@ -93,10 +60,7 @@ import type { SeedPortalResult } from "../../../../server/src/dev/seed-portal.js
 
 // ── Exported types ──────────────────────────────────────────────────
 
-export interface HealthTimings {
-  readonly label: string;
-  readonly ms: number;
-}
+export type { HealthTimings } from "./engine-core.js";
 
 export interface HealthProofResult {
   readonly name: string;
@@ -145,47 +109,6 @@ export interface HealthEngine {
   runProofs(report: (r: HealthProofResult) => void): Promise<void>;
 }
 
-// ── Timing helper ───────────────────────────────────────────────────
-
-function timeMs(): number {
-  return performance.now();
-}
-
-// ── No-op infrastructure stubs ──────────────────────────────────────
-
-const noopLimiter: RateLimiter = {
-  check: () => ({ allowed: true, remaining: Infinity, retryAfterMs: 0 }),
-  reset: () => {
-    // intentional no-op
-  },
-};
-
-function createMapBlobStore(): BlobStore {
-  const store = new Map<string, Buffer>();
-  return {
-    async put(
-      orgSchema: OrgSchema,
-      category: BlobCategory,
-      blob: Buffer,
-    ): Promise<BlobKey> {
-      const key =
-        `${orgSchema}/${category}/${globalThis.crypto.randomUUID()}` as BlobKey;
-      store.set(key, Buffer.from(blob));
-      return Promise.resolve(key);
-    },
-    async get(key: BlobKey): Promise<Buffer | null> {
-      return Promise.resolve(store.get(key) ?? null);
-    },
-    async delete(key: BlobKey): Promise<void> {
-      store.delete(key);
-      return Promise.resolve();
-    },
-    async exists(key: BlobKey): Promise<boolean> {
-      return Promise.resolve(store.has(key));
-    },
-  };
-}
-
 // Email/SMS outbox for inspection. The implementation lives in outbox.ts
 // so phone-side subscribers do not create a static edge to this module.
 // Re-exported here for the health page and any engine-side consumers.
@@ -206,15 +129,9 @@ export async function bootDemoEngine(
 ): Promise<DemoEngineResult> {
   const timings: HealthTimings[] = [];
 
-  // 0. Init sodium FIRST (node-crypto-shim needs it), plus the crypto
-  // package's own backend state (seed-tickets calls its sync API, which
-  // requires the package-level getSodium() to have resolved).
+  // 0. Init sodium and the crypto package's backend state.
   const t0 = timeMs();
-  await _sodium.ready;
-  markSodiumReady();
-  const { getSodium, deriveTaggedShare: deriveTaggedShareFn } =
-    await import("@care-y/crypto");
-  await getSodium();
+  const { deriveTaggedShare } = await initEngineSodium();
   timings.push({ label: "sodium-ready", ms: timeMs() - t0 });
 
   // 1. Boot PGlite (memory FS)
@@ -226,9 +143,9 @@ export async function bootDemoEngine(
   // Wire up the DB shim
   initDb(pg);
 
-  // Kick off all seven dynamic imports in parallel so module fetch/eval
+  // Kick off all the dynamic imports in parallel so module fetch/eval
   // overlaps with migrations and seeding. None depends on another's
-  // evaluation; the globals-init constraint (engine.ts:11-14) is
+  // evaluation; the globals-init constraint (top of this file) is
   // satisfied because it is a static import that evaluates first.
   const [
     passwordMod,
@@ -248,73 +165,25 @@ export async function bootDemoEngine(
     import("./caller-adapter.js"),
   ]);
 
-  // 2. Platform migrations
-  const t2 = timeMs();
-  const platformMigrator = createPlatformMigrator(db);
-  const platformResult = await platformMigrator.migrateToLatest();
-  if (platformResult.error !== undefined) {
-    const errMsg =
-      platformResult.error instanceof Error
-        ? platformResult.error.message
-        : JSON.stringify(platformResult.error);
-    throw new DemoEngineError(`Platform migration failed: ${errMsg}`);
-  }
-  timings.push({ label: "platform-migrate", ms: timeMs() - t2 });
-
-  // 3. Create tenant schema + tenant migrations
-  const t3 = timeMs();
-  await sql`CREATE SCHEMA IF NOT EXISTS ${sql.ref(DEMO_ORG_SCHEMA)}`.execute(
-    db,
-  );
+  // 2-3. Platform migrations, tenant schema + tenant migrations
   const tDb = tenantDb(DEMO_ORG_SCHEMA);
-  const tenantMigrator = createTenantMigrator(tDb, DEMO_ORG_SCHEMA);
-  const tenantResult = await tenantMigrator.migrateToLatest();
-  if (tenantResult.error !== undefined) {
-    const errMsg =
-      tenantResult.error instanceof Error
-        ? tenantResult.error.message
-        : JSON.stringify(tenantResult.error);
-    throw new DemoEngineError(`Tenant migration failed: ${errMsg}`);
-  }
-  timings.push({ label: "tenant-migrate", ms: timeMs() - t3 });
+  await migrateEngineDatabase(db, tDb, timings);
 
   // 4. Derive crypto services
-  const opsKey = Buffer.from(FAKE_OPS_KEY_HEX, "hex");
-  const derivedKeys = deriveKeys(opsKey);
-  const encryptor = createFieldEncryptor(derivedKeys.fieldEncryptKey);
-  const indexer = createBlindIndexer(derivedKeys.blindIndexKey);
-  const secretsKey = deriveSecretsKey(opsKey);
-  const secretsEncryptor = createSecretsEncryptor(secretsKey);
-
-  // Session tokenizer (via shim)
-  const SESSION_TOKEN_INFO = "care-y-session-token-v1";
-  const sessionHmacKey = Buffer.from(
-    hkdfSync("sha256", opsKey, Buffer.alloc(0), SESSION_TOKEN_INFO, 32),
-  );
-  const tokenizer: SessionTokenizer = {
-    tokenize(value: string): string {
-      return createHmac("sha256", sessionHmacKey).update(value).digest("hex");
-    },
-    tokenizeIp(value: string): IpToken {
-      return this.tokenize(value) as IpToken;
-    },
-    tokenizeUa(value: string): UaToken {
-      return this.tokenize(value) as UaToken;
-    },
-  };
-
   // The product's Argon2id hasher, running over the sodium-native shim.
   // Cost is libsodium's minimum because demo sign-ins hash in the
   // visitor's browser, and the hashes only ever land in the tab's
   // in-memory database. Never reuse these parameters for stored
   // credentials.
-  const hasher = passwordMod.createPasswordHasher(
-    passwordMod.AUTH_ARGON2ID_TEST_PARAMS,
+  const cryptoServices = deriveEngineCryptoServices(() =>
+    passwordMod.createPasswordHasher(passwordMod.AUTH_ARGON2ID_TEST_PARAMS),
   );
+  const { encryptor, indexer, secretsEncryptor, hasher, tokenizer } =
+    cryptoServices;
 
   // 5. Structural seed
   const t5 = timeMs();
-  const blobStore = createMapBlobStore();
+  const { blobStore } = createMapBlobStore();
   const seedResult = await seedStructure({
     platformDb: db,
     tenantDb: tDb,
@@ -334,47 +203,7 @@ export async function bootDemoEngine(
   const orgPublicKey = seedResult.orgPublicKey;
   const sealedBox = createSealedBoxEncryptor(orgPublicKey, 1);
 
-  // Derive the demo OPRF scalar and volunteer keypair deterministically.
-  // Running the full client pipeline (Argon2id, OPRF blind/evaluate/finalize,
-  // master key derivation) at seed time produces a volPublic that the
-  // visitor's real client crypto worker will reproduce identically when
-  // it logs in with the same password and salt.
-  const tKeys = timeMs();
-  const demoVolScalar = deriveDemoOprfScalar();
-  const demoSalt = _sodium.randombytes_buf(16);
-  const { volPublic: demoVolPublic } = deriveDemoVolPublic(
-    DEMO_ADMIN_PASSWORD,
-    demoSalt,
-    demoVolScalar,
-    seedResult.adminUserId,
-  );
-  timings.push({ label: "demo-key-derivation", ms: timeMs() - tKeys });
-
-  await tDb
-    .insertInto("user_keys")
-    .values({
-      user_id: seedResult.adminUserId,
-      salt: Buffer.from(demoSalt),
-      vol_public: Buffer.from(demoVolPublic),
-    })
-    .execute();
-
-  // Wrap the org secret key to the volunteer's ristretto255 public key
-  // so the client can unwrap it via keys.getWrappedOrgKey after login.
-  const orgWrap = wrapOrgKeyForVolunteer(
-    seedResult.orgSecretKey,
-    demoVolPublic,
-  );
-  await tDb
-    .insertInto("wrapped_org_keys")
-    .values({
-      user_id: seedResult.adminUserId,
-      ephemeral_point: Buffer.from(orgWrap.ephemeralPoint),
-      wrapped_key: Buffer.from(orgWrap.ciphertext),
-      nonce: Buffer.from(orgWrap.nonce),
-      key_version: 1,
-    })
-    .execute();
+  const { demoVolScalar } = await seedAdminKeys(tDb, seedResult, timings);
 
   const ticketResult = await seedTicketsMod.seedTestTickets(
     tDb,
@@ -385,23 +214,14 @@ export async function bootDemoEngine(
     opts?.mediaAssets,
   );
 
-  // Delete one seeded ticket's key wrap so the locked/denied state still
-  // demos. Pick the LAST ticket (never ticketIds[0], which is the detail
-  // deep-link target). A missing wrap is the shape production actually
-  // produces for no-access (keyWrap null -> DENIED); the earlier variant
-  // (re-wrapping to a foreign key while keeping user_id) created a row
-  // no production flow can create, and it broke the real password-change
-  // pipeline, whose myTicketKeyWraps unwrap loop rightly expects every
-  // own wrap to open.
+  // Pick the LAST ticket for the denied demo (never ticketIds[0], which
+  // is the detail deep-link target).
   const deniedTicketId =
     ticketResult.ticketIds[ticketResult.ticketIds.length - 1];
   if (deniedTicketId === undefined) {
     throw new DemoEngineError("No seeded tickets for the denied demo");
   }
-  await tDb
-    .deleteFrom("ticket_key_wraps")
-    .where("ticket_id", "=", deniedTicketId as TicketId)
-    .execute();
+  await denyTicketAccess(tDb, deniedTicketId);
 
   const kbResult = await seedKbMod.seedKbArticles(
     tDb,
@@ -451,29 +271,17 @@ export async function bootDemoEngine(
 
   // 7. Build router (service stubs, provider factories, createAppRouter)
   const t7 = timeMs();
-  const {
-    appRouter,
-    intakeFormService,
-    accountServiceDeps,
-    notificationService,
-  } = await serviceStubsMod.buildServiceStubs({
-    opsKey,
+  const routerBuild = await serviceStubsMod.buildServiceStubs({
+    ...cryptoServices,
     seedResult,
-    encryptor,
-    indexer,
-    secretsEncryptor,
-    hasher,
-    tokenizer,
     blobStore,
     demoVolScalar,
     noopLimiter,
   });
+  const { appRouter } = routerBuild;
   timings.push({ label: "router-build", ms: timeMs() - t7 });
 
-  // 7b. Portal content seed. Runs after the router build because it needs
-  // the same IntakeFormService the two portal routers hold, and it has to
-  // come last regardless: the account tier attaches to a client one of its
-  // own intake submissions creates.
+  // 7b. Portal content seed.
   const t7b = timeMs();
   const anchorTicketId = ticketResult.ticketIds[0];
   if (anchorTicketId === undefined) {
@@ -485,223 +293,29 @@ export async function bootDemoEngine(
       `Ticket seed returned no content key for ${anchorTicketId}`,
     );
   }
-  const portalResult = await seedPortalMod.seedPortal({
+  const portalResult = await seedEnginePortal({
+    seedPortal: seedPortalMod.seedPortal,
     tDb,
     sealedBox,
-    orgPublicKey,
-    fieldEncryptor: encryptor,
-    blindIndexer: indexer,
+    crypto: cryptoServices,
     blobStore,
-    intakeFormService,
-    notificationService,
-    accountServiceDeps,
-    orgId: seedResult.orgId,
-    orgSchema: DEMO_ORG_SCHEMA,
-    orgSlug: DEMO_ORG_SLUG,
-    adminUserId: seedResult.adminUserId,
-    anchorTicketId: anchorTicketId as TicketId,
+    router: routerBuild,
+    seedResult,
+    demoVolScalar,
+    deriveTaggedShare,
+    anchorTicketId,
     anchorTicketKey,
-    // Same scalar the demo OPRF service evaluates under, so the published
-    // password re-derives these keys when the visitor signs in for real.
-    // The tag selects a per-identity working share (ADR-091), matching how
-    // the real service derives per-tag scalars from the master share.
-    evaluateOprf: (blindedElement: Uint8Array, tag: string): Uint8Array => {
-      const taggedScalar = deriveTaggedShareFn(demoVolScalar, tag);
-      try {
-        return _sodium.crypto_scalarmult_ristretto255(
-          taggedScalar,
-          blindedElement,
-        );
-      } finally {
-        _sodium.memzero(taggedScalar);
-      }
-    },
-    accountUsername: DEMO_CLIENT_USERNAME,
-    accountPassword: DEMO_CLIENT_PASSWORD,
   });
   timings.push({ label: "seed-portal", ms: timeMs() - t7b });
 
-  // Create caller factory
-  const { createCallerFactory } = trpcMod;
-
-  // Fabricated context for the admin user
-  const orgCtx: OrgContext = {
-    orgId: seedResult.orgId,
-    orgSlug: DEMO_ORG_SLUG,
-    orgSchema: DEMO_ORG_SCHEMA,
-    tenantDb: tDb,
+  // 8. Fabricated admin session, callers and caller adapter
+  const session = await createEngineSession({
+    appRouter,
+    createCallerFactory: trpcMod.createCallerFactory,
+    createCallerAdapter: callerAdapterMod.createCallerAdapter,
+    tDb,
+    seedResult,
     sealedBox,
-  };
-
-  const adminSession: SessionData = {
-    id: globalThis.crypto.randomUUID() as SessionId,
-    token: globalThis.crypto.randomUUID() as SessionToken,
-    userId: seedResult.adminUserId,
-    ipToken: "demo" as IpToken,
-    uaToken: "demo" as UaToken,
-    expiresAt: new Date(Date.now() + 86400000),
-    twofaVerified: true,
-    webauthnChallenge: null,
-  };
-
-  // The fabricated context mirrors what the production session middleware
-  // does per request: load the user record fresh from the users table.
-  // auth.me serves ctx.user directly, so the sealed ciphertexts must be
-  // the row's real bytes (or every me:* org-tier decrypt fails), and a
-  // profile mutation must be visible on the next read (or settings
-  // writes appear to have no effect). The adapter refreshes this when
-  // the dirty flag is set; ctx.user is a live getter over the latest load.
-  async function loadAdminUser(): Promise<UserRecord> {
-    const row = await tDb
-      .selectFrom("users")
-      .select([
-        "encrypted_identifier",
-        "encrypted_display_name",
-        "role_id",
-        "is_active",
-        "has_seen_briefing",
-        "must_change_password",
-      ])
-      .where("id", "=", seedResult.adminUserId)
-      .executeTakeFirstOrThrow();
-    return {
-      id: seedResult.adminUserId,
-      encryptedIdentifier: row.encrypted_identifier.toString("base64"),
-      encryptedDisplayName: row.encrypted_display_name.toString("base64"),
-      encryptedPreferredLocale: null,
-      roleId: row.role_id,
-      isActive: row.is_active,
-      hasSeenBriefing: row.has_seen_briefing,
-      mustChangePassword: row.must_change_password,
-    };
-  }
-
-  let currentAdminUser: UserRecord = await loadAdminUser();
-
-  // Dirty flag: set after any mutation dispatch completes (including
-  // failures) via the adapter's finally block. The adapter only runs
-  // a PGlite SELECT when dirty, avoiding a full reload before pure
-  // reads. setSignedInRole refreshes directly instead of marking dirty.
-  let adminUserDirty = false;
-
-  async function refreshAdminUser(): Promise<void> {
-    currentAdminUser = await loadAdminUser();
-    adminUserDirty = false;
-  }
-
-  function markAdminUserDirty(): void {
-    adminUserDirty = true;
-  }
-
-  // Cookie jar. The client-portal account procedures are the only ones
-  // that need a real round-trip: accountLogin writes a Set-Cookie header
-  // and accountBootstrap/accountMessages/accountLogout read it back off
-  // req.headers.cookie. Everything else on that router is orgProcedure
-  // and reads nothing from the request.
-  //
-  // Reset point: the jar is local to this boot. A demo restart reloads
-  // the iframe, which reboots the engine and builds a fresh jar, so a
-  // signed-out account cannot survive into the next run.
-  const cookieJar = new Map<string, string>();
-
-  const requestHeaders: Record<string, string> = {};
-
-  function syncCookieHeader(): void {
-    if (cookieJar.size === 0) {
-      delete requestHeaders.cookie;
-      return;
-    }
-    requestHeaders.cookie = Array.from(
-      cookieJar,
-      ([name, value]) => `${name}=${value}`,
-    ).join("; ");
-  }
-
-  /**
-   * Parse one Set-Cookie value back into the jar, which is what a browser
-   * would do before the next request carries it in the Cookie header.
-   * Only the pieces the portal actually uses are honoured: the name-value
-   * pair and Max-Age=0 as the delete signal (buildExpiredClientSessionCookie
-   * in client-portal.ts logs out that way). Expires, Domain, Path, Secure,
-   * HttpOnly, and SameSite have no meaning against a fabricated request
-   * that never leaves the page.
-   */
-  function acceptSetCookie(value: string): void {
-    const [pair, ...attrs] = value.split(";");
-    if (pair === undefined) return;
-    const eq = pair.indexOf("=");
-    if (eq === -1) return;
-    const name = pair.slice(0, eq).trim();
-    if (name === "") return;
-    const cookieValue = pair.slice(eq + 1).trim();
-
-    const expired = attrs.some((attr) => {
-      const [attrName, attrValue] = attr.split("=");
-      return (
-        attrName?.trim().toLowerCase() === "max-age" &&
-        Number(attrValue?.trim()) <= 0
-      );
-    });
-
-    if (expired || cookieValue === "") {
-      cookieJar.delete(name);
-    } else {
-      cookieJar.set(name, cookieValue);
-    }
-    syncCookieHeader();
-  }
-
-  const adminCtx: Context = {
-    // auth.login reads req.socket.remoteAddress (request-utils getClientIp)
-    // for its rate-limit and ip-token inputs, so the fabricated request
-    // needs a socket with a stable placeholder address.
-    req: {
-      headers: requestHeaders,
-      socket: { remoteAddress: "127.0.0.1" },
-    } as unknown as Context["req"],
-    res: {
-      setHeader(name: string, value: string): void {
-        // Set-Cookie is the one header the embedded engine has to honour;
-        // there is no HTTP transport for the rest.
-        if (name.toLowerCase() === "set-cookie") {
-          acceptSetCookie(value);
-        }
-      },
-    } as unknown as Context["res"],
-    org: orgCtx,
-    session: adminSession,
-    get user(): UserRecord {
-      return currentAdminUser;
-    },
-  };
-
-  const callerFactory = createCallerFactory(appRouter);
-  const adminCaller = callerFactory(adminCtx);
-
-  // Non-admin context for middleware testing
-  const volunteerUser: UserRecord = {
-    id: globalThis.crypto.randomUUID() as UserId,
-    encryptedIdentifier: "",
-    encryptedDisplayName: "",
-    encryptedPreferredLocale: null,
-    roleId: RoleId.VOLUNTEER,
-    isActive: true,
-    hasSeenBriefing: true,
-    mustChangePassword: false,
-  };
-
-  const volunteerCtx: Context = {
-    ...adminCtx,
-    user: volunteerUser,
-    session: { ...adminSession, userId: volunteerUser.id },
-  };
-
-  // 8. Build caller adapter (wire reshape + dispatch proxy)
-  const trpcAdapter = callerAdapterMod.createCallerAdapter({
-    callerObj: adminCaller,
-    refreshAdminUser,
-    markDirty: markAdminUserDirty,
-    isDirty: () => adminUserDirty,
   });
 
   // Snapshot: dumpDataDir is not feasible without COOP/COEP headers
@@ -709,7 +323,7 @@ export async function bootDemoEngine(
   timings.push({ label: "snapshot-bytes", ms: -1 });
 
   return {
-    trpc: trpcAdapter,
+    trpc: session.trpc,
     timings,
     seedResult,
     ticketIds: ticketResult.ticketIds,
@@ -717,78 +331,15 @@ export async function bootDemoEngine(
     demoVolScalar,
     platformDb: db,
     tDb,
-    callerFactory,
-    adminCtx,
-    volunteerCtx,
+    callerFactory: session.callerFactory,
+    adminCtx: session.adminCtx,
+    volunteerCtx: session.volunteerCtx,
     appRouter,
     deniedTicketId,
     portal: portalResult,
     blobStore,
-    // Demo is single-user with all-fictional data; no auth/role checks.
-    resolveBlob: {
-      async resolveBlob(category, id): Promise<Uint8Array | null> {
-        // Portal categories share the underlying attachments/recordings
-        // tables. The server resolves them through the portal join tables
-        // with channel-scoped auth; the demo skips auth and queries the
-        // org-side table directly.
-        // Exhaustive rather than a trailing else: a sixth category added to
-        // BlobCategory would otherwise land in kb_attachments silently and
-        // return the wrong org's bytes rather than failing.
-        const tableName = (():
-          "recordings" | "attachments" | "kb_attachments" => {
-          switch (category) {
-            case "recordings":
-            case "portal-recordings":
-              return "recordings";
-            case "attachments":
-            case "portal-attachments":
-              return "attachments";
-            case "kb-attachments":
-              return "kb_attachments";
-            default: {
-              const unreachable: never = category;
-              throw new DemoEngineError(
-                `Unknown blob category: ${String(unreachable)}`,
-              );
-            }
-          }
-        })();
-
-        // The id parameter is a plain string from the DemoBlobResolver
-        // interface, but the tables have distinct branded id columns.
-        // A single cast to the union's common shape is the cleanest fix
-        // for this generic lookup across the five categories.
-        const brandedId = id as RecordingId & AttachmentId & KbAttachmentId;
-        const row = await tDb
-          .selectFrom(tableName)
-          .select("blob_key")
-          .where("id", "=", brandedId)
-          .where("deleted_at", "is", null)
-          .executeTakeFirst();
-
-        if (!row) return null;
-
-        const blob = await blobStore.get(row.blob_key);
-        if (!blob) return null;
-
-        return new Uint8Array(blob.buffer, blob.byteOffset, blob.byteLength);
-      },
-    },
-    async setSignedInRole(roleId: RoleIdValue): Promise<readonly Permission[]> {
-      await tDb
-        .updateTable("users")
-        .set({ role_id: roleId })
-        .where("id", "=", seedResult.adminUserId)
-        .execute();
-      // Refresh immediately so the auth.me call below (and every
-      // subsequent ctx.user read) sees the new role_id. The adapter's
-      // own finally-based markDirty handles the dispatch path; this
-      // out-of-band UPDATE bypasses dispatch, so a direct refresh is
-      // the correct synchronization point.
-      await refreshAdminUser();
-      const me = await adminCaller.auth.me();
-      return me.permissions;
-    },
+    resolveBlob: createEngineBlobResolver(tDb, blobStore),
+    setSignedInRole: session.setSignedInRole,
   };
 }
 

@@ -10,6 +10,7 @@
     "./paraglide/runtime.js": "./src/paraglide/runtime.js",
     "./dev/seed-stories.js": "./src/dev/seed-stories.ts",
     "./dev/seed-handbook-ticket.js": "./src/dev/seed-handbook-ticket.ts",
+    "./dev/seed-snapshot.js": "./src/dev/seed-snapshot.ts",
     "./dev/assets/*": "./src/dev/assets/*"
   },
   "scripts": {

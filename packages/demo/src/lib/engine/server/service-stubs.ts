@@ -549,6 +549,8 @@ export async function buildServiceStubs(
     escalationDeps: null,
     // HARD CONSTRAINT: no dev router (NODE_ENV=production). The router
     // gates on `!== null`, so undefined would mount it with no deps.
+    // The seed snapshot builder mounts the dev procedures on a separate
+    // router of its own; this one never carries them.
     devDeps: null,
   });
 

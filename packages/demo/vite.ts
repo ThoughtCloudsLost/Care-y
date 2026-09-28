@@ -263,6 +263,26 @@ export function demoAliases(): Alias[] {
 }
 
 /**
+ * Aliases for running the demo engine under Node rather than in a
+ * browser. They cover the server shims, the demo stubs and the buffer
+ * polyfill, in the order the build uses them. The smoke test config and
+ * the seed snapshot builder both boot the engine with these, next to
+ * serverRedirectPlugin().
+ */
+export function nodeEngineAliases(): Alias[] {
+  const serverAliases: Alias[] = serverHealthAliases.map((sa) => ({
+    find: sa.find,
+    replacement: sa.replacement,
+  }));
+
+  return [
+    ...serverAliases,
+    ...demoAliases(),
+    { find: "buffer", replacement: "buffer/" },
+  ];
+}
+
+/**
  * Inject the production splash into phone.html at serve/build time.
  *
  * Production paints #splash from static markup in the client's app.html

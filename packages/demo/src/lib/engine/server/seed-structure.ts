@@ -95,7 +95,47 @@ export interface SeedStructureDeps {
    * greeting row plays this instead of the synthetic silence fallback.
    */
   readonly greetingAudioEn?: { readonly bytes: Uint8Array };
+  /**
+   * "full" (the default) seeds everything the demo shows. "builder"
+   * seeds only what the seed replay neither creates nor wipes, for the
+   * snapshot builder, which runs the replay next: it skips the phone
+   * record, queues and every queue assignment, clients, KB categories,
+   * note types, greetings and quarantine rows. The builder writes the
+   * greetings and the roster's queue memberships after the replay, with
+   * {@link seedPhoneGreetings} and {@link assignRosterQueues}.
+   */
+  readonly mode?: "full" | "builder";
 }
+
+/**
+ * The demo org's name and colors. The seed replay sets its own branding,
+ * so the snapshot builder re-applies these after it.
+ */
+export const DEMO_BRANDING = {
+  name: DEMO_ORG_NAME,
+  primaryColor: "#4A6FA5",
+  accentColor: "#E07A5F",
+} as const;
+
+/** The queue names, in the order both this seed and the replay create them. */
+const DEMO_QUEUE_NAMES = ["Intake", "Crisis", "Housing"] as const;
+
+/**
+ * Queue memberships of the roster users, by index into the queues in
+ * {@link DEMO_QUEUE_NAMES} order:
+ * roster user 0 (manager): all queues
+ * roster user 1: Intake + Crisis
+ * roster user 2: Housing only
+ * roster user 3 (inactive): Intake only
+ * roster user 4: Crisis + Housing
+ */
+const ROSTER_QUEUE_MAP: readonly (readonly number[])[] = [
+  [0, 1, 2],
+  [0, 1],
+  [2],
+  [0],
+  [1, 2],
+];
 
 // Word lists for alias generation (subset of server alias-generator)
 const ADJECTIVES = [
@@ -155,6 +195,7 @@ export async function seedStructure(
 ): Promise<SeedStructureResult> {
   const { platformDb, tenantDb, encryptor, indexer, secretsEncryptor, hasher } =
     deps;
+  const full = deps.mode !== "builder";
 
   // 1. Insert org into platform table
   const orgId = globalThis.crypto.randomUUID() as OrgId;
@@ -201,16 +242,13 @@ export async function seedStructure(
   await tenantDb
     .updateTable("org_config")
     .set({
-      // care-y-ignore-next-line ast-pii-in-db-write -- plaintext branding column (ADR-094)
-      name: DEMO_ORG_NAME,
       default_language: "en",
       default_country_code: "US",
-      primary_color: "#4A6FA5",
-      accent_color: "#E07A5F",
       client_text:
         "If you or someone you know needs help, please call our support line. All calls are confidential.",
     })
     .execute();
+  await applyDemoBranding(tenantDb);
 
   // 4. Create admin user
   const passwordHash = (await hasher.hash(DEMO_ADMIN_PASSWORD)) as PasswordHash;
@@ -284,22 +322,26 @@ export async function seedStructure(
 
   // 6. Phone record
   const phoneId = globalThis.crypto.randomUUID() as PhoneId;
-  await tenantDb
-    .insertInto("phones")
-    .values({
-      id: phoneId,
-      phone_hash: indexer.hash("+15550001234", orgId) as PhoneHash,
-      encrypted_number: encryptor.encrypt("+15550001234"),
-      locale: "en",
-    })
-    .execute();
+  if (full) {
+    await tenantDb
+      .insertInto("phones")
+      .values({
+        id: phoneId,
+        phone_hash: indexer.hash("+15550001234", orgId) as PhoneHash,
+        encrypted_number: encryptor.encrypt("+15550001234"),
+        locale: "en",
+      })
+      .execute();
+  }
 
   // 7. Queues
-  const seedQueues = [
-    { name: "Intake", color: "blue", icon: "phone" },
-    { name: "Crisis", color: "red", icon: "triangle-alert" },
-    { name: "Housing", color: "green", icon: "house" },
-  ];
+  const seedQueues = full
+    ? [
+        { name: DEMO_QUEUE_NAMES[0], color: "blue", icon: "phone" },
+        { name: DEMO_QUEUE_NAMES[1], color: "red", icon: "triangle-alert" },
+        { name: DEMO_QUEUE_NAMES[2], color: "green", icon: "house" },
+      ]
+    : [];
   const queueIds = new Map<string, QueueId>();
 
   for (let i = 0; i < seedQueues.length; i++) {
@@ -397,52 +439,16 @@ export async function seedStructure(
   }
 
   // 8c. Queue assignments for roster users (varied, some in multiple queues)
-  const queueIdList = [...queueIds.values()];
-  // roster user 0 (manager): all queues
-  // roster user 1: Intake + Crisis
-  // roster user 2: Housing only
-  // roster user 3 (inactive): Intake only
-  // roster user 4: Crisis + Housing
-  const rosterQueueMap: readonly number[][] = [
-    [0, 1, 2],
-    [0, 1],
-    [2],
-    [0],
-    [1, 2],
-  ];
-  for (let i = 0; i < rosterQueueMap.length; i++) {
-    const queueIndices = rosterQueueMap.at(i);
-    if (queueIndices === undefined) {
-      throw new DemoEngineError(`rosterQueueMap missing index ${String(i)}`);
-    }
-    const userId = rosterUserIds.at(i);
-    if (userId === undefined) {
-      throw new DemoEngineError(`rosterUserIds missing index ${String(i)}`);
-    }
-    for (let j = 0; j < queueIndices.length; j++) {
-      const qIdx = queueIndices.at(j);
-      if (qIdx === undefined) {
-        throw new DemoEngineError(`queueIndices missing index ${String(j)}`);
-      }
-      const qId = queueIdList.at(qIdx);
-      if (qId === undefined) {
-        throw new DemoEngineError(`queueIdList missing index ${String(qIdx)}`);
-      }
-      await tenantDb
-        .insertInto("queue_assignments")
-        .values({
-          queue_id: qId,
-          user_id: userId,
-        })
-        .execute();
-    }
+  if (full) {
+    await assignRosterQueues(tenantDb, rosterUserIds, [...queueIds.values()]);
   }
 
   // 9. Clients. Aliases are org-tier sealed (clients.encrypted_alias);
   // alias_hash stays null, which the blind-index design allows for
   // server-side write paths, and the sealed ciphertext carries no
   // unique constraint, so no retry loop is needed.
-  for (let i = 0; i < NUM_SEED_CLIENTS; i++) {
+  const clientCount = full ? NUM_SEED_CLIENTS : 0;
+  for (let i = 0; i < clientCount; i++) {
     const alias = generateAlias();
     await tenantDb
       .insertInto("clients")
@@ -454,7 +460,7 @@ export async function seedStructure(
   }
 
   // 10. KB categories
-  const kbCategoryNames = ["Procedures", "Resources", "Safety"];
+  const kbCategoryNames = full ? ["Procedures", "Resources", "Safety"] : [];
   for (let i = 0; i < kbCategoryNames.length; i++) {
     const name = kbCategoryNames.at(i);
     if (name === undefined) {
@@ -468,9 +474,11 @@ export async function seedStructure(
   }
 
   // 11. Default note types
-  const { seedDefaultNoteTypes } =
-    await import("../../../../../server/src/tickets/note-type-service.js");
-  await seedDefaultNoteTypes(tenantDb, sealedBox, secretsEncryptor);
+  if (full) {
+    const { seedDefaultNoteTypes } =
+      await import("../../../../../server/src/tickets/note-type-service.js");
+    await seedDefaultNoteTypes(tenantDb, sealedBox, secretsEncryptor);
+  }
 
   // 12. Telephony config. TelephonyConfigSection reads telephonyAdmin.getConfig
   // which calls configService.getMaskedConfig, which calls providerFactory.getProvider.
@@ -527,7 +535,169 @@ export async function seedStructure(
     })
     .execute();
 
-  // 13. Phone greetings (GreetingsSection lists per phone, grouped by type).
+  // 13. Phone greetings. The replay's reset wipes phone_greetings, so
+  // the builder writes them after the replay instead.
+  if (full) {
+    await seedPhoneGreetings(tenantDb, deps.blobStore, deps.greetingAudioEn);
+  }
+
+  // 14. SMS response templates (SmsTemplatesSection lists per type and
+  // renders the response_type, locale, and text columns).
+  const smsTemplates = [
+    {
+      response_type: "auto_reply",
+      locale: "en",
+      text: "We received your message. A volunteer will follow up soon.",
+    },
+    {
+      response_type: "auto_reply",
+      locale: "es",
+      text: "Recibimos su mensaje. Un voluntario le contactará pronto.",
+    },
+    {
+      response_type: "after_hours",
+      locale: "en",
+      text: "Our support line is currently closed. We will respond during the next available shift.",
+    },
+    {
+      response_type: "after_hours",
+      locale: "es",
+      text: "Nuestra línea de apoyo está cerrada en este momento. Responderemos durante el próximo turno disponible.",
+    },
+    {
+      response_type: "new_client",
+      locale: "en",
+      text: "Welcome to Handbook Example Org. Reply HELP for a list of commands, or a volunteer will reach out shortly.",
+    },
+    {
+      response_type: "error",
+      locale: "en",
+      text: "We could not process your message. Please try again or call +1 (555) 000-1234.",
+    },
+  ];
+  for (const t of smsTemplates) {
+    await tenantDb
+      .insertInto("sms_responses")
+      .values({
+        response_type: t.response_type,
+        locale: t.locale,
+        text: t.text,
+      })
+      .execute();
+  }
+
+  // 15. Phone blocklist (one entry so auth.hubBlocklistCount is non-zero)
+  await tenantDb
+    .insertInto("phone_blocklist")
+    .values({
+      phone_hash: indexer.hash("+15559990000", orgId) as PhoneHash,
+      encrypted_number: encryptor.encrypt("+15559990000"),
+      added_by: adminUserId,
+    })
+    .execute();
+
+  // 16. Voicemail quarantine rows. QuarantineSection reads
+  // voicemailQuarantine.list (status, reason, createdAt, durationSeconds,
+  // encryptedCallerNumber, encryptedCalledNumber) and
+  // voicemailQuarantine.download (sealedBase64 from blob store).
+  // Production writes sealed audio via sealBufferAndZero (crypto_box_seal)
+  // and caller/called via sealString (crypto_box_seal on UTF-8 Buffer).
+  // Skip if no blob store (E4 precedent: metadata without bytes is worse
+  // than nothing).
+  if (full && deps.blobStore !== undefined) {
+    const quarantineRows = [
+      {
+        recordingSid: "RE" + "demo_quarantine_1".padEnd(32, "0"),
+        callSid: "CA" + "demo_qcall_1".padEnd(32, "0"),
+        reason: "tracker_miss",
+        callerNumber: "+15550009876",
+        calledNumber: "+15550001234",
+        durationSeconds: 47,
+        minutesAgo: 180,
+      },
+      {
+        recordingSid: "RE" + "demo_quarantine_2".padEnd(32, "0"),
+        callSid: "CA" + "demo_qcall_2".padEnd(32, "0"),
+        reason: "no_intake_queue",
+        callerNumber: "+15550004321",
+        calledNumber: "+15550005678",
+        durationSeconds: 12,
+        minutesAgo: 90,
+      },
+      {
+        recordingSid: "RE" + "demo_quarantine_3".padEnd(32, "0"),
+        callSid: "CA" + "demo_qcall_3".padEnd(32, "0"),
+        reason: "unresolved_client",
+        callerNumber: "+15550007777",
+        calledNumber: "+15550001234",
+        durationSeconds: 63,
+        minutesAgo: 30,
+      },
+    ] as const;
+
+    const quarantineNow = Date.now();
+    for (const qr of quarantineRows) {
+      // Use the narrative voicemail clip when provided (same audio the
+      // ticket voicemails play); otherwise generate a minimal valid WAV.
+      // Either way, seal exactly as the product does: crypto_box_seal on
+      // the raw audio bytes. QuarantinePlayer decrypts via
+      // orgKeyManager.decrypt (crypto_box_seal_open).
+      const rawAudio = Buffer.from(
+        deps.voicemailAudio?.bytes ?? generateMinimalWav(),
+      );
+      const sealedAudio = sealedBox.sealBuffer(rawAudio);
+      rawAudio.fill(0);
+
+      const blobKey = await deps.blobStore.put(
+        DEMO_ORG_SCHEMA,
+        "quarantine",
+        sealedAudio,
+      );
+
+      await tenantDb
+        .insertInto("voicemail_quarantine")
+        .values({
+          recording_sid: qr.recordingSid as RecordingSid,
+          call_sid: qr.callSid as CallSid,
+          blob_key: blobKey,
+          size_bytes: sealedAudio.length,
+          duration_seconds:
+            deps.voicemailAudio?.durationSeconds ?? qr.durationSeconds,
+          reason: qr.reason,
+          status: "pending",
+          client_id: null,
+          encrypted_caller_number: sealedBox.seal(qr.callerNumber),
+          encrypted_called_number: sealedBox.seal(qr.calledNumber),
+          routed_ticket_id: null,
+          routed_followup_id: null,
+          resolved_by: null,
+          resolved_at: null,
+          created_at: new Date(quarantineNow - qr.minutesAgo * 60 * 1000),
+        })
+        .execute();
+    }
+  }
+
+  return {
+    orgId,
+    adminUserId,
+    orgPublicKey,
+    orgSecretKey,
+    queueIds,
+    rosterUserIds,
+  };
+}
+
+/**
+ * Write the org's line greetings. The Crisis line's English answer
+ * greeting is an audio row when a blob store is given.
+ */
+export async function seedPhoneGreetings(
+  tenantDb: Kysely<TenantDatabase>,
+  blobStore: BlobStore | undefined,
+  greetingAudioEn: { readonly bytes: Uint8Array } | undefined,
+): Promise<void> {
+  // GreetingsSection lists per phone, grouped by type.
   // Columns rendered: phone_number, greeting_type, locale, text, is_audio,
   // audio_blob_key, audio_content_type.
   const greetings: {
@@ -623,11 +793,11 @@ export async function seedStructure(
   // regeneration scripts in scripts/, loaded at boot in phone-main.
   // Greeting audio is NOT encrypted (stored as raw audio in the blob store,
   // served via a public HTTP handler at /api/greetings/<blobKey>).
-  if (deps.blobStore !== undefined) {
-    const greetingBytes = deps.greetingAudioEn?.bytes ?? generateMinimalWav();
+  if (blobStore !== undefined) {
+    const greetingBytes = greetingAudioEn?.bytes ?? generateMinimalWav();
     const greetingContentType =
-      deps.greetingAudioEn !== undefined ? "audio/mp4" : "audio/wav";
-    const audioBlobKey = await deps.blobStore.put(
+      greetingAudioEn !== undefined ? "audio/mp4" : "audio/wav";
+    const audioBlobKey = await blobStore.put(
       DEMO_ORG_SCHEMA,
       "greeting",
       Buffer.from(greetingBytes),
@@ -664,152 +834,65 @@ export async function seedStructure(
       })
       .execute();
   }
+}
 
-  // 14. SMS response templates (SmsTemplatesSection lists per type and
-  // renders the response_type, locale, and text columns).
-  const smsTemplates = [
-    {
-      response_type: "auto_reply",
-      locale: "en",
-      text: "We received your message. A volunteer will follow up soon.",
-    },
-    {
-      response_type: "auto_reply",
-      locale: "es",
-      text: "Recibimos su mensaje. Un voluntario le contactará pronto.",
-    },
-    {
-      response_type: "after_hours",
-      locale: "en",
-      text: "Our support line is currently closed. We will respond during the next available shift.",
-    },
-    {
-      response_type: "after_hours",
-      locale: "es",
-      text: "Nuestra línea de apoyo está cerrada en este momento. Responderemos durante el próximo turno disponible.",
-    },
-    {
-      response_type: "new_client",
-      locale: "en",
-      text: "Welcome to Handbook Example Org. Reply HELP for a list of commands, or a volunteer will reach out shortly.",
-    },
-    {
-      response_type: "error",
-      locale: "en",
-      text: "We could not process your message. Please try again or call +1 (555) 000-1234.",
-    },
-  ];
-  for (const t of smsTemplates) {
-    await tenantDb
-      .insertInto("sms_responses")
-      .values({
-        response_type: t.response_type,
-        locale: t.locale,
-        text: t.text,
-      })
-      .execute();
-  }
-
-  // 15. Phone blocklist (one entry so auth.hubBlocklistCount is non-zero)
+/** Set the demo org's name and colors on org_config. */
+export async function applyDemoBranding(
+  tenantDb: Kysely<TenantDatabase>,
+): Promise<void> {
+  // Branding columns are plaintext (ADR-094).
   await tenantDb
-    .insertInto("phone_blocklist")
-    .values({
-      phone_hash: indexer.hash("+15559990000", orgId) as PhoneHash,
-      encrypted_number: encryptor.encrypt("+15559990000"),
-      added_by: adminUserId,
+    .updateTable("org_config")
+    .set({
+      // care-y-ignore-next-line ast-pii-in-db-write -- plaintext branding column (ADR-094)
+      name: DEMO_BRANDING.name,
+      primary_color: DEMO_BRANDING.primaryColor,
+      accent_color: DEMO_BRANDING.accentColor,
     })
     .execute();
+}
 
-  // 16. Voicemail quarantine rows. QuarantineSection reads
-  // voicemailQuarantine.list (status, reason, createdAt, durationSeconds,
-  // encryptedCallerNumber, encryptedCalledNumber) and
-  // voicemailQuarantine.download (sealedBase64 from blob store).
-  // Production writes sealed audio via sealBufferAndZero (crypto_box_seal)
-  // and caller/called via sealString (crypto_box_seal on UTF-8 Buffer).
-  // Skip if no blob store (E4 precedent: metadata without bytes is worse
-  // than nothing).
-  if (deps.blobStore !== undefined) {
-    const quarantineRows = [
-      {
-        recordingSid: "RE" + "demo_quarantine_1".padEnd(32, "0"),
-        callSid: "CA" + "demo_qcall_1".padEnd(32, "0"),
-        reason: "tracker_miss",
-        callerNumber: "+15550009876",
-        calledNumber: "+15550001234",
-        durationSeconds: 47,
-        minutesAgo: 180,
-      },
-      {
-        recordingSid: "RE" + "demo_quarantine_2".padEnd(32, "0"),
-        callSid: "CA" + "demo_qcall_2".padEnd(32, "0"),
-        reason: "no_intake_queue",
-        callerNumber: "+15550004321",
-        calledNumber: "+15550005678",
-        durationSeconds: 12,
-        minutesAgo: 90,
-      },
-      {
-        recordingSid: "RE" + "demo_quarantine_3".padEnd(32, "0"),
-        callSid: "CA" + "demo_qcall_3".padEnd(32, "0"),
-        reason: "unresolved_client",
-        callerNumber: "+15550007777",
-        calledNumber: "+15550001234",
-        durationSeconds: 63,
-        minutesAgo: 30,
-      },
-    ] as const;
-
-    const quarantineNow = Date.now();
-    for (const qr of quarantineRows) {
-      // Use the narrative voicemail clip when provided (same audio the
-      // ticket voicemails play); otherwise generate a minimal valid WAV.
-      // Either way, seal exactly as the product does: crypto_box_seal on
-      // the raw audio bytes. QuarantinePlayer decrypts via
-      // orgKeyManager.decrypt (crypto_box_seal_open).
-      const rawAudio = Buffer.from(
-        deps.voicemailAudio?.bytes ?? generateMinimalWav(),
-      );
-      const sealedAudio = sealedBox.sealBuffer(rawAudio);
-      rawAudio.fill(0);
-
-      const blobKey = await deps.blobStore.put(
-        DEMO_ORG_SCHEMA,
-        "quarantine",
-        sealedAudio,
-      );
-
+/**
+ * Give the roster users their queue memberships. `queueIds` lists the
+ * three queues in Intake, Crisis, Housing order.
+ */
+export async function assignRosterQueues(
+  tenantDb: Kysely<TenantDatabase>,
+  rosterUserIds: readonly UserId[],
+  queueIds: readonly QueueId[],
+): Promise<void> {
+  if (queueIds.length !== DEMO_QUEUE_NAMES.length) {
+    throw new DemoEngineError(
+      `Expected ${String(DEMO_QUEUE_NAMES.length)} queues, found ${String(queueIds.length)}`,
+    );
+  }
+  for (let i = 0; i < ROSTER_QUEUE_MAP.length; i++) {
+    const queueIndices = ROSTER_QUEUE_MAP.at(i);
+    if (queueIndices === undefined) {
+      throw new DemoEngineError(`rosterQueueMap missing index ${String(i)}`);
+    }
+    const userId = rosterUserIds.at(i);
+    if (userId === undefined) {
+      throw new DemoEngineError(`rosterUserIds missing index ${String(i)}`);
+    }
+    for (let j = 0; j < queueIndices.length; j++) {
+      const qIdx = queueIndices.at(j);
+      if (qIdx === undefined) {
+        throw new DemoEngineError(`queueIndices missing index ${String(j)}`);
+      }
+      const qId = queueIds.at(qIdx);
+      if (qId === undefined) {
+        throw new DemoEngineError(`queueIdList missing index ${String(qIdx)}`);
+      }
       await tenantDb
-        .insertInto("voicemail_quarantine")
+        .insertInto("queue_assignments")
         .values({
-          recording_sid: qr.recordingSid as RecordingSid,
-          call_sid: qr.callSid as CallSid,
-          blob_key: blobKey,
-          size_bytes: sealedAudio.length,
-          duration_seconds:
-            deps.voicemailAudio?.durationSeconds ?? qr.durationSeconds,
-          reason: qr.reason,
-          status: "pending",
-          client_id: null,
-          encrypted_caller_number: sealedBox.seal(qr.callerNumber),
-          encrypted_called_number: sealedBox.seal(qr.calledNumber),
-          routed_ticket_id: null,
-          routed_followup_id: null,
-          resolved_by: null,
-          resolved_at: null,
-          created_at: new Date(quarantineNow - qr.minutesAgo * 60 * 1000),
+          queue_id: qId,
+          user_id: userId,
         })
         .execute();
     }
   }
-
-  return {
-    orgId,
-    adminUserId,
-    orgPublicKey,
-    orgSecretKey,
-    queueIds,
-    rosterUserIds,
-  };
 }
 
 // ---------------------------------------------------------------------------

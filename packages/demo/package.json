@@ -12,7 +12,8 @@
   "scripts": {
     "dev": "pnpm --filter @care-y/client run build:paraglide && vite",
     "dev:mobile": "pnpm --filter @care-y/client run build:paraglide && node scripts/dev-network.js",
-    "build": "pnpm --filter @care-y/client run build:paraglide && NODE_OPTIONS=--max-old-space-size=4096 vite build",
+    "build": "pnpm --filter @care-y/client run build:paraglide && node scripts/seed-snapshot.mjs && NODE_OPTIONS=--max-old-space-size=4096 vite build",
+    "seed-snapshot": "pnpm --filter @care-y/client run build:paraglide && node scripts/seed-snapshot.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "check:handbook-refs": "node scripts/check-handbook-refs.mjs",
     "check:prose-flags": "node scripts/prose-flags.mjs",
