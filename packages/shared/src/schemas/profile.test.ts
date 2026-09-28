@@ -4,8 +4,8 @@ import {
   adminUpdateDisplayNameSchema,
   updateUsernameSchema,
   adminUpdateUsernameSchema,
-  updatePasswordHashSchema,
   updatePreferredLocaleSchema,
+  changePasswordSchema,
 } from "./profile.js";
 
 describe("updateDisplayNameSchema", () => {
@@ -117,9 +117,16 @@ describe("adminUpdateUsernameSchema", () => {
   });
 });
 
-describe("updatePasswordHashSchema", () => {
-  it("accepts valid current and new passwords", () => {
-    const result = updatePasswordHashSchema.safeParse({
+describe("changePasswordSchema", () => {
+  const keys = {
+    saltNew: Buffer.alloc(16, 0xaa).toString("base64"),
+    volPublicNew: Buffer.alloc(32, 0xbb).toString("base64"),
+    reWrappedKeys: [],
+  };
+
+  it("accepts valid current and new passwords with key material", () => {
+    const result = changePasswordSchema.safeParse({
+      ...keys,
       currentPassword: "old-password-16chars!",
       newPassword: "new-password-16chars!",
     });
@@ -127,7 +134,8 @@ describe("updatePasswordHashSchema", () => {
   });
 
   it("rejects currentPassword under 16 characters", () => {
-    const result = updatePasswordHashSchema.safeParse({
+    const result = changePasswordSchema.safeParse({
+      ...keys,
       currentPassword: "short",
       newPassword: "new-password-16chars!",
     });
@@ -135,20 +143,20 @@ describe("updatePasswordHashSchema", () => {
   });
 
   it("rejects newPassword under 16 characters", () => {
-    const result = updatePasswordHashSchema.safeParse({
+    const result = changePasswordSchema.safeParse({
+      ...keys,
       currentPassword: "old-password-16chars!",
       newPassword: "short",
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects missing fields", () => {
-    expect(updatePasswordHashSchema.safeParse({}).success).toBe(false);
-    expect(
-      updatePasswordHashSchema.safeParse({
-        currentPassword: "old-password-16chars!",
-      }).success,
-    ).toBe(false);
+  it("rejects missing key material", () => {
+    const result = changePasswordSchema.safeParse({
+      currentPassword: "old-password-16chars!",
+      newPassword: "new-password-16chars!",
+    });
+    expect(result.success).toBe(false);
   });
 });
 

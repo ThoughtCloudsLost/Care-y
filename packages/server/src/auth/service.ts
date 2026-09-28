@@ -45,17 +45,27 @@ export interface UserRecord {
   readonly roleId: RoleIdValue;
   readonly isActive: boolean;
   readonly hasSeenBriefing: boolean;
+  /** Set on accounts an administrator created with a temporary password. */
+  readonly mustChangePassword: boolean;
+}
+
+export interface RegisterInput {
+  identifier: string;
+  password: string;
+  displayName: string;
+  notificationEmail?: string;
+  preferredLocale?: string;
+  roleId: RoleIdValue;
+  /**
+   * True when an administrator creates the account directly with a
+   * temporary password; the holder must replace it before using the app.
+   * Invite registration and the first owner choose their own password.
+   */
+  mustChangePassword?: boolean;
 }
 
 export interface AuthService {
-  register(input: {
-    identifier: string;
-    password: string;
-    displayName: string;
-    notificationEmail?: string;
-    preferredLocale?: string;
-    roleId: RoleIdValue;
-  }): Promise<UserRecord>;
+  register(input: RegisterInput): Promise<UserRecord>;
 
   login(input: {
     identifier: string;
@@ -110,17 +120,6 @@ export interface AuthService {
     currentPassword?: string,
   ): Promise<void>;
 
-  /**
-   * Updates a user's password hash and kills all other sessions.
-   * Crypto key rotation (rotateKeys) is a separate step handled by the client.
-   */
-  updatePasswordHash(
-    userId: UserId,
-    sessionToken: SessionToken,
-    currentPassword: string,
-    newPassword: string,
-  ): Promise<void>;
-
   /** Updates the org's PII retention setting in org_config. */
   setPiiRetentionDays(days: number | null): Promise<void>;
 
@@ -167,6 +166,7 @@ function toUserRecord(row: Selectable<UsersTable>): UserRecord {
     roleId: row.role_id,
     isActive: row.is_active,
     hasSeenBriefing: row.has_seen_briefing,
+    mustChangePassword: row.must_change_password,
   };
 }
 
@@ -339,14 +339,9 @@ export function createAuthService(
     return session;
   }
 
-  async function insertUserRow(input: {
-    identifier: string;
-    password: string;
-    displayName: string;
-    notificationEmail?: string;
-    preferredLocale?: string;
-    roleId: RoleIdValue;
-  }): Promise<Selectable<UsersTable>> {
+  async function insertUserRow(
+    input: RegisterInput,
+  ): Promise<Selectable<UsersTable>> {
     const identifierHash = indexer.hashIdentifier(input.identifier, orgId);
     // ADR-052: identifier is org-key tier (sealed box, server-blind).
     // Login never reads it back; lookup goes through identifier_hash.
@@ -375,6 +370,7 @@ export function createAuthService(
           encrypted_preferred_locale: encryptedPreferredLocale,
           role_id: input.roleId,
           org_key_generation: sealedBox.generation,
+          must_change_password: input.mustChangePassword === true,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -618,40 +614,6 @@ export function createAuthService(
         }
         throw err;
       }
-    },
-
-    async updatePasswordHash(
-      userId: UserId,
-      sessionToken: SessionToken,
-      currentPassword: string,
-      newPassword: string,
-    ): Promise<void> {
-      const row = await findActiveUserById(userId);
-      if (!row) {
-        throw new NotFoundError(ErrorCode.USER_NOT_FOUND);
-      }
-
-      const valid = await hasher.verify(currentPassword, row.password_hash);
-      if (!valid) {
-        throw new AuthError(ErrorCode.INVALID_CREDENTIALS);
-      }
-
-      const newHash = await hasher.hashPassword(newPassword);
-
-      await db.transaction().execute(async (tx) => {
-        await tx
-          .updateTable("users")
-          .set({ password_hash: newHash })
-          .where("id", "=", userId)
-          .where("is_active", "=", true)
-          .execute();
-
-        await tx
-          .deleteFrom("sessions")
-          .where("user_id", "=", userId)
-          .where("token", "!=", sessionToken)
-          .execute();
-      });
     },
 
     async countActiveUsers(): Promise<number> {

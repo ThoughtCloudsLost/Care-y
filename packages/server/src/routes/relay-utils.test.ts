@@ -272,6 +272,7 @@ describe("authenticateRelay", () => {
       markTwoFactorVerified: vi.fn(),
       clearTwoFactorVerified: vi.fn(),
       setWebauthnChallenge: vi.fn(),
+      recordTwoFactorFailure: vi.fn().mockResolvedValue(0),
     });
   }
 

@@ -8,11 +8,6 @@ export const initCryptoKeysSchema = z.object({
   volPublic: base64Bytes(32, "volPublic (ristretto255 point)"),
 });
 
-/** volPublic update (password change re-derives volPublic without changing salt separately). */
-export const uploadVolPublicSchema = z.object({
-  volPublic: base64Bytes(32, "volPublic (ristretto255 point)"),
-});
-
 /** Single re-wrapped ticket key entry (ECIES wrapping output). */
 const reWrappedKeySchema = z.object({
   ticketId: ticketIdSchema,
@@ -121,7 +116,6 @@ export const RESEAL_TABLE_NAMES = [
   "merge_candidate_dismissals",
   "consultants",
   "phone_blocklist",
-  "invite_tokens",
   "voicemail_quarantine",
   "intake_key_wraps",
   "portal_reply_key_wraps",
@@ -237,7 +231,6 @@ export const reindexPendingSchema = z.object({
 export type ReindexPendingInput = z.infer<typeof reindexPendingSchema>;
 
 export type InitCryptoKeysInput = z.infer<typeof initCryptoKeysSchema>;
-export type UploadVolPublicInput = z.infer<typeof uploadVolPublicSchema>;
 export type PasswordChangeKeysInput = z.infer<typeof passwordChangeKeysSchema>;
 export type UploadOrgPublicKeyInput = z.infer<typeof uploadOrgPublicKeySchema>;
 export type RotateOrgKeyInput = z.infer<typeof rotateOrgKeySchema>;

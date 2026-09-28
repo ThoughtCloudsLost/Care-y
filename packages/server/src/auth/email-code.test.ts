@@ -1,14 +1,23 @@
 /**
  * Integration tests for email verification code service.
  *
- * Covers: code generation and storage, successful verification (deletes row),
- * wrong code rejection, attempt tracking, max attempts deletion, expired code
- * rejection, rate limiting (60s cooldown and hourly cap).
+ * Covers: code generation and storage, successful verification (marks the
+ * row consumed), wrong code rejection, attempt tracking, max attempts
+ * exhaustion, expired code rejection, rate limiting (60s cooldown and hourly
+ * cap), single use under parallel verification.
  *
  * DB integration: requires Docker test containers (DATABASE_URL).
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  afterEach,
+  vi,
+} from "vitest";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import {
@@ -20,7 +29,7 @@ import {
 } from "../test-utils.js";
 import { createEmailCodeService, type EmailCodeService } from "./email-code.js";
 import { RateLimitError, ValidationError } from "../errors.js";
-import type { CodeHash } from "@care-y/shared";
+import { ErrorCode } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
   let testDb: TestDb;
@@ -33,6 +42,10 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
 
   afterAll(async () => {
     await testDb.cleanup();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   function makeService(): {
@@ -80,7 +93,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
       expect(row!.attempts).toBe(0);
     });
 
-    it("deletes previous active code before creating new one", async () => {
+    it("consumes the previous active code before creating a new one", async () => {
       const user = await createTestUser(db);
       const { service } = makeService();
 
@@ -122,37 +135,54 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
       ).rejects.toThrow(RateLimitError);
     });
 
-    it("rate limits at 5 codes per hour", async () => {
+    it("rate limits at 5 codes per hour, counting codes it replaced", async () => {
+      const user = await createTestUser(db);
+      const { service, sender } = makeService();
+
+      // Only Date is faked: the DB driver keeps its real timers.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const start = Date.now();
+
+      // 5 sends, each past the cooldown. Every send replaces the
+      // previous code, and the replaced codes must still count.
+      for (let i = 0; i < 5; i++) {
+        vi.setSystemTime(start + i * 61_000);
+        await service.sendCode(user.id, "user@example.com");
+      }
+      expect(sender.calls).toHaveLength(5);
+
+      vi.setSystemTime(start + 5 * 61_000);
+      await expect(
+        service.sendCode(user.id, "user@example.com"),
+      ).rejects.toThrow(ErrorCode.RATE_LIMIT_HOURLY);
+      expect(sender.calls).toHaveLength(5);
+    });
+
+    it("drops rows older than the hourly window on the next send", async () => {
       const user = await createTestUser(db);
       const { service } = makeService();
 
-      // Insert 5 code rows directly with recent timestamps
-      const now = Date.now();
-      for (let i = 0; i < 5; i++) {
-        await db
-          .insertInto("email_codes")
-          .values({
-            user_id: user.id,
-            code_hash:
-              `scrypt:${"aa".repeat(16)}:${"bb".repeat(32)}` as CodeHash,
-            // expires_at set so that creation time (expires_at - 5min) is within the hour
-            expires_at: new Date(now + 5 * 60 * 1000 - i * 60_000),
-            consumed: true, // consumed so they don't interfere with cooldown
-          })
-          .execute();
-      }
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const start = Date.now();
 
-      // Attempting to send should hit hourly limit
-      await expect(
-        service.sendCode(user.id, "user@example.com"),
-      ).rejects.toThrow(RateLimitError);
+      await service.sendCode(user.id, "user@example.com");
+      vi.setSystemTime(start + 2 * 60 * 60 * 1000);
+      await service.sendCode(user.id, "user@example.com");
+
+      const rows = await db
+        .selectFrom("email_codes")
+        .select("consumed")
+        .where("user_id", "=", user.id)
+        .execute();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.consumed).toBe(false);
     });
   });
 
   // --- verifyCode ---
 
   describe("verifyCode", () => {
-    it("accepts correct code and deletes the row", async () => {
+    it("accepts correct code and marks the row consumed", async () => {
       const user = await createTestUser(db);
       const { service, sender } = makeService();
 
@@ -164,7 +194,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
       const result = await service.verifyCode(user.id, code);
       expect(result).toBe(true);
 
-      // Row should be deleted (ADR-017)
+      // No active row remains, so the same code cannot be used again
       const row = await db
         .selectFrom("email_codes")
         .selectAll()
@@ -172,6 +202,24 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
         .where("consumed", "=", false)
         .executeTakeFirst();
       expect(row).toBeUndefined();
+      await expect(service.verifyCode(user.id, code)).rejects.toThrow(
+        ErrorCode.NO_ACTIVE_CODE,
+      );
+    });
+
+    it("accepts a correct code exactly once under parallel use", async () => {
+      const user = await createTestUser(db);
+      const { service, sender } = makeService();
+
+      await service.sendCode(user.id, "user@example.com");
+      const code = extractEmailCode(sender.calls[0]!.text);
+
+      const results = await Promise.all([
+        service.verifyCode(user.id, code),
+        service.verifyCode(user.id, code),
+      ]);
+
+      expect(results.filter((r) => r)).toHaveLength(1);
     });
 
     it("rejects wrong code and increments attempts", async () => {
@@ -194,7 +242,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
       expect(row!.attempts).toBe(1);
     });
 
-    it("deletes code after max attempts (3) and throws ValidationError", async () => {
+    it("consumes code after max attempts (3) and throws ValidationError", async () => {
       const user = await createTestUser(db);
       const { service } = makeService();
 
@@ -204,12 +252,12 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
       await service.verifyCode(user.id, "000000");
       await service.verifyCode(user.id, "000001");
 
-      // Third wrong attempt should delete and throw
+      // Third wrong attempt should consume the code and throw
       await expect(service.verifyCode(user.id, "000002")).rejects.toThrow(
         ValidationError,
       );
 
-      // Row should be deleted
+      // No active row remains
       const row = await db
         .selectFrom("email_codes")
         .selectAll()
@@ -259,7 +307,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
         .where("user_id", "=", user.id)
         .execute();
 
-      // Should detect max attempts and delete
+      // Should detect max attempts and consume the code
       await expect(service.verifyCode(user.id, "123456")).rejects.toThrow(
         ValidationError,
       );

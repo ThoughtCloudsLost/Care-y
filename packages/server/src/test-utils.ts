@@ -418,13 +418,14 @@ type SessionOverrides = Partial<Insertable<SessionsTable>> & {
   user_id: UserId;
 };
 
-// Fake password hash for test rows. Format matches createScryptHasher output
-// (scrypt:<32-hex-salt>:<128-hex-key>) but the key is not a real derivation.
-// Tests that need actual password verification should hash via createScryptHasher.
-const DEFAULT_PASSWORD_HASH = ("scrypt:" +
-  "aa".repeat(16) +
-  ":" +
-  "bb".repeat(64)) as PasswordHash;
+// Fake password hash for test rows. Format matches createPasswordHasher output
+// ($argon2id$v=19$m=...,t=...,p=1$<salt-b64>$<hash-b64>) but the hash is not a
+// real derivation. Tests that need actual password verification should hash
+// via createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS).
+const DEFAULT_PASSWORD_HASH = ("$argon2id$v=19$m=65536,t=4,p=1$" +
+  "A".repeat(22) +
+  "$" +
+  "B".repeat(43)) as PasswordHash;
 
 /**
  * Inserts a user row with sensible defaults. Override any column via
@@ -987,6 +988,7 @@ export async function insertWebauthnCredential(
       backed_up: false,
       aaguid: "00000000-0000-0000-0000-000000000000",
       ordinal,
+      algorithm: "ES256",
     })
     .execute();
 
@@ -1040,7 +1042,10 @@ export const DOCKER_SOCKET_B = "/run/oprf/oprf-b.sock";
 import type { OprfRouterDeps } from "./routes/oprf.js";
 import type { OptionalRouterDeps, RouterDeps } from "./routes/router.js";
 import type { OrgService } from "./org/service.js";
-import { createScryptHasher } from "./auth/password.js";
+import {
+  AUTH_ARGON2ID_TEST_PARAMS,
+  createPasswordHasher,
+} from "./auth/password.js";
 import {
   createInMemoryRateLimiter,
   type RateLimiter,
@@ -1308,7 +1313,7 @@ export const ALL_OPTIONAL_ROUTERS: OptionalRouterDeps = {
 export function createTestRouterDeps(
   overrides?: Partial<RouterDeps>,
 ): RouterDeps {
-  const hasher = createScryptHasher();
+  const hasher = createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS);
   const allowLimiter = (): RateLimiter =>
     createInMemoryRateLimiter({ windowMs: 60_000, maxRequests: 1000 });
 
@@ -1346,6 +1351,7 @@ export function createTestRouterDeps(
       pushSender: null,
       pushHmacKey: null,
       totpReplayCache: createInMemoryTotpReplayCache(),
+      verifyLimiter: allowLimiter(),
     },
     oprfDeps: createMockOprfDeps(),
     orgService: {

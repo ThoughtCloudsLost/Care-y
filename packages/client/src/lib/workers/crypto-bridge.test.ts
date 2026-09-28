@@ -338,6 +338,49 @@ describe("CryptoBridge", () => {
     });
   });
 
+  describe("rewrapTk", () => {
+    it("sends the key-cache id and returns ECIES output", async () => {
+      const bridge = await createReadyBridge();
+
+      const promise = bridge.rewrapTk("ticket-tk:2", "recipient-pub-b64");
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const rewrapCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) => (c[0] as { type: string }).type === "rewrapTk",
+        ) as
+          | [
+              {
+                type: string;
+                id: number;
+                keyCacheId: string;
+                recipientVolPublic: string;
+              },
+            ]
+          | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      expect(rewrapCall?.[0].keyCacheId).toBe("ticket-tk:2");
+      expect(rewrapCall?.[0].recipientVolPublic).toBe("recipient-pub-b64");
+
+      respondFromWorker({
+        id: rewrapCall?.[0].id ?? 0,
+        ok: true,
+        type: "rewrapTk",
+        ephemeralPoint: "ZXBoZW1lcmFs",
+        nonce: "bm9uY2U=",
+        wrappedKey: "d3JhcHBlZA==",
+      });
+
+      const result = await promise;
+      expect(result.ephemeralPoint).toBe("ZXBoZW1lcmFs");
+      expect(result.nonce).toBe("bm9uY2U=");
+      expect(result.wrappedKey).toBe("d3JhcHBlZA==");
+    });
+  });
+
   describe("wrapWithVolPublic", () => {
     it("sends data and returns ECIES output", async () => {
       const bridge = await createReadyBridge();

@@ -49,10 +49,6 @@ const UNGATED_PROCEDURES: Record<string, string> = {
   // --- keys: self-service crypto ---
   "keys.initCryptoKeys":
     "first-time key setup for the caller's own account (authedProcedure)",
-  "keys.uploadVolPublic":
-    "update caller's own volPublic after password change (authedProcedure)",
-  "keys.rotateKeys":
-    "password-change key rotation for the caller's own keys (authedProcedure)",
   "keys.rotationStatus":
     "check rotation lock status for the caller's own keys (authedProcedure)",
   "keys.getWrappedOrgKey":
@@ -66,7 +62,7 @@ const UNGATED_PROCEDURES: Record<string, string> = {
   "profile.updateUsername":
     "caller changes their own username (authedProcedure, password-verified)",
   "profile.changePassword":
-    "caller changes their own password (authedProcedure, rate-limited)",
+    "caller changes their own password (authedProcedure behind the second-factor gate, rate-limited)",
   "profile.myTicketKeyWraps":
     "caller reads their own ticket key wraps (authedProcedure)",
   "profile.markBriefingSeen":
@@ -88,27 +84,25 @@ const UNGATED_PROCEDURES: Record<string, string> = {
   "twoFactor.status":
     "2FA enrollment status for the caller's own session (authedProcedure)",
   "twoFactor.enroll.totpSetup":
-    "TOTP enrollment for the caller (authedProcedure, pre-2FA)",
+    "TOTP enrollment for the caller (enrollProcedure, pre-2FA only with no active method)",
   "twoFactor.enroll.totpVerify":
-    "TOTP enrollment verification for the caller (authedProcedure, pre-2FA)",
+    "TOTP enrollment verification for the caller (enrollProcedure, pre-2FA only with no active method)",
   "twoFactor.enroll.webauthnOptions":
-    "WebAuthn registration options for the caller (authedProcedure, pre-2FA)",
+    "WebAuthn registration options for the caller (enrollProcedure, pre-2FA only with no active method)",
   "twoFactor.enroll.webauthnVerify":
-    "WebAuthn registration for the caller (authedProcedure, pre-2FA)",
+    "WebAuthn registration for the caller (enrollProcedure, pre-2FA only with no active method)",
   "twoFactor.enroll.emailSend":
-    "email 2FA enrollment for the caller (authedProcedure, pre-2FA)",
+    "email 2FA enrollment for the caller (enrollProcedure, pre-2FA only with no active method)",
   "twoFactor.enroll.emailVerify":
-    "email 2FA enrollment verification (authedProcedure, pre-2FA)",
+    "email 2FA enrollment verification (enrollProcedure, pre-2FA only with no active method)",
   "twoFactor.enroll.smsSend":
-    "SMS 2FA enrollment for the caller (authedProcedure, pre-2FA)",
+    "SMS 2FA enrollment for the caller (enrollProcedure, pre-2FA only with no active method)",
   "twoFactor.enroll.smsVerify":
-    "SMS 2FA enrollment verification (authedProcedure, pre-2FA)",
+    "SMS 2FA enrollment verification (enrollProcedure, pre-2FA only with no active method)",
   "twoFactor.enroll.pushVerify":
-    "push 2FA enrollment for the caller (authedProcedure, pre-2FA)",
+    "push 2FA enrollment for the caller (enrollProcedure, pre-2FA only with no active method)",
   "twoFactor.enroll.backupCodes":
-    "backup code generation for the caller (authedProcedure, pre-2FA)",
-  "twoFactor.enroll.markVerifiedOnFirstEnrollment":
-    "mark session verified after first enrollment (authedProcedure, pre-2FA)",
+    "backup code generation for the caller (enrollProcedure, pre-2FA only with no active method)",
   "twoFactor.verify.totp":
     "post-login TOTP challenge (authedProcedure, pre-2FA)",
   "twoFactor.verify.webauthnOptions":
@@ -234,6 +228,8 @@ const UNGATED_PROCEDURES: Record<string, string> = {
     "encrypted account password change, session-authed (orgProcedure)",
   "clientPortal.accountLogout":
     "encrypted account logout, session-authed (orgProcedure)",
+  "clientPortal.accountSessionRenew":
+    "encrypted account idle-window renewal, session-authed (orgProcedure)",
   "clientPortal.evaluateChannelOprf":
     "channel-scoped OPRF evaluation, public-facing (orgProcedure)",
   "clientPortal.contactInfo":

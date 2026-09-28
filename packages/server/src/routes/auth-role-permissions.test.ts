@@ -49,7 +49,10 @@ import { createAuditService } from "../tickets/audit.js";
 import { invalidateRolePermissionCache } from "../auth/roles.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
-import { createScryptHasher } from "../auth/password.js";
+import {
+  AUTH_ARGON2ID_TEST_PARAMS,
+  createPasswordHasher,
+} from "../auth/password.js";
 import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 
 // ---------------------------------------------------------------------------
@@ -103,7 +106,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     function buildDeps(): AuthRouterDeps {
       return {
-        hasher: createScryptHasher(),
+        hasher: createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
         loginLimiter: createInMemoryRateLimiter({
           windowMs: 60_000,
           maxRequests: 100,
@@ -148,6 +151,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: user.role_id,
           isActive: user.is_active,
           hasSeenBriefing: true,
+          mustChangePassword: false,
         },
       };
       const deps = buildDeps();

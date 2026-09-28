@@ -26,12 +26,6 @@ export const adminUpdateUsernameSchema = z.object({
   newIdentifier: identifierSchema,
 });
 
-/** Self-service password hash update. Crypto key rotation handled separately via keys.rotateKeys. */
-export const updatePasswordHashSchema = z.object({
-  currentPassword: passwordSchema,
-  newPassword: passwordSchema,
-});
-
 export type UpdateDisplayNameInput = z.infer<typeof updateDisplayNameSchema>;
 export type AdminUpdateDisplayNameInput = z.infer<
   typeof adminUpdateDisplayNameSchema
@@ -40,7 +34,6 @@ export type UpdateUsernameInput = z.infer<typeof updateUsernameSchema>;
 export type AdminUpdateUsernameInput = z.infer<
   typeof adminUpdateUsernameSchema
 >;
-export type UpdatePasswordHashInput = z.infer<typeof updatePasswordHashSchema>;
 
 /** Self-service preferred locale update. Server stores ciphertext only (org-key sealed box). */
 export const updatePreferredLocaleSchema = z.object({

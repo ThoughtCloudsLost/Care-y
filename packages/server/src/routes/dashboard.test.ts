@@ -78,6 +78,7 @@ function createAdminContext(): Context {
       roleId: RoleId.ADMIN,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
   };
 }
@@ -215,6 +216,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: adminUser.role_id,
           isActive: adminUser.is_active,
           hasSeenBriefing: true,
+          mustChangePassword: false,
         },
       };
     }

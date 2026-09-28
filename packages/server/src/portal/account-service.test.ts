@@ -37,6 +37,7 @@ import {
   upgradeFromSecureLink,
   login,
   resolveAccountSession,
+  renewSession,
   changePassword,
   resetAccount,
   logout,
@@ -50,6 +51,9 @@ import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Mirrors the service's idle window (20 minutes). */
+const ACCOUNT_SESSION_IDLE_MS_EXPECTED = 20 * 60 * 1000;
 
 const TEST_OPS_HEX =
   "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe";
@@ -159,6 +163,46 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
   afterAll(async () => {
     await testDb.cleanup();
   });
+
+  /** Creates an account and logs it in, returning the fresh session. */
+  async function loginFreshAccount(): Promise<{
+    sessionToken: string;
+    expiresAt: Date;
+  }> {
+    const clientId = await insertClient(db);
+    const rawAuthToken = crypto.randomBytes(32);
+    const authHash = Buffer.from(hashChannelAuth(rawAuthToken));
+    const reg = makeAccountReg({ authHash });
+
+    await db.transaction().execute(async (trx) => {
+      await createAccount(trx, deps, clientId, reg);
+    });
+
+    const result = await login(db, reg.accountId, rawAuthToken);
+    expect(result).not.toBeNull();
+    return result!;
+  }
+
+  function sessionTokenHash(sessionToken: string): Buffer {
+    return Buffer.from(hashChannelAuth(Buffer.from(sessionToken, "base64url")));
+  }
+
+  async function readExpiry(sessionToken: string): Promise<Date> {
+    const row = await db
+      .selectFrom("client_account_sessions")
+      .select("expires_at")
+      .where("token_hash", "=", sessionTokenHash(sessionToken))
+      .executeTakeFirstOrThrow();
+    return row.expires_at;
+  }
+
+  async function setExpiry(sessionToken: string, at: Date): Promise<void> {
+    await db
+      .updateTable("client_account_sessions")
+      .set({ expires_at: at })
+      .where("token_hash", "=", sessionTokenHash(sessionToken))
+      .execute();
+  }
 
   // -----------------------------------------------------------------------
   // getSaltForUsername
@@ -464,6 +508,10 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
       expect(result!.sessionToken).toBeTruthy();
       expect(result!.expiresAt).toBeInstanceOf(Date);
       expect(result!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+      // One idle window, not a day
+      expect(result!.expiresAt.getTime()).toBeLessThanOrEqual(
+        Date.now() + ACCOUNT_SESSION_IDLE_MS_EXPECTED,
+      );
 
       // Contract: no plaintext token at rest. The session row is only
       // findable via hashChannelAuth(token); if this lookup matches, the
@@ -590,6 +638,64 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
       const fakeToken = crypto.randomBytes(32).toString("base64url");
       const session = await resolveAccountSession(db, fakeToken);
       expect(session).toBeNull();
+    });
+
+    it("does not extend the session expiry", async () => {
+      const { sessionToken } = await loginFreshAccount();
+      const before = await readExpiry(sessionToken);
+
+      await resolveAccountSession(db, sessionToken);
+
+      const after = await readExpiry(sessionToken);
+      expect(after.getTime()).toBe(before.getTime());
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // renewSession
+  // -----------------------------------------------------------------------
+
+  describe("renewSession", () => {
+    it("slides an unexpired session one idle window from now", async () => {
+      const { sessionToken, expiresAt } = await loginFreshAccount();
+
+      // Pull the expiry close so the slide is observable
+      await setExpiry(sessionToken, new Date(Date.now() + 60_000));
+
+      const renewedAt = Date.now();
+      const renewed = await renewSession(db, sessionToken);
+      expect(renewed).not.toBeNull();
+      expect(renewed!.getTime()).toBeGreaterThanOrEqual(
+        renewedAt + ACCOUNT_SESSION_IDLE_MS_EXPECTED - 5_000,
+      );
+      expect(renewed!.getTime()).toBeLessThanOrEqual(
+        Date.now() + ACCOUNT_SESSION_IDLE_MS_EXPECTED + 5_000,
+      );
+
+      const stored = await readExpiry(sessionToken);
+      expect(stored.getTime()).toBe(renewed!.getTime());
+      // Login set the same window, so the renewed expiry is never shorter
+      expect(stored.getTime()).toBeGreaterThanOrEqual(
+        expiresAt.getTime() - 5_000,
+      );
+    });
+
+    it("refuses an expired session and leaves its expiry untouched", async () => {
+      const { sessionToken } = await loginFreshAccount();
+      const past = new Date(Date.now() - 1_000);
+      await setExpiry(sessionToken, past);
+
+      const renewed = await renewSession(db, sessionToken);
+      expect(renewed).toBeNull();
+
+      const stored = await readExpiry(sessionToken);
+      expect(stored.getTime()).toBe(past.getTime());
+      expect(await resolveAccountSession(db, sessionToken)).toBeNull();
+    });
+
+    it("returns null for an unknown token", async () => {
+      const fakeToken = crypto.randomBytes(32).toString("base64url");
+      expect(await renewSession(db, fakeToken)).toBeNull();
     });
   });
 

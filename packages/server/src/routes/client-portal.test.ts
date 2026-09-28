@@ -97,6 +97,7 @@ const mockGetSaltForUsername = vi.fn();
 const mockAccountLogin = vi.fn();
 const mockResolveAccountSession = vi.fn();
 const mockAccountLogout = vi.fn();
+const mockRenewSession = vi.fn();
 const mockUpgradeFromSecureLink = vi.fn();
 const mockChangePassword = vi.fn();
 
@@ -110,6 +111,8 @@ vi.mock("../portal/account-service.js", async (importOriginal) => ({
     (mockResolveAccountSession as (...a: unknown[]) => unknown)(...args),
   logout: (...args: unknown[]) =>
     (mockAccountLogout as (...a: unknown[]) => unknown)(...args),
+  renewSession: (...args: unknown[]) =>
+    (mockRenewSession as (...a: unknown[]) => unknown)(...args),
   upgradeFromSecureLink: (...args: unknown[]) =>
     (mockUpgradeFromSecureLink as (...a: unknown[]) => unknown)(...args),
   changePassword: (...args: unknown[]) =>
@@ -223,6 +226,7 @@ function buildDeps(
     accountLoginLimiter: null,
     oprfService: null,
     liveEvents: null,
+    isSecureCookie: false,
     ...overrides,
   };
 }
@@ -254,6 +258,7 @@ function makeVolunteerContext(): Context {
       roleId: RoleId.VOLUNTEER,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
   };
 }
@@ -1649,6 +1654,56 @@ describe("client-portal router", () => {
       expect(cookie).not.toContain("Domain");
     });
 
+    it("marks the cookie Secure from isSecureCookie without a forwarded-proto header", async () => {
+      mockAccountLogin.mockResolvedValue({
+        sessionToken: "session-tok-abc",
+        expiresAt: new Date(Date.now() + 1_200_000),
+      });
+
+      // makeContext sends no x-forwarded-proto header
+      const ctx = makeContext();
+      expect(ctx.req.headers["x-forwarded-proto"]).toBeUndefined();
+      const caller = buildCaller(
+        buildAccountDeps({ isSecureCookie: true }),
+        ctx,
+      );
+
+      await caller.accountLogin({
+        accountId: VALID_ACCOUNT_ID,
+        authToken: VALID_AUTH_TOKEN,
+      });
+
+      const cookie = (ctx.res as MockResWithCookies).getCapturedCookies()[0]!;
+      expect(cookie.split("; ")).toContain("Secure");
+    });
+
+    it("omits Secure when isSecureCookie is false, even behind forwarded https", async () => {
+      mockAccountLogin.mockResolvedValue({
+        sessionToken: "session-tok-abc",
+        expiresAt: new Date(Date.now() + 1_200_000),
+      });
+
+      const ctx: Context = {
+        ...makeContext(),
+        req: mockReq({
+          remoteAddress: "10.0.0.1",
+          headers: { "x-forwarded-proto": "https" },
+        }),
+      };
+      const caller = buildCaller(
+        buildAccountDeps({ isSecureCookie: false }),
+        ctx,
+      );
+
+      await caller.accountLogin({
+        accountId: VALID_ACCOUNT_ID,
+        authToken: VALID_AUTH_TOKEN,
+      });
+
+      const cookie = (ctx.res as MockResWithCookies).getCapturedCookies()[0]!;
+      expect(cookie.split("; ")).not.toContain("Secure");
+    });
+
     it("wrong-token and unknown-id produce identical error shapes", async () => {
       mockAccountLogin.mockResolvedValue(null);
 
@@ -2322,6 +2377,133 @@ describe("client-portal router", () => {
       expect(cookie).not.toContain("Domain");
 
       expect(mockAccountLogout).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("accountSessionRenew", () => {
+    const SESSION_TOKEN = "valid-session-token";
+    const ACCOUNT_ROW = {
+      id: crypto.randomUUID() as ClientAccountId,
+      client_id: crypto.randomUUID() as ClientId,
+      username_hash: "hash",
+      salt: Buffer.alloc(16),
+      public_key: Buffer.alloc(32),
+      auth_hash: Buffer.alloc(32),
+      created_at: new Date(),
+    };
+
+    function fakeChannelRow(): PortalChannelRow {
+      return {
+        id: crypto.randomUUID() as ChannelRowId,
+        client_id: ACCOUNT_ROW.client_id,
+        channel_id: "c".repeat(48) as ChannelSecret,
+        auth_hash: Buffer.alloc(32, 0xaa),
+        client_public: Buffer.alloc(32, 0xbb),
+        has_passphrase: false,
+        key_check_ephemeral_point: Buffer.alloc(32),
+        key_check_nonce: Buffer.alloc(24),
+        key_check_ciphertext: Buffer.alloc(48),
+        status: "active",
+        created_at: new Date(),
+        last_seen_at: null,
+        last_notified_at: null,
+        revoked_at: null,
+        kind: "account",
+      };
+    }
+
+    function makeContextWithCookie(token: string): Context {
+      return {
+        req: mockReq({
+          remoteAddress: "10.0.0.1",
+          headers: { cookie: `care_y_client_session=${token}` },
+        }),
+        res: mockRes(),
+        org: createMockOrgContext(),
+        session: null,
+        user: null,
+      };
+    }
+
+    function resolveLiveSession(): void {
+      mockResolveAccountSession.mockResolvedValue({
+        account: ACCOUNT_ROW,
+        channel: fakeChannelRow(),
+        tokenHash: Buffer.alloc(32),
+      });
+    }
+
+    it("renews the session and re-issues a Secure cookie in production", async () => {
+      resolveLiveSession();
+      mockRenewSession.mockResolvedValue(new Date(Date.now() + 1_200_000));
+
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(buildDeps({ isSecureCookie: true }), ctx);
+
+      const result = await caller.accountSessionRenew();
+      expect(result).toEqual({});
+
+      expect(mockRenewSession).toHaveBeenCalledOnce();
+      expect(mockRenewSession.mock.calls[0]![1]).toBe(SESSION_TOKEN);
+
+      const cookies = (ctx.res as MockResWithCookies).getCapturedCookies();
+      expect(cookies).toHaveLength(1);
+      const parts = cookies[0]!.split("; ");
+      expect(parts).toContain(`care_y_client_session=${SESSION_TOKEN}`);
+      expect(parts).toContain("HttpOnly");
+      expect(parts).toContain("SameSite=Strict");
+      expect(parts).toContain("Path=/");
+      expect(parts).toContain("Secure");
+      const maxAge = parts.find((p) => p.startsWith("Max-Age="));
+      expect(Number(maxAge?.slice("Max-Age=".length))).toBeGreaterThan(1_100);
+    });
+
+    it("omits Secure outside production", async () => {
+      resolveLiveSession();
+      mockRenewSession.mockResolvedValue(new Date(Date.now() + 1_200_000));
+
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(buildDeps({ isSecureCookie: false }), ctx);
+
+      await caller.accountSessionRenew();
+
+      const cookie = (ctx.res as MockResWithCookies).getCapturedCookies()[0]!;
+      expect(cookie.split("; ")).not.toContain("Secure");
+    });
+
+    it("fails with the generic UNAUTHORIZED shape when renewal finds no live row", async () => {
+      resolveLiveSession();
+      mockRenewSession.mockResolvedValue(null);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+
+      const ctx = makeContextWithCookie(SESSION_TOKEN);
+      const caller = buildCaller(buildDeps(), ctx);
+
+      const err = await expectTrpcError(
+        caller.accountSessionRenew(),
+        "UNAUTHORIZED",
+      );
+      expect(err.message).toBe("Sign-in failed");
+      expect((ctx.res as MockResWithCookies).getCapturedCookies()).toEqual([]);
+      warnSpy.mockRestore();
+    });
+
+    it("rejects without a session cookie and never renews", async () => {
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+
+      const caller = buildCaller(buildDeps());
+
+      const err = await expectTrpcError(
+        caller.accountSessionRenew(),
+        "UNAUTHORIZED",
+      );
+      expect(err.message).toBe("Sign-in failed");
+      expect(mockRenewSession).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
   });
 });
@@ -3624,34 +3806,6 @@ describe("client-portal router (account session procedures)", () => {
         "TOO_MANY_REQUESTS",
       );
       warnSpy.mockRestore();
-    });
-
-    it("sets Secure flag when x-forwarded-proto is https", async () => {
-      const expiresAt = new Date(Date.now() + 86400_000);
-      mockAccountLogin.mockResolvedValue({
-        sessionToken: "session-tok-secure",
-        expiresAt,
-      });
-      const deps = buildLoginDeps();
-      const ctx: Context = {
-        req: mockReq({
-          remoteAddress: "10.0.0.1",
-          headers: { "x-forwarded-proto": "https" },
-        }),
-        res: mockRes(),
-        org: createMockOrgContext(),
-        session: null,
-        user: null,
-      };
-      const caller = buildCaller(deps, ctx);
-      await caller.accountLogin({
-        accountId: crypto.randomUUID(),
-        authToken: Buffer.alloc(32, 0xdd).toString("base64"),
-      });
-      const res = ctx.res as MockResWithCookies;
-      const cookies = res.getCapturedCookies();
-      expect(cookies).toHaveLength(1);
-      expect(cookies[0]).toContain("Secure");
     });
   });
 

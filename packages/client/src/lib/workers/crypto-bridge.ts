@@ -727,17 +727,18 @@ export class CryptoBridge {
   }
 
   /**
-   * Re-encrypt a cached tk for a new recipient's volPublic.
+   * Re-encrypt a cached tk for a new recipient's volPublic. `keyCacheId`
+   * is the id the tk was cached under by unwrapTk or decryptContent.
    * Returns the ECIES wrapping output (ephemeralPoint, nonce, wrappedKey).
    */
   async rewrapTk(
-    ticketId: string,
+    keyCacheId: string,
     recipientVolPublic: string,
   ): Promise<{ ephemeralPoint: string; nonce: string; wrappedKey: string }> {
     const resp = expectResponse(
       await this.sendRequest({
         type: "rewrapTk",
-        ticketId,
+        keyCacheId,
         recipientVolPublic,
       }),
       "rewrapTk",

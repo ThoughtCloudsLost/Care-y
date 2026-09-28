@@ -50,6 +50,8 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.NO_PUSH_SUBSCRIPTIONS]: () => m.error_no_push_subscriptions(),
   [ErrorCode.NO_PHONE_NUMBERS_CONFIGURED]: () =>
     m.error_no_phone_numbers_configured(),
+  [ErrorCode.TWOFA_RATE_LIMITED]: () => m.error_twofa_rate_limited(),
+  [ErrorCode.TWOFA_SESSION_ENDED]: () => m.error_twofa_session_ended(),
 
   // Tickets
   [ErrorCode.TICKET_NOT_FOUND]: () => m.error_ticket_not_found(withTerms()),
@@ -207,6 +209,12 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.VOICE_DISABLED]: () => m.error_voice_disabled(),
   [ErrorCode.SHARE_LINKS_DISABLED]: () => m.error_share_links_disabled(),
   [ErrorCode.PORTAL_CHANNEL_DISABLED]: () => m.error_portal_channel_disabled(),
+
+  // Password change
+  [ErrorCode.PASSWORD_CHANGE_REQUIRED]: () =>
+    m.error_password_change_required(),
+  [ErrorCode.PASSWORD_UNCHANGED]: () => m.error_password_unchanged(),
+  [ErrorCode.STALE_KEY_WRAPS]: () => m.error_stale_key_wraps(),
 };
 
 /** Type guard: returns true when the string is a recognized ErrorCode value. */

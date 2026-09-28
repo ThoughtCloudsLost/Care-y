@@ -55,7 +55,6 @@ interface InviteData {
   roleId: string;
   invitedBy: string;
   expiresAt: string;
-  encryptedToken: string | null;
 }
 
 let mockInvitesData: InviteData[] = [];
@@ -918,14 +917,12 @@ describe("UsersSection", () => {
           roleId: RoleId.VOLUNTEER,
           invitedBy: "u-1",
           expiresAt: new Date(Date.now() + 86400000).toISOString(),
-          encryptedToken: null,
         },
         {
           id: "inv-2",
           roleId: RoleId.ADMIN,
           invitedBy: "u-1",
           expiresAt: new Date(Date.now() + 86400000).toISOString(),
-          encryptedToken: null,
         },
       ];
       const { component } = render(UsersSection);

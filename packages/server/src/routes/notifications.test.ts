@@ -118,6 +118,7 @@ function createVolunteerContext(): Context {
       roleId: RoleId.VOLUNTEER,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
   };
 }
@@ -573,6 +574,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: user.role_id,
           isActive: user.is_active,
           hasSeenBriefing: true,
+          mustChangePassword: false,
         },
       };
     }

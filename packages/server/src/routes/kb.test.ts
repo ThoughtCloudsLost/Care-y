@@ -114,6 +114,7 @@ function volunteerContext(): Context {
       roleId: RoleId.VOLUNTEER,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
   };
 }
@@ -133,6 +134,7 @@ function managerContext(): Context {
       roleId: RoleId.MANAGER,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
   };
 }

@@ -8,7 +8,7 @@
  * Only two concerns stay mocked:
  *   1. twoFactor.verify.* choreography (TOTP is time-based, no real
  *      enrolled device exists, push approval is synthetic).
- *   2. auth.login wrapper: delegates to the engine for real scrypt
+ *   2. auth.login wrapper: delegates to the engine for real Argon2id
  *      password verification, then sets the login stage to "twofa-picker"
  *      as a demo-choreography side effect. This is a pass-through
  *      wrapper with a stage side effect, not a parallel data layer.
@@ -342,7 +342,7 @@ const mockOverlay: Record<string, Record<string, unknown>> = {
         identifier: string;
         password: string;
       }): Promise<unknown> {
-        // Delegate to the real engine for scrypt password verification
+        // Delegate to the real engine for Argon2id password verification
         // and real enrolledMethods from the seeded two_factor_methods rows.
         // The stage side effect is choreography, not a parallel data layer.
         return tracedProc("auth.login", "mutate", null, async () => {

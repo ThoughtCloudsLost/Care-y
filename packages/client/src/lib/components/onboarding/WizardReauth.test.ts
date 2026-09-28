@@ -179,7 +179,9 @@ beforeEach(() => {
 
 describe("WizardReauth", () => {
   it("renders the reauth heading, credential fields, and a disabled submit button", () => {
-    render(WizardReauth, { props: { onauthenticated: vi.fn() } });
+    render(WizardReauth, {
+      props: { onauthenticated: vi.fn(), onsessionended: vi.fn() },
+    });
 
     expect(screen.getByText(m.onboarding_reauth_heading())).toBeTruthy();
     expect(screen.getByText(m.onboarding_reauth_message())).toBeTruthy();
@@ -189,7 +191,9 @@ describe("WizardReauth", () => {
   });
 
   it("enables submit only when both username and password are filled", async () => {
-    render(WizardReauth, { props: { onauthenticated: vi.fn() } });
+    render(WizardReauth, {
+      props: { onauthenticated: vi.fn(), onsessionended: vi.fn() },
+    });
 
     await fireEvent.input(usernameInput(), {
       target: { value: "wizard-admin" },
@@ -203,7 +207,9 @@ describe("WizardReauth", () => {
   });
 
   it("submits the entered credentials to the reauthenticate endpoint", async () => {
-    render(WizardReauth, { props: { onauthenticated: vi.fn() } });
+    render(WizardReauth, {
+      props: { onauthenticated: vi.fn(), onsessionended: vi.fn() },
+    });
 
     await fillCredentials("wizard-admin", "reauth-test-passphrase-0000");
     await submitForm();
@@ -221,7 +227,9 @@ describe("WizardReauth", () => {
   it("zeroes stale worker keys before reauthenticating", async () => {
     // Security contract: a refresh mid-wizard may leave partial key state
     // in the Worker. It must be zeroed before new keys are derived.
-    render(WizardReauth, { props: { onauthenticated: vi.fn() } });
+    render(WizardReauth, {
+      props: { onauthenticated: vi.fn(), onsessionended: vi.fn() },
+    });
 
     await fillCredentials();
     await submitForm();
@@ -239,7 +247,9 @@ describe("WizardReauth", () => {
       }),
     );
     const onauthenticated = vi.fn();
-    render(WizardReauth, { props: { onauthenticated } });
+    render(WizardReauth, {
+      props: { onauthenticated, onsessionended: vi.fn() },
+    });
 
     await fillCredentials();
     // Captured before submit: while the mutation is pending the button
@@ -262,7 +272,9 @@ describe("WizardReauth", () => {
   it("shows an invalid-credentials alert when reauthentication fails and re-enables the form", async () => {
     mockReauthenticate.mockRejectedValue(new Error("bad credentials"));
     const onauthenticated = vi.fn();
-    render(WizardReauth, { props: { onauthenticated } });
+    render(WizardReauth, {
+      props: { onauthenticated, onsessionended: vi.fn() },
+    });
 
     await fillCredentials();
     await submitForm();
@@ -277,7 +289,9 @@ describe("WizardReauth", () => {
   it("derives keys, loads the org key, and reports success with the briefing flag", async () => {
     mockReauthenticate.mockResolvedValue(reauthOk({ hasSeenBriefing: true }));
     const onauthenticated = vi.fn();
-    render(WizardReauth, { props: { onauthenticated } });
+    render(WizardReauth, {
+      props: { onauthenticated, onsessionended: vi.fn() },
+    });
 
     await fillCredentials();
     await submitForm();
@@ -295,7 +309,9 @@ describe("WizardReauth", () => {
     });
     mockFetchAndUnwrapOrgKey.mockResolvedValue("fallback-org-pub-b64");
     const onauthenticated = vi.fn();
-    render(WizardReauth, { props: { onauthenticated } });
+    render(WizardReauth, {
+      props: { onauthenticated, onsessionended: vi.fn() },
+    });
 
     await fillCredentials();
     await submitForm();
@@ -313,7 +329,9 @@ describe("WizardReauth", () => {
     });
     mockFetchAndUnwrapOrgKey.mockResolvedValue(null);
     const onauthenticated = vi.fn();
-    render(WizardReauth, { props: { onauthenticated } });
+    render(WizardReauth, {
+      props: { onauthenticated, onsessionended: vi.fn() },
+    });
 
     await fillCredentials();
     await submitForm();
@@ -327,7 +345,9 @@ describe("WizardReauth", () => {
   it("shows a login error and returns to the form when key derivation fails", async () => {
     mockLoginCrypto.mockRejectedValue(new Error("oprf unavailable"));
     const onauthenticated = vi.fn();
-    render(WizardReauth, { props: { onauthenticated } });
+    render(WizardReauth, {
+      props: { onauthenticated, onsessionended: vi.fn() },
+    });
 
     await fillCredentials();
     await submitForm();
@@ -344,7 +364,9 @@ describe("WizardReauth", () => {
       reauthOk({ requiresTwoFactor: true, enrolledMethods: ["totp"] }),
     );
     const onauthenticated = vi.fn();
-    render(WizardReauth, { props: { onauthenticated } });
+    render(WizardReauth, {
+      props: { onauthenticated, onsessionended: vi.fn() },
+    });
 
     await fillCredentials();
     await submitForm();
@@ -372,7 +394,9 @@ describe("WizardReauth", () => {
       }),
     );
     const onauthenticated = vi.fn();
-    render(WizardReauth, { props: { onauthenticated } });
+    render(WizardReauth, {
+      props: { onauthenticated, onsessionended: vi.fn() },
+    });
 
     await fillCredentials();
     await submitForm();
@@ -391,13 +415,39 @@ describe("WizardReauth", () => {
     expect(mockOrgKeyLoad).toHaveBeenCalledWith("org-pub-b64");
   });
 
+  it("reports a session the server ended after too many wrong codes", async () => {
+    mockReauthenticate.mockResolvedValue(
+      reauthOk({ requiresTwoFactor: true, enrolledMethods: ["totp"] }),
+    );
+    mockTotpVerify.mockRejectedValue(new Error("TWOFA_SESSION_ENDED"));
+    const onauthenticated = vi.fn();
+    const onsessionended = vi.fn();
+    render(WizardReauth, { props: { onauthenticated, onsessionended } });
+
+    await fillCredentials();
+    await submitForm();
+
+    const codeInput = await screen.findByPlaceholderText(
+      m.twofa_totp_code_placeholder(),
+    );
+    await fireEvent.input(codeInput, { target: { value: "123456" } });
+    await submitForm();
+
+    await waitFor(() => {
+      expect(onsessionended).toHaveBeenCalledTimes(1);
+    });
+    expect(onauthenticated).not.toHaveBeenCalled();
+  });
+
   it("restores the saved locale when it differs from the current one", async () => {
     mockReauthenticate.mockResolvedValue(
       reauthOk({ encryptedPreferredLocale: "sealed-locale-blob-b64" }),
     );
     mockOrgDecrypt.mockResolvedValue("es");
     const onauthenticated = vi.fn();
-    render(WizardReauth, { props: { onauthenticated } });
+    render(WizardReauth, {
+      props: { onauthenticated, onsessionended: vi.fn() },
+    });
 
     await fillCredentials();
     await submitForm();
@@ -415,7 +465,9 @@ describe("WizardReauth", () => {
     );
     mockOrgDecrypt.mockRejectedValue(new Error("wrong key"));
     const onauthenticated = vi.fn();
-    render(WizardReauth, { props: { onauthenticated } });
+    render(WizardReauth, {
+      props: { onauthenticated, onsessionended: vi.fn() },
+    });
 
     await fillCredentials();
     await submitForm();

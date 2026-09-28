@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  uploadVolPublicSchema,
-  passwordChangeKeysSchema,
-  uploadOrgPublicKeySchema,
-} from "./keys.js";
+import { passwordChangeKeysSchema, uploadOrgPublicKeySchema } from "./keys.js";
 
 /**
  * Helper: generate a base64 string that decodes to exactly `n` bytes.
@@ -24,57 +20,6 @@ function base64OfBytes(n: number): string {
   }
   return btoa(binary);
 }
-
-describe("uploadVolPublicSchema", () => {
-  const valid32 = base64OfBytes(32);
-
-  it("accepts valid 32-byte base64 volPublic", () => {
-    const result = uploadVolPublicSchema.safeParse({ volPublic: valid32 });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects 31-byte volPublic", () => {
-    const result = uploadVolPublicSchema.safeParse({
-      volPublic: base64OfBytes(31),
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects 33-byte volPublic", () => {
-    const result = uploadVolPublicSchema.safeParse({
-      volPublic: base64OfBytes(33),
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects non-base64 characters", () => {
-    const result = uploadVolPublicSchema.safeParse({
-      volPublic: "not!valid@base64#",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects empty string", () => {
-    const result = uploadVolPublicSchema.safeParse({ volPublic: "" });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects missing volPublic field", () => {
-    const result = uploadVolPublicSchema.safeParse({});
-    expect(result.success).toBe(false);
-  });
-
-  it("strips extra fields from output", () => {
-    const result = uploadVolPublicSchema.safeParse({
-      volPublic: valid32,
-      extraField: "should be stripped",
-    });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data).not.toHaveProperty("extraField");
-    }
-  });
-});
 
 describe("passwordChangeKeysSchema", () => {
   const validInput = {

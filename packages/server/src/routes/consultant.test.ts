@@ -80,6 +80,7 @@ function createAuthed2faContext(): Context {
       roleId: RoleId.VOLUNTEER,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
   };
 }

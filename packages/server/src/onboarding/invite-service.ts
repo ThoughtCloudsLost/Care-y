@@ -14,16 +14,13 @@ export interface PendingInviteRecord {
   readonly invitedBy: UserId;
   readonly expiresAt: Date;
   readonly createdAt: Date;
-  readonly encryptedToken: Buffer | null;
 }
 
 export interface InviteService {
   generate(input: {
     invitedBy: UserId;
     roleId: RoleIdValue;
-    encryptedEmail?: Buffer;
     expiresInHours?: number;
-    seal?: (token: string) => Buffer;
     orgKeyGeneration: number;
   }): Promise<{ rawToken: string; expiresAt: Date }>;
 
@@ -53,15 +50,11 @@ export function createInviteService(db: Kysely<TenantDatabase>): InviteService {
       const expiresInHours = input.expiresInHours ?? DEFAULT_EXPIRY_HOURS;
       const expiresAt = new Date(Date.now() + expiresInHours * 3600_000);
 
-      const encryptedToken = input.seal ? input.seal(rawToken) : null;
-
       await db
         .insertInto("invite_tokens")
         .values({
           token_hash: tokenHash,
           invited_by: input.invitedBy,
-          encrypted_email: input.encryptedEmail ?? null,
-          encrypted_token: encryptedToken,
           role_id: input.roleId,
           expires_at: expiresAt,
           org_key_generation: input.orgKeyGeneration,
@@ -104,14 +97,7 @@ export function createInviteService(db: Kysely<TenantDatabase>): InviteService {
     async listPending() {
       const rows = await db
         .selectFrom("invite_tokens")
-        .select([
-          "id",
-          "role_id",
-          "invited_by",
-          "expires_at",
-          "created_at",
-          "encrypted_token",
-        ])
+        .select(["id", "role_id", "invited_by", "expires_at", "created_at"])
         .where("consumed_at", "is", null)
         .where("revoked_at", "is", null)
         .where("expires_at", ">", new Date())
@@ -124,7 +110,6 @@ export function createInviteService(db: Kysely<TenantDatabase>): InviteService {
         invitedBy: r.invited_by,
         expiresAt: r.expires_at,
         createdAt: r.created_at,
-        encryptedToken: r.encrypted_token,
       }));
     },
 

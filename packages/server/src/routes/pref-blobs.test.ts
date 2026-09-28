@@ -79,6 +79,7 @@ describe.skipIf(!process.env.DATABASE_URL)("prefBlobs router", () => {
         roleId: user.role_id,
         isActive: user.is_active,
         hasSeenBriefing: true,
+        mustChangePassword: false,
       },
     };
     return factory(ctx);

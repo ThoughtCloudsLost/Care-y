@@ -25,6 +25,9 @@ function ready(): typeof _sodium {
   return _sodium;
 }
 
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
 interface SodiumNativeShim {
   readonly crypto_secretbox_NONCEBYTES: number;
   readonly crypto_secretbox_MACBYTES: number;
@@ -32,6 +35,21 @@ interface SodiumNativeShim {
   readonly crypto_box_SEALBYTES: number;
   readonly crypto_box_PUBLICKEYBYTES: number;
   readonly crypto_box_SECRETKEYBYTES: number;
+  // argon2id-hash.ts reads the limits at module scope for its test
+  // params, and hashes and verifies through the async pair below.
+  readonly crypto_pwhash_OPSLIMIT_MIN: number;
+  readonly crypto_pwhash_MEMLIMIT_MIN: number;
+  readonly crypto_pwhash_STRBYTES: number;
+  crypto_pwhash_str_async(
+    out: Uint8Array,
+    passwd: Uint8Array,
+    opslimit: number,
+    memlimit: number,
+  ): Promise<void>;
+  crypto_pwhash_str_verify_async(
+    str: Uint8Array,
+    passwd: Uint8Array,
+  ): Promise<boolean>;
   crypto_secretbox_easy(
     cipher: Uint8Array,
     message: Uint8Array,
@@ -83,6 +101,65 @@ const impl: SodiumNativeShim = {
   },
   get crypto_box_SECRETKEYBYTES(): number {
     return ready().crypto_box_SECRETKEYBYTES;
+  },
+  get crypto_pwhash_OPSLIMIT_MIN(): number {
+    return ready().crypto_pwhash_OPSLIMIT_MIN;
+  },
+  get crypto_pwhash_MEMLIMIT_MIN(): number {
+    return ready().crypto_pwhash_MEMLIMIT_MIN;
+  },
+  get crypto_pwhash_STRBYTES(): number {
+    return ready().crypto_pwhash_STRBYTES;
+  },
+  // sodium-native writes the encoded hash into `out` and NUL-pads the
+  // rest; libsodium.js returns it as a string, so it is copied in here.
+  // The derivation runs on the calling thread (no thread pool in the
+  // browser) and the promise settles once it finishes.
+  async crypto_pwhash_str_async(
+    out,
+    passwd,
+    opslimit,
+    memlimit,
+  ): Promise<void> {
+    const sodium = ready();
+    if (out.byteLength !== sodium.crypto_pwhash_STRBYTES) {
+      throw new DemoEngineError(
+        "sodium-native shim: out must be crypto_pwhash_STRBYTES bytes",
+      );
+    }
+    if (passwd.byteLength === 0) {
+      throw new DemoEngineError("sodium-native shim: passwd must not be empty");
+    }
+    const encoded = textEncoder.encode(
+      sodium.crypto_pwhash_str(passwd, opslimit, memlimit),
+    );
+    // The string plus its NUL terminator must fit, as in libsodium.
+    if (encoded.byteLength > out.byteLength - 1) {
+      throw new DemoEngineError(
+        "sodium-native shim: encoded hash exceeds crypto_pwhash_STRBYTES",
+      );
+    }
+    out.fill(0);
+    out.set(encoded);
+    return Promise.resolve();
+  },
+  // `str` is the NUL-padded STRBYTES buffer sodium-native takes; the
+  // encoded hash ends at the first NUL.
+  async crypto_pwhash_str_verify_async(str, passwd): Promise<boolean> {
+    const sodium = ready();
+    if (str.byteLength !== sodium.crypto_pwhash_STRBYTES) {
+      throw new DemoEngineError(
+        "sodium-native shim: str must be crypto_pwhash_STRBYTES bytes",
+      );
+    }
+    if (passwd.byteLength === 0) {
+      throw new DemoEngineError("sodium-native shim: passwd must not be empty");
+    }
+    const end = str.indexOf(0);
+    const encoded = textDecoder.decode(
+      str.subarray(0, end === -1 ? str.byteLength : end),
+    );
+    return Promise.resolve(sodium.crypto_pwhash_str_verify(encoded, passwd));
   },
   crypto_secretbox_easy(cipher, message, nonce, key): void {
     cipher.set(ready().crypto_secretbox_easy(message, nonce, key));

@@ -90,6 +90,7 @@ function makeContext(roleId: RoleIdValue): Context {
       roleId,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
   };
 }

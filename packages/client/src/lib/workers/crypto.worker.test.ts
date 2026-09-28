@@ -516,7 +516,7 @@ describe("crypto.worker", () => {
       const rewrapResp = (await sendAndWait({
         type: "rewrapTk",
         id: 71,
-        ticketId: "ticket-rewrap",
+        keyCacheId: "ticket-rewrap",
         recipientVolPublic: encode(recipientPublic),
       })) as RewrapTkResponse;
 

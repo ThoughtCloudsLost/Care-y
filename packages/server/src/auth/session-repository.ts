@@ -58,6 +58,11 @@ export interface SessionRepository {
     token: SessionToken,
     challenge: WebauthnChallenge | null,
   ): Promise<void>;
+  /**
+   * Counts one failed 2FA guess on the session and returns the new total.
+   * Returns 0 when the session no longer exists.
+   */
+  recordTwoFactorFailure(token: SessionToken): Promise<number>;
 }
 
 function toSessionData(row: Selectable<SessionsTable>): SessionData {
@@ -155,7 +160,9 @@ export function createDbSessionRepository(
     async markTwoFactorVerified(token: SessionToken): Promise<void> {
       await db
         .updateTable("sessions")
-        .set({ twofa_verified: true })
+        // A passed challenge clears the failed-guess count, so the cap
+        // limits consecutive failures rather than a session's lifetime total.
+        .set({ twofa_verified: true, twofa_failed_attempts: 0 })
         .where("token", "=", token)
         .execute();
     },
@@ -177,6 +184,21 @@ export function createDbSessionRepository(
         .set({ webauthn_challenge: challenge })
         .where("token", "=", token)
         .execute();
+    },
+
+    async recordTwoFactorFailure(token: SessionToken): Promise<number> {
+      // Single-statement increment: parallel failures each see a distinct
+      // count, so none of them can slip past the per-session cap.
+      const row = await db
+        .updateTable("sessions")
+        .set((eb) => ({
+          twofa_failed_attempts: eb("twofa_failed_attempts", "+", 1),
+        }))
+        .where("token", "=", token)
+        .returning("twofa_failed_attempts")
+        .executeTakeFirst();
+
+      return row?.twofa_failed_attempts ?? 0;
     },
   };
 }

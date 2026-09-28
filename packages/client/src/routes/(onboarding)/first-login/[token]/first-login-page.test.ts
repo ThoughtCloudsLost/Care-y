@@ -65,11 +65,6 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
       validateInvite: { query: vi.fn() },
       markBriefingSeen: { mutate: vi.fn() },
     },
-    twoFactor: {
-      enroll: {
-        markVerifiedOnFirstEnrollment: { mutate: vi.fn() },
-      },
-    },
   },
 }));
 

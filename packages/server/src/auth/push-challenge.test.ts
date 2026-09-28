@@ -9,6 +9,7 @@ import {
   createPushChallengeService,
   hashSessionToken,
   type PushChallengeService,
+  type SendChallengeResult,
 } from "./push-challenge.js";
 import type { PushNotificationSender } from "../notifications/push.js";
 import type { Kysely } from "kysely";
@@ -23,13 +24,12 @@ import {
 } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
-// Narrowing helper: asserts the challenge was actually created (not the
-// empty-string sentinel returned when a user has no push subscriptions).
+// Narrowing helper: asserts the push was sent and returns the challenge ID.
 // ---------------------------------------------------------------------------
 
-function requireChallengeId(c: PushChallengeId | ""): PushChallengeId {
-  if (c === "") throw new Error("expected a challenge to have been created");
-  return c;
+function requireChallengeId(result: SendChallengeResult): PushChallengeId {
+  if (!result.sent) throw new Error("expected a challenge to have been sent");
+  return result.challengeId;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,11 +50,20 @@ const TEST_HMAC_KEY = Buffer.from(
 // Mock PushNotificationSender
 // ---------------------------------------------------------------------------
 
+class PushDeliveryTestError extends Error {}
+
 function createMockPushSender(
-  options: { allExpired?: boolean } = {},
+  options: {
+    allExpired?: boolean;
+    reject?: boolean;
+    noneDelivered?: boolean;
+  } = {},
 ): PushNotificationSender {
   return {
     async sendToUsers(tDb, userIds, _ttl) {
+      if (options.reject) {
+        throw new PushDeliveryTestError("push service unreachable");
+      }
       if (options.allExpired) {
         for (const uid of userIds) {
           await (tDb as Kysely<TenantDatabase>)
@@ -62,7 +71,10 @@ function createMockPushSender(
             .where("user_id", "=", uid as UserId)
             .execute();
         }
+        return { delivered: 0 };
       }
+      if (options.noneDelivered) return { delivered: 0 };
+      return { delivered: userIds.length };
     },
     async removeSubscription(tDb, endpoint) {
       await (tDb as Kysely<TenantDatabase>)
@@ -181,13 +193,14 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
   it("creates a pending challenge and returns sent: true", async () => {
     const result = await service.sendChallenge(testUserId, SESSION_TOKEN_A);
     expect(result.sent).toBe(true);
-    expect(result.challengeId).toBeTruthy();
+    const challengeId = requireChallengeId(result);
+    expect(challengeId).toBeTruthy();
 
     // Verify DB row
     const row = await testDb.db
       .selectFrom("push_challenges")
       .selectAll()
-      .where("id", "=", requireChallengeId(result.challengeId))
+      .where("id", "=", challengeId)
       .executeTakeFirstOrThrow();
     expect(row.status).toBe("pending");
     expect(row.user_id).toBe(testUserId);
@@ -199,8 +212,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
     const user2 = await createTestUser(testDb.db);
 
     const result = await service.sendChallenge(user2.id, SESSION_TOKEN_A);
-    expect(result.sent).toBe(false);
-    expect(result.challengeId).toBe("");
+    expect(result).toEqual({ sent: false });
 
     // Verify no challenge row was created
     const rows = await testDb.db
@@ -211,17 +223,88 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
     expect(rows).toHaveLength(0);
   });
 
-  it("invalidates previous pending challenges for same user+session", async () => {
-    const first = await service.sendChallenge(testUserId, SESSION_TOKEN_A);
-    const second = await service.sendChallenge(testUserId, SESSION_TOKEN_A);
+  it("returns sent: false and expires the challenge when delivery fails", async () => {
+    const user5 = await createTestUser(testDb.db);
+    await testDb.db
+      .insertInto("push_subscriptions")
+      .values({
+        user_id: user5.id,
+        endpoint: "https://push.example.com/unreachable-endpoint",
+        key_p256dh: "test-p256dh-key",
+        key_auth: "test-auth-key",
+      })
+      .execute();
 
-    expect(first.challengeId).not.toBe(second.challengeId);
+    const failingService = createPushChallengeService(
+      testDb.db,
+      createMockPushSender({ reject: true }),
+      TEST_HMAC_KEY,
+    );
+
+    const result = await failingService.sendChallenge(
+      user5.id,
+      SESSION_TOKEN_A,
+    );
+    expect(result).toEqual({ sent: false });
+
+    // The challenge row exists but is no longer pending
+    const rows = await testDb.db
+      .selectFrom("push_challenges")
+      .select("status")
+      .where("user_id", "=", user5.id)
+      .execute();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("expired");
+  });
+
+  it("returns sent: false and expires the challenge when no endpoint accepts the push", async () => {
+    const user6 = await createTestUser(testDb.db);
+    await testDb.db
+      .insertInto("push_subscriptions")
+      .values({
+        user_id: user6.id,
+        endpoint: "https://push.example.com/refusing-endpoint",
+        key_p256dh: "test-p256dh-key",
+        key_auth: "test-auth-key",
+      })
+      .execute();
+
+    const undeliveredService = createPushChallengeService(
+      testDb.db,
+      createMockPushSender({ noneDelivered: true }),
+      TEST_HMAC_KEY,
+    );
+
+    const result = await undeliveredService.sendChallenge(
+      user6.id,
+      SESSION_TOKEN_A,
+    );
+    expect(result).toEqual({ sent: false });
+
+    const rows = await testDb.db
+      .selectFrom("push_challenges")
+      .select("status")
+      .where("user_id", "=", user6.id)
+      .execute();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("expired");
+  });
+
+  it("invalidates previous pending challenges for same user+session", async () => {
+    const first = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
+    );
+    const second = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
+    );
+
+    expect(first).not.toBe(second);
 
     // First challenge should now be expired
     const firstRow = await testDb.db
       .selectFrom("push_challenges")
       .select("status")
-      .where("id", "=", requireChallengeId(first.challengeId))
+      .where("id", "=", first)
       .executeTakeFirstOrThrow();
     expect(firstRow.status).toBe("expired");
 
@@ -229,7 +312,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
     const secondRow = await testDb.db
       .selectFrom("push_challenges")
       .select("status")
-      .where("id", "=", requireChallengeId(second.challengeId))
+      .where("id", "=", second)
       .executeTakeFirstOrThrow();
     expect(secondRow.status).toBe("pending");
   });
@@ -237,27 +320,19 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
   // --- pollChallenge ---
 
   it("returns pending for a fresh challenge", async () => {
-    const { challengeId } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
+    const challengeId = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
     );
-    const result = await service.pollChallenge(
-      requireChallengeId(challengeId),
-      SESSION_TOKEN_A,
-    );
+    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
     expect(result.status).toBe("pending");
   });
 
   it("returns expired for a challenge from a different session", async () => {
-    const { challengeId } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
+    const challengeId = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
     );
     // Poll with a different session token
-    const result = await service.pollChallenge(
-      requireChallengeId(challengeId),
-      SESSION_TOKEN_B,
-    );
+    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_B);
     expect(result.status).toBe("expired");
   });
 
@@ -270,29 +345,25 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
   });
 
   it("returns expired for a challenge past its TTL", async () => {
-    const { challengeId } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
+    const challengeId = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
     );
 
     // Manually set expires_at to the past
     await testDb.db
       .updateTable("push_challenges")
       .set({ expires_at: new Date(Date.now() - 1000) })
-      .where("id", "=", requireChallengeId(challengeId))
+      .where("id", "=", challengeId)
       .execute();
 
-    const result = await service.pollChallenge(
-      requireChallengeId(challengeId),
-      SESSION_TOKEN_A,
-    );
+    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
     expect(result.status).toBe("expired");
 
     // DB row should also be marked expired (lazy expiry)
     const row = await testDb.db
       .selectFrom("push_challenges")
       .select("status")
-      .where("id", "=", requireChallengeId(challengeId))
+      .where("id", "=", challengeId)
       .executeTakeFirstOrThrow();
     expect(row.status).toBe("expired");
   });
@@ -300,96 +371,72 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
   // --- approveChallenge ---
 
   it("atomically approves a pending challenge", async () => {
-    const { challengeId } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
+    const challengeId = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
     );
-    const approved = await service.approveChallenge(
-      requireChallengeId(challengeId),
-      testUserId,
-    );
+    const approved = await service.approveChallenge(challengeId, testUserId);
     expect(approved).toBe(true);
 
-    const result = await service.pollChallenge(
-      requireChallengeId(challengeId),
-      SESSION_TOKEN_A,
-    );
+    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
     expect(result.status).toBe("approved");
   });
 
   it("returns false when approving an already-approved challenge", async () => {
-    const { challengeId } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
+    const challengeId = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
     );
-    await service.approveChallenge(requireChallengeId(challengeId), testUserId);
+    await service.approveChallenge(challengeId, testUserId);
     const secondApproval = await service.approveChallenge(
-      requireChallengeId(challengeId),
+      challengeId,
       testUserId,
     );
     expect(secondApproval).toBe(false);
   });
 
   it("returns false when approving with wrong userId", async () => {
-    const { challengeId } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
+    const challengeId = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
     );
     const result = await service.approveChallenge(
-      requireChallengeId(challengeId),
+      challengeId,
       "00000000-0000-4000-8000-999999999999" as UserId,
     );
     expect(result).toBe(false);
   });
 
   it("returns false when approving an expired challenge", async () => {
-    const { challengeId } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
+    const challengeId = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
     );
     await testDb.db
       .updateTable("push_challenges")
       .set({ expires_at: new Date(Date.now() - 1000) })
-      .where("id", "=", requireChallengeId(challengeId))
+      .where("id", "=", challengeId)
       .execute();
 
-    const result = await service.approveChallenge(
-      requireChallengeId(challengeId),
-      testUserId,
-    );
+    const result = await service.approveChallenge(challengeId, testUserId);
     expect(result).toBe(false);
   });
 
   // --- denyChallenge ---
 
   it("denies a pending challenge", async () => {
-    const { challengeId } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
+    const challengeId = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
     );
-    const denied = await service.denyChallenge(
-      requireChallengeId(challengeId),
-      testUserId,
-    );
+    const denied = await service.denyChallenge(challengeId, testUserId);
     expect(denied).toBe(true);
 
-    const result = await service.pollChallenge(
-      requireChallengeId(challengeId),
-      SESSION_TOKEN_A,
-    );
+    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
     expect(result.status).toBe("denied");
   });
 
   it("returns false when denying a non-pending challenge", async () => {
-    const { challengeId } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
+    const challengeId = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
     );
-    await service.approveChallenge(requireChallengeId(challengeId), testUserId);
-    const denied = await service.denyChallenge(
-      requireChallengeId(challengeId),
-      testUserId,
-    );
+    await service.approveChallenge(challengeId, testUserId);
+    const denied = await service.denyChallenge(challengeId, testUserId);
     expect(denied).toBe(false);
   });
 
@@ -413,13 +460,11 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
 
   it("deletes expired and pending-past-TTL rows", async () => {
     // Create some challenges and expire them
-    const { challengeId: c1 } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
+    const c1 = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
     );
-    const { challengeId: c2 } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_B,
+    const c2 = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_B),
     );
 
     // Mark both as expired in the past
@@ -429,7 +474,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
         expires_at: new Date(Date.now() - 60_000),
         status: "expired",
       })
-      .where("id", "in", [requireChallengeId(c1), requireChallengeId(c2)])
+      .where("id", "in", [c1, c2])
       .execute();
 
     const deleted = await service.cleanupExpired();
@@ -499,47 +544,29 @@ describe.skipIf(!process.env.DATABASE_URL)("PushChallengeService", () => {
   // --- Happy path: full flow ---
 
   it("completes the full approve flow: send -> poll (pending) -> approve -> poll (approved)", async () => {
-    const { challengeId, sent } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
-    );
-    expect(sent).toBe(true);
+    const sendResult = await service.sendChallenge(testUserId, SESSION_TOKEN_A);
+    expect(sendResult.sent).toBe(true);
+    const challengeId = requireChallengeId(sendResult);
 
-    const pending = await service.pollChallenge(
-      requireChallengeId(challengeId),
-      SESSION_TOKEN_A,
-    );
+    const pending = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
     expect(pending.status).toBe("pending");
 
-    const approved = await service.approveChallenge(
-      requireChallengeId(challengeId),
-      testUserId,
-    );
+    const approved = await service.approveChallenge(challengeId, testUserId);
     expect(approved).toBe(true);
 
-    const final = await service.pollChallenge(
-      requireChallengeId(challengeId),
-      SESSION_TOKEN_A,
-    );
+    const final = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
     expect(final.status).toBe("approved");
   });
 
   it("completes the full deny flow: send -> deny -> poll (denied)", async () => {
-    const { challengeId } = await service.sendChallenge(
-      testUserId,
-      SESSION_TOKEN_A,
+    const challengeId = requireChallengeId(
+      await service.sendChallenge(testUserId, SESSION_TOKEN_A),
     );
 
-    const denied = await service.denyChallenge(
-      requireChallengeId(challengeId),
-      testUserId,
-    );
+    const denied = await service.denyChallenge(challengeId, testUserId);
     expect(denied).toBe(true);
 
-    const result = await service.pollChallenge(
-      requireChallengeId(challengeId),
-      SESSION_TOKEN_A,
-    );
+    const result = await service.pollChallenge(challengeId, SESSION_TOKEN_A);
     expect(result.status).toBe("denied");
   });
 });

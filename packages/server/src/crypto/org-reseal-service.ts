@@ -34,7 +34,6 @@ import {
   orgConfigIdSchema,
   consultantIdSchema,
   phoneBlocklistIdSchema,
-  inviteTokenIdSchema,
   voicemailQuarantineIdSchema,
   phoneIdSchema,
   ticketIdSchema,
@@ -893,67 +892,6 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           org_key_generation: gen,
         })
         .where("id", "=", phoneBlocklistIdSchema.parse(id))
-        .where("org_key_generation", "<", gen)
-        .executeTakeFirst();
-      return Number(result.numUpdatedRows);
-    },
-  },
-
-  invite_tokens: {
-    columns: ["encrypted_token", "encrypted_email"],
-    countPending: async (db, gen) => {
-      const r = await db
-        .selectFrom("invite_tokens")
-        .select(db.fn.countAll().as("count"))
-        .where("org_key_generation", "<", gen)
-        .executeTakeFirstOrThrow();
-      return toCount(r);
-    },
-    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
-      if (onlyIds?.length === 0) return [];
-      let q = db
-        .selectFrom("invite_tokens")
-        .select(["id", "encrypted_token", "encrypted_email"])
-        .where("org_key_generation", "<", gen)
-        .orderBy("id")
-        .limit(limit);
-      if (excludeIds.length > 0) {
-        q = q.where(
-          "id",
-          "not in",
-          excludeIds.map((v) => inviteTokenIdSchema.parse(v)),
-        );
-      }
-      if (onlyIds !== undefined && onlyIds.length > 0) {
-        q = q.where(
-          "id",
-          "in",
-          onlyIds.map((v) => inviteTokenIdSchema.parse(v)),
-        );
-      }
-      const rows = await q.execute();
-      return rows.map((r) => {
-        const columns: Record<string, Buffer> = {};
-        if (r.encrypted_token !== null)
-          columns.encrypted_token = r.encrypted_token;
-        if (r.encrypted_email !== null)
-          columns.encrypted_email = r.encrypted_email;
-        return { id: r.id, columns };
-      });
-    },
-    resealRow: async (tx, id, cols, gen) => {
-      const result = await tx
-        .updateTable("invite_tokens")
-        .set({
-          ...(cols.encrypted_token !== undefined
-            ? { encrypted_token: cols.encrypted_token }
-            : {}),
-          ...(cols.encrypted_email !== undefined
-            ? { encrypted_email: cols.encrypted_email }
-            : {}),
-          org_key_generation: gen,
-        })
-        .where("id", "=", inviteTokenIdSchema.parse(id))
         .where("org_key_generation", "<", gen)
         .executeTakeFirst();
       return Number(result.numUpdatedRows);

@@ -5,7 +5,7 @@
  * correct sequencing, batching, and org key re-wrap behavior.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
 import type {
@@ -15,6 +15,11 @@ import type {
 } from "./password-change.js";
 import type * as TrpcNS from "$lib/trpc/index.js";
 import type * as CryptoNS from "@care-y/crypto";
+
+type RewrapTk = (
+  keyCacheId: string,
+  recipientVolPublic: string,
+) => Promise<{ ephemeralPoint: string; nonce: string; wrappedKey: string }>;
 
 // ── Mocks ────────────────────────────────────────────────────────────
 
@@ -56,7 +61,7 @@ interface MockBridge {
   deriveKeys: ReturnType<typeof vi.fn>;
   unwrapOrgKey: ReturnType<typeof vi.fn>;
   unwrapTk: ReturnType<typeof vi.fn>;
-  rewrapTk: ReturnType<typeof vi.fn>;
+  rewrapTk: Mock<RewrapTk>;
   wrapWithVolPublic: ReturnType<typeof vi.fn>;
   zeroAll: ReturnType<typeof vi.fn>;
   destroy: ReturnType<typeof vi.fn>;
@@ -73,7 +78,7 @@ function createMockBridge(volPublic = "new-vol-public-b64"): MockBridge {
     deriveKeys: vi.fn().mockResolvedValue({ volPublic }),
     unwrapOrgKey: vi.fn().mockResolvedValue("org-public-key-b64"),
     unwrapTk: vi.fn().mockResolvedValue(undefined),
-    rewrapTk: vi.fn().mockResolvedValue({
+    rewrapTk: vi.fn<RewrapTk>().mockResolvedValue({
       ephemeralPoint: "rewrap-ep",
       nonce: "rewrap-nonce",
       wrappedKey: "rewrap-wk",
@@ -339,16 +344,74 @@ describe("changePassword", () => {
 
       expect(primaryBridge.unwrapTk).toHaveBeenCalledWith(
         "ticket-1",
-        "ticket-1",
+        "ticket-1:kg-1",
         "ep-ticket-1",
         "n-ticket-1",
         "wk-ticket-1",
       );
 
       expect(primaryBridge.rewrapTk).toHaveBeenCalledWith(
-        "ticket-1",
+        "ticket-1:kg-1",
         "temp-new-vol-b64",
       );
+    });
+
+    it("re-wraps each key generation of one ticket with its own key", async () => {
+      const gen1 = {
+        ...makeWrap("ticket-1", "kg-1"),
+        ephemeralPoint: "ep-gen-1",
+        nonce: "n-gen-1",
+        wrappedKey: "wk-gen-1",
+      };
+      const gen2 = {
+        ...makeWrap("ticket-1", "kg-2"),
+        ephemeralPoint: "ep-gen-2",
+        nonce: "n-gen-2",
+        wrappedKey: "wk-gen-2",
+      };
+      mockMyTicketKeyWraps.mockResolvedValue([gen1, gen2]);
+
+      const { deps, primaryBridge } = createDeps();
+      primaryBridge.rewrapTk.mockImplementation((keyCacheId: string) =>
+        Promise.resolve({
+          ephemeralPoint: `rewrap-ep-${keyCacheId}`,
+          nonce: `rewrap-nonce-${keyCacheId}`,
+          wrappedKey: `rewrap-wk-${keyCacheId}`,
+        }),
+      );
+
+      await changePassword(deps);
+
+      // Each generation is cached under its own id, so the second unwrap
+      // cannot overwrite the first before re-wrapping.
+      expect(primaryBridge.unwrapTk.mock.calls).toEqual([
+        ["ticket-1", "ticket-1:kg-1", "ep-gen-1", "n-gen-1", "wk-gen-1"],
+        ["ticket-1", "ticket-1:kg-2", "ep-gen-2", "n-gen-2", "wk-gen-2"],
+      ]);
+      expect(primaryBridge.rewrapTk.mock.calls).toEqual([
+        ["ticket-1:kg-1", "temp-new-vol-b64"],
+        ["ticket-1:kg-2", "temp-new-vol-b64"],
+      ]);
+
+      const input = mockChangePassword.mock.calls[0]?.[0] as {
+        reWrappedKeys: unknown[];
+      };
+      expect(input.reWrappedKeys).toEqual([
+        {
+          ticketId: "ticket-1",
+          keyGeneration: "kg-1",
+          ephemeralPoint: "rewrap-ep-ticket-1:kg-1",
+          nonce: "rewrap-nonce-ticket-1:kg-1",
+          wrappedKey: "rewrap-wk-ticket-1:kg-1",
+        },
+        {
+          ticketId: "ticket-1",
+          keyGeneration: "kg-2",
+          ephemeralPoint: "rewrap-ep-ticket-1:kg-2",
+          nonce: "rewrap-nonce-ticket-1:kg-2",
+          wrappedKey: "rewrap-wk-ticket-1:kg-2",
+        },
+      ]);
     });
 
     it("batches ticket key processing in groups of 40", async () => {

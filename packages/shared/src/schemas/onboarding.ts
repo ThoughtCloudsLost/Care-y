@@ -47,7 +47,6 @@ export const registerFromInviteInputSchema = z.object({
 /** Generate a new invite token (admin-only). */
 export const generateInviteInputSchema = z.object({
   roleId: z.enum(ROLE_ID_VALUES_TUPLE),
-  encryptedEmail: base64String("encryptedEmail").optional(),
 });
 
 /** Revoke a pending invite token (admin-only). */

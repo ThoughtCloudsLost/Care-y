@@ -2,17 +2,17 @@
   Post-auth onboarding: completes remaining setup steps after login.
 
   The login page redirects here when a user has pending onboarding
-  steps (security briefing not seen, or 2FA not enrolled). Queries
-  the server to determine which steps are needed, then shows the
-  same wizard components used by the admin setup and volunteer
-  first-login flows.
+  steps (temporary password to replace, security briefing not seen, or
+  2FA not enrolled). Queries the server to determine which steps are
+  needed, then shows the same wizard components used by the admin setup
+  and volunteer first-login flows.
 -->
 <script lang="ts">
   import { getContext } from "svelte";
   import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { createQuery } from "@tanstack/svelte-query";
+  import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { Preloader, Block } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -21,14 +21,21 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { getWizardNavCtx } from "$lib/components/onboarding/wizard-nav-context.js";
+  import {
+    canGoBack,
+    type CompletionStepId,
+  } from "$lib/onboarding/completion-steps.js";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
   import SetupTwoFactor from "$lib/components/onboarding/SetupTwoFactor.svelte";
+  import SetupOwnPassword from "$lib/components/onboarding/SetupOwnPassword.svelte";
 
   const updateStep = getContext<
     (p: { current: number; total: number; label: string } | null) => void
   >("onboarding-update-step");
 
   const wizardNav = getWizardNavCtx();
+
+  const queryClient = useQueryClient();
 
   const meQuery = createQuery(() => ({
     queryKey: authKeys.me(),
@@ -51,7 +58,7 @@
   });
 
   interface StepConfig {
-    readonly id: "briefing" | "twofa";
+    readonly id: CompletionStepId;
     readonly label: string;
   }
 
@@ -64,6 +71,14 @@
     stepsResolved = true;
 
     const configs: StepConfig[] = [];
+    // An administrator-created account replaces its temporary password
+    // first. The server keeps the rest of the app closed until it does.
+    if (meQuery.data.user.mustChangePassword) {
+      configs.push({
+        id: "password",
+        label: m.onboarding_step_password(),
+      });
+    }
     if (!meQuery.data.user.hasSeenBriefing) {
       configs.push({
         id: "briefing",
@@ -110,8 +125,17 @@
   // eslint-disable-next-line security/detect-object-injection -- step is a controlled integer index
   const currentStepId = $derived(stepConfigs[step]?.id);
 
+  // A completed password step is never re-entered, so the step after it
+  // gets no Back, the same as the first step.
+  const backAllowed = $derived(
+    canGoBack(
+      step,
+      stepConfigs.map((c) => c.id),
+    ),
+  );
+
   function goBack(): void {
-    if (step <= 0) return;
+    if (!backAllowed) return;
     step -= 1;
     document
       .querySelector(".onboarding-content")
@@ -134,17 +158,19 @@
     }
   }
 
+  async function handlePasswordComplete(): Promise<void> {
+    await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+    advanceStep();
+  }
+
   function handleBriefingConfirm(): void {
     void trpc.profile.markBriefingSeen.mutate();
     advanceStep();
   }
 
-  async function handleTwofaComplete(): Promise<void> {
-    try {
-      await trpc.twoFactor.enroll.markVerifiedOnFirstEnrollment.mutate();
-    } catch {
-      /* best-effort */
-    }
+  // The server marks the session verified when the enrollment itself
+  // succeeds, so completing the step only advances the wizard.
+  function handleTwofaComplete(): void {
     advanceStep();
   }
 
@@ -163,16 +189,22 @@
       <Preloader />
     </div>
   </Block>
+{:else if currentStepId === "password"}
+  <SetupOwnPassword
+    oncomplete={handlePasswordComplete}
+    userId={meQuery.data?.user.id ?? ""}
+    goBack={backAllowed ? goBack : undefined}
+  />
 {:else if currentStepId === "briefing"}
   <SecurityBriefing
     onconfirm={handleBriefingConfirm}
-    goBack={step > 0 ? goBack : undefined}
+    goBack={backAllowed ? goBack : undefined}
   />
 {:else if currentStepId === "twofa"}
   <SetupTwoFactor
     oncomplete={handleTwofaComplete}
     username={meQuery.data?.user.id ?? ""}
-    goBack={step > 0 ? goBack : undefined}
+    goBack={backAllowed ? goBack : undefined}
   />
 {/if}
 

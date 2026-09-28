@@ -9,7 +9,7 @@
  * All queries run against a tenant-scoped Kysely instance.
  */
 
-import type { Kysely } from "kysely";
+import type { Kysely, Transaction } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
@@ -19,6 +19,7 @@ import type { SmsCodeService } from "./sms-code.js";
 import type {
   PushChallengeService,
   ChallengeStatus,
+  SendChallengeResult,
 } from "./push-challenge.js";
 import { normalizePhoneNumber } from "../telephony/phone-utils.js";
 import {
@@ -102,6 +103,9 @@ export interface TwoFactorStatusResult {
 export interface TwoFactorService {
   getStatus(userId: UserId): Promise<TwoFactorStatusResult>;
 
+  /** True when the user has at least one active 2FA method. */
+  hasActiveMethod(userId: UserId): Promise<boolean>;
+
   // TOTP enrollment
   setupTotp(userId: UserId): Promise<TotpSetupResult>;
   verifyTotpEnrollment(userId: UserId, code: string): Promise<boolean>;
@@ -139,6 +143,7 @@ export interface TwoFactorService {
     authentication: AuthenticationResponseJSON,
     origin: string,
     rpId: string,
+    userId: UserId,
   ): Promise<void>;
 
   // Email enrollment
@@ -173,7 +178,7 @@ export interface TwoFactorService {
   sendPushChallenge(
     userId: UserId,
     sessionToken: SessionToken,
-  ): Promise<{ challengeId: PushChallengeId | ""; sent: boolean }>;
+  ): Promise<SendChallengeResult>;
   pollPushChallenge(
     challengeId: PushChallengeId,
     sessionToken: SessionToken,
@@ -230,6 +235,21 @@ export async function getEnrolledMethodTypes(
   return rows.map((r) => r.method_type);
 }
 
+/** Whether the user has at least one active second-factor method. */
+export async function hasActiveSecondFactor(
+  db: Kysely<TenantDatabase>,
+  userId: UserId,
+): Promise<boolean> {
+  const row = await db
+    .selectFrom("two_factor_methods")
+    .select("id")
+    .where("user_id", "=", userId)
+    .where("is_active", "=", true)
+    .limit(1)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
 export function createTwoFactorService(
   db: Kysely<TenantDatabase>,
   sessions: SessionRepository,
@@ -271,10 +291,11 @@ export function createTwoFactorService(
   async function registerMethod(
     userId: UserId,
     method: TwoFactorMethodType,
+    trxOrDb: Kysely<TenantDatabase> | Transaction<TenantDatabase> = db,
   ): Promise<void> {
     // Single-query upsert via the unique index on (user_id, method_type).
     // Reactivates previously deactivated methods without a separate SELECT.
-    await db
+    await trxOrDb
       .insertInto("two_factor_methods")
       .values({ user_id: userId, method_type: method, is_active: true })
       .onConflict((oc) =>
@@ -358,6 +379,18 @@ export function createTwoFactorService(
       .where("is_used", "=", false)
       .executeTakeFirstOrThrow();
     return toCount({ count });
+  }
+
+  /**
+   * Decodes a WebAuthn userHandle (base64url) to the UTF-8 user ID the
+   * client registered as user.id. Returns null when the authenticator
+   * sent no handle.
+   */
+  function decodeUserHandle(
+    userHandle: string | null | undefined,
+  ): string | null {
+    if (userHandle == null || userHandle === "") return null;
+    return Buffer.from(userHandle, "base64url").toString("utf8");
   }
 
   /**
@@ -542,6 +575,10 @@ export function createTwoFactorService(
       };
     },
 
+    async hasActiveMethod(userId: UserId): Promise<boolean> {
+      return hasActiveSecondFactor(db, userId);
+    },
+
     // --- TOTP ---
 
     async setupTotp(userId: UserId): Promise<TotpSetupResult> {
@@ -549,12 +586,14 @@ export function createTwoFactorService(
       const uri = getTotpUri(secret, issuer);
       const b32 = base32Encode(secret);
 
-      // Encrypt and store (replace existing unverified secret)
+      // Encrypt and store. Only a pending (unverified) secret is replaced:
+      // a confirmed secret stays in force until the new one is verified.
       const encrypted = encryptor.encrypt(b32);
 
       await db
         .deleteFrom("totp_secrets")
         .where("user_id", "=", userId)
+        .where("verified", "=", false)
         .execute();
 
       await db
@@ -584,14 +623,24 @@ export function createTwoFactorService(
       }
       totpReplay.cache.markUsed(totpReplay.orgId, userId, code);
 
-      // Mark as verified and register method
-      await db
-        .updateTable("totp_secrets")
-        .set({ verified: true })
-        .where("id", "=", rowId)
-        .execute();
+      // Swap in the new secret atomically: the previous confirmed secret is
+      // removed only in the same transaction that confirms its replacement.
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .deleteFrom("totp_secrets")
+          .where("user_id", "=", userId)
+          .where("verified", "=", true)
+          .where("id", "!=", rowId)
+          .execute();
 
-      await registerMethod(userId, TwoFactorMethod.TOTP);
+        await trx
+          .updateTable("totp_secrets")
+          .set({ verified: true })
+          .where("id", "=", rowId)
+          .execute();
+
+        await registerMethod(userId, TwoFactorMethod.TOTP, trx);
+      });
       return true;
     },
 
@@ -616,25 +665,29 @@ export function createTwoFactorService(
     // --- Backup codes ---
 
     async generateBackupCodes(userId: UserId): Promise<BackupCodesResult> {
-      // Delete existing codes
-      await db
-        .deleteFrom("backup_codes")
-        .where("user_id", "=", userId)
-        .execute();
-
+      // Hash before opening the transaction: scrypt is slow and the
+      // transaction should hold its locks only for the swap itself.
       const codes = generateBackupCodes();
       const hashes = await Promise.all(codes.map(hashBackupCode));
 
-      // Insert all 8 codes
-      await db
-        .insertInto("backup_codes")
-        .values(
-          hashes.map((hash) => ({
-            user_id: userId,
-            code_hash: hash,
-          })),
-        )
-        .execute();
+      // Replace the previous set in one step, so no reader ever sees the
+      // user with no codes or with both sets.
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .deleteFrom("backup_codes")
+          .where("user_id", "=", userId)
+          .execute();
+
+        await trx
+          .insertInto("backup_codes")
+          .values(
+            hashes.map((hash) => ({
+              user_id: userId,
+              code_hash: hash,
+            })),
+          )
+          .execute();
+      });
 
       return { codes: codes.map(formatCode) };
     },
@@ -653,17 +706,21 @@ export function createTwoFactorService(
 
       // Sequential by design: scrypt is CPU-bound (saturates the thread pool
       // under Promise.all), and early return on first match is faster for the
-      // common case (valid code). Route-level rate limiting prevents brute-force.
+      // common case (valid code). Guessing is bounded by the verify routes:
+      // a per-user rate limiter and a per-session failure cap that ends the
+      // session (routes/two-factor.ts).
       for (const row of rows) {
         const valid = await verifyBackupCode(code, row.code_hash);
         if (valid) {
-          // Mark as used immediately (one-time use)
-          await db
+          // One-time use. The is_used filter makes the claim atomic: when a
+          // concurrent request already spent this code, no row updates.
+          const result = await db
             .updateTable("backup_codes")
             .set({ is_used: true })
             .where("id", "=", row.id)
-            .execute();
-          return true;
+            .where("is_used", "=", false)
+            .executeTakeFirst();
+          return Number(result.numUpdatedRows) > 0;
         }
       }
 
@@ -721,6 +778,7 @@ export function createTwoFactorService(
           backed_up: result.synced,
           aaguid: result.authenticator.aaguid,
           ordinal,
+          algorithm: result.credential.algorithm,
         })
         .execute();
 
@@ -756,24 +814,34 @@ export function createTwoFactorService(
       authentication: AuthenticationResponseJSON,
       origin: string,
       rpId: string,
+      userId: UserId,
     ): Promise<void> {
       const challenge = await requireWebauthnChallenge(sessionToken);
 
-      // Look up the credential
+      // Look up the credential among the session user's own credentials,
+      // so another user's passkey cannot complete this user's challenge.
       const credRow = await db
         .selectFrom("webauthn_credentials")
         .selectAll()
         .where("credential_id", "=", authentication.id)
+        .where("user_id", "=", userId)
         .executeTakeFirst();
 
       if (!credRow) {
         throw new ValidationError(ErrorCode.UNKNOWN_CREDENTIAL);
       }
 
+      // The client registers user.id as the UTF-8 bytes of the user ID.
+      // When the authenticator returns a handle it must name this user.
+      const handleUserId = decodeUserHandle(authentication.response.userHandle);
+      if (handleUserId !== null && handleUserId !== userId) {
+        throw new ValidationError(ErrorCode.UNKNOWN_CREDENTIAL);
+      }
+
       const credential: CredentialInfo = {
         id: credRow.credential_id,
         publicKey: credRow.public_key,
-        algorithm: "ES256", // We'll determine from stored data in production
+        algorithm: credRow.algorithm,
         transports: credRow.transports ?? [],
       };
 
@@ -798,6 +866,7 @@ export function createTwoFactorService(
         .updateTable("webauthn_credentials")
         .set({ sign_count: result.signCount })
         .where("credential_id", "=", credRow.credential_id)
+        .where("user_id", "=", userId)
         .execute();
     },
 
@@ -956,7 +1025,7 @@ export function createTwoFactorService(
     async sendPushChallenge(
       userId: UserId,
       sessionToken: SessionToken,
-    ): Promise<{ challengeId: PushChallengeId | ""; sent: boolean }> {
+    ): Promise<SendChallengeResult> {
       const push = requirePushDeps();
       return push.pushChallenges.sendChallenge(userId, sessionToken);
     },

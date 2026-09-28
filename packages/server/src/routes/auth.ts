@@ -43,9 +43,9 @@ import {
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import {
+  assertCanAssignRole,
   getDefaultRoleId,
   isValidRoleId,
-  hasPermissionForOrg,
   getEffectivePermissions,
   LOCKED_PERMISSIONS,
   invalidateRolePermissionCache,
@@ -124,6 +124,7 @@ export interface UserResponse {
   readonly encryptedPreferredLocale: string | null; // base64 ciphertext, client decrypts
   readonly roleId: string;
   readonly hasSeenBriefing: boolean;
+  readonly mustChangePassword: boolean;
 }
 
 /** Projects a UserRecord to a safe response shape (no password_hash, no internal fields). */
@@ -135,6 +136,7 @@ function toUserResponse(user: UserRecord): UserResponse {
     encryptedPreferredLocale: user.encryptedPreferredLocale,
     roleId: user.roleId,
     hasSeenBriefing: user.hasSeenBriefing,
+    mustChangePassword: user.mustChangePassword,
   };
 }
 
@@ -290,18 +292,12 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const effectiveRoleId = input.roleId ?? getDefaultRoleId();
 
-          // Non-default roles require MANAGE_ROLES permission.
-          if (effectiveRoleId !== getDefaultRoleId()) {
-            const canAssign = await hasPermissionForOrg(
-              ctx.org.tenantDb,
-              ctx.org.orgSchema,
-              ctx.user.roleId,
-              Permission.MANAGE_ROLES,
-            );
-            if (!canAssign) {
-              throw new ForbiddenError(ErrorCode.ONLY_ADMINS_CAN_ASSIGN_ROLES);
-            }
-          }
+          await assertCanAssignRole(
+            ctx.org.tenantDb,
+            ctx.org.orgSchema,
+            ctx.user.roleId,
+            effectiveRoleId,
+          );
 
           const authService = getAuthService(ctx.org, deps);
           const user = await authService.register({
@@ -312,6 +308,9 @@ export function createAuthRouter(deps: AuthRouterDeps) {
               notificationEmail: input.notificationEmail,
             }),
             roleId: effectiveRoleId,
+            // The administrator chose this password; the holder replaces
+            // it at first sign-in before the rest of the app opens.
+            mustChangePassword: true,
           });
 
           return { user: toUserResponse(user) };

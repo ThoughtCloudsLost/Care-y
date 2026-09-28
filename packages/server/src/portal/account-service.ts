@@ -36,7 +36,13 @@ import { channelSecretSchema } from "@care-y/shared";
 // Constants
 // ---------------------------------------------------------------------------
 
-const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+/**
+ * Server-side lifetime of a client account session. The client idle
+ * timeout is 15 minutes; this window is slightly longer and slides only
+ * on explicit renewal from human activity (renewSession), never on a
+ * plain read, so a walked-away device holds no usable session for long.
+ */
+const ACCOUNT_SESSION_IDLE_MS = 20 * 60 * 1000; // 20 minutes
 const CHANNEL_ID_BYTES = 24; // 48 hex chars
 const AUTH_HASH_BYTES = 32;
 
@@ -344,7 +350,8 @@ export async function upgradeFromSecureLink(
  * node:crypto timingSafeEqual (fixed 32-byte operands).
  *
  * Success: mint a session token, insert client_account_sessions with
- * token_hash and 24h expiry, fire-and-forget purge of expired rows.
+ * token_hash and an expiry one idle window out (ACCOUNT_SESSION_IDLE_MS),
+ * fire-and-forget purge of expired rows.
  * Returns { sessionToken, expiresAt }.
  *
  * Failure: returns null (one generic error for unknown account and
@@ -379,7 +386,7 @@ export async function login(
   const sessionTokenBuf = crypto.randomBytes(32);
   const sessionToken = sessionTokenBuf.toString("base64url");
   const tokenHash = Buffer.from(hashChannelAuth(sessionTokenBuf));
-  const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
+  const expiresAt = new Date(Date.now() + ACCOUNT_SESSION_IDLE_MS);
 
   await db
     .insertInto("client_account_sessions")
@@ -410,6 +417,7 @@ export async function login(
  * Resolves a session by hashing the presented token and joining the row
  * to its account and ACTIVE kind='account' channel after an expiry check.
  * Returns null uniformly for unknown, expired, or channel-less sessions.
+ * Never extends the expiry: only renewSession slides the window.
  */
 export async function resolveAccountSession(
   db: Kysely<TenantDatabase>,
@@ -460,6 +468,36 @@ export async function resolveAccountSession(
   }
 
   return { account, channel, tokenHash };
+}
+
+// ---------------------------------------------------------------------------
+// renewSession
+// ---------------------------------------------------------------------------
+
+/**
+ * Slides an unexpired session's expiry one idle window from now. Called
+ * only on explicit renewal from human activity on the client. Hashes the
+ * presented token the same way resolveAccountSession does; the expiry
+ * guard sits in the UPDATE itself, so an expired session is never
+ * revived. Returns the new expiry, or null when no live row matched.
+ */
+export async function renewSession(
+  db: Kysely<TenantDatabase>,
+  sessionToken: string,
+): Promise<Date | null> {
+  const tokenBuf = Buffer.from(sessionToken, "base64url");
+  const tokenHash = Buffer.from(hashChannelAuth(tokenBuf));
+  const now = new Date();
+
+  const row = await db
+    .updateTable("client_account_sessions")
+    .set({ expires_at: new Date(now.getTime() + ACCOUNT_SESSION_IDLE_MS) })
+    .where("token_hash", "=", tokenHash)
+    .where("expires_at", ">", now)
+    .returning("expires_at")
+    .executeTakeFirst();
+
+  return row?.expires_at ?? null;
 }
 
 // ---------------------------------------------------------------------------

@@ -13,17 +13,14 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { encode } from "@care-y/crypto";
   import { requireRouter, ClientError } from "$lib/errors.js";
-  import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import { Preloader } from "konsta/svelte";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
-  import { isPhoneLookupResult } from "$lib/components/inputs/client-select-types.js";
+  import { createClientSelectSearch } from "$lib/components/inputs/client-select-search.js";
   import type {
     ClientSelection,
     CollisionInfo,
-    ClientSearchResult,
-    PhoneLookupResult,
   } from "$lib/components/inputs/client-select-types.js";
 
   interface Props {
@@ -64,61 +61,24 @@
     return clientSelection !== null;
   });
 
+  const clientSearch = createClientSelectSearch({
+    ticketRouter,
+    orgCache,
+    orgKeyManager,
+  });
+
   function resetForm(): void {
     clientSelection = null;
     ticketIdInput = "";
     routeMode = "client";
+    clientSearch.reset();
   }
 
-  async function searchClients(query: string): Promise<ClientSearchResult[]> {
-    const raw = await ticketRouter.searchClients.query({ query, limit: 10 });
-    return raw.map((r) => ({
-      ...r,
-      alias:
-        orgCache.decrypt(`client-alias:${r.id}`, r.encryptedAlias, {
-          table: "clients",
-          id: r.id,
-        }) ?? r.id.slice(0, 8),
-    }));
-  }
-
-  async function phoneLookup(phone: string): Promise<PhoneLookupResult> {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (import.meta.env.DEV) {
-      headers["x-org-slug"] = DEV_ORG_SLUG;
+  $effect(() => {
+    if (!opened) {
+      clientSearch.reset();
     }
-
-    const phoneMatchHash = await orgKeyManager.phoneMatchHash(phone);
-
-    const res = await fetch("/relay/phone-lookup", {
-      method: "POST",
-      credentials: "include",
-      headers,
-      body: JSON.stringify({
-        phone,
-        ...(phoneMatchHash != null ? { phoneMatchHash } : {}),
-      }),
-    });
-
-    if (!res.ok) {
-      throw new ClientError("Phone lookup failed");
-    }
-
-    const data: unknown = await res.json();
-    if (!isPhoneLookupResult(data)) {
-      throw new ClientError("Phone lookup returned an unexpected shape");
-    }
-    if (data.found) {
-      data.alias =
-        orgCache.decrypt(`client-alias:${data.clientId}`, data.encryptedAlias, {
-          table: "clients",
-          id: data.clientId,
-        }) ?? data.clientId.slice(0, 8);
-    }
-    return data;
-  }
+  });
 
   function handleCollision(_info: CollisionInfo): void {
     // In quarantine context, collisions are informational.
@@ -228,9 +188,9 @@
         <ClientSelectModule.default
           label={m.admin_quarantine_route_client_label()}
           placeholder={m.admin_quarantine_route_client_placeholder()}
-          search={searchClients}
+          search={clientSearch.search}
           onchange={(v: ClientSelection) => (clientSelection = v)}
-          {phoneLookup}
+          phoneLookup={clientSearch.phoneLookup}
           oncollision={handleCollision}
         />
       {:catch}

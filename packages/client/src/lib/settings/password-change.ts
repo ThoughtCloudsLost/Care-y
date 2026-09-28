@@ -27,6 +27,15 @@ import {
 
 const BATCH_SIZE = 40;
 
+/**
+ * Worker tk-cache id for one key generation of a ticket. A ticket can
+ * hold several generations, so each is cached under its own id and
+ * re-wrapped from that entry rather than from the shared ticket-id slot.
+ */
+function generationCacheId(ticketId: string, keyGeneration: string): string {
+  return `${ticketId}:${keyGeneration}`;
+}
+
 export interface PasswordChangeCallbacks {
   onFetchWraps: () => void;
   onDeriveNewKeys: () => void;
@@ -136,7 +145,7 @@ export async function changePassword(deps: PasswordChangeDeps): Promise<void> {
     for (const wrap of batch) {
       await primaryBridge.unwrapTk(
         wrap.ticketId,
-        wrap.ticketId,
+        generationCacheId(wrap.ticketId, wrap.keyGeneration),
         wrap.ephemeralPoint,
         wrap.nonce,
         wrap.wrappedKey,
@@ -145,7 +154,7 @@ export async function changePassword(deps: PasswordChangeDeps): Promise<void> {
 
     for (const wrap of batch) {
       const rewrapped = await primaryBridge.rewrapTk(
-        wrap.ticketId,
+        generationCacheId(wrap.ticketId, wrap.keyGeneration),
         newVolPublic,
       );
       reWrappedKeys.push({

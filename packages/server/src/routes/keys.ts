@@ -1,16 +1,14 @@
 /**
- * Keys router: volunteer key management endpoints.
+ * Keys router: volunteer and org key management endpoints.
  *
- * Handles volPublic upload (account creation), password change key
- * rotation (acquireLock + applyRotation), and rotation status checks.
- * Services are created per-request from the tenant DB since key
- * management is org-scoped.
+ * Handles first-time crypto key setup (account creation), rotation
+ * status checks, org key custody and resealing. Password change key
+ * rotation lives in profile.changePassword. Services are created
+ * per-request from the tenant DB since key management is org-scoped.
  */
 
 import {
   initCryptoKeysSchema,
-  uploadVolPublicSchema,
-  passwordChangeKeysSchema,
   uploadOrgPublicKeySchema,
   rotateOrgKeySchema,
   wrapOrgKeyForUserSchema,
@@ -70,58 +68,6 @@ export function createKeysRouter(deps?: KeysRouterDeps) {
         return { success: true as const };
       }),
     ),
-
-    /** Update volPublic on existing user_keys row (e.g. after password change). */
-    uploadVolPublic: authedProcedure
-      .input(uploadVolPublicSchema)
-      .mutation(async ({ ctx, input }) => {
-        const keyRotation = createKeyRotationService(ctx.org.tenantDb);
-        const volPublic = b64(input.volPublic);
-        await keyRotation.storeVolPublic(ctx.session.userId, volPublic);
-        return { success: true as const };
-      }),
-
-    /** Password change: receive new salt, volPublic, and re-wrapped ticket keys. */
-    rotateKeys: authedProcedure
-      .input(passwordChangeKeysSchema)
-      .mutation(async ({ ctx, input }) => {
-        const keyRotation = createKeyRotationService(ctx.org.tenantDb);
-        const userId = ctx.session.userId;
-        await keyRotation.acquireLock(userId);
-        let rotationSucceeded = false;
-        try {
-          await keyRotation.applyRotation({
-            userId,
-            saltNew: b64(input.saltNew),
-            volPublicNew: b64(input.volPublicNew),
-            reWrappedKeys: input.reWrappedKeys.map((k) => ({
-              ticketId: k.ticketId,
-              keyGeneration: k.keyGeneration,
-              ephemeralPoint: b64(k.ephemeralPoint),
-              nonce: b64(k.nonce),
-              wrappedKey: b64(k.wrappedKey),
-            })),
-            reWrappedOrgKey: input.reWrappedOrgKey
-              ? {
-                  ephemeralPoint: b64(input.reWrappedOrgKey.ephemeralPoint),
-                  nonce: b64(input.reWrappedOrgKey.nonce),
-                  wrappedKey: b64(input.reWrappedOrgKey.wrappedKey),
-                }
-              : undefined,
-          });
-          rotationSucceeded = true;
-        } finally {
-          // applyRotation clears the lock on success (inside its transaction).
-          // On failure, release the lock so the volunteer isn't permanently
-          // locked out of new ticket wraps.
-          if (!rotationSucceeded) {
-            await keyRotation.releaseLock(userId).catch(() => {
-              // Log but don't mask the original error. Admin can clear manually.
-            });
-          }
-        }
-        return { success: true as const };
-      }),
 
     /** Check if rotation is in progress for the current user. */
     rotationStatus: authedProcedure.query(async ({ ctx }) => {

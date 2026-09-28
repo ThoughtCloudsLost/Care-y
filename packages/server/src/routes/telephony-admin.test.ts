@@ -134,6 +134,7 @@ function createMockContext(): Context {
       roleId: RoleId.ADMIN,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
   };
 }
@@ -865,6 +866,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: RoleId.ADMIN,
           isActive: true,
           hasSeenBriefing: true,
+          mustChangePassword: false,
         },
       };
     }

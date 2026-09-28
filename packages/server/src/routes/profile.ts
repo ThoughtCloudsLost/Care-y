@@ -11,6 +11,7 @@ import {
 import { encode } from "@care-y/crypto";
 import { createKeyRotationService } from "../crypto/key-rotation.js";
 import { createTicketKeyWrapQueryService } from "../crypto/ticket-key-wrap-query-service.js";
+import { changePasswordWithRotation } from "../auth/password-change-service.js";
 import {
   ConflictError,
   ForbiddenError,
@@ -23,6 +24,7 @@ import {
   router,
   authedProcedure,
   permissionProcedure,
+  requireSecondFactorIfEnrolled,
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
@@ -121,80 +123,71 @@ export function createProfileRouter(deps: ProfileRouterDeps) {
         }),
       ),
 
-    // Atomic password change: verifies old password, hashes new,
-    // rotates crypto keys, and kills other sessions in a single request.
-    // updatePasswordHash and applyRotation are separate DB transactions
-    // within this handler. A server crash between them could leave
-    // stale crypto keys (password changed, keys not rotated). This
-    // window is milliseconds on controlled infrastructure vs. the
-    // minutes-long client-side gap this replaces.
-    changePassword: authedProcedure.input(changePasswordSchema).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-        const result = deps.passwordChangeLimiter.check(
-          `pw:${ctx.session.userId}:${ip}`,
-        );
-        if (!result.allowed) {
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: ErrorCode.REQUEST_RATE_LIMITED,
-            cause: new RateLimitError(
-              ErrorCode.REQUEST_RATE_LIMITED,
-              Math.ceil(result.retryAfterMs / 1000),
-            ),
-          });
-        }
-
-        const authService = getAuthService(ctx.org, deps);
-        const keyRotation = createKeyRotationService(ctx.org.tenantDb);
-        const userId = ctx.session.userId;
-
-        await authService.updatePasswordHash(
-          userId,
-          ctx.session.token,
-          input.currentPassword,
-          input.newPassword,
-        );
-
-        await keyRotation.acquireLock(userId);
-        let rotationSucceeded = false;
-        try {
-          await keyRotation.applyRotation({
-            userId,
-            saltNew: Buffer.from(input.saltNew, "base64"),
-            volPublicNew: Buffer.from(input.volPublicNew, "base64"),
-            reWrappedKeys: input.reWrappedKeys.map((k) => ({
-              ticketId: k.ticketId,
-              keyGeneration: k.keyGeneration,
-              ephemeralPoint: Buffer.from(k.ephemeralPoint, "base64"),
-              nonce: Buffer.from(k.nonce, "base64"),
-              wrappedKey: Buffer.from(k.wrappedKey, "base64"),
-            })),
-            reWrappedOrgKey: input.reWrappedOrgKey
-              ? {
-                  ephemeralPoint: Buffer.from(
-                    input.reWrappedOrgKey.ephemeralPoint,
-                    "base64",
-                  ),
-                  nonce: Buffer.from(input.reWrappedOrgKey.nonce, "base64"),
-                  wrappedKey: Buffer.from(
-                    input.reWrappedOrgKey.wrappedKey,
-                    "base64",
-                  ),
-                }
-              : undefined,
-          });
-          rotationSucceeded = true;
-        } finally {
-          if (!rotationSucceeded) {
-            // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional: don't mask the original rotation error
-            await keyRotation.releaseLock(userId).catch(() => {});
+    // Atomic password change: verifies the current password, then commits
+    // the new hash, the end of other sessions and the key rotation in one
+    // transaction (auth/password-change-service.ts). Reachable from a
+    // password-only session only while the account has no second factor.
+    changePassword: authedProcedure
+      .use(requireSecondFactorIfEnrolled)
+      .input(changePasswordSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const ip = extractClientIp(ctx.req);
+          const result = deps.passwordChangeLimiter.check(
+            `pw:${ctx.session.userId}:${ip}`,
+          );
+          if (!result.allowed) {
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: ErrorCode.REQUEST_RATE_LIMITED,
+              cause: new RateLimitError(
+                ErrorCode.REQUEST_RATE_LIMITED,
+                Math.ceil(result.retryAfterMs / 1000),
+              ),
+            });
           }
-        }
 
-        return { success: true as const };
-      }),
-    ),
+          await changePasswordWithRotation(
+            {
+              db: ctx.org.tenantDb,
+              hasher: deps.hasher,
+              keyRotation: createKeyRotationService(ctx.org.tenantDb),
+            },
+            {
+              userId: ctx.session.userId,
+              sessionToken: ctx.session.token,
+              currentPassword: input.currentPassword,
+              newPassword: input.newPassword,
+              rotation: {
+                saltNew: Buffer.from(input.saltNew, "base64"),
+                volPublicNew: Buffer.from(input.volPublicNew, "base64"),
+                reWrappedKeys: input.reWrappedKeys.map((k) => ({
+                  ticketId: k.ticketId,
+                  keyGeneration: k.keyGeneration,
+                  ephemeralPoint: Buffer.from(k.ephemeralPoint, "base64"),
+                  nonce: Buffer.from(k.nonce, "base64"),
+                  wrappedKey: Buffer.from(k.wrappedKey, "base64"),
+                })),
+                reWrappedOrgKey: input.reWrappedOrgKey
+                  ? {
+                      ephemeralPoint: Buffer.from(
+                        input.reWrappedOrgKey.ephemeralPoint,
+                        "base64",
+                      ),
+                      nonce: Buffer.from(input.reWrappedOrgKey.nonce, "base64"),
+                      wrappedKey: Buffer.from(
+                        input.reWrappedOrgKey.wrappedKey,
+                        "base64",
+                      ),
+                    }
+                  : undefined,
+              },
+            },
+          );
+
+          return { success: true as const };
+        }),
+      ),
 
     myTicketKeyWraps: authedProcedure.query(
       withErrorWrapping(async ({ ctx }) => {

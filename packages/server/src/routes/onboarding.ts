@@ -30,7 +30,7 @@ import {
   authedProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
-import { requirePermissionForOrg } from "../auth/roles.js";
+import { assertCanAssignRole, requirePermissionForOrg } from "../auth/roles.js";
 import { createInviteService } from "../onboarding/invite-service.js";
 import {
   createOnboardingService,
@@ -259,7 +259,11 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
               preferredLocale: input.preferredLocale,
               ipAddress: extractClientIp(ctx.req),
               userAgent: ctx.req.headers["user-agent"] ?? "unknown",
-              invite: { id: invite.id, roleId: invite.roleId },
+              invite: {
+                id: invite.id,
+                roleId: invite.roleId,
+                invitedBy: invite.invitedBy,
+              },
             },
             org.sealedBox,
             {
@@ -283,19 +287,18 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           ctx.user.roleId,
           Permission.MANAGE_USERS,
         );
+        await assertCanAssignRole(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          ctx.user.roleId,
+          input.roleId,
+        );
 
         const inviteService = createInviteService(ctx.org.tenantDb);
-
-        const encryptedEmail =
-          input.encryptedEmail !== undefined
-            ? Buffer.from(input.encryptedEmail, "base64")
-            : undefined;
 
         const { rawToken, expiresAt } = await inviteService.generate({
           invitedBy: ctx.session.userId,
           roleId: input.roleId,
-          encryptedEmail,
-          seal: (token: string) => ctx.org.sealedBox.seal(token),
           orgKeyGeneration: ctx.org.sealedBox.generation,
         });
 
@@ -326,7 +329,6 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           invitedBy: inv.invitedBy,
           expiresAt: inv.expiresAt.toISOString(),
           createdAt: inv.createdAt.toISOString(),
-          encryptedToken: inv.encryptedToken?.toString("base64url") ?? null,
         }));
       }),
     ),

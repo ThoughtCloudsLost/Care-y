@@ -63,6 +63,7 @@
   let pendingHasKeys = $state(true);
   let pendingEncryptedLocale = $state<string | null>(null);
   let pendingHasSeenBriefing = $state(true);
+  let pendingMustChangePassword = $state(false);
 
   function getPhaseLabel(p: LoginPhaseId): string {
     switch (p) {
@@ -93,7 +94,7 @@
   // has no keys and the user needs to re-enter credentials).
   // Also verify twofa_verified: a session with 2FA pending should NOT
   // redirect (it would hit TWOFA_REQUIRED on every volunteerProcedure call
-  // and loop back through /2fa → /login → / indefinitely).
+  // and loop between /login and / indefinitely).
   if (browser) {
     const isReauth = page.url.searchParams.get("reauth") === "1";
     if (!isReauth) {
@@ -176,6 +177,7 @@
       pendingEncryptedLocale =
         loginResult.user.encryptedPreferredLocale ?? null;
       pendingHasSeenBriefing = loginResult.user.hasSeenBriefing;
+      pendingMustChangePassword = loginResult.user.mustChangePassword;
       pendingHasKeys = loginResult.hasKeys;
       pendingNeedsEnrollment = loginResult.needsEnrollment;
       pendingUserId = loginResult.user.id;
@@ -270,7 +272,10 @@
   }
 
   async function navigateAfterAuth(): Promise<void> {
-    const needsOnboarding = !pendingHasSeenBriefing || pendingNeedsEnrollment;
+    const needsOnboarding =
+      pendingMustChangePassword ||
+      !pendingHasSeenBriefing ||
+      pendingNeedsEnrollment;
     phase = "done";
     if (needsOnboarding) {
       await goto(resolve("/complete"));
@@ -286,6 +291,15 @@
       return;
     }
     await goto(resolve("/"));
+  }
+
+  // The server ended the session after too many wrong second-factor
+  // guesses. Return to the sign-in form, as "Back to login" does, and keep
+  // the challenge's message on screen.
+  function handleTwofaSessionEnded(): void {
+    phase = "error";
+    error = m.error_twofa_session_ended();
+    twofaMethods = [];
   }
 
   async function handleTwofaSuccess(): Promise<void> {
@@ -340,6 +354,7 @@
       onsuccess={() => {
         void handleTwofaSuccess();
       }}
+      onsessionended={handleTwofaSessionEnded}
     />
     <div class="text-center mt-6">
       <button
@@ -387,6 +402,12 @@
       <p class="mt-1 text-sm opacity-60">{m.auth_sign_in_continue()}</p>
       <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
     </div>
+
+    {#if page.url.searchParams.get("signout") === "unconfirmed"}
+      <Block role="status">
+        <p class="text-sm text-[--muted]">{m.auth_signout_unconfirmed()}</p>
+      </Block>
+    {/if}
 
     {#if error !== ""}
       <Block role="alert">

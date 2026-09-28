@@ -75,6 +75,7 @@ function makeCtx(overrides?: Partial<Context>): Context {
       roleId: RoleId.VOLUNTEER,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
     ...overrides,
   };
@@ -90,6 +91,7 @@ function makeCtxWithRole(roleId: RoleIdValue): Context {
       roleId,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
   });
 }

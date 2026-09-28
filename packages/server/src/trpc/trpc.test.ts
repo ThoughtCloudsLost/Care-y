@@ -29,6 +29,7 @@ import {
   ValidationError,
   ConflictError,
   RateLimitError,
+  SecondFactorLimitError,
   InternalError,
 } from "../errors.js";
 import type { Context, OrgContext } from "./context.js";
@@ -107,6 +108,12 @@ describe("appErrorToTrpcCode", () => {
 
   it("maps RateLimitError to TOO_MANY_REQUESTS", () => {
     expect(appErrorToTrpcCode(new RateLimitError("x", 30))).toBe(
+      "TOO_MANY_REQUESTS",
+    );
+  });
+
+  it("maps SecondFactorLimitError to TOO_MANY_REQUESTS", () => {
+    expect(appErrorToTrpcCode(new SecondFactorLimitError("x"))).toBe(
       "TOO_MANY_REQUESTS",
     );
   });
@@ -313,6 +320,7 @@ describe("requireAuth middleware (authedProcedure)", () => {
           roleId: RoleId.VOLUNTEER,
           isActive: true,
           hasSeenBriefing: true,
+          mustChangePassword: false,
         },
       }),
     );
@@ -370,6 +378,7 @@ describe("require2fa middleware (authed2faProcedure)", () => {
           roleId: RoleId.VOLUNTEER,
           isActive: true,
           hasSeenBriefing: true,
+          mustChangePassword: false,
         },
       }),
     );
@@ -398,11 +407,45 @@ describe("require2fa middleware (authed2faProcedure)", () => {
           roleId: RoleId.VOLUNTEER,
           isActive: true,
           hasSeenBriefing: true,
+          mustChangePassword: false,
         },
       }),
     );
     const result = await caller.needs2fa();
     expect(result).toBe("verified");
+  });
+
+  it("rejects with FORBIDDEN while the account must change its password", async () => {
+    const caller = factory(
+      baseCtx({
+        org: fakeOrg,
+        session: {
+          id: FAKE_SESSION_ID,
+          token: FAKE_TOKEN,
+          userId: FAKE_USER_ID,
+          ipToken: FAKE_IP_TOKEN,
+          uaToken: FAKE_UA_TOKEN,
+          expiresAt: new Date(Date.now() + 60_000),
+          twofaVerified: true,
+          webauthnChallenge: null,
+        },
+        user: {
+          id: FAKE_USER_ID,
+          encryptedIdentifier: "testuser",
+          encryptedDisplayName: "Test",
+          encryptedPreferredLocale: null,
+          roleId: RoleId.VOLUNTEER,
+          isActive: true,
+          hasSeenBriefing: true,
+          mustChangePassword: true,
+        },
+      }),
+    );
+    await expectTrpcError(
+      caller.needs2fa(),
+      "FORBIDDEN",
+      "PASSWORD_CHANGE_REQUIRED",
+    );
   });
 });
 
@@ -429,6 +472,7 @@ describe("withErrorWrapping resolver wrapper", () => {
       roleId: RoleId.VOLUNTEER,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
   });
 
@@ -502,6 +546,7 @@ describe("withErrorWrapping resolver wrapper", () => {
         roleId: RoleId.VOLUNTEER,
         isActive: true,
         hasSeenBriefing: true,
+        mustChangePassword: false,
       },
     });
     const testRouter = router({

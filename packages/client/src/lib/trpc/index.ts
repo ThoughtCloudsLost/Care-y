@@ -22,7 +22,10 @@ import type { AppRouter } from "@care-y/server";
 import { ErrorCode } from "@care-y/shared";
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
+import { page } from "$app/state";
 import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
+import { isUnauthorizedTrpcError } from "$lib/errors.js";
+import { reverifyStore } from "$lib/stores/reverify.svelte.js";
 import { TRPC_BASE_PATH } from "./base-path.js";
 
 // DEV-only artificial delay for testing loading/skeleton states.
@@ -37,12 +40,17 @@ export function isDevDelayEnabled(): boolean {
   return devDelayEnabled;
 }
 
-// Prevents multiple simultaneous 2FA redirects when many queries fail at once.
-let redirectingTo2fa = false;
+// Prevents multiple simultaneous re-verification prompts when many queries
+// fail at once.
+let openingReverify = false;
+
+// Prevents multiple simultaneous password-change redirects when many
+// queries fail at once.
+let redirectingToPasswordChange = false;
 
 /**
  * Paths that handle TWOFA_REQUIRED themselves (login, 2FA verification,
- * logout). The interceptor must not redirect for these.
+ * logout). The interceptor must not prompt or redirect for these.
  */
 const TWOFA_BYPASS_PREFIXES = ["auth.", "twoFactor.verify."];
 
@@ -51,45 +59,62 @@ function shouldBypass(path: string): boolean {
 }
 
 /**
- * Fetches enrolled 2FA method types from the server, stores them in
- * sessionStorage for the /2fa page, and navigates there.
+ * Fetches enrolled 2FA method types from the server and opens the
+ * re-verification sheet over the current page, so unsaved work stays.
  *
  * The twoFactor.status endpoint uses authedProcedure (no 2FA required),
- * so it won't trigger this interceptor recursively.
+ * so it won't trigger this interceptor recursively. When the session is
+ * gone entirely (UNAUTHORIZED) there is nothing to re-verify, so the user
+ * goes to /login. Any other failure leaves the sheet closed; the next call
+ * that fails with TWOFA_REQUIRED tries again.
+ *
+ * Only the (app) layout mounts ReverifySheet. On any other route (for
+ * example onboarding) nothing would render the store, so the user goes to
+ * /login and signs in again there.
  */
-async function redirectTo2fa(): Promise<void> {
+async function openReverify(): Promise<void> {
+  if (!reverifyStore.registered) {
+    await goto(resolve("/login"));
+    return;
+  }
   try {
     const status = await trpc.twoFactor.status.query();
-    const methodTypes = status.methods.map((m) => m.type);
-    try {
-      sessionStorage.setItem("care-y-2fa-methods", JSON.stringify(methodTypes));
-    } catch (storageErr: unknown) {
-      // sessionStorage may be unavailable in private browsing or when full.
-      // The /2fa page will redirect to /login if no methods are found.
-      console.warn(
-        "[2fa-interceptor] sessionStorage write failed:",
-        storageErr,
-      );
-    }
+    reverifyStore.open(status.methods.map((m) => m.type));
   } catch (fetchErr: unknown) {
-    // Status fetch can fail if the session is fully expired or the network
-    // is down. Still redirect; the /2fa page sends the user to /login when
-    // no methods are found in sessionStorage.
+    if (isUnauthorizedTrpcError(fetchErr)) {
+      await goto(resolve("/login"));
+      return;
+    }
     console.warn(
       "[2fa-interceptor] failed to fetch enrolled methods:",
       fetchErr,
     );
   }
-  await goto(resolve("/2fa"));
 }
 
 /**
- * tRPC link that intercepts TWOFA_REQUIRED errors globally.
+ * Sends an account still on its temporary password to /complete, where
+ * onboarding asks for a new one. Skipped when already there so the page's
+ * own failing calls do not reload it.
+ */
+async function redirectToPasswordChange(): Promise<void> {
+  const target = resolve("/complete");
+  if (page.url.pathname === target) return;
+  await goto(target);
+}
+
+/**
+ * tRPC link that intercepts TWOFA_REQUIRED and PASSWORD_CHANGE_REQUIRED
+ * errors globally.
  *
  * When the server clears twofa_verified (e.g., IP drift), every authed2fa
  * procedure fails with TWOFA_REQUIRED. Without this interceptor, each widget
- * would show its own QueryError. Instead, a single redirect to /2fa gives the
- * user a clean re-verification flow.
+ * would show its own QueryError. Instead, a single re-verification sheet
+ * opens over the current page.
+ *
+ * While the account must replace its temporary password, every authed2fa
+ * procedure fails with PASSWORD_CHANGE_REQUIRED, and the user is sent to
+ * the onboarding page that collects the new password.
  */
 function twoFaInterceptorLink(): TRPCLink<AppRouter> {
   return () =>
@@ -102,18 +127,30 @@ function twoFaInterceptorLink(): TRPCLink<AppRouter> {
           error(err) {
             if (
               !shouldBypass(op.path) &&
-              !redirectingTo2fa &&
+              !openingReverify &&
+              !reverifyStore.opened &&
               isTRPCClientError<AppRouter>(err) &&
               err.message === ErrorCode.TWOFA_REQUIRED
             ) {
-              redirectingTo2fa = true;
-              void redirectTo2fa().finally(() => {
-                redirectingTo2fa = false;
+              openingReverify = true;
+              void openReverify().finally(() => {
+                openingReverify = false;
+              });
+            }
+            if (
+              !shouldBypass(op.path) &&
+              !redirectingToPasswordChange &&
+              isTRPCClientError<AppRouter>(err) &&
+              err.message === ErrorCode.PASSWORD_CHANGE_REQUIRED
+            ) {
+              redirectingToPasswordChange = true;
+              void redirectToPasswordChange().finally(() => {
+                redirectingToPasswordChange = false;
               });
             }
             // Always propagate the error so callers see the failure.
-            // The redirect handles the UX; individual queries can still
-            // clean up their loading states.
+            // The sheet or redirect handles the UX; individual queries can
+            // still clean up their loading states.
             observer.error(err);
           },
           complete() {
@@ -132,6 +169,11 @@ export const trpc: TRPCClient<AppRouter> = createTRPCClient<AppRouter>({
     twoFaInterceptorLink(),
     httpBatchLink({
       url: TRPC_BASE_PATH,
+      // Send queries as POST too. A GET query carries its input in the URL,
+      // which proxies and access logs record; identifiers such as the
+      // sign-in username must not end up there. Needs allowMethodOverride
+      // on the server handler.
+      methodOverride: "POST",
       // Dev: send X-Org-Slug header for org resolution (no subdomain in dev).
       // import.meta.env.DEV is compile-time; Vite strips the header in prod builds.
       headers: import.meta.env.DEV ? { "x-org-slug": DEV_ORG_SLUG } : undefined,

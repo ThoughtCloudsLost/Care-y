@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomBytes, randomUUID } from "node:crypto";
 import { sql, type Kysely } from "kysely";
-import { RoleId, type RoleIdValue } from "@care-y/shared";
+import { RoleId, TwoFactorMethod, type RoleIdValue } from "@care-y/shared";
 import type {
   SessionToken,
   UserId,
@@ -27,11 +27,15 @@ import {
   createMockOprfDeps,
   createThrowingProviderFactory,
   NO_OPTIONAL_ROUTERS,
+  registerMethodDirectly,
   type TestDb,
 } from "../test-utils.js";
 import { encode, getSodium } from "@care-y/crypto";
-import { createScryptHasher } from "../auth/password.js";
-import { createAuthService } from "../auth/service.js";
+import {
+  AUTH_ARGON2ID_TEST_PARAMS,
+  createPasswordHasher,
+} from "../auth/password.js";
+import { createAuthService, type AuthService } from "../auth/service.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
@@ -57,7 +61,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const createdOrgIds: OrgId[] = [];
     const createdSchemas: string[] = [];
 
-    const hasher = createScryptHasher();
+    const hasher = createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS);
     const loginLimiter = createInMemoryRateLimiter({
       windowMs: 60_000,
       maxRequests: 100,
@@ -165,6 +169,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
           pushSender: null,
           pushHmacKey: null,
           totpReplayCache,
+          verifyLimiter: createInMemoryRateLimiter({
+            windowMs: 60_000,
+            maxRequests: 1000,
+          }),
         },
         oprfDeps: createMockOprfDeps(),
         orgService,
@@ -210,6 +218,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId,
           isActive: true,
           hasSeenBriefing: true,
+          mustChangePassword: false,
         },
       };
     }
@@ -788,6 +797,283 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(await repo.findByToken(otherSession1.token)).toBeNull();
         expect(await repo.findByToken(otherSession2.token)).toBeNull();
       });
+
+      /** Inserts a ticket key wrap held by the volunteer. */
+      async function insertHeldWrap(
+        ticketId: TicketId,
+        volunteerId: UserId,
+        keyGeneration: KeyGeneration,
+      ): Promise<void> {
+        // care-y-ignore-next-line no-plaintext-db-write -- test key wrap data, not real cryptographic material
+        await tenantDb
+          .insertInto("ticket_key_wraps")
+          .values({
+            ticket_id: ticketId,
+            volunteer_id: volunteerId,
+            key_generation: keyGeneration,
+            ephemeral_point: randomBytes(32),
+            nonce: randomBytes(24),
+            wrapped_key: randomBytes(48),
+            algorithm: "ecies-ristretto255-v1",
+          })
+          .execute();
+      }
+
+      function reWrapInput(
+        ticketId: TicketId,
+        keyGeneration: KeyGeneration,
+      ): {
+        ticketId: TicketId;
+        keyGeneration: KeyGeneration;
+        ephemeralPoint: string;
+        nonce: string;
+        wrappedKey: string;
+      } {
+        return {
+          ticketId,
+          keyGeneration,
+          ephemeralPoint: randomBytes(32).toString("base64"),
+          nonce: randomBytes(24).toString("base64"),
+          wrappedKey: randomBytes(48).toString("base64"),
+        };
+      }
+
+      async function registerWithKeys(
+        prefix: string,
+        password: string,
+        mustChangePassword = false,
+      ): Promise<Awaited<ReturnType<AuthService["register"]>>> {
+        const user = await makeAuthService().register({
+          identifier: `${prefix}-${randomUUID().slice(0, 8)}`,
+          password,
+          displayName: prefix,
+          roleId: RoleId.VOLUNTEER,
+          mustChangePassword,
+        });
+        await seedUserKeys(user.id);
+        return user;
+      }
+
+      it("refuses a new password equal to the current one", async () => {
+        const password = "unchanged-password-long-enough";
+        const user = await registerWithKeys("pw-same", password);
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        await expectTrpcError(
+          caller.profile.changePassword(makeChangeInput(password, password)),
+          "BAD_REQUEST",
+          "PASSWORD_UNCHANGED",
+        );
+
+        const row = await tenantDb
+          .selectFrom("user_keys")
+          .select(["key_version", "rotation_lock"])
+          .where("user_id", "=", user.id)
+          .executeTakeFirstOrThrow();
+        expect(row.key_version).toBe(1);
+        expect(row.rotation_lock).toBe(false);
+      });
+
+      it("refuses a password-only session when the account has a second factor", async () => {
+        const password = "factor-guard-password-long";
+        const user = await registerWithKeys("pw-factor", password);
+        await registerMethodDirectly(tenantDb, user.id, TwoFactorMethod.TOTP);
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        await expectTrpcError(
+          caller.profile.changePassword(
+            makeChangeInput(password, "factor-guard-new-password!!"),
+          ),
+          "UNAUTHORIZED",
+          "TWOFA_REQUIRED",
+        );
+
+        const row = await tenantDb
+          .selectFrom("user_keys")
+          .select("key_version")
+          .where("user_id", "=", user.id)
+          .executeTakeFirstOrThrow();
+        expect(row.key_version).toBe(1);
+      });
+
+      it("allows a 2FA-verified session when the account has a second factor", async () => {
+        const password = "factor-verified-password-l";
+        const user = await registerWithKeys("pw-factor-ok", password);
+        await registerMethodDirectly(tenantDb, user.id, TwoFactorMethod.TOTP);
+        const session = await createSession(user.id);
+        const caller = buildCaller(
+          authedCtx(user.id, session, RoleId.VOLUNTEER, true),
+        );
+
+        const result = await caller.profile.changePassword(
+          makeChangeInput(password, "factor-verified-new-password"),
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it("allows a password-only session when the account has no second factor", async () => {
+        const password = "no-factor-password-long-e";
+        const user = await registerWithKeys("pw-no-factor", password);
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        const result = await caller.profile.changePassword(
+          makeChangeInput(password, "no-factor-new-password-long"),
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it("clears must_change_password on success", async () => {
+        const password = "temporary-admin-set-password";
+        const user = await registerWithKeys("pw-forced", password, true);
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        await caller.profile.changePassword(
+          makeChangeInput(password, "self-chosen-password-long-en"),
+        );
+
+        const row = await tenantDb
+          .selectFrom("users")
+          .select("must_change_password")
+          .where("id", "=", user.id)
+          .executeTakeFirstOrThrow();
+        expect(row.must_change_password).toBe(false);
+      });
+
+      it("is not blocked by a pending intake_key_wraps row", async () => {
+        const password = "intake-pending-password-lo";
+        const user = await registerWithKeys("pw-intake", password);
+        const fixture = await createTestTicketFixture(tenantDb);
+        await tenantDb
+          .insertInto("intake_key_wraps")
+          .values({
+            ticket_id: fixture.ticketId,
+            wrapped_tk: Buffer.alloc(80, 0xab),
+          })
+          .execute();
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        try {
+          const result = await caller.profile.changePassword(
+            makeChangeInput(password, "intake-pending-new-password"),
+          );
+          expect(result.success).toBe(true);
+        } finally {
+          await tenantDb
+            .deleteFrom("intake_key_wraps")
+            .where("ticket_id", "=", fixture.ticketId)
+            .execute();
+        }
+      });
+
+      it("drops a re-wrap for a deleted ticket and commits the rest", async () => {
+        const password = "stale-ticket-password-long";
+        const user = await registerWithKeys("pw-stale", password);
+        const kept = await createTestTicketFixture(tenantDb);
+        const deleted = await createTestTicketFixture(tenantDb);
+        const keptGen = randomUUID() as KeyGeneration;
+        const deletedGen = randomUUID() as KeyGeneration;
+        await insertHeldWrap(kept.ticketId, user.id, keptGen);
+        await insertHeldWrap(deleted.ticketId, user.id, deletedGen);
+        await tenantDb
+          .deleteFrom("tickets")
+          .where("id", "=", deleted.ticketId)
+          .execute();
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        const result = await caller.profile.changePassword({
+          ...makeChangeInput(password, "stale-ticket-new-password-l"),
+          reWrappedKeys: [
+            reWrapInput(kept.ticketId, keptGen),
+            reWrapInput(deleted.ticketId, deletedGen),
+          ],
+        });
+        expect(result.success).toBe(true);
+
+        const wraps = await tenantDb
+          .selectFrom("ticket_key_wraps")
+          .select("ticket_id")
+          .where("volunteer_id", "=", user.id)
+          .execute();
+        expect(wraps.map((w) => w.ticket_id)).toEqual([kept.ticketId]);
+      });
+
+      it("refuses with STALE_KEY_WRAPS when a held wrap is missing and changes nothing", async () => {
+        const password = "stale-wraps-password-long-e";
+        const user = await registerWithKeys("pw-missing", password);
+        const known = await createTestTicketFixture(tenantDb);
+        const granted = await createTestTicketFixture(tenantDb);
+        const knownGen = randomUUID() as KeyGeneration;
+        const grantedGen = randomUUID() as KeyGeneration;
+        await insertHeldWrap(known.ticketId, user.id, knownGen);
+        // Granted after the client fetched its list.
+        await insertHeldWrap(granted.ticketId, user.id, grantedGen);
+        const session = await createSession(user.id);
+        const caller = buildCaller(authedCtx(user.id, session));
+
+        const beforeUser = await tenantDb
+          .selectFrom("users")
+          .select("password_hash")
+          .where("id", "=", user.id)
+          .executeTakeFirstOrThrow();
+        const beforeKeys = await tenantDb
+          .selectFrom("user_keys")
+          .select(["salt", "vol_public", "key_version"])
+          .where("user_id", "=", user.id)
+          .executeTakeFirstOrThrow();
+        const beforeWraps = await tenantDb
+          .selectFrom("ticket_key_wraps")
+          .select(["ticket_id", "wrapped_key"])
+          .where("volunteer_id", "=", user.id)
+          .orderBy("ticket_id")
+          .execute();
+
+        await expectTrpcError(
+          caller.profile.changePassword({
+            ...makeChangeInput(password, "stale-wraps-new-password-lo"),
+            reWrappedKeys: [reWrapInput(known.ticketId, knownGen)],
+          }),
+          "CONFLICT",
+          "STALE_KEY_WRAPS",
+        );
+
+        const afterUser = await tenantDb
+          .selectFrom("users")
+          .select("password_hash")
+          .where("id", "=", user.id)
+          .executeTakeFirstOrThrow();
+        expect(afterUser.password_hash).toBe(beforeUser.password_hash);
+
+        const afterKeys = await tenantDb
+          .selectFrom("user_keys")
+          .select(["salt", "vol_public", "key_version", "rotation_lock"])
+          .where("user_id", "=", user.id)
+          .executeTakeFirstOrThrow();
+        expect(Buffer.compare(afterKeys.salt, beforeKeys.salt)).toBe(0);
+        expect(
+          Buffer.compare(
+            afterKeys.vol_public ?? Buffer.alloc(0),
+            beforeKeys.vol_public ?? Buffer.alloc(0),
+          ),
+        ).toBe(0);
+        expect(afterKeys.key_version).toBe(beforeKeys.key_version);
+        // The lock is released on failure, so the volunteer keeps
+        // receiving wraps for new tickets.
+        expect(afterKeys.rotation_lock).toBe(false);
+
+        const afterWraps = await tenantDb
+          .selectFrom("ticket_key_wraps")
+          .select(["ticket_id", "wrapped_key"])
+          .where("volunteer_id", "=", user.id)
+          .orderBy("ticket_id")
+          .execute();
+        expect(afterWraps).toEqual(beforeWraps);
+      });
     });
 
     describe("myTicketKeyWraps", () => {
@@ -917,6 +1203,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
               pushSender: null,
               pushHmacKey: null,
               totpReplayCache,
+              verifyLimiter: createInMemoryRateLimiter({
+                windowMs: 60_000,
+                maxRequests: 1000,
+              }),
             },
             oprfDeps: createMockOprfDeps(),
             orgService,
@@ -1051,8 +1341,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
     });
 
-    describe("changePassword rotation lock release on failure", () => {
-      it("releases the rotation lock when applyRotation throws", async () => {
+    describe("changePassword rotation lock release", () => {
+      it("leaves the rotation lock released so a second change succeeds", async () => {
         const authService = makeAuthService();
         const identifier = `pw-lockrel-${randomUUID().slice(0, 8)}`;
         const user = await authService.register({
@@ -1073,26 +1363,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const session = await createSession(user.id);
         const caller = buildCaller(authedCtx(user.id, session));
 
-        // Spy on the key rotation service to make applyRotation throw.
-        // We use an invalid ticketId in reWrappedKeys to cause a real
-        // DB failure during applyRotation (FK violation or similar).
-        // However, the savepoint logic in applyRotation may swallow FK
-        // violations. Instead, pass a malformed input that causes a
-        // non-recoverable error within the transaction.
-
-        // The simplest approach: call changePassword with data that
-        // passes the password check but causes applyRotation to fail.
-        // A non-existent ticketId will cause an FK violation (code 23503)
-        // which is caught by the savepoint. Instead, we can spy on
-        // the tenantDb to make the user_keys UPDATE inside applyRotation
-        // fail, but that's too invasive.
-        //
-        // Approach: use a valid changePassword call, then verify that
-        // the lock is released (rotation_lock = false). The existing
-        // happy-path test already verifies this. For the failure path,
-        // we verify that a subsequent changePassword call does not
-        // fail with "Key rotation already in progress", which would
-        // mean the lock was left stuck.
+        // The failure path (lock released after a refused rotation) is
+        // covered by the STALE_KEY_WRAPS test above. Here a second change
+        // must not fail with "Key rotation already in progress", which
+        // would mean the first left the lock stuck.
 
         // First: make a call that succeeds (sets lock, does rotation, releases).
         const result = await caller.profile.changePassword({

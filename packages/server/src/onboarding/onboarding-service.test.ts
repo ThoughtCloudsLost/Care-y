@@ -5,7 +5,10 @@ import {
   RoleId,
   type OrgSchema,
   type OrgSlug,
+  ErrorCode,
   type InviteTokenId,
+  type RoleIdValue,
+  type UserId,
 } from "@care-y/shared";
 import {
   createTestDb,
@@ -19,12 +22,15 @@ import {
   testSealedBox,
   type TestDb,
 } from "../test-utils.js";
-import { createScryptHasher } from "../auth/password.js";
+import {
+  AUTH_ARGON2ID_TEST_PARAMS,
+  createPasswordHasher,
+} from "../auth/password.js";
 import {
   createOnboardingService,
   type OnboardingService,
 } from "./onboarding-service.js";
-import { ConflictError } from "../errors.js";
+import { ConflictError, ValidationError } from "../errors.js";
 import { createInviteService } from "./invite-service.js";
 
 const HAS_DB = Boolean(process.env.DATABASE_URL);
@@ -45,7 +51,7 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
       .execute();
 
     svc = createOnboardingService(tenantDb, {
-      hasher: createScryptHasher(),
+      hasher: createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
       encryptor: testFieldEncryptor,
       indexer: testBlindIndexer,
       tokenizer: testSessionTokenizer,
@@ -111,6 +117,7 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
         .where("id", "=", result.userId)
         .executeTakeFirstOrThrow();
       expect(user.role_id).toBe(RoleId.ADMIN);
+      expect(user.must_change_password).toBe(false);
       expect(Buffer.isBuffer(user.encrypted_identifier)).toBe(true);
       expect(Buffer.isBuffer(user.encrypted_display_name)).toBe(true);
 
@@ -157,7 +164,7 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
         .execute();
 
       const freshSvc = createOnboardingService(freshDb.db, {
-        hasher: createScryptHasher(),
+        hasher: createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
@@ -219,6 +226,7 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
   describe("registerFromInvite", () => {
     let inviteId: InviteTokenId;
     let rawToken: string;
+    let adminId: UserId;
 
     beforeAll(async () => {
       // Find the admin user for invitedBy
@@ -227,6 +235,7 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
         .select("id")
         .where("role_id", "=", RoleId.ADMIN)
         .executeTakeFirstOrThrow();
+      adminId = admin.id;
 
       const inviteSvc = createInviteService(tenantDb);
       const invite = await inviteSvc.generate({
@@ -250,7 +259,11 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
           preferredLocale: "es",
           ipAddress: "10.0.0.3",
           userAgent: "mobile-agent",
-          invite: { id: inviteId, roleId: RoleId.VOLUNTEER },
+          invite: {
+            id: inviteId,
+            roleId: RoleId.VOLUNTEER,
+            invitedBy: adminId,
+          },
         },
         testSealedBox,
         {
@@ -263,13 +276,15 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
       expect(result.userId).toBeTruthy();
       expect(result.sessionToken).toHaveLength(64);
 
-      // Verify user has volunteer role
+      // Verify user has volunteer role. The invitee chose their own
+      // password, so no forced change applies.
       const user = await tenantDb
         .selectFrom("users")
-        .select("role_id")
+        .select(["role_id", "must_change_password"])
         .where("id", "=", result.userId)
         .executeTakeFirstOrThrow();
       expect(user.role_id).toBe(RoleId.VOLUNTEER);
+      expect(user.must_change_password).toBe(false);
     });
 
     it("rejects registration with an invalid token", async () => {
@@ -283,6 +298,115 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
       // The invite from the happy path test was consumed
       const validated = await inviteSvc.validate(rawToken);
       expect(validated).toBeNull();
+    });
+
+    interface MintedInvite {
+      readonly id: InviteTokenId;
+      readonly roleId: RoleIdValue;
+      readonly invitedBy: UserId;
+    }
+
+    /** Mints an invite from `inviterId` and returns what the route passes on. */
+    async function mintInvite(
+      inviterId: UserId,
+      roleId: RoleIdValue,
+    ): Promise<MintedInvite> {
+      const inviteSvc = createInviteService(tenantDb);
+      const { rawToken: token } = await inviteSvc.generate({
+        invitedBy: inviterId,
+        roleId,
+        orgKeyGeneration: 1,
+      });
+      const validated = await inviteSvc.validate(token);
+      return {
+        id: validated!.id,
+        roleId: validated!.roleId,
+        invitedBy: validated!.invitedBy,
+      };
+    }
+
+    function registerWith(
+      invite: MintedInvite,
+      identifier: string,
+    ): ReturnType<OnboardingService["registerFromInvite"]> {
+      return svc.registerFromInvite(
+        {
+          identifier,
+          password: "InviteeP@ss1!",
+          displayName: identifier,
+          preferredLocale: undefined,
+          ipAddress: "10.0.0.4",
+          userAgent: "mobile-agent",
+          invite,
+        },
+        testSealedBox,
+        {
+          orgId: TEST_ORG_ID,
+          orgSlug: "test-org" as OrgSlug,
+          orgSchema: testDb.schemaName as OrgSchema,
+        },
+      );
+    }
+
+    it("refuses when the inviter lost the right to assign the invited role", async () => {
+      const inviter = await createTestUser(tenantDb, {
+        overrides: { role_id: RoleId.ADMIN },
+      });
+      const invite = await mintInvite(inviter.id, RoleId.MANAGER);
+
+      await tenantDb
+        .updateTable("users")
+        .set({ role_id: RoleId.MANAGER })
+        .where("id", "=", inviter.id)
+        .execute();
+
+      const err: unknown = await registerWith(
+        invite,
+        "demoted-inviter@example.com",
+      ).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(ValidationError);
+      expect(err instanceof ValidationError && err.message).toBe(
+        ErrorCode.INVALID_INVITE_TOKEN,
+      );
+
+      // Refused before consumption, so the rolled-back transaction left the
+      // invite open.
+      const row = await tenantDb
+        .selectFrom("invite_tokens")
+        .select("consumed_at")
+        .where("id", "=", invite.id)
+        .executeTakeFirstOrThrow();
+      expect(row.consumed_at).toBeNull();
+    });
+
+    it("refuses when the inviter has been deactivated", async () => {
+      const inviter = await createTestUser(tenantDb, {
+        overrides: { role_id: RoleId.ADMIN },
+      });
+      const invite = await mintInvite(inviter.id, RoleId.VOLUNTEER);
+
+      await tenantDb
+        .updateTable("users")
+        .set({ is_active: false })
+        .where("id", "=", inviter.id)
+        .execute();
+
+      await expect(
+        registerWith(invite, "orphaned-invite@example.com"),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it("registers a default-role invite from an active inviter", async () => {
+      const inviter = await createTestUser(tenantDb, {
+        overrides: { role_id: RoleId.ADMIN },
+      });
+      const invite = await mintInvite(inviter.id, RoleId.VOLUNTEER);
+
+      const result = await registerWith(invite, "default-invitee@example.com");
+      expect(result.userId).toBeTruthy();
     });
   });
 

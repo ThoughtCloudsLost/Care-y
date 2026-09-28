@@ -1,10 +1,10 @@
 /**
  * Shared scrypt hashing and verification.
  *
- * Used by password.ts (64-byte keys), backup-codes.ts (32-byte keys), and
- * email-code.ts (32-byte keys). Each caller creates a hasher with its own
- * key length; the salt size (16 bytes) and serialization format
- * ("scrypt:saltHex:hashHex") are fixed.
+ * Used by password.ts createCodeHasher (32-byte keys) for email, SMS, and
+ * backup codes. Each caller creates a hasher with its own key length; the
+ * salt size (16 bytes) and serialization format ("scrypt:saltHex:hashHex")
+ * are fixed. Passwords use Argon2id (argon2id-hash.ts), not this module.
  *
  * Verification uses timing-safe comparison to prevent side-channel leaks.
  */

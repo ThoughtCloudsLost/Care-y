@@ -1,15 +1,24 @@
 /**
  * Integration tests for SMS verification code service.
  *
- * Covers: code generation and storage, successful verification (deletes row),
- * wrong code rejection, attempt tracking, max attempts deletion, expired code
- * rejection, rate limiting (90s cooldown and hourly cap of 3), caller ID
- * resolution via phone purpose resolver.
+ * Covers: code generation and storage, successful verification (marks the
+ * row consumed), wrong code rejection, attempt tracking, max attempts
+ * exhaustion, expired code rejection, rate limiting (90s cooldown and hourly
+ * cap of 3), single use under parallel verification, caller ID resolution
+ * via phone purpose resolver.
  *
  * DB integration: requires Docker test containers (DATABASE_URL).
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  afterEach,
+  vi,
+} from "vitest";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import {
@@ -24,8 +33,8 @@ import type {
   OrgIdentifiers,
 } from "../telephony/phone-resolver.js";
 import { RateLimitError, ValidationError } from "../errors.js";
-import type { OrgId, OrgSchema, CodeHash, E164 } from "@care-y/shared";
-import { e164Schema } from "@care-y/shared";
+import type { OrgId, OrgSchema, E164 } from "@care-y/shared";
+import { ErrorCode, e164Schema } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
   let testDb: TestDb;
@@ -38,6 +47,10 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
 
   afterAll(async () => {
     await testDb.cleanup();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const TEST_ORG_ID = "00000000-0000-4000-8000-000000000001" as OrgId;
@@ -101,7 +114,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
       expect(row!.attempts).toBe(0);
     });
 
-    it("deletes previous active code before creating new one", async () => {
+    it("consumes the previous active code before creating a new one", async () => {
       const user = await createTestUser(db);
       const { service } = makeService();
 
@@ -125,7 +138,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
         .where("consumed", "=", false)
         .execute();
 
-      // Only the new code should remain (unconsumed)
+      // Only the new code should remain unconsumed
       expect(rows.length).toBeLessThanOrEqual(1);
     });
 
@@ -141,30 +154,47 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
       );
     });
 
-    it("rate limits at 3 codes per hour", async () => {
+    it("rate limits at 3 codes per hour, counting codes it replaced", async () => {
+      const user = await createTestUser(db);
+      const { service, provider } = makeService();
+
+      // Only Date is faked: the DB driver keeps its real timers.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const start = Date.now();
+
+      // 3 sends, each past the cooldown. Every send replaces the
+      // previous code, and the replaced codes must still count.
+      for (let i = 0; i < 3; i++) {
+        vi.setSystemTime(start + i * 91_000);
+        await service.sendCode(user.id, "+15559876543");
+      }
+      expect(provider.smsCalls).toHaveLength(3);
+
+      vi.setSystemTime(start + 3 * 91_000);
+      await expect(service.sendCode(user.id, "+15559876543")).rejects.toThrow(
+        ErrorCode.RATE_LIMIT_HOURLY,
+      );
+      expect(provider.smsCalls).toHaveLength(3);
+    });
+
+    it("drops rows older than the hourly window on the next send", async () => {
       const user = await createTestUser(db);
       const { service } = makeService();
 
-      // Insert 3 code rows directly with recent timestamps
-      const now = Date.now();
-      for (let i = 0; i < 3; i++) {
-        await db
-          .insertInto("sms_codes")
-          .values({
-            user_id: user.id,
-            code_hash:
-              `scrypt:${"aa".repeat(16)}:${"bb".repeat(32)}` as CodeHash,
-            // expires_at set so creation time is within the hour
-            expires_at: new Date(now + 5 * 60 * 1000 - i * 90_000),
-            consumed: true, // consumed so they don't interfere with cooldown
-          })
-          .execute();
-      }
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const start = Date.now();
 
-      // Attempting to send hits hourly limit
-      await expect(service.sendCode(user.id, "+15559876543")).rejects.toThrow(
-        RateLimitError,
-      );
+      await service.sendCode(user.id, "+15559876543");
+      vi.setSystemTime(start + 2 * 60 * 60 * 1000);
+      await service.sendCode(user.id, "+15559876543");
+
+      const rows = await db
+        .selectFrom("sms_codes")
+        .select("consumed")
+        .where("user_id", "=", user.id)
+        .execute();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.consumed).toBe(false);
     });
 
     it("throws ValidationError when resolver returns null (no phones)", async () => {
@@ -200,7 +230,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
   // --- verifyCode ---
 
   describe("verifyCode", () => {
-    it("accepts correct code and deletes the row", async () => {
+    it("accepts correct code and marks the row consumed", async () => {
       const user = await createTestUser(db);
       const { service, provider } = makeService();
 
@@ -214,7 +244,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
       const result = await service.verifyCode(user.id, code);
       expect(result).toBe(true);
 
-      // Row should be deleted
+      // No active row remains, so the same code cannot be used again
       const row = await db
         .selectFrom("sms_codes")
         .selectAll()
@@ -222,6 +252,26 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
         .where("consumed", "=", false)
         .executeTakeFirst();
       expect(row).toBeUndefined();
+      await expect(service.verifyCode(user.id, code)).rejects.toThrow(
+        ErrorCode.NO_ACTIVE_CODE,
+      );
+    });
+
+    it("accepts a correct code exactly once under parallel use", async () => {
+      const user = await createTestUser(db);
+      const { service, provider } = makeService();
+
+      await service.sendCode(user.id, "+15559876543");
+      const codeMatch = /(\d{6})/.exec(provider.smsCalls[0]!.body);
+      expect(codeMatch).not.toBeNull();
+      const code = codeMatch![1] as string;
+
+      const results = await Promise.all([
+        service.verifyCode(user.id, code),
+        service.verifyCode(user.id, code),
+      ]);
+
+      expect(results.filter((r) => r)).toHaveLength(1);
     });
 
     it("rejects wrong code and increments attempts", async () => {
@@ -244,7 +294,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
       expect(row!.attempts).toBe(1);
     });
 
-    it("deletes code after max attempts (3) and throws ValidationError", async () => {
+    it("consumes code after max attempts (3) and throws ValidationError", async () => {
       const user = await createTestUser(db);
       const { service } = makeService();
 
@@ -254,12 +304,12 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
       await service.verifyCode(user.id, "000000");
       await service.verifyCode(user.id, "000001");
 
-      // Third wrong attempt deletes and throws
+      // Third wrong attempt consumes the code and throws
       await expect(service.verifyCode(user.id, "000002")).rejects.toThrow(
         ValidationError,
       );
 
-      // Row should be deleted
+      // No active row remains
       const row = await db
         .selectFrom("sms_codes")
         .selectAll()
@@ -309,7 +359,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
         .where("user_id", "=", user.id)
         .execute();
 
-      // Should detect max attempts and delete
+      // Should detect max attempts and consume the code
       await expect(service.verifyCode(user.id, "123456")).rejects.toThrow(
         ValidationError,
       );

@@ -1880,7 +1880,7 @@ describe("crypto-core error paths", () => {
     const resp = await dispatchAndWait({
       type: "rewrapTk",
       id: 711,
-      ticketId: "t-no-tk",
+      keyCacheId: "t-no-tk",
       recipientVolPublic: encode(sodium.randombytes_buf(32)),
     });
     expect(resp.ok).toBe(false);
@@ -2222,7 +2222,7 @@ describe("crypto-core rewrapTk success", () => {
     const resp = (await dispatchAndWait({
       type: "rewrapTk",
       id: 1001,
-      ticketId: "t-rewraptk",
+      keyCacheId: "t-rewraptk",
       recipientVolPublic: encode(recipientPublic),
     })) as RewrapTkResponse;
 
@@ -2241,6 +2241,76 @@ describe("crypto-core rewrapTk success", () => {
     expect(unwrappedTk).toEqual(tk);
 
     sodium.memzero(tk);
+    sodium.memzero(recipientPrivate);
+  });
+
+  it("re-wraps each key generation of one ticket from its own cache entry", async () => {
+    const sodium = requireSodium();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    const tkGen1 = generateContentKey();
+    const tkGen2 = generateContentKey();
+    const wrapGen1 = eciesEncrypt(tkGen1, volPub);
+    const wrapGen2 = eciesEncrypt(tkGen2, volPub);
+
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 1010,
+      ticketId: "t-multigen",
+      keyCacheId: "t-multigen:1",
+      ephemeralPoint: encode(wrapGen1.ephemeralPoint),
+      nonce: encode(wrapGen1.nonce),
+      wrappedKey: encode(wrapGen1.ciphertext),
+    });
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: 1011,
+      ticketId: "t-multigen",
+      keyCacheId: "t-multigen:2",
+      ephemeralPoint: encode(wrapGen2.ephemeralPoint),
+      nonce: encode(wrapGen2.nonce),
+      wrappedKey: encode(wrapGen2.ciphertext),
+    });
+    sinkMessages = [];
+
+    const recipientPrivate =
+      sodium.crypto_core_ristretto255_scalar_random() as Scalar;
+    const recipientPublic =
+      sodium.crypto_scalarmult_ristretto255_base(recipientPrivate);
+
+    const resp1 = (await dispatchAndWait({
+      type: "rewrapTk",
+      id: 1012,
+      keyCacheId: "t-multigen:1",
+      recipientVolPublic: encode(recipientPublic),
+    })) as RewrapTkResponse;
+    const resp2 = (await dispatchAndWait({
+      type: "rewrapTk",
+      id: 1013,
+      keyCacheId: "t-multigen:2",
+      recipientVolPublic: encode(recipientPublic),
+    })) as RewrapTkResponse;
+
+    expect(resp1.ok).toBe(true);
+    expect(resp2.ok).toBe(true);
+
+    const unwrapped1 = eciesDecrypt(
+      decode(resp1.ephemeralPoint) as RistrettoPoint,
+      decode(resp1.nonce) as Nonce,
+      decode(resp1.wrappedKey),
+      recipientPrivate,
+    );
+    const unwrapped2 = eciesDecrypt(
+      decode(resp2.ephemeralPoint) as RistrettoPoint,
+      decode(resp2.nonce) as Nonce,
+      decode(resp2.wrappedKey),
+      recipientPrivate,
+    );
+    expect(unwrapped1).toEqual(tkGen1);
+    expect(unwrapped2).toEqual(tkGen2);
+
+    sodium.memzero(tkGen1);
+    sodium.memzero(tkGen2);
     sodium.memzero(recipientPrivate);
   });
 });

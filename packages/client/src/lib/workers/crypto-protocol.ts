@@ -399,7 +399,12 @@ export interface OpenSelfBlobRequest {
 export interface RewrapTkRequest {
   readonly type: "rewrapTk";
   readonly id: number;
-  readonly ticketId: string;
+  /**
+   * Key-cache identity the tk was cached under (see
+   * DecryptContentRequest.keyCacheId). Callers holding several key
+   * generations of one ticket cache each under its own id.
+   */
+  readonly keyCacheId: string;
   /** New volunteer's ristretto255 public key, base64. */
   readonly recipientVolPublic: string;
 }

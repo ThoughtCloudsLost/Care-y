@@ -5,9 +5,10 @@
  * packages/server/src/scripts/seed.ts without any process/env/sodium-native
  * usage. Uses the shimmed sealed-box and secrets encryptors.
  *
- * The admin user gets a REAL scrypt password hash (produced by the shimmed
- * scrypt-hash.ts via the node-crypto-shim) for password "DemoPassword2026"
- * so that login verification exercises shim-vs-seed self-consistency.
+ * The admin user gets a REAL Argon2id password hash (produced by the
+ * product's password hasher over the sodium-native shim) for password
+ * "DemoPassword2026" so that login verification exercises seed-vs-login
+ * self-consistency.
  * Credentials match the LoginMount prefill (jdoe / DemoPassword2026).
  */
 
@@ -277,6 +278,7 @@ export async function seedStructure(
       backed_up: true,
       aaguid: null,
       ordinal: 1,
+      algorithm: "ES256",
     })
     .execute();
 
