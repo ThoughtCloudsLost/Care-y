@@ -2,18 +2,38 @@
  * The demo seed snapshot's on-disk format, shared by the Node builder
  * that writes it and the demo boot that reads it.
  *
- * A snapshot is three files:
- *   - db.tar.gz: a PGlite data directory dump (dumpDataDir("gzip")),
- *     restored with the loadDataDir constructor option.
- *   - blobs.bin: every entry of the demo's in-memory blob store, as
+ * A snapshot is three files.
+ *   - rows.bin.gz holds every row the seed wrote, gzipped. Boot runs the
+ *     product's migrations on an empty database and then inserts these
+ *     rows, so the file carries data only, never Postgres files.
+ *   - blobs.bin holds every entry of the demo's in-memory blob store, as
  *     length-prefixed key and bytes records (layout below).
- *   - manifest.json holds the build time, the content hash, and the ids
- *     and demo org keys the boot needs. {@link seedSnapshotManifestSchema}
- *     validates it.
+ *   - manifest.json holds the format version, the build time, the content
+ *     hash, the rows file's tables in load order with their row counts,
+ *     and the ids and demo org keys the boot needs.
+ *     {@link seedSnapshotManifestSchema} validates it.
  *
- * blobs.bin layout, all integers unsigned 32-bit little-endian:
- *   magic "CYSB" (4 bytes) | version | record count
- *   then per record: key length | key (UTF-8) | value length | value
+ * All integers below are unsigned 32-bit little-endian. A "string" is a
+ * byte length followed by that many bytes of UTF-8.
+ *
+ * Layout of rows.bin before gzip.
+ *   file   = "CYSR" (4 bytes), version, table count, table...
+ *   table  = schema (string), table (string), row count, column count,
+ *            column..., then the values of each column in turn, each
+ *            column's values in row order
+ *   column = name (string), kind (1 byte, 1 for text or 2 for bytes)
+ *   value  = byte length (0xFFFFFFFF for SQL NULL), value bytes
+ * Tables come in an order that satisfies every foreign key between them.
+ * A text value is Postgres's own text output for the column's type, so
+ * inserting it back parses to the identical value (timestamptz keeps its
+ * microseconds, json keeps its exact text). A bytes value is a bytea
+ * column's raw bytes. Values are stored column by column so that similar
+ * text sits together for gzip, while ciphertext, which gzip cannot
+ * shrink, is stored raw rather than inflated by hex or base64.
+ *
+ * Layout of blobs.bin.
+ *   file   = "CYSB" (4 bytes), version, record count, record...
+ *   record = key length, key (UTF-8), value length, value
  */
 
 import { z } from "zod";
@@ -29,17 +49,16 @@ import { base64Bytes } from "../schemas/validators.js";
 
 /** File names inside the snapshot directory. */
 export const SEED_SNAPSHOT_FILES = {
-  db: "db.tar.gz",
+  rows: "rows.bin.gz",
   blobs: "blobs.bin",
   manifest: "manifest.json",
 } as const;
 
 /**
- * MIME type to give the db.tar.gz Blob on restore. PGlite gunzips a
- * loadDataDir Blob when its type is one of the gzip types; this is the
- * type its own dumpDataDir("gzip") output carries.
+ * Version of the snapshot as a whole, recorded in the manifest. Bumped
+ * whenever any of the three files changes shape.
  */
-export const SEED_SNAPSHOT_DB_MIME = "application/x-gzip";
+export const SEED_SNAPSHOT_FORMAT_VERSION = 2;
 
 /** Raised when a snapshot file does not match the format. */
 export class SeedSnapshotFormatError extends Error {
@@ -67,7 +86,24 @@ const portalSchema = z.object({
   keyNotHeldTicketId: ticketIdSchema,
 });
 
+const rowsTableSchema = z.object({
+  schema: z.string().min(1),
+  table: z.string().min(1),
+  rowCount: z.number().int().nonnegative(),
+});
+
+export type SeedSnapshotRowsTable = z.infer<typeof rowsTableSchema>;
+
 export const seedSnapshotManifestSchema = z.object({
+  formatVersion: z.literal(SEED_SNAPSHOT_FORMAT_VERSION),
+  rows: z.object({
+    file: z.literal(SEED_SNAPSHOT_FILES.rows),
+    /**
+     * Every table in rows.bin.gz, in the file's order, which is an order
+     * that satisfies every foreign key between them.
+     */
+    tables: z.array(rowsTableSchema).min(1),
+  }),
   /** Wall-clock ms epoch the seed's relative timestamps were written against. */
   buildNow: z.number().int().positive(),
   /** Hex SHA-256 over the sources the snapshot is built from. */
@@ -231,4 +267,308 @@ export function decodeSeedSnapshotBlobs(
     throw new SeedSnapshotFormatError("blobs.bin has trailing bytes");
   }
   return out;
+}
+
+// ── Seeded rows ──────────────────────────────────────────────────────
+
+/**
+ * One value in rows.bin. It is Postgres text output for a text column,
+ * raw bytes for a bytea column, or null for SQL NULL.
+ */
+export type SeedSnapshotValue = string | Uint8Array | null;
+
+export type SeedSnapshotColumnKind = "text" | "bytes";
+
+export interface SeedSnapshotColumn {
+  readonly name: string;
+  readonly kind: SeedSnapshotColumnKind;
+}
+
+export interface SeedSnapshotTable {
+  readonly schema: string;
+  readonly table: string;
+  readonly columns: readonly SeedSnapshotColumn[];
+  /** Each row holds one value per column, in column order. */
+  readonly rows: readonly (readonly SeedSnapshotValue[])[];
+}
+
+const ROWS_MAGIC = "CYSR";
+const ROWS_VERSION = 1;
+const ROWS_HEADER_BYTES = ROWS_MAGIC.length + 2 * U32_BYTES;
+const NULL_LENGTH = 0xffffffff;
+const TEXT_KIND_CODE = 1;
+const BYTES_KIND_CODE = 2;
+
+function kindCode(kind: SeedSnapshotColumnKind): number {
+  return kind === "text" ? TEXT_KIND_CODE : BYTES_KIND_CODE;
+}
+
+function kindFromCode(code: number): SeedSnapshotColumnKind {
+  if (code === TEXT_KIND_CODE) return "text";
+  if (code === BYTES_KIND_CODE) return "bytes";
+  throw new SeedSnapshotFormatError(
+    `rows.bin has an unknown column kind ${String(code)}`,
+  );
+}
+
+/** Appends length-prefixed pieces and joins them once at the end. */
+class ByteWriter {
+  private readonly chunks: Uint8Array[] = [];
+  private total = 0;
+  private readonly encoder = new TextEncoder();
+
+  u32(value: number): void {
+    const chunk = new Uint8Array(U32_BYTES);
+    new DataView(chunk.buffer).setUint32(0, value, true);
+    this.push(chunk);
+  }
+
+  u8(value: number): void {
+    this.push(Uint8Array.of(value));
+  }
+
+  raw(bytes: Uint8Array): void {
+    this.push(bytes);
+  }
+
+  string(value: string): void {
+    const bytes = this.encoder.encode(value);
+    this.u32(bytes.byteLength);
+    this.push(bytes);
+  }
+
+  finish(): Uint8Array {
+    const out = new Uint8Array(this.total);
+    let offset = 0;
+    for (const chunk of this.chunks) {
+      out.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return out;
+  }
+
+  private push(chunk: Uint8Array): void {
+    this.chunks.push(chunk);
+    this.total += chunk.byteLength;
+  }
+}
+
+/** Reads rows.bin, failing with SeedSnapshotFormatError past the end. */
+class ByteReader {
+  private offset = 0;
+  private readonly bytes: Uint8Array;
+  private readonly view: DataView;
+  private readonly decoder = new TextDecoder("utf-8", { fatal: true });
+
+  constructor(bytes: Uint8Array) {
+    this.bytes = bytes;
+    this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }
+
+  u32(): number {
+    this.need(U32_BYTES);
+    const value = this.view.getUint32(this.offset, true);
+    this.offset += U32_BYTES;
+    return value;
+  }
+
+  u8(): number {
+    this.need(1);
+    const value = this.view.getUint8(this.offset);
+    this.offset += 1;
+    return value;
+  }
+
+  slice(length: number): Uint8Array {
+    this.need(length);
+    const out = this.bytes.subarray(this.offset, this.offset + length);
+    this.offset += length;
+    return out;
+  }
+
+  text(length: number): string {
+    try {
+      return this.decoder.decode(this.slice(length));
+    } catch (err: unknown) {
+      if (err instanceof SeedSnapshotFormatError) throw err;
+      throw new SeedSnapshotFormatError(
+        "rows.bin holds text that is not UTF-8",
+        { cause: err },
+      );
+    }
+  }
+
+  string(): string {
+    return this.text(this.u32());
+  }
+
+  atEnd(): boolean {
+    return this.offset === this.bytes.byteLength;
+  }
+
+  remaining(): number {
+    return this.bytes.byteLength - this.offset;
+  }
+
+  private need(length: number): void {
+    if (this.offset + length > this.bytes.byteLength) {
+      throw new SeedSnapshotFormatError("rows.bin is truncated");
+    }
+  }
+}
+
+function qualifiedName(schema: string, table: string): string {
+  return `${schema}.${table}`;
+}
+
+/**
+ * Encode tables as rows.bin, before gzip. Tables are written in the order
+ * given, which must be the load order. Throws
+ * {@link SeedSnapshotFormatError} when a row's width or a value's type
+ * does not match its columns, or a name repeats.
+ */
+export function encodeSeedSnapshotRows(
+  tables: readonly SeedSnapshotTable[],
+): Uint8Array {
+  const writer = new ByteWriter();
+  writer.raw(new TextEncoder().encode(ROWS_MAGIC));
+  writer.u32(ROWS_VERSION);
+  writer.u32(tables.length);
+
+  const seenTables = new Set<string>();
+  for (const table of tables) {
+    if (table.schema === "" || table.table === "") {
+      throw new SeedSnapshotFormatError("A rows.bin table has an empty name");
+    }
+    const name = qualifiedName(table.schema, table.table);
+    if (seenTables.has(name)) {
+      throw new SeedSnapshotFormatError(`rows.bin repeats table ${name}`);
+    }
+    seenTables.add(name);
+    const seenColumns = new Set<string>();
+    for (const column of table.columns) {
+      if (column.name === "" || seenColumns.has(column.name)) {
+        throw new SeedSnapshotFormatError(
+          `Table ${name} has an empty or repeated column name`,
+        );
+      }
+      seenColumns.add(column.name);
+    }
+    for (const row of table.rows) {
+      if (row.length !== table.columns.length) {
+        throw new SeedSnapshotFormatError(
+          `A row of ${name} has ${String(row.length)} values for ${String(table.columns.length)} columns`,
+        );
+      }
+    }
+
+    writer.string(table.schema);
+    writer.string(table.table);
+    writer.u32(table.rows.length);
+    writer.u32(table.columns.length);
+    for (const column of table.columns) {
+      writer.string(column.name);
+      writer.u8(kindCode(column.kind));
+    }
+    for (const [c, column] of table.columns.entries()) {
+      for (const row of table.rows) {
+        const value = row.at(c) ?? null;
+        if (value === null) {
+          writer.u32(NULL_LENGTH);
+        } else if (column.kind === "text" && typeof value === "string") {
+          writer.string(value);
+        } else if (column.kind === "bytes" && value instanceof Uint8Array) {
+          writer.u32(value.byteLength);
+          writer.raw(value);
+        } else {
+          throw new SeedSnapshotFormatError(
+            `Column ${name}.${column.name} holds a value that is not ${column.kind}`,
+          );
+        }
+      }
+    }
+  }
+  return writer.finish();
+}
+
+/**
+ * Decode rows.bin (already gunzipped) into its tables, in file order.
+ * Byte values are copies, independent of `bytes`. Throws
+ * {@link SeedSnapshotFormatError} on a bad header, a truncated value, an
+ * unknown column kind, a repeated name or trailing bytes.
+ */
+export function decodeSeedSnapshotRows(bytes: Uint8Array): SeedSnapshotTable[] {
+  if (bytes.byteLength < ROWS_HEADER_BYTES) {
+    throw new SeedSnapshotFormatError("rows.bin is shorter than its header");
+  }
+  const reader = new ByteReader(bytes);
+  if (reader.text(ROWS_MAGIC.length) !== ROWS_MAGIC) {
+    throw new SeedSnapshotFormatError("rows.bin has the wrong magic");
+  }
+  const version = reader.u32();
+  if (version !== ROWS_VERSION) {
+    throw new SeedSnapshotFormatError(
+      `rows.bin version ${String(version)} is not ${String(ROWS_VERSION)}`,
+    );
+  }
+  const tableCount = reader.u32();
+
+  const tables: SeedSnapshotTable[] = [];
+  const seenTables = new Set<string>();
+  for (let t = 0; t < tableCount; t++) {
+    const schema = reader.string();
+    const table = reader.string();
+    const name = qualifiedName(schema, table);
+    if (schema === "" || table === "" || seenTables.has(name)) {
+      throw new SeedSnapshotFormatError(
+        `rows.bin has an empty or repeated table name ${name}`,
+      );
+    }
+    seenTables.add(name);
+    const rowCount = reader.u32();
+    const columnCount = reader.u32();
+
+    const columns: SeedSnapshotColumn[] = [];
+    const seenColumns = new Set<string>();
+    for (let c = 0; c < columnCount; c++) {
+      const columnName = reader.string();
+      if (columnName === "" || seenColumns.has(columnName)) {
+        throw new SeedSnapshotFormatError(
+          `Table ${name} has an empty or repeated column name`,
+        );
+      }
+      seenColumns.add(columnName);
+      columns.push({ name: columnName, kind: kindFromCode(reader.u8()) });
+    }
+
+    // Every value takes at least its 4-byte length, so a count the rest of
+    // the file cannot hold is rejected before anything is allocated for it.
+    if (rowCount * columnCount * U32_BYTES > reader.remaining()) {
+      throw new SeedSnapshotFormatError("rows.bin is truncated");
+    }
+    // The file holds each column's values in turn; read them that way,
+    // then turn the columns into rows.
+    const columnValues = columns.map((column) => {
+      const values: SeedSnapshotValue[] = [];
+      for (let r = 0; r < rowCount; r++) {
+        const length = reader.u32();
+        if (length === NULL_LENGTH) {
+          values.push(null);
+        } else if (column.kind === "text") {
+          values.push(reader.text(length));
+        } else {
+          values.push(reader.slice(length).slice());
+        }
+      }
+      return values;
+    });
+    const rows = Array.from({ length: rowCount }, (_, r) =>
+      columnValues.map((values) => values.at(r) ?? null),
+    );
+    tables.push({ schema, table, columns, rows });
+  }
+  if (!reader.atEnd()) {
+    throw new SeedSnapshotFormatError("rows.bin has trailing bytes");
+  }
+  return tables;
 }

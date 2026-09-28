@@ -624,6 +624,28 @@ let ensureKeyedPromise: Promise<void> | null = null;
 let ensureKeyedResult: LoginCryptoResult | null = null;
 let derivationRecording: readonly RecordedFlowEvent[] | null = null;
 
+/** Work to run on the keyed bridge before keying counts as done. */
+export type PostKeyStep = (bridge: CryptoBridgeType) => Promise<void>;
+
+let postKeyStep: PostKeyStep | null = null;
+
+/**
+ * Register work that must finish after the worker is keyed and before
+ * any queued decrypt runs or any ensureKeyed caller proceeds. The step
+ * gets the real, unpaced bridge, since paced decrypts wait for the
+ * keying this step is part of. The phone entry registers the seed read
+ * cursor reseal here. The step runs on every keying. The keepalive's
+ * re-keying runs it again, so it must be safe to repeat. A failing step
+ * fails ensureKeyed.
+ */
+export function setPostKeyStep(step: PostKeyStep): void {
+  postKeyStep = step;
+}
+
+async function runPostKeyStep(bridge: CryptoBridge): Promise<void> {
+  if (postKeyStep !== null) await postKeyStep(bridge);
+}
+
 /**
  * Reset the ensureKeyed memos so a subsequent call runs the full
  * derivation pipeline again. Called by the keepalive recovery path
@@ -658,6 +680,7 @@ export async function ensureKeyed(): Promise<void> {
 
   const bridge = initBridge();
   if (bridge.getState() === "KEYED") {
+    await runPostKeyStep(bridge);
     initPacingBridge().resolveKeyed();
     return;
   }
@@ -750,6 +773,10 @@ async function runEnsureKeyed(): Promise<void> {
   // knows a future getVolPublic failure is a silent idle-zero, not a
   // boot-time error.
   hasEverKeyed = true;
+
+  // Outside the flow recording on purpose: the recording is replayed as
+  // the login's own derivation, and this step is not part of it.
+  await runPostKeyStep(bridge);
 
   // Unblock all queued decrypt calls in the pacing wrapper
   pacing.resolveKeyed();

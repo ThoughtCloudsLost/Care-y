@@ -105,6 +105,17 @@ import type {
   ServiceStubResult,
 } from "./server/service-stubs.js";
 
+// ── Seed identity ───────────────────────────────────────────────────
+
+/**
+ * The demo org and admin a booted engine signs in as. The structural seed
+ * returns it in the builder; a snapshot boot reads it from the manifest.
+ */
+export type EngineSeedIdentity = Pick<
+  SeedStructureResult,
+  "orgId" | "adminUserId" | "orgPublicKey"
+>;
+
 // ── Timing ──────────────────────────────────────────────────────────
 
 export interface HealthTimings {
@@ -413,7 +424,7 @@ export interface EngineSessionDeps {
   readonly createCallerFactory: typeof CreateCallerFactory;
   readonly createCallerAdapter: typeof CreateCallerAdapter;
   readonly tDb: Kysely<TenantDatabase>;
-  readonly seedResult: SeedStructureResult;
+  readonly seedResult: EngineSeedIdentity;
   readonly sealedBox: SealedBoxEncryptor;
 }
 

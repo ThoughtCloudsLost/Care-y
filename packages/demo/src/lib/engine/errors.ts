@@ -25,3 +25,27 @@ export class SeedSnapshotBuildError extends Error {
     this.name = "SeedSnapshotBuildError";
   }
 }
+
+/**
+ * Raised when the demo cannot load a seed snapshot's rows, because the
+ * file does not decode, disagrees with its manifest, or an insert fails.
+ * Nothing is left half loaded, because the load runs in one transaction.
+ */
+export class SeedSnapshotLoadError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "SeedSnapshotLoadError";
+  }
+}
+
+/**
+ * Raised when the demo cannot move a seeded read cursor's stored time by
+ * the boot's time shift, because the cursor does not open, does not parse
+ * as the product's cursor payload, or the write back fails.
+ */
+export class SeedTimeResealError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "SeedTimeResealError";
+  }
+}

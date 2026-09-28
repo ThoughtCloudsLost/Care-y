@@ -31,11 +31,8 @@ import type { PushNotificationSender } from "../../../../../server/src/notificat
 import type { NotificationService } from "../../../../../server/src/notifications/service.js";
 import type { OrgService } from "../../../../../server/src/org/service.js";
 import type { ProviderFactory } from "../../../../../server/src/telephony/factory.js";
-import {
-  DEMO_ORG_SLUG,
-  DEMO_ORG_SCHEMA,
-  type SeedStructureResult,
-} from "./seed-structure.js";
+import { DEMO_ORG_SLUG, DEMO_ORG_SCHEMA } from "./seed-structure.js";
+import type { EngineSeedIdentity } from "../engine-core.js";
 import { createDemoOprfService } from "./demo-keys.js";
 import type { SessionTokenizer } from "../../../../../server/src/crypto/session-tokenizer.js";
 import type { PasswordHasher } from "../../../../../server/src/auth/password.js";
@@ -47,7 +44,7 @@ import type { AccountServiceDeps } from "../../../../../server/src/portal/accoun
 
 export interface ServiceStubDeps {
   readonly opsKey: Buffer;
-  readonly seedResult: SeedStructureResult;
+  readonly seedResult: EngineSeedIdentity;
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
   readonly secretsEncryptor: SecretsEncryptor;

@@ -1,15 +1,22 @@
 /**
- * Demo engine: boots PGlite, runs migrations, seeds, builds the real
- * tRPC router, and returns a caller adapter usable by both the phone
- * demo and the health check.
+ * Demo engine: boots PGlite, runs the product's migrations, loads the
+ * prebuilt seed snapshot, builds the real tRPC router, and returns a
+ * caller adapter usable by both the phone demo and the health check.
  *
  * Split into two entry points:
  *   - bootDemoEngine(): shared boot sequence, returns DemoEngineResult
  *   - runHealthProofs(): health-only proof battery over the engine
  *
- * The building blocks (migrations, crypto services, admin keys, the
- * fabricated session, the portal seed) live in engine-core.ts, which the
- * Node seed snapshot builder composes too.
+ * The seed itself is built ahead of time in Node
+ * (scripts/build-seed-snapshot.ts), by replaying the shared seed data
+ * through the product's own endpoints. Boot loads its rows and blobs, then
+ * moves every seeded time forward by the gap between build time and now.
+ * The one time stored inside ciphertext, the read cursor, moves after the
+ * crypto worker is keyed (DemoEngineResult.resealSeedTimes).
+ *
+ * The building blocks (migrations, crypto services, the fabricated
+ * session, the blob store and resolver) live in engine-core.ts, which the
+ * Node snapshot builder composes too.
  */
 
 // Globals (Buffer, process.env, trpc isServer signal) MUST evaluate
@@ -22,9 +29,15 @@ import { Buffer } from "buffer";
 import { PGlite } from "@electric-sql/pglite";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
+import { decode } from "@care-y/crypto";
+import {
+  decodeSeedSnapshotBlobs,
+  parseSeedSnapshotManifest,
+  type SeedSnapshotManifest,
+} from "@care-y/shared/dev/seed-snapshot.js";
 import { isTrpcServerError } from "./caller-adapter.js";
 import { TRPCClientError } from "@trpc/client";
-import type { RoleIdValue, Permission, TicketId } from "@care-y/shared";
+import type { RoleIdValue, Permission } from "@care-y/shared";
 
 import { initDb, db, tenantDb } from "./server/db-shim.js";
 import {
@@ -32,7 +45,8 @@ import {
   getTenantMigrationCount,
 } from "./server/schema-utils-shim.js";
 import { createSealedBoxEncryptor } from "./server/sealed-box-shim.js";
-import { seedStructure, DEMO_ORG_SCHEMA } from "./server/seed-structure.js";
+import { DEMO_ORG_SCHEMA } from "./server/seed-structure.js";
+import { deriveDemoOprfScalar } from "./server/demo-keys.js";
 import {
   timeMs,
   noopLimiter,
@@ -40,27 +54,33 @@ import {
   initEngineSodium,
   migrateEngineDatabase,
   deriveEngineCryptoServices,
-  seedAdminKeys,
-  denyTicketAccess,
-  seedEnginePortal,
   createEngineSession,
   createEngineBlobResolver,
+  type EngineSeedIdentity,
   type HealthTimings,
 } from "./engine-core.js";
+import { loadSeedSnapshotRows } from "./snapshot/seed-rows.js";
+import { shiftSeedTimes } from "./snapshot/seed-time-shift.js";
+import {
+  resealReadCursors,
+  type ReadCursorResealDeps,
+} from "./snapshot/read-cursor-reseal.js";
+
+import { requireRouter } from "$lib/errors.js";
 
 import type { TenantDatabase } from "../../../../server/src/db/types.js";
 import type { BlobStore } from "../../../../server/src/storage/store.js";
 import type { DemoBlobResolver } from "../../stubs/fetch-blob.js";
 import type { Context } from "../../../../server/src/trpc/context.js";
 import type { PlatformDatabase } from "../../../../server/src/db/types.js";
-import type { SeedStructureResult } from "./server/seed-structure.js";
 import type { ProcedureProxy } from "./proc-proxy.js";
-import type { SeedMediaAssets } from "../../../../server/src/dev/seed-tickets.js";
-import type { SeedPortalResult } from "../../../../server/src/dev/seed-portal.js";
+// Type-only, through a relative path: the $lib/trpc alias points at the
+// demo's stub, and only the real client's type is wanted here.
+import type { trpc as RealTrpcClient } from "../../../../client/src/lib/trpc/index.js";
 
 // ── Exported types ──────────────────────────────────────────────────
 
-export type { HealthTimings } from "./engine-core.js";
+export type { HealthTimings, EngineSeedIdentity } from "./engine-core.js";
 
 export interface HealthProofResult {
   readonly name: string;
@@ -68,11 +88,38 @@ export interface HealthProofResult {
   readonly detail: string;
 }
 
+/** The seed snapshot's three files, as boot receives them. */
+export interface SeedSnapshotFiles {
+  /** rows.bin.gz, still gzipped. */
+  readonly rows: Uint8Array;
+  /** blobs.bin. */
+  readonly blobs: Uint8Array;
+  /** manifest.json's text. */
+  readonly manifestText: string;
+}
+
+/**
+ * Supplies the seed snapshot. The phone and the health page fetch the
+ * files the demo build ships; smoke tests read them from disk.
+ */
+export type SeedSnapshotSource = () => Promise<SeedSnapshotFiles>;
+
+/** Byte sizes of the snapshot files boot loaded. */
+export interface SeedSnapshotSizes {
+  readonly rows: number;
+  readonly blobs: number;
+  readonly manifest: number;
+}
+
+/** The crypto bridge operations the read cursor reseal uses. */
+export type SeedTimeResealBridge = ReadCursorResealDeps["bridge"];
+
 export interface DemoEngineResult {
   readonly trpc: ProcedureProxy;
   readonly timings: readonly HealthTimings[];
-  readonly seedResult: SeedStructureResult;
-  /** Seeded ticket IDs, ordered by creation. First entry has the richest thread. */
+  /** The demo org and the admin the engine is signed in as. */
+  readonly seedResult: EngineSeedIdentity;
+  /** Seeded ticket IDs. The first is the handbook story ticket, the detail deep-link target. */
   readonly ticketIds: readonly string[];
   /** Seeded KB article IDs, ordered by creation. First entry is the detail deep-link target. */
   readonly articleIds: readonly string[];
@@ -83,14 +130,27 @@ export interface DemoEngineResult {
   readonly adminCtx: Context;
   readonly volunteerCtx: Context;
   readonly appRouter: unknown;
-  /** Ticket ID whose key wrap was deleted (decrypt-denied demo). */
+  /** Ticket ID whose key wraps were removed (decrypt-denied demo). */
   readonly deniedTicketId: string;
   /** Seeded client-portal surfaces: channel and share ids, their fragments, account credentials. */
-  readonly portal: SeedPortalResult;
+  readonly portal: SeedSnapshotManifest["portal"];
   /** Map-backed blob store (greeting audio, attachments). */
   readonly blobStore: BlobStore;
   /** Blob resolver for the fetch-blob stub (recordings, attachments, kb-attachments). */
   readonly resolveBlob: DemoBlobResolver;
+  /** Milliseconds every seeded time was moved forward by at boot. */
+  readonly timeShiftMs: number;
+  /** Tickets whose read cursor resealSeedTimes moves. */
+  readonly readCursorTicketIds: readonly string[];
+  readonly snapshotSizes: SeedSnapshotSizes;
+  /**
+   * Move the time inside each seeded read cursor by timeShiftMs, through
+   * the product's read cursor calls. Needs a crypto bridge keyed as the
+   * admin; call it after keying and before any ticket query reads a
+   * cursor. Runs once: later calls share the first successful run, and a
+   * failed run can be retried.
+   */
+  resealSeedTimes(bridge: SeedTimeResealBridge): Promise<void>;
   /**
    * Mutate the signed-in user's role_id in the tenant DB and refresh
    * the cached admin user so subsequent middleware checks (requireRole)
@@ -106,6 +166,7 @@ export interface DemoEngineResult {
 export interface HealthEngine {
   readonly trpc: unknown;
   readonly timings: readonly HealthTimings[];
+  readonly snapshotSizes: SeedSnapshotSizes;
   runProofs(report: (r: HealthProofResult) => void): Promise<void>;
 }
 
@@ -115,61 +176,98 @@ export interface HealthEngine {
 export { appendToOutbox, onOutboxAppend } from "./outbox.js";
 export type { OutboxEntry } from "./outbox.js";
 
-/** Options for bootDemoEngine. All fields are optional for backward compat. */
 export interface BootDemoEngineOptions {
-  mediaAssets?: SeedMediaAssets;
-  /** English answer-greeting clip for the admin Greetings section. */
-  greetingAudioEn?: { bytes: Uint8Array };
+  /** Where the seed snapshot's files come from. */
+  readonly snapshot: SeedSnapshotSource;
+  /**
+   * Wall-clock ms epoch the seed's times are shifted to. Defaults to the
+   * time the snapshot finishes loading. Smoke tests move it so the shift
+   * is large enough to observe.
+   */
+  readonly shiftTo?: number;
 }
+
+type AppTrpc = typeof RealTrpcClient;
 
 // ── Boot ────────────────────────────────────────────────────────────
 
-export async function bootDemoEngine(
-  opts?: BootDemoEngineOptions,
-): Promise<DemoEngineResult> {
-  const timings: HealthTimings[] = [];
+async function fetchSnapshot(
+  source: SeedSnapshotSource,
+  timings: HealthTimings[],
+): Promise<SeedSnapshotFiles> {
+  const start = timeMs();
+  const files = await source();
+  timings.push({ label: "snapshot-fetch", ms: timeMs() - start });
+  return files;
+}
 
-  // 0. Init sodium and the crypto package's backend state.
+async function startDatabase(timings: HealthTimings[]): Promise<PGlite> {
+  // Sodium first: node-crypto-shim and the crypto package need it.
   const t0 = timeMs();
-  const { deriveTaggedShare } = await initEngineSodium();
+  await initEngineSodium();
   timings.push({ label: "sodium-ready", ms: timeMs() - t0 });
 
-  // 1. Boot PGlite (memory FS)
   const t1 = timeMs();
   const pg = new PGlite();
   await pg.waitReady;
   timings.push({ label: "pglite-init", ms: timeMs() - t1 });
+  return pg;
+}
+
+export async function bootDemoEngine(
+  opts: BootDemoEngineOptions,
+): Promise<DemoEngineResult> {
+  const timings: HealthTimings[] = [];
+
+  // 1. Snapshot files, sodium and PGlite (memory FS), side by side.
+  const [files, pg] = await Promise.all([
+    fetchSnapshot(opts.snapshot, timings),
+    startDatabase(timings),
+  ]);
+  // Throws SeedSnapshotFormatError on text that is not JSON, a format
+  // version other than this build's, or any field outside the schema.
+  const manifest = parseSeedSnapshotManifest(files.manifestText);
 
   // Wire up the DB shim
   initDb(pg);
 
-  // Kick off all the dynamic imports in parallel so module fetch/eval
-  // overlaps with migrations and seeding. None depends on another's
+  // 2. Platform migrations, tenant schema + tenant migrations, while the
+  // server modules load. None of the modules depends on another's
   // evaluation; the globals-init constraint (top of this file) is
   // satisfied because it is a static import that evaluates first.
-  const [
-    passwordMod,
-    seedTicketsMod,
-    seedKbMod,
-    seedPortalMod,
-    serviceStubsMod,
-    trpcMod,
-    callerAdapterMod,
-  ] = await Promise.all([
+  const tDb = tenantDb(DEMO_ORG_SCHEMA);
+  const modulesPromise = Promise.all([
     import("../../../../server/src/auth/password.js"),
-    import("../../../../server/src/dev/seed-tickets.js"),
-    import("../../../../server/src/dev/seed-kb.js"),
-    import("../../../../server/src/dev/seed-portal.js"),
     import("./server/service-stubs.js"),
     import("../../../../server/src/trpc/trpc.js"),
     import("./caller-adapter.js"),
   ]);
+  const [modules] = await Promise.all([
+    modulesPromise,
+    migrateEngineDatabase(db, tDb, timings),
+  ]);
+  const [passwordMod, serviceStubsMod, trpcMod, callerAdapterMod] = modules;
 
-  // 2-3. Platform migrations, tenant schema + tenant migrations
-  const tDb = tenantDb(DEMO_ORG_SCHEMA);
-  await migrateEngineDatabase(db, tDb, timings);
+  // 3. The snapshot's rows and blob store contents.
+  const tLoad = timeMs();
+  await loadSeedSnapshotRows(pg, files.rows, manifest);
+  const blobEntries = new Map<string, Buffer>();
+  for (const [key, bytes] of decodeSeedSnapshotBlobs(files.blobs)) {
+    blobEntries.set(
+      key,
+      Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+    );
+  }
+  const { blobStore } = createMapBlobStore(blobEntries);
+  timings.push({ label: "snapshot-load", ms: timeMs() - tLoad });
 
-  // 4. Derive crypto services
+  // 4. Move every seeded time forward to now.
+  const tShift = timeMs();
+  const timeShiftMs = (opts.shiftTo ?? Date.now()) - manifest.buildNow;
+  await shiftSeedTimes(pg, timeShiftMs);
+  timings.push({ label: "time-shift", ms: timeMs() - tShift });
+
+  // 5. Crypto services
   // The product's Argon2id hasher, running over the sodium-native shim.
   // Cost is libsodium's minimum because demo sign-ins hash in the
   // visitor's browser, and the hashes only ever land in the tab's
@@ -178,99 +276,18 @@ export async function bootDemoEngine(
   const cryptoServices = deriveEngineCryptoServices(() =>
     passwordMod.createPasswordHasher(passwordMod.AUTH_ARGON2ID_TEST_PARAMS),
   );
-  const { encryptor, indexer, secretsEncryptor, hasher, tokenizer } =
-    cryptoServices;
 
-  // 5. Structural seed
-  const t5 = timeMs();
-  const { blobStore } = createMapBlobStore();
-  const seedResult = await seedStructure({
-    platformDb: db,
-    tenantDb: tDb,
-    encryptor,
-    indexer,
-    secretsEncryptor,
-    hasher,
-    tokenizer,
-    blobStore,
-    voicemailAudio: opts?.mediaAssets?.voicemailAudio,
-    greetingAudioEn: opts?.greetingAudioEn,
-  });
-  timings.push({ label: "seed-structure", ms: timeMs() - t5 });
+  const seedResult: EngineSeedIdentity = {
+    orgId: manifest.orgId,
+    adminUserId: manifest.adminUserId,
+    orgPublicKey: Buffer.from(decode(manifest.orgPublicKey)),
+  };
+  // Deterministic, so it is the scalar the snapshot's admin keys were
+  // derived under.
+  const demoVolScalar = deriveDemoOprfScalar();
 
-  // 6. Content seed (real seed modules)
+  // 6. Build router (service stubs, provider factories, createAppRouter)
   const t6 = timeMs();
-  const orgPublicKey = seedResult.orgPublicKey;
-  const sealedBox = createSealedBoxEncryptor(orgPublicKey, 1);
-
-  const { demoVolScalar } = await seedAdminKeys(tDb, seedResult, timings);
-
-  const ticketResult = await seedTicketsMod.seedTestTickets(
-    tDb,
-    blobStore,
-    seedResult.adminUserId,
-    DEMO_ORG_SCHEMA,
-    undefined,
-    opts?.mediaAssets,
-  );
-
-  // Pick the LAST ticket for the denied demo (never ticketIds[0], which
-  // is the detail deep-link target).
-  const deniedTicketId =
-    ticketResult.ticketIds[ticketResult.ticketIds.length - 1];
-  if (deniedTicketId === undefined) {
-    throw new DemoEngineError("No seeded tickets for the denied demo");
-  }
-  await denyTicketAccess(tDb, deniedTicketId);
-
-  const kbResult = await seedKbMod.seedKbArticles(
-    tDb,
-    sealedBox,
-    seedResult.adminUserId,
-    blobStore,
-    DEMO_ORG_SCHEMA,
-    seedResult.rosterUserIds,
-  );
-
-  // Seed audit_log rows so the dashboard activity feed has entries.
-  // Spread across five event types with staggered timestamps.
-  const auditEventTypes = [
-    "ticket_created",
-    "ticket_closed",
-    "ticket_reopened",
-    "followup_added",
-    "mention",
-    "ticket_created",
-    "followup_added",
-    "ticket_closed",
-  ] as const;
-  const now = Date.now();
-  const auditRows = auditEventTypes.map((eventType, i) => {
-    const ticketId = ticketResult.ticketIds.at(
-      i % ticketResult.ticketIds.length,
-    );
-    if (ticketId === undefined) {
-      throw new DemoEngineError(
-        `ticketIds missing index ${String(i % ticketResult.ticketIds.length)}`,
-      );
-    }
-    // Stagger from 2 hours ago to 5 days ago
-    const hoursBack = 2 + i * 14;
-    const createdAt = new Date(now - hoursBack * 60 * 60 * 1000);
-    return {
-      event_type: eventType,
-      actor_id: seedResult.adminUserId,
-      ticket_id: ticketId as TicketId,
-      metadata: {},
-      created_at: createdAt,
-    };
-  });
-  await tDb.insertInto("audit_log").values(auditRows).execute();
-
-  timings.push({ label: "seed-content", ms: timeMs() - t6 });
-
-  // 7. Build router (service stubs, provider factories, createAppRouter)
-  const t7 = timeMs();
   const routerBuild = await serviceStubsMod.buildServiceStubs({
     ...cryptoServices,
     seedResult,
@@ -279,55 +296,41 @@ export async function bootDemoEngine(
     noopLimiter,
   });
   const { appRouter } = routerBuild;
-  timings.push({ label: "router-build", ms: timeMs() - t7 });
+  timings.push({ label: "router-build", ms: timeMs() - t6 });
 
-  // 7b. Portal content seed.
-  const t7b = timeMs();
-  const anchorTicketId = ticketResult.ticketIds[0];
-  if (anchorTicketId === undefined) {
-    throw new DemoEngineError("No seeded tickets to anchor the portal seed");
-  }
-  const anchorTicketKey = ticketResult.ticketKeys.get(anchorTicketId);
-  if (anchorTicketKey === undefined) {
-    throw new DemoEngineError(
-      `Ticket seed returned no content key for ${anchorTicketId}`,
-    );
-  }
-  const portalResult = await seedEnginePortal({
-    seedPortal: seedPortalMod.seedPortal,
-    tDb,
-    sealedBox,
-    crypto: cryptoServices,
-    blobStore,
-    router: routerBuild,
-    seedResult,
-    demoVolScalar,
-    deriveTaggedShare,
-    anchorTicketId,
-    anchorTicketKey,
-  });
-  timings.push({ label: "seed-portal", ms: timeMs() - t7b });
-
-  // 8. Fabricated admin session, callers and caller adapter
+  // 7. Fabricated admin session, callers and caller adapter
   const session = await createEngineSession({
     appRouter,
     createCallerFactory: trpcMod.createCallerFactory,
     createCallerAdapter: callerAdapterMod.createCallerAdapter,
     tDb,
     seedResult,
-    sealedBox,
+    sealedBox: createSealedBoxEncryptor(seedResult.orgPublicKey, 1),
   });
 
-  // Snapshot: dumpDataDir is not feasible without COOP/COEP headers
-  // (GitHub Pages restriction). Record -1 as a sentinel.
-  timings.push({ label: "snapshot-bytes", ms: -1 });
+  // 8. The read cursor reseal, run once the caller holds a keyed bridge.
+  const app = session.trpc as unknown as AppTrpc;
+  let reseal: Promise<void> | null = null;
+  async function resealSeedTimes(bridge: SeedTimeResealBridge): Promise<void> {
+    reseal ??= resealReadCursors({
+      tickets: requireRouter(app.tickets, "tickets"),
+      bridge,
+      userId: manifest.adminUserId,
+      ticketIds: manifest.readCursorTicketIds,
+      deltaMs: timeShiftMs,
+    }).catch((err: unknown) => {
+      reseal = null;
+      throw err;
+    });
+    await reseal;
+  }
 
   return {
     trpc: session.trpc,
     timings,
     seedResult,
-    ticketIds: ticketResult.ticketIds,
-    articleIds: kbResult.articleIds,
+    ticketIds: manifest.ticketIds,
+    articleIds: manifest.articleIds,
     demoVolScalar,
     platformDb: db,
     tDb,
@@ -335,10 +338,18 @@ export async function bootDemoEngine(
     adminCtx: session.adminCtx,
     volunteerCtx: session.volunteerCtx,
     appRouter,
-    deniedTicketId,
-    portal: portalResult,
+    deniedTicketId: manifest.deniedTicketId,
+    portal: manifest.portal,
     blobStore,
     resolveBlob: createEngineBlobResolver(tDb, blobStore),
+    timeShiftMs,
+    readCursorTicketIds: manifest.readCursorTicketIds,
+    snapshotSizes: {
+      rows: files.rows.byteLength,
+      blobs: files.blobs.byteLength,
+      manifest: new TextEncoder().encode(files.manifestText).byteLength,
+    },
+    resealSeedTimes,
     setSignedInRole: session.setSignedInRole,
   };
 }
@@ -711,11 +722,11 @@ export async function runHealthProofs(
     const expectedLabels = [
       "sodium-ready",
       "pglite-init",
+      "snapshot-fetch",
       "platform-migrate",
       "tenant-migrate",
-      "seed-structure",
-      "demo-key-derivation",
-      "seed-content",
+      "snapshot-load",
+      "time-shift",
       "router-build",
     ];
     const presentLabels = timings.map((t) => t.label);

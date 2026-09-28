@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import type { DemoEngineResult } from "./engine.js";
 import { bootDemoEngine } from "./engine.js";
+import {
+  SMOKE_SNAPSHOT_TIMEOUT_MS,
+  loadSmokeSnapshot,
+  smokeSnapshotSource,
+} from "./test-utils.js";
 import { isTrpcServerError } from "./caller-adapter.js";
 import { RoleId, Permission } from "@care-y/shared";
 
@@ -73,8 +78,10 @@ describe("setSignedInRole", () => {
   let engine: DemoEngineResult;
 
   beforeAll(async () => {
-    engine = await bootDemoEngine();
-  }, 120_000);
+    engine = await bootDemoEngine({
+      snapshot: smokeSnapshotSource(await loadSmokeSnapshot()),
+    });
+  }, SMOKE_SNAPSHOT_TIMEOUT_MS);
 
   it("switching to VOLUNTEER returns exactly the volunteer permission set", async () => {
     const permissions = await engine.setSignedInRole(RoleId.VOLUNTEER);

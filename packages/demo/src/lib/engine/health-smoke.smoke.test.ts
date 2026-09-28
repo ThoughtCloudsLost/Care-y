@@ -1,10 +1,16 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import type { DemoEngineResult, HealthProofResult } from "./engine.js";
 import { bootDemoEngine, runHealthProofs } from "./engine.js";
+import {
+  SMOKE_SNAPSHOT_TIMEOUT_MS,
+  loadSmokeSnapshot,
+  smokeSnapshotSource,
+} from "./test-utils.js";
 
 /**
- * CI smoke test: boots the full demo engine under Node and runs the
- * health proof battery. Every proof must report pass: true.
+ * CI smoke test: boots the full demo engine under Node from the seed
+ * snapshot and runs the health proof battery. Every proof must report
+ * pass: true.
  *
  * Uses vitest.smoke.config.ts (separate from the default jsdom project)
  * because PGlite requires a Node environment.
@@ -14,8 +20,10 @@ describe("engine health smoke", () => {
   let engine: DemoEngineResult;
 
   beforeAll(async () => {
-    engine = await bootDemoEngine();
-  }, 120_000);
+    engine = await bootDemoEngine({
+      snapshot: smokeSnapshotSource(await loadSmokeSnapshot()),
+    });
+  }, SMOKE_SNAPSHOT_TIMEOUT_MS);
 
   it("every health proof passes", async () => {
     const results: HealthProofResult[] = [];

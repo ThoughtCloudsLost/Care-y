@@ -17,8 +17,10 @@
     HealthTimings,
     HealthProofResult,
     HealthEngine,
+    SeedSnapshotSizes,
   } from "$demo/engine/engine.js";
   import { bootDemoEngine, runHealthProofs } from "$demo/engine/engine.js";
+  import { fetchSeedSnapshot } from "$demo/seed-snapshot-fetch.js";
   import { setEngineTrpc } from "../stubs/trpc.js";
   import RouteMount from "$demo/engine/RouteMount.svelte";
   import HealthProviders from "./HealthProviders.svelte";
@@ -26,10 +28,11 @@
   import ProofRow from "./ui/ProofRow.svelte";
 
   async function bootHealthEngine(): Promise<HealthEngine> {
-    const engine = await bootDemoEngine();
+    const engine = await bootDemoEngine({ snapshot: fetchSeedSnapshot });
     return {
       trpc: engine.trpc,
       timings: engine.timings,
+      snapshotSizes: engine.snapshotSizes,
       async runProofs(report: (r: HealthProofResult) => void): Promise<void> {
         return runHealthProofs(engine, report);
       },
@@ -89,6 +92,14 @@
   }
 
   let heapBytes = $state<number | null>(null);
+  let snapshotSizes = $state<SeedSnapshotSizes | null>(null);
+  let snapshotSizeLine = $derived(
+    snapshotSizes === null
+      ? null
+      : `rows ${formatBytes(snapshotSizes.rows)}, ` +
+          `blobs ${formatBytes(snapshotSizes.blobs)}, ` +
+          `manifest ${formatBytes(snapshotSizes.manifest)}`,
+  );
 
   // ── Boot sequence ──
 
@@ -100,6 +111,7 @@
 
       totalBootMs = Math.round(performance.now() - bootStart);
       timings = [...engine.timings];
+      snapshotSizes = engine.snapshotSizes;
 
       // Wire the engine's tRPC into the client shim
       setEngineTrpc(engine.trpc);
@@ -179,6 +191,9 @@
         <div class="health-total">
           Total boot: {totalBootMs} ms
         </div>
+        {#if snapshotSizeLine !== null}
+          <div class="health-memory">Seed snapshot: {snapshotSizeLine}</div>
+        {/if}
         {#if heapBytes !== null}
           <div class="health-memory">
             JS heap: {formatBytes(heapBytes)}

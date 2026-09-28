@@ -16,6 +16,7 @@ import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
 import seedVoicemailUrl from "@care-y/shared/dev/assets/seed-voicemail-en.m4a?url";
 import {
+  DEV_SEED_STORY_COUNT,
   seedReplay,
   type SeedPhoneLookup,
   type SeedProgressCallback,
@@ -93,6 +94,7 @@ export async function devSeedData(
     orgKeyManager,
     phoneLookup,
     loadVoicemail: loadSeedVoicemail,
+    storyCount: DEV_SEED_STORY_COUNT,
     ...(onProgress !== undefined ? { onProgress } : {}),
   });
 }

@@ -162,6 +162,20 @@ export interface SeedReplayResult {
   readonly readCursorTicketIds: readonly string[];
 }
 
+/**
+ * A person the replay hands tickets to. The replay matches each one to an
+ * existing account by decrypted identifier and registers only the ones it
+ * does not find, so a caller can pass people who already exist.
+ */
+export interface SeedReplayUser {
+  readonly identifier: string;
+  readonly displayName: string;
+  /** Used only when the replay registers the account. */
+  readonly roleId: RoleIdValue;
+  /** Queues to add the person to, by index into the replay's queues. */
+  readonly queueIndices: readonly number[];
+}
+
 export interface SeedReplayDeps {
   readonly client: SeedReplayClient;
   readonly bridge: SeedReplayBridge;
@@ -170,6 +184,19 @@ export interface SeedReplayDeps {
   readonly phoneLookup: (phone: string) => Promise<SeedPhoneLookup>;
   /** The seed voicemail clip's bytes. */
   readonly loadVoicemail: () => Promise<Uint8Array>;
+  /**
+   * How many generated stories to replay, on top of the handbook story
+   * ticket. The last generated story is the last ticket the replay opens.
+   */
+  readonly storyCount: number;
+  /**
+   * The people tickets are assigned to, in the order the replay draws
+   * them. The first one also works the handbook story ticket's first
+   * shift. Every one must be active, because the product refuses to
+   * assign a ticket to a deactivated account. Defaults to the dev seed's
+   * own five.
+   */
+  readonly users?: readonly SeedReplayUser[];
   readonly onProgress?: SeedProgressCallback;
 }
 
@@ -266,7 +293,8 @@ function link(href: string): PmMark {
 
 // ── Seed data definitions ────────────────────────────────────────────
 
-const SEED_TICKET_COUNT = 120;
+/** Generated stories the dev Settings seed and e2e replay. */
+export const DEV_SEED_STORY_COUNT = 120;
 
 /** The seeded org's name and colors, as in the README screenshots. */
 const SEED_ORG_NAME = "CARE-Y";
@@ -333,14 +361,8 @@ const NOTE_TYPES: readonly NoteTypeDef[] = [
 
 // ── User definitions ────────────────────────────────────────────────
 
-interface SeedUserDef {
-  identifier: string;
-  displayName: string;
-  roleId: RoleIdValue;
-  queueIndices: number[];
-}
-
-const SEED_USERS: readonly SeedUserDef[] = [
+/** The dev seed's own people, used when the caller passes none. */
+const SEED_USERS: readonly SeedReplayUser[] = [
   {
     identifier: "vol.intake",
     displayName: "Jordan Rivera",
@@ -1148,6 +1170,15 @@ async function runReplay(
       "Org public key not loaded. Complete onboarding first.",
     );
   }
+  if (!Number.isInteger(deps.storyCount) || deps.storyCount < 1) {
+    throw new SeedReplayError(
+      `Story count must be a positive integer, got ${String(deps.storyCount)}`,
+    );
+  }
+  const seedUsers = deps.users ?? SEED_USERS;
+  if (seedUsers.length === 0) {
+    throw new SeedReplayError("The replay needs at least one user");
+  }
 
   const ticketRouter = client.tickets;
   const kbRouter = client.kb;
@@ -1179,7 +1210,7 @@ async function runReplay(
   }
   const seededUserIds: Record<string, string> = {};
 
-  for (const user of SEED_USERS) {
+  for (const user of seedUsers) {
     const existingId = existingIdByIdentifier.get(user.identifier);
     if (existingId !== undefined) {
       seededUserIds[user.identifier] = existingId;
@@ -1223,7 +1254,7 @@ async function runReplay(
   }
 
   // Assign seeded users to their queues
-  for (const user of SEED_USERS) {
+  for (const user of seedUsers) {
     const userId = seededUserIds[user.identifier];
     if (userId === undefined || userId === "") continue;
     for (const qi of user.queueIndices) {
@@ -1463,8 +1494,12 @@ async function runReplay(
   // ── Step 6: Ticket stories ──────────────────────────────────────────
   // Each story is replayed through the production mutations, then the dev
   // timeline procedure spreads the written follow-ups across its times.
-  const stories = buildSeedStories(SEED_TICKET_COUNT);
-  const userIdValues = Object.values(seededUserIds).filter((id) => id !== "");
+  const stories = buildSeedStories(deps.storyCount);
+  // In the order the caller listed the users, which decides who is drawn
+  // first.
+  const userIdValues = seedUsers
+    .map((user) => seededUserIds[user.identifier] ?? "")
+    .filter((id) => id !== "");
   let otherAssignCount = 0;
   const voicemailAudio = encode(await deps.loadVoicemail());
   const quarantineRouter = client.voicemailQuarantine;

@@ -1,7 +1,7 @@
 /**
  * Builds the demo seed snapshot in Node: boots the engine on a fresh
  * PGlite, replays the shared seed data through the product's own
- * endpoints, and returns the database dump, the blob store contents and
+ * endpoints, and returns the seeded rows, the blob store contents and
  * the manifest. Writing them to disk is the caller's job
  * (scripts/build-seed-snapshot.ts).
  *
@@ -28,10 +28,19 @@ import {
   toSymmetricKey,
   type SymmetricKey,
 } from "@care-y/crypto";
-import type { NoteTypeId, QueueId, TicketId } from "@care-y/shared";
 import {
+  RoleId,
+  type NoteTypeId,
+  type QueueId,
+  type TicketId,
+  type UserId,
+} from "@care-y/shared";
+import {
+  SEED_SNAPSHOT_FILES,
+  SEED_SNAPSHOT_FORMAT_VERSION,
   seedSnapshotManifestSchema,
   encodeSeedSnapshotBlobs,
+  encodeSeedSnapshotRows,
   type SeedSnapshotManifest,
 } from "@care-y/shared/dev/seed-snapshot.js";
 
@@ -46,6 +55,7 @@ import {
   DEMO_ORG_SCHEMA,
   DEMO_ADMIN_IDENTIFIER,
   DEMO_ADMIN_PASSWORD,
+  DEMO_ROSTER,
   type SeedStructureResult,
 } from "../server/seed-structure.js";
 import { withDemoVolPrivate } from "../server/demo-keys.js";
@@ -78,12 +88,15 @@ import {
   seedReplay,
   type SeedReplayClient,
   type SeedReplayResult,
+  type SeedReplayUser,
 } from "$lib/dev/seed-replay.js";
 // Type-only, through a relative path: the $lib/trpc alias points at the
 // demo's stub, and only the real client's type is wanted here.
 import type { trpc as RealTrpcClient } from "../../../../../client/src/lib/trpc/index.js";
 
 import { withInProcessCryptoWorker } from "./in-process-crypto-worker.js";
+import { gzipBytes } from "./seed-rows.js";
+import { exportSeedSnapshotRows } from "./seed-rows-export.js";
 // Type-only (erased at runtime): the modules themselves load through
 // loadServerModules, after sodium is ready.
 import type * as ServiceStubsModule from "../server/service-stubs.js";
@@ -95,19 +108,46 @@ import type * as RelayLookupModule from "./relay-phone-lookup.js";
 
 type AppTrpc = typeof RealTrpcClient;
 
+/**
+ * Generated stories the demo seeds on top of the handbook story ticket.
+ * At 52 the My tickets and Needs attention dashboard sections and the
+ * tickets list all overflow into "See all", and every origin kind,
+ * queue, priority and status still appears.
+ */
+const DEMO_STORY_COUNT = 52;
+
+/**
+ * The roster people the replay hands tickets to. Only the active ones are
+ * listed, because the product refuses to assign a ticket to a deactivated
+ * account. Volunteers come first, so the handbook story ticket's first
+ * shift goes to a volunteer (the replay gives it to the first user) and
+ * not to the manager.
+ */
+function rosterReplayUsers(): SeedReplayUser[] {
+  const active = DEMO_ROSTER.filter((member) => member.active);
+  const volunteers = active.filter((m) => m.roleId === RoleId.VOLUNTEER);
+  const others = active.filter((m) => m.roleId !== RoleId.VOLUNTEER);
+  return [...volunteers, ...others].map((member) => ({
+    identifier: member.identifier,
+    displayName: member.displayName,
+    roleId: member.roleId,
+    queueIndices: member.queueIndices,
+  }));
+}
+
 export interface SeedSnapshotBuildInputs {
   /** Content hash of the snapshot's sources, recorded in the manifest. */
   readonly schemaHash: string;
   /** Loads the seed voicemail clip the replay attaches to tickets. */
   readonly loadVoicemail: () => Promise<Uint8Array>;
   /** English answer-greeting clip for the admin Greetings section. */
-  readonly greetingAudioEn?: Uint8Array;
+  readonly greetingAudioEn: Uint8Array;
   readonly onProgress?: (message: string) => void;
 }
 
 export interface SeedSnapshotArtifacts {
-  /** PGlite data directory dump, gzipped (db.tar.gz). */
-  readonly db: Uint8Array;
+  /** Every seeded row in the rows.bin format, gzipped (rows.bin.gz). */
+  readonly rows: Uint8Array;
   /** Blob store contents in the blobs.bin format. */
   readonly blobs: Uint8Array;
   readonly manifest: SeedSnapshotManifest;
@@ -159,6 +199,7 @@ async function runBuild(
 
     const tDb = tenantDb(DEMO_ORG_SCHEMA);
     await timed("migrate", async () => migrateEngineDatabase(db, tDb, timings));
+    await assertMigrationsWroteNoRows(pg);
 
     // Same minimum-cost Argon2id as the runtime engine: these hashes only
     // ever land in the demo's in-memory database. Imported here, not at
@@ -180,8 +221,6 @@ async function runBuild(
         secretsEncryptor: cryptoServices.secretsEncryptor,
         hasher: cryptoServices.hasher,
         tokenizer: cryptoServices.tokenizer,
-        blobStore,
-        mode: "builder",
       }),
     );
     const { demoVolScalar } = await seedAdminKeys(tDb, seedResult, timings);
@@ -203,6 +242,7 @@ async function runBuild(
       sealedBox,
     });
 
+    const usersBeforeReplay = await listUserIds(tDb);
     const replay = await withInProcessCryptoWorker(async () =>
       runReplayWithBridge({
         session,
@@ -217,21 +257,22 @@ async function runBuild(
         progress,
       }),
     );
+    assertSameUsers(usersBeforeReplay, await listUserIds(tDb));
 
     // The replay sets its own branding and its reset wipes greetings and
-    // queue memberships, so the demo's own come back after it.
+    // queue memberships. The demo's branding and greetings come back
+    // after it. The replay already gave the active roster people their
+    // queues, so only the deactivated ones, whom it never sees, get
+    // theirs here.
     await applyDemoBranding(tDb);
-    await seedPhoneGreetings(
-      tDb,
-      blobStore,
-      inputs.greetingAudioEn !== undefined
-        ? { bytes: inputs.greetingAudioEn }
-        : undefined,
-    );
+    await seedPhoneGreetings(tDb, blobStore, {
+      bytes: inputs.greetingAudioEn,
+    });
     await assignRosterQueues(
       tDb,
       seedResult.rosterUserIds,
       await listQueueIdsInOrder(tDb),
+      (member) => !member.active,
     );
     const defaultNoteTypeId = replay.noteTypeIds.at(0);
     if (defaultNoteTypeId !== undefined) {
@@ -286,13 +327,24 @@ async function runBuild(
     // build time here keeps every shifted time at or before the load time.
     const buildNow = Date.now();
 
-    const dump = await timed("dump", async () => {
-      const blob = await pg.dumpDataDir("gzip");
-      return new Uint8Array(await blob.arrayBuffer());
-    });
+    const tables = await timed("export-rows", async () =>
+      exportSeedSnapshotRows(pg),
+    );
+    const rows = await timed("encode-rows", async () =>
+      gzipBytes(encodeSeedSnapshotRows(tables)),
+    );
     const blobs = encodeSeedSnapshotBlobs(entries);
 
     const manifest = seedSnapshotManifestSchema.safeParse({
+      formatVersion: SEED_SNAPSHOT_FORMAT_VERSION,
+      rows: {
+        file: SEED_SNAPSHOT_FILES.rows,
+        tables: tables.map((table) => ({
+          schema: table.schema,
+          table: table.table,
+          rowCount: table.rows.length,
+        })),
+      },
       buildNow,
       schemaHash: inputs.schemaHash,
       adminUserId: seedResult.adminUserId,
@@ -329,7 +381,7 @@ async function runBuild(
       );
     }
 
-    return { db: dump, blobs, manifest: manifest.data, timings };
+    return { rows, blobs, manifest: manifest.data, timings };
   } finally {
     await pg.close();
   }
@@ -492,11 +544,56 @@ async function keyAndReplay(
         orgKeyManager,
         phoneLookup: relayLookup.lookup,
         loadVoicemail: deps.loadVoicemail,
+        storyCount: DEMO_STORY_COUNT,
+        users: rosterReplayUsers(),
         onProgress: deps.progress,
       }),
     );
   } finally {
     await relayLookup.close();
+  }
+}
+
+// ── Build checks ────────────────────────────────────────────────────
+
+/**
+ * Boot runs the same migrations and then inserts the snapshot's rows with
+ * no conflict rule, which is only sound while the migrations themselves
+ * write no rows into an empty database. They write none today. This
+ * fails the build if a migration starts seeding rows, so the loader gets
+ * a rule for them before any snapshot duplicates one.
+ */
+async function assertMigrationsWroteNoRows(pg: PGlite): Promise<void> {
+  const seeded = (await exportSeedSnapshotRows(pg)).filter(
+    (table) => table.rows.length > 0,
+  );
+  if (seeded.length > 0) {
+    const names = seeded.map((t) => `${t.schema}.${t.table}`).join(", ");
+    throw new SeedSnapshotBuildError(
+      `Migrations wrote rows into an empty database (${names}); the snapshot loader has no rule for them`,
+    );
+  }
+}
+
+async function listUserIds(tDb: Kysely<TenantDatabase>): Promise<UserId[]> {
+  const rows = await tDb.selectFrom("users").select("id").execute();
+  return rows.map((r) => r.id);
+}
+
+/**
+ * The replay must find every roster person it is given. An account it
+ * registered would be a second set of people beside the roster.
+ */
+function assertSameUsers(
+  before: readonly UserId[],
+  after: readonly UserId[],
+): void {
+  const known = new Set<string>(before);
+  const added = after.filter((id) => !known.has(id));
+  if (added.length > 0 || after.length !== before.length) {
+    throw new SeedSnapshotBuildError(
+      `The replay changed the user list (${String(added.length)} added) instead of reusing the roster`,
+    );
   }
 }
 

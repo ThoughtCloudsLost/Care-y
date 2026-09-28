@@ -9,9 +9,11 @@ import {
   type Mock,
 } from "vitest";
 import { getSodium, requireSodium, encode } from "@care-y/crypto";
+import { RoleId } from "@care-y/shared";
 import { SEED_HANDBOOK_TICKET } from "@care-y/shared/dev/seed-handbook-ticket.js";
 import { SeedReplayError } from "$lib/errors.js";
 import {
+  DEV_SEED_STORY_COUNT,
   seedReplay,
   type SeedPhoneLookup,
   type SeedReplayBridge,
@@ -295,6 +297,7 @@ describe("seedReplay", () => {
       orgKeyManager: { getPublicKey: () => orgPublicKey },
       phoneLookup,
       loadVoicemail,
+      storyCount: DEV_SEED_STORY_COUNT,
       onProgress: (message) => progress.push(message),
     };
   });
@@ -448,5 +451,97 @@ describe("seedReplay", () => {
     for (const input of inputsOf(server.calls, "dev.seedVoicemail")) {
       expect(readField(input, "audio")).toBe(audio);
     }
+  });
+
+  it("opens one ticket per generated story plus the handbook ticket", async () => {
+    const result = await seedReplay({ ...deps, storyCount: 52 });
+
+    expect(result.ticketIds).toHaveLength(53);
+    expect(result.ticketIds[0]).toBe(handbookTicketId());
+  });
+
+  it("rejects a story count that is not a positive integer before calling anything", async () => {
+    await expect(seedReplay({ ...deps, storyCount: 0 })).rejects.toBeInstanceOf(
+      SeedReplayError,
+    );
+    await expect(
+      seedReplay({ ...deps, storyCount: 2.5 }),
+    ).rejects.toBeInstanceOf(SeedReplayError);
+    expect(server.calls).toHaveLength(0);
+  });
+
+  it("assigns to the users it is given, finding existing accounts instead of registering them", async () => {
+    // "tchen" already has an account; "newcomer" does not.
+    server.handlers.set("auth.listUsers", () => [
+      { id: "existing-user", encryptedIdentifier: "sealed:tchen" },
+    ]);
+    server.handlers.set("auth.register", () => ({
+      user: { id: "registered-user" },
+    }));
+    const bridge: SeedReplayBridge = {
+      ...fake.bridge,
+      orgDecryptBatch(items) {
+        return Promise.resolve(
+          items.map((item) => ({
+            cacheKey: item.cacheKey,
+            plaintext: item.ciphertext.startsWith("sealed:")
+              ? item.ciphertext.slice("sealed:".length)
+              : null,
+            generation: null,
+          })),
+        );
+      },
+    };
+
+    await seedReplay({
+      ...deps,
+      bridge,
+      storyCount: 52,
+      users: [
+        {
+          identifier: "tchen",
+          displayName: "Tao Chen",
+          roleId: RoleId.VOLUNTEER,
+          queueIndices: [0, 1],
+        },
+        {
+          identifier: "newcomer",
+          displayName: "New Comer",
+          roleId: RoleId.VOLUNTEER,
+          queueIndices: [2],
+        },
+      ],
+    });
+
+    const registered = inputsOf(server.calls, "auth.register").map((input) =>
+      readString(input, "identifier"),
+    );
+    expect(registered).toEqual(["newcomer"]);
+
+    const memberships = inputsOf(server.calls, "tickets.addQueueMember")
+      .map((input) => ({
+        queueId: readField(input, "queueId"),
+        userId: readField(input, "userId"),
+      }))
+      .filter((m) => m.userId !== ADMIN_ID);
+    expect(memberships).toEqual([
+      { queueId: "queue-1", userId: "existing-user" },
+      { queueId: "queue-2", userId: "existing-user" },
+      { queueId: "queue-3", userId: "registered-user" },
+    ]);
+
+    const assignInputs = inputsOf(server.calls, "tickets.assignTo");
+    const targets = assignInputs
+      .map((input) => readField(input, "targetUserId"))
+      .filter((target) => target !== null);
+    for (const target of targets) {
+      expect(["existing-user", "registered-user"]).toContain(target);
+    }
+    // The first user listed works the handbook ticket's first shift.
+    const handbookTarget = assignInputs
+      .filter((input) => readField(input, "ticketId") === handbookTicketId())
+      .map((input) => readField(input, "targetUserId"))
+      .find((target) => target !== null);
+    expect(handbookTarget).toBe("existing-user");
   });
 });

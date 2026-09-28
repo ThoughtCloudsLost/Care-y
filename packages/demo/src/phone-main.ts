@@ -1,13 +1,8 @@
 import { mount } from "svelte";
 import * as m from "$lib/paraglide/messages.js";
 import type { DemoEngineResult } from "./lib/engine/engine.js";
-import type { SeedMediaAssets } from "../../server/src/dev/seed-tickets.js";
-import {
-  DEMO_VOICEMAIL_URL,
-  DEMO_VOICEMAIL_DURATION_S,
-  DEMO_DOCUMENT_IMAGE_URLS,
-  DEMO_GREETING_EN_URL,
-} from "./lib/media-assets.js";
+import { fetchSeedSnapshot } from "./lib/seed-snapshot-fetch.js";
+import { setPostKeyStep } from "$lib/crypto/context.js";
 import { setEngineTrpc } from "./stubs/trpc.js";
 import { setEngineBlobResolver } from "./stubs/fetch-blob.js";
 import { traceFlowLocal, buildFlowDetail } from "./lib/flow-events.js";
@@ -217,7 +212,7 @@ window.addEventListener(
 // Engine boot (starts after the first frame commits)
 // -----------------------------------------------------------------------
 
-// Dynamic import moves the engine (PGlite, migrations, seeds, router)
+// Dynamic import moves the engine (PGlite, migrations, seed load, router)
 // off the initial chunk. Issuing the import at module evaluation still
 // put the chunk's fetch, parse, and wasm compile in contention with the
 // login screen's first paint on this same thread, so the import waits
@@ -233,77 +228,23 @@ const afterFirstPaint = new Promise<void>((resolve) => {
   }
 });
 
-/** Fetch a URL to Uint8Array. Returns null on any failure. */
-async function fetchToBytes(url: string): Promise<Uint8Array | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    return new Uint8Array(await res.arrayBuffer());
-  } catch {
-    return null;
-  }
-}
-
-/** Fetch all narrative media assets in parallel, falling back to
- *  undefined (synthetic generators) on any individual failure. */
-async function loadMediaAssets(): Promise<SeedMediaAssets | undefined> {
-  try {
-    const [voicemailBytes, ...imageResults] = await Promise.all([
-      fetchToBytes(DEMO_VOICEMAIL_URL),
-      ...DEMO_DOCUMENT_IMAGE_URLS.map(async (img) => {
-        const bytes = await fetchToBytes(img.url);
-        return bytes !== null ? { bytes, contentType: img.contentType } : null;
-      }),
-    ]);
-
-    const mediaAssets: SeedMediaAssets = {};
-
-    if (voicemailBytes !== null) {
-      mediaAssets.voicemailAudio = {
-        bytes: voicemailBytes,
-        durationSeconds: DEMO_VOICEMAIL_DURATION_S,
-      };
-    }
-
-    const validImages = imageResults.filter(
-      (r): r is { bytes: Uint8Array; contentType: string } => r !== null,
-    );
-    if (validImages.length > 0) {
-      mediaAssets.documentImages = validImages;
-    }
-
-    // Return undefined when nothing loaded so the seed falls back entirely
-    if (
-      mediaAssets.voicemailAudio === undefined &&
-      mediaAssets.documentImages === undefined
-    ) {
-      return undefined;
-    }
-
-    return mediaAssets;
-  } catch {
-    console.warn(
-      "[demo] Failed to load narrative media assets, using generated placeholders",
-    );
-    return undefined;
-  }
-}
-
 const enginePromise: Promise<DemoEngineResult> = afterFirstPaint.then(
   async () => {
     performance.mark("demo-engine-import-start");
-    const [mod, mediaAssets, greetingBytes] = await Promise.all([
-      import("./lib/engine/engine.js"),
-      loadMediaAssets(),
-      fetchToBytes(DEMO_GREETING_EN_URL),
-    ]);
-    return mod.bootDemoEngine({
-      mediaAssets,
-      greetingAudioEn:
-        greetingBytes !== null ? { bytes: greetingBytes } : undefined,
-    });
+    const mod = await import("./lib/engine/engine.js");
+    // Boot downloads the prebuilt seed snapshot while sodium and PGlite
+    // start; the snapshot carries every seeded row and media blob.
+    return mod.bootDemoEngine({ snapshot: fetchSeedSnapshot });
   },
 );
+
+// The seed's read cursors store their time inside ciphertext, so the
+// boot's time shift reaches them only once the crypto worker is keyed.
+// Registered before mount, so it is in place before any keying starts.
+setPostKeyStep(async (bridge) => {
+  const engine = await enginePromise;
+  await engine.resealSeedTimes(bridge);
+});
 
 // setEngineTrpc accepts a Promise: calls to trpc.* before boot
 // completes will await it. A rejected boot surfaces through the
@@ -311,7 +252,7 @@ const enginePromise: Promise<DemoEngineResult> = afterFirstPaint.then(
 setEngineTrpc(enginePromise.then((e) => e.trpc));
 setEngineBlobResolver(enginePromise.then((e) => e.resolveBlob));
 
-// Measurement hook: marks when the engine (DB, migrations, seeds,
+// Measurement hook: marks when the engine (DB, migrations, seed load,
 // router) is ready. Read via performance.getEntriesByName in devtools.
 enginePromise.then(
   () => {

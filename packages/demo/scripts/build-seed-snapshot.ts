@@ -1,5 +1,5 @@
 /**
- * Demo seed snapshot builder: writes db.tar.gz, blobs.bin and
+ * Demo seed snapshot builder. Writes rows.bin.gz, blobs.bin and
  * manifest.json to packages/demo/.seed-snapshot/, skipping the build when
  * the manifest's schemaHash already matches the current sources.
  *
@@ -42,7 +42,7 @@ export const DEFAULT_SEED_SNAPSHOT_DIR = fileURLToPath(
 );
 
 /** Bumped when the hashing scheme itself changes. */
-const HASH_SCHEME = "care-y-seed-snapshot-v1";
+const HASH_SCHEME = "care-y-seed-snapshot-v2";
 
 /**
  * Sources whose content decides the snapshot, relative to the repo root.
@@ -58,6 +58,8 @@ const HASHED_SOURCES: readonly string[] = [
   "packages/demo/scripts/build-seed-snapshot.ts",
   "packages/demo/src/lib/engine/snapshot",
   "packages/demo/src/lib/engine/engine-core.ts",
+  // The migration provider decides which migrations the build runs.
+  "packages/demo/src/lib/engine/server/schema-utils-shim.ts",
   "packages/demo/src/lib/engine/server/service-stubs.ts",
   "packages/demo/src/lib/engine/server/demo-keys.ts",
   "packages/server/src/dev/dev-service.ts",
@@ -147,7 +149,7 @@ async function readExistingManifest(
 async function snapshotFilesExist(outDir: string): Promise<boolean> {
   const present = new Set(await readdir(outDir));
   return (
-    present.has(SEED_SNAPSHOT_FILES.db) &&
+    present.has(SEED_SNAPSHOT_FILES.rows) &&
     present.has(SEED_SNAPSHOT_FILES.blobs)
   );
 }
@@ -214,7 +216,10 @@ export async function buildSeedSnapshot(
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
   try {
-    await writeFile(path.join(staging, SEED_SNAPSHOT_FILES.db), artifacts.db);
+    await writeFile(
+      path.join(staging, SEED_SNAPSHOT_FILES.rows),
+      artifacts.rows,
+    );
     await writeFile(
       path.join(staging, SEED_SNAPSHOT_FILES.blobs),
       artifacts.blobs,
@@ -234,7 +239,7 @@ export async function buildSeedSnapshot(
   }
 
   progress(
-    `wrote ${outDir} (db ${String(artifacts.db.byteLength)} bytes, blobs ${String(artifacts.blobs.byteLength)} bytes)`,
+    `wrote ${outDir} (rows ${String(artifacts.rows.byteLength)} bytes, blobs ${String(artifacts.blobs.byteLength)} bytes)`,
   );
   return { outDir, skipped: false, manifest: artifacts.manifest };
 }
@@ -242,7 +247,8 @@ export async function buildSeedSnapshot(
 export interface SeedSnapshotContents {
   /** Every entry name in the snapshot directory. */
   readonly entries: readonly string[];
-  readonly db: Uint8Array<ArrayBuffer>;
+  /** rows.bin.gz, still gzipped, as the demo boot receives it. */
+  readonly rows: Uint8Array<ArrayBuffer>;
   readonly blobs: Uint8Array<ArrayBuffer>;
   readonly manifest: SeedSnapshotManifest;
 }
@@ -251,9 +257,9 @@ export interface SeedSnapshotContents {
 export async function readSeedSnapshot(
   dir: string,
 ): Promise<SeedSnapshotContents> {
-  const [entries, db, blobs, manifestText] = await Promise.all([
+  const [entries, rows, blobs, manifestText] = await Promise.all([
     readdir(dir),
-    readFile(path.join(dir, SEED_SNAPSHOT_FILES.db)),
+    readFile(path.join(dir, SEED_SNAPSHOT_FILES.rows)),
     readFile(path.join(dir, SEED_SNAPSHOT_FILES.blobs)),
     readFile(path.join(dir, SEED_SNAPSHOT_FILES.manifest), {
       encoding: "utf-8",
@@ -261,7 +267,7 @@ export async function readSeedSnapshot(
   ]);
   return {
     entries,
-    db: new Uint8Array(db),
+    rows: new Uint8Array(rows),
     blobs: new Uint8Array(blobs),
     manifest: parseSeedSnapshotManifest(manifestText),
   };

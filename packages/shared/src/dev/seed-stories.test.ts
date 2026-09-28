@@ -19,7 +19,7 @@ import {
 import { SEED_HANDBOOK_TICKET } from "./seed-handbook-ticket.js";
 
 const DAY = 1_440;
-const COUNTS = [120, 106] as const;
+const COUNTS = [120, 106, 52] as const;
 
 function stepsOf(story: SeedStory, kind: SeedStep["kind"]): SeedStep[] {
   return story.steps.filter((s) => s.kind === kind);

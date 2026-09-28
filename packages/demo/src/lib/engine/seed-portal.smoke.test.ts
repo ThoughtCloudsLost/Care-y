@@ -33,10 +33,16 @@ import {
   toRistrettoPoint,
   toSalt,
 } from "@care-y/crypto";
+import { SEED_HANDBOOK_TICKET } from "@care-y/shared/dev/seed-handbook-ticket.js";
 import { decryptFieldContent } from "$lib/portal/intake-form-crypto.js";
 
 import type { DemoEngineResult } from "./engine.js";
 import { bootDemoEngine } from "./engine.js";
+import {
+  SMOKE_SNAPSHOT_TIMEOUT_MS,
+  loadSmokeSnapshot,
+  smokeSnapshotSource,
+} from "./test-utils.js";
 import type { Context } from "../../../../server/src/trpc/context.js";
 import { isTrpcServerError } from "./caller-adapter.js";
 
@@ -127,16 +133,39 @@ interface PortalCaller {
   };
 }
 
+/** Follow-up types the portal mirrors (the reseed service's copy types). */
+const PORTAL_COPY_TYPES: ReadonlySet<string> = new Set([
+  "message",
+  "sms_outbound",
+  "sms_inbound",
+  "email_outbound",
+  "email_inbound",
+]);
+
+/**
+ * The story ticket's rows the portal mirrors: every public row of a copy
+ * type the replay writes. The merge rows stay out of the replay.
+ */
+const MIRRORED_STORY_ROWS = SEED_HANDBOOK_TICKET.followUps.filter(
+  (fu) =>
+    fu.mergedIn !== true &&
+    fu.isPrivate !== true &&
+    fu.source !== "system" &&
+    PORTAL_COPY_TYPES.has(fu.type ?? "message"),
+).length;
+
 describe("client portal seed", () => {
   let engine: DemoEngineResult;
   let caller: PortalCaller;
 
   beforeAll(async () => {
-    engine = await bootDemoEngine();
+    engine = await bootDemoEngine({
+      snapshot: smokeSnapshotSource(await loadSmokeSnapshot()),
+    });
     caller = (engine.callerFactory as (ctx: Context) => PortalCaller)(
       engine.adminCtx,
     );
-  }, 180_000);
+  }, SMOKE_SNAPSHOT_TIMEOUT_MS);
 
   it("seeds a custom form the real client can decrypt", async () => {
     const form = await caller.clientPortal.getIntakeForm({
@@ -203,13 +232,11 @@ describe("client portal seed", () => {
     // The full text-bearing conversation from the anchor ticket thread,
     // plus the two messages seedSecureLink wrote. Mirrors every eligible
     // follow-up (message, sms_outbound, sms_inbound, email_outbound,
-    // email_inbound) excluding private and system rows.
-    // The anchor ticket's eligible follow-ups plus the two seedSecureLink
-    // wrote. Eligible is wider than the explicitly-typed rows suggest:
-    // seed-tickets defaults a missing type to "message", so the untyped
-    // entries count too. An exact number is the cheapest leak guard we
-    // have, since over-mirroring shows up here as a larger thread.
-    expect(result.messages.length).toBe(34);
+    // email_inbound) excluding private and system rows. A row with no
+    // type is a "message", so the untyped entries count too. An exact
+    // number is the cheapest leak guard we have, since over-mirroring
+    // shows up here as a larger thread.
+    expect(result.messages.length).toBe(MIRRORED_STORY_ROWS + 2);
     expect(result.ticketId).not.toBeNull();
 
     // The key check opens under the OPRF-derived keypair: blind the seed,
@@ -233,7 +260,7 @@ describe("client portal seed", () => {
     _sodium.memzero(keypair.clientPrivate);
   }, 60_000);
 
-  it("portal bootstrap returns recordings, attachments, and call entries for the anchor ticket", async () => {
+  it("portal bootstrap returns the anchor ticket's attachments and call entries, but not its earlier voicemail", async () => {
     const seed = decode(engine.portal.portalFragment);
     const auth = deriveChannelAuth(seed);
     const result = await caller.clientPortal.portalBootstrap({
@@ -241,11 +268,14 @@ describe("client portal seed", () => {
       auth: encode(auth),
     });
 
-    // The anchor ticket has one voicemail recording sealed to the channel.
-    expect(result.recordings.length).toBeGreaterThanOrEqual(1);
+    // The voicemail arrived before the client had a portal channel, so
+    // ingest stored it for volunteers only and never sealed a copy the
+    // channel can open. Media from before the channel is not backfilled;
+    // the portal still lists the call it came with.
+    expect(result.recordings).toHaveLength(0);
 
-    // Two file attachments on the anchor ticket: the referral letter image
-    // and the housing checklist.
+    // Two file attachments on the anchor ticket: the photo and the
+    // housing checklist, both uploaded with a file-key wrap.
     expect(result.attachments.length).toBeGreaterThanOrEqual(2);
 
     // Two phone_call follow-ups: a no_answer and a completed call.
@@ -257,11 +287,11 @@ describe("client portal seed", () => {
 
   // The tests above prove the carrier rows exist and are shaped right. They
   // would still pass if the seed sealed under the wrong slot or AAD, because
-  // nothing there opens what it wrote. This one does: the seed builds the
-  // file-key envelope in two phases (org wrap at ticket-seed time, client
-  // seal at portal-seed time) rather than through the production ingest
-  // helper, so the two implementations agreeing is an assertion, not a given.
-  it("seals anchor ticket media so the channel keypair opens it", async () => {
+  // nothing there opens what it wrote. This one does: the file-key envelope
+  // is built in two phases (the org wrap at upload time, the client seal at
+  // portal-seed time) rather than through the production ingest helper, so
+  // the two agreeing is an assertion, not a given.
+  it("seals anchor ticket attachments so the channel keypair opens them", async () => {
     const seed = decode(engine.portal.portalFragment);
     const auth = deriveChannelAuth(seed);
     const result = await caller.clientPortal.portalBootstrap({
@@ -298,16 +328,19 @@ describe("client portal seed", () => {
           ),
         );
 
-      const recording = result.recordings[0];
-      expect(recording).toBeDefined();
-      if (recording !== undefined) {
-        expect(unseal(recording).fileKey).toHaveLength(32);
+      expect(result.attachments.length).toBeGreaterThan(0);
+      const opened = result.attachments.map((a) => unseal(a));
+      for (const payload of opened) {
+        expect(payload.fileKey).toHaveLength(32);
       }
 
       // The filename rides inside the sealed payload, so recovering it end to
       // end also covers the encrypted_filename decrypt the seed does under tk.
-      const filenames = result.attachments.map((a) => unseal(a).filename);
+      const filenames = opened.map((payload) => payload.filename);
       expect(filenames).toContain("housing-checklist.txt");
+
+      // Nothing the channel can open exists for the earlier voicemail.
+      expect(result.recordings).toHaveLength(0);
     } finally {
       _sodium.memzero(oprfInput);
       _sodium.memzero(oprfOutput);

@@ -7,8 +7,11 @@
  * serverHealthAliases and serverRedirectPlugin() map server module
  * specifiers to browser-compatible shims under src/lib/engine/server/.
  * The vite.config.ts consumes them to wire resolve.alias entries.
+ *
+ * seedSnapshotPlugin() serves the prebuilt seed snapshot in dev and ships
+ * it with the build.
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Alias, Plugin } from "vite";
@@ -428,6 +431,171 @@ export function clientStaticAssetsPlugin(): Plugin {
         // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time constant path
         source: readFileSync(path.join(staticDir, iconFile)),
       });
+    },
+  };
+}
+
+// -----------------------------------------------------------------------
+// Seed snapshot
+// -----------------------------------------------------------------------
+
+/** Import this id to get the seed snapshot's fetch URLs. */
+const SEED_SNAPSHOT_MODULE_ID = "virtual:care-y-seed-snapshot";
+const RESOLVED_SEED_SNAPSHOT_MODULE_ID = `\0${SEED_SNAPSHOT_MODULE_ID}`;
+
+const demoDir = path.dirname(fileURLToPath(import.meta.url));
+
+// The snapshot builder's output (scripts/build-seed-snapshot.ts), under
+// the file names SEED_SNAPSHOT_FILES gives in
+// packages/shared/src/dev/seed-snapshot.ts. Each path is spelled out so
+// every read below is of a fixed path.
+const SEED_SNAPSHOT_ROWS_PATH = path.resolve(
+  demoDir,
+  ".seed-snapshot",
+  "rows.bin.gz",
+);
+const SEED_SNAPSHOT_BLOBS_PATH = path.resolve(
+  demoDir,
+  ".seed-snapshot",
+  "blobs.bin",
+);
+const SEED_SNAPSHOT_MANIFEST_PATH = path.resolve(
+  demoDir,
+  ".seed-snapshot",
+  "manifest.json",
+);
+
+type SeedSnapshotPart = "rows" | "blobs" | "manifest";
+
+const SEED_SNAPSHOT_PARTS: readonly SeedSnapshotPart[] = [
+  "rows",
+  "blobs",
+  "manifest",
+];
+
+function seedSnapshotPartExists(part: SeedSnapshotPart): boolean {
+  switch (part) {
+    case "rows":
+      return existsSync(SEED_SNAPSHOT_ROWS_PATH);
+    case "blobs":
+      return existsSync(SEED_SNAPSHOT_BLOBS_PATH);
+    case "manifest":
+      return existsSync(SEED_SNAPSHOT_MANIFEST_PATH);
+  }
+}
+
+function readSeedSnapshotPart(part: SeedSnapshotPart): Buffer {
+  switch (part) {
+    case "rows":
+      return readFileSync(SEED_SNAPSHOT_ROWS_PATH);
+    case "blobs":
+      return readFileSync(SEED_SNAPSHOT_BLOBS_PATH);
+    case "manifest":
+      return readFileSync(SEED_SNAPSHOT_MANIFEST_PATH);
+  }
+}
+
+/**
+ * Names the built assets take, before Vite adds its content hash. None
+ * ends in .gz, so no static host labels the gzipped rows file with a
+ * Content-Encoding header and has the browser unzip it before the demo
+ * does.
+ */
+function seedSnapshotAssetName(part: SeedSnapshotPart): string {
+  return part === "manifest"
+    ? "seed-snapshot-manifest.json"
+    : `seed-snapshot-${part}.bin`;
+}
+
+function missingSeedSnapshotMessage(): string | null {
+  const missing = SEED_SNAPSHOT_PARTS.filter(
+    (part) => !seedSnapshotPartExists(part),
+  );
+  if (missing.length === 0) return null;
+  return (
+    `The demo seed snapshot is missing (${missing.join(", ")} in ` +
+    `${path.join(demoDir, ".seed-snapshot")}). Build it with ` +
+    '"pnpm --filter @care-y/demo seed-snapshot", then start again.'
+  );
+}
+
+/**
+ * Ships the seed snapshot the demo boots from. The phone and health
+ * entries import `virtual:care-y-seed-snapshot` for the files' URLs.
+ *
+ * Dev serves the three files from .seed-snapshot/ on every request, so a
+ * rebuilt snapshot takes effect on the next reload. The build emits them
+ * as hashed assets, and the URLs point at those. Neither builds the
+ * snapshot: the build script runs the builder first, and in dev a
+ * missing snapshot stops the server with the command that builds it. A
+ * snapshot left stale by source changes is not detected in dev; rerun
+ * the command.
+ */
+export function seedSnapshotPlugin(): Plugin {
+  let command: "build" | "serve" = "serve";
+  let base = "/";
+
+  const devUrl = (part: SeedSnapshotPart): string =>
+    `${base}__seed-snapshot/${part}`;
+
+  return {
+    name: "care-y-demo-seed-snapshot",
+    configResolved(config): void {
+      command = config.command;
+      base = config.base;
+    },
+    buildStart(): void {
+      const message = missingSeedSnapshotMessage();
+      if (message !== null) this.error(message);
+    },
+    configureServer(server): void {
+      server.middlewares.use((req, res, next) => {
+        const url = (req.url ?? "").split("?")[0] ?? "";
+        const part = SEED_SNAPSHOT_PARTS.find((p) => url === devUrl(p));
+        if (part === undefined) {
+          next();
+          return;
+        }
+        if (!seedSnapshotPartExists(part)) {
+          res.statusCode = 404;
+          res.setHeader("Content-Type", "text/plain; charset=utf-8");
+          res.end(missingSeedSnapshotMessage() ?? "Seed snapshot not found");
+          return;
+        }
+        res.setHeader(
+          "Content-Type",
+          part === "manifest"
+            ? "application/json; charset=utf-8"
+            : "application/octet-stream",
+        );
+        res.setHeader("Cache-Control", "no-store");
+        res.end(readSeedSnapshotPart(part));
+      });
+    },
+    resolveId(id): string | null {
+      return id === SEED_SNAPSHOT_MODULE_ID
+        ? RESOLVED_SEED_SNAPSHOT_MODULE_ID
+        : null;
+    },
+    load(id): string | null {
+      if (id !== RESOLVED_SEED_SNAPSHOT_MODULE_ID) return null;
+      if (command === "serve") {
+        const urls = {
+          rows: devUrl("rows"),
+          blobs: devUrl("blobs"),
+          manifest: devUrl("manifest"),
+        };
+        return `export const seedSnapshotUrls = ${JSON.stringify(urls)};\n`;
+      }
+      const lines = SEED_SNAPSHOT_PARTS.map((part) => {
+        const referenceId = this.emitFile({
+          type: "asset",
+          name: seedSnapshotAssetName(part),
+          source: readSeedSnapshotPart(part),
+        });
+        return `  ${part}: import.meta.ROLLUP_FILE_URL_${referenceId},`;
+      });
+      return `export const seedSnapshotUrls = {\n${lines.join("\n")}\n};\n`;
     },
   };
 }
