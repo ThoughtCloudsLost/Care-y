@@ -21,7 +21,7 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "../tickets/access.js";
-import { ForbiddenError, ValidationError } from "../errors.js";
+import { ForbiddenError } from "../errors.js";
 import { encode } from "@care-y/crypto";
 import { Permission, type OrgSchema } from "@care-y/shared";
 import type { TicketId, UserId } from "@care-y/shared";
@@ -218,17 +218,4 @@ export async function convertIntakeKeyWrap(
 
     return { converted: true };
   });
-}
-
-/**
- * Typed error for the key rotation guard: rotation cannot proceed while
- * intake wraps are pending conversion.
- */
-export class PendingIntakeWrapsError extends ValidationError {
-  constructor() {
-    super(
-      "Cannot rotate org key while intake_key_wraps rows exist. " +
-        "Convert all pending intake wraps before rotating.",
-    );
-  }
 }

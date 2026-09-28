@@ -25,7 +25,10 @@ import {
   mockRes,
   type TestDb,
 } from "../test-utils.js";
-import { createScryptHasher } from "../auth/password.js";
+import {
+  AUTH_ARGON2ID_TEST_PARAMS,
+  createPasswordHasher,
+} from "../auth/password.js";
 import { createOrgService, type OrgService } from "../org/service.js";
 import { createAuthService } from "../auth/service.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
@@ -60,7 +63,7 @@ describe.skipIf(!HAS_DB)("context factory (DB integration)", () => {
   let orgSlug: OrgSlug;
   let orgId: OrgId;
   let orgSchemaName: OrgSchema;
-  const hasher = createScryptHasher();
+  const hasher = createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS);
   const createdOrgIds: OrgId[] = [];
   const createdSchemas: OrgSchema[] = [];
 

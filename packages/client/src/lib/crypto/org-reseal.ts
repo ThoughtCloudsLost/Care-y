@@ -48,7 +48,6 @@ export const RED_TIER_TABLES: readonly ResealTableName[] = [
   "phone_blocklist",
   "users",
   "sessions",
-  "invite_tokens",
 ] as const;
 
 /**

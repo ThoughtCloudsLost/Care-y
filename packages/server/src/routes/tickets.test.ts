@@ -265,6 +265,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: dbRow.role_id,
           isActive: true,
           hasSeenBriefing: true,
+          mustChangePassword: false,
         },
       };
       return factory(ctx);

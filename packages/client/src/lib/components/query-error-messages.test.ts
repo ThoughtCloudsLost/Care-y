@@ -149,6 +149,14 @@ const expectedMessages: Array<{ code: ErrorCodeType; expected: string }> = [
     code: ErrorCode.NO_PHONE_NUMBERS_CONFIGURED,
     expected: m.error_no_phone_numbers_configured(),
   },
+  {
+    code: ErrorCode.TWOFA_RATE_LIMITED,
+    expected: m.error_twofa_rate_limited(),
+  },
+  {
+    code: ErrorCode.TWOFA_SESSION_ENDED,
+    expected: m.error_twofa_session_ended(),
+  },
 
   // Tickets
   {
@@ -379,6 +387,20 @@ const expectedMessages: Array<{ code: ErrorCodeType; expected: string }> = [
   {
     code: ErrorCode.SMS_RESPONSE_NOT_FOUND,
     expected: m.error_sms_response_not_found(),
+  },
+
+  // Password change
+  {
+    code: ErrorCode.PASSWORD_CHANGE_REQUIRED,
+    expected: m.error_password_change_required(),
+  },
+  {
+    code: ErrorCode.PASSWORD_UNCHANGED,
+    expected: m.error_password_unchanged(),
+  },
+  {
+    code: ErrorCode.STALE_KEY_WRAPS,
+    expected: m.error_stale_key_wraps(),
   },
 ];
 

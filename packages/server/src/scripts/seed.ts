@@ -44,7 +44,7 @@ import sodium from "sodium-native";
 import { db, tenantDb } from "../db/db.js";
 import { getEnv } from "../env.js";
 import { createOrgService } from "../org/service.js";
-import { createScryptHasher } from "../auth/password.js";
+import { createPasswordHasher } from "../auth/password.js";
 import { createAuthService } from "../auth/service.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
 import { createSealedBoxEncryptor } from "../crypto/sealed-box.js";
@@ -120,7 +120,7 @@ async function seed(): Promise<void> {
   const encryptor = createFieldEncryptor(derivedKeys.fieldEncryptKey);
   const indexer = createBlindIndexer(derivedKeys.blindIndexKey);
   const secretsEncryptor = createSecretsEncryptor(deriveSecretsKey(opsKey));
-  const hasher = createScryptHasher();
+  const hasher = createPasswordHasher();
 
   const orgService = createOrgService(db, tenantDb);
 

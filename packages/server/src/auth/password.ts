@@ -1,18 +1,27 @@
 /**
- * Password hashing with a pluggable interface.
+ * Password and one-time code hashing behind narrow interfaces.
  *
- * Current implementation uses Node's built-in crypto.scrypt (no native dep).
- * Swap to Argon2id by providing a different PasswordHasher factory.
+ * Passwords use Argon2id via libsodium (argon2id-hash.ts). One-time codes
+ * (email, SMS, backup) use Node's crypto.scrypt (scrypt-hash.ts).
  *
  * This module is a designated mint site for PasswordHash and CodeHash brands
- * (ADR-074). The narrow wrappers below cast once from the generic ScryptHasher
+ * (ADR-074). The narrow wrappers below cast once from the generic hasher
  * output, keeping brand casts out of every call site.
  */
 
+import {
+  AUTH_ARGON2ID_PARAMS,
+  createArgon2idHasher,
+  type Argon2idParams,
+} from "./argon2id-hash.js";
 import { createScryptHasher as createBaseHasher } from "./scrypt-hash.js";
 import type { PasswordHash, CodeHash } from "@care-y/shared";
 
-const PASSWORD_KEY_BYTES = 64;
+export {
+  AUTH_ARGON2ID_PARAMS,
+  AUTH_ARGON2ID_TEST_PARAMS,
+} from "./argon2id-hash.js";
+
 const CODE_KEY_BYTES = 32;
 
 export interface PasswordHasher {
@@ -38,9 +47,14 @@ export interface CodeHasher {
   hashCode(code: string): Promise<CodeHash>;
 }
 
-/** Creates a PasswordHasher backed by Node crypto.scrypt. */
-export function createScryptHasher(): PasswordHasher {
-  const base = createBaseHasher(PASSWORD_KEY_BYTES);
+/**
+ * Creates a PasswordHasher backed by Argon2id. Tests pass
+ * AUTH_ARGON2ID_TEST_PARAMS; everything else uses the default.
+ */
+export function createPasswordHasher(
+  params: Argon2idParams = AUTH_ARGON2ID_PARAMS,
+): PasswordHasher {
+  const base = createArgon2idHasher(params);
   return {
     hash: base.hash.bind(base),
     verify: base.verify.bind(base),

@@ -4,12 +4,17 @@ import {
   createTestDb,
   createTestUser,
   createTestQueue,
+  createTestTicketFixture,
   type TestDb,
 } from "../test-utils.js";
-import { createKeyRotationService } from "./key-rotation.js";
+import {
+  applyRotationInTransaction,
+  createKeyRotationService,
+  StaleKeyWrapsError,
+  type KeyRotationInput,
+  type ReWrappedKey,
+} from "./key-rotation.js";
 import { KeyRotationError } from "../errors.js";
-import { PendingIntakeWrapsError } from "../portal/intake-conversion-service.js";
-import { PendingPortalReplyWrapsError } from "../portal/portal-errors.js";
 import type { KeyRotationService } from "./key-rotation.js";
 import type {
   UserId,
@@ -65,41 +70,64 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
     return row;
   }
 
-  describe("storeVolPublic", () => {
-    it("stores vol_public for a user with null vol_public", async () => {
-      const user = await createTestUser(testDb.db);
-      await seedUserKeys(user.id);
-      const volPublic = crypto.randomBytes(32);
+  /** Inserts a ticket_key_wraps row for the given volunteer. */
+  async function insertWrap(
+    ticketId: TicketId,
+    volunteerId: UserId,
+    keyGeneration: KeyGeneration,
+  ): Promise<{ wrappedKey: Buffer }> {
+    const wrappedKey = crypto.randomBytes(64);
+    // care-y-ignore-next-line no-plaintext-db-write -- test key wrap data, not real cryptographic material
+    await testDb.db
+      .insertInto("ticket_key_wraps")
+      .values({
+        ticket_id: ticketId,
+        volunteer_id: volunteerId,
+        key_generation: keyGeneration,
+        ephemeral_point: crypto.randomBytes(32),
+        nonce: crypto.randomBytes(24),
+        wrapped_key: wrappedKey,
+        algorithm: "ecies-ristretto255-v1",
+      })
+      .execute();
+    return { wrappedKey };
+  }
 
-      await service.storeVolPublic(user.id, volPublic);
+  /** A fresh re-wrapped entry for one (ticket, key generation). */
+  function newReWrap(
+    ticketId: TicketId,
+    keyGeneration: KeyGeneration,
+  ): ReWrappedKey {
+    return {
+      ticketId,
+      keyGeneration,
+      ephemeralPoint: crypto.randomBytes(32),
+      nonce: crypto.randomBytes(24),
+      wrappedKey: crypto.randomBytes(64),
+    };
+  }
 
-      const row = await testDb.db
-        .selectFrom("user_keys")
-        .select("vol_public")
-        .where("user_id", "=", user.id)
-        .executeTakeFirstOrThrow();
-
-      expect(row.vol_public).not.toBeNull();
-      expect(Buffer.compare(row.vol_public as Buffer, volPublic)).toBe(0);
+  /** Runs a rotation in its own transaction. */
+  async function applyRotation(input: KeyRotationInput): Promise<void> {
+    await testDb.db.transaction().execute(async (tx) => {
+      await applyRotationInTransaction(tx, input);
     });
+  }
 
-    it("overwrites existing vol_public", async () => {
-      const user = await createTestUser(testDb.db);
-      const oldPub = crypto.randomBytes(32);
-      await seedUserKeys(user.id, { vol_public: oldPub });
-
-      const newPub = crypto.randomBytes(32);
-      await service.storeVolPublic(user.id, newPub);
-
-      const row = await testDb.db
-        .selectFrom("user_keys")
-        .select("vol_public")
-        .where("user_id", "=", user.id)
-        .executeTakeFirstOrThrow();
-
-      expect(Buffer.compare(row.vol_public as Buffer, newPub)).toBe(0);
-    });
-  });
+  /** The volunteer's current wrap rows. */
+  async function wrapsFor(volunteerId: UserId): Promise<
+    {
+      ticket_id: TicketId;
+      key_generation: KeyGeneration;
+      wrapped_key: Buffer;
+    }[]
+  > {
+    return testDb.db
+      .selectFrom("ticket_key_wraps")
+      .select(["ticket_id", "key_generation", "wrapped_key"])
+      .where("volunteer_id", "=", volunteerId)
+      .execute();
+  }
 
   describe("getRotationStatus", () => {
     it("returns inProgress: false when rotation_lock is false", async () => {
@@ -203,7 +231,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
     });
   });
 
-  describe("applyRotation", () => {
+  describe("applyRotationInTransaction", () => {
     it("updates salt, vol_public, bumps key_version, sets rotated_at, and clears lock", async () => {
       const user = await createTestUser(testDb.db);
       await seedUserKeys(user.id, { vol_public: crypto.randomBytes(32) });
@@ -212,7 +240,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
       const saltNew = crypto.randomBytes(32);
       const volPublicNew = crypto.randomBytes(32);
 
-      await service.applyRotation({
+      await applyRotation({
         userId: user.id,
         saltNew,
         volPublicNew,
@@ -238,7 +266,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
 
       // First rotation
       await service.acquireLock(user.id);
-      await service.applyRotation({
+      await applyRotation({
         userId: user.id,
         saltNew: crypto.randomBytes(32),
         volPublicNew: crypto.randomBytes(32),
@@ -247,7 +275,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
 
       // Second rotation
       await service.acquireLock(user.id);
-      await service.applyRotation({
+      await applyRotation({
         userId: user.id,
         saltNew: crypto.randomBytes(32),
         volPublicNew: crypto.randomBytes(32),
@@ -263,15 +291,13 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
       expect(row.key_version).toBe(3);
     });
 
-    it("succeeds with empty reWrappedKeys (no ticket_key_wraps table yet)", async () => {
+    it("succeeds with empty reWrappedKeys when the volunteer holds no wraps", async () => {
       const user = await createTestUser(testDb.db);
       await seedUserKeys(user.id, { vol_public: crypto.randomBytes(32) });
       await service.acquireLock(user.id);
 
-      // No ticket_key_wraps table exists yet, and reWrappedKeys is empty.
-      // This should complete without error.
       await expect(
-        service.applyRotation({
+        applyRotation({
           userId: user.id,
           saltNew: crypto.randomBytes(32),
           volPublicNew: crypto.randomBytes(32),
@@ -280,40 +306,134 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
       ).resolves.toBeUndefined();
     });
 
-    it("handles reWrappedKeys with stale ticket references gracefully", async () => {
+    it("replaces the volunteer's wraps with the re-wrapped set", async () => {
       const user = await createTestUser(testDb.db);
       await seedUserKeys(user.id, { vol_public: crypto.randomBytes(32) });
+      const fixture = await createTestTicketFixture(testDb.db);
+      const keyGeneration = crypto.randomUUID() as KeyGeneration;
+      await insertWrap(fixture.ticketId, user.id, keyGeneration);
       await service.acquireLock(user.id);
 
-      // Attempt to insert re-wrapped keys referencing a non-existent ticket.
-      // The FK violation is caught by the savepoint guard, and user_keys
-      // are still updated in the outer transaction.
-      await expect(
-        service.applyRotation({
-          userId: user.id,
-          saltNew: crypto.randomBytes(32),
-          volPublicNew: crypto.randomBytes(32),
-          reWrappedKeys: [
-            {
-              ticketId: crypto.randomUUID() as TicketId,
-              keyGeneration: crypto.randomUUID() as KeyGeneration,
-              ephemeralPoint: crypto.randomBytes(32),
-              nonce: crypto.randomBytes(24),
-              wrappedKey: crypto.randomBytes(64),
-            },
-          ],
-        }),
-      ).resolves.toBeUndefined();
+      const reWrap = newReWrap(fixture.ticketId, keyGeneration);
+      await applyRotation({
+        userId: user.id,
+        saltNew: crypto.randomBytes(32),
+        volPublicNew: crypto.randomBytes(32),
+        reWrappedKeys: [reWrap],
+      });
 
-      // Verify user_keys were still updated despite the FK violation
-      const row = await testDb.db
+      const rows = await wrapsFor(user.id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.ticket_id).toBe(fixture.ticketId);
+      expect(rows[0]?.key_generation).toBe(keyGeneration);
+      expect(
+        Buffer.compare(
+          rows[0]?.wrapped_key ?? Buffer.alloc(0),
+          reWrap.wrappedKey,
+        ),
+      ).toBe(0);
+    });
+
+    it("drops a re-wrap for a deleted ticket and commits the rest", async () => {
+      const user = await createTestUser(testDb.db);
+      await seedUserKeys(user.id, { vol_public: crypto.randomBytes(32) });
+      const kept = await createTestTicketFixture(testDb.db);
+      const deleted = await createTestTicketFixture(testDb.db);
+      const keptGen = crypto.randomUUID() as KeyGeneration;
+      const deletedGen = crypto.randomUUID() as KeyGeneration;
+      await insertWrap(kept.ticketId, user.id, keptGen);
+      await insertWrap(deleted.ticketId, user.id, deletedGen);
+
+      // The client fetched both wraps; the second ticket is deleted
+      // (cascading its wrap) before the rotation lands.
+      await testDb.db
+        .deleteFrom("tickets")
+        .where("id", "=", deleted.ticketId)
+        .execute();
+      await service.acquireLock(user.id);
+
+      await applyRotation({
+        userId: user.id,
+        saltNew: crypto.randomBytes(32),
+        volPublicNew: crypto.randomBytes(32),
+        reWrappedKeys: [
+          newReWrap(kept.ticketId, keptGen),
+          newReWrap(deleted.ticketId, deletedGen),
+        ],
+      });
+
+      const rows = await wrapsFor(user.id);
+      expect(rows.map((r) => r.ticket_id)).toEqual([kept.ticketId]);
+
+      const keys = await testDb.db
         .selectFrom("user_keys")
         .select(["key_version", "rotation_lock"])
         .where("user_id", "=", user.id)
         .executeTakeFirstOrThrow();
+      expect(keys.key_version).toBe(2);
+      expect(keys.rotation_lock).toBe(false);
+    });
 
-      expect(row.key_version).toBe(2);
-      expect(row.rotation_lock).toBe(false);
+    it("refuses with StaleKeyWrapsError when a held wrap is missing and changes nothing", async () => {
+      const user = await createTestUser(testDb.db);
+      const oldPublic = crypto.randomBytes(32);
+      await seedUserKeys(user.id, { vol_public: oldPublic });
+      const originalOrgWrap = await seedWrappedOrgKey(user.id);
+      const known = await createTestTicketFixture(testDb.db);
+      const granted = await createTestTicketFixture(testDb.db);
+      const knownGen = crypto.randomUUID() as KeyGeneration;
+      const grantedGen = crypto.randomUUID() as KeyGeneration;
+      const knownWrap = await insertWrap(known.ticketId, user.id, knownGen);
+      // Granted after the client fetched its list: not in the re-wrap set.
+      await insertWrap(granted.ticketId, user.id, grantedGen);
+
+      const before = await testDb.db
+        .selectFrom("user_keys")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .executeTakeFirstOrThrow();
+
+      await expect(
+        applyRotation({
+          userId: user.id,
+          saltNew: crypto.randomBytes(32),
+          volPublicNew: crypto.randomBytes(32),
+          reWrappedKeys: [newReWrap(known.ticketId, knownGen)],
+          reWrappedOrgKey: {
+            ephemeralPoint: crypto.randomBytes(32),
+            nonce: crypto.randomBytes(24),
+            wrappedKey: crypto.randomBytes(64),
+          },
+        }),
+      ).rejects.toThrow(StaleKeyWrapsError);
+
+      const after = await testDb.db
+        .selectFrom("user_keys")
+        .selectAll()
+        .where("user_id", "=", user.id)
+        .executeTakeFirstOrThrow();
+      expect(Buffer.compare(after.salt, before.salt)).toBe(0);
+      expect(Buffer.compare(after.vol_public as Buffer, oldPublic)).toBe(0);
+      expect(after.key_version).toBe(before.key_version);
+
+      const rows = await wrapsFor(user.id);
+      expect(rows).toHaveLength(2);
+      const knownRow = rows.find((r) => r.ticket_id === known.ticketId);
+      expect(
+        Buffer.compare(
+          knownRow?.wrapped_key ?? Buffer.alloc(0),
+          knownWrap.wrappedKey,
+        ),
+      ).toBe(0);
+
+      const orgWrap = await testDb.db
+        .selectFrom("wrapped_org_keys")
+        .select("wrapped_key")
+        .where("user_id", "=", user.id)
+        .executeTakeFirstOrThrow();
+      expect(
+        Buffer.compare(orgWrap.wrapped_key, originalOrgWrap.wrapped_key),
+      ).toBe(0);
     });
 
     it("releases the lock inside the transaction (lock is false after applyRotation)", async () => {
@@ -321,7 +441,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
       await seedUserKeys(user.id, { vol_public: crypto.randomBytes(32) });
       await service.acquireLock(user.id);
 
-      await service.applyRotation({
+      await applyRotation({
         userId: user.id,
         saltNew: crypto.randomBytes(32),
         volPublicNew: crypto.randomBytes(32),
@@ -348,7 +468,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
         wrappedKey: crypto.randomBytes(64),
       };
 
-      await service.applyRotation({
+      await applyRotation({
         userId: user.id,
         saltNew: crypto.randomBytes(32),
         volPublicNew: crypto.randomBytes(32),
@@ -375,7 +495,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
       const originalOrgWrap = await seedWrappedOrgKey(user.id);
       await service.acquireLock(user.id);
 
-      await service.applyRotation({
+      await applyRotation({
         userId: user.id,
         saltNew: crypto.randomBytes(32),
         volPublicNew: crypto.randomBytes(32),
@@ -398,19 +518,11 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
     });
   });
 
-  describe("intake wrap rotation guard", () => {
-    it("throws PendingIntakeWrapsError when intake_key_wraps is non-empty", async () => {
-      const user = await createTestUser(testDb.db);
-      await seedUserKeys(user.id, {
-        vol_public: crypto.randomBytes(32),
-        rotation_lock: false,
-      });
-      await seedWrappedOrgKey(user.id);
-      await service.acquireLock(user.id);
-
-      // Seed an intake_key_wraps row (needs a ticket referencing a queue + client)
-      const q = await createTestQueue(testDb.db, { label: "Intake Guard Q" });
-      const clientAlias = `guard-${crypto.randomUUID().slice(0, 8)}`;
+  describe("pending org-key wraps", () => {
+    /** Inserts a ticket with its own client; returns the ticket id. */
+    async function seedTicket(label: string): Promise<TicketId> {
+      const q = await createTestQueue(testDb.db, { label });
+      const clientAlias = `${label}-${crypto.randomUUID().slice(0, 8)}`;
       const client = await testDb.db
         .insertInto("clients")
         .values({
@@ -433,6 +545,15 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
           key_generation: crypto.randomUUID() as KeyGeneration,
         })
         .execute();
+      return ticketId;
+    }
+
+    it("a pending intake_key_wraps row does not block rotation", async () => {
+      const user = await createTestUser(testDb.db);
+      await seedUserKeys(user.id, { vol_public: crypto.randomBytes(32) });
+      await seedWrappedOrgKey(user.id);
+
+      const ticketId = await seedTicket("intake-pending");
       await testDb.db
         .insertInto("intake_key_wraps")
         .values({
@@ -441,171 +562,71 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
         })
         .execute();
 
-      await expect(
-        service.applyRotation({
-          userId: user.id,
-          saltNew: crypto.randomBytes(32),
-          volPublicNew: crypto.randomBytes(32),
-          reWrappedKeys: [],
-        }),
-      ).rejects.toThrow(PendingIntakeWrapsError);
-
-      // Clean up: release lock and remove the intake wrap
-      await service.releaseLock(user.id);
-      await testDb.db
-        .deleteFrom("intake_key_wraps")
-        .where("ticket_id", "=", ticketId)
-        .execute();
-    });
-  });
-
-  describe("portal reply wrap rotation guard", () => {
-    it("throws PendingPortalReplyWrapsError when portal_reply_key_wraps is non-empty", async () => {
-      const user = await createTestUser(testDb.db);
-      await seedUserKeys(user.id, {
-        vol_public: crypto.randomBytes(32),
-        rotation_lock: false,
-      });
-      await seedWrappedOrgKey(user.id);
       await service.acquireLock(user.id);
-
-      // Seed a portal_reply_key_wraps row (needs a follow-up referencing a ticket)
-      const q = await createTestQueue(testDb.db, {
-        label: "Portal Guard Q",
-      });
-      const clientAlias = `portal-guard-${crypto.randomUUID().slice(0, 8)}`;
-      const client = await testDb.db
-        .insertInto("clients")
-        .values({
-          encrypted_alias: Buffer.from(clientAlias),
-          alias_hash: clientAlias as AliasHash,
-        })
-        .returning("id")
-        .executeTakeFirstOrThrow();
-      const ticketId = crypto.randomUUID() as TicketId;
-      await testDb.db
-        .insertInto("tickets")
-        .values({
-          id: ticketId,
-          client_id: client.id,
-          queue_id: q.id,
-          status: "open",
-          priority: "normal",
-          encrypted_title: Buffer.from("ct-title"),
-          encrypted_description: Buffer.from("ct-desc"),
-          key_generation: crypto.randomUUID() as KeyGeneration,
-        })
-        .execute();
-      const followupId = crypto.randomUUID() as FollowupId;
-      await testDb.db
-        .insertInto("followups")
-        .values({
-          id: followupId,
-          ticket_id: ticketId,
-          source: "client",
-          type: "message",
-          encrypted_content: Buffer.from("ct-content"),
-          created_by: null,
-          key_generation: crypto.randomUUID() as KeyGeneration,
-        })
-        .execute();
-      await testDb.db
-        .insertInto("portal_reply_key_wraps")
-        .values({
-          followup_id: followupId,
-          wrapped_tk: Buffer.alloc(80, 0xcd),
-        })
-        .execute();
-
       await expect(
-        service.applyRotation({
-          userId: user.id,
-          saltNew: crypto.randomBytes(32),
-          volPublicNew: crypto.randomBytes(32),
-          reWrappedKeys: [],
-        }),
-      ).rejects.toThrow(PendingPortalReplyWrapsError);
-
-      // Clean up: release lock and remove the portal wrap
-      await service.releaseLock(user.id);
-      await testDb.db
-        .deleteFrom("portal_reply_key_wraps")
-        .where("followup_id", "=", followupId)
-        .execute();
-    });
-
-    it("succeeds after portal reply wrap is deleted", async () => {
-      const user = await createTestUser(testDb.db);
-      await seedUserKeys(user.id, {
-        vol_public: crypto.randomBytes(32),
-        rotation_lock: false,
-      });
-      await seedWrappedOrgKey(user.id);
-
-      // Insert and then delete a portal reply wrap to prove rotation passes
-      const q = await createTestQueue(testDb.db, {
-        label: "Portal Pass Q",
-      });
-      const clientAlias = `portal-pass-${crypto.randomUUID().slice(0, 8)}`;
-      const client = await testDb.db
-        .insertInto("clients")
-        .values({
-          encrypted_alias: Buffer.from(clientAlias),
-          alias_hash: clientAlias as AliasHash,
-        })
-        .returning("id")
-        .executeTakeFirstOrThrow();
-      const ticketId = crypto.randomUUID() as TicketId;
-      await testDb.db
-        .insertInto("tickets")
-        .values({
-          id: ticketId,
-          client_id: client.id,
-          queue_id: q.id,
-          status: "open",
-          priority: "normal",
-          encrypted_title: Buffer.from("ct-title"),
-          encrypted_description: Buffer.from("ct-desc"),
-          key_generation: crypto.randomUUID() as KeyGeneration,
-        })
-        .execute();
-      const followupId = crypto.randomUUID() as FollowupId;
-      await testDb.db
-        .insertInto("followups")
-        .values({
-          id: followupId,
-          ticket_id: ticketId,
-          source: "client",
-          type: "message",
-          encrypted_content: Buffer.from("ct-content"),
-          created_by: null,
-          key_generation: crypto.randomUUID() as KeyGeneration,
-        })
-        .execute();
-      await testDb.db
-        .insertInto("portal_reply_key_wraps")
-        .values({
-          followup_id: followupId,
-          wrapped_tk: Buffer.alloc(80, 0xcd),
-        })
-        .execute();
-
-      // Delete the wrap before attempting rotation
-      await testDb.db
-        .deleteFrom("portal_reply_key_wraps")
-        .where("followup_id", "=", followupId)
-        .execute();
-
-      await service.acquireLock(user.id);
-
-      await expect(
-        service.applyRotation({
+        applyRotation({
           userId: user.id,
           saltNew: crypto.randomBytes(32),
           volPublicNew: crypto.randomBytes(32),
           reWrappedKeys: [],
         }),
       ).resolves.toBeUndefined();
+
+      // The org-key wrap is untouched by a volunteer rotation.
+      const intake = await testDb.db
+        .selectFrom("intake_key_wraps")
+        .select("ticket_id")
+        .where("ticket_id", "=", ticketId)
+        .executeTakeFirst();
+      expect(intake?.ticket_id).toBe(ticketId);
+
+      await testDb.db
+        .deleteFrom("intake_key_wraps")
+        .where("ticket_id", "=", ticketId)
+        .execute();
+    });
+
+    it("a pending portal_reply_key_wraps row does not block rotation", async () => {
+      const user = await createTestUser(testDb.db);
+      await seedUserKeys(user.id, { vol_public: crypto.randomBytes(32) });
+      await seedWrappedOrgKey(user.id);
+
+      const ticketId = await seedTicket("portal-pending");
+      const followupId = crypto.randomUUID() as FollowupId;
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          id: followupId,
+          ticket_id: ticketId,
+          source: "client",
+          type: "message",
+          encrypted_content: Buffer.from("ct-content"),
+          created_by: null,
+          key_generation: crypto.randomUUID() as KeyGeneration,
+        })
+        .execute();
+      await testDb.db
+        .insertInto("portal_reply_key_wraps")
+        .values({
+          followup_id: followupId,
+          wrapped_tk: Buffer.alloc(80, 0xcd),
+        })
+        .execute();
+
+      await service.acquireLock(user.id);
+      await expect(
+        applyRotation({
+          userId: user.id,
+          saltNew: crypto.randomBytes(32),
+          volPublicNew: crypto.randomBytes(32),
+          reWrappedKeys: [],
+        }),
+      ).resolves.toBeUndefined();
+
+      await testDb.db
+        .deleteFrom("portal_reply_key_wraps")
+        .where("followup_id", "=", followupId)
+        .execute();
     });
   });
 });

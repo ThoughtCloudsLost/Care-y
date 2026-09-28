@@ -38,6 +38,7 @@ import {
   RoleId,
   TwoFactorMethod,
   ErrorCode,
+  Permission,
   type RoleIdValue,
 } from "@care-y/shared";
 import type {
@@ -51,10 +52,14 @@ import type {
   OrgSchema,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
-import { createScryptHasher } from "../auth/password.js";
+import {
+  AUTH_ARGON2ID_TEST_PARAMS,
+  createPasswordHasher,
+} from "../auth/password.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createOrgService } from "../org/service.js";
 import { createInviteService } from "../onboarding/invite-service.js";
+import { invalidateRolePermissionCache } from "../auth/roles.js";
 import {
   createOnboardingRouter,
   type OnboardingRouterDeps,
@@ -75,7 +80,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
   let testDb: TestDb;
   let tenantDb: Kysely<TenantDatabase>;
   let orgSlug: string;
-  const hasher = createScryptHasher();
+  const hasher = createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS);
   const createdOrgIds: OrgId[] = [];
   const createdSchemas: OrgSchema[] = [];
 
@@ -197,6 +202,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
         roleId: user.roleId,
         isActive: true,
         hasSeenBriefing: true,
+        mustChangePassword: false,
       },
     };
     return { caller: factory(ctx), res };
@@ -488,19 +494,16 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
         roleId,
       });
       const rawToken = inviteUrl.replace("/first-login/", "");
-      const pending = await caller.onboarding.listPendingInvites();
-      const entry = pending.find(
-        (inv) =>
-          inv.encryptedToken !== null &&
-          testUnseal(inv.encryptedToken) === rawToken,
+      const entry = await createInviteService(inviteOrg.tenantDb).validate(
+        rawToken,
       );
       if (!entry) {
-        throw new TestSetupError("generated invite not found in pending list");
+        throw new TestSetupError("generated invite not found");
       }
       return { rawToken, expiresAt, tokenId: entry.id };
     }
 
-    it("generateInvite returns a first-login URL and a sealed token copy", async () => {
+    it("generateInvite returns a first-login URL and lists the invite without its token", async () => {
       const { caller } = adminCaller();
       const result = await caller.onboarding.generateInvite({
         roleId: RoleId.VOLUNTEER,
@@ -511,17 +514,23 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       expect(rawToken.length).toBeGreaterThan(0);
       expect(new Date(result.expiresAt).getTime()).toBeGreaterThan(Date.now());
 
-      // The sealed copy lets org-key holders recover the invite link later.
-      // testUnseal opens it with the committed test org keypair.
-      const pending = await caller.onboarding.listPendingInvites();
-      const entry = pending.find(
-        (inv) =>
-          inv.encryptedToken !== null &&
-          testUnseal(inv.encryptedToken) === rawToken,
+      // The link is shown once, at creation. The pending list identifies the
+      // invite but carries no copy of the token in any form.
+      const invite = await createInviteService(inviteOrg.tenantDb).validate(
+        rawToken,
       );
+      const pending = await caller.onboarding.listPendingInvites();
+      const entry = pending.find((inv) => inv.id === invite?.id);
       expect(entry).toBeDefined();
       expect(entry!.roleId).toBe(RoleId.VOLUNTEER);
       expect(entry!.invitedBy).toBe(adminUserId);
+      expect(Object.keys(entry!).sort()).toEqual([
+        "createdAt",
+        "expiresAt",
+        "id",
+        "invitedBy",
+        "roleId",
+      ]);
     });
 
     it("rejects invite generation without the manage-roles permission", async () => {
@@ -716,6 +725,152 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
         "PRECONDITION_FAILED",
       );
     }, 30_000);
+
+    describe("inviter authority", () => {
+      // Managers lack MANAGE_USERS by default. Granting it here produces an
+      // account that can add users but not assign roles: MANAGE_ROLES is
+      // locked to Admin and no override can grant it.
+      beforeAll(async () => {
+        await inviteOrg.tenantDb
+          .insertInto("role_permission_overrides")
+          .values({
+            role_id: RoleId.MANAGER,
+            permission: Permission.MANAGE_USERS,
+            enabled: true,
+          })
+          .execute();
+        invalidateRolePermissionCache(inviteOrg.orgSchema);
+      });
+
+      afterAll(async () => {
+        await inviteOrg.tenantDb
+          .deleteFrom("role_permission_overrides")
+          .where("role_id", "=", RoleId.MANAGER)
+          .where("permission", "=", Permission.MANAGE_USERS)
+          .execute();
+        invalidateRolePermissionCache(inviteOrg.orgSchema);
+      });
+
+      async function createInviter(roleId: RoleIdValue): Promise<UserId> {
+        const user = await createTestUser(inviteOrg.tenantDb, {
+          overrides: { role_id: roleId },
+        });
+        return user.id;
+      }
+
+      async function mintInvite(
+        inviter: { id: UserId; roleId: RoleIdValue },
+        roleId: RoleIdValue,
+      ): Promise<string> {
+        const { caller } = buildAuthedCaller(inviteOrg, inviter);
+        const { inviteUrl } = await caller.onboarding.generateInvite({
+          roleId,
+        });
+        return inviteUrl.replace("/first-login/", "");
+      }
+
+      it("generateInvite refuses a non-default role from a MANAGE_USERS-only account", async () => {
+        const managerId = await createInviter(RoleId.MANAGER);
+        const { caller } = buildAuthedCaller(inviteOrg, {
+          id: managerId,
+          roleId: RoleId.MANAGER,
+        });
+
+        await expectTrpcError(
+          caller.onboarding.generateInvite({ roleId: RoleId.MANAGER }),
+          "FORBIDDEN",
+          ErrorCode.ONLY_ADMINS_CAN_ASSIGN_ROLES,
+        );
+      });
+
+      it("a default-role invite from a MANAGE_USERS-only account registers", async () => {
+        const managerId = await createInviter(RoleId.MANAGER);
+        const rawToken = await mintInvite(
+          { id: managerId, roleId: RoleId.MANAGER },
+          RoleId.VOLUNTEER,
+        );
+
+        const { caller } = buildCaller(inviteOrg.orgSlug);
+        const { userId } = await caller.onboarding.registerFromInvite({
+          token: rawToken,
+          identifier: "default-role-invitee",
+          password: "default-role-invitee-pw1",
+        });
+
+        const row = await inviteOrg.tenantDb
+          .selectFrom("users")
+          .select("role_id")
+          .where("id", "=", userId)
+          .executeTakeFirstOrThrow();
+        expect(row.role_id).toBe(RoleId.VOLUNTEER);
+      });
+
+      it("registerFromInvite refuses once the inviter can no longer assign the invited role", async () => {
+        const inviterId = await createInviter(RoleId.ADMIN);
+        const rawToken = await mintInvite(
+          { id: inviterId, roleId: RoleId.ADMIN },
+          RoleId.MANAGER,
+        );
+
+        // Demoted to Manager after minting: keeps MANAGE_USERS through the
+        // override above, loses MANAGE_ROLES.
+        await inviteOrg.tenantDb
+          .updateTable("users")
+          .set({ role_id: RoleId.MANAGER })
+          .where("id", "=", inviterId)
+          .execute();
+
+        const { caller } = buildCaller(inviteOrg.orgSlug);
+        await expectTrpcError(
+          caller.onboarding.registerFromInvite({
+            token: rawToken,
+            identifier: "escalation-invitee",
+            password: "escalation-invitee-pw1",
+          }),
+          "BAD_REQUEST",
+          ErrorCode.INVALID_INVITE_TOKEN,
+        );
+
+        const created = await inviteOrg.tenantDb
+          .selectFrom("users")
+          .select("id")
+          .where(
+            "identifier_hash",
+            "=",
+            testBlindIndexer.hashIdentifier(
+              "escalation-invitee",
+              inviteOrg.orgId,
+            ),
+          )
+          .executeTakeFirst();
+        expect(created).toBeUndefined();
+      });
+
+      it("registerFromInvite refuses once the inviter is deactivated", async () => {
+        const inviterId = await createInviter(RoleId.ADMIN);
+        const rawToken = await mintInvite(
+          { id: inviterId, roleId: RoleId.ADMIN },
+          RoleId.VOLUNTEER,
+        );
+
+        await inviteOrg.tenantDb
+          .updateTable("users")
+          .set({ is_active: false })
+          .where("id", "=", inviterId)
+          .execute();
+
+        const { caller } = buildCaller(inviteOrg.orgSlug);
+        await expectTrpcError(
+          caller.onboarding.registerFromInvite({
+            token: rawToken,
+            identifier: "orphaned-invitee",
+            password: "orphaned-invitee-pw1",
+          }),
+          "BAD_REQUEST",
+          ErrorCode.INVALID_INVITE_TOKEN,
+        );
+      });
+    });
   });
 
   describe("setup steps", () => {

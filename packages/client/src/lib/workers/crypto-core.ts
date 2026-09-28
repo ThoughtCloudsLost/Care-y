@@ -1409,13 +1409,13 @@ function handleOpenSelfBlob(req: OpenSelfBlobRequest, sink: Sink): void {
 function handleRewrapTk(req: RewrapTkRequest, sink: Sink): void {
   if (!requireKeyed(sink, req.id, "rewrapTk")) return;
 
-  const tk = tkCache.get(req.ticketId);
+  const tk = tkCache.get(req.keyCacheId);
   if (!tk) {
     postError(
       sink,
       req.id,
       "rewrapTk",
-      `No cached tk for ticket ${req.ticketId}`,
+      `No cached tk for key ${req.keyCacheId}`,
       "TK_NOT_CACHED",
     );
     return;

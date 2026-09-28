@@ -50,7 +50,10 @@ import {
   DOCKER_OPRF_AVAILABLE,
   stubTenantDbDefaultRoles,
 } from "../test-utils.js";
-import { createScryptHasher } from "../auth/password.js";
+import {
+  AUTH_ARGON2ID_TEST_PARAMS,
+  createPasswordHasher,
+} from "../auth/password.js";
 import {
   ForbiddenError,
   PowRequiredError,
@@ -525,7 +528,7 @@ describe("OPRF tRPC route", () => {
     const appRouter = createAppRouter({
       ...NO_OPTIONAL_ROUTERS,
       authDeps: {
-        hasher: createScryptHasher(),
+        hasher: createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
         loginLimiter: createInMemoryRateLimiter({
           windowMs: 60_000,
           maxRequests: 100,
@@ -546,7 +549,7 @@ describe("OPRF tRPC route", () => {
         createAuditSvc: null,
       },
       profileDeps: {
-        hasher: createScryptHasher(),
+        hasher: createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
@@ -565,6 +568,10 @@ describe("OPRF tRPC route", () => {
         pushSender: null,
         pushHmacKey: null,
         totpReplayCache: createInMemoryTotpReplayCache(),
+        verifyLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 1000,
+        }),
       },
       oprfDeps: { oprfService: service },
       orgService: {
@@ -618,6 +625,7 @@ describe("OPRF tRPC route", () => {
         roleId: RoleId.VOLUNTEER,
         isActive: true,
         hasSeenBriefing: true,
+        mustChangePassword: false,
       },
     });
 
@@ -647,7 +655,7 @@ describe("OPRF evaluate 2FA gate", () => {
     const appRouter = createAppRouter({
       ...NO_OPTIONAL_ROUTERS,
       authDeps: {
-        hasher: createScryptHasher(),
+        hasher: createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
         loginLimiter: createInMemoryRateLimiter({
           windowMs: 60_000,
           maxRequests: 100,
@@ -668,7 +676,7 @@ describe("OPRF evaluate 2FA gate", () => {
         createAuditSvc: null,
       },
       profileDeps: {
-        hasher: createScryptHasher(),
+        hasher: createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
@@ -687,6 +695,10 @@ describe("OPRF evaluate 2FA gate", () => {
         pushSender: null,
         pushHmacKey: null,
         totpReplayCache: createInMemoryTotpReplayCache(),
+        verifyLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 1000,
+        }),
       },
       oprfDeps: { oprfService: service },
       orgService: {
@@ -729,6 +741,7 @@ describe("OPRF evaluate 2FA gate", () => {
             roleId: RoleId.VOLUNTEER,
             isActive: true,
             hasSeenBriefing: true,
+            mustChangePassword: false,
           }
         : null,
     };
@@ -820,7 +833,7 @@ describe("OPRF adminEvaluate route", () => {
     const appRouter = createAppRouter({
       ...NO_OPTIONAL_ROUTERS,
       authDeps: {
-        hasher: createScryptHasher(),
+        hasher: createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
         loginLimiter: createInMemoryRateLimiter({
           windowMs: 60_000,
           maxRequests: 100,
@@ -841,7 +854,7 @@ describe("OPRF adminEvaluate route", () => {
         createAuditSvc: null,
       },
       profileDeps: {
-        hasher: createScryptHasher(),
+        hasher: createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
@@ -860,6 +873,10 @@ describe("OPRF adminEvaluate route", () => {
         pushSender: null,
         pushHmacKey: null,
         totpReplayCache: createInMemoryTotpReplayCache(),
+        verifyLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 1000,
+        }),
       },
       oprfDeps: { oprfService: spiedService },
       orgService: {
@@ -899,6 +916,7 @@ describe("OPRF adminEvaluate route", () => {
         roleId: RoleId.ADMIN,
         isActive: true,
         hasSeenBriefing: true,
+        mustChangePassword: false,
       },
       ...ctxOverrides,
     };
@@ -935,6 +953,7 @@ describe("OPRF adminEvaluate route", () => {
         roleId: RoleId.VOLUNTEER,
         isActive: true,
         hasSeenBriefing: true,
+        mustChangePassword: false,
       },
       session: {
         id: "vol-session" as SessionId,
@@ -1090,7 +1109,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
       const appRouter = createAppRouter({
         ...NO_OPTIONAL_ROUTERS,
         authDeps: {
-          hasher: createScryptHasher(),
+          hasher: createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
           loginLimiter: createInMemoryRateLimiter({
             windowMs: 60_000,
             maxRequests: 100,
@@ -1111,7 +1130,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           createAuditSvc: null,
         },
         profileDeps: {
-          hasher: createScryptHasher(),
+          hasher: createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
           encryptor: testFieldEncryptor,
           indexer: testBlindIndexer,
           tokenizer: testSessionTokenizer,
@@ -1130,6 +1149,10 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           pushSender: null,
           pushHmacKey: null,
           totpReplayCache: createInMemoryTotpReplayCache(),
+          verifyLimiter: createInMemoryRateLimiter({
+            windowMs: 60_000,
+            maxRequests: 1000,
+          }),
         },
         oprfDeps: { oprfService: service },
         orgService: {

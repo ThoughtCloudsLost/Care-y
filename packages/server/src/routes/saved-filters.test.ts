@@ -80,6 +80,7 @@ describe.skipIf(!process.env.DATABASE_URL)("savedFilters router", () => {
         roleId: (roleOverride ?? user.role_id) as typeof user.role_id,
         isActive: user.is_active,
         hasSeenBriefing: true,
+        mustChangePassword: false,
       },
     };
     return factory(ctx);

@@ -112,6 +112,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: user.role_id,
           isActive: user.is_active,
           hasSeenBriefing: true,
+          mustChangePassword: false,
         },
       };
       const deps = buildDeps();

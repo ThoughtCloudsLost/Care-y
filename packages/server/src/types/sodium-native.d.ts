@@ -142,6 +142,34 @@ declare module "sodium-native" {
     key?: Buffer | null,
   ): void;
 
+  // --- Password hashing (Argon2id, crypto_pwhash_str) ---
+  // Verified against the installed sodium-native@5.1.0 index.js (2026-09-28).
+  export const crypto_pwhash_STRBYTES: number;
+  export const crypto_pwhash_OPSLIMIT_MIN: number;
+  export const crypto_pwhash_MEMLIMIT_MIN: number;
+
+  /**
+   * Hashes `passwd` into `out` as a NUL-padded "$argon2id$..." string.
+   * `out` must be crypto_pwhash_STRBYTES bytes; `passwd` must not be empty.
+   * Runs on the libuv thread pool; rejects if hashing fails.
+   */
+  export function crypto_pwhash_str_async(
+    out: Buffer,
+    passwd: Buffer,
+    opslimit: number,
+    memlimit: number,
+  ): Promise<void>;
+
+  /**
+   * Verifies `passwd` against the NUL-terminated hash string in `str`.
+   * `str` must be crypto_pwhash_STRBYTES bytes; `passwd` must not be empty.
+   * Resolves to true on match, false otherwise.
+   */
+  export function crypto_pwhash_str_verify_async(
+    str: Buffer,
+    passwd: Buffer,
+  ): Promise<boolean>;
+
   // --- Memory hardening (OPRF process) ---
 
   /**

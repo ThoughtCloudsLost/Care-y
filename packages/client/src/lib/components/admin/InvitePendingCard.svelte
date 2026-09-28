@@ -1,18 +1,15 @@
 <script lang="ts">
   import { Card, Preloader } from "konsta/svelte";
-  import { Link2, X, Copy } from "@lucide/svelte";
+  import { Link2, X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
-  import { getOrgDecryptCache } from "$lib/crypto/context.js";
   interface InvitePendingCardProps {
     readonly id: string;
     readonly roleLabel: string;
     readonly inviterName: string | null;
     readonly expiresAt: string;
-    readonly encryptedToken: string | null;
     readonly revoking?: boolean;
     readonly onrevoke: (tokenId: string) => void;
-    readonly oncopy?: (url: string) => void;
   }
 
   let {
@@ -20,30 +17,9 @@
     roleLabel,
     inviterName,
     expiresAt,
-    encryptedToken,
     revoking = false,
     onrevoke,
-    oncopy,
   }: InvitePendingCardProps = $props();
-
-  const orgCache = getOrgDecryptCache();
-
-  const decryptedToken = $derived(
-    encryptedToken !== null
-      ? orgCache.decrypt(`invite:${id}`, encryptedToken)
-      : null,
-  );
-
-  const inviteUrl = $derived(
-    decryptedToken !== null ? `/first-login/${decryptedToken}` : null,
-  );
-
-  function handleCopy(e: MouseEvent): void {
-    e.stopPropagation();
-    if (inviteUrl !== null && oncopy) {
-      oncopy(`${window.location.origin}${inviteUrl}`);
-    }
-  }
 
   const inviterLabel = $derived(
     inviterName !== null && inviterName.length > 0
@@ -92,24 +68,11 @@
           <span class="pending-label">{inviterLabel}</span>
         </div>
         <span class="expiry-label">{expiryLabel}</span>
-        {#if inviteUrl !== null}
-          <span class="invite-url">{window.location.origin}{inviteUrl}</span>
-        {/if}
       </div>
 
       <div class="action-area">
         <span class="stamp-chip role-stamp">{roleLabel}</span>
         <div class="action-buttons">
-          {#if inviteUrl !== null && oncopy}
-            <button
-              class="copy-btn"
-              onclick={handleCopy}
-              aria-label={m.admin_invite_link_copy()}
-              type="button"
-            >
-              <Copy size={14} aria-hidden="true" />
-            </button>
-          {/if}
           <button
             class="revoke-btn"
             onclick={handleRevoke}
@@ -205,15 +168,6 @@
     color: var(--muted);
   }
 
-  .invite-url {
-    font-family: var(--theme-font-mono);
-    font-size: var(--text-xs);
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   .action-area {
     display: flex;
     flex-direction: column;
@@ -230,37 +184,6 @@
   /* The role is who the invitee will be: stamp anatomy in brand ink. */
   .role-stamp {
     color: var(--brand-text, var(--brand-primary));
-  }
-
-  .copy-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 50%;
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    color: var(--brand-text);
-    flex-shrink: 0;
-    -webkit-tap-highlight-color: transparent;
-    opacity: 0.7;
-  }
-
-  .copy-btn:hover {
-    background: color-mix(in srgb, var(--brand-text) 10%, transparent);
-    opacity: 1;
-  }
-
-  .copy-btn:active {
-    background: color-mix(in srgb, var(--brand-text) 18%, transparent);
-  }
-
-  .copy-btn:focus-visible {
-    outline: 2px solid var(--brand-text);
-    outline-offset: 2px;
   }
 
   .revoke-btn {

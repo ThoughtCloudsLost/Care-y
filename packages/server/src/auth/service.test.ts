@@ -12,7 +12,7 @@ import {
 } from "../test-utils.js";
 import { createDbSessionRepository } from "./session-repository.js";
 import type { SessionRepository } from "./session-repository.js";
-import { createScryptHasher } from "./password.js";
+import { AUTH_ARGON2ID_TEST_PARAMS, createPasswordHasher } from "./password.js";
 import type { PasswordHasher } from "./password.js";
 import {
   createAuthService,
@@ -39,7 +39,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
 
   beforeAll(async () => {
     testDb = await createTestDb();
-    hasher = createScryptHasher();
+    hasher = createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS);
     sessions = createDbSessionRepository(
       testDb.db,
       testSessionTokenizer,
@@ -83,6 +83,31 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       // password_hash must not leak through the domain object.
       expect(user).not.toHaveProperty("passwordHash");
       expect(user).not.toHaveProperty("password_hash");
+    });
+
+    it("leaves mustChangePassword false unless requested", async () => {
+      const user = await service.register({
+        identifier: "no-forced-change",
+        password: "supersecretpasswd1",
+        displayName: "No Forced Change",
+        roleId: RoleId.VOLUNTEER,
+      });
+
+      expect(user.mustChangePassword).toBe(false);
+    });
+
+    it("stores mustChangePassword when requested and exposes it on lookup", async () => {
+      const user = await service.register({
+        identifier: "forced-change",
+        password: "supersecretpasswd1",
+        displayName: "Forced Change",
+        roleId: RoleId.VOLUNTEER,
+        mustChangePassword: true,
+      });
+
+      expect(user.mustChangePassword).toBe(true);
+      const found = await service.findUserById(user.id);
+      expect(found?.mustChangePassword).toBe(true);
     });
 
     it("stores encrypted identifier (raw bytes != plaintext) with real encryptor", async () => {
@@ -958,125 +983,6 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
 
       await expect(
         service.updateUsername(user.id, "new-name"),
-      ).rejects.toBeInstanceOf(NotFoundError);
-    });
-  });
-
-  // --- updatePasswordHash (line 587) ---
-
-  describe("updatePasswordHash", () => {
-    it("changes password and kills other sessions", async () => {
-      const user = await service.register({
-        identifier: "pass-change-user",
-        password: "supersecretpasswd1",
-        displayName: "Pass Change",
-        roleId: RoleId.VOLUNTEER,
-      });
-
-      const { session: s1 } = await service.login({
-        identifier: "pass-change-user",
-        password: "supersecretpasswd1",
-        ipAddress: "127.0.0.1",
-        userAgent: "test-agent",
-      });
-
-      // Create a second session
-      const { session: s2 } = await service.login({
-        identifier: "pass-change-user",
-        password: "supersecretpasswd1",
-        ipAddress: "127.0.0.2",
-        userAgent: "test-agent",
-      });
-
-      await service.updatePasswordHash(
-        user.id,
-        s1.token,
-        "supersecretpasswd1",
-        "newpassword12345678",
-      );
-
-      // s1 should still be valid
-      const valid1 = await service.validateSession(
-        s1.token,
-        "127.0.0.1",
-        "test-agent",
-      );
-      expect(valid1).not.toBeNull();
-
-      // s2 should be killed
-      const valid2 = await service.validateSession(
-        s2.token,
-        "127.0.0.2",
-        "test-agent",
-      );
-      expect(valid2).toBeNull();
-
-      // New password should work
-      const { user: loggedIn } = await service.login({
-        identifier: "pass-change-user",
-        password: "newpassword12345678",
-        ipAddress: "127.0.0.1",
-        userAgent: "test-agent",
-      });
-      expect(loggedIn.id).toBe(user.id);
-    });
-
-    it("rejects wrong current password", async () => {
-      const user = await service.register({
-        identifier: "bad-pass-change",
-        password: "supersecretpasswd1",
-        displayName: "Bad Pass Change",
-        roleId: RoleId.VOLUNTEER,
-      });
-
-      const { session } = await service.login({
-        identifier: "bad-pass-change",
-        password: "supersecretpasswd1",
-        ipAddress: "127.0.0.1",
-        userAgent: "test-agent",
-      });
-
-      await expect(
-        service.updatePasswordHash(
-          user.id,
-          session.token,
-          "wrongpassword12345",
-          "newpassword12345678",
-        ),
-      ).rejects.toBeInstanceOf(AuthError);
-    });
-
-    it("rejects inactive user", async () => {
-      const user = await service.register({
-        identifier: "inactive-pass-change",
-        password: "supersecretpasswd1",
-        displayName: "Inactive Pass",
-        roleId: RoleId.VOLUNTEER,
-      });
-
-      const { session } = await service.login({
-        identifier: "inactive-pass-change",
-        password: "supersecretpasswd1",
-        ipAddress: "127.0.0.1",
-        userAgent: "test-agent",
-      });
-
-      // Deactivate user
-      const actor = await service.register({
-        identifier: "actor-pass-deact",
-        password: "supersecretpasswd1",
-        displayName: "Actor",
-        roleId: RoleId.ADMIN,
-      });
-      await service.setUserActive(actor.id, user.id, false);
-
-      await expect(
-        service.updatePasswordHash(
-          user.id,
-          session.token,
-          "supersecretpasswd1",
-          "newpassword12345678",
-        ),
       ).rejects.toBeInstanceOf(NotFoundError);
     });
   });

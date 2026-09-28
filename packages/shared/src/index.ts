@@ -114,7 +114,6 @@ export {
 // --- Key management schemas ---
 export {
   initCryptoKeysSchema,
-  uploadVolPublicSchema,
   passwordChangeKeysSchema,
   uploadOrgPublicKeySchema,
   rotateOrgKeySchema,
@@ -132,7 +131,6 @@ export {
   reindexPendingSchema,
   type ReindexPendingInput,
   type InitCryptoKeysInput,
-  type UploadVolPublicInput,
   type PasswordChangeKeysInput,
   type UploadOrgPublicKeyInput,
   type RotateOrgKeyInput,
@@ -157,14 +155,12 @@ export {
   adminUpdateDisplayNameSchema,
   updateUsernameSchema,
   adminUpdateUsernameSchema,
-  updatePasswordHashSchema,
   updatePreferredLocaleSchema,
   changePasswordSchema,
   type UpdateDisplayNameInput,
   type AdminUpdateDisplayNameInput,
   type UpdateUsernameInput,
   type AdminUpdateUsernameInput,
-  type UpdatePasswordHashInput,
   type UpdatePreferredLocaleInput,
   type ChangePasswordInput,
 } from "./schemas/profile.js";

@@ -121,6 +121,7 @@ function createAdminContext(): Context {
       roleId: RoleId.ADMIN,
       isActive: true,
       hasSeenBriefing: true,
+      mustChangePassword: false,
     },
   };
 }

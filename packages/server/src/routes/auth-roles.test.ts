@@ -38,7 +38,10 @@ import {
   NO_OPTIONAL_ROUTERS,
   type TestDb,
 } from "../test-utils.js";
-import { createScryptHasher } from "../auth/password.js";
+import {
+  AUTH_ARGON2ID_TEST_PARAMS,
+  createPasswordHasher,
+} from "../auth/password.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 import { createAuthService } from "../auth/service.js";
@@ -66,7 +69,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const createdOrgIds: OrgId[] = [];
     const createdSchemas: string[] = [];
 
-    const hasher = createScryptHasher();
+    const hasher = createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS);
     const loginLimiter = createInMemoryRateLimiter({
       windowMs: 60_000,
       maxRequests: 100,
@@ -175,6 +178,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
           pushSender: null,
           pushHmacKey: null,
           totpReplayCache,
+          verifyLimiter: createInMemoryRateLimiter({
+            windowMs: 60_000,
+            maxRequests: 1000,
+          }),
         },
         oprfDeps: createMockOprfDeps(),
         orgService,

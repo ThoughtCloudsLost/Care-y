@@ -145,6 +145,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           roleId: dbRow.role_id,
           isActive: true,
           hasSeenBriefing: true,
+          mustChangePassword: false,
         },
       };
       return factory(ctx);
@@ -236,195 +237,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           }),
           "UNAUTHORIZED",
         );
-      });
-    });
-
-    // -----------------------------------------------------------------------
-    // uploadVolPublic
-    // -----------------------------------------------------------------------
-
-    describe("uploadVolPublic", () => {
-      it("updates volPublic on existing user_keys row", async () => {
-        const user = await createTestUser(tenantDb);
-        const caller = createAuthedCaller(user);
-
-        await caller.keys.initCryptoKeys({
-          salt: testSalt(),
-          volPublic: testVolPublic(0x01),
-        });
-
-        const newVolPublic = testVolPublic(0x02);
-        const result = await caller.keys.uploadVolPublic({
-          volPublic: newVolPublic,
-        });
-        expect(result.success).toBe(true);
-
-        const row = await tenantDb
-          .selectFrom("user_keys")
-          .select("vol_public")
-          .where("user_id", "=", user.id)
-          .executeTakeFirstOrThrow();
-
-        expect(row.vol_public).toEqual(Buffer.alloc(32, 0x02));
-      });
-
-      it("succeeds silently when no user_keys row exists (0 rows affected)", async () => {
-        const user = await createTestUser(tenantDb);
-        const caller = createAuthedCaller(user);
-
-        const result = await caller.keys.uploadVolPublic({
-          volPublic: testVolPublic(),
-        });
-        expect(result.success).toBe(true);
-      });
-    });
-
-    // -----------------------------------------------------------------------
-    // rotateKeys
-    // -----------------------------------------------------------------------
-
-    describe("rotateKeys", () => {
-      it("acquires lock, applies rotation, and releases lock on success", async () => {
-        const user = await createTestUser(tenantDb);
-        const caller = createAuthedCaller(user);
-
-        await caller.keys.initCryptoKeys({
-          salt: testSalt(),
-          volPublic: testVolPublic(0x01),
-        });
-
-        const result = await caller.keys.rotateKeys({
-          saltNew: testSalt(),
-          volPublicNew: testVolPublic(0x02),
-          reWrappedKeys: [],
-        });
-        expect(result.success).toBe(true);
-
-        const row = await tenantDb
-          .selectFrom("user_keys")
-          .select(["vol_public", "rotation_lock", "key_version"])
-          .where("user_id", "=", user.id)
-          .executeTakeFirstOrThrow();
-
-        expect(row.vol_public).toEqual(Buffer.alloc(32, 0x02));
-        expect(row.rotation_lock).toBe(false);
-        expect(row.key_version).toBeGreaterThanOrEqual(2);
-      });
-
-      it("rejects concurrent rotation (lock already held)", async () => {
-        const user = await createTestUser(tenantDb);
-        const caller = createAuthedCaller(user);
-
-        await caller.keys.initCryptoKeys({
-          salt: testSalt(),
-          volPublic: testVolPublic(),
-        });
-
-        // Manually set rotation_lock to simulate concurrent rotation.
-        await tenantDb
-          .updateTable("user_keys")
-          .set({ rotation_lock: true })
-          .where("user_id", "=", user.id)
-          .execute();
-
-        await expectTrpcError(
-          caller.keys.rotateKeys({
-            saltNew: testSalt(),
-            volPublicNew: testVolPublic(0x03),
-            reWrappedKeys: [],
-          }),
-          "INTERNAL_SERVER_ERROR",
-        );
-
-        // Clean up: release the lock so cleanup can proceed.
-        await tenantDb
-          .updateTable("user_keys")
-          .set({ rotation_lock: false })
-          .where("user_id", "=", user.id)
-          .execute();
-      });
-
-      it("releases lock on applyRotation failure (not permanently locked out)", async () => {
-        const user = await createTestUser(tenantDb);
-        const caller = createAuthedCaller(user);
-
-        await caller.keys.initCryptoKeys({
-          salt: testSalt(),
-          volPublic: testVolPublic(),
-        });
-
-        // Provide a re-wrapped key with a non-existent ticket ID to trigger
-        // an FK violation inside the savepoint. The savepoint rollback handles
-        // FK violations gracefully, so the rotation itself succeeds.
-        // Test the lock release in the success path instead.
-        const result = await caller.keys.rotateKeys({
-          saltNew: testSalt(),
-          volPublicNew: testVolPublic(0x04),
-          reWrappedKeys: [
-            {
-              ticketId: randomUUID(),
-              keyGeneration: randomUUID(),
-              ephemeralPoint: testEphemeralPoint(),
-              nonce: testNonce(),
-              wrappedKey: testWrappedKey(),
-            },
-          ],
-        });
-
-        expect(result.success).toBe(true);
-
-        const row = await tenantDb
-          .selectFrom("user_keys")
-          .select("rotation_lock")
-          .where("user_id", "=", user.id)
-          .executeTakeFirstOrThrow();
-
-        expect(row.rotation_lock).toBe(false);
-      });
-
-      it("rotates with reWrappedOrgKey when provided", async () => {
-        const user = await createTestUser(tenantDb, {
-          overrides: { role_id: RoleId.ADMIN },
-        });
-        const caller = createAuthedCaller(user);
-
-        await caller.keys.initCryptoKeys({
-          salt: testSalt(),
-          volPublic: testVolPublic(),
-        });
-
-        // Insert a wrapped_org_keys row for this user so the UPDATE has a target.
-        await tenantDb
-          .insertInto("wrapped_org_keys")
-          .values({
-            user_id: user.id,
-            ephemeral_point: Buffer.alloc(32, 0x01),
-            nonce: Buffer.alloc(24, 0x01),
-            wrapped_key: Buffer.alloc(48, 0x01),
-          })
-          .execute();
-
-        const result = await caller.keys.rotateKeys({
-          saltNew: testSalt(),
-          volPublicNew: testVolPublic(0x05),
-          reWrappedKeys: [],
-          reWrappedOrgKey: {
-            ephemeralPoint: testEphemeralPoint(0x99),
-            nonce: testNonce(0x99),
-            wrappedKey: testWrappedKey(0x99),
-          },
-        });
-
-        expect(result.success).toBe(true);
-
-        const wrap = await tenantDb
-          .selectFrom("wrapped_org_keys")
-          .selectAll()
-          .where("user_id", "=", user.id)
-          .executeTakeFirstOrThrow();
-
-        expect(wrap.ephemeral_point).toEqual(Buffer.alloc(32, 0x99));
-        expect(wrap.nonce).toEqual(Buffer.alloc(24, 0x99));
       });
     });
 
@@ -576,6 +388,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               roleId: RoleId.ADMIN,
               isActive: true,
               hasSeenBriefing: true,
+              mustChangePassword: false,
             },
           };
           const caller = factory(ctx);

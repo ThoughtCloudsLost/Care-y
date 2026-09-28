@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { createScryptHasher } from "./password.js";
+import {
+  AUTH_ARGON2ID_PARAMS,
+  AUTH_ARGON2ID_TEST_PARAMS,
+  createCodeHasher,
+  createPasswordHasher,
+} from "./password.js";
+import { CryptoError } from "../errors.js";
 
-describe("createScryptHasher", () => {
-  const hasher = createScryptHasher();
+describe("createPasswordHasher", () => {
+  const hasher = createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS);
 
   it("hash then verify roundtrips successfully", async () => {
     const hash = await hasher.hash("correct-horse-battery-staple");
@@ -22,18 +28,27 @@ describe("createScryptHasher", () => {
     expect(h1).not.toBe(h2);
   });
 
-  // Format test guards backward compatibility with hashes already persisted
-  // in the DB. Changing the serialization format (e.g., to PHC "$scrypt$..."
-  // style) would silently break verification of all existing passwords.
-  it("hash output follows scrypt:<salt-hex>:<hash-hex> format", async () => {
-    const hash = await hasher.hash("test");
-    const parts = hash.split(":");
-    expect(parts).toHaveLength(3);
-    expect(parts[0]).toBe("scrypt");
-    // 16-byte salt = 32 hex chars
-    expect(parts[1]).toHaveLength(32);
-    // 64-byte key = 128 hex chars
-    expect(parts[2]).toHaveLength(128);
+  it("stores an Argon2id string with no trailing NUL padding", async () => {
+    const hash = await hasher.hash("test-password");
+    expect(hash.startsWith("$argon2id$")).toBe(true);
+    expect(hash.includes("\0")).toBe(false);
+  });
+
+  it("hashPassword output verifies like hash output", async () => {
+    const hash = await hasher.hashPassword("branded-password");
+    expect(await hasher.verify("branded-password", hash)).toBe(true);
+  });
+
+  it("encodes the production cost parameters in the stored string", async () => {
+    const production = createPasswordHasher(AUTH_ARGON2ID_PARAMS);
+    const hash = await production.hash("production-cost");
+    expect(hash).toContain("$m=65536,t=4,");
+    expect(await production.verify("production-cost", hash)).toBe(true);
+  });
+
+  it("returns false for a scrypt-format stored hash", async () => {
+    const legacy = await createCodeHasher().hash("legacy-password");
+    expect(await hasher.verify("legacy-password", legacy)).toBe(false);
   });
 
   describe("verify rejects malformed hashes", () => {
@@ -41,54 +56,56 @@ describe("createScryptHasher", () => {
       expect(await hasher.verify("pw", "")).toBe(false);
     });
 
-    it("returns false for wrong prefix", async () => {
-      expect(await hasher.verify("pw", "bcrypt:abc:def")).toBe(false);
-    });
-
-    it("returns false for too few parts", async () => {
-      expect(await hasher.verify("pw", "scrypt:onlyonepart")).toBe(false);
-    });
-
-    it("returns false for too many parts", async () => {
-      expect(await hasher.verify("pw", "scrypt:a:b:c")).toBe(false);
-    });
-
-    it("returns false for wrong salt length", async () => {
-      const shortSalt = "aa".repeat(8); // 8 bytes, need 16
-      const fakeHash = "bb".repeat(64);
-      expect(await hasher.verify("pw", `scrypt:${shortSalt}:${fakeHash}`)).toBe(
+    it("returns false for a non-Argon2id prefix", async () => {
+      expect(await hasher.verify("pw", "$argon2i$v=19$m=8,t=1,p=1$a$b")).toBe(
         false,
       );
     });
 
-    it("returns false for wrong hash length", async () => {
-      const salt = "aa".repeat(16);
-      const shortHash = "bb".repeat(32); // 32 bytes, need 64
-      expect(await hasher.verify("pw", `scrypt:${salt}:${shortHash}`)).toBe(
+    it("returns false for a truncated Argon2id string", async () => {
+      const hash = await hasher.hash("pw-truncated");
+      expect(await hasher.verify("pw-truncated", hash.slice(0, -4))).toBe(
         false,
       );
     });
 
-    it("returns false for non-hex characters in salt", async () => {
-      const badSalt = "zz".repeat(16);
-      const fakeHash = "bb".repeat(64);
-      // Buffer.from with 'hex' silently drops invalid pairs, producing
-      // a shorter buffer that fails the length check.
-      expect(await hasher.verify("pw", `scrypt:${badSalt}:${fakeHash}`)).toBe(
-        false,
-      );
+    it("returns false for a string longer than the libsodium buffer", async () => {
+      const oversized = "$argon2id$" + "A".repeat(200);
+      expect(await hasher.verify("pw", oversized)).toBe(false);
     });
   });
 
-  it("handles empty password string", async () => {
-    const hash = await hasher.hash("");
-    expect(await hasher.verify("", hash)).toBe(true);
-    expect(await hasher.verify("notempty", hash)).toBe(false);
+  it("returns false when verifying an empty password", async () => {
+    const hash = await hasher.hash("not-empty");
+    expect(await hasher.verify("", hash)).toBe(false);
+  });
+
+  it("refuses to hash an empty password", async () => {
+    await expect(hasher.hash("")).rejects.toBeInstanceOf(CryptoError);
   });
 
   it("handles unicode passwords", async () => {
-    const hash = await hasher.hash("p\u00e4ssw\u00f6rd\u{1F512}");
-    expect(await hasher.verify("p\u00e4ssw\u00f6rd\u{1F512}", hash)).toBe(true);
+    const hash = await hasher.hash("pässwörd\u{1F512}");
+    expect(await hasher.verify("pässwörd\u{1F512}", hash)).toBe(true);
     expect(await hasher.verify("password", hash)).toBe(false);
+  });
+});
+
+describe("createCodeHasher", () => {
+  const hasher = createCodeHasher();
+
+  it("hash then verify roundtrips successfully", async () => {
+    const hash = await hasher.hashCode("123456");
+    expect(await hasher.verify("123456", hash)).toBe(true);
+    expect(await hasher.verify("654321", hash)).toBe(false);
+  });
+
+  it("keeps the scrypt:<salt-hex>:<hash-hex> format", async () => {
+    const parts = (await hasher.hash("123456")).split(":");
+    expect(parts).toHaveLength(3);
+    expect(parts[0]).toBe("scrypt");
+    expect(parts[1]).toHaveLength(32);
+    // 32-byte key = 64 hex chars
+    expect(parts[2]).toHaveLength(64);
   });
 });

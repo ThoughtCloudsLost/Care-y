@@ -39,7 +39,10 @@ import type {
   OrgSchema,
 } from "@care-y/shared";
 import type { UserRecord } from "../auth/service.js";
-import { createScryptHasher } from "../auth/password.js";
+import {
+  AUTH_ARGON2ID_TEST_PARAMS,
+  createPasswordHasher,
+} from "../auth/password.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
 import { createDbSessionRepository } from "../auth/session-repository.js";
@@ -71,7 +74,7 @@ function makeAuthService(
   );
   return createAuthService(
     tenantDb,
-    createScryptHasher(),
+    createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS),
     sessions,
     testFieldEncryptor,
     testSealedBox,
@@ -84,7 +87,7 @@ function makeAuthService(
 describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
   let testDb: TestDb;
   let tenantDb: Kysely<TenantDatabase>;
-  const hasher = createScryptHasher();
+  const hasher = createPasswordHasher(AUTH_ARGON2ID_TEST_PARAMS);
   const loginLimiter = createInMemoryRateLimiter({
     windowMs: 60_000,
     maxRequests: 5,
@@ -194,6 +197,10 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         pushSender: null,
         pushHmacKey: null,
         totpReplayCache,
+        verifyLimiter: createInMemoryRateLimiter({
+          windowMs: 60_000,
+          maxRequests: 1000,
+        }),
       },
       oprfDeps: createMockOprfDeps(),
       orgService,
@@ -348,6 +355,32 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
   });
 
+  it("auth.register flags the new account to replace its temporary password", async () => {
+    const authService = makeAuthService(tenantDb);
+    const admin = await authService.register({
+      identifier: "admin-forced-change",
+      password: "admin-password-long-enough",
+      displayName: "Admin Forced Change",
+      roleId: RoleId.ADMIN,
+    });
+
+    const { caller } = createAuthedCaller(admin, "forced-admin-token", true);
+    const result = await caller.auth.register({
+      identifier: "direct-created-user",
+      password: "temporary-password-long-enough",
+      displayName: "Direct Created",
+      roleId: RoleId.VOLUNTEER,
+    });
+
+    expect(result.user.mustChangePassword).toBe(true);
+    const row = await tenantDb
+      .selectFrom("users")
+      .select("must_change_password")
+      .where("id", "=", result.user.id as UserRecord["id"])
+      .executeTakeFirstOrThrow();
+    expect(row.must_change_password).toBe(true);
+  });
+
   // --- Auth: login ---
 
   it("auth.login returns user and sets cookie", async () => {
@@ -449,6 +482,30 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     expect(testUnseal(result.user.encryptedIdentifier)).toBe("meuser");
     expect(result.user.encryptedDisplayName).toBeDefined();
     expect(result.user.roleId).toBe(RoleId.VOLUNTEER);
+    expect(result.user.mustChangePassword).toBe(false);
+  });
+
+  it("auth.me and the login payload expose mustChangePassword", async () => {
+    const authService = makeAuthService(tenantDb, orgContext.orgId);
+    const user = await authService.register({
+      identifier: "must-change-user",
+      password: "temporary-password-long-enough",
+      displayName: "Must Change",
+      roleId: RoleId.VOLUNTEER,
+      mustChangePassword: true,
+    });
+
+    const { caller: meCaller } = createAuthedCaller(user, "must-change-token");
+    const meResult = await meCaller.auth.me();
+    expect(meResult.user.mustChangePassword).toBe(true);
+
+    loginLimiter.reset("127.0.0.1");
+    const { caller } = createTestCaller();
+    const loginResult = await caller.auth.login({
+      identifier: "must-change-user",
+      password: "temporary-password-long-enough",
+    });
+    expect(loginResult.user.mustChangePassword).toBe(true);
   });
 
   // Wire contract: no auth endpoint returns a plaintext identifier. The
@@ -889,6 +946,10 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
           pushSender: null,
           pushHmacKey: null,
           totpReplayCache,
+          verifyLimiter: createInMemoryRateLimiter({
+            windowMs: 60_000,
+            maxRequests: 1000,
+          }),
         },
         oprfDeps: createMockOprfDeps(),
         orgService,

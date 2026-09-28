@@ -13,19 +13,14 @@
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import NewTicketForm from "./NewTicketForm.svelte";
   import type { NewTicketPayload } from "./NewTicketForm.svelte";
-  import type {
-    CollisionInfo,
-    ClientSearchResult,
-    PhoneLookupResult,
-  } from "$lib/components/inputs/ClientSelect.svelte";
-  import { isPhoneLookupResult } from "$lib/components/inputs/client-select-types.js";
+  import type { CollisionInfo } from "$lib/components/inputs/ClientSelect.svelte";
+  import { createClientSelectSearch } from "$lib/components/inputs/client-select-search.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import { decryptQueueAppearance } from "$lib/utils/queue-appearance.js";
   import { trpc } from "$lib/trpc/index.js";
   import { ticketsKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { requireRouter, RelayError } from "$lib/errors.js";
-  import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
+  import { requireRouter } from "$lib/errors.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
 
@@ -96,84 +91,17 @@
     oncollision(ticketId);
   }
 
-  let clientCache: ClientSearchResult[] | null = null;
+  const clientSearch = createClientSelectSearch({
+    ticketRouter,
+    orgCache,
+    orgKeyManager,
+  });
 
   $effect(() => {
     if (!opened) {
-      clientCache = null;
+      clientSearch.reset();
     }
   });
-
-  async function searchClients(query: string): Promise<ClientSearchResult[]> {
-    if (!clientCache) {
-      const raw = await ticketRouter.searchClients.query({
-        query: "",
-        limit: 50,
-      });
-      const decrypted = await Promise.all(
-        raw.map(async (r) => ({
-          ...r,
-          alias:
-            (await orgCache.decryptAsync(
-              `client-alias:${r.id}`,
-              r.encryptedAlias,
-              { table: "clients", id: r.id },
-            )) ?? r.id.slice(0, 8),
-        })),
-      );
-      clientCache = decrypted;
-    }
-
-    const q = query.toLowerCase().trim();
-    if (q.length === 0) return clientCache;
-    return clientCache.filter(
-      (c) => c.alias.toLowerCase().includes(q) === true,
-    );
-  }
-
-  async function phoneLookup(phone: string): Promise<PhoneLookupResult> {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (import.meta.env.DEV) {
-      headers["x-org-slug"] = DEV_ORG_SLUG;
-    }
-
-    const phoneMatchHash = await orgKeyManager.phoneMatchHash(phone);
-
-    const res = await fetch("/relay/phone-lookup", {
-      method: "POST",
-      credentials: "include",
-      headers,
-      body: JSON.stringify({
-        phone,
-        ...(phoneMatchHash != null ? { phoneMatchHash } : {}),
-      }),
-    });
-
-    if (!res.ok) {
-      throw new RelayError("PHONE_LOOKUP_FAILED", res.status);
-    }
-
-    // Validate the shape rather than casting: this is a fetch boundary, and
-    // the guard exists for it.
-    const raw: unknown = await res.json();
-    if (!isPhoneLookupResult(raw)) {
-      throw new RelayError("PHONE_LOOKUP_MALFORMED", res.status);
-    }
-    if (!raw.found) return raw;
-
-    // Fall back to a short client id while the alias is still decrypting or
-    // if it cannot be decrypted, so the field is never blank.
-    return {
-      ...raw,
-      alias:
-        orgCache.decrypt(`client-alias:${raw.clientId}`, raw.encryptedAlias, {
-          table: "clients",
-          id: raw.clientId,
-        }) ?? raw.clientId.slice(0, 8),
-    };
-  }
 </script>
 
 <ShellSheet
@@ -193,8 +121,8 @@
     fetchQueueMemberKeys={async (qId: string) =>
       ticketRouter.listQueueMemberPublicKeys.query({ queueId: qId })}
     queues={decryptedQueues}
-    {searchClients}
-    {phoneLookup}
+    searchClients={clientSearch.search}
+    phoneLookup={clientSearch.phoneLookup}
     onsubmit={(p) => createTicketMutation.mutate(p)}
     oncollision={handleCollision}
     submitting={isPending}

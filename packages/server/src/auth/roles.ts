@@ -323,6 +323,30 @@ export async function requirePermissionForOrg(
 }
 
 /**
+ * Throws ForbiddenError unless the actor may hand out `targetRoleId`.
+ * Anyone who can add users may assign the default role; any other role
+ * requires MANAGE_ROLES, so an account holding only MANAGE_USERS cannot
+ * create or invite someone more privileged than the default.
+ */
+export async function assertCanAssignRole(
+  tDb: Kysely<TenantDatabase>,
+  orgSchema: OrgSchema,
+  actorRoleId: string,
+  targetRoleId: string,
+): Promise<void> {
+  if (targetRoleId === getDefaultRoleId()) return;
+  const canAssign = await hasPermissionForOrg(
+    tDb,
+    orgSchema,
+    actorRoleId,
+    Permission.MANAGE_ROLES,
+  );
+  if (!canAssign) {
+    throw new ForbiddenError(ErrorCode.ONLY_ADMINS_CAN_ASSIGN_ROLES);
+  }
+}
+
+/**
  * Drops one org's cached permission sets. Must be called from every
  * override mutation (set, reset, delete) so that revoked permissions
  * stop working on the next request, not after some TTL.

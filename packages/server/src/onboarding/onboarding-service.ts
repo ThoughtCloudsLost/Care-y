@@ -1,6 +1,11 @@
 import { randomBytes } from "node:crypto";
 import type { Kysely } from "kysely";
-import { RoleId, ErrorCode, sessionTokenSchema } from "@care-y/shared";
+import {
+  RoleId,
+  ErrorCode,
+  Permission,
+  sessionTokenSchema,
+} from "@care-y/shared";
 import type {
   OrgId,
   OrgSlug,
@@ -12,7 +17,8 @@ import type {
 } from "@care-y/shared";
 import type { TenantDatabase } from "../db/types.js";
 import { isPgUniqueViolation } from "../db/pg-errors.js";
-import { ConflictError } from "../errors.js";
+import { ConflictError, ForbiddenError, ValidationError } from "../errors.js";
+import { assertCanAssignRole, hasPermissionForOrg } from "../auth/roles.js";
 import { SESSION_MAX_AGE_MS } from "../auth/service.js";
 import { createInviteService } from "./invite-service.js";
 import {
@@ -59,6 +65,7 @@ export interface RegisterFromInviteInput {
   readonly invite: {
     readonly id: InviteTokenId;
     readonly roleId: RoleIdValue;
+    readonly invitedBy: UserId;
   };
 }
 
@@ -101,6 +108,46 @@ export async function resolveOrgPublicKey(
     row.org_public_key,
     row.current_key_generation,
   );
+}
+
+/**
+ * Throws ValidationError(INVALID_INVITE_TOKEN) unless, at registration time,
+ * the inviter is active, holds MANAGE_USERS, and may assign `roleId`.
+ */
+async function assertInviterStillAuthorized(
+  tx: Kysely<TenantDatabase>,
+  orgSchema: OrgSchema,
+  inviterId: UserId,
+  roleId: RoleIdValue,
+): Promise<void> {
+  const inviter = await tx
+    .selectFrom("users")
+    .select(["role_id", "is_active"])
+    .where("id", "=", inviterId)
+    .executeTakeFirst();
+
+  if (inviter?.is_active !== true) {
+    throw new ValidationError(ErrorCode.INVALID_INVITE_TOKEN);
+  }
+
+  const canManageUsers = await hasPermissionForOrg(
+    tx,
+    orgSchema,
+    inviter.role_id,
+    Permission.MANAGE_USERS,
+  );
+  if (!canManageUsers) {
+    throw new ValidationError(ErrorCode.INVALID_INVITE_TOKEN);
+  }
+
+  try {
+    await assertCanAssignRole(tx, orgSchema, inviter.role_id, roleId);
+  } catch (err: unknown) {
+    if (err instanceof ForbiddenError) {
+      throw new ValidationError(ErrorCode.INVALID_INVITE_TOKEN);
+    }
+    throw err;
+  }
 }
 
 // ── Factory ──────────────────────────────────────────────────────────
@@ -239,6 +286,18 @@ export function createOnboardingService(
           tokenizer,
         });
         const txInvite = createInviteService(tx);
+
+        // The invite carries the inviter's authority from minting time.
+        // Re-check it now so a deactivated inviter, or one who has since lost
+        // the right to add users or to grant this role, cannot still bring
+        // someone in. Every refusal reads as an invalid token so nothing
+        // about the inviter reaches the person holding the link.
+        await assertInviterStillAuthorized(
+          tx,
+          orgCtx.orgSchema,
+          input.invite.invitedBy,
+          input.invite.roleId,
+        );
 
         const user = await txAuth.register({
           identifier: input.identifier,

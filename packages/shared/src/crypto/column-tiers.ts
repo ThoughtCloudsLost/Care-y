@@ -136,11 +136,6 @@ export const COLUMN_TIER_MANIFEST: Readonly<
     { column: "encrypted_number", tier: "org", adrs: ["ADR-052"] },
   ],
 
-  /** invite_tokens: org tier. */
-  invite_tokens: [
-    { column: "encrypted_token", tier: "org", adrs: ["ADR-052"] },
-  ],
-
   /** saved_filters: org tier. Filter name and state are org-key-sealed
    *  so volunteers can share filters without server-readable content.
    *  ADR-064 (org-key tier for non-PII org configuration data). */
