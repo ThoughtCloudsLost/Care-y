@@ -39,6 +39,37 @@ describe("handbook-corpus", () => {
     expect(entry!.subSlug).toBe("case-fold");
   });
 
+  it("a bold opening ending in a question mark is a label with its body text", () => {
+    // demo_narrative_topic_case_fold_body line 1 starts with
+    // **Where does the fold live?**
+    const entry = getCorpusEntry(
+      LOCALE,
+      "demo_narrative_topic_case_fold_body",
+      1,
+    );
+    expect(entry).not.toBeNull();
+    expect(entry!.label).toBe("Where does the fold live?");
+    expect(entry!.plainText).toMatch(/^One entry in a reactive map/);
+    expect(entry!.plainText).not.toContain("Where does the fold live?");
+    expect(entry!.sectionId).toBe("ticket-detail");
+    expect(entry!.subSlug).toBe("case-fold");
+  });
+
+  it("a question label on its own line carries an empty body", () => {
+    // demo_narrative_deepdive_deployment_body line 1 is
+    // **What differs between the two?** introducing a bullet list.
+    const entry = getCorpusEntry(
+      LOCALE,
+      "demo_narrative_deepdive_deployment_body",
+      1,
+    );
+    expect(entry).not.toBeNull();
+    expect(entry!.label).toBe("What differs between the two?");
+    expect(entry!.plainText).toBe("");
+    expect(entry!.sectionId).toBe("deep-dive");
+    expect(entry!.subSlug).toBe("deployment");
+  });
+
   it("missing keys are skipped (no entry for a key that is not in the lookup)", () => {
     const entry = getCorpusEntry(LOCALE, "demo_nonexistent_body", 0);
     expect(entry).toBeNull();

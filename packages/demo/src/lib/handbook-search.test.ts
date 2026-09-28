@@ -14,6 +14,9 @@ const ES = "es";
 /** A seam label present in the EN corpus (case-fold body, line 2). */
 const FOLD_LABEL = "The fold store and drag handling.";
 
+/** A question-style seam label in the EN corpus (case-fold body, line 1). */
+const FOLD_QUESTION_LABEL = "Where does the fold live?";
+
 /** The corpus resolves through paraglide's GLOBAL locale; the locale
  *  argument is a cache key and reactivity signal. Tests that need ES
  *  text must switch the global. */
@@ -126,6 +129,32 @@ describe("searchEntries", () => {
     for (const hit of all) {
       expect(hit.labels).toContain(FOLD_LABEL);
     }
+  });
+
+  it("label filter by a question label returns the entry carrying it", () => {
+    const hits = searchEntries("", EN, {
+      labels: [FOLD_QUESTION_LABEL],
+      limit: 100,
+    });
+    expect(hits.map((h) => `${h.sectionId}/${h.subSlug}`)).toContain(
+      "ticket-detail/case-fold",
+    );
+    for (const hit of hits) {
+      expect(hit.labels).toContain(FOLD_QUESTION_LABEL);
+    }
+  });
+
+  it("question label text scores as a label match", () => {
+    // "live" appears in the case-fold entry once, inside its question
+    // label, and not in its heading or tags. A label match outweighs a
+    // single body-line match, so the score exceeds the body weight.
+    const hits = searchEntries("live", EN, { limit: 100 });
+    const fold = hits.find(
+      (h) => h.sectionId === "ticket-detail" && h.subSlug === "case-fold",
+    );
+    expect(fold).toBeDefined();
+    expect(fold!.labels).toContain(FOLD_QUESTION_LABEL);
+    expect(fold!.score).toBeGreaterThan(1);
   });
 
   it("empty query with labels returns entries in taxonomy order", () => {

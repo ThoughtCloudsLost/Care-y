@@ -122,7 +122,8 @@ export function buildAggregationSection(
 
 /** Distinct seam labels and tags across a hit list, most frequent first
  *  (ties keep first-seen order). Tag facets display without the trailing
- *  period that labels carry. The merged list feeds the facet chip row. */
+ *  period or question mark that labels carry. The merged list feeds the
+ *  facet chip row. */
 export function distinctHitFacets(
   hits: readonly EntryHit[],
 ): readonly string[] {
