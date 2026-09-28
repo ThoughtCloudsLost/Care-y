@@ -226,12 +226,12 @@ export async function bootDemoEngine(
   // Wire up the DB shim
   initDb(pg);
 
-  // Kick off all six dynamic imports in parallel so module fetch/eval
+  // Kick off all seven dynamic imports in parallel so module fetch/eval
   // overlaps with migrations and seeding. None depends on another's
   // evaluation; the globals-init constraint (engine.ts:11-14) is
   // satisfied because it is a static import that evaluates first.
   const [
-    scryptHashMod,
+    passwordMod,
     seedTicketsMod,
     seedKbMod,
     seedPortalMod,
@@ -239,7 +239,7 @@ export async function bootDemoEngine(
     trpcMod,
     callerAdapterMod,
   ] = await Promise.all([
-    import("../../../../server/src/auth/scrypt-hash.js"),
+    import("../../../../server/src/auth/password.js"),
     import("../../../../server/src/dev/seed-tickets.js"),
     import("../../../../server/src/dev/seed-kb.js"),
     import("../../../../server/src/dev/seed-portal.js"),
@@ -303,8 +303,14 @@ export async function bootDemoEngine(
     },
   };
 
-  // Scrypt hasher (via shim)
-  const hasher = scryptHashMod.createScryptHasher(64);
+  // The product's Argon2id hasher, running over the sodium-native shim.
+  // Cost is libsodium's minimum because demo sign-ins hash in the
+  // visitor's browser, and the hashes only ever land in the tab's
+  // in-memory database. Never reuse these parameters for stored
+  // credentials.
+  const hasher = passwordMod.createPasswordHasher(
+    passwordMod.AUTH_ARGON2ID_TEST_PARAMS,
+  );
 
   // 5. Structural seed
   const t5 = timeMs();
@@ -554,6 +560,7 @@ export async function bootDemoEngine(
         "role_id",
         "is_active",
         "has_seen_briefing",
+        "must_change_password",
       ])
       .where("id", "=", seedResult.adminUserId)
       .executeTakeFirstOrThrow();
@@ -565,6 +572,7 @@ export async function bootDemoEngine(
       roleId: row.role_id,
       isActive: row.is_active,
       hasSeenBriefing: row.has_seen_briefing,
+      mustChangePassword: row.must_change_password,
     };
   }
 
@@ -679,6 +687,7 @@ export async function bootDemoEngine(
     roleId: RoleId.VOLUNTEER,
     isActive: true,
     hasSeenBriefing: true,
+    mustChangePassword: false,
   };
 
   const volunteerCtx: Context = {

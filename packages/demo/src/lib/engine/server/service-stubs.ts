@@ -38,9 +38,7 @@ import {
 } from "./seed-structure.js";
 import { createDemoOprfService } from "./demo-keys.js";
 import type { SessionTokenizer } from "../../../../../server/src/crypto/session-tokenizer.js";
-import type { ScryptHasher } from "../../../../../server/src/auth/scrypt-hash.js";
 import type { PasswordHasher } from "../../../../../server/src/auth/password.js";
-import type { PasswordHash } from "@care-y/shared";
 import type { PendingClient } from "../../../../../server/src/tickets/ticket-service.js";
 import type { IntakeFormService } from "../../../../../server/src/portal/intake-form-service.js";
 import type { AccountServiceDeps } from "../../../../../server/src/portal/account-service.js";
@@ -53,7 +51,7 @@ export interface ServiceStubDeps {
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
   readonly secretsEncryptor: SecretsEncryptor;
-  readonly hasher: ScryptHasher;
+  readonly hasher: PasswordHasher;
   readonly tokenizer: SessionTokenizer;
   readonly blobStore: BlobStore;
   readonly demoVolScalar: Uint8Array;
@@ -78,17 +76,6 @@ export interface ServiceStubResult {
   /** Account service deps minus orgUuid, which callers fill per request. */
   readonly accountServiceDeps: Omit<AccountServiceDeps, "orgUuid">;
   readonly notificationService: NotificationService;
-}
-
-/** Wraps a ScryptHasher with the branded hashPassword method PasswordHasher requires. */
-function wrapAsPasswordHasher(base: ScryptHasher): PasswordHasher {
-  return {
-    hash: base.hash.bind(base),
-    verify: base.verify.bind(base),
-    async hashPassword(password: string): Promise<PasswordHash> {
-      return (await base.hash(password)) as PasswordHash;
-    },
-  };
 }
 
 // ── Builder ────────────────────────────────────────────────────────
@@ -215,8 +202,9 @@ export async function buildServiceStubs(
 
   // Push sender no-op
   const pushSenderStub: PushNotificationSender = {
-    async sendToUsers(): Promise<void> {
-      // no-op
+    async sendToUsers(): Promise<{ delivered: number }> {
+      // The demo has no push service, so nothing is ever delivered.
+      return Promise.resolve({ delivered: 0 });
     },
     async removeSubscription(): Promise<void> {
       // no-op
@@ -347,8 +335,6 @@ export async function buildServiceStubs(
     providerStatics: new Map([["twilio", twilioProviderStatic]]),
   });
 
-  const passwordHasher = wrapAsPasswordHasher(hasher);
-
   // Import notification preferences service for notificationDeps
   const { createNotificationPreferencesService } =
     await import("../../../../../server/src/notifications/preferences.js");
@@ -377,7 +363,7 @@ export async function buildServiceStubs(
 
   const appRouter = createAppRouter({
     authDeps: {
-      hasher: passwordHasher,
+      hasher,
       loginLimiter: noopLimiter,
       saltLimiter: noopLimiter,
       fakeSaltKey,
@@ -392,7 +378,7 @@ export async function buildServiceStubs(
       createAuditSvc: createAuditService,
     },
     profileDeps: {
-      hasher: passwordHasher,
+      hasher,
       encryptor,
       indexer,
       tokenizer,
@@ -408,6 +394,7 @@ export async function buildServiceStubs(
       pushSender: pushSenderStub,
       pushHmacKey: pushChallengeHmacKey,
       totpReplayCache: totpReplayCacheStub,
+      verifyLimiter: noopLimiter,
     },
     oprfDeps: { oprfService },
     orgService: orgServiceStub,
@@ -479,7 +466,7 @@ export async function buildServiceStubs(
     },
     onboardingDeps: {
       orgService: orgServiceStub,
-      hasher: passwordHasher,
+      hasher,
       encryptor,
       indexer,
       tokenizer,
@@ -555,6 +542,8 @@ export async function buildServiceStubs(
 
       // No SSE stream is served here, so there is no one to tell.
       liveEvents: null,
+
+      isSecureCookie: false,
     },
     clientDeps: null,
     escalationDeps: null,
