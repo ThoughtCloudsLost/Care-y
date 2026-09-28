@@ -16,6 +16,7 @@ import {
   type SeedStep,
   type SeedStory,
 } from "./seed-stories.js";
+import { SEED_HANDBOOK_TICKET } from "./seed-handbook-ticket.js";
 
 const DAY = 1_440;
 const COUNTS = [120, 106] as const;
@@ -372,5 +373,26 @@ describe("seedVoicemailInputSchema", () => {
     expect(parse("AAAA", 0)).toBe(false);
     expect(parse("AAAA", 601)).toBe(false);
     expect(parse("AAAA", 2.5)).toBe(false);
+  });
+});
+
+describe("SEED_HANDBOOK_TICKET", () => {
+  const { followUps, createdAgo } = SEED_HANDBOOK_TICKET;
+
+  it("orders every row strictly after the last and after the ticket opened", () => {
+    const times = followUps.map((fu) => fu.agoMinutes);
+    expect(times[0]).toBeLessThan(createdAgo);
+    for (let i = 1; i < times.length; i++) {
+      expect(times[i]).toBeLessThan(times[i - 1] ?? Infinity);
+    }
+  });
+
+  it("opens with the client's first message, before anyone is assigned", () => {
+    const first = followUps.at(0);
+    expect(first?.source).toBe("client");
+    const assigned = followUps.findIndex(
+      (fu) => fu.type === "volunteer_assigned",
+    );
+    expect(assigned).toBeGreaterThan(0);
   });
 });

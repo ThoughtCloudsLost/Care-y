@@ -14,7 +14,12 @@
 import { z } from "zod";
 import { ticketIdSchema, userIdSchema } from "../ids.js";
 import { base64String } from "../schemas/validators.js";
-import { callStatusSchema, type TicketPriority } from "../schemas/tickets.js";
+import {
+  callStatusSchema,
+  type FollowUpSource,
+  type FollowUpType,
+  type TicketPriority,
+} from "../schemas/tickets.js";
 
 export type SeedQueue = "Intake" | "Crisis" | "Housing";
 /**
@@ -82,8 +87,8 @@ export interface SeedStory {
 }
 
 export interface SeedFollowUpShape {
-  readonly type: string;
-  readonly source: "client" | "volunteer" | "system";
+  readonly type: FollowUpType;
+  readonly source: FollowUpSource;
 }
 
 /** Input for the dev-only dev.applySeedTimeline procedure. */

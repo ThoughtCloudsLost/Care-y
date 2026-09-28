@@ -104,13 +104,8 @@ export const SEED_HANDBOOK_TICKET: SeedHandbookTicket = {
     // shift's volunteer (another roster user when available) handles
     // this stretch; the seeded volunteer takes over at the handoff
     // below, which is why the reassignment events name two people.
-    {
-      content: "Volunteer assigned",
-      source: "system",
-      type: "volunteer_assigned",
-      eventParams: { user: "other" },
-      agoMinutes: 4310,
-    },
+    // The client's opening messages come first; the volunteer picks the
+    // ticket up after them and replies.
     {
       content: "I need help finding a place to stay",
       source: "client",
@@ -120,6 +115,13 @@ export const SEED_HANDBOOK_TICKET: SeedHandbookTicket = {
       content: "My sister said I can only stay with her through the weekend",
       source: "client",
       agoMinutes: 4297,
+    },
+    {
+      content: "Volunteer assigned",
+      source: "system",
+      type: "volunteer_assigned",
+      eventParams: { user: "other" },
+      agoMinutes: 4290,
     },
     {
       content: "I can look into shelters in your area",
