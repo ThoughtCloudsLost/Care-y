@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The channel policy controls which communication channels the organization makes available: SMS, email, secure links, voice, and one-time share links. Every c..." |
+* | "The channel policy controls which communication channels the organization makes available. - SMS - Email - Secure links - Voice - One-time share links Every ..." |
 *
 * @param {Demo_Narrative_Admin_Channel_Policy_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -6,12 +6,16 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Reply_BodyInputs */
 
 const en_demo_narrative_topic_reply_body = /** @type {(inputs: Demo_Narrative_Topic_Reply_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A reply is encrypted in the browser under the ticket key before it leaves the device, and the server stores the result without holding a key that can open it. How much of the path stays encrypted depends on the channel: a reply to an encrypted portal channel is sealed for the client's own browser, while a text message leaves the encrypted path when it reaches the telephony provider. [[#encryption #telephony]]
+	return /** @type {LocalizedString} */ (`A reply is encrypted in the browser under the ticket key before it leaves the device, and the server stores the result without holding a key that can open it. How much of the path stays encrypted depends on the channel. A reply to an encrypted portal channel is sealed for the client's own browser, while a text message leaves the encrypted path when it reaches the telephony provider. [[#encryption #telephony]]
 **What two copies does a reply produce?** Sending writes the message twice, under different keys. [[#encryption #portal]]
 - The organization's copy is encrypted under the ticket's symmetric key and stored as a follow-up on the ticket, readable by every account the ticket key is wrapped for. [[#encryption #client-data]]
 - The client's copy is sealed to the public key of their active portal channel and stored beside that channel, readable only in the client's browser. [[#portal #encryption]]
 When the client has no encrypted channel open, the second copy is not written and the reply reaches them over the channel they came in on. [How encryption works](#deep-dive/how-encryption-works) covers the key hierarchy behind both copies. [[#encryption #portal]]
-**Sending a text.** The browser posts the ticket identifier and the message to a relay endpoint. The server resolves and decrypts the client's phone number itself rather than accepting one from the browser, which keeps the number out of the request. The server hands both to the telephony provider and then zeroes every buffer that touched plaintext in a \`finally\` block: the raw request body, the ticket identifier, the message, and the phone number. [[#telephony #server-holds #encryption]]
+**Sending a text.** The browser posts the ticket identifier and the message to a relay endpoint. The server resolves and decrypts the client's phone number itself rather than accepting one from the browser, which keeps the number out of the request. The server hands both to the telephony provider and then zeroes every buffer that touched plaintext in a \`finally\` block.
+- The raw request body
+- The ticket identifier
+- The message
+- The phone number [[#telephony #server-holds #encryption]]
 - The endpoint logs no request body and returns no content in an error response.
 - The message is capped at 1600 characters, and both the browser and the server count the same unit.
 - The provider interface accepts strings rather than buffers, so two immutable copies of the number and the message exist for the length of one outbound HTTP call and persist until garbage collection. This residual risk is recorded in the code beside the line that creates it.
@@ -25,12 +29,16 @@ When the client has no encrypted channel open, the second copy is not written an
 };
 
 const es_demo_narrative_topic_reply_body = /** @type {(inputs: Demo_Narrative_Topic_Reply_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una respuesta se cifra en el navegador con la clave del ticket antes de salir del dispositivo, y el servidor almacena el resultado sin poseer una clave que pueda abrirlo. Cuánto del recorrido permanece cifrado depende del canal: una respuesta a un canal cifrado del portal se sella para el propio navegador del cliente, mientras que un mensaje de texto abandona la ruta cifrada al llegar al proveedor de telefonía. [[#encryption #telephony]]
+	return /** @type {LocalizedString} */ (`Una respuesta se cifra en el navegador con la clave del ticket antes de salir del dispositivo, y el servidor almacena el resultado sin poseer una clave que pueda abrirlo. Cuánto del recorrido permanece cifrado depende del canal. Una respuesta a un canal cifrado del portal se sella para el propio navegador del cliente, mientras que un mensaje de texto abandona la ruta cifrada al llegar al proveedor de telefonía. [[#encryption #telephony]]
 **¿Qué dos copias produce una respuesta?** El envío escribe el mensaje dos veces, con claves distintas. [[#encryption #portal]]
 - La copia de la organización se cifra con la clave simétrica del ticket y se almacena como un seguimiento en el ticket, legible para cada cuenta para la que se ha envuelto la clave del ticket. [[#encryption #client-data]]
 - La copia del cliente se sella con la clave pública de su canal activo del portal y se almacena junto a ese canal, legible solo en el navegador del cliente. [[#portal #encryption]]
 Cuando el cliente no tiene ningún canal cifrado abierto, la segunda copia no se escribe y la respuesta le llega por el canal por el que entró. [Cómo funciona el cifrado](#deep-dive/how-encryption-works) trata la jerarquía de claves detrás de ambas copias. [[#encryption #portal]]
-**Enviar un mensaje de texto.** El navegador envía el identificador del ticket y el mensaje a un endpoint de relevo. El servidor resuelve y descifra por su cuenta el número de teléfono del cliente en lugar de aceptar uno del navegador, lo que mantiene el número fuera de la solicitud. El servidor entrega ambos al proveedor de telefonía y después pone a cero cada búfer que tocó texto plano en un bloque \`finally\`: el cuerpo crudo de la solicitud, el identificador del ticket, el mensaje y el número de teléfono. [[#telephony #server-holds #encryption]]
+**Enviar un mensaje de texto.** El navegador envía el identificador del ticket y el mensaje a un endpoint de relevo. El servidor resuelve y descifra por su cuenta el número de teléfono del cliente en lugar de aceptar uno del navegador, lo que mantiene el número fuera de la solicitud. El servidor entrega ambos al proveedor de telefonía y después pone a cero cada búfer que tocó texto plano en un bloque \`finally\`.
+- El cuerpo crudo de la solicitud
+- El identificador del ticket
+- El mensaje
+- El número de teléfono [[#telephony #server-holds #encryption]]
 - El endpoint no registra ningún cuerpo de solicitud y no devuelve contenido en una respuesta de error.
 - El mensaje tiene un tope de 1600 caracteres, y tanto el navegador como el servidor cuentan la misma unidad.
 - La interfaz del proveedor acepta cadenas en lugar de búferes, por lo que existen dos copias inmutables del número y del mensaje durante una sola llamada HTTP saliente y persisten hasta la recolección de basura. Este riesgo residual está anotado en el código junto a la línea que lo crea.
@@ -44,12 +52,16 @@ Cuando el cliente no tiene ningún canal cifrado abierto, la segunda copia no se
 };
 
 const en_xa2_demo_narrative_topic_reply_body = /** @type {(inputs: Demo_Narrative_Topic_Reply_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦À rèply ìs èncryptèd ìn thè bròwsèr ùndèr thè tìckèt kèy bèfòrè ìt lèàvès thè dèvìcè, ànd thè sèrvèr stòrès thè rèsùlt wìthòùt hòldìng à kèy thàt càn òpèn ìt. Hòw mùch òf thè pàth stàys èncryptèd dèpènds òn thè chànnèl: à rèply tò àn èncryptèd pòrtàl chànnèl ìs sèàlèd fòr thè clìènt's òwn bròwsèr, whìlè à tèxt mèssàgè lèàvès thè èncryptèd pàth whèn ìt rèàchès thè tèlèphòny pròvìdèr. [[#èncryptìòn #tèlèphòny]]
+	return /** @type {LocalizedString} */ (`⟦À rèply ìs èncryptèd ìn thè bròwsèr ùndèr thè tìckèt kèy bèfòrè ìt lèàvès thè dèvìcè, ànd thè sèrvèr stòrès thè rèsùlt wìthòùt hòldìng à kèy thàt càn òpèn ìt. Hòw mùch òf thè pàth stàys èncryptèd dèpènds òn thè chànnèl. À rèply tò àn èncryptèd pòrtàl chànnèl ìs sèàlèd fòr thè clìènt's òwn bròwsèr, whìlè à tèxt mèssàgè lèàvès thè èncryptèd pàth whèn ìt rèàchès thè tèlèphòny pròvìdèr. [[#èncryptìòn #tèlèphòny]]
  ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt twò còpìès dòès à rèply pròdùcè? ••••••••••••** Sèndìng wrìtès thè mèssàgè twìcè, ùndèr dìffèrènt kèys. [[#èncryptìòn #pòrtàl]]
 - Thè òrgànìzàtìòn's còpy ìs èncryptèd ùndèr thè tìckèt's symmètrìc kèy ànd stòrèd às à fòllòw-ùp òn thè tìckèt, rèàdàblè by èvèry àccòùnt thè tìckèt kèy ìs wràppèd fòr. [[#èncryptìòn #clìènt-dàtà]]
 - Thè clìènt's còpy ìs sèàlèd tò thè pùblìc kèy òf thèìr àctìvè pòrtàl chànnèl ànd stòrèd bèsìdè thàt chànnèl, rèàdàblè ònly ìn thè clìènt's bròwsèr. [[#pòrtàl #èncryptìòn]]
 Whèn thè clìènt hàs nò èncryptèd chànnèl òpèn, thè sècònd còpy ìs nòt wrìttèn ànd thè rèply rèàchès thèm òvèr thè chànnèl thèy càmè ìn òn. [Hòw èncryptìòn wòrks](#dèèp-dìvè/hòw-èncryptìòn-wòrks) còvèrs thè kèy hìèràrchy bèhìnd bòth còpìès. [[#èncryptìòn #pòrtàl]]
- ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Sèndìng à tèxt. •••••** Thè bròwsèr pòsts thè tìckèt ìdèntìfìèr ànd thè mèssàgè tò à rèlày èndpòìnt. Thè sèrvèr rèsòlvès ànd dècrypts thè clìènt's phònè nùmbèr ìtsèlf ràthèr thàn àccèptìng ònè fròm thè bròwsèr, whìch kèèps thè nùmbèr òùt òf thè rèqùèst. Thè sèrvèr hànds bòth tò thè tèlèphòny pròvìdèr ànd thèn zèròès èvèry bùffèr thàt tòùchèd plàìntèxt ìn à \`fìnàlly\` blòck: thè ràw rèqùèst bòdy, thè tìckèt ìdèntìfìèr, thè mèssàgè, ànd thè phònè nùmbèr. [[#tèlèphòny #sèrvèr-hòlds #èncryptìòn]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Sèndìng à tèxt. •••••** Thè bròwsèr pòsts thè tìckèt ìdèntìfìèr ànd thè mèssàgè tò à rèlày èndpòìnt. Thè sèrvèr rèsòlvès ànd dècrypts thè clìènt's phònè nùmbèr ìtsèlf ràthèr thàn àccèptìng ònè fròm thè bròwsèr, whìch kèèps thè nùmbèr òùt òf thè rèqùèst. Thè sèrvèr hànds bòth tò thè tèlèphòny pròvìdèr ànd thèn zèròès èvèry bùffèr thàt tòùchèd plàìntèxt ìn à \`fìnàlly\` blòck.
+- Thè ràw rèqùèst bòdy
+- Thè tìckèt ìdèntìfìèr
+- Thè mèssàgè
+- Thè phònè nùmbèr [[#tèlèphòny #sèrvèr-hòlds #èncryptìòn]]
 - Thè èndpòìnt lògs nò rèqùèst bòdy ànd rètùrns nò còntènt ìn àn èrròr rèspònsè.
 - Thè mèssàgè ìs càppèd àt 1600 chàràctèrs, ànd bòth thè bròwsèr ànd thè sèrvèr còùnt thè sàmè ùnìt.
 - Thè pròvìdèr ìntèrfàcè àccèpts strìngs ràthèr thàn bùffèrs, sò twò ìmmùtàblè còpìès òf thè nùmbèr ànd thè mèssàgè èxìst fòr thè lèngth òf ònè òùtbòùnd HTTP càll ànd pèrsìst ùntìl gàrbàgè còllèctìòn. Thìs rèsìdùàl rìsk ìs rècòrdèd ìn thè còdè bèsìdè thè lìnè thàt crèàtès ìt.

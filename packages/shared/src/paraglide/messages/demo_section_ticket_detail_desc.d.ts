@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Surfaces what is recorded on one ticket: client contact on each channel, volunteer notes, attached files, and actions that change the ticket's state. A clien..." |
+* | "Surfaces what is recorded on one ticket, from client contact on each channel and volunteer notes to attached files and actions that change the ticket's state..." |
 *
 * @param {Demo_Section_Ticket_Detail_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
