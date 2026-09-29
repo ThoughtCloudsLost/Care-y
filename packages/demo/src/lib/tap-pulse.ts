@@ -737,7 +737,8 @@ export function buildSmsTitleCandidates(): Set<string> {
 
 /**
  * Labels for the "Reply to client" entry inside the compose actions
- * popover (ComposeActions.svelte:98-106), across locales. The reply
+ * popover (the ComposeActions ListItem titled ticket_reply_to_client),
+ * across locales. The reply
  * choreography's second stage searches for this label alone so the
  * still-visible compose button does not win the aria pass.
  */

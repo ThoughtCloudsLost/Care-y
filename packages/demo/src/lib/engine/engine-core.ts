@@ -441,6 +441,8 @@ export interface EngineSession {
   readonly refreshAdminUser: () => Promise<void>;
   readonly markAdminUserDirty: () => void;
   readonly isAdminUserDirty: () => boolean;
+  /** See DemoEngineResult.signedInPermissions. */
+  readonly signedInPermissions: () => Promise<readonly Permission[]>;
   /** See DemoEngineResult.setSignedInRole. */
   readonly setSignedInRole: (
     roleId: RoleIdValue,
@@ -632,6 +634,14 @@ export async function createEngineSession(
     isDirty: () => adminUserDirty,
   });
 
+  // Reads auth.me on the admin caller, never through the phone's trpc
+  // stub, which rejects auth.me until the scripted login completes. The
+  // phone needs this set at boot, well before that.
+  async function signedInPermissions(): Promise<readonly Permission[]> {
+    const me = await adminCaller.auth.me();
+    return me.permissions;
+  }
+
   return {
     trpc: trpcAdapter,
     callerFactory,
@@ -640,6 +650,7 @@ export async function createEngineSession(
     refreshAdminUser,
     markAdminUserDirty,
     isAdminUserDirty: () => adminUserDirty,
+    signedInPermissions,
     setSignedInRole: async (
       roleId: RoleIdValue,
     ): Promise<readonly Permission[]> => {
@@ -654,8 +665,7 @@ export async function createEngineSession(
       // out-of-band UPDATE bypasses dispatch, so a direct refresh is
       // the correct synchronization point.
       await refreshAdminUser();
-      const me = await adminCaller.auth.me();
-      return me.permissions;
+      return signedInPermissions();
     },
   };
 }

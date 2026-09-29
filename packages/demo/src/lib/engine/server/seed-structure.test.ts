@@ -1,7 +1,7 @@
 /**
  * Tests for seed-structure.ts data shapes.
  *
- * Validates the permission grant additions, the telephony config shape,
+ * Validates the admin permission keys, the telephony config shape,
  * the greetings and SMS templates, and the retention policy. Does NOT
  * boot PGlite (unit tests against the data shape only).
  */
@@ -9,12 +9,12 @@
 import { describe, it, expect } from "vitest";
 import { Permission } from "@care-y/shared";
 
-describe("DEFAULT_PERMISSIONS grant", () => {
-  // This test verifies the permission set matches the E6 decisions.
-  // The actual DEFAULT_PERMISSIONS lives in crypto-context.ts, but
-  // the seed file's contract is that ADMIN role covers them all.
+describe("admin permission keys", () => {
+  // The phone reads the seeded admin's permission set from auth.me at
+  // boot (role-switch.smoke.test.ts covers that); this only pins that
+  // the admin-only keys the demo narrates exist in the enum.
 
-  it("includes all E6-granted permissions in Permission enum", () => {
+  it("includes the admin-only keys in the Permission enum", () => {
     // Verify these permission values exist in the enum
     expect(Permission.MANAGE_ORG_IDENTITY).toBeDefined();
     expect(Permission.MANAGE_KEYS).toBeDefined();

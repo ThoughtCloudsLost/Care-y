@@ -14,8 +14,9 @@
 
   The PGlite engine boots in phone-main.ts before this component
   mounts. The engine promise is passed as a prop; when it resolves,
-  PhoneApp seeds the crypto-context identity (userId, userRoleId)
-  and resolves the real detail ticket ID for the outer-page sentinel.
+  PhoneApp seeds the crypto-context identity (userId, then the seeded
+  admin's role and server permission set) and resolves the real detail
+  ticket ID for the outer-page sentinel.
 -->
 <script lang="ts">
   import { App, Preloader } from "konsta/svelte";
@@ -59,7 +60,7 @@
   import { isPacedLoginInFlight } from "./stubs/login-crypto.js";
   import { themeStore } from "./stubs/theme.svelte.js";
   import { sealSeedFilterNames } from "./stubs/saved-filters.svelte.js";
-  import { RoleId, type RoleIdValue } from "@care-y/shared";
+  import { RoleId, type Permission, type RoleIdValue } from "@care-y/shared";
   import {
     classifyDemoLabel,
     type DemoLocale,
@@ -317,19 +318,49 @@
     globalThis.location.hash = next;
   }
 
+  /**
+   * Read the seeded admin's permission set from the server and apply it
+   * through the role switch's path, so every permission gate on the
+   * phone derives from the role the seed actually holds. The engine
+   * reads auth.me on its own caller because the trpc stub rejects
+   * auth.me until the scripted login completes. A failure here is
+   * logged and rethrown, since nothing else reports it and a phone
+   * left on the placeholder set would hide every gated control.
+   */
+  async function applySignedInPermissions(e: DemoEngineResult): Promise<void> {
+    let permissions: readonly Permission[];
+    try {
+      permissions = await e.signedInPermissions();
+    } catch (err: unknown) {
+      console.error(
+        "[demo] Loading the signed-in permissions failed:",
+        err instanceof Error ? err.message : String(err),
+      );
+      throw err;
+    }
+    setRoleAndPermissions(RoleId.ADMIN, new Set(permissions));
+  }
+
   // Seed crypto-context and resolve the detail IDs once the engine
-  // finishes booting. Failures are already logged by phone-main.ts;
-  // we catch here to avoid an unhandled rejection inside the component.
+  // finishes booting. Engine failures are already logged by
+  // phone-main.ts; the catch below avoids an unhandled rejection
+  // inside the component.
+  //
+  // The permission set lands first, before engineReady flips and before
+  // keying starts. Gated surfaces only mount once the phone leaves the
+  // login screen. The fast-forward awaits bootSeeded as well as
+  // ensureKeyed. The scripted login cannot finish sooner, because its
+  // sign-in runs on the engine and its paced derivation holds for
+  // several seconds after that. So no gated control renders a frame
+  // against the placeholder set.
   //
   // enginePromise is a Promise prop set once at mount; capturing the
   // initial value is intentional (the prop never changes).
   // svelte-ignore state_referenced_locally
-  void enginePromise
-    .then((e) => {
-      demoSeed({
-        userId: e.seedResult.adminUserId,
-        userRoleId: RoleId.ADMIN,
-      });
+  const bootSeeded: Promise<void> = enginePromise.then(
+    async (e): Promise<void> => {
+      demoSeed({ userId: e.seedResult.adminUserId });
+      await applySignedInPermissions(e);
       if (e.ticketIds.length > 0) {
         resolvedDetailId = e.ticketIds[0] ?? null;
       }
@@ -363,12 +394,14 @@
         .catch(() => {
           settleBackgroundLogin();
         });
-    })
-    .catch(() => {
-      // Boot failure already surfaced by phone-main.ts console.error.
-      // engineReady stays false so the peek keeps showing a blurred still.
-      keyedDone = true;
-    });
+    },
+  );
+  void bootSeeded.catch(() => {
+    // Engine failures are logged by phone-main.ts and permission-read
+    // failures by applySignedInPermissions. engineReady stays false so
+    // the peek keeps showing a blurred still.
+    keyedDone = true;
+  });
 
   // Flips when the background login settles (success or failure).
   // Gates the splash; resets naturally on restart (iframe reload).
@@ -865,9 +898,16 @@
         // Engine still booting or a raced worker state: navigate anyway.
         // ensureKeyed clears its cached promise on rejection, so the
         // next transition (or the scripted login) retries derivation.
-      } finally {
-        fastForwardPending -= 1;
       }
+      try {
+        // The seeded admin's permission set, so gated controls on the
+        // target route render from the real set on their first frame.
+        await bootSeeded;
+      } catch {
+        // Boot failed and was already logged; bootSeeded's own catch
+        // settled the splash. Navigate anyway so the failure shows.
+      }
+      fastForwardPending -= 1;
       setDemoAuthed(true);
       setLoginStage(null);
     }
@@ -1729,9 +1769,11 @@
     }
 
     // reply: three-stage choreography. Stage 1: click the compose
-    // actions button. Stage 2: wait for the popover's Reply entry
-    // (ComposeActions.svelte:98-106, ticket_reply_to_client) and click
-    // it, which calls activateReply and expands the messagebar.
+    // actions button. Stage 2: wait for the popover's Reply entry (the
+    // ComposeActions ListItem titled ticket_reply_to_client, rendered
+    // only when the orchestrator passes onreply, which needs the portal
+    // channel permission) and click it, which calls activateReply and
+    // expands the messagebar.
     // Stage 3: set a sample draft in the expanded textarea so the send
     // button and character affordances show.
     if (pulseTopic === "reply" && el !== null) {

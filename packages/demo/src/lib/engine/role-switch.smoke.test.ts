@@ -7,14 +7,16 @@ import {
   smokeSnapshotSource,
 } from "./test-utils.js";
 import { isTrpcServerError } from "./caller-adapter.js";
-import { RoleId, Permission } from "@care-y/shared";
+import { RoleId, Permission, CLIENT_CHANNEL_PERMISSIONS } from "@care-y/shared";
+import { allowedQuickActions } from "$lib/tickets/quick-action-gates.js";
 
 /**
- * Smoke tests for setSignedInRole: the engine-level role switch that
- * mutates the signed-in user's role_id directly in the tenant DB and
- * returns the new permission set via auth.me. The client bridge is
- * already tested in bridge.test.ts and crypto-context.test.ts; these
- * tests cover the server half that touches PGlite.
+ * Smoke tests for signedInPermissions, the boot-time read of the seeded
+ * admin's permission set, and setSignedInRole, the engine-level role
+ * switch that mutates the signed-in user's role_id directly in the
+ * tenant DB and returns the new permission set via auth.me. The client
+ * bridge is already tested in bridge.test.ts and crypto-context.test.ts;
+ * these tests cover the server half that touches PGlite.
  *
  * Shares a single booted engine across all tests (PGlite boot is
  * expensive). Tests run sequentially because they mutate the same
@@ -82,6 +84,29 @@ describe("setSignedInRole", () => {
       snapshot: smokeSnapshotSource(await loadSmokeSnapshot()),
     });
   }, SMOKE_SNAPSHOT_TIMEOUT_MS);
+
+  // Runs first, before any switch, so it reads the role the snapshot
+  // seeded. PhoneApp applies this set at boot through
+  // setRoleAndPermissions, the same call a role switch makes.
+  it("signedInPermissions returns the seeded admin's set without changing the role", async () => {
+    const permissions = await engine.signedInPermissions();
+
+    expect(engine.adminCtx.user?.roleId).toBe(RoleId.ADMIN);
+    expect(permissions).toContain(Permission.MESSAGE_CLIENTS_IN_PORTAL);
+    expect(permissions).toContain(Permission.SEND_CLIENT_SMS);
+    for (const channelPerm of Object.values(CLIENT_CHANNEL_PERMISSIONS)) {
+      expect(permissions).toContain(channelPerm);
+    }
+    for (const adminPerm of ADMIN_ONLY_PERMISSIONS) {
+      expect(permissions).toContain(adminPerm);
+    }
+
+    // The ticket list's gated controls (card quick actions, swipe zones,
+    // the bulk bar) all render for the demo admin.
+    expect([...allowedQuickActions(new Set(permissions))].sort()).toEqual(
+      ["assign", "call", "hold", "reply", "take", "unhold"].sort(),
+    );
+  }, 30_000);
 
   it("switching to VOLUNTEER returns exactly the volunteer permission set", async () => {
     const permissions = await engine.setSignedInRole(RoleId.VOLUNTEER);

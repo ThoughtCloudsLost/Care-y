@@ -17,7 +17,7 @@
  * role switcher mutates the signed-in user's role.
  */
 
-import { Permission } from "@care-y/shared";
+import type { Permission } from "@care-y/shared";
 import { plainSet } from "../lib/non-reactive.js";
 import { RoleId } from "@care-y/shared";
 import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
@@ -408,29 +408,20 @@ function initOrgKeyManager(): OrgKeyManager {
 // Auth state (rune-backed for reactive consumers)
 // -----------------------------------------------------------------------
 
-const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
-  Permission.VIEW_CASES,
-  Permission.WRITE_CASE_NOTES,
-  Permission.VIEW_KNOWLEDGE_BASE,
-  Permission.EDIT_KNOWLEDGE_BASE,
-  Permission.VIEW_OWN_SHIFTS,
-  Permission.DELETE_KNOWLEDGE_BASE_ARTICLES,
-  Permission.MANAGE_USERS,
-  Permission.MANAGE_QUEUES,
-  Permission.MANAGE_PRESETS,
-  Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
-  Permission.VIEW_REPORTS,
-  Permission.DELETE_CLIENTS,
-  Permission.VIEW_CLIENTS,
-  Permission.MANAGE_ORG_IDENTITY,
-  Permission.MANAGE_KEYS,
-  Permission.MANAGE_INFRASTRUCTURE,
-  Permission.MANAGE_ROLES,
-]);
+/**
+ * Pre-boot placeholder. The only screen the phone shows before the
+ * engine boots is the login form, which reads no permissions. Once the
+ * engine is up, PhoneApp replaces this with the seeded admin's set from
+ * auth.me through setRoleAndPermissions, and the login fast-forward
+ * waits for that. Empty rather than a guess, so a surface that did
+ * render early would hide gated controls instead of offering ones the
+ * server might refuse.
+ */
+const PRE_BOOT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>();
 
 let currentUserId: string | undefined = $state("demo-user-001");
 let currentUserRoleId: string | undefined = $state(RoleId.ADMIN);
-let currentPermissions: ReadonlySet<Permission> = $state(DEFAULT_PERMISSIONS);
+let currentPermissions: ReadonlySet<Permission> = $state(PRE_BOOT_PERMISSIONS);
 
 // -----------------------------------------------------------------------
 // Public getters (mirror the real module's export names exactly)

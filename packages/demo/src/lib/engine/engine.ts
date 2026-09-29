@@ -152,6 +152,12 @@ export interface DemoEngineResult {
    */
   resealSeedTimes(bridge: SeedTimeResealBridge): Promise<void>;
   /**
+   * The signed-in user's server-authoritative permission set, read
+   * through auth.me without changing anything. The phone applies it at
+   * boot so client gates start from the seeded role's real permissions.
+   */
+  signedInPermissions(): Promise<readonly Permission[]>;
+  /**
    * Mutate the signed-in user's role_id in the tenant DB and refresh
    * the cached admin user so subsequent middleware checks (requireRole)
    * enforce the new role. Does not touch key material. Returns the
@@ -350,6 +356,7 @@ export async function bootDemoEngine(
       manifest: new TextEncoder().encode(files.manifestText).byteLength,
     },
     resealSeedTimes,
+    signedInPermissions: session.signedInPermissions,
     setSignedInRole: session.setSignedInRole,
   };
 }
@@ -616,7 +623,14 @@ export async function runHealthProofs(
       appRouter as { _def: { procedures: Record<string, unknown> } }
     )._def;
     const procedures = routerDef.procedures;
-    const hasDevSeedTickets = "devSeedTickets" in procedures;
+    // Procedure keys are dotted paths. The server mounts these only in
+    // development, alongside the dev router checked below.
+    const gatedDevKeys = [
+      "auth.devBypass2fa",
+      "auth.devReEncryptDisplayName",
+      "keys.devSeedOrgKey",
+      "telephonyAdmin.devSeedTelephony",
+    ].filter((key) => key in procedures);
     const hasDevKey = "dev" in procedures;
     const topLevelKeys = Object.keys(procedures).filter((k) =>
       k.startsWith("dev."),
@@ -624,9 +638,10 @@ export async function runHealthProofs(
 
     report({
       name: "P5 no-dev-surface",
-      pass: !hasDevSeedTickets && !hasDevKey && topLevelKeys.length === 0,
+      pass:
+        gatedDevKeys.length === 0 && !hasDevKey && topLevelKeys.length === 0,
       detail:
-        `devSeedTickets: ${String(hasDevSeedTickets)}, ` +
+        `gated dev procedures: ${gatedDevKeys.join(", ") || "none"}, ` +
         `dev key: ${String(hasDevKey)}, ` +
         `dev procedures: ${String(topLevelKeys.length)}`,
     });
