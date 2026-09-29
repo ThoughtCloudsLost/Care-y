@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This section lists every on-hold ticket from the queues the signed-in user belongs to, regardless of who placed the hold. The section is absent when no ticke..." |
+* | "This section lists every on-hold ticket from the queues the signed-in user belongs to, regardless of who placed the hold. In the stacked layout the section d..." |
 *
 * @param {Demo_Narrative_Dashboard_On_Hold_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
