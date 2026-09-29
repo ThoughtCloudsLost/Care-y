@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The privacy notice is a static page of fixed text shared by every organization, with the organization name as the only value filled in per deployment. It sta..." |
+* | "The privacy notice is a static page of fixed text shared by every organization, with the organization's name and its own retention setting filled in per depl..." |
 *
 * @param {Demo_Section_Client_Privacy_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

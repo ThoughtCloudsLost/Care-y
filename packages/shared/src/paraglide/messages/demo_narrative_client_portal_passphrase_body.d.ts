@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When a secure link carries a passphrase, the client enters it before any message is decrypted. The passphrase exists only in the browser of the user who crea..." |
+* | "When a secure link carries a passphrase, the client enters it before any message is decrypted. A passphrase set up with the secure link is generated from a w..." |
 *
 * @param {Demo_Narrative_Client_Portal_Passphrase_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
