@@ -17,7 +17,7 @@ const en_demo_narrative_deepdive_deployment_body = /** @type {(inputs: Demo_Narr
 [How keys are derived](#deep-dive/how-keys-are-derived) covers the split, the refresh, and the Lagrange combination. [The trust boundary](#deep-dive/the-trust-boundary) covers what any server can read regardless of deployment type. [What CARE-Y is](#deep-dive/what-is-care-y) covers the schema isolation and the contributor package map. [[#deep-dive]]
 **The OPRF processes and socket configuration.** [[#keys #server-holds]]
 - \`packages/server/src/crypto/oprf-process.ts\` runs evaluation, reached through \`oprf-ipc.ts\`. \`dead-man-switch.ts\` implements the heartbeat monitor and share destruction. [[#keys #server-holds]]
-- \`packages/server/src/env.ts\` defines \`OPRF_SOCKET_A\` and \`OPRF_SOCKET_B\`, defaulting to Unix sockets on one machine. [[#keys #server-holds]]`)
+- \`packages/server/src/env.ts\` defines the two OPRF share-server socket settings, defaulting to Unix sockets on one machine. [[#keys #server-holds]]`)
 };
 
 const es_demo_narrative_deepdive_deployment_body = /** @type {(inputs: Demo_Narrative_Deepdive_Deployment_BodyInputs) => LocalizedString} */ () => {
@@ -32,7 +32,7 @@ const es_demo_narrative_deepdive_deployment_body = /** @type {(inputs: Demo_Narr
 [Cómo se derivan las claves](#deep-dive/how-keys-are-derived) trata la división, la renovación y la combinación de Lagrange. [La frontera de confianza](#deep-dive/the-trust-boundary) trata lo que cualquier servidor puede leer independientemente del tipo de despliegue. [Qué es CARE-Y](#deep-dive/what-is-care-y) trata el aislamiento de esquemas y el mapa de paquetes para contribuidores. [[#deep-dive]]
 **Los procesos OPRF y la configuración de sockets.** [[#keys #server-holds]]
 - \`packages/server/src/crypto/oprf-process.ts\` ejecuta la evaluación y se alcanza a través de \`oprf-ipc.ts\`. \`dead-man-switch.ts\` implementa el monitor de latidos y la destrucción de fragmentos. [[#keys #server-holds]]
-- \`packages/server/src/env.ts\` define \`OPRF_SOCKET_A\` y \`OPRF_SOCKET_B\`, con sockets Unix en una máquina por defecto. [[#keys #server-holds]]`)
+- \`packages/server/src/env.ts\` define los dos ajustes de socket de los servidores de fragmentos OPRF, con sockets Unix en una máquina por defecto. [[#keys #server-holds]]`)
 };
 
 const en_xa2_demo_narrative_deepdive_deployment_body = /** @type {(inputs: Demo_Narrative_Deepdive_Deployment_BodyInputs) => LocalizedString} */ () => {
@@ -47,7 +47,7 @@ const en_xa2_demo_narrative_deepdive_deployment_body = /** @type {(inputs: Demo_
 [Hòw kèys àrè dèrìvèd](#dèèp-dìvè/hòw-kèys-àrè-dèrìvèd) còvèrs thè splìt, thè rèfrèsh, ànd thè Làgràngè còmbìnàtìòn. [Thè trùst bòùndàry](#dèèp-dìvè/thè-trùst-bòùndàry) còvèrs whàt àny sèrvèr càn rèàd règàrdlèss òf dèplòymènt typè. [Whàt CÀRÈ-Y ìs](#dèèp-dìvè/whàt-ìs-càrè-y) còvèrs thè schèmà ìsòlàtìòn ànd thè còntrìbùtòr pàckàgè màp. [[#dèèp-dìvè]]
  ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Thè ÒPRF pròcèssès ànd sòckèt cònfìgùràtìòn. ••••••••••••••** [[#kèys #sèrvèr-hòlds]]
 - \`pàckàgès/sèrvèr/src/cryptò/òprf-pròcèss.ts\` rùns èvàlùàtìòn, rèàchèd thròùgh \`òprf-ìpc.ts\`. \`dèàd-màn-swìtch.ts\` ìmplèmènts thè hèàrtbèàt mònìtòr ànd shàrè dèstrùctìòn. [[#kèys #sèrvèr-hòlds]]
-- \`pàckàgès/sèrvèr/src/ènv.ts\` dèfìnès \`ÒPRF_SÒCKÈT_À\` ànd \`ÒPRF_SÒCKÈT_B\`, dèfàùltìng tò Ùnìx sòckèts òn ònè màchìnè. [[#kèys #sèrvèr-hòlds]] •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+- \`pàckàgès/sèrvèr/src/ènv.ts\` dèfìnès thè twò ÒPRF shàrè-sèrvèr sòckèt sèttìngs, dèfàùltìng tò Ùnìx sòckèts òn ònè màchìnè. [[#kèys #sèrvèr-hòlds]] •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**
