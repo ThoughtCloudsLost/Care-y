@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The knowledge base preview shows the two articles edited most recently, ordered by last-edit time. Viewing them requires the view-knowledge-base permission. ..." |
+* | "The knowledge base section shows the five most recently edited articles, newest edit first, under the section's category and author filters. The heading show..." |
 *
 * @param {Demo_Narrative_Dashboard_Kb_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
