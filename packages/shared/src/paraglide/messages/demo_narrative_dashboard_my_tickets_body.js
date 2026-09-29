@@ -12,7 +12,8 @@ const en_demo_narrative_dashboard_my_tickets_body = /** @type {(inputs: Demo_Nar
 - Queue
 - Priority
 - Status
-- Times A placeholder appears where the title would be. [Ticket decryption](#tickets/decryption) covers the wrapping. [[#keys #encryption]]
+- Times
+A placeholder appears where the title would be. [Ticket decryption](#tickets/decryption) covers the wrapping. [[#keys #encryption]]
 **Lane query path and cache structure.** Each lane runs a paged infinite query in \`packages/client/src/lib/composables/dashboard/create-dashboard-lane.svelte.ts\`, requesting fifty tickets per page. The server caps a single page at one hundred in \`ticketListInputSchema\` in \`packages/shared/src/schemas/tickets.ts\`. The heading counts and filter option counts draw from the shared metadata index. [Quick actions](#tickets/quick-actions) covers the actions available on each row. [[#client-data]]`)
 };
 
@@ -23,7 +24,8 @@ const es_demo_narrative_dashboard_my_tickets_body = /** @type {(inputs: Demo_Nar
 - Cola
 - Prioridad
 - Estado
-- Tiempos Un marcador de posición aparece donde estaría el título. [Descifrado de tickets](#tickets/decryption) trata el envolvimiento. [[#keys #encryption]]
+- Tiempos
+Un marcador de posición aparece donde estaría el título. [Descifrado de tickets](#tickets/decryption) trata el envolvimiento. [[#keys #encryption]]
 **Ruta de consulta del carril y estructura de caché.** Cada carril ejecuta una infinite query paginada en \`packages/client/src/lib/composables/dashboard/create-dashboard-lane.svelte.ts\` y solicita cincuenta tickets por página. El servidor limita una página a cien en \`ticketListInputSchema\` en \`packages/shared/src/schemas/tickets.ts\`. Los conteos de los encabezados y los conteos de opciones de filtro se calculan a partir del índice de metadatos compartido. [Acciones rápidas](#tickets/quick-actions) trata las acciones disponibles en cada fila. [[#client-data]]`)
 };
 
@@ -34,7 +36,8 @@ const en_xa2_demo_narrative_dashboard_my_tickets_body = /** @type {(inputs: Demo
 - Qùèùè
 - Prìòrìty
 - Stàtùs
-- Tìmès À plàcèhòldèr àppèàrs whèrè thè tìtlè wòùld bè. [Tìckèt dècryptìòn](#tìckèts/dècryptìòn) còvèrs thè wràppìng. [[#kèys #èncryptìòn]]
+- Tìmès
+À plàcèhòldèr àppèàrs whèrè thè tìtlè wòùld bè. [Tìckèt dècryptìòn](#tìckèts/dècryptìòn) còvèrs thè wràppìng. [[#kèys #èncryptìòn]]
  •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Lànè qùèry pàth ànd càchè strùctùrè. •••••••••••** Èàch lànè rùns à pàgèd ìnfìnìtè qùèry ìn \`pàckàgès/clìènt/src/lìb/còmpòsàblès/dàshbòàrd/crèàtè-dàshbòàrd-lànè.svèltè.ts\`, rèqùèstìng fìfty tìckèts pèr pàgè. Thè sèrvèr càps à sìnglè pàgè àt ònè hùndrèd ìn \`tìckètLìstÌnpùtSchèmà\` ìn \`pàckàgès/shàrèd/src/schèmàs/tìckèts.ts\`. Thè hèàdìng còùnts ànd fìltèr òptìòn còùnts dràw fròm thè shàrèd mètàdàtà ìndèx. [Qùìck àctìòns](#tìckèts/qùìck-àctìòns) còvèrs thè àctìòns àvàìlàblè òn èàch ròw. [[#clìènt-dàtà]] •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 

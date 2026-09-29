@@ -14,7 +14,8 @@ const en_demo_narrative_admin_hub_analytics_body = /** @type {(inputs: Demo_Narr
 - Timestamps
 - Queue assignments
 - Priority levels
-- Resolution times Volunteer names and queue names are organization-key ciphertext that the browser decrypts for chart labels. A separate set of charts decrypts ticket content in the browser to extract topic keywords and conversation patterns, and sends nothing decrypted to the server. Those charts can analyze only tickets the viewer holds keys for, so two users with access to different queues see different figures. [[#server-holds #encryption]]
+- Resolution times
+Volunteer names and queue names are organization-key ciphertext that the browser decrypts for chart labels. A separate set of charts decrypts ticket content in the browser to extract topic keywords and conversation patterns, and sends nothing decrypted to the server. Those charts can analyze only tickets the viewer holds keys for, so two users with access to different queues see different figures. [[#server-holds #encryption]]
 **Dashboard configuration.** Each organization has three dashboard tabs whose names, chart selections, and display order are encrypted with the organization key and stored as a single blob in the organization record. The server holds the ciphertext and cannot read which charts an organization has chosen or what it has named its tabs. Every user with the View reports permission sees the same three dashboards. [[#encryption #privacy]]`)
 };
 
@@ -27,7 +28,8 @@ const es_demo_narrative_admin_hub_analytics_body = /** @type {(inputs: Demo_Narr
 - Marcas de tiempo
 - Asignaciones de cola
 - Niveles de prioridad
-- Tiempos de resolución Los nombres de las personas voluntarias y los nombres de las colas son texto cifrado con la clave de la organización que el navegador descifra para las etiquetas de los gráficos. Un conjunto aparte de gráficos descifra el contenido de los tickets en el navegador para extraer palabras clave temáticas y patrones de conversación, y no envía nada descifrado al servidor. Esos gráficos solo pueden analizar los tickets para los cuales quien observa tiene claves, así que dos personas con acceso a colas distintas ven cifras diferentes. [[#server-holds #encryption]]
+- Tiempos de resolución
+Los nombres de las personas voluntarias y los nombres de las colas son texto cifrado con la clave de la organización que el navegador descifra para las etiquetas de los gráficos. Un conjunto aparte de gráficos descifra el contenido de los tickets en el navegador para extraer palabras clave temáticas y patrones de conversación, y no envía nada descifrado al servidor. Esos gráficos solo pueden analizar los tickets para los cuales quien observa tiene claves, así que dos personas con acceso a colas distintas ven cifras diferentes. [[#server-holds #encryption]]
 **Configuración de los paneles.** Cada organización tiene tres pestañas de panel cuyos nombres, selecciones de gráficos y orden de presentación se cifran con la clave de la organización y se almacenan como un solo bloque en el registro de la organización. El servidor guarda el texto cifrado y no puede leer qué gráficos ha elegido una organización ni cómo ha nombrado sus pestañas. Todas las personas con el permiso Ver reportes ven los mismos tres paneles. [[#encryption #privacy]]`)
 };
 
@@ -40,7 +42,8 @@ const en_xa2_demo_narrative_admin_hub_analytics_body = /** @type {(inputs: Demo_
 - Tìmèstàmps
 - Qùèùè àssìgnmènts
 - Prìòrìty lèvèls
-- Rèsòlùtìòn tìmès Vòlùntèèr nàmès ànd qùèùè nàmès àrè òrgànìzàtìòn-kèy cìphèrtèxt thàt thè bròwsèr dècrypts fòr chàrt làbèls. À sèpàràtè sèt òf chàrts dècrypts tìckèt còntènt ìn thè bròwsèr tò èxtràct tòpìc kèywòrds ànd cònvèrsàtìòn pàttèrns, ànd sènds nòthìng dècryptèd tò thè sèrvèr. Thòsè chàrts càn ànàlyzè ònly tìckèts thè vìèwèr hòlds kèys fòr, sò twò ùsèrs wìth àccèss tò dìffèrènt qùèùès sèè dìffèrènt fìgùrès. [[#sèrvèr-hòlds #èncryptìòn]]
+- Rèsòlùtìòn tìmès
+Vòlùntèèr nàmès ànd qùèùè nàmès àrè òrgànìzàtìòn-kèy cìphèrtèxt thàt thè bròwsèr dècrypts fòr chàrt làbèls. À sèpàràtè sèt òf chàrts dècrypts tìckèt còntènt ìn thè bròwsèr tò èxtràct tòpìc kèywòrds ànd cònvèrsàtìòn pàttèrns, ànd sènds nòthìng dècryptèd tò thè sèrvèr. Thòsè chàrts càn ànàlyzè ònly tìckèts thè vìèwèr hòlds kèys fòr, sò twò ùsèrs wìth àccèss tò dìffèrènt qùèùès sèè dìffèrènt fìgùrès. [[#sèrvèr-hòlds #èncryptìòn]]
  •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Dàshbòàrd cònfìgùràtìòn. ••••••••** Èàch òrgànìzàtìòn hàs thrèè dàshbòàrd tàbs whòsè nàmès, chàrt sèlèctìòns, ànd dìsplày òrdèr àrè èncryptèd wìth thè òrgànìzàtìòn kèy ànd stòrèd às à sìnglè blòb ìn thè òrgànìzàtìòn rècòrd. Thè sèrvèr hòlds thè cìphèrtèxt ànd cànnòt rèàd whìch chàrts àn òrgànìzàtìòn hàs chòsèn òr whàt ìt hàs nàmèd ìts tàbs. Èvèry ùsèr wìth thè Vìèw rèpòrts pèrmìssìòn sèès thè sàmè thrèè dàshbòàrds. [[#èncryptìòn #prìvàcy]] •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
