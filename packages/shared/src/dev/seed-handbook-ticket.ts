@@ -1,9 +1,8 @@
 /**
  * The handbook story ticket, "Help with housing", as plain data.
  *
- * The server's direct-insert seeder (also used by the demo) writes it row
- * by row, and the client's dev seeder replays it through the production
- * mutations, so both seeds carry the same thread. Authors are symbolic:
+ * The seed replay writes it through the production mutations for the dev
+ * Settings seed, e2e setup and the demo snapshot. Authors are symbolic:
  * "me" is the seeding volunteer, "other" is the volunteer who worked the
  * first shift before handing the ticket over.
  *

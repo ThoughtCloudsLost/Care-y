@@ -3,7 +3,7 @@
  *
  * Tests assign-to-self and put-on-hold flows via the ticket card
  * action buttons. These state changes generate system events in
- * the ticket timeline (unlike the devSeedTickets direct DB inserts).
+ * the ticket timeline.
  */
 
 import { test, expect } from "./coverage-fixture";

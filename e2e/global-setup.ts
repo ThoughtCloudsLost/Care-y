@@ -80,6 +80,8 @@ export default async function globalSetup(): Promise<void> {
   // Give the e2e org a client-facing name (org_config.name, plaintext per
   // ADR-094) so branding assertions can verify the real data flow:
   // org_config -> getPublicBranding -> client shell navbar. Idempotent.
+  // The seed replay in seed-data.setup.ts overwrites the name with its own
+  // branding, and that setup puts this name back afterwards.
   setupSql(
     "Setting e2e org display name",
     "UPDATE org_config SET name = 'E2E Test Org';",
@@ -88,20 +90,18 @@ export default async function globalSetup(): Promise<void> {
   // Delete ALL tickets. Same reasoning as the KB wipe below: tickets
   // created by specs (lifecycle, create, intake) accumulate across runs
   // because a surgical "non-seed ticket" discriminator cannot keep up
-  // with every path that adds followups. The accumulated OPEN tickets
-  // make createTicket churn through client search terms (every seeded
-  // client already has an open ticket) and drift dashboard counts.
+  // with every path that adds followups, and accumulated OPEN tickets
+  // drift dashboard counts.
   // Every ticket-rooted table (followups, wraps, watchers, cursors,
   // attachments, recordings, portal_messages via followups) is ON
-  // DELETE CASCADE, and seed-data.setup.ts re-creates the 14 seed
-  // tickets each run (devSeedTickets seeds per-client when the client
-  // has no ticket).
+  // DELETE CASCADE, and seed-data.setup.ts re-creates the seed tickets
+  // each run through the dev seed replay.
   setupSql("Cleaning E2E tickets", "DELETE FROM tickets;");
 
   // Delete all KB articles. They accumulate across runs (kb-create.spec.ts
   // and kb-editor.spec.ts each create articles) and eventually push seeded
   // articles past the page size, breaking tests that look for seed titles.
-  // Articles are re-created client-side by seed-data.setup.ts on each run.
+  // The dev seed replay in seed-data.setup.ts re-creates them each run.
   // kb_votes and kb_attachments cascade from kb_items.
   setupSql("Cleaning stale E2E KB articles", "DELETE FROM kb_items;");
 

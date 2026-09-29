@@ -250,12 +250,15 @@ test.describe.serial("Desktop Responsive Layout", () => {
   test("clicking ticket opens detail in right pane", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
 
-    // Click a ticket card in the list pane. Each card exposes a single
-    // "Open <ticket> <alias>" overlay button.
+    // Click the handbook story ticket's card in the list pane, picked by
+    // title (the most recent card can be the locked ticket, whose detail
+    // has no thread). Each card exposes a single "Open <ticket> <alias>"
+    // overlay button.
     const card = page
       .locator('[data-testid="split-left-pane"]')
-      .locator('[data-testid="ticket-card-wrap"]')
-      .first()
+      .locator('[data-testid="ticket-card-wrap"]', {
+        hasText: "Help with housing",
+      })
       .getByRole("button", { name: /^open /i });
     await card.click();
 
@@ -444,8 +447,9 @@ test.describe.serial("Desktop Responsive Layout", () => {
 
     const card = page
       .locator('[data-testid="split-left-pane"]')
-      .locator('[data-testid="ticket-card-wrap"]')
-      .first()
+      .locator('[data-testid="ticket-card-wrap"]', {
+        hasText: "Help with housing",
+      })
       .getByRole("button", { name: /^open /i });
     await card.click();
 

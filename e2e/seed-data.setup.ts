@@ -1,26 +1,219 @@
 /**
  * Playwright setup project: seeds crypto-dependent test data.
  *
- * The server seed (global-setup.ts) creates structural data (org, user,
+ * The server seed (global-setup.ts) creates structural data (org, admin,
  * queues, clients, KB categories) but cannot create tickets or KB articles
  * because those require crypto keys that only exist after the first login.
  *
  * This setup project runs in a real browser before the test projects. It:
  * 1. Logs in (triggers Argon2id + OPRF + key derivation, creating vol_public)
- * 2. Calls devSeedTickets with handcraftedOnly (14 tickets with ECIES wraps)
- * 3. Calls devSeedKb (6 KB articles with org-key sealing)
- *
- * Both mutations are idempotent: they skip records that already exist.
+ * 2. Seeds the real org keypair through keys.devSeedOrgKey (key setup)
+ * 3. Runs the Settings page dev seed, the same browser adapter a developer
+ *    runs. It resets the seed tables, then replays the deterministic seed
+ *    stories and the handbook story ticket through the product's own
+ *    endpoints. replay-tickets.ts derives the titles specs assert on.
+ * 4. Adds one ticket the admin holds no key for (LOCKED_TICKET_TITLE),
+ *    through the product: a seed volunteer signs in for the first time
+ *    and creates it in a queue the admin has just left, then the admin
+ *    rejoins. See createLockedTicket below.
  *
  * Layer 3 test suites (3a-ticket-create, 3b-ticket-lifecycle, 3c-kb-create)
  * cover the production UI create/manage flows separately.
  */
 
-import { test as setup } from "@playwright/test";
-import { CRYPTO_TIMEOUT, E2eError, login } from "./helpers";
+import {
+  expect,
+  test as setup,
+  type Browser,
+  type Page,
+} from "@playwright/test";
+import { CRYPTO_TIMEOUT, E2eError, createTicket, login } from "./helpers";
+import { LOCKED_TICKET_TITLE } from "./replay-tickets";
 
-setup("seed crypto-dependent data", async ({ page }) => {
-  setup.setTimeout(CRYPTO_TIMEOUT * 4);
+/**
+ * Budget for the dev seed replay. It is a guess sized well above the
+ * 7.6 s a full replay took in Node on an M1 laptop, since the browser
+ * replay pays an HTTP round trip per mutation and runs crypto in a
+ * worker. Tune it from a measured e2e setup run.
+ */
+const SEED_REPLAY_TIMEOUT = 600_000;
+
+/** Org name the e2e specs assert on (shell-architecture, intake). */
+const E2E_ORG_NAME = "E2E Test Org";
+
+/**
+ * The seed volunteer who creates the locked ticket. vol.crisis is a member
+ * of the Crisis queue only. The replay registers every seed account with
+ * the dev password (SEED_USERS in packages/client/src/lib/dev/seed-replay.ts).
+ */
+const LOCKED_TICKET_VOLUNTEER = "vol.crisis";
+const VOLUNTEER_PASSWORD = "dev-password-1234!";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/**
+ * Calls a tRPC procedure from the page with its session cookie, as a query
+ * (GET) when there is no input and as a mutation (POST) otherwise. Returns
+ * the procedure's result data. Failures report the status only, never the
+ * response body.
+ */
+async function callTrpc(
+  page: Page,
+  procedure: string,
+  input?: Record<string, unknown>,
+): Promise<unknown> {
+  const outcome = await page.evaluate(
+    async (args) => {
+      const res = await fetch(
+        `/trpc/${args.procedure}`,
+        args.input === undefined
+          ? { credentials: "include" }
+          : {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(args.input),
+              credentials: "include",
+            },
+      );
+      return { status: res.status, text: await res.text() };
+    },
+    { procedure, input },
+  );
+  if (outcome.status !== 200) {
+    throw new E2eError(
+      `${procedure} failed with HTTP ${String(outcome.status)}`,
+    );
+  }
+  const body: unknown = JSON.parse(outcome.text);
+  if (!isRecord(body) || !isRecord(body.result) || !("data" in body.result)) {
+    throw new E2eError(`${procedure} returned an unexpected shape`);
+  }
+  return body.result.data;
+}
+
+/** The signed-in account's user id, from auth.me. */
+async function currentUserId(page: Page): Promise<string> {
+  const data = await callTrpc(page, "auth.me");
+  if (
+    !isRecord(data) ||
+    !isRecord(data.user) ||
+    typeof data.user.id !== "string"
+  ) {
+    throw new E2eError("auth.me returned no user id");
+  }
+  return data.user.id;
+}
+
+/**
+ * The Crisis queue's id. Queue names are org-key sealed, so the queue is
+ * found by position. The replay creates Intake, Crisis and Housing in that
+ * order on emptied tables, and each new queue sorts after the last.
+ */
+async function crisisQueueId(page: Page): Promise<string> {
+  const data = await callTrpc(page, "tickets.listQueues");
+  if (!Array.isArray(data)) {
+    throw new E2eError("tickets.listQueues returned no list");
+  }
+  const queues = data
+    .filter(isRecord)
+    .flatMap((q) =>
+      typeof q.id === "string" && typeof q.sortOrder === "number"
+        ? [{ id: q.id, sortOrder: q.sortOrder }]
+        : [],
+    )
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const crisis = queues.at(1);
+  if (queues.length !== 3 || crisis === undefined) {
+    throw new E2eError(
+      `Expected the replay's three queues, found ${String(queues.length)}`,
+    );
+  }
+  return crisis.id;
+}
+
+/**
+ * Creates LOCKED_TICKET_TITLE, a ticket the admin can see but holds no key
+ * for, using only product flows.
+ *
+ * A new ticket's key is wrapped for its creator and for the queue's
+ * onboarded members at that moment (listQueueMemberPublicKeys). The ticket
+ * list shows every ticket in the viewer's queues, so a member without a
+ * wrap sees the "Locked ticket" placeholder until another member's client
+ * backfills a wrap for them. The flow runs in five steps.
+ *
+ * 1. vol.crisis signs in for the first time. The login page sets up the
+ *    account's keys, the onboarding wizard enrolls TOTP, and the account
+ *    waits for the org key.
+ * 2. The admin signs in again, and the admin client's auto-wrap hands the
+ *    org key to the new volunteer.
+ * 3. The admin leaves the Crisis queue through the queue membership
+ *    endpoint the admin pages use.
+ * 4. vol.crisis creates the ticket in Crisis through the new-ticket sheet,
+ *    so its key is wrapped for vol.crisis alone.
+ * 5. The volunteer's browser context closes before the admin rejoins
+ *    Crisis. Only vol.crisis holds the key, so no client is left to
+ *    backfill a wrap for the admin. global-setup.ts deletes every ticket
+ *    at the start of the next run.
+ */
+async function createLockedTicket(
+  browser: Browser,
+  adminPage: Page,
+): Promise<void> {
+  const volContext = await browser.newContext();
+  let volContextOpen = true;
+  const closeVolContext = async (): Promise<void> => {
+    if (!volContextOpen) return;
+    volContextOpen = false;
+    await volContext.close();
+  };
+  try {
+    const volPage = await volContext.newPage();
+    await login(volPage, LOCKED_TICKET_VOLUNTEER, VOLUNTEER_PASSWORD, {
+      allowOrgKeyWait: true,
+    });
+    console.log("[e2e-seed] second seed account signed in");
+
+    // A fresh admin session runs the auto-wrap for accounts that have
+    // keys but no org key yet. The volunteer's key gate polls every 5s.
+    await login(adminPage);
+    await volPage.locator('[role="tablist"]').waitFor({
+      state: "attached",
+      timeout: CRYPTO_TIMEOUT * 2,
+    });
+    console.log("[e2e-seed] second seed account received the org key");
+
+    const adminId = await currentUserId(adminPage);
+    const queueId = await crisisQueueId(adminPage);
+    await callTrpc(adminPage, "tickets.removeQueueMember", {
+      queueId,
+      userId: adminId,
+    });
+    try {
+      await createTicket(volPage, {
+        title: LOCKED_TICKET_TITLE,
+        queue: "Crisis",
+        priority: "urgent",
+      });
+      console.log("[e2e-seed] second seed account created the locked ticket");
+    } finally {
+      // Close before the admin rejoins. An open volunteer client could
+      // backfill a wrap for the admin once the admin is a member again.
+      await closeVolContext();
+      await callTrpc(adminPage, "tickets.addQueueMember", {
+        queueId,
+        userId: adminId,
+      });
+    }
+    console.log("[e2e-seed] admin rejoined the Crisis queue");
+  } finally {
+    await closeVolContext();
+  }
+}
+
+setup("seed crypto-dependent data", async ({ browser, page }) => {
+  setup.setTimeout(CRYPTO_TIMEOUT * 12 + SEED_REPLAY_TIMEOUT);
 
   // On a fresh org the app shell cannot render yet: the server seed
   // creates no wrapped_org_keys row, so the (app) layout shows the
@@ -61,49 +254,55 @@ setup("seed crypto-dependent data", async ({ page }) => {
   });
   console.log("[e2e-seed] app shell rendered with seeded org key");
 
-  // 1. Seed tickets (handcrafted only, no generated bulk data)
-  const ticketResult = await page.evaluate(async () => {
-    const res = await fetch("/trpc/tickets.devSeedTickets", {
+  // 1. Open Settings in-app. A full page load would drop the in-memory
+  // keys the replay encrypts with. This project runs at a desktop width
+  // (Desktop Chrome in playwright.config.ts), where Settings sits in the
+  // sidebar's user section.
+  await page
+    .getByRole("navigation", { name: "Sidebar navigation" })
+    .getByRole("button", { name: "Settings" })
+    .click();
+  await expect(page).toHaveURL("/more/settings", { timeout: CRYPTO_TIMEOUT });
+
+  // 2. Run the dev seed. The page shows "Seed data created." when the
+  // replay finishes and the replay's error message when it throws, so
+  // wait for whichever comes first.
+  const seedButton = page.getByRole("button", { name: "Seed Dev Data" });
+  await seedButton.click({ timeout: CRYPTO_TIMEOUT });
+  console.log("[e2e-seed] seed replay started");
+
+  const done = page.getByText("Seed data created.", { exact: true });
+  const failed = page.locator(".dev-seed-error");
+  await expect(done.or(failed)).toBeVisible({ timeout: SEED_REPLAY_TIMEOUT });
+  if (await failed.isVisible()) {
+    const reason = (await failed.textContent()) ?? "(no message)";
+    throw new E2eError(`Seed replay failed: ${reason}`);
+  }
+  console.log("[e2e-seed] seed replay complete");
+
+  // 3. The replay sets the org name to its own branding. Put back the name
+  // global-setup.ts gives the e2e org, through the same branding mutation
+  // the settings pages use.
+  const nameResult = await page.evaluate(async (name) => {
+    const res = await fetch("/trpc/branding.saveBrandingField", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ handcraftedOnly: true }),
+      body: JSON.stringify({ field: "name", value: name }),
       credentials: "include",
     });
     if (!res.ok) {
       return { ok: false as const, error: await res.text() };
     }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tRPC response shape is known
-    const data = (await res.json()) as {
-      result: { data: { ticketIds: string[] } };
-    };
-    return { ok: true as const, count: data.result.data.ticketIds.length };
-  });
+    return { ok: true as const };
+  }, E2E_ORG_NAME);
 
-  if (!ticketResult.ok) {
-    throw new E2eError(`Ticket seeding failed: ${ticketResult.error}`);
+  if (!nameResult.ok) {
+    throw new E2eError(
+      `Restoring the e2e org name failed: ${nameResult.error}`,
+    );
   }
-  console.log(`[e2e-seed] ${String(ticketResult.count)} tickets ready`);
+  console.log("[e2e-seed] e2e org name restored");
 
-  // 2. Seed KB articles
-  const kbResult = await page.evaluate(async () => {
-    const res = await fetch("/trpc/kb.devSeedKb", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-      credentials: "include",
-    });
-    if (!res.ok) {
-      return { ok: false as const, error: await res.text() };
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- tRPC response shape is known
-    const data = (await res.json()) as {
-      result: { data: { articleIds: string[] } };
-    };
-    return { ok: true as const, count: data.result.data.articleIds.length };
-  });
-
-  if (!kbResult.ok) {
-    throw new E2eError(`KB seeding failed: ${kbResult.error}`);
-  }
-  console.log(`[e2e-seed] ${String(kbResult.count)} KB articles ready`);
+  // 4. A ticket the admin can see but cannot open.
+  await createLockedTicket(browser, page);
 });

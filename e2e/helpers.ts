@@ -54,17 +54,28 @@ const DEV_PASSWORD = "dev-password-1234!";
 const AUTH_DIR = join(process.cwd(), ".auth");
 const TOTP_SECRET_PATH = join(AUTH_DIR, "totp-secret.txt");
 
-function saveTotpSecret(secret: string): void {
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- test infra, path is constant
-  mkdirSync(AUTH_DIR, { recursive: true });
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- test infra, path is constant
-  writeFileSync(TOTP_SECRET_PATH, secret, "utf-8");
+/**
+ * Where an account's enrolled TOTP secret is kept. The admin keeps the
+ * original file name. Any other account the setup signs in as gets its
+ * own file and leaves the admin's secret alone.
+ */
+function totpSecretPath(username: string): string {
+  return username === DEV_USER
+    ? TOTP_SECRET_PATH
+    : join(AUTH_DIR, `totp-secret-${username}.txt`);
 }
 
-export function loadTotpSecret(): string | null {
+function saveTotpSecret(secret: string, username: string): void {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- test infra, path is constant
+  mkdirSync(AUTH_DIR, { recursive: true });
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- test infra, path is derived from a fixed account name
+  writeFileSync(totpSecretPath(username), secret, "utf-8");
+}
+
+export function loadTotpSecret(username: string = DEV_USER): string | null {
   try {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test infra, path is constant
-    return readFileSync(TOTP_SECRET_PATH, "utf-8").trim();
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test infra, path is derived from a fixed account name
+    return readFileSync(totpSecretPath(username), "utf-8").trim();
   } catch {
     return null;
   }
@@ -316,12 +327,12 @@ async function loginAttempt(
   );
 
   if (result === "onboarding") {
-    await completeOnboarding(page);
+    await completeOnboarding(page, username);
   } else if (result === "2fa-challenge") {
-    await completeTwofaChallenge(page);
+    await completeTwofaChallenge(page, username);
     // 2FA may redirect to /complete if onboarding is still needed.
     if (page.url().endsWith("/complete")) {
-      await completeOnboarding(page);
+      await completeOnboarding(page, username);
     }
   }
   // result === "done": already on /, nothing to do
@@ -358,7 +369,7 @@ async function loginAttempt(
  * Steps are conditional: briefing only if not yet seen, 2FA only if not enrolled.
  * The wizard nav renders Next/Confirm as Konsta Link elements in the navbar.
  */
-async function completeOnboarding(page: Page): Promise<void> {
+async function completeOnboarding(page: Page, username: string): Promise<void> {
   // Wait for the onboarding content to load.
   await page.waitForTimeout(2_000);
   if (page.url().endsWith("/")) return;
@@ -401,7 +412,7 @@ async function completeOnboarding(page: Page): Promise<void> {
   ]);
 
   if (enrollmentShown) {
-    await enrollTotp(page);
+    await enrollTotp(page, username);
 
     // After enrollment, "Next" in the wizard navbar finishes onboarding
     await page.getByRole("banner").getByText("Next").click();
@@ -414,7 +425,7 @@ async function completeOnboarding(page: Page): Promise<void> {
  * Enroll TOTP during onboarding: select authenticator app, extract secret,
  * generate code, verify, and dismiss the backup codes sheet.
  */
-async function enrollTotp(page: Page): Promise<void> {
+async function enrollTotp(page: Page, username: string): Promise<void> {
   // Click the TOTP option in the enrollment list (ListItem renders as <a>)
   const totpOption = page
     .locator("a")
@@ -429,7 +440,7 @@ async function enrollTotp(page: Page): Promise<void> {
   if (secret === null || secret === "")
     throw new E2eError("TOTP secret not found on page");
 
-  saveTotpSecret(secret);
+  saveTotpSecret(secret, username);
 
   // Generate and enter TOTP code
   const code = generateTotpCode(secret);
@@ -577,8 +588,11 @@ export async function dismissBackupCodesSheet(page: Page): Promise<void> {
  * Complete the inline 2FA challenge on the login page.
  * Reads the saved TOTP secret, generates a code, and verifies.
  */
-async function completeTwofaChallenge(page: Page): Promise<void> {
-  const secret = loadTotpSecret();
+async function completeTwofaChallenge(
+  page: Page,
+  username: string,
+): Promise<void> {
+  const secret = loadTotpSecret(username);
   // eslint-disable-next-line security/detect-possible-timing-attacks -- null check, not crypto comparison
   if (secret === null) {
     throw new E2eError(
@@ -787,35 +801,31 @@ export interface CreateTicketOptions {
 }
 
 /**
- * Return to /tickets after a collision redirect landed on a ticket
- * detail view. Desktop redirects /tickets/[id] back to /tickets on its
- * own (deep-link handling in the [id] page), so first give the URL a
- * moment to settle. Mobile stays on the detail view, where the navbar
- * Back button returns to the list.
+ * Last suffix handed out by nextCallerPhone, so two tickets created in the
+ * same millisecond still get different numbers.
  */
-async function returnToTicketList(page: Page): Promise<void> {
-  const settled = await expect(page)
-    .toHaveURL("/tickets", { timeout: 3_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (settled) return;
+let lastCallerSuffix = 0;
 
-  const backBtn = page.getByRole("button", { name: /back/i });
-  if (await backBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
-    await backBtn.click();
-  } else {
-    await page.getByRole("tab", { name: "Tickets" }).click();
-  }
-  await expect(page).toHaveURL("/tickets", { timeout: 10_000 });
+/**
+ * A phone number no client in the org has yet. The seven digits after
+ * +1555 start with 9. The seed replay's story clients (+1555001NNNN), its
+ * handbook client (+15550029999) and the org's own lines (+155500) all
+ * start with 0. The seed replay deletes every
+ * client each run, so numbers only need to be unique within one run.
+ */
+function nextCallerPhone(): string {
+  lastCallerSuffix = Math.max(lastCallerSuffix + 1, Date.now() % 1_000_000);
+  return `+15559${String(lastCallerSuffix % 1_000_000).padStart(6, "0")}`;
 }
 
 /**
- * Create a ticket through the production new-ticket form.
- * Opens the sheet from the /tickets navbar, selects a client, fills the
- * form, submits, and waits for the list refetch. Exercises the full
- * crypto pipeline (CryptoBridge encrypts title/description in the Web
- * Worker). Retries with a different client when the selected one already
- * has an open ticket (client-side collision redirect or server 409).
+ * Create a ticket through the production new-ticket form, for a caller
+ * the org has never heard from. Opens the sheet from the /tickets navbar,
+ * switches the client field to "Create new client", enters a fresh phone
+ * number (the phone lookup returns a one-time token, and the client is
+ * created with the ticket), fills the form, submits, and waits for the
+ * list refetch. Exercises the full crypto pipeline (CryptoBridge encrypts
+ * title/description in the Web Worker).
  */
 export async function createTicket(
   page: Page,
@@ -836,197 +846,87 @@ export async function createTicket(
   const sheet = page.getByRole("dialog", { name: "New Ticket" });
   await expect(sheet).toBeVisible({ timeout: 15_000 });
 
-  // Select client, fill form, and submit. Retries with a different client
-  // if the search term has no matches, the submit preflight redirects to
-  // the client's existing open ticket, or the server returns 409
-  // (TICKET_ALREADY_OPEN).
-  let needsFormFill = true;
-  const maxAttempts = CLIENT_SEARCH_TERMS.length;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    // Ensure the sheet is open before each attempt.
-    if (!(await sheet.isVisible({ timeout: 500 }).catch(() => false))) {
-      await newTicketBtn.click();
-      await expect(sheet).toBeVisible({ timeout: 15_000 });
-      needsFormFill = true;
-    }
+  // The "Create new client" action lives at the foot of the client
+  // search dropdown, which opens once the search field has input.
+  const clientInput = sheet.getByPlaceholder(/search by alias/i);
+  await clientInput.click();
+  await clientInput.pressSequentially("new", { delay: 30 });
+  const createClientBtn = sheet.getByRole("button", { name: /^create new/i });
+  await createClientBtn.waitFor({ state: "visible", timeout: 10_000 });
+  await createClientBtn.click();
 
-    // Search for a client. Try the next term if no results appear.
-    const searchTerm =
-      CLIENT_SEARCH_TERMS.at(
-        clientSearchIndex++ % CLIENT_SEARCH_TERMS.length,
-      ) ?? "azure-";
-    const clientInput = sheet.getByPlaceholder(/search by alias/i);
-    await clientInput.click();
-    await clientInput.fill("");
-    await clientInput.pressSequentially(searchTerm, { delay: 30 });
-
-    // Short wait for search results. If none appear, try the next term.
-    // Scope to the dialog to avoid matching results in closed Konsta overlays.
-    const firstResult = sheet.locator("[data-testid='client-result']").first();
-    const resultsAppeared = await firstResult
-      .waitFor({ state: "visible", timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!resultsAppeared) {
-      console.log(
-        `[createTicket] no results for "${searchTerm}" (attempt ${String(attempt + 1)}), trying next term`,
-      );
-      continue;
-    }
-
-    // Click the first result to select it.
-    await firstResult.click();
-    await expect(firstResult).not.toBeVisible({ timeout: 3_000 });
-
-    // Wait for the selected alias to appear (confirms selection stuck).
-    const aliasShown = await sheet
-      .getByText(/^[a-z]+-[a-z]+-\d+$/)
-      .first()
-      .waitFor({ state: "visible", timeout: 3_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!aliasShown) {
-      console.log(
-        `[createTicket] selection didn't stick for "${searchTerm}" (attempt ${String(attempt + 1)}), retrying`,
-      );
-      continue;
-    }
-
-    // Fill form fields on first attempt and after sheet reopens (fields reset).
-    if (needsFormFill) {
-      await sheet.getByPlaceholder(/brief description/i).fill(opts.title);
-      if (opts.description != null) {
-        await sheet.getByPlaceholder(/details/i).fill(opts.description);
-      }
-      if (opts.priority && opts.priority !== "normal") {
-        await sheet
-          .locator("li")
-          .filter({ hasText: /priority/i })
-          .locator("select")
-          .selectOption(opts.priority);
-      }
-      const queueSelect = sheet
-        .locator("li")
-        .filter({ hasText: /queue/i })
-        .locator("select");
-      await queueSelect
-        .locator(`option:text("${opts.queue}")`)
-        .waitFor({ state: "attached", timeout: 10_000 });
-      await queueSelect.selectOption({ label: opts.queue });
-      needsFormFill = false;
-    }
-
-    // Blur combobox and let effects settle.
-    await sheet.getByPlaceholder(/brief description/i).click();
-    await page.waitForTimeout(300);
-
-    // Watch for the tickets.create response (409 means retry), and also
-    // capture the tickets.list refetch triggered by invalidateQueries on
-    // success. All listeners must start BEFORE the click so no signal
-    // slips past.
-    const responsePromise = page
-      .waitForResponse(
-        (r) =>
-          r.url().includes("tickets.create") && r.request().method() === "POST",
-        { timeout: CRYPTO_TIMEOUT },
-      )
-      .catch(() => null);
-
-    // Submit preflights resolveCreateTarget. When the selected client
-    // already has an open ticket, no tickets.create request is sent at
-    // all: the sheet closes and the app navigates to that open ticket
-    // (collision redirect). The URL change is the only observable signal
-    // on that path.
-    const collisionPromise = page
-      .waitForURL(/\/tickets\/[0-9a-f-]{36}$/, { timeout: CRYPTO_TIMEOUT })
-      .then(() => "collision" as const)
-      .catch(() => null);
-
-    const listRefetchPromise = page
-      .waitForResponse(
-        (r) =>
-          r.url().includes("tickets.list") &&
-          r.request().method() === "POST" &&
-          r.status() === 200,
-        { timeout: CRYPTO_TIMEOUT },
-      )
-      .catch(() => null);
-
-    const submitBtn = sheet.getByRole("button", { name: /create ticket/i });
-    await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
-    await submitBtn.click();
-
-    const outcome = await Promise.race([responsePromise, collisionPromise]);
-
-    if (outcome === "collision") {
-      console.log(
-        `[createTicket] collision redirect for "${searchTerm}" (attempt ${String(attempt + 1)}), returning to list and retrying`,
-      );
-      await returnToTicketList(page);
-      continue;
-    }
-
-    if (outcome?.status() !== 409) {
-      await expect(sheet).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
-      await listRefetchPromise;
-      return;
-    }
-
-    // 409: client already has an open ticket. Retry with a different client.
-    console.log(
-      `[createTicket] 409 on attempt ${String(attempt + 1)}, retrying`,
-    );
-    await page.waitForTimeout(1_000);
-  }
-
-  // All retries exhausted. Dismiss the sheet so subsequent tests don't
-  // start with a stale overlay, then fail with a clear message.
-  await page.keyboard.press("Escape");
-  await sheet
-    .waitFor({ state: "hidden", timeout: 5_000 })
-    .catch(() => undefined);
-  throw new E2eError(
-    `createTicket exhausted ${String(maxAttempts)} retries. All matched clients already have open tickets.`,
+  // The lookup runs when the phone field loses focus. A number nobody
+  // has used comes back as not found, with the token that creates the
+  // client alongside the ticket.
+  const phoneInput = sheet.getByRole("textbox", { name: "Phone number" });
+  await phoneInput.waitFor({ state: "visible", timeout: 5_000 });
+  const lookupResponse = page.waitForResponse(
+    (r) =>
+      r.url().includes("/relay/phone-lookup") &&
+      r.request().method() === "POST",
+    { timeout: CRYPTO_TIMEOUT },
   );
-}
+  await phoneInput.fill(nextCallerPhone());
 
-// Rotate through adjective prefixes to find clients without open tickets.
-// With 120 clients drawn from 83 adjectives (~1.4 per adjective), any
-// single term may not match. Use many full-adjective terms to maximize
-// coverage. PID offset separates parallel workers.
-const CLIENT_SEARCH_TERMS = [
-  "azure-",
-  "ivory-",
-  "fleet-",
-  "plush-",
-  "proud-",
-  "swift-",
-  "bright-",
-  "smooth-",
-  "coral-",
-  "opal-",
-  "merry-",
-  "rosy-",
-  "snowy-",
-  "jolly-",
-  "noble-",
-  "serene-",
-  "humble-",
-  "vivid-",
-  "teal-",
-  "sunny-",
-  "steady-",
-  "silver-",
-  "sandy-",
-  "lucid-",
-  "dusky-",
-  "early-",
-  "gentle-",
-  "solar-",
-  "stone-",
-  "open-",
-];
-let clientSearchIndex = process.pid % CLIENT_SEARCH_TERMS.length;
+  // Fill the rest of the form. Clicking the title field also blurs the
+  // phone field, which starts the lookup.
+  await sheet.getByPlaceholder(/brief description/i).fill(opts.title);
+  const lookup = await lookupResponse;
+  if (lookup.status() !== 200) {
+    throw new E2eError(
+      `Phone lookup for a new caller failed with HTTP ${String(lookup.status())}`,
+    );
+  }
+  if (opts.description != null) {
+    await sheet.getByPlaceholder(/details/i).fill(opts.description);
+  }
+  if (opts.priority && opts.priority !== "normal") {
+    await sheet
+      .locator("li")
+      .filter({ hasText: /priority/i })
+      .locator("select")
+      .selectOption(opts.priority);
+  }
+  const queueSelect = sheet
+    .locator("li")
+    .filter({ hasText: /queue/i })
+    .locator("select");
+  await queueSelect
+    .locator(`option:text("${opts.queue}")`)
+    .waitFor({ state: "attached", timeout: 10_000 });
+  await queueSelect.selectOption({ label: opts.queue });
+
+  // Capture the tickets.create response and the tickets.list refetch
+  // triggered by invalidateQueries on success. Both listeners start
+  // BEFORE the click so no signal slips past.
+  const createResponse = page.waitForResponse(
+    (r) =>
+      r.url().includes("tickets.create") && r.request().method() === "POST",
+    { timeout: CRYPTO_TIMEOUT },
+  );
+  const listRefetch = page
+    .waitForResponse(
+      (r) =>
+        r.url().includes("tickets.list") &&
+        r.request().method() === "POST" &&
+        r.status() === 200,
+      { timeout: CRYPTO_TIMEOUT },
+    )
+    .catch(() => null);
+
+  const submitBtn = sheet.getByRole("button", { name: /create ticket/i });
+  await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
+  await submitBtn.click();
+
+  const created = await createResponse;
+  if (created.status() !== 200) {
+    throw new E2eError(
+      `tickets.create for a new caller failed with HTTP ${String(created.status())}`,
+    );
+  }
+  await expect(sheet).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
+  await listRefetch;
+}
 
 /**
  * Close any open split-view detail pane so the list gets full width.

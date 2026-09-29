@@ -8,6 +8,33 @@ import {
   login,
   longPress,
 } from "./helpers";
+import {
+  HANDBOOK_TITLE,
+  LOCKED_TICKET_TITLE,
+  REPLAY_TICKETS,
+  distinctWord,
+  replayTitle,
+} from "./replay-tickets";
+
+// Seeded tickets these tests assert on, picked by the property each test
+// needs (replay-tickets.ts). The list is asserted by title, never by
+// position or count.
+const RECENT_TITLE = replayTitle(
+  "open and off hold",
+  (t) => t.state !== "closed" && t.state !== "on_hold",
+);
+const ON_HOLD_TITLE = replayTitle("on hold", (t) => t.state === "on_hold");
+const CRISIS_TITLE = replayTitle(
+  "open in the Crisis queue",
+  (t) => t.queue === "Crisis" && t.state !== "closed",
+);
+// Search matches queue names too, so the "housing" search must not reach
+// this ticket through a Housing queue badge.
+const SEARCH_TITLE = replayTitle(
+  "open outside the Housing queue",
+  (t) => t.queue !== "Housing" && t.state !== "closed",
+);
+const SEARCH_TERM = distinctWord(SEARCH_TITLE);
 
 test.describe.serial("Ticket List (Tickets Tab)", () => {
   let page: Page;
@@ -53,10 +80,13 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     // Multiple seeded tickets should be visible with decrypted titles.
     // Verify the shape: non-empty title text, not shimmer placeholders.
     await expect(page.getByText("Help with housing")).toBeVisible();
-    await expect(page.getByText("Safety planning session")).toBeVisible();
+    await expect(page.getByText(RECENT_TITLE)).toBeVisible();
 
-    // Ticket without key wrap shows "Locked ticket" placeholder with help icon.
+    // The ticket seed-data.setup.ts has a volunteer create while the admin
+    // is out of its queue carries no key wrap for the admin, so it shows
+    // the "Locked ticket" placeholder with a help icon, never its title.
     await expect(page.getByText("Locked ticket")).toBeVisible();
+    await expect(page.getByText(LOCKED_TICKET_TITLE)).toHaveCount(0);
   });
 
   test("cards show queue badges, status dots, and priority chips", async () => {
@@ -93,8 +123,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     // after selection, so the original locator is stale. Escape is reliable.
     await page.keyboard.press("Escape");
 
-    // On-hold tickets should be visible (seeded: "Waiting for callback from shelter",
-    // "Pending court date documentation").
+    // A seeded on-hold ticket should be visible.
     //
     // Applying a filter triggers a server refetch plus decrypt of the
     // filtered list, which can outlast the 5s default expect timeout on a
@@ -102,7 +131,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     // response showed the tap itself always registers (the handler lives
     // on the keyed <li>, which a count-label re-render never replaces), so
     // slow-list-update is the only failure mode left to absorb here.
-    await expect(page.getByText("Waiting for callback")).toBeVisible({
+    await expect(page.getByText(ON_HOLD_TITLE)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
 
@@ -134,11 +163,10 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     // Close popover (pill text changes after selection, use Escape).
     await page.keyboard.press("Escape");
 
-    // Crisis tickets should be visible.
-    await expect(page.getByText("Safety planning session")).toBeVisible();
-    await expect(
-      page.getByText("Emergency referral needed").first(),
-    ).toBeVisible();
+    // A seeded Crisis ticket should be visible.
+    await expect(page.getByText(CRISIS_TITLE)).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
     // Non-Crisis tickets should be hidden.
     await expect(page.getByText("Help with housing")).not.toBeVisible();
@@ -154,23 +182,23 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     // Enter search mode via the subnavbar trigger.
     await page.getByRole("button", { name: "Search this page" }).click();
 
-    // Type a term that appears only in one decrypted title.
+    // Type a word that appears in only one seeded title.
     const searchInput = page.getByRole("textbox", { name: "Refine search" });
-    await searchInput.fill("safety");
+    await searchInput.fill(SEARCH_TERM);
 
     // The list narrows to tickets whose decrypted title matches.
-    await expect(page.getByText("Safety planning session")).toBeVisible();
+    await expect(page.getByText(SEARCH_TITLE)).toBeVisible();
     await expect(page.getByText("Help with housing")).not.toBeVisible();
 
     // A different term flips the visible set, proving the match reads
     // the decrypted titles rather than any static order.
     await searchInput.fill("housing");
     await expect(page.getByText("Help with housing")).toBeVisible();
-    await expect(page.getByText("Safety planning session")).not.toBeVisible();
+    await expect(page.getByText(SEARCH_TITLE)).not.toBeVisible();
 
     // Exit search; the full list returns.
     await page.getByRole("button", { name: "Cancel" }).click();
-    await expect(page.getByText("Safety planning session")).toBeVisible();
+    await expect(page.getByText(SEARCH_TITLE)).toBeVisible();
     await expect(page.getByText("Help with housing")).toBeVisible();
   });
 
@@ -249,7 +277,7 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   // ── 5. Infinite scroll ──────────────────────────────────────────
 
   test("virtual scroller keeps DOM node count bounded", async () => {
-    // The dev seed has ~13 tickets, below the 500 virtualizeThreshold.
+    // The seed replay creates about 120 tickets, below the 500 virtualizeThreshold.
     // VirtualList stays in flat mode with small datasets, so
     // data-virtual="container" only appears above threshold.
     // Verify the sentinel (infinite scroll trigger) is present in both modes.
@@ -312,9 +340,13 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   // ── 7. Card tap navigation ──────────────────────────────────────
 
   test("tapping a card navigates to ticket detail route", async () => {
-    // Click the first card's inner button area.
-    const firstCardButton = page.locator("button.card-open-link").first();
-    await firstCardButton.click();
+    // Open the handbook story ticket's card, picked by title because the
+    // most recent card can be the locked ticket, whose detail has no
+    // thread.
+    await page
+      .locator('[data-testid="ticket-card-wrap"]', { hasText: HANDBOOK_TITLE })
+      .locator("button.card-open-link")
+      .click();
 
     // On desktop, the detail opens in a split-view pane (URL stays at
     // /tickets). On mobile, it navigates to /tickets/{uuid}. Verify by
@@ -348,12 +380,25 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   // ── 8. Empty state ──────────────────────────────────────────────
 
   test("empty state shown when filters match zero tickets", async () => {
-    // Apply a filter combination that matches nothing: "Closed" status.
-    // No seeded tickets are closed.
+    // "Closed" status with "Low" priority matches nothing. The replay
+    // closes some tickets, but none of them at low priority, and no spec
+    // closes a ticket.
+    expect(
+      REPLAY_TICKETS.some((t) => t.state === "closed" && t.priority === "low"),
+    ).toBe(false);
     const statusPill = filterToolbar().getByText("Status");
     await statusPill.click();
-    await page.getByText(/^Closed \(\d+\)$/).click();
+    await page.getByText(/^Closed \(\d+\+?\)$/).click();
     // Dismiss the filter popover by pressing Escape.
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+
+    const priorityPill = filterToolbar().getByText("Priority");
+    await priorityPill.click();
+    await page
+      .getByRole("group", { name: "Priority" })
+      .getByText(/^Low \(\d+\+?\)$/)
+      .click();
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
 

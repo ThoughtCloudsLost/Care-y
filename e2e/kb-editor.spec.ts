@@ -280,11 +280,12 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   test("atag: seeded article with a11y violations shows issues", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
-    // Open the "Try the accessibility checker" article (seeded with violations).
+    // Open the seed replay's accessibility example article (KB_ARTICLES in
+    // packages/client/src/lib/dev/seed-replay.ts), written with violations.
     // On desktop, split view uses pushState (URL stays at /library).
-    await page.getByText("Try the accessibility checker").click();
+    await page.getByText("Accessibility issues example").click();
     await expect(
-      page.locator("h1").getByText("Try the accessibility checker"),
+      page.locator("h1").getByText("Accessibility issues example"),
     ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
     // Tap the edit button to open the editor.
@@ -297,7 +298,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // creates a .ProseMirror child only after onMount + doc parsing.
     const pmContent = page.locator(".ProseMirror");
     await expect(pmContent).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await expect(pmContent).toContainText("How to use this article", {
+    await expect(pmContent).toContainText("About this article", {
       timeout: CRYPTO_TIMEOUT * 2,
     });
   });
@@ -309,9 +310,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // If the page navigated away (e.g., crypto timeout redirect),
     // re-enter the editor.
     if (!page.url().includes("/edit")) {
-      await page.getByText("Try the accessibility checker").click();
+      await page.getByText("Accessibility issues example").click();
       await expect(
-        page.locator("h1").getByText("Try the accessibility checker"),
+        page.locator("h1").getByText("Accessibility issues example"),
       ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
       const editBtn = page.getByRole("button", { name: "Edit article" });
       await editBtn.click();

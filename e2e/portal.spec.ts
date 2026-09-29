@@ -23,6 +23,7 @@ import {
   queryDb,
   resetCommunicationTiers,
 } from "./db-probe";
+import { PORTAL_TICKET_TITLE } from "./replay-tickets";
 
 /**
  * Secure Link portal E2E roundtrip.
@@ -40,10 +41,10 @@ import {
  * passphrase Argon2id runs at test parameters.
  */
 
-// "Safety planning session" belongs to account-portal.spec's upgrade
-// half; this spec uses its own seeded ticket so the two upgrade flows
-// never fight over one client's tier.
-const TICKET_TITLE = "Benefits application help";
+// account-portal.spec's upgrade half uses UPGRADE_TICKET_TITLE; this spec
+// uses its own seeded ticket so the two upgrade flows never fight over one
+// client's tier.
+const TICKET_TITLE = PORTAL_TICKET_TITLE;
 const VOLUNTEER_MESSAGE = `Portal hello ${String(Date.now()).slice(-6)}`;
 const CLIENT_REPLY = `Client portal reply ${String(Date.now()).slice(-6)}`;
 

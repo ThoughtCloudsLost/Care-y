@@ -158,8 +158,8 @@ export const EFFECTS: EffectMap = new Map([
   ],
 
   // quick-actions: mark-only. Presence asserts at least one ticket card
-  // is rendered. Seed dependency: seed-tickets.ts seeds 10+ ticket defs,
-  // all with withKeyWrap: true, so at least one card renders.
+  // is rendered. Seed dependency: the demo snapshot carries dozens of
+  // replayed tickets, so at least one card renders.
   [
     "quick-actions",
     {
@@ -172,10 +172,11 @@ export const EFFECTS: EffectMap = new Map([
   ],
 
   // unread-badges: mark-only. Presence asserts the new-pill badge is
-  // visible on at least one ticket. Seed dependency: seed-tickets.ts
-  // seeds encrypted read cursors (unreadSince defs) older than a later
-  // client follow-up, so those tickets read as unread. Never-opened
-  // tickets (no cursor row) are NOT unread by design.
+  // visible on at least one ticket. Seed dependency: the seed replay
+  // writes an encrypted read cursor at the admin's last reply on the
+  // tickets the admin owns, so a later client follow-up reads as
+  // unread. Never-opened tickets (no cursor row) are NOT unread by
+  // design.
   [
     "unread-badges",
     {

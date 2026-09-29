@@ -22,6 +22,7 @@ import {
   queryDb,
   resetCommunicationTiers,
 } from "./db-probe";
+import { UPGRADE_TICKET_TITLE } from "./replay-tickets";
 
 /**
  * Encrypted Account portal E2E roundtrip.
@@ -53,7 +54,6 @@ const PASSWORD = `correct-horse-${suffix}`;
 const WRONG_PASSWORD = "wrong-battery-staple-0"; // gitleaks:allow (test fixture, not a credential)
 const CLIENT_REPLY = `Account client reply ${suffix}`;
 const VOLUNTEER_MESSAGE = `Account volunteer reply ${suffix}`;
-const UPGRADE_TICKET_TITLE = "Safety planning session";
 const UPGRADE_USERNAME = `e2e upgrade ${suffix}`;
 const UPGRADE_PASSWORD = `upgrade-pass-${suffix}`;
 const UPGRADE_MESSAGE = `Pre-upgrade history ${suffix}`;
@@ -68,7 +68,7 @@ test.describe.serial("Encrypted Account Portal", () => {
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
     // All browser projects share one org: an earlier project's run left
-    // the upgrade-half client ("Safety planning session") upgraded, and
+    // the upgrade-half client (UPGRADE_TICKET_TITLE's) upgraded, and
     // its "Set up secure link" flow needs a fresh SMS/Email client.
     resetCommunicationTiers();
     intakePage = await browser.newPage();

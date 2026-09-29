@@ -78,8 +78,9 @@ export const EFFECTS: EffectMap = new Map([
 
   // ── Method screen specs ──
   //
-  // The advance chain (PhoneApp.svelte:960-968) clicks the picker item
-  // for the method, opening that method's screen. loginStage transitions
+  // The advance chain (advanceThroughTwofa in PhoneApp.svelte) clicks
+  // the picker item for the method, opening that method's screen.
+  // loginStage transitions
   // to "twofa-method" (login-stage.svelte.ts:22). The pulse then fires
   // and finds the method's own controls. Each spec asserts an element
   // unique to the open method screen, distinguishing it from the picker

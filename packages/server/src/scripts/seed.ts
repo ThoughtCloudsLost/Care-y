@@ -240,8 +240,8 @@ async function seed(): Promise<void> {
   }
 
   // --- Seed structural data (phone, queue, queue assignment, clients) ---
-  // No crypto here. Tickets and key wraps are created later by the browser
-  // (registerCrypto + loginCrypto) and server (devSeedTickets).
+  // No crypto here. Tickets and key wraps are created later in the browser,
+  // after registerCrypto + loginCrypto, by the Settings page dev seed.
 
   // Phone record (encrypted via OPS_SECRETS_KEY field encryption)
   let phoneId: PhoneId;
@@ -522,7 +522,7 @@ async function seed(): Promise<void> {
     }
   } else {
     console.log(
-      "No tickets found for audit seeding (run devSeedTickets first).",
+      "No tickets found for audit seeding (run the Settings dev seed first).",
     );
   }
 

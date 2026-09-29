@@ -2,6 +2,7 @@ import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
 import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
+import { LOCKED_TICKET_TITLE } from "./replay-tickets";
 
 test.describe.serial("Dashboard (Overview Tab)", () => {
   let page: Page;
@@ -24,23 +25,23 @@ test.describe.serial("Dashboard (Overview Tab)", () => {
   // ── Section count badges (real data) ──────────────────────────────
 
   test("section badges show correct counts from seeded tickets", async () => {
-    // My Tickets: at least the 5 seeded assigned non-hold tickets (may be
-    // higher when an earlier browser project's lifecycle specs assigned
-    // more in the shared DB).
+    // My Tickets: the seed replay assigns well over 5 open tickets to the
+    // seeding admin; the floor stays low so lifecycle specs in an earlier
+    // browser project cannot push it out of range.
     const myTickets = page.locator("#section-my-tickets [data-count]");
     await expect(myTickets).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     const myCount = Number(await myTickets.getAttribute("data-count"));
     expect(myCount).toBeGreaterThanOrEqual(5);
 
-    // Unassigned: at least 6 tickets with no assignee (may be higher if
-    // prior test runs created additional tickets in the shared DB).
+    // Unassigned: at least 6 tickets with no assignee (the replay leaves
+    // far more unassigned, and earlier specs may add their own).
     const unassigned = page.locator("#section-unassigned [data-count]");
     await expect(unassigned).toBeVisible();
     const unassignedCount = Number(await unassigned.getAttribute("data-count"));
     expect(unassignedCount).toBeGreaterThanOrEqual(6);
 
-    // On Hold: at least the 2 seeded tickets (shelter callback, court
-    // date); lifecycle specs in an earlier browser project may add one.
+    // On Hold: at least 2. The replay puts several tickets on hold, and
+    // lifecycle specs in an earlier browser project may add one.
     const onHold = page.locator("#section-on-hold [data-count]");
     await expect(onHold).toBeVisible();
     const holdCount = Number(await onHold.getAttribute("data-count"));
@@ -58,9 +59,12 @@ test.describe.serial("Dashboard (Overview Tab)", () => {
   });
 
   test("ticket without key wrap shows encrypted placeholder", async () => {
-    // Ticket with withKeyWrap: false has no key wrap. The title falls
-    // back to the i18n placeholder "Locked ticket" with a help icon.
-    await expect(page.getByText("Locked ticket")).toBeVisible();
+    // seed-data.setup.ts has a volunteer create an urgent, unassigned
+    // ticket while the admin is out of its queue, so the admin holds no
+    // key wrap for it. It leads Needs attention, and its title falls back
+    // to the i18n placeholder "Locked ticket" with a help icon.
+    await expect(page.getByText("Locked ticket").first()).toBeVisible();
+    await expect(page.getByText(LOCKED_TICKET_TITLE)).toHaveCount(0);
   });
 
   // ── Section heading labels (i18n) ─────────────────────────────────

@@ -178,7 +178,8 @@ export const EFFECTS: EffectMap = new Map([
   // (PhoneApp.svelte) that open overlays and populate UI before the
   // assertion fires.
 
-  // reply: three-stage choreography (PhoneApp.svelte:1166-1226).
+  // reply: three-stage choreography (the "reply" branch of handlePulse
+  // in PhoneApp.svelte).
   // Stage 1: clicks the compose-actions button. Stage 2: clicks the
   // Reply entry in the popover (ComposeActions.svelte:98-106,
   // ticket_reply_to_client), which activates reply compose mode and
@@ -194,7 +195,7 @@ export const EFFECTS: EffectMap = new Map([
         // ShellMessagebar.svelte:157-161 - the anchor div loses the
         // shell-messagebar-collapsed class when expanded. The textarea
         // inside it (line 164-168, Konsta Messagebar) is populated by
-        // the choreography's stage 3 (PhoneApp.svelte:1189-1207).
+        // the choreography's stage 3 (same handlePulse branch).
         ".shell-messagebar-anchor:not(.shell-messagebar-collapsed) textarea",
         // ShellMessagebar.svelte:184-193 - the send Link (role="button")
         // with aria-label={sendLabel}. The choreography types sample
@@ -207,7 +208,8 @@ export const EFFECTS: EffectMap = new Map([
     },
   ],
 
-  // close-reopen: choreography (PhoneApp.svelte:1229-1261). Opens
+  // close-reopen: choreography (the "close-reopen" branch of
+  // handlePulse in PhoneApp.svelte). Opens
   // the more-actions panel (clicks the same button as case-panel), then
   // finds the close/reopen ListItem inside TicketPanelContent and marks
   // it with a pulse marker. The panel stays open until the next pulse's

@@ -38,6 +38,7 @@ import {
 } from "@care-y/shared";
 import {
   buildSeedStories,
+  DEV_SEED_STORY_COUNT,
   originFollowUps,
   messageFollowUp,
   messageStepContent,
@@ -294,7 +295,7 @@ function link(href: string): PmMark {
 // ── Seed data definitions ────────────────────────────────────────────
 
 /** Generated stories the dev Settings seed and e2e replay. */
-export const DEV_SEED_STORY_COUNT = 120;
+export { DEV_SEED_STORY_COUNT };
 
 /** The seeded org's name and colors, as in the README screenshots. */
 const SEED_ORG_NAME = "CARE-Y";

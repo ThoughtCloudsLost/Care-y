@@ -18,6 +18,7 @@ import {
   openTicketInfoPanel,
 } from "./helpers";
 import { clearClientEmails, resetCommunicationTiers } from "./db-probe";
+import { PORTAL_TICKET_TITLE, UPGRADE_TICKET_TITLE } from "./replay-tickets";
 
 /**
  * Portal upgrade and email compose E2E.
@@ -40,7 +41,7 @@ import { clearClientEmails, resetCommunicationTiers } from "./db-probe";
  * passphrase Argon2id runs at test parameters.
  */
 
-const TICKET_TITLE = "Benefits application help";
+const TICKET_TITLE = PORTAL_TICKET_TITLE;
 const suffix = String(Date.now()).slice(-6);
 const EMAIL_SUBJECT = `Follow-up ${suffix}`;
 const EMAIL_BOLD_TEXT = `important update`;
@@ -469,10 +470,10 @@ test.describe.serial("Portal Upgrade + Email", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
     // The first client's channel now has a passphrase, so create a
-    // separate bare link on the "Safety planning session" ticket.
+    // separate bare link on the second seeded client's ticket.
     // account-portal.spec resets tiers in its own beforeAll, so no
     // cross-spec conflict.
-    await reopenTicketByTitle(volunteerPage, "Safety planning session");
+    await reopenTicketByTitle(volunteerPage, UPGRADE_TICKET_TITLE);
 
     await openTicketInfoPanel(volunteerPage, "Communication");
 

@@ -131,20 +131,26 @@ if (!failures.some((f) => f.startsWith("[A]"))) {
 
 // -------------------------------------------------------------------------
 // Check B: dev-gated procedure keys must be statically absent.
-// The server's development-only seed procedures (devSeedTickets, devSeedKb,
-// devSeedOrgKey) are guarded by NODE_ENV === "development". The demo env
-// module inlines NODE_ENV as "production", so the bundler should dead-code
-// eliminate them. If those procedure keys appear as object keys in the
-// bundle, it means the dead-code elimination failed and the dev router is
-// still wired in.
+// The server's development-only procedures (auth.devBypass2fa,
+// auth.devReEncryptDisplayName, keys.devSeedOrgKey and
+// telephonyAdmin.devSeedTelephony) are guarded by
+// NODE_ENV === "development". The demo env module inlines NODE_ENV as
+// "production", so the bundler should dead-code eliminate them. If those
+// procedure keys appear as object keys in the bundle, it means the
+// dead-code elimination failed and the dev router is still wired in.
 // -------------------------------------------------------------------------
 
-const devProcedures = ["devSeedTickets", "devSeedKb", "devSeedOrgKey"];
+const devProcedures = [
+  "devBypass2fa",
+  "devReEncryptDisplayName",
+  "devSeedOrgKey",
+  "devSeedTelephony",
+];
 
-// Match object-key forms like {"devSeedTickets": or ,devSeedTickets: which
+// Match object-key forms like {"devSeedOrgKey": or ,devSeedOrgKey: which
 // indicate the key is registered in a router or procedure map. A health
-// proof may contain the quoted string "devSeedTickets" followed by " in"
-// (a membership check); the colon requirement avoids that false positive.
+// proof may contain a quoted procedure name followed by " in" (a
+// membership check); the colon requirement avoids that false positive.
 const devKeyPatterns = devProcedures.map(
   (name) => new RegExp(`[,{]"?${name}"?\\s*:`, "g"),
 );
