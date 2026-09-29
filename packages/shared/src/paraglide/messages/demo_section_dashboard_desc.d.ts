@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Surfaces the volunteer's shift status, queue counts, recent activity, knowledge base updates, and merge candidates. The browser decrypts all card data locally." |
+* | "Surfaces the user's shift status, queue counts, recent activity, knowledge base updates, and merge candidates above four ticket lanes (Needs attention, My ti..." |
 *
 * @param {Demo_Section_Dashboard_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
