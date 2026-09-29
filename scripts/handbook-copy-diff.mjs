@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Compares the edited prose audit file against the canonical message
+ * Compares the edited copy audit file against the canonical message
  * catalog and reports which keys were changed.
  *
- * Reads docs/demo-handbook-prose-audit.md, pairs each prose block with
+ * Reads docs/demo-handbook-copy-audit.md, pairs each text block with
  * its <!-- key --> comment, and diffs the text against en.json. Outputs
  * a JSON array of { key, original, edited } objects to stdout, one per
  * changed key.
@@ -20,11 +20,11 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
-const AUDIT_FILE = resolve(ROOT, "docs/demo-handbook-prose-audit.md");
+const AUDIT_FILE = resolve(ROOT, "docs/demo-handbook-copy-audit.md");
 const EN_JSON = resolve(ROOT, "packages/shared/messages/en.json");
 
 // -----------------------------------------------------------------------
-// Parse the audit markdown into key/prose pairs
+// Parse the audit markdown into key/text pairs
 // -----------------------------------------------------------------------
 
 function parseAudit(md) {
@@ -32,7 +32,7 @@ function parseAudit(md) {
   const lines = md.split("\n");
 
   // Walk lines backwards from each <!-- key --> comment to collect the
-  // prose block above it. A prose block is every non-empty, non-heading,
+  // text block above it. A text block is every non-empty, non-heading,
   // non-comment line between the previous structural marker and the
   // comment.
   for (let i = 0; i < lines.length; i++) {
@@ -44,7 +44,7 @@ function parseAudit(md) {
     if (key.startsWith("section:")) continue;
 
     // Heading keys: the text is on the ### line immediately above.
-    // Body/desc keys: the prose block between the previous structural
+    // Body/desc keys: the text block between the previous structural
     // marker and this comment.
     if (key.endsWith("_heading")) {
       for (let j = i - 1; j >= 0; j--) {
@@ -59,32 +59,32 @@ function parseAudit(md) {
       continue;
     }
 
-    // Collect prose lines upward until we hit a heading, another comment,
+    // Collect text lines upward until we hit a heading, another comment,
     // a horizontal rule, or the blockquote tip marker.
-    const proseLines = [];
+    const textLines = [];
     for (let j = i - 1; j >= 0; j--) {
       const line = lines[j];
       if (line.startsWith("##")) break;
       if (line.startsWith("<!--")) break;
       if (line === "---") break;
       if (line.startsWith("> ")) break;
-      proseLines.unshift(line);
+      textLines.unshift(line);
     }
 
     // Trim leading/trailing empty lines
-    while (proseLines.length > 0 && proseLines[0].trim() === "") {
-      proseLines.shift();
+    while (textLines.length > 0 && textLines[0].trim() === "") {
+      textLines.shift();
     }
     while (
-      proseLines.length > 0 &&
-      proseLines[proseLines.length - 1].trim() === ""
+      textLines.length > 0 &&
+      textLines[textLines.length - 1].trim() === ""
     ) {
-      proseLines.pop();
+      textLines.pop();
     }
 
-    const prose = proseLines.join("\n");
-    if (prose.length > 0) {
-      entries.set(key, prose);
+    const text = textLines.join("\n");
+    if (text.length > 0) {
+      entries.set(key, text);
     }
   }
 
