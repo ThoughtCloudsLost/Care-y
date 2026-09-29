@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The drawer entries for managing an account require a sign-in. A client who opens the page without a password sees nothing in the drawer. [Change password](#c..." |
+* | "The drawer entries for managing an account require a sign-in. Without signing in, the drawer shows no account actions; the organization header, the theme tog..." |
 *
 * @param {Demo_Narrative_Client_Account_Settings_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
