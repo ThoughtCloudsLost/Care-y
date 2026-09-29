@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Select mode lets an account pick several tickets so one action applies to all of them. The Select control beside the filters turns select mode on. A long pre..." |
+* | "Select mode lets the user pick several tickets so one action applies to all of them. The Select control beside the filters turns select mode on. A long press..." |
 *
 * @param {Demo_Narrative_Topic_Select_Mode_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

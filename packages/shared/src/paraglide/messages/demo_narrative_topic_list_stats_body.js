@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_List_Stats_BodyInputs */
 
 const en_demo_narrative_topic_list_stats_body = /** @type {(inputs: Demo_Narrative_Topic_List_Stats_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The ticket list shows counts across the queues the account can access, plus a count of tickets carrying replies the account has not read. The status counts are New, Active, and On hold. [[#metadata]]
+	return /** @type {LocalizedString} */ (`The ticket list shows counts across the queues the account can access, plus a count of tickets carrying replies the user has not read. The status counts are New, Active, and On hold. [[#metadata]]
 **Status counts.** Each status count covers open tickets in the accessible queues:
 - New: open tickets that are not on hold and have no volunteer reply or answered call yet. Internal notes and the client's opening message do not count.
 - Active: open tickets that are not on hold and have at least one volunteer reply or answered call.
@@ -17,7 +17,7 @@ One query computes them from plaintext columns. An account that belongs to no qu
 };
 
 const es_demo_narrative_topic_list_stats_body = /** @type {(inputs: Demo_Narrative_Topic_List_Stats_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La lista de tickets muestra conteos en todas las colas a las que puede acceder la cuenta, más un conteo de tickets con respuestas que la cuenta no ha leído. Los conteos de estado son Nuevos, Activos y En espera. [[#metadata]]
+	return /** @type {LocalizedString} */ (`La lista de tickets muestra conteos en todas las colas a las que puede acceder la cuenta, más un conteo de tickets con respuestas que la persona usuaria no ha leído. Los conteos de estado son Nuevos, Activos y En espera. [[#metadata]]
 **Conteos de estado.** Cada conteo de estado abarca tickets abiertos en las colas accesibles:
 - Nuevos: tickets abiertos que no están en espera y no tienen respuesta de persona voluntaria ni llamada contestada todavía. Las notas internas y el mensaje inicial del cliente no cuentan.
 - Activos: tickets abiertos que no están en espera y tienen al menos una respuesta de persona voluntaria o llamada contestada.
@@ -28,7 +28,7 @@ Una sola consulta los calcula a partir de columnas en texto plano. Una cuenta qu
 };
 
 const en_xa2_demo_narrative_topic_list_stats_body = /** @type {(inputs: Demo_Narrative_Topic_List_Stats_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Thè tìckèt lìst shòws còùnts àcròss thè qùèùès thè àccòùnt càn àccèss, plùs à còùnt òf tìckèts càrryìng rèplìès thè àccòùnt hàs nòt rèàd. Thè stàtùs còùnts àrè Nèw, Àctìvè, ànd Òn hòld. [[#mètàdàtà]]
+	return /** @type {LocalizedString} */ (`⟦Thè tìckèt lìst shòws còùnts àcròss thè qùèùès thè àccòùnt càn àccèss, plùs à còùnt òf tìckèts càrryìng rèplìès thè ùsèr hàs nòt rèàd. Thè stàtùs còùnts àrè Nèw, Àctìvè, ànd Òn hòld. [[#mètàdàtà]]
  ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Stàtùs còùnts. •••••** Èàch stàtùs còùnt còvèrs òpèn tìckèts ìn thè àccèssìblè qùèùès:
 - Nèw: òpèn tìckèts thàt àrè nòt òn hòld ànd hàvè nò vòlùntèèr rèply òr ànswèrèd càll yèt. Ìntèrnàl nòtès ànd thè clìènt's òpènìng mèssàgè dò nòt còùnt.
 - Àctìvè: òpèn tìckèts thàt àrè nòt òn hòld ànd hàvè àt lèàst ònè vòlùntèèr rèply òr ànswèrèd càll.
@@ -41,7 +41,7 @@ const en_xa2_demo_narrative_topic_list_stats_body = /** @type {(inputs: Demo_Nar
 /**
 * | output |
 * | --- |
-* | "The ticket list shows counts across the queues the account can access, plus a count of tickets carrying replies the account has not read. The status counts a..." |
+* | "The ticket list shows counts across the queues the account can access, plus a count of tickets carrying replies the user has not read. The status counts are ..." |
 *
 * @param {Demo_Narrative_Topic_List_Stats_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

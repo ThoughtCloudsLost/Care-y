@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Each ticket row shows how many replies the signed-in account has not read. [[#client-data #encryption]] **Where does the count come from?** Each account keep..." |
+* | "Each ticket row shows how many replies the signed-in user has not read. [[#client-data #encryption]] **Where does the count come from?** Each account keeps o..." |
 *
 * @param {Demo_Narrative_Topic_Unread_Badges_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
