@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_BodyInputs */
 
 const en_demo_narrative_topic_twofa_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The browser derives encryption keys only after a second factor is verified. An attacker who has the password but not the second factor cannot obtain key material. [[#keys #encryption]]
+	return /** @type {LocalizedString} */ (`For any account that has a second factor enrolled, the browser derives encryption keys only after that factor is verified. An account signing in for the first time derives its keys and then must enroll a method before anything else opens. An attacker who has the password but not the second factor cannot obtain key material. [[#keys #encryption]]
 **Supported methods.** Any number can be active at once. Each works on its own. [[#privacy]]
 - [Passkeys and security keys](#login/passkey) are device-bound and cannot be used from another device. [[#keys]]
 - [Authenticator app codes](#login/totp) generate six-digit codes offline. [[#privacy]]
@@ -21,7 +21,7 @@ const en_demo_narrative_topic_twofa_body = /** @type {(inputs: Demo_Narrative_To
 };
 
 const es_demo_narrative_topic_twofa_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El navegador deriva las claves de cifrado solo tras verificar un segundo factor. Un atacante que tenga la contraseña pero no el segundo factor no puede obtener material de claves. [[#keys #encryption]]
+	return /** @type {LocalizedString} */ (`Para cualquier cuenta que tenga un segundo factor inscrito, el navegador deriva las claves de cifrado solo tras verificar ese factor. Una cuenta que inicia sesión por primera vez deriva sus claves y después debe inscribir un método antes de que se abra cualquier otra cosa. Un atacante que tenga la contraseña pero no el segundo factor no puede obtener material de claves. [[#keys #encryption]]
 **Métodos admitidos.** Se puede tener activo cualquier número a la vez. Cada uno funciona por separado. [[#privacy]]
 - [Passkeys y llaves de seguridad](#login/passkey) están vinculadas al dispositivo y no se pueden usar desde otro. [[#keys]]
 - [Códigos de aplicación de autenticación](#login/totp) generan códigos de seis dígitos sin conexión. [[#privacy]]
@@ -36,8 +36,8 @@ const es_demo_narrative_topic_twofa_body = /** @type {(inputs: Demo_Narrative_To
 };
 
 const en_xa2_demo_narrative_topic_twofa_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Thè bròwsèr dèrìvès èncryptìòn kèys ònly àftèr à sècònd fàctòr ìs vèrìfìèd. Àn àttàckèr whò hàs thè pàsswòrd bùt nòt thè sècònd fàctòr cànnòt òbtàìn kèy màtèrìàl. [[#kèys #èncryptìòn]]
- ••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Sùppòrtèd mèthòds. ••••••** Àny nùmbèr càn bè àctìvè àt òncè. Èàch wòrks òn ìts òwn. [[#prìvàcy]]
+	return /** @type {LocalizedString} */ (`⟦Fòr àny àccòùnt thàt hàs à sècònd fàctòr ènròllèd, thè bròwsèr dèrìvès èncryptìòn kèys ònly àftèr thàt fàctòr ìs vèrìfìèd. Àn àccòùnt sìgnìng ìn fòr thè fìrst tìmè dèrìvès ìts kèys ànd thèn mùst ènròll à mèthòd bèfòrè ànythìng èlsè òpèns. Àn àttàckèr whò hàs thè pàsswòrd bùt nòt thè sècònd fàctòr cànnòt òbtàìn kèy màtèrìàl. [[#kèys #èncryptìòn]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Sùppòrtèd mèthòds. ••••••** Àny nùmbèr càn bè àctìvè àt òncè. Èàch wòrks òn ìts òwn. [[#prìvàcy]]
 - [Pàsskèys ànd sècùrìty kèys](#lògìn/pàsskèy) àrè dèvìcè-bòùnd ànd cànnòt bè ùsèd fròm ànòthèr dèvìcè. [[#kèys]]
 - [Àùthèntìcàtòr àpp còdès](#lògìn/tòtp) gènèràtè sìx-dìgìt còdès òfflìnè. [[#prìvàcy]]
 - [Èmàìl còdès](#lògìn/èmàìl) ànd [Tèxt mèssàgè còdès](#lògìn/sms) àrè dèlìvèrèd tò àn àddrèss òr nùmbèr thè sèrvèr càn rèàd. [[#sèrvèr-hòlds #tèlèphòny]]
@@ -53,7 +53,7 @@ const en_xa2_demo_narrative_topic_twofa_body = /** @type {(inputs: Demo_Narrativ
 /**
 * | output |
 * | --- |
-* | "The browser derives encryption keys only after a second factor is verified. An attacker who has the password but not the second factor cannot obtain key mate..." |
+* | "For any account that has a second factor enrolled, the browser derives encryption keys only after that factor is verified. An account signing in for the firs..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

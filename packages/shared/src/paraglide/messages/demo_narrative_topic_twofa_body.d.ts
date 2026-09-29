@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The browser derives encryption keys only after a second factor is verified. An attacker who has the password but not the second factor cannot obtain key mate..." |
+* | "For any account that has a second factor enrolled, the browser derives encryption keys only after that factor is verified. An account signing in for the firs..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

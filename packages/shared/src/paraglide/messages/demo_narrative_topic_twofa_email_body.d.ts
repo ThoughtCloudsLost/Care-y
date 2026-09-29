@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A six-digit code is sent to the email address on the account. It is valid for five minutes. A third wrong entry deletes the code rather than locking the acco..." |
+* | "A six-digit code is sent to the email address on the account. It is valid for five minutes. A third wrong entry uses the code up, so the next attempt needs a..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Email_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
