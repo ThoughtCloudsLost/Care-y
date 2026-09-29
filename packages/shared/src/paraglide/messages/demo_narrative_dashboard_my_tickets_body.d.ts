@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "My tickets lists open tickets assigned to the signed-in user. A ticket on hold does not appear until the hold is lifted. The count beside the heading and the..." |
+* | "My tickets lists open tickets assigned to the signed-in user. A ticket on hold does not appear until the hold is lifted. The heading count follows the lane's..." |
 *
 * @param {Demo_Narrative_Dashboard_My_Tickets_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

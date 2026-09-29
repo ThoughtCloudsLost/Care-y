@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A ticket belongs to this section when it meets every condition below. The section is absent when no ticket qualifies. [[#client-data #privacy]] - The ticket ..." |
+* | "A ticket belongs to this section when it meets every condition below. In the stacked layout the section disappears when no ticket qualifies, unless a filter ..." |
 *
 * @param {Demo_Narrative_Dashboard_Needs_Attention_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
