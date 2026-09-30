@@ -51,7 +51,7 @@ pre-commit:
       run: node scripts/check-id-brands.mjs
 
     format:
-      run: pnpm exec prettier --check --ignore-path .prettierignore --ignore-path .prettierignore.local {staged_files}
+      run: pnpm exec prettier --check --ignore-unknown --ignore-path .prettierignore --ignore-path .prettierignore.local {staged_files}
 
 commit-msg:
   commands:
