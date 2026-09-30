@@ -12,10 +12,10 @@
     "@care-y/shared": "workspace:*",
     "@trpc/server": "11.10.0",
     "kysely": "0.29.5",
-    "nodemailer": "10.0.4",
+    "nodemailer": "10.0.10",
     "pg": "8.23.0",
     "postal-mime": "^3.0.0",
-    "smtp-server": "^3.19.10",
+    "smtp-server": "3.19.13",
     "sodium-native": "^5.1.0",
     "zod": "4.6.2"
   },

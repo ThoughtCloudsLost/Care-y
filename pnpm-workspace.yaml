@@ -17,6 +17,8 @@ overrides:
   # (sveltejs/kit#16184, version-3 branch). When migrating to SvelteKit 3,
   # this cap must be removed or it will hold kit back in the other direction.
   cookie: ">=0.7.0 <2"
-  devalue: ">=5.8.1"
+  devalue: ">=5.9.2"
   fast-uri: ">=3.1.2"
+  # postcss 8 depends on nanoid ^3, so the floor applies to 3.x only.
+  "nanoid@<3.3.18": "^3.3.18"
   serialize-javascript: ">=7.0.3"

@@ -9,8 +9,9 @@ overrides:
   '@types/node': 26.1.0
   brace-expansion: '>=5.0.6'
   cookie: '>=0.7.0 <2'
-  devalue: '>=5.8.1'
+  devalue: '>=5.9.2'
   fast-uri: '>=3.1.2'
+  nanoid@<3.3.18: ^3.3.18
   serialize-javascript: '>=7.0.3'
 
 patchedDependencies:
@@ -202,7 +203,7 @@ importers:
         version: 5.57.0(@typescript-eslint/types@8.70.0)
       svelte-check:
         specifier: ^4.7.6
-        version: 4.7.6(picomatch@4.0.5)(svelte@5.57.0(@typescript-eslint/types@8.70.0))(typescript@5.9.3)
+        version: 4.7.6(picomatch@4.0.7)(svelte@5.57.0(@typescript-eslint/types@8.70.0))(typescript@5.9.3)
       tailwindcss:
         specifier: 4.3.3
         version: 4.3.3
@@ -284,7 +285,7 @@ importers:
         version: 5.57.0(@typescript-eslint/types@8.70.0)
       svelte-check:
         specifier: ^4.7.6
-        version: 4.7.6(picomatch@4.0.7)(svelte@5.57.0(@typescript-eslint/types@8.70.0))(typescript@5.9.3)
+        version: 4.7.6(picomatch@4.0.5)(svelte@5.57.0(@typescript-eslint/types@8.70.0))(typescript@5.9.3)
       tailwindcss:
         specifier: 4.3.3
         version: 4.3.3
@@ -310,8 +311,8 @@ importers:
         specifier: 0.29.5
         version: 0.29.5
       nodemailer:
-        specifier: 10.0.4
-        version: 10.0.4
+        specifier: 10.0.10
+        version: 10.0.10
       pg:
         specifier: 8.23.0
         version: 8.23.0
@@ -319,8 +320,8 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0
       smtp-server:
-        specifier: ^3.19.10
-        version: 3.19.10
+        specifier: 3.19.13
+        version: 3.19.13
       sodium-native:
         specifier: ^5.1.0
         version: 5.1.0(bare-events@2.8.2)
@@ -2468,9 +2469,6 @@ packages:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
 
-  devalue@5.8.2:
-    resolution: {integrity: sha512-DObPPAfdtFbXjxLqK8s2Xk9ZuWz5+ZoFEhC7J76es4GU/rEiXwHTmbImoCdyoCOcBH1UF3+Cz6Z2sYD4hyl5TA==}
-
   devalue@5.9.2:
     resolution: {integrity: sha512-po4PAY5c53tw5XMocSnf8A/5OHhbbUftpr93aEN6BBoAdntUmK7vu7wOATqvt7cXO7m1Cl4gMVn6p7n6n4mj0w==}
 
@@ -3349,11 +3347,6 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
-  nanoid@3.3.16:
-    resolution: {integrity: sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==}
-    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
-    hasBin: true
-
   nanoid@3.3.19:
     resolution: {integrity: sha512-Y2tUNy4ouw6tq5oDSKeQYGOyhkUBhNOcGV/02KC+6kd9eDGqdZd++mjMiIDilrBYvjEnCYvVtsuHCuP+okSfug==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -3366,12 +3359,8 @@ packages:
     resolution: {integrity: sha512-mIrE/Cw9y+9Au6dS5vDKDhQza9YvG6w+ZrS6X+ZzA7yFW/soAeaups4Qzn1bL6g5FVy8WtP79+0j82oPIbqRjQ==}
     engines: {node: '>=18'}
 
-  nodemailer@10.0.3:
-    resolution: {integrity: sha512-h5c8ypcMoOIh44bIcVROvTDbjRdOJX8AXTkxMht2C92HlSjkG+/8kjoqmNPypfjQaVNaUHWyZ3tqs5I3K91F3g==}
-    engines: {node: '>=20.0.0'}
-
-  nodemailer@10.0.4:
-    resolution: {integrity: sha512-hhjVvg8CyDQsYOBp5+nGPRAeHhJFu7p+EJYlHbrO2U8kqIEPFIkTn6uumnmdH7mXB/lt0WMcDZAtpALTyvVmIw==}
+  nodemailer@10.0.10:
+    resolution: {integrity: sha512-He9XskOFms62SyAKkLu8CcGcYHAo+BSHSsORI8s4PJH8qZgZY4L4lDfvyN0twvmbpyG+eGrxpyBlskj9d9rJ8A==}
     engines: {node: '>=20.0.0'}
 
   object-inspect@1.13.4:
@@ -3818,8 +3807,8 @@ packages:
     resolution: {integrity: sha512-RQsvleCbF8cVHEv+xuDGaA4pOizFqJ0GgjtMSRo6oP8pnN7WsigHgVGey6aILRBKv4W2YOMHLqbKdnB6hpB9fw==}
     engines: {node: '>=20.0.0'}
 
-  smtp-server@3.19.10:
-    resolution: {integrity: sha512-uN0dx/iwSmsD46Ew4yXuwZF1g7OumBg2GXDykWZ1w7rHVNzrrfxHEg5HmVW2iFGa93QbknS7CLi1p2rlZdacEQ==}
+  smtp-server@3.19.13:
+    resolution: {integrity: sha512-W1CjNcrPqW4+1gUOYRyjPvTOxu7GgKR9+7l50yQBF0GM8v8jpYwheHFCHX7s+p7pYI8iXKQQZiF2Rv2Na/3i2g==}
     engines: {node: '>=20.0.0'}
 
   sodium-native@5.1.0:
@@ -5777,7 +5766,7 @@ snapshots:
       '@types/cookie': 0.6.0
       acorn: 8.17.0
       cookie: 1.1.1
-      devalue: 5.8.2
+      devalue: 5.9.2
       esm-env: 1.2.2
       kleur: 4.1.5
       magic-string: 0.30.21
@@ -6487,8 +6476,6 @@ snapshots:
   dequal@2.0.3: {}
 
   detect-libc@2.1.2: {}
-
-  devalue@5.8.2: {}
 
   devalue@5.9.2: {}
 
@@ -7427,17 +7414,13 @@ snapshots:
 
   ms@2.1.3: {}
 
-  nanoid@3.3.16: {}
-
   nanoid@3.3.19: {}
 
   natural-compare@1.4.0: {}
 
   node-releases@2.0.55: {}
 
-  nodemailer@10.0.3: {}
-
-  nodemailer@10.0.4: {}
+  nodemailer@10.0.10: {}
 
   object-inspect@1.13.4: {}
 
@@ -7585,7 +7568,7 @@ snapshots:
 
   postcss@8.5.23:
     dependencies:
-      nanoid: 3.3.16
+      nanoid: 3.3.19
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
@@ -7936,10 +7919,10 @@ snapshots:
 
   smob@1.6.2: {}
 
-  smtp-server@3.19.10:
+  smtp-server@3.19.13:
     dependencies:
       ipv6-normalize: 1.0.1
-      nodemailer: 10.0.3
+      nodemailer: 10.0.10
       punycode.js: 2.3.1
 
   sodium-native@5.1.0(bare-events@2.8.2):
