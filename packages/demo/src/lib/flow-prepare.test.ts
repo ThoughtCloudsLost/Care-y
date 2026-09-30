@@ -99,17 +99,6 @@ function richBlock(id: string): FlowBlock {
   };
 }
 
-function figureBlock(id: string): FlowBlock {
-  return {
-    id,
-    sectionId: "login",
-    subSlug: "a-sub",
-    kind: "figure",
-    aspectRatio: 0.5,
-    headingKey: "demo_login_a_sub",
-  };
-}
-
 // -----------------------------------------------------------------------
 
 describe("prepareBlockHandles", () => {
@@ -141,19 +130,6 @@ describe("prepareBlockHandles", () => {
       { text: "bold", font: FONT_SUB_BODY_BOLD },
       { text: " tail", font: FONT_STRINGS["sub-body"] },
     ]);
-  });
-
-  it("skips figure blocks, leaving a gap at their index", () => {
-    const blocks = [
-      textBlock("b0", "sub-body", "before"),
-      figureBlock("b1"),
-      textBlock("b2", "sub-body", "after"),
-    ];
-    const prepared = prepareBlockHandles(blocks, "en");
-
-    expect(prepared.handles.has(0)).toBe(true);
-    expect(prepared.handles.has(1)).toBe(false);
-    expect(prepared.handles.has(2)).toBe(true);
   });
 
   it("returns the exact blocks array it measured, by identity", () => {
@@ -216,10 +192,7 @@ describe("createFiller", () => {
   });
 
   it("returns null for a block index with no handle", () => {
-    // Figure blocks land here: they occupy an index but have no text.
-    const filler = createFiller(
-      prepareBlockHandles([figureBlock("b0")], "en").handles,
-    );
+    const filler = createFiller(prepareBlockHandles([], "en").handles);
     expect(filler.fillLine(0, { segmentIndex: 0, graphemeIndex: 0 }, 200)).toBe(
       null,
     );

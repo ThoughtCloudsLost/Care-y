@@ -2,16 +2,10 @@
   import type { Section, SectionId } from "./scroll-sections.js";
   import type { DemoTopic } from "./bridge.js";
   import {
-    resolveStoryMessage,
-    resolveParameterizedMessage,
-  } from "./story-messages.js";
-  import {
     type FlowBlock,
-    type FlowFigureBlock,
     type FlowHole,
     type FlowLayoutResult,
     type FlowColumn,
-    type FlowFigureGeometry,
     DEFAULT_METRICS,
     FRAME_PAD_TOP,
     FRAME_PAD_BOTTOM,
@@ -25,10 +19,7 @@
     createFiller,
     loadFlowFonts,
   } from "./flow-prepare.js";
-  import { type PeekFirePayload } from "./clip-registry.js";
   import { buildBlocks } from "./story-blocks.js";
-  import { createFigureHysteresis } from "./figure-hysteresis.js";
-  import ClipFigure from "./ClipFigure.svelte";
   import FlowProse from "./FlowProse.svelte";
   import {
     setFlowGeometrySource,
@@ -53,30 +44,17 @@
     activeSub: string | null;
     seenTopics: ReadonlySet<DemoTopic>;
     /** Viewport-space frame box the text wraps around, or null when the
-     *  frame is hidden (read mode, no peek): the flow carves no hole. */
+     *  frame is hidden (read mode): the flow carves no hole. */
     frameRect: {
       left: number;
       top: number;
       outerW: number;
       outerH: number;
     } | null;
-    /** Play the fullscreen-exit entrance (see FlowProse). Figures are
-     *  the host's own layer and stay out of it. */
+    /** Play the fullscreen-exit entrance (see FlowProse). */
     entrance?: boolean;
     onSelectSection: (id: SectionId) => void;
     onSelectSub: (sectionId: SectionId, subSlug: string) => void;
-    /** Peek hold completed on a figure. */
-    onpeekfire?: (payload: PeekFirePayload) => void;
-    /** Drag delta while peek is held. */
-    onpeekdrag?: (dx: number, dy: number) => void;
-    /** Secondary tap during a held peek. */
-    onpeeksecondarytap?: () => void;
-    /** Primary pointer released after peek fired. */
-    onpeekrelease?: () => void;
-    /** Peek gesture cancelled. */
-    onpeekcancel?: () => void;
-    /** A figure's container element is ready (for engine prewarm). */
-    onelement?: (el: HTMLElement) => void;
   }
 
   let {
@@ -89,12 +67,6 @@
     entrance = false,
     onSelectSection,
     onSelectSub,
-    onpeekfire,
-    onpeekdrag,
-    onpeeksecondarytap,
-    onpeekrelease,
-    onpeekcancel,
-    onelement,
   }: Props = $props();
 
   let blocks = $derived(buildBlocks(sections, locale));
@@ -602,21 +574,6 @@
   // Virtualization: only render blocks in viewport + buffer
   // -----------------------------------------------------------------------
 
-  function isBlockVisible(
-    blockGeo: { topY: number; bottomY: number },
-    containerDocTop: number,
-    viewportTop: number,
-    viewportBottom: number,
-    buffer: number,
-  ): boolean {
-    const blockDocTop = containerDocTop + blockGeo.topY;
-    const blockDocBottom = containerDocTop + blockGeo.bottomY;
-    return (
-      blockDocBottom >= viewportTop - buffer &&
-      blockDocTop <= viewportBottom + buffer
-    );
-  }
-
   /**
    * The band of prose worth rendering, in container space, one viewport
    * of buffer either side of the visible window. Reads only reactive
@@ -630,64 +587,6 @@
   let proseRange: { top: number; bottom: number } = $derived({
     top: scrollY - containerTop - viewportH,
     bottom: scrollY - containerTop + viewportH * 2,
-  });
-
-  // -----------------------------------------------------------------------
-  // Visible figures: virtualized from the layout's figures array
-  // -----------------------------------------------------------------------
-
-  interface VisibleFigure {
-    blockIndex: number;
-    block: FlowFigureBlock;
-    geo: FlowFigureGeometry;
-    /** Block geometry from the blocks array, for fade calculation. */
-    blockGeo: { topY: number; bottomY: number };
-  }
-
-  // Asymmetric enter/leave margins prevent a figure oscillating across
-  // the boundary from unmounting and remounting ClipFigure (which
-  // destroys its video element and IntersectionObserver). Enter at 1
-  // viewport; leave only after 1.5 viewports of distance.
-  const FIGURE_ENTER_BUFFER_RATIO = 1;
-  const FIGURE_LEAVE_BUFFER_RATIO = 1.5;
-
-  // Track which block indices are currently mounted, so the wider leave
-  // margin can keep them alive after they would have failed the enter
-  // test. The tracker is scratch memory updated inside the $derived.by
-  // and read only there, so it lives outside component state.
-  const figureHysteresis = createFigureHysteresis();
-
-  let visibleFigures: VisibleFigure[] = $derived.by(() => {
-    if (layoutResult === null) return [];
-    if (layoutResult.blocks.length !== blocks.length) return [];
-
-    const vpTop = scrollY;
-    const vpBottom = vpTop + viewportH;
-    const enterBuffer = viewportH * FIGURE_ENTER_BUFFER_RATIO;
-    const leaveBuffer = viewportH * FIGURE_LEAVE_BUFFER_RATIO;
-
-    const result: VisibleFigure[] = [];
-    for (const fig of layoutResult.figures) {
-      const blockGeo = layoutResult.blocks.at(fig.blockIndex);
-      const block = blocks.at(fig.blockIndex);
-      if (blockGeo === undefined || block === undefined) continue;
-      if (block.kind !== "figure") continue;
-
-      const wasMounted = figureHysteresis.wasMounted(fig.blockIndex);
-      const buffer = wasMounted ? leaveBuffer : enterBuffer;
-      if (!isBlockVisible(blockGeo, containerTop, vpTop, vpBottom, buffer)) {
-        continue;
-      }
-      figureHysteresis.keep(fig.blockIndex);
-      result.push({
-        blockIndex: fig.blockIndex,
-        block,
-        geo: fig,
-        blockGeo,
-      });
-    }
-    figureHysteresis.commit();
-    return result;
   });
 </script>
 
@@ -708,57 +607,4 @@
   oncontainer={(el: HTMLDivElement) => {
     containerEl = el;
   }}
->
-  <!-- Figures are the page's alone: the drawer has the live app behind
-       it and needs no clip of the same screens. They render here rather
-       than inside FlowProse so their peek handlers stay with the host
-       that owns them. -->
-  {#snippet figures()}
-    {#each visibleFigures as vf (vf.block.id)}
-      <div
-        class="flow-figure"
-        style:left="{vf.geo.x}px"
-        style:top="{vf.geo.y}px"
-        style:width="{vf.geo.width}px"
-        style:height="{vf.geo.height}px"
-      >
-        <ClipFigure
-          sectionId={vf.block.sectionId}
-          subSlug={vf.block.subSlug ?? ""}
-          width={vf.geo.width}
-          height={vf.geo.height}
-          ariaLabel={resolveParameterizedMessage(
-            "demo_figure_aria_label",
-            {
-              sub: resolveStoryMessage(vf.block.headingKey, locale),
-            },
-            locale,
-          )}
-          {onpeekfire}
-          {onpeekdrag}
-          {onpeeksecondarytap}
-          {onpeekrelease}
-          {onpeekcancel}
-          {onelement}
-        />
-      </div>
-    {/each}
-  {/snippet}
-</FlowProse>
-
-<style>
-  /* Inline clip figures. Declared here rather than in FlowProse because
-     the snippet above is compiled into this component, so this is the
-     scope its class resolves in. */
-  .flow-figure {
-    position: absolute;
-    pointer-events: auto;
-    transition: opacity 0.2s ease;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .flow-figure {
-      transition: none;
-    }
-  }
-</style>
+/>

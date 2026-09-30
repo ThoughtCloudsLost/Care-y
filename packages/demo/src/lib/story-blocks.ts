@@ -17,13 +17,7 @@ import {
   unitHasRichContent,
   unitText,
 } from "./flow-markup.js";
-import { hasClip, getClip } from "./clip-registry.js";
-import type {
-  FlowBlock,
-  FlowTextBlock,
-  FlowFigureBlock,
-  FlowTextKind,
-} from "./flow-layout.js";
+import type { FlowBlock, FlowTextBlock, FlowTextKind } from "./flow-layout.js";
 import { LIST_INDENT, PARA_SPACE, LIST_ITEM_SPACE } from "./flow-layout.js";
 
 // -----------------------------------------------------------------------
@@ -221,19 +215,6 @@ export function buildBlocks(sects: Section[], loc: string): FlowBlock[] {
                   : PARA_SPACE,
           } satisfies FlowTextBlock);
         }
-      }
-
-      // Append a figure block when a clip exists for this sub.
-      if (hasClip(section.id, sub.slug)) {
-        const clip = getClip(section.id, sub.slug);
-        result.push({
-          id: `${section.id}--${sub.slug}--figure`,
-          sectionId: section.id,
-          subSlug: sub.slug,
-          kind: "figure",
-          aspectRatio: clip.aspectRatio,
-          headingKey: sub.headingKey,
-        } satisfies FlowFigureBlock);
       }
     }
   }

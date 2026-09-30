@@ -12,7 +12,6 @@
 export { default as DemoFrame } from "./DemoFrame.svelte";
 export { default as TopBar } from "./TopBar.svelte";
 export { default as FlowStory } from "./FlowStory.svelte";
-export type { PeekFirePayload } from "./clip-registry.js";
 export { resolveStoryMessage } from "./story-messages.js";
 export { createDemoRouter } from "./router.svelte.js";
 export { createDemoQueryClient } from "./demo-query-client.js";
@@ -86,13 +85,10 @@ export {
 export type {
   FlowBlock,
   FlowTextBlock,
-  FlowFigureBlock,
   FlowTextKind,
-  FlowBlockKind,
   FlowHole,
   FlowLine,
   FlowBlockGeometry,
-  FlowFigureGeometry,
   FlowLayoutResult,
   FlowKindMetrics,
   FlowMetrics,

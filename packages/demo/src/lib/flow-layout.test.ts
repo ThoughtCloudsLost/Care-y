@@ -7,7 +7,6 @@ import {
   computeColumnSegments,
   DEFAULT_METRICS,
   HOLE_GAP,
-  MAX_FIGURE_WIDTH,
   MIN_SEGMENT,
   SHIFT_MAX,
   FULL_BLEED_SLIVER,
@@ -17,7 +16,6 @@ import {
 import type {
   FlowBlock,
   FlowTextBlock,
-  FlowFigureBlock,
   FlowColumn,
   FlowHole,
   LineFiller,
@@ -50,9 +48,6 @@ function createFixedFiller(
       const offset = cursor as number;
       const block = blocks[blockIndex];
       if (block === undefined) return null;
-      // Figure blocks have no text; the layout engine never calls the
-      // filler for them, but the type system requires the guard.
-      if (block.kind === "figure") return null;
       const text = block.text;
       if (offset >= text.length) return null;
 
@@ -109,21 +104,6 @@ function makeBlock(
   subSlug: string | null = "overview",
 ): FlowTextBlock {
   return { id: `b-${text.slice(0, 8)}`, sectionId, subSlug, kind, text };
-}
-
-function makeFigure(
-  aspectRatio: number = 390 / 220,
-  sectionId = "login" as FlowBlock["sectionId"],
-  subSlug: string | null = "overview",
-): FlowFigureBlock {
-  return {
-    id: `fig-${sectionId}-${subSlug ?? "none"}`,
-    sectionId,
-    subSlug,
-    kind: "figure",
-    aspectRatio,
-    headingKey: "demo_narrative_topic_credentials_heading",
-  };
 }
 
 // -----------------------------------------------------------------------
@@ -544,7 +524,6 @@ describe("locationAtY", () => {
     const emptyResult = {
       lines: [],
       blocks: [],
-      figures: [],
       totalHeight: 0,
     };
     const loc = locationAtY(50, emptyResult, []);
@@ -609,139 +588,6 @@ describe("hitTestBlock", () => {
       blocks,
     );
     expect(bi).toBe(1);
-  });
-
-  it("does not claim figure block rects", () => {
-    const figBlocks: FlowBlock[] = [makeBlock("A".repeat(20)), makeFigure()];
-    const filler = createFixedFiller(figBlocks, 10);
-    const result = computeFlowLayout(figBlocks, filler, 500, null);
-
-    // The figure block has geometry (topY/bottomY) but hitTestBlock
-    // must skip it: clicks on the video are the figure's own business.
-    const figGeo = at(result.blocks, 1);
-    const midY = (figGeo.topY + figGeo.bottomY) / 2;
-    const bi = hitTestBlock(100, midY, result, DEFAULT_METRICS, figBlocks);
-    expect(bi).toBeNull();
-  });
-});
-
-// -----------------------------------------------------------------------
-// Figure block placement
-// -----------------------------------------------------------------------
-
-describe("figure block placement", () => {
-  const ASPECT = 390 / 220;
-
-  it("places a figure in the text band, capped to MAX_FIGURE_WIDTH", () => {
-    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 500, null);
-
-    expect(result.figures).toHaveLength(1);
-    const fig = at(result.figures, 0);
-    expect(fig.blockIndex).toBe(0);
-    expect(fig.width).toBeLessThanOrEqual(MAX_FIGURE_WIDTH);
-    expect(fig.height).toBe(Math.round(fig.width / ASPECT));
-  });
-
-  it("centres the figure in the band", () => {
-    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 500, null);
-
-    const fig = at(result.figures, 0);
-    // Default column spans the full container (500px). The figure is
-    // centred within the column.
-    const bandWidth = 500;
-    const expectedX = (bandWidth - fig.width) / 2;
-    expect(fig.x).toBeCloseTo(expectedX, 5);
-  });
-
-  it("uses the band width when it is narrower than MAX_FIGURE_WIDTH", () => {
-    // Default column is 150px (full container width).
-    // 150 < MAX_FIGURE_WIDTH, so figure width = 150.
-    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 150, null);
-
-    expect(result.figures).toHaveLength(1);
-    const fig = at(result.figures, 0);
-    expect(fig.width).toBe(150);
-  });
-
-  it("drops below the hole when no band fits the figure", () => {
-    // Hole covers the entire container width: no segments available.
-    const hole: FlowHole = { left: 0, top: 0, right: 500, bottom: 100 };
-    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 500, hole);
-
-    expect(result.figures).toHaveLength(1);
-    const fig = at(result.figures, 0);
-    // Figure should be placed below the hole.
-    expect(fig.y).toBeGreaterThanOrEqual(100 + HOLE_GAP);
-  });
-
-  it("records correct block geometry for a figure", () => {
-    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 500, null);
-
-    const geo = at(result.blocks, 0);
-    const fig = at(result.figures, 0);
-    // Block geometry must enclose the figure.
-    expect(geo.topY).toBeLessThanOrEqual(fig.y);
-    expect(geo.bottomY).toBeGreaterThanOrEqual(fig.y + fig.height);
-    // Figure blocks have no lines.
-    expect(geo.lineCount).toBe(0);
-  });
-
-  it("places a figure after text in a mixed flow", () => {
-    const blocks: FlowBlock[] = [
-      makeBlock("A".repeat(50)),
-      makeFigure(ASPECT),
-      makeBlock("B".repeat(50)),
-    ];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 500, null);
-
-    expect(result.figures).toHaveLength(1);
-    const textGeo0 = at(result.blocks, 0);
-    const figGeo = at(result.blocks, 1);
-    const textGeo2 = at(result.blocks, 2);
-    const fig = at(result.figures, 0);
-
-    // The figure sits between the two text blocks.
-    expect(fig.y).toBeGreaterThanOrEqual(textGeo0.bottomY);
-    expect(figGeo.bottomY).toBeLessThanOrEqual(textGeo2.topY);
-  });
-
-  it("figure belongs to its sub-section for scrollspy", () => {
-    const blocks: FlowBlock[] = [
-      makeBlock(
-        "Heading",
-        "sub-heading",
-        "login" as FlowBlock["sectionId"],
-        "credentials",
-      ),
-      makeBlock(
-        "Body text",
-        "sub-body",
-        "login" as FlowBlock["sectionId"],
-        "credentials",
-      ),
-      makeFigure(ASPECT, "login" as FlowBlock["sectionId"], "credentials"),
-    ];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 500, null);
-
-    const figGeo = at(result.blocks, 2);
-    const midY = (figGeo.topY + figGeo.bottomY) / 2;
-    const loc = locationAtY(midY, result, blocks);
-    expect(loc).toEqual({
-      sectionId: "login",
-      subSlug: "credentials",
-    });
   });
 });
 
@@ -1257,115 +1103,6 @@ describe("computeFlowLayout with column (indent under shift)", () => {
     // Downstream marker position: line.x - indent = 44 - 22 = 22.
     // This is just a documentation assertion; layout does not emit markers.
     expect(line.x - 22).toBe(22);
-  });
-});
-
-// -----------------------------------------------------------------------
-// Column-aware figure placement (full vertical probe, mid-figure hole)
-// -----------------------------------------------------------------------
-
-describe("computeFlowLayout with column (figure ladder)", () => {
-  const ASPECT = 390 / 220;
-
-  it("places a figure in the column when no hole exists", () => {
-    const col: FlowColumn = { x: 100, width: 400 };
-    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(
-      blocks,
-      filler,
-      800,
-      null,
-      DEFAULT_METRICS,
-      col,
-    );
-
-    expect(result.figures).toHaveLength(1);
-    const fig = at(result.figures, 0);
-    expect(fig.width).toBeLessThanOrEqual(MAX_FIGURE_WIDTH);
-    // Centred within the column.
-    const expectedX = 100 + (400 - fig.width) / 2;
-    expect(fig.x).toBeCloseTo(expectedX, 5);
-  });
-
-  it("detects a hole starting mid-figure via full vertical probe", () => {
-    const col: FlowColumn = { x: 0, width: 400 };
-    // Figure at y=0. estFigW = min(400, 200) = 200, estFigH = round(200/1.77) = 113.
-    // Hole starts at y=50 (mid-figure) and overlaps the column.
-    const figW = Math.min(400, MAX_FIGURE_WIDTH);
-    const figH = Math.round(figW / ASPECT);
-    // Hole starting in the middle of the figure's estimated extent.
-    const holeTop = Math.floor(figH / 2);
-    const hole: FlowHole = { left: 100, top: holeTop, right: 300, bottom: 300 };
-    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(
-      blocks,
-      filler,
-      800,
-      hole,
-      DEFAULT_METRICS,
-      col,
-    );
-
-    expect(result.figures).toHaveLength(1);
-    const fig = at(result.figures, 0);
-    // The figure should NOT be placed at y=0 (where the 1px probe would
-    // have missed the hole). It should either be shifted or placed below.
-    // With full probe, the overlap is detected and the ladder engages.
-    // The figure's bottom should not overlap the hole without clearance.
-    const figBottom = fig.y + fig.height;
-    const noOverlap =
-      figBottom <= hole.top ||
-      fig.y >= hole.bottom + HOLE_GAP ||
-      fig.x + fig.width <= hole.left - HOLE_GAP ||
-      fig.x >= hole.right + HOLE_GAP;
-    expect(noOverlap).toBe(true);
-  });
-
-  it("shifts a figure within SHIFT_MAX when hole partially overlaps", () => {
-    // Column [0, 300], hole touching the right edge.
-    const col: FlowColumn = { x: 0, width: 300 };
-    const hole: FlowHole = { left: 260, top: 0, right: 400, bottom: 200 };
-    // Column [0, 300] vs hole gap [244, 416].
-    // colRight(300) - gapLeft(244) = 56 <= 72. Shift should succeed.
-    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(
-      blocks,
-      filler,
-      800,
-      hole,
-      DEFAULT_METRICS,
-      col,
-    );
-
-    expect(result.figures).toHaveLength(1);
-    const fig = at(result.figures, 0);
-    // Figure should be placed at y=0 (shifted, not jumped).
-    expect(fig.y).toBe(0);
-    // And should not overlap the hole horizontally.
-    expect(fig.x + fig.width).toBeLessThanOrEqual(hole.left - HOLE_GAP);
-  });
-
-  it("jumps below the hole when shift and constrained segments both fail", () => {
-    // Column [0, 250], hole covering most of the column.
-    const col: FlowColumn = { x: 0, width: 250 };
-    const hole: FlowHole = { left: 20, top: 0, right: 230, bottom: 100 };
-    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(
-      blocks,
-      filler,
-      800,
-      hole,
-      DEFAULT_METRICS,
-      col,
-    );
-
-    expect(result.figures).toHaveLength(1);
-    const fig = at(result.figures, 0);
-    expect(fig.y).toBeGreaterThanOrEqual(hole.bottom + HOLE_GAP);
   });
 });
 

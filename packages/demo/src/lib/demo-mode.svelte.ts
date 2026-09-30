@@ -1,5 +1,5 @@
 /**
- * Demo consumption mode: "read" (story-first, frame via peek) or
+ * Demo consumption mode: "read" (story-first, frame hidden) or
  * "simulate" (frame always visible with desktop chrome).
  *
  * Default derives from viewport width (narrow = read, wide = simulate).

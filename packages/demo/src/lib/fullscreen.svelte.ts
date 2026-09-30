@@ -12,13 +12,20 @@
 
 import { MIN_SEGMENT, HOLE_GAP, FULL_BLEED_SLIVER } from "./flow-layout.js";
 import type { FrameGeometry } from "./frame-geometry.svelte.js";
-import type { SavedGeometry } from "./peek-controller.svelte.js";
 
 // -----------------------------------------------------------------------
 // Types
 // -----------------------------------------------------------------------
 
 export type DockEdge = "top" | "right" | "bottom" | "left";
+
+/** Frame footprint and position captured before entry, restored on exit. */
+export interface SavedGeometry {
+  footprintW: number;
+  footprintH: number;
+  readonly top: number;
+  readonly left: number;
+}
 
 // -----------------------------------------------------------------------
 // Constants
@@ -173,7 +180,6 @@ export interface FullscreenController {
 
   /**
    * Enter fullscreen mode.
-   * No-op when peek is not idle (checked via the injected guard).
    *
    * @param auto     True for auto-entry (pressure threshold or narrow default)
    * @param snapshot Geometry to restore on exit
@@ -222,14 +228,11 @@ export interface FullscreenController {
 
 /**
  * @param geo            The FrameGeometry instance to restore on exit.
- * @param isPeekIdle     Returns true when the peek controller is in its
- *                       idle phase. Fullscreen entry is gated on this.
  * @param getWindowSize  Returns the current window dimensions. Injected
  *                       so the factory stays testable without a real DOM.
  */
 export function createFullscreenController(
   geo: FrameGeometry,
-  isPeekIdle: () => boolean = () => true,
   getWindowSize: () => { w: number; h: number } = () => {
     if (typeof window === "undefined") return { w: 1280, h: 900 };
     return { w: window.innerWidth, h: window.innerHeight };
@@ -244,7 +247,6 @@ export function createFullscreenController(
   let drawerMeasure = $state(DRAWER_DEFAULT_MEASURE);
 
   function enter(auto: boolean, snapshot: SavedGeometry): void {
-    if (!isPeekIdle()) return;
     if (active) return;
 
     saved = snapshot;

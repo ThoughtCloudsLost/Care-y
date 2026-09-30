@@ -96,11 +96,7 @@ export async function loadFlowFonts(): Promise<void> {
 // Preparation
 // -----------------------------------------------------------------------
 
-/**
- * Measure every text block with the faces available right now. Figure
- * blocks have no text and get no handle, so their indices are absent
- * from the map.
- */
+/** Measure every text block with the faces available right now. */
 export function prepareBlockHandles(
   blocks: readonly FlowBlock[],
   locale: string,
@@ -111,7 +107,6 @@ export function prepareBlockHandles(
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks.at(i);
     if (block === undefined) continue;
-    if (block.kind === "figure") continue;
     const fontStr = FONT_STRINGS[block.kind];
     if (block.runs !== undefined) {
       // Bold markup: one rich-inline item per run, each measured with

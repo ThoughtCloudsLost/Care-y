@@ -12,13 +12,13 @@ import {
   TAB_SIZE,
   TAB_MARGIN,
   type FullscreenController,
+  type SavedGeometry,
 } from "./fullscreen.svelte.js";
 import {
   createFrameGeometry,
   type FrameGeometry,
 } from "./frame-geometry.svelte.js";
 import { MIN_SEGMENT, HOLE_GAP, FULL_BLEED_SLIVER } from "./flow-layout.js";
-import type { SavedGeometry } from "./peek-controller.svelte.js";
 
 // ---------------------------------------------------------------------------
 // isFullscreenPressure
@@ -247,22 +247,17 @@ describe("createFullscreenController", () => {
     vi.unstubAllGlobals();
   });
 
-  function setup(opts?: { peekIdle?: boolean }): {
+  function setup(): {
     geo: FrameGeometry;
     ctrl: FullscreenController;
     teardown: () => void;
   } {
-    const peekIdle = opts?.peekIdle ?? true;
     let geo!: FrameGeometry;
     let ctrl!: FullscreenController;
 
     const teardown = $effect.root(() => {
       geo = createFrameGeometry();
-      ctrl = createFullscreenController(
-        geo,
-        () => peekIdle,
-        () => winSize,
-      );
+      ctrl = createFullscreenController(geo, () => winSize);
     });
     flushSync();
 
@@ -314,23 +309,6 @@ describe("createFullscreenController", () => {
     flushSync();
 
     expect(ctrl.autoEntered).toBe(true);
-    teardown();
-  });
-
-  it("enter is a no-op when peek is not idle", () => {
-    const { ctrl, geo, teardown } = setup({ peekIdle: false });
-
-    const snapshot: SavedGeometry = {
-      footprintW: geo.footprintW,
-      footprintH: geo.footprintH,
-      top: geo.top,
-      left: geo.left,
-    };
-
-    ctrl.enter(false, snapshot);
-    flushSync();
-
-    expect(ctrl.active).toBe(false);
     teardown();
   });
 

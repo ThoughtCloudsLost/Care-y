@@ -488,8 +488,7 @@ export interface DemoBridgeState {
   readonly restartSeq: number;
   /**
    * False at boot, flips true once the PGlite engine finishes loading
-   * and stays true until the iframe reloads. The outer page uses it to
-   * sharpen the peek's blurred still into the live app.
+   * and stays true until the iframe reloads.
    */
   readonly engineReady: boolean;
   /** The signed-in user's current role. Starts as ADMIN; tracks role

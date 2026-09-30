@@ -180,8 +180,7 @@
   let resolvedDetailId: string | null = $state(null);
 
   // Flipped once (false -> true) when the PGlite engine finishes
-  // booting. Never resets; a failed boot leaves it false so the
-  // peek surface keeps showing the blurred still.
+  // booting. Never resets; a failed boot leaves it false.
   let engineReady = $state(false);
 
   // Resolved engine instance, captured for the role switcher handler.
@@ -398,8 +397,7 @@
   );
   void bootSeeded.catch(() => {
     // Engine failures are logged by phone-main.ts and permission-read
-    // failures by applySignedInPermissions. engineReady stays false so
-    // the peek keeps showing a blurred still.
+    // failures by applySignedInPermissions. engineReady stays false.
     keyedDone = true;
   });
 

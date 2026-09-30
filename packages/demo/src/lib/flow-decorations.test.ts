@@ -48,7 +48,7 @@ function createFixedFiller(blocks: readonly FlowBlock[]): LineFiller {
     ): LineFillerResult | null {
       const offset = cursor as number;
       const target = blocks[blockIndex];
-      if (target === undefined || target.kind === "figure") return null;
+      if (target === undefined) return null;
       if (offset >= target.text.length) return null;
 
       const maxChars = Math.floor(maxWidth / CHAR_W);

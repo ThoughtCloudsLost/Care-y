@@ -131,7 +131,7 @@ export function createScrollEngine(
   // Unlinked local navigation
   //
   // getLinked() is the combined intent gate (the user's link choice
-  // minus transient drag/peek suspension). getUserLinked() is the
+  // minus transient drag suspension). getUserLinked() is the
   // choice alone. The distinction matters: while the user has
   // explicitly unlinked, the story navigates LOCALLY (localLoc below
   // overrides the stale mirror, alignment still runs, no intents go
@@ -381,7 +381,7 @@ export function createScrollEngine(
       return;
     }
 
-    // Transient suspension (drag/peek while linked): fully inert.
+    // Transient suspension (drag while linked): fully inert.
     if (!getLinked()) return;
 
     // Already showing this location: clear any pending request
@@ -421,7 +421,7 @@ export function createScrollEngine(
       return;
     }
 
-    // Transient suspension (drag/peek while linked): drop the snapshot
+    // Transient suspension (drag while linked): drop the snapshot
     // entirely. The mirror stays stale so the page holds position, and
     // no reconciliation state accumulates from a gesture.
     if (!getLinked()) return;

@@ -16,8 +16,6 @@ import type { MarkupRun, MarkupLink } from "./flow-markup.js";
 export type FlowTextKind =
   "section-title" | "section-desc" | "story-tip" | "sub-heading" | "sub-body";
 
-export type FlowBlockKind = FlowTextKind | "figure";
-
 /** A text block (title, description, heading, or body). */
 export interface FlowTextBlock {
   readonly id: string;
@@ -49,27 +47,8 @@ export interface FlowTextBlock {
   readonly spaceBefore?: number;
 }
 
-/** An inline figure block (region clip). Has no text; sized by aspect ratio. */
-export interface FlowFigureBlock {
-  readonly id: string;
-  readonly sectionId: SectionId;
-  readonly subSlug: string | null;
-  readonly kind: "figure";
-  /** Intrinsic width / height ratio of the clip region. */
-  readonly aspectRatio: number;
-  /**
-   * Paraglide key of the sub's heading, carried from the taxonomy so
-   * the figure's accessible label resolves through the same key as the
-   * prose (slug-derived key names break on hyphenated slugs).
-   */
-  readonly headingKey: string;
-}
-
-/**
- * Discriminated union: the layout engine places text and figure blocks
- * through the same pipeline; the `kind` field separates them.
- */
-export type FlowBlock = FlowTextBlock | FlowFigureBlock;
+/** A block the layout engine places. Every block is text. */
+export type FlowBlock = FlowTextBlock;
 
 export interface FlowHole {
   readonly left: number;
@@ -111,7 +90,6 @@ export interface FlowBlockGeometry {
 export interface FlowLayoutResult {
   readonly lines: FlowLine[];
   readonly blocks: FlowBlockGeometry[];
-  readonly figures: FlowFigureGeometry[];
   readonly totalHeight: number;
 }
 
@@ -124,16 +102,7 @@ export interface FlowKindMetrics {
 }
 
 /** Full set of metrics keyed by block kind. */
-export type FlowMetrics = Record<FlowBlockKind, FlowKindMetrics>;
-
-/** Geometry for a positioned figure in the layout output. */
-export interface FlowFigureGeometry {
-  readonly blockIndex: number;
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-}
+export type FlowMetrics = Record<FlowTextKind, FlowKindMetrics>;
 
 // -----------------------------------------------------------------------
 // Defaults tuned to the old StorySection look (Atkinson Hyperlegible Next)
@@ -186,27 +155,6 @@ const SUB_BODY_METRICS: FlowKindMetrics = {
   marginBottom: 0,
 };
 
-/**
- * Figure block: no font rendering. fontSize and lineHeight are unused
- * but required by FlowKindMetrics. The margins separate the clip from
- * surrounding prose.
- */
-const FIGURE_METRICS: FlowKindMetrics = {
-  fontSize: 0,
-  lineHeight: 0,
-  marginTop: 16,
-  marginBottom: 16,
-};
-
-/**
- * Maximum width for a figure in px. Region crops are roughly 390x220
- * (aspect ~1.77). At 200px width the figure is about a quarter of a
- * typical narrow viewport (390px), leaving room for prose above and
- * below. On wider viewports the column is a container half, so 200px
- * keeps figures from dominating the band there too.
- */
-export const MAX_FIGURE_WIDTH = 200;
-
 // -----------------------------------------------------------------------
 // Markup unit spacing (used by the block builder when a body block is
 // split into paragraph / list-item units)
@@ -227,7 +175,6 @@ export const DEFAULT_METRICS: FlowMetrics = {
   "story-tip": STORY_TIP_METRICS,
   "sub-heading": SUB_HEADING_METRICS,
   "sub-body": SUB_BODY_METRICS,
-  figure: FIGURE_METRICS,
 };
 
 // -----------------------------------------------------------------------
@@ -521,7 +468,6 @@ export function computeFlowLayout(
 ): FlowLayoutResult {
   const lines: FlowLine[] = [];
   const blockGeometries: FlowBlockGeometry[] = [];
-  const figures: FlowFigureGeometry[] = [];
 
   let y = 0;
 
@@ -533,31 +479,6 @@ export function computeFlowLayout(
     // Add top margin (skip for the very first block)
     if (bi > 0) {
       y += km.marginTop;
-    }
-
-    // Figure blocks occupy a rect instead of text lines.
-    if (block.kind === "figure") {
-      const figTopY = y;
-      const placed = placeFigureColumn(
-        bi,
-        block,
-        y,
-        containerWidth,
-        hole,
-        column,
-        figures,
-      );
-      if (placed.y > y) y = placed.y;
-
-      const bottomY = y + km.marginBottom;
-      blockGeometries.push({
-        topY: figTopY,
-        bottomY,
-        firstLineIndex: lines.length,
-        lineCount: 0,
-      });
-      y = bottomY;
-      continue;
     }
 
     // Unit spacing for split body blocks (paragraph / list-item gaps).
@@ -595,7 +516,6 @@ export function computeFlowLayout(
   return {
     lines,
     blocks: blockGeometries,
-    figures,
     totalHeight: y,
   };
 }
@@ -797,141 +717,6 @@ function fillBlockColumn(
 }
 
 // -----------------------------------------------------------------------
-// Figure placement helpers
-// -----------------------------------------------------------------------
-
-interface FigurePlacementResult {
-  readonly y: number;
-}
-
-/**
- * Pick the widest segment from a list, returning its index. Returns -1
- * when the list is empty.
- */
-function widestSegmentIndex(segments: readonly Segment[]): number {
-  let best = -1;
-  let bestW = -1;
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments.at(i);
-    if (seg !== undefined && seg.width > bestW) {
-      bestW = seg.width;
-      best = i;
-    }
-  }
-  return best;
-}
-
-/**
- * Place a figure using the column dodge ladder. Probes the full vertical
- * span [y, y + figH] instead of a 1px band, fixing a latent bug where a
- * hole starting mid-figure is invisible.
- *
- * Ladder: in-column band -> shift up to SHIFT_MAX -> widest constrained
- * segment (floor MIN_SEGMENT) -> existing jump-below fallback. The figure
- * is centred within the chosen band.
- */
-function placeFigureColumn(
-  bi: number,
-  block: FlowFigureBlock,
-  startY: number,
-  containerWidth: number,
-  hole: FlowHole | null,
-  column: FlowColumn,
-  figures: FlowFigureGeometry[],
-): FigurePlacementResult {
-  let y = startY;
-
-  // Estimate figure height at column width (needed for the full-span probe).
-  const estFigW = Math.min(column.width, MAX_FIGURE_WIDTH);
-  const estFigH = Math.round(estFigW / block.aspectRatio);
-
-  let jumpCount = 0;
-  while (jumpCount < 2) {
-    // Stage 1: in-column band, probe full [y, y + figH].
-    if (hole === null || y + estFigH <= hole.top || y >= hole.bottom) {
-      const figW = Math.min(column.width, MAX_FIGURE_WIDTH);
-      const figH = Math.round(figW / block.aspectRatio);
-      const figX = column.x + (column.width - figW) / 2;
-      figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
-      return { y: y + figH };
-    }
-
-    // The figure vertically overlaps the hole. Try shift.
-    const dir = shiftDirection(column, hole);
-    const gapLeft = hole.left - HOLE_GAP;
-    const gapRight = hole.right + HOLE_GAP;
-
-    // Check if the figure's horizontal band (column) overlaps the hole.
-    const colLeft = column.x;
-    const colRight = column.x + column.width;
-
-    if (colRight <= gapLeft || colLeft >= gapRight) {
-      // Column does not horizontally overlap the hole: place in column.
-      const figW = Math.min(column.width, MAX_FIGURE_WIDTH);
-      const figH = Math.round(figW / block.aspectRatio);
-      const figX = column.x + (column.width - figW) / 2;
-      figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
-      return { y: y + figH };
-    }
-
-    // Stage 2: try shifting the figure band.
-    let shift: number;
-    if (dir < 0) {
-      shift = colRight - gapLeft;
-    } else {
-      shift = gapRight - colLeft;
-    }
-
-    if (shift <= SHIFT_MAX) {
-      const shiftedX = column.x + dir * shift;
-      const figW = Math.min(column.width, MAX_FIGURE_WIDTH);
-      // Centre within the shifted band.
-      let figX = shiftedX + (column.width - figW) / 2;
-      figX = Math.max(0, Math.min(figX, containerWidth - figW));
-      // Verify clearance.
-      const figRight = figX + figW;
-      if (figRight <= gapLeft || figX >= gapRight) {
-        const figH = Math.round(figW / block.aspectRatio);
-        figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
-        return { y: y + figH };
-      }
-    }
-
-    // Stage 3: widest constrained segment (floor MIN_SEGMENT).
-    // Probe at figure top with full height to find usable bands.
-    const segments = computeColumnSegments(
-      y,
-      estFigH,
-      containerWidth,
-      column,
-      hole,
-    );
-    const bestIdx = widestSegmentIndex(segments);
-    if (bestIdx >= 0) {
-      const bestSeg = segments.at(bestIdx);
-      if (bestSeg !== undefined && bestSeg.width >= MIN_SEGMENT) {
-        const figW = Math.min(bestSeg.width, MAX_FIGURE_WIDTH);
-        const figH = Math.round(figW / block.aspectRatio);
-        const figX = bestSeg.x + (bestSeg.width - figW) / 2;
-        figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
-        return { y: y + figH };
-      }
-    }
-
-    // Stage 4: jump below the hole.
-    y = hole.bottom + HOLE_GAP;
-    jumpCount++;
-  }
-
-  // Fallback: container width, capped.
-  const figW = Math.min(containerWidth, MAX_FIGURE_WIDTH);
-  const figH = Math.round(figW / block.aspectRatio);
-  const figX = (containerWidth - figW) / 2;
-  figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
-  return { y: y + figH };
-}
-
-// -----------------------------------------------------------------------
 // Hit testing
 // -----------------------------------------------------------------------
 
@@ -951,11 +736,8 @@ export function hitTestBlock(
     if (bg === undefined) continue;
     if (y < bg.topY || y >= bg.bottomY) continue;
 
-    // Figure blocks are not claimed by hit testing; clicks on the
-    // video are the figure's own concern (long-press, peek, etc.).
     const srcBlock = blocks.at(bi);
     if (srcBlock === undefined) continue;
-    if (srcBlock.kind === "figure") continue;
 
     // Check if x falls within any of this block's lines at this y
     const km = metrics[srcBlock.kind];

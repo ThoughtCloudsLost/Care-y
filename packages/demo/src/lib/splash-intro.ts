@@ -91,8 +91,6 @@ export const SPLASH_SPRING: FrameSpringOptions = {
 export interface IntroSplashConditions {
   /** Effective demo mode at load. */
   mode: DemoMode;
-  /** True when the document is in capture mode (?record=1). */
-  recordMode: boolean;
   /** Viewport width at load. */
   windowW: number;
   /** Width at and above which the story keeps a column beside the frame. */
@@ -112,10 +110,8 @@ export interface IntroSplashConditions {
  * Every exclusion is a surface where a window-filling app that then
  * shrinks would be wrong rather than merely unnecessary:
  *
- *   read mode      The frame is hidden until a peek opens it, so there
- *                  is nothing for the splash to resolve into.
- *   record mode    Captures must be frame-identical across re-records;
- *                  a timed intro puts motion at the head of every clip.
+ *   read mode      The frame is hidden, so there is nothing for the
+ *                  splash to resolve into.
  *   narrow         Narrow viewports enter fullscreen and stay there, so
  *                  the splash has no framed state to land in.
  *   reduced motion The splash is motion for its own sake, which is the
@@ -127,7 +123,6 @@ export interface IntroSplashConditions {
  */
 export function shouldPlayIntroSplash(c: IntroSplashConditions): boolean {
   if (c.mode !== "simulate") return false;
-  if (c.recordMode) return false;
   if (c.reducedMotion) return false;
   if (c.deepLinked) return false;
   return c.windowW >= c.wideBreakpoint;

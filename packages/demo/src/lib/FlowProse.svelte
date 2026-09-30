@@ -1,5 +1,4 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
   import { Check, MousePointerClick } from "@lucide/svelte";
   import type { Section, SectionId } from "./scroll-sections.js";
   import { getSection } from "./scroll-sections.js";
@@ -72,8 +71,6 @@
     entrance?: boolean;
     /** The container element, for hosts that measure or observe it. */
     oncontainer?: (el: HTMLDivElement) => void;
-    /** Rendered inside the container, above the prose in stacking order. */
-    figures?: Snippet;
   }
 
   let {
@@ -91,7 +88,6 @@
     onSelectSection,
     onSelectSub,
     oncontainer,
-    figures,
   }: Props = $props();
 
   // -----------------------------------------------------------------------
@@ -163,9 +159,6 @@
       const geo = layoutResult.blocks.at(bi);
       const block = blocks.at(bi);
       if (geo === undefined || block === undefined) continue;
-      // Figure blocks are rendered by the host through the figures
-      // snippet, not here.
-      if (block.kind === "figure") continue;
       if (
         range !== null &&
         (geo.bottomY < range.top || geo.topY > range.bottom)
@@ -179,7 +172,6 @@
         const line = layoutResult.lines.at(li);
         if (line !== undefined) lines.push(line);
       }
-      // The figure guard above narrows block to FlowTextBlock.
       result.push({ blockIndex: bi, block, geo, lines });
     }
     return result;
@@ -511,8 +503,6 @@
         </p>
       {/if}
     {/each}
-
-    {@render figures?.()}
   {/if}
 </div>
 

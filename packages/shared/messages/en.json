@@ -2462,8 +2462,6 @@
   "demo_entry_search_body": "The magnifying glass in the top bar searches across all handbook sections. Click a result to jump to that part of the handbook.",
   "demo_entry_modes_heading": "Viewing modes",
   "demo_entry_modes_body": "Switch between the read-only handbook and the interactive simulator app from the top bar. Read shows the handbook as a document. The simulator is hidden but keeps running. Simulate places the simulator beside the text on wide screens. Fullscreen activates on narrow screens and whenever the simulator fills the window. In fullscreen the handbook moves into a resizable drawer, opened and repositioned from a book icon tab on the edge.",
-  "demo_peek_back_to": "Back to {section}",
-  "demo_figure_aria_label": "Hold to preview {sub}",
   "demo_role_rail_label": "Role switcher",
   "demo_role_admin_label": "Admin",
   "demo_role_admin_tooltip": "Admin with full access to all features. Switch users to see how server side enforcement changes every screen.",

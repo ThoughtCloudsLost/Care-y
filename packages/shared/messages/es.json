@@ -2462,8 +2462,6 @@
   "demo_entry_search_body": "La lupa en la barra superior o la fila de búsqueda en el menú de contenidos abre una búsqueda de texto completo en todas las secciones del manual. Los resultados aparecen como entradas del manual con las coincidencias resaltadas, y las etiquetas en la parte superior filtran por sección para saltar directamente al encabezado que corresponda.",
   "demo_entry_modes_heading": "Modos de visualización",
   "demo_entry_modes_body": "Cambia entre el manual de solo lectura y el simulador interactivo de la aplicación desde la barra superior. Lectura muestra el manual como un documento. El simulador queda oculto, pero sigue funcionando. Simular coloca el simulador junto al texto en pantallas anchas. La pantalla completa se activa en pantallas estrechas y cuando el simulador ocupa toda la ventana. En pantalla completa, el manual pasa a un cajón redimensionable que se abre y se reubica desde una pestaña con un icono de libro en el borde.",
-  "demo_peek_back_to": "Volver a {section}",
-  "demo_figure_aria_label": "Mantén pulsado para ver {sub}",
   "demo_role_rail_label": "Selector de rol",
   "demo_role_admin_label": "Administración",
   "demo_role_admin_tooltip": "Administrador con acceso completo a todas las funciones. Cambia de usuario para ver cómo la autorización del servidor cambia cada pantalla.",

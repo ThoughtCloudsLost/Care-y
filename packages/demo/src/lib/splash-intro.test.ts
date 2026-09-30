@@ -14,7 +14,6 @@ import { BOOT_TIP_SHOWN_MS } from "./boot-tip.js";
 function base(): IntroSplashConditions {
   return {
     mode: "simulate",
-    recordMode: false,
     windowW: 1280,
     wideBreakpoint: 900,
     reducedMotion: false,
@@ -32,25 +31,11 @@ describe("shouldPlayIntroSplash", () => {
   });
 
   // -----------------------------------------------------------------
-  // Read mode: the frame is hidden until a peek opens it
+  // Read mode: the frame is hidden
   // -----------------------------------------------------------------
 
   it("does not play in read mode", () => {
     expect(shouldPlayIntroSplash({ ...base(), mode: "read" })).toBe(false);
-  });
-
-  // -----------------------------------------------------------------
-  // Record mode: captures must stay frame-identical
-  // -----------------------------------------------------------------
-
-  it("does not play in record mode", () => {
-    expect(shouldPlayIntroSplash({ ...base(), recordMode: true })).toBe(false);
-  });
-
-  it("does not play in record mode even on a wide simulate load", () => {
-    expect(
-      shouldPlayIntroSplash({ ...base(), recordMode: true, windowW: 1920 }),
-    ).toBe(false);
   });
 
   // -----------------------------------------------------------------

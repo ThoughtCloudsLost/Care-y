@@ -2,11 +2,10 @@
  * The demo's mount and unmount fade.
  *
  * Simulator chrome comes and goes constantly: the toolbar and flow band
- * leave for fullscreen, the next-section pill steps aside for a drag,
- * the peek close bar arrives on commit. Every one of those is a real
- * element entering or leaving the page, and an unfaded `{#if}` shows it
- * as a hard cut. Around a frame that is otherwise spring-driven the cut
- * is the thing the eye catches.
+ * leave for fullscreen, and the next-section pill steps aside for a
+ * drag. Every one of those is a real element entering or leaving the
+ * page, and an unfaded `{#if}` shows it as a hard cut. Around a frame
+ * that is otherwise spring-driven the cut is the thing the eye catches.
  *
  * One helper rather than a `transition:fade` at each site, so the
  * duration and the reduced-motion bypass are decided once. Reduced

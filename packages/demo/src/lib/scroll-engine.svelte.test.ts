@@ -130,7 +130,6 @@ describe("scroll engine suppression disarm", () => {
         text: "line",
       })),
       blocks: geos,
-      figures: [],
       totalHeight: 540,
     };
     setHeaderBottom(100);

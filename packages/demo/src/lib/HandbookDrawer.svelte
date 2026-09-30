@@ -332,7 +332,7 @@
   }
 
   // -----------------------------------------------------------------------
-  // Prose layout: blocks for the active section, figures filtered out
+  // Prose layout: blocks for the active section
   // -----------------------------------------------------------------------
 
   let contentEl = $state<HTMLDivElement | undefined>(undefined);
@@ -363,11 +363,8 @@
     contentWidth > proseWidth ? Math.floor((contentWidth - proseWidth) / 2) : 0,
   );
 
-  // Build blocks for the active section only, filtering out figures
-  let proseBlocks: FlowBlock[] = $derived.by(() => {
-    const all = buildBlocks([section], locale);
-    return all.filter((b) => b.kind !== "figure");
-  });
+  // Build blocks for the active section only
+  let proseBlocks: FlowBlock[] = $derived(buildBlocks([section], locale));
 
   // -----------------------------------------------------------------------
   // Pretext preparation

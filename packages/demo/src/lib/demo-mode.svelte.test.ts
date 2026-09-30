@@ -42,7 +42,7 @@ describe("parseModeParam", () => {
   });
 
   it("preserves other params while reading", () => {
-    expect(parseModeParam("?record=1&mode=simulate")).toBe("simulate");
+    expect(parseModeParam("?ref=share&mode=simulate")).toBe("simulate");
   });
 });
 
@@ -64,8 +64,8 @@ describe("writeModeParam", () => {
   });
 
   it("preserves other params", () => {
-    const result = writeModeParam("?record=1&foo=bar", "simulate");
-    expect(result).toContain("record=1");
+    const result = writeModeParam("?ref=share&foo=bar", "simulate");
+    expect(result).toContain("ref=share");
     expect(result).toContain("foo=bar");
     expect(result).toContain("mode=simulate");
   });

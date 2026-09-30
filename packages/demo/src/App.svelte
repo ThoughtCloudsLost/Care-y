@@ -10,7 +10,7 @@
     locales,
     isLocale,
   } from "$lib/paraglide/runtime.js";
-  import { ArrowRight, X } from "@lucide/svelte";
+  import { ArrowRight } from "@lucide/svelte";
   import { RoleId, type RoleIdValue } from "@care-y/shared";
   import TopBar from "$demo/TopBar.svelte";
   import FrameToolbar from "$demo/FrameToolbar.svelte";
@@ -20,15 +20,7 @@
   import SectionRail from "$demo/SectionRail.svelte";
   import DemoFrame from "$demo/DemoFrame.svelte";
   import HandbookDrawer from "$demo/HandbookDrawer.svelte";
-  import PeekStill from "$demo/PeekStill.svelte";
-  import { isRecordMode } from "$demo/record-mode.js";
   import { entryAutoDismisses } from "$demo/entry-visibility.js";
-  import { captureStill, type CapturedStill } from "$demo/peek-still.js";
-  import {
-    createPeekController,
-    COMMIT_DRAG_PX,
-  } from "$demo/peek-controller.svelte.js";
-  import type { PeekFirePayload } from "$demo/clip-registry.js";
   import {
     createScrollEngine,
     createTopicProgress,
@@ -61,8 +53,8 @@
     createFullscreenController,
     isFullscreenPressure,
     type DockEdge,
+    type SavedGeometry,
   } from "$demo/fullscreen.svelte.js";
-  import type { SavedGeometry } from "$demo/peek-controller.svelte.js";
   import { chromeFade } from "$demo/chrome-fade.js";
   import { entranceTotalMs } from "$demo/flow-entrance.js";
   import {
@@ -240,20 +232,13 @@
   const geo = createFrameGeometry(() => topChromeHeight());
 
   // -----------------------------------------------------------------------
-  // Peek controller
-  // -----------------------------------------------------------------------
-
-  const peekCtrl = createPeekController(geo, () => topChromeHeight());
-
-  // -----------------------------------------------------------------------
   // Fullscreen controller
   // -----------------------------------------------------------------------
 
-  const fsCtrl = createFullscreenController(
-    geo,
-    () => peekCtrl.phase === "idle",
-    () => ({ w: windowW, h: windowH }),
-  );
+  const fsCtrl = createFullscreenController(geo, () => ({
+    w: windowW,
+    h: windowH,
+  }));
 
   const fsActive: boolean = $derived(fsCtrl.active);
   const excursionOpen: boolean = $derived(activeExcursion() !== null);
@@ -386,17 +371,8 @@
     };
   });
 
-  /** Still captured from the clip's current frame at peek fire time. */
-  let capturedStill: CapturedStill | null = $state(null);
-
-  /** True once the phone engine reports ready via the bridge. */
-  let engineReady = $state(false);
-
   /** Active role from the bridge snapshot; admin at boot/restart. */
   let activeRole: RoleIdValue = $state(RoleId.ADMIN);
-
-  /** Whether the peek is in a non-idle phase (active for UI gating). */
-  const peekActive: boolean = $derived(peekCtrl.phase !== "idle");
 
   // Tear down listeners when the component unmounts
   $effect(() => {
@@ -431,10 +407,10 @@
   const TOOLBAR_GAP = 8;
 
   // -----------------------------------------------------------------------
-  // Frame rects: bare (for peek controller) and chrome-inclusive (for flow)
+  // Frame rects: bare and chrome-inclusive (for flow)
   // -----------------------------------------------------------------------
 
-  /** Bare frame box in viewport coordinates (peek, resize). */
+  /** Bare frame box in viewport coordinates (resize). */
   const frameRect = $derived({
     left: geo.left,
     top: geo.top,
@@ -972,57 +948,6 @@
   }
 
   // -----------------------------------------------------------------------
-  // Peek event handlers
-  // -----------------------------------------------------------------------
-
-  function handlePeekFire(payload: PeekFirePayload): void {
-    const still = captureStill(payload.video);
-    capturedStill = still;
-    peekCtrl.open(payload.rect);
-
-    // Keyboard fires bypass the long-press primitive (ClipFigure's
-    // handleKeydown calls onpeekfire directly), so no pointer is
-    // captured and no release will arrive. Commit synchronously so
-    // keyboard users land in full-screen state.
-    if (payload.viaKeyboard === true) {
-      peekCtrl.commit();
-    }
-  }
-
-  function handlePeekDrag(_dx: number, dy: number): void {
-    // dy < 0 = upward screen motion; commit when the drag exceeds threshold
-    if (dy < -COMMIT_DRAG_PX) {
-      peekCtrl.commit();
-    }
-  }
-
-  function handlePeekSecondaryTap(): void {
-    peekCtrl.commit();
-  }
-
-  function handlePeekRelease(): void {
-    if (peekCtrl.phase !== "committed") {
-      peekCtrl.collapse();
-    }
-  }
-
-  function handlePeekCancel(): void {
-    // Nothing to do: the gesture was cancelled before fire
-  }
-
-  /** Close-and-continue: collapse from committed back to idle. */
-  function handlePeekClose(): void {
-    peekCtrl.collapse();
-    // The still fades on its own via onfaded; clearing here makes the
-    // still disappear together with the frame collapse.
-    capturedStill = null;
-  }
-
-  function handleStillFaded(): void {
-    capturedStill = null;
-  }
-
-  // -----------------------------------------------------------------------
   // Bridge + phone state
   // -----------------------------------------------------------------------
 
@@ -1055,7 +980,7 @@
   // and it must not mistake a transient gesture for that state.
   const scrollEngine = createScrollEngine(
     () => bridge,
-    () => isLinked() && !gestureActive && !peekActive,
+    () => isLinked() && !gestureActive,
     // Page scroll drives navigation only while the story is on screen
     // and interactive. It is unmounted in fullscreen, where the app owns
     // scrolling, and a story excursion shows a synthetic section whose
@@ -1084,14 +1009,11 @@
   // available space. Suspended while the user or an animation owns the
   // geometry; reading the flags reactively is what re-runs the effect
   // when suspension lifts, and the rescale is anchor-relative, so the
-  // deferred catch-up lands in one exact step. Peek needs no special
-  // handling beyond the gate: on collapse the controller restores the
-  // saved pre-peek geometry, peekActive flips false, and this effect
-  // maps that restored geometry to the current band once.
+  // deferred catch-up lands in one exact step.
   $effect(() => {
     void topChromeHeight();
     void windowH;
-    if (gestureActive || animating || peekActive) return;
+    if (gestureActive || animating) return;
     // untrack: rescaleForBand reads and writes geo $state; without it
     // the effect would re-run on its own footprint writes.
     untrack(() => geo.rescaleForBand());
@@ -1133,9 +1055,6 @@
 
     unsubscribe = b.subscribe((state: DemoBridgeState) => {
       progress.markFromState(state);
-
-      // Track engine readiness for the peek still crossfade
-      engineReady = state.engineReady;
 
       // Sync the role rail highlight from the bridge snapshot
       activeRole = state.role;
@@ -1196,10 +1115,6 @@
       "",
       window.location.pathname + window.location.search,
     );
-    // Reset peek, still, and engine state
-    peekCtrl.resetToIdle();
-    capturedStill = null;
-    engineReady = false;
     activeRole = RoleId.ADMIN;
     // Cancel any in-flight fullscreen animation, then reset the
     // controller and geometry. fsCtrl before geo so the fullscreen
@@ -1479,7 +1394,7 @@
 
   const isNarrow: boolean = $derived(windowW < WIDE_BREAKPOINT);
 
-  // Explicit demo mode: "read" (story-first, frame via peek) or "simulate"
+  // Explicit demo mode: "read" (story-first, frame hidden) or "simulate"
   // (frame always visible with sidebar chrome). Default derives from
   // viewport width; ?mode=read/simulate overrides. The override survives
   // restart (search string is preserved) and is not clobbered by resizes.
@@ -1491,22 +1406,16 @@
   // sees the phone logging in; by the time they leave the entry page,
   // keying has completed and the phone shows the signed-in state.
   // Visibility is controlled separately by frameVisible (CSS hide in
-  // read mode until peek opens); see the DemoFrame in the template.
-
-  // In read mode the floating frame is CSS-hidden when the peek
-  // controller is idle, and shown during any peek phase.
-  const frameVisible: boolean = $derived(
-    demoMode.mode === "simulate" || peekActive,
-  );
+  // read mode); see the DemoFrame in the template.
+  const frameVisible: boolean = $derived(demoMode.mode === "simulate");
 
   // The desktop chrome (sidebar, resize handles, bezel strips) is shown
-  // in simulate mode. Read mode uses the close-and-continue button instead.
+  // in simulate mode.
   const showDesktopChrome: boolean = $derived(demoMode.mode === "simulate");
 
   // Rect the story layout wraps around. Null while the frame is
-  // CSS-hidden (read mode, peek idle) or fullscreen is active, so the
-  // flow carves no hole. During a peek the rect comes back and the
-  // text parts around the peeked frame as designed.
+  // CSS-hidden (read mode) or fullscreen is active, so the flow carves
+  // no hole.
   const flowFrameRect = $derived.by(() => {
     if (!frameVisible || fsActive) return null;
     // Exit-shrink: the frozen rect captured at animation start is the
@@ -1539,9 +1448,7 @@
     }
 
     if (switching === "read" && current === "simulate") {
-      // Entering simulate: cancel any in-flight peek, present the frame.
-      peekCtrl.resetToIdle();
-      capturedStill = null;
+      // Entering simulate: present the frame.
       geo.reset();
       moveColumnToSlot("left");
 
@@ -1600,10 +1507,6 @@
     if (section === undefined) return id;
     return resolveStoryMessage(section.titleKey, uiLocale);
   }
-
-  // Record mode: flat backdrop, no story chrome. The flag is static
-  // for the page's lifetime (query param, read once).
-  const recordMode = isRecordMode();
 
   function handleLocaleChange(): void {
     // Cycle through available locales
@@ -1855,7 +1758,7 @@
    * Sequence: snapshot -> animate geo to window size -> engage override + fade chrome.
    */
   function handleFullscreenEntry(): void {
-    // Guard: no-op if already active, animating, or peek is running
+    // Guard: no-op if already active or animating
     if (fsActive || fsAnimPhase !== "idle" || animating) return;
 
     // 1. Snapshot BEFORE animation starts
@@ -2086,7 +1989,6 @@
     if (
       shouldPlayIntroSplash({
         mode: demoMode.mode,
-        recordMode: isRecordMode(),
         windowW,
         wideBreakpoint: WIDE_BREAKPOINT,
         reducedMotion: prefersReducedMotion.current,
@@ -2306,61 +2208,36 @@
   }
 </script>
 
-{#if !recordMode}
-  <!-- TopBar rendering: three locations depending on state.
-       1. Fullscreen + drawer open: TopBar renders inside the drawer
-          via snippet (see HandbookDrawer below). The edge-reveal wrapper
-          and hot strip are suppressed.
-       2. Fullscreen + drawer closed: edge-reveal wrapper with hot strip.
-       3. Not fullscreen: normal sticky position.
-       The splash suppresses the strip: a pointer crossing the top of
-       the window during the opening should not pull a bar down over an
-       app that has not finished arriving. -->
-  {#if fsActive && !fsCtrl.drawerOpen && !splashActive}
-    <!-- 8px hot strip at top edge: pointerenter (mouse) or
-         pointerdown + dy>24 (touch) reveals the TopBar. -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="fs-top-hot-strip"
-      onpointerenter={handleTopStripPointerEnter}
-      onpointerdown={handleTopStripPointerDown}
-      onpointermove={handleTopStripPointerMove}
-      onpointerup={handleTopStripPointerUp}
-      onpointercancel={handleTopStripPointerUp}
-    ></div>
-    <div
-      class="fs-topbar-container"
-      class:fs-topbar-container--revealed={topBarRevealed}
-      class:fs-topbar-container--above-tab={fsCtrl.dockEdge === "top"}
-      aria-hidden={topBarRevealed ? undefined : "true"}
-      inert={topBarRevealed ? undefined : true}
-      onpointerenter={handleTopBarEnter}
-      onpointerleave={handleTopBarLeave}
-    >
-      {#key uiLocale}
-        <TopBar
-          activeSection={entryVisible ? null : scrollEngine.activeSection}
-          {dark}
-          locale={uiLocale}
-          seen={progress.count}
-          total={progress.total}
-          flowBandOpen={flowBand.open}
-          mode={demoMode.mode}
-          {seenTopics}
-          onSectionClick={handleSectionClick}
-          onSubClick={handleSubClick}
-          onToggleDark={handleToggleDark}
-          onRestart={handleRestart}
-          onLocaleChange={handleLocaleChange}
-          onToggleFlowBand={handleToggleFlowBand}
-          onToggleMode={handleToggleMode}
-          linked={isLinked()}
-          onToggleLink={toggleLinked}
-          onHomeClick={handleShowEntry}
-        />
-      {/key}
-    </div>
-  {:else if !fsActive}
+<!-- TopBar rendering: three locations depending on state.
+     1. Fullscreen + drawer open: TopBar renders inside the drawer
+        via snippet (see HandbookDrawer below). The edge-reveal wrapper
+        and hot strip are suppressed.
+     2. Fullscreen + drawer closed: edge-reveal wrapper with hot strip.
+     3. Not fullscreen: normal sticky position.
+     The splash suppresses the strip: a pointer crossing the top of
+     the window during the opening should not pull a bar down over an
+     app that has not finished arriving. -->
+{#if fsActive && !fsCtrl.drawerOpen && !splashActive}
+  <!-- 8px hot strip at top edge: pointerenter (mouse) or
+       pointerdown + dy>24 (touch) reveals the TopBar. -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="fs-top-hot-strip"
+    onpointerenter={handleTopStripPointerEnter}
+    onpointerdown={handleTopStripPointerDown}
+    onpointermove={handleTopStripPointerMove}
+    onpointerup={handleTopStripPointerUp}
+    onpointercancel={handleTopStripPointerUp}
+  ></div>
+  <div
+    class="fs-topbar-container"
+    class:fs-topbar-container--revealed={topBarRevealed}
+    class:fs-topbar-container--above-tab={fsCtrl.dockEdge === "top"}
+    aria-hidden={topBarRevealed ? undefined : "true"}
+    inert={topBarRevealed ? undefined : true}
+    onpointerenter={handleTopBarEnter}
+    onpointerleave={handleTopBarLeave}
+  >
     {#key uiLocale}
       <TopBar
         activeSection={entryVisible ? null : scrollEngine.activeSection}
@@ -2372,6 +2249,7 @@
         mode={demoMode.mode}
         {seenTopics}
         onSectionClick={handleSectionClick}
+        onSubClick={handleSubClick}
         onToggleDark={handleToggleDark}
         onRestart={handleRestart}
         onLocaleChange={handleLocaleChange}
@@ -2379,90 +2257,112 @@
         onToggleMode={handleToggleMode}
         linked={isLinked()}
         onToggleLink={toggleLinked}
-        exiting={fsAnimPhase === "enter-grow" || fsAnimPhase === "exit-shrink"}
         onHomeClick={handleShowEntry}
       />
     {/key}
-  {/if}
-  <!-- Sub navigation for viewports without the rail. Part of the top
-       chrome rather than the story: it docks under the bar and reports
-       its height, so everything that parks below the chrome (the story,
-       the frame's spawn band) accounts for it. -->
-  <!-- Excursion dock: back affordance, and for search the input,
-       facets and count. The results render in the story below. -->
-  {#if storyExcursionOpen && !fsActive}
-    <div
-      class="strip-dock"
-      style="--wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
-      bind:offsetHeight={searchDockHeight}
-      transition:chromeFade
-    >
-      <SearchDock
-        showInput={activeExcursion()?.kind === "search"}
-        query={searchQuery}
-        resultCount={searchHits.length}
-        facetLabels={searchFacetLabels}
-        activeFacet={searchFacet?.value ?? null}
-        onQueryInput={(v: string) => {
-          searchQuery = v;
-        }}
-        onToggleFacet={toggleSearchFacet}
-        onBack={() => closeExcursion("user")}
-      />
-    </div>
-  {/if}
-  {#if !entryVisible && !showRail && !fsActive && !storyExcursionOpen}
-    <div
-      class="strip-dock"
-      style="--wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
-      bind:offsetHeight={stripHeight}
-      transition:chromeFade
-    >
-      <SectionStrip
-        section={activeSectionDef}
-        activeSub={scrollEngine.activeSub}
-        locale={uiLocale}
-        {seenTopics}
-        onSubClick={handleSubClick}
-      />
-    </div>
-  {/if}
-  <!-- Dirty-state guard notice: appears when handbook navigation was
-       suppressed because the phone has unsaved input. Auto-clears
-       after the override window expires. -->
-  {#if isNavSuppressed() && !entryVisible && !fsActive}
-    <p
-      class="dirty-guard-note"
-      role="status"
-      aria-live="polite"
-      style="--wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
-    >
-      {m.demo_dirty_guard_note()}
-    </p>
-  {/if}
-  <!-- Reading-position chip (windowed mode): appears when the phone
-       moves the story while the reader has a recent scroll position.
-       Hidden during excursions (the overlay covers the column) and
-       when the entry page is visible (no story to follow). -->
-  {#if !fsActive && !entryVisible}
-    <ReadingChip
+  </div>
+{:else if !fsActive}
+  {#key uiLocale}
+    <TopBar
+      activeSection={entryVisible ? null : scrollEngine.activeSection}
+      {dark}
       locale={uiLocale}
-      hidden={excursionOpen}
-      onJump={handleChipJump}
+      seen={progress.count}
+      total={progress.total}
+      flowBandOpen={flowBand.open}
+      mode={demoMode.mode}
+      {seenTopics}
+      onSectionClick={handleSectionClick}
+      onToggleDark={handleToggleDark}
+      onRestart={handleRestart}
+      onLocaleChange={handleLocaleChange}
+      onToggleFlowBand={handleToggleFlowBand}
+      onToggleMode={handleToggleMode}
+      linked={isLinked()}
+      onToggleLink={toggleLinked}
+      exiting={fsAnimPhase === "enter-grow" || fsAnimPhase === "exit-shrink"}
+      onHomeClick={handleShowEntry}
     />
-  {/if}
-  <!-- Data flow band: normal flow directly after the sticky top bar, so
-       opening it moves the story down rather than covering it. The
-       floating frame (z:50) passes under it. Fullscreen renders it in
-       the drawer instead (see the takeover below). -->
-  {#if !fsActive}
-    <FlowBand
-      store={flowBand}
-      presentation={isNarrow ? "overlay" : "band"}
+  {/key}
+{/if}
+<!-- Sub navigation for viewports without the rail. Part of the top
+     chrome rather than the story: it docks under the bar and reports
+     its height, so everything that parks below the chrome (the story,
+     the frame's spawn band) accounts for it. -->
+<!-- Excursion dock: back affordance, and for search the input,
+     facets and count. The results render in the story below. -->
+{#if storyExcursionOpen && !fsActive}
+  <div
+    class="strip-dock"
+    style="--wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
+    bind:offsetHeight={searchDockHeight}
+    transition:chromeFade
+  >
+    <SearchDock
+      showInput={activeExcursion()?.kind === "search"}
+      query={searchQuery}
+      resultCount={searchHits.length}
+      facetLabels={searchFacetLabels}
+      activeFacet={searchFacet?.value ?? null}
+      onQueryInput={(v: string) => {
+        searchQuery = v;
+      }}
+      onToggleFacet={toggleSearchFacet}
+      onBack={() => closeExcursion("user")}
+    />
+  </div>
+{/if}
+{#if !entryVisible && !showRail && !fsActive && !storyExcursionOpen}
+  <div
+    class="strip-dock"
+    style="--wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
+    bind:offsetHeight={stripHeight}
+    transition:chromeFade
+  >
+    <SectionStrip
+      section={activeSectionDef}
+      activeSub={scrollEngine.activeSub}
       locale={uiLocale}
-      onFlowHeight={handleBandFlowHeight}
+      {seenTopics}
+      onSubClick={handleSubClick}
     />
-  {/if}
+  </div>
+{/if}
+<!-- Dirty-state guard notice: appears when handbook navigation was
+     suppressed because the phone has unsaved input. Auto-clears
+     after the override window expires. -->
+{#if isNavSuppressed() && !entryVisible && !fsActive}
+  <p
+    class="dirty-guard-note"
+    role="status"
+    aria-live="polite"
+    style="--wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
+  >
+    {m.demo_dirty_guard_note()}
+  </p>
+{/if}
+<!-- Reading-position chip (windowed mode): appears when the phone
+     moves the story while the reader has a recent scroll position.
+     Hidden during excursions (the overlay covers the column) and
+     when the entry page is visible (no story to follow). -->
+{#if !fsActive && !entryVisible}
+  <ReadingChip
+    locale={uiLocale}
+    hidden={excursionOpen}
+    onJump={handleChipJump}
+  />
+{/if}
+<!-- Data flow band: normal flow directly after the sticky top bar, so
+     opening it moves the story down rather than covering it. The
+     floating frame (z:50) passes under it. Fullscreen renders it in
+     the drawer instead (see the takeover below). -->
+{#if !fsActive}
+  <FlowBand
+    store={flowBand}
+    presentation={isNarrow ? "overlay" : "band"}
+    locale={uiLocale}
+    onFlowHeight={handleBandFlowHeight}
+  />
 {/if}
 
 <!-- The flow inside the fullscreen drawer, in the drawer's own two
@@ -2659,7 +2559,7 @@
     {dark}
     {geo}
     onbridgeready={handleBridgeReady}
-    gestureActive={gestureActive || peekActive}
+    {gestureActive}
     fullscreen={fsActive}
     winW={windowW}
     winH={windowH}
@@ -2667,49 +2567,6 @@
     {animating}
     bind:this={frameRef}
   />
-
-  <!-- Peek still: positioned over the screen area (inside the bezel),
-       shown while a still exists and the peek is not idle. -->
-  {#if capturedStill !== null && peekActive}
-    <div
-      class="peek-still-layer"
-      style="
-        top: {BEZEL}px;
-        left: {BEZEL}px;
-        width: {geo.footprintW}px;
-        height: {geo.footprintH}px;
-      "
-    >
-      <PeekStill
-        still={capturedStill}
-        ready={engineReady}
-        onfaded={handleStillFaded}
-      />
-    </div>
-  {/if}
-
-  <!-- Close-and-continue: visible in committed phase, placed at the
-       bottom for thumb reach. Labels the destination section name
-       rather than a generic "Close". -->
-  {#if peekCtrl.phase === "committed"}
-    <div class="peek-close-bar" transition:chromeFade>
-      <button
-        class="peek-close-btn"
-        type="button"
-        onclick={handlePeekClose}
-        aria-label={m.demo_peek_back_to({
-          section: sectionTitle(scrollEngine.activeSection),
-        })}
-      >
-        <X size={16} />
-        <span
-          >{m.demo_peek_back_to({
-            section: sectionTitle(scrollEngine.activeSection),
-          })}</span
-        >
-      </button>
-    </div>
-  {/if}
 </div>
 
 <!-- Edge tab: replaces the floating pill in fullscreen. Dockable to
@@ -2727,7 +2584,7 @@
   />
 {/if}
 
-{#if !recordMode && (!fsActive || fsAnimPhase === "exit-fade")}
+{#if !fsActive || fsAnimPhase === "exit-fade"}
   <!-- Unmounted in fullscreen rather than hidden. The app fills the
        window there and owns scrolling; leaving the story mounted below
        it gives the page a second scroll container competing for the
@@ -2792,11 +2649,6 @@
                 entrance={storyEntrance}
                 onSelectSection={handleSectionClick}
                 onSelectSub={handleSubClick}
-                onpeekfire={handlePeekFire}
-                onpeekdrag={handlePeekDrag}
-                onpeeksecondarytap={handlePeekSecondaryTap}
-                onpeekrelease={handlePeekRelease}
-                onpeekcancel={handlePeekCancel}
               />
               <div class="story-spacer"></div>
             </div>
@@ -2820,7 +2672,7 @@
   <!-- Next-section pill: fixed at bottom center, hidden during gestures
      and when there is no next section. Fullscreen has no page to pin it
      over, so it moves into the drawer footer instead (below). -->
-  {#if nextSectionDef !== null && !gestureActive && !peekActive && !excursionOpen}
+  {#if nextSectionDef !== null && !gestureActive && !excursionOpen}
     <div
       class="next-pill-container"
       style="left: {pillCenterX}px"
@@ -3177,7 +3029,7 @@
     z-index: 50;
   }
 
-  /* Hidden on narrow while peek is idle. visibility + pointer-events
+  /* Hidden in read mode. visibility + pointer-events
      rather than display:none so the iframe stays mounted and the
      engine boot is not thrown away. */
   .floating-frame--hidden {
@@ -3337,68 +3189,5 @@
     width: 12px;
     height: 12px;
     cursor: nw-resize;
-  }
-
-  /* -----------------------------------------------------------------------
-     Peek still layer. Sits inside the bezel, above the iframe, below
-     the bezel overlay and toolbar.
-     ----------------------------------------------------------------------- */
-
-  .peek-still-layer {
-    position: absolute;
-    z-index: 1;
-    overflow: hidden;
-    pointer-events: none;
-  }
-
-  /* -----------------------------------------------------------------------
-     Close-and-continue bar: committed peek chrome, bottom of frame
-     ----------------------------------------------------------------------- */
-
-  .peek-close-bar {
-    position: absolute;
-    bottom: -52px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 6;
-    pointer-events: auto;
-  }
-
-  .peek-close-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.5rem 1rem;
-    border: 1px solid var(--hair);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--paper) 92%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    color: var(--ink);
-    font-size: 0.8125rem;
-    font-weight: 600;
-    cursor: pointer;
-    min-height: 44px;
-    box-shadow: 0 2px 8px var(--glass-shadow);
-    transition:
-      background 0.15s ease,
-      box-shadow 0.15s ease;
-    white-space: nowrap;
-  }
-
-  .peek-close-btn:hover {
-    background: color-mix(in srgb, var(--paper) 98%, transparent);
-    box-shadow: 0 4px 12px var(--glass-shadow);
-  }
-
-  .peek-close-btn:focus-visible {
-    outline: 2px solid var(--demo-accent);
-    outline-offset: 2px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .peek-close-btn {
-      transition: none;
-    }
   }
 </style>

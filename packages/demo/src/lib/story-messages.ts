@@ -820,31 +820,3 @@ export function deriveSectionState(
     complete: topicCount > 0 && seenCount === topicCount,
   };
 }
-
-/**
- * Resolve a parameterized message. Used for keys that accept substitution
- * parameters (for example demo_figure_aria_label with {sub}).
- */
-export function resolveParameterizedMessage(
-  key: string,
-  params: Record<string, string>,
-  locale: string,
-): string {
-  void locale;
-  // The paraglide messages module exports typed functions, but the story
-  // system works with string keys. The typed wrapper below covers the keys
-  // the peek wiring actually needs. New parameterized keys must be added
-  // here as they arise.
-  switch (key) {
-    case "demo_figure_aria_label": {
-      const sub = params.sub ?? "";
-      return m.demo_figure_aria_label({ sub });
-    }
-    case "demo_peek_back_to": {
-      const section = params.section ?? "";
-      return m.demo_peek_back_to({ section });
-    }
-    default:
-      return key;
-  }
-}

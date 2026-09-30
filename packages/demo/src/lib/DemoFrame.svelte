@@ -22,7 +22,6 @@
     deriveZoomViewport,
     type FrameGeometry,
   } from "./frame-geometry.svelte.js";
-  import { isRecordMode, forwardRecordParam } from "./record-mode.js";
 
   interface Props {
     dark?: boolean;
@@ -58,7 +57,7 @@
 
   let iframeEl: HTMLIFrameElement | undefined = $state();
 
-  const phoneUrl = forwardRecordParam(`${import.meta.env.BASE_URL}phone.html`);
+  const phoneUrl = `${import.meta.env.BASE_URL}phone.html`;
 
   // In fullscreen the viewport derives from the window dimensions, not geo.
   const fsViewport = $derived(
@@ -148,14 +147,9 @@
     return `${String(h)}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
 
-  // In record mode the clock reads 9:41 (Apple marketing convention)
-  // and no interval fires, so every frame is identical.
-  const RECORD_CLOCK = "9:41";
-
-  let clock = $state(isRecordMode() ? RECORD_CLOCK : formatClock(new Date()));
+  let clock = $state(formatClock(new Date()));
 
   $effect(() => {
-    if (isRecordMode()) return;
     const id = setInterval(() => {
       clock = formatClock(new Date());
     }, 15_000);

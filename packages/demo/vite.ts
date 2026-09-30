@@ -223,7 +223,6 @@ const stubMatchers: [RegExp, string][] = [
   [/^\$lib\/paraglide\/runtime(\.js)?$/, "./src/stubs/paraglide-runtime.ts"],
   [/^\$lib\/auth\/login-crypto(\.js)?$/, "./src/stubs/login-crypto.ts"],
   [/^\$lib\/shell\/navigation(\.js)?$/, "./src/stubs/shell-navigation.ts"],
-  [/^\$lib\/utils\/format-time(\.js)?$/, "./src/stubs/format-time.ts"],
   [/^\$lib\/utils\/fetch-blob(\.js)?$/, "./src/stubs/fetch-blob.ts"],
   [
     /^\$lib\/components\/dashboard\/section-defaults(\.js|\.ts)?$/,
