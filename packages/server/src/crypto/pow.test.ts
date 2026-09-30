@@ -25,6 +25,23 @@ function solvePow(challenge: string, difficulty: number): string {
   throw new Error("Failed to solve PoW in 1M attempts");
 }
 
+/**
+ * Find a solution whose hash misses the difficulty. A fixed string would
+ * meet an 8-bit difficulty by chance on about 1 in 256 random challenges.
+ */
+function wrongSolution(challenge: string, difficulty: number): string {
+  for (let i = 0; ; i++) {
+    const solution = `wrong-${String(i)}`;
+    const hash = createHash("sha256")
+      .update(challenge)
+      .update(solution)
+      .digest();
+    if (!hasLeadingZeroBits(hash, difficulty)) {
+      return solution;
+    }
+  }
+}
+
 describe("hasLeadingZeroBits", () => {
   it("accepts all-zero buffer for any difficulty", () => {
     const zeros = Buffer.alloc(32, 0);
@@ -176,9 +193,9 @@ describe("PowVerifier", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
       const c = verifier.createChallenge(USER_1, 0);
 
-      expect(verifier.verify(USER_1, c.challenge, "definitely-wrong")).toBe(
-        false,
-      );
+      const solution = wrongSolution(c.challenge, c.difficulty);
+
+      expect(verifier.verify(USER_1, c.challenge, solution)).toBe(false);
       verifier.dispose();
     });
   });
