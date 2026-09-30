@@ -5,9 +5,9 @@
   "type": "module",
   "engines": {
     "node": ">=22",
-    "pnpm": ">=10"
+    "pnpm": ">=10.16.0"
   },
-  "packageManager": "pnpm@10.6.2",
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "typecheck": "pnpm --filter @care-y/shared run build:paraglide && pnpm --filter @care-y/client run build:paraglide && NODE_OPTIONS=--max-old-space-size=1536 tsc --build && NODE_OPTIONS=--max-old-space-size=3072 pnpm --filter @care-y/client exec svelte-check --tsconfig ./tsconfig.json && NODE_OPTIONS=--max-old-space-size=1536 pnpm --filter @care-y/demo run check",
     "lint": "NODE_OPTIONS=--max-old-space-size=4096 eslint --cache --cache-location node_modules/.cache/eslint/ packages/",

@@ -26,7 +26,7 @@
     "@trpc/client": "11.10.0",
     "@twilio/voice-sdk": "2.18.5",
     "bits-ui": "2.19.2",
-    "dompurify": "3.4.15",
+    "dompurify": "3.4.16",
     "konsta": "5.4.0",
     "prosemirror-commands": "1.7.2",
     "prosemirror-dropcursor": "1.8.3",
