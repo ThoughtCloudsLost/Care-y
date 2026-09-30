@@ -1,11 +1,16 @@
-import { validateEnv, EnvValidationError } from "./env.js";
-import { extractErrorMessage } from "./errors.js";
+import { initEnv, EnvValidationError } from "./env.js";
+import { extractErrorMessage, SecretsFileError } from "./errors.js";
 import { configureTrustedProxies } from "./http/request-utils.js";
+import { loadSecretsFile } from "./config/secrets-file.js";
 
 // Validate env vars before anything else. Exits with a clear error if
 // required vars are missing or malformed (same fail-fast as original).
+// In production the secrets file is merged into a separate source object
+// first; its values never enter process.env. initEnv() stores the result
+// so every later getEnv() call reads the merged config.
 try {
-  const env = validateEnv();
+  const { source } = loadSecretsFile();
+  const env = initEnv(source);
   // Hand the trusted-proxy list to the request helpers here rather than
   // letting them read the environment themselves. They are bundled into
   // the demo, which runs the routers in a browser, so the environment
@@ -13,7 +18,7 @@ try {
   // so no request can be served with an unconfigured list.
   configureTrustedProxies(env.TRUSTED_PROXIES);
 } catch (err) {
-  if (err instanceof EnvValidationError) {
+  if (err instanceof EnvValidationError || err instanceof SecretsFileError) {
     console.error(err.message);
     process.exit(1);
   }

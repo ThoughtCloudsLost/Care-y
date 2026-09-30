@@ -1,0 +1,17 @@
+# installimage configuration for the CARE-Y host (Hetzner full-disk-encryption
+# procedure, SEC-214). Template only: copy it to /tmp/setup.conf on the rescue
+# system, set the real passphrase there, and never commit the result.
+#
+# Layout: unencrypted /boot/efi and /boot (the initramfs with Dropbear must be
+# readable before unlock), everything else on one LUKS volume. No swap
+# partition. No discard/TRIM flags: TRIM through dm-crypt reveals which blocks
+# are in use (SEC-217).
+CRYPTPASSWORD replace-me-on-rescue-system-never-commit-a-real-value
+DRIVE1 /dev/sda
+BOOTLOADER grub
+HOSTNAME care-y-prod-1
+PART /boot/efi esp 256M
+PART /boot ext4 1G
+PART / ext4 all crypt
+IMAGE /root/images/Ubuntu-2404-noble-amd64-base.tar.zst
+SSHKEYS_URL /tmp/authorized_keys
