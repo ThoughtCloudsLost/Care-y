@@ -53,6 +53,12 @@ import {
   keepaliveDecision,
   KEEPALIVE_INTERVAL_MS,
 } from "../lib/crypto-keepalive.js";
+import type * as ThisStub from "./crypto-context.svelte.js";
+import type * as Real from "../../../client/src/lib/crypto/context.js";
+import type { NoStubDrift, StubDrift } from "./stub-contract.js";
+
+// Fails typecheck when an export drifts from the real module.
+type _Contract = NoStubDrift<StubDrift<typeof ThisStub, typeof Real>>;
 
 // -----------------------------------------------------------------------
 // Error type
@@ -514,33 +520,46 @@ export function getCurrentPermissions(): () => ReadonlySet<Permission> {
 
 // The real module also exports setters (from context-init.ts).
 // These are no-ops here: the demo constructs objects directly instead
-// of delegating to CryptoProvider/AppCryptoProvider.
-export function setCryptoBridge(_v: unknown): void {
-  /* no-op */
+// of delegating to CryptoProvider/AppCryptoProvider. Each hands its
+// argument back, matching the setter half of Svelte's createContext.
+export function setCryptoBridge(v: CryptoBridgeType): CryptoBridgeType {
+  return v;
 }
-export function setOrgKeyManager(_v: unknown): void {
-  /* no-op */
+export function setOrgKeyManager(v: OrgKeyManagerType): OrgKeyManagerType {
+  return v;
 }
-export function setOrgDecryptCache(_v: unknown): void {
-  /* no-op */
+export function setOrgDecryptCache(
+  v: OrgDecryptCacheType,
+): OrgDecryptCacheType {
+  return v;
 }
-export function setTicketDecryptCache(_v: unknown): void {
-  /* no-op */
+export function setTicketDecryptCache(
+  v: TicketDecryptCacheType,
+): TicketDecryptCacheType {
+  return v;
 }
-export function setFollowUpDecryptCache(_v: unknown): void {
-  /* no-op */
+export function setFollowUpDecryptCache(
+  v: FollowUpDecryptCacheType,
+): FollowUpDecryptCacheType {
+  return v;
 }
-export function setPreviewLoader(_v: unknown): void {
-  /* no-op */
+export function setPreviewLoader(v: PreviewLoader): PreviewLoader {
+  return v;
 }
-export function setCurrentUserId(_v: unknown): void {
-  /* no-op */
+export function setCurrentUserId(
+  v: () => string | undefined,
+): () => string | undefined {
+  return v;
 }
-export function setCurrentUserRoleId(_v: unknown): void {
-  /* no-op */
+export function setCurrentUserRoleId(
+  v: () => string | undefined,
+): () => string | undefined {
+  return v;
 }
-export function setCurrentPermissions(_v: unknown): void {
-  /* no-op */
+export function setCurrentPermissions(
+  v: () => ReadonlySet<Permission>,
+): () => ReadonlySet<Permission> {
+  return v;
 }
 
 // -----------------------------------------------------------------------

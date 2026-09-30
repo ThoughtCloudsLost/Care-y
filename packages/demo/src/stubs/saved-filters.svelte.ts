@@ -17,6 +17,12 @@
 import type { SavedFilterRecord, SavedFilterState } from "@care-y/shared";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import _sodium from "libsodium-wrappers-sumo";
+import type * as ThisStub from "./saved-filters.svelte.js";
+import type * as Real from "../../../client/src/lib/stores/saved-filters.svelte.js";
+import type { NoStubDrift, StubDrift } from "./stub-contract.js";
+
+// Fails typecheck when an export drifts from the real module.
+type _Contract = NoStubDrift<StubDrift<typeof ThisStub, typeof Real>>;
 
 export type { SavedFilterState };
 

@@ -16,7 +16,8 @@
  * points with separate module graphs.
  */
 
-// Re-export everything from the real runtime.
+// Re-export everything from the real runtime except setLocale, which
+// is overridden below.
 export {
   baseLocale,
   locales,
@@ -47,6 +48,27 @@ export {
   assertIsLocale,
   extractLocaleFromRequest,
   extractLocaleFromRequestWithStrategies,
+  getServerAsyncLocalStorage,
+  extractLocaleFromCookie,
+  extractLocaleFromHeader,
+  extractLocaleFromNavigator,
+  extractLocaleFromUrl,
+  localizeUrl,
+  deLocalizeUrl,
+  aggregateGroups,
+  findMatchingRouteStrategy,
+  shouldRedirect,
+  localizeHref,
+  deLocalizeHref,
+  trackMessageCall,
+  generateStaticLocalizedUrls,
+  isCustomStrategy,
+  defineCustomServerStrategy,
+  defineCustomClientStrategy,
+  trailingSlash,
+  extractLocaleFromRequestAsync,
+  customServerStrategies,
+  customClientStrategies,
 } from "../../../client/src/lib/paraglide/runtime.js";
 
 import { setLocale as realSetLocale } from "../../../client/src/lib/paraglide/runtime.js";
@@ -54,6 +76,12 @@ import {
   installReactiveLocale,
   setReactiveLocale,
 } from "./locale-state.svelte.js";
+import type * as ThisStub from "./paraglide-runtime.js";
+import type * as Real from "../../../client/src/lib/paraglide/runtime.js";
+import type { NoStubDrift, StubDrift } from "./stub-contract.js";
+
+// Fails typecheck when an export drifts from the real module.
+type _Contract = NoStubDrift<StubDrift<typeof ThisStub, typeof Real>>;
 
 // Install the reactive getLocale override at module evaluation time.
 // This runs once per browsing context (outer page or phone iframe).

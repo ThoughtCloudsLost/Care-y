@@ -11,6 +11,12 @@ import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import { emptyLaneFilterState } from "$lib/prefs/dashboard-filters.svelte.js";
 import { filterStore } from "$lib/stores/filters.svelte.js";
+import type * as ThisStub from "./shell-navigation.js";
+import type * as Real from "../../../client/src/lib/shell/navigation.js";
+import type { NoStubDrift, StubDrift } from "./stub-contract.js";
+
+// Fails typecheck when an export drifts from the real module.
+type _Contract = NoStubDrift<StubDrift<typeof ThisStub, typeof Real>>;
 
 /**
  * No-op in the demo. The real module tracks afterNavigate calls

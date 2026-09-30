@@ -23,6 +23,12 @@ import type {
   VisualTheme,
   GlassMode,
 } from "./theme-types.js";
+import type * as ThisStub from "./theme.svelte.js";
+import type * as Real from "../../../client/src/lib/stores/theme.svelte.js";
+import type { NoStubDrift, StubDrift } from "./stub-contract.js";
+
+// Fails typecheck when an export drifts from the real module.
+type _Contract = NoStubDrift<StubDrift<typeof ThisStub, typeof Real>>;
 
 export type { ColorScheme, KonstaTheme, GlassMode, VisualTheme, ThemeStore };
 

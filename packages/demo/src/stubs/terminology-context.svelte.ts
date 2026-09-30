@@ -8,6 +8,12 @@
  */
 
 import type { TerminologyLabels } from "@care-y/shared";
+import type * as ThisStub from "./terminology-context.svelte.js";
+import type * as Real from "../../../client/src/lib/terminology/context.js";
+import type { NoStubDrift, StubDrift } from "./stub-contract.js";
+
+// Fails typecheck when an export drifts from the real module.
+type _Contract = NoStubDrift<StubDrift<typeof ThisStub, typeof Real>>;
 
 const defaults: TerminologyLabels = {
   volunteer: "volunteer",

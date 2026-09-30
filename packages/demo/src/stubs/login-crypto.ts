@@ -22,6 +22,12 @@ import {
   roundFlowDuration,
 } from "../lib/flow-events.js";
 import type { RecordedFlowEvent } from "../lib/flow-events.js";
+import type * as ThisStub from "./login-crypto.js";
+import type * as Real from "../../../client/src/lib/auth/login-crypto.js";
+import type { NoStubDrift, StubDrift } from "./stub-contract.js";
+
+// Fails typecheck when an export drifts from the real module.
+type _Contract = NoStubDrift<StubDrift<typeof ThisStub, typeof Real>>;
 
 // -----------------------------------------------------------------------
 // Exported types (mirror the real module exactly)

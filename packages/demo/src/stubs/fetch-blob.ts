@@ -10,6 +10,12 @@
  */
 
 import { BlobFetchError } from "$lib/errors.js";
+import type * as ThisStub from "./fetch-blob.js";
+import type * as Real from "../../../client/src/lib/utils/fetch-blob.js";
+import type { NoStubDrift, StubDrift } from "./stub-contract.js";
+
+// Fails typecheck when an export drifts from the real module.
+type _Contract = NoStubDrift<StubDrift<typeof ThisStub, typeof Real>>;
 
 // Re-export so consumer modules that import BlobFetchError from this
 // path still resolve. The real fetch-blob.ts does not export it, but

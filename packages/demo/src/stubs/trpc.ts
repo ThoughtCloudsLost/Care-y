@@ -31,6 +31,12 @@ import type { PreviewTrpc } from "./crypto-context.svelte.js";
 import { traceFlowSpan, buildFlowDetail } from "../lib/flow-events.js";
 import type { DemoSeamKey } from "../lib/bridge.js";
 import { makeProcedureProxy } from "../lib/engine/proc-proxy.js";
+import type * as ThisStub from "./trpc.js";
+import type * as Real from "../../../client/src/lib/trpc/index.js";
+import type { NoStubDrift, StubDrift } from "./stub-contract.js";
+
+// Fails typecheck when an export drifts from the real module.
+type _Contract = NoStubDrift<StubDrift<typeof ThisStub, typeof Real>>;
 
 // -----------------------------------------------------------------------
 // Error types (no bare Error throws)
@@ -143,6 +149,14 @@ export function setDemoAuthed(authed: boolean): void {
  */
 export function isDevDelayEnabled(): boolean {
   return false;
+}
+
+/**
+ * Mirror of the real setter DevThemePanel toggles. A no-op, so the
+ * probe above stays false.
+ */
+export function setDevDelay(_enabled: boolean): void {
+  // No-op: the demo never turns the delay on.
 }
 
 async function delay(ms: number): Promise<void> {
