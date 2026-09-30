@@ -18,7 +18,7 @@
     "check:handbook-refs": "node scripts/check-handbook-refs.mjs",
     "check:prose-flags": "node scripts/prose-flags.mjs",
     "health": "pnpm --filter @care-y/client run build:paraglide && vite --open /health.html",
-    "test": "pnpm --filter @care-y/client run build:paraglide && vitest run",
+    "test": "pnpm --filter @care-y/client run build:paraglide && vitest run && vitest run --config vitest.smoke.config.ts",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "test:boot": "playwright test"
   },

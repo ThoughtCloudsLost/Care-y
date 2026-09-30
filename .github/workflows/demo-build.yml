@@ -72,8 +72,9 @@ jobs:
 
       # The demo vitest project is not part of the root CI test run, so
       # this workflow is where its unit tests (including the handbook
-      # route-mapping completeness checks) actually execute.
-      - name: Demo unit tests
+      # route-mapping completeness checks) actually execute. The script
+      # also runs the smoke suite, the only tests that boot the engine.
+      - name: Demo unit and smoke tests
         run: pnpm --filter @care-y/demo run test
 
       - name: Build demo
