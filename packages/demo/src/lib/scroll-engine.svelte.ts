@@ -169,10 +169,17 @@ export function createScrollEngine(
       initialHash?.sectionId ??
       "login",
   );
+  // A section-level location (null sub: boot, tab click, section-only
+  // hash) presents as the section's first sub. That is the sub the
+  // derived selection names at the section top, so the rail and
+  // highlight show it on load without waiting for a scroll, and the
+  // derived-intent effect sees agreement and sends the phone nothing.
   const activeSub: string | null = $derived(
-    localLoc !== null
+    (localLoc !== null
       ? localLoc.subSlug
-      : (mirror?.location.subSlug ?? initialHash?.subSlug ?? null),
+      : (mirror?.location.subSlug ?? initialHash?.subSlug ?? null)) ??
+      getSection(activeSection)?.subs[0]?.slug ??
+      null,
   );
 
   // Last sub requested from a settle, so one settle sends one intent
@@ -190,7 +197,12 @@ export function createScrollEngine(
 
   // Armed when a programmatic alignment scroll is in flight, or when
   // an init/reboot transition swaps the rendered section list.
-  let suppressSettle = false;
+  //
+  // Reactive so the derived-intent effect re-runs on disarm. As a plain
+  // flag, a disarm from a timer (layout-shift settle, backstop) left
+  // the effect holding its last muted run: a selection that changed
+  // while muted went unreported until the visitor scrolled again.
+  let suppressSettle = $state(false);
 
   // The location the in-flight alignment targets, so the backstop
   // timeout can check whether the page reached it before unmuting.
@@ -451,10 +463,10 @@ export function createScrollEngine(
     }
 
     if (state.origin === "page-scroll") {
-      // The visitor scrolled here. Alignment is NOT re-run: bringing the
-      // sub to the reading line is done by CSS scroll snapping, which
-      // happens during the scroll itself. Scrolling them again here
-      // would yank the page after they had already stopped.
+      // The visitor scrolled here. Alignment is NOT re-run: the sub was
+      // selected because its heading already reached the reading line,
+      // so the page is where the visitor put it. Scrolling them again
+      // here would yank the page after they had already stopped.
       return;
     }
 
