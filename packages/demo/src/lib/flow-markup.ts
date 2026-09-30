@@ -136,7 +136,8 @@ function parseRuns(line: string): MarkupRun[] {
 export function parseFlowMarkup(text: string): MarkupUnit[] {
   const units: MarkupUnit[] = [];
   for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
+    // Search tags never render. A line holding only tags drops out.
+    const line = rawLine.replace(TAG_BLOCK_RE, "").trim();
     if (line === "") continue;
 
     let kind: MarkupUnitKind = "paragraph";
@@ -181,8 +182,8 @@ export function unitText(unit: MarkupUnit): string {
 //
 // Tags are invisible metadata for corpus search, written as
 // `[[#tag1 #tag2]]` blocks in the raw body text. extractTags strips
-// them and returns the tag list. Called by the corpus builder before
-// parseFlowMarkup; story rendering callers skip this step.
+// them and returns the tag list for the corpus builder. parseFlowMarkup
+// strips them too, so rendered copy never shows them.
 // -----------------------------------------------------------------------
 
 /**

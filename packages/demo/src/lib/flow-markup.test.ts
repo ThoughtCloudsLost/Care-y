@@ -70,6 +70,15 @@ describe("parseFlowMarkup", () => {
     expect(unitText(units[1]!)).toBe("Second.");
   });
 
+  it("drops search tag blocks from rendered units", () => {
+    const units = parseFlowMarkup(
+      "First. [[#keys]]\n[[#encryption #server-holds]]\nSecond.",
+    );
+    expect(units).toHaveLength(2);
+    expect(unitText(units[0]!)).toBe("First.");
+    expect(unitText(units[1]!)).toBe("Second.");
+  });
+
   it("ignores blank lines between paragraphs", () => {
     const units = parseFlowMarkup("First.\n\nSecond.");
     expect(units).toHaveLength(2);
