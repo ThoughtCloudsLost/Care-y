@@ -237,12 +237,8 @@ describe("crypto-context (lazy real objects)", () => {
 
   describe("preview loader", () => {
     it("throws if trpc is not registered", () => {
-      // registerTrpcForPreview is called by trpc stub at init time.
-      // Since we mocked the modules, the trpc stub's init may not
-      // have run. The test verifies the guard exists.
-      // (If registerTrpcForPreview was already called by the trpc
-      // stub import, this test passes vacuously.)
-      expect(typeof registerTrpcForPreview).toBe("function");
+      // Nothing registers on import; each entry registers at boot.
+      expect(() => getPreviewLoader()).toThrow(/trpc not registered/);
     });
 
     it("getPreviewLoader works after registerTrpcForPreview", () => {

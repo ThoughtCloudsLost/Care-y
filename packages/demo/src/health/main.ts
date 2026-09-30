@@ -6,6 +6,8 @@
  * they would in the real demo phone iframe.
  */
 
+// Must stay the first import. See trpc-server-signal.ts.
+import "../lib/engine/server/trpc-server-signal.js";
 import { mount } from "svelte";
 import HealthApp from "./HealthApp.svelte";
 import { DemoMountError } from "../lib/errors.js";

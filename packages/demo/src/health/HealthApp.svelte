@@ -21,7 +21,8 @@
   } from "$demo/engine/engine.js";
   import { bootDemoEngine, runHealthProofs } from "$demo/engine/engine.js";
   import { fetchSeedSnapshot } from "$demo/seed-snapshot-fetch.js";
-  import { setEngineTrpc } from "../stubs/trpc.js";
+  import { setEngineTrpc, previewTrpc } from "../stubs/trpc.js";
+  import { registerTrpcForPreview } from "../stubs/crypto-context.svelte.js";
   import RouteMount from "$demo/engine/RouteMount.svelte";
   import HealthProviders from "./HealthProviders.svelte";
   import TimingRow from "./ui/TimingRow.svelte";
@@ -115,6 +116,7 @@
 
       // Wire the engine's tRPC into the client shim
       setEngineTrpc(engine.trpc);
+      registerTrpcForPreview(previewTrpc);
 
       // Fetch the first ticket ID for the nav link
       try {

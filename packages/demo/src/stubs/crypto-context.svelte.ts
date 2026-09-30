@@ -457,11 +457,14 @@ export function getFollowUpDecryptCache(): FollowUpDecryptCacheType {
 }
 
 /**
- * Set by the trpc stub at init time to break the circular dependency.
- * The trpc stub calls registerTrpcForPreview() during its own module
- * init, which runs before any component calls getPreviewLoader().
+ * The trpc proxy the PreviewLoader queries through. crypto-context
+ * already reaches the trpc stub through the decrypt caches
+ * (async-decrypt-cache imports $lib/trpc), so the stub cannot import
+ * this module back without a cycle. Each entry (phone-main.ts,
+ * HealthApp.svelte) registers the proxy at boot, before it mounts
+ * anything that calls getPreviewLoader().
  */
-let trpcForPreview: {
+export interface PreviewTrpc {
   tickets: {
     recentFollowUps: {
       query: (input: { ticketIds: string[]; perTicket: number }) => Promise<{
@@ -470,13 +473,12 @@ let trpcForPreview: {
       }>;
     };
   };
-} | null = null;
+}
 
-/**
- * Called by the trpc stub to register the engine-backed trpc proxy.
- * This avoids a circular import between crypto-context and trpc.
- */
-export function registerTrpcForPreview(t: typeof trpcForPreview): void {
+let trpcForPreview: PreviewTrpc | null = null;
+
+/** Called by each entry at boot with the trpc stub's proxy. */
+export function registerTrpcForPreview(t: PreviewTrpc): void {
   trpcForPreview = t;
 }
 
@@ -484,7 +486,7 @@ export function getPreviewLoader(): PreviewLoader {
   if (previewLoader !== null) return previewLoader;
   if (trpcForPreview === null) {
     throw new DemoCryptoContextError(
-      "trpc not registered for preview loader. Ensure trpc stub is imported before getPreviewLoader().",
+      "trpc not registered for preview loader. The entry must call registerTrpcForPreview() before mounting.",
     );
   }
   const t = trpcForPreview;

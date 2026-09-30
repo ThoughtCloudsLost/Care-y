@@ -19,7 +19,8 @@
     "check:prose-flags": "node scripts/prose-flags.mjs",
     "health": "pnpm --filter @care-y/client run build:paraglide && vite --open /health.html",
     "test": "pnpm --filter @care-y/client run build:paraglide && vitest run",
-    "test:smoke": "vitest run --config vitest.smoke.config.ts"
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
+    "test:boot": "playwright test"
   },
   "dependencies": {
     "@care-y/crypto": "workspace:*",
@@ -36,6 +37,7 @@
     "libsodium-wrappers-sumo": "0.8.4"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@tailwindcss/vite": "4.3.3",
     "@testing-library/jest-dom": "7.0.1",

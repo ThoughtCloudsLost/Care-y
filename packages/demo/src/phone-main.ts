@@ -1,9 +1,12 @@
+// Must stay the first import. See trpc-server-signal.ts.
+import "./lib/engine/server/trpc-server-signal.js";
 import { mount } from "svelte";
 import * as m from "$lib/paraglide/messages.js";
 import type { DemoEngineResult } from "./lib/engine/engine.js";
 import { fetchSeedSnapshot } from "./lib/seed-snapshot-fetch.js";
 import { setPostKeyStep } from "$lib/crypto/context.js";
-import { setEngineTrpc } from "./stubs/trpc.js";
+import { setEngineTrpc, previewTrpc } from "./stubs/trpc.js";
+import { registerTrpcForPreview } from "./stubs/crypto-context.svelte.js";
 import { setEngineBlobResolver } from "./stubs/fetch-blob.js";
 import { traceFlowLocal, buildFlowDetail } from "./lib/flow-events.js";
 import { matchesAnyLocale } from "./lib/topic-classifier.js";
@@ -250,6 +253,7 @@ setPostKeyStep(async (bridge) => {
 // completes will await it. A rejected boot surfaces through the
 // first tRPC call that reads the rejected promise.
 setEngineTrpc(enginePromise.then((e) => e.trpc));
+registerTrpcForPreview(previewTrpc);
 setEngineBlobResolver(enginePromise.then((e) => e.resolveBlob));
 
 // Measurement hook: marks when the engine (DB, migrations, seed load,

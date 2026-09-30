@@ -27,7 +27,7 @@ import type { trpc as realTrpcClient } from "../../../client/src/lib/trpc/index.
 type RealTrpc = typeof realTrpcClient;
 
 import { setLoginStage } from "../lib/login-stage.svelte.js";
-import { registerTrpcForPreview } from "./crypto-context.svelte.js";
+import type { PreviewTrpc } from "./crypto-context.svelte.js";
 import { traceFlowSpan, buildFlowDetail } from "../lib/flow-events.js";
 import type { DemoSeamKey } from "../lib/bridge.js";
 import { makeProcedureProxy } from "../lib/engine/proc-proxy.js";
@@ -509,9 +509,10 @@ export const trpc: RealTrpc = new Proxy(
  */
 export const demoTrpcMock: typeof mockOverlay = mockOverlay;
 
-// Register the trpc proxy with crypto-context for the PreviewLoader's queryFn.
-// This runs at module init time, after the trpc Proxy is constructed above.
-// crypto-context.ts cannot import trpc.ts (circular), so trpc.ts pushes itself.
-registerTrpcForPreview(
-  trpc as unknown as Parameters<typeof registerTrpcForPreview>[0],
-);
+/**
+ * The proxy narrowed to what crypto-context's PreviewLoader queries. The
+ * entries hand this to registerTrpcForPreview() at boot. The import above
+ * is type-only, so this module still has no runtime edge back to
+ * crypto-context.
+ */
+export const previewTrpc: PreviewTrpc = trpc as unknown as PreviewTrpc;

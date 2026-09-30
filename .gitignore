@@ -96,6 +96,8 @@ data/
 # ============================================================
 /test-results/
 /playwright-report/
+/packages/demo/test-results/
+/packages/demo/playwright-report/
 /blob-report/
 /playwright/.cache/
 /.auth/
