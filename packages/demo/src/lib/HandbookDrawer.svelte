@@ -476,16 +476,17 @@
   // -----------------------------------------------------------------------
   // Scroll-driven sub detection
   //
-  // Mirrors the main story's reading-line selection: the first
-  // sub-heading whose layout top has not yet scrolled past a reading
-  // line within the container is the active sub. The reading line sits
-  // at READING_LINE_RATIO of the container's visible height, matching
-  // the main engine's viewport fraction.
+  // Mirrors the main story's reading-line selection: the last
+  // sub-heading whose layout top has reached a reading line within the
+  // container is the active sub. The reading line sits at
+  // READING_LINE_RATIO of the container's visible height, matching the
+  // main engine's viewport fraction.
   // -----------------------------------------------------------------------
 
-  // Tolerance (px) a heading may sit above the reading line and still
-  // count as "at" it, absorbing scroll rounding and programmatic-scroll
-  // residuals. Same rationale as flow-geometry's BAND_TOLERANCE.
+  // Tolerance (px) a heading may sit below the reading line and still
+  // count as having reached it, absorbing scroll rounding and
+  // programmatic-scroll residuals. Same rationale as flow-geometry's
+  // BAND_TOLERANCE.
   const DRAWER_BAND_TOLERANCE = 4;
 
   // Suppression flag: armed during programmatic scrolls (scrollToSub,
@@ -520,24 +521,25 @@
     const scrollTop = contentEl.scrollTop;
     const readingLine = contentEl.clientHeight * READING_LINE_RATIO;
 
-    // Walk sub-heading blocks and find the one at the reading line.
-    // Same rule as locationWithVisibleHeading: the first sub-heading
-    // whose top is >= readingLine (in container-scroll space) is the
-    // selection; if every heading has scrolled past, the last one wins.
-    let lastSlug: string | null = null;
+    // Same rule as locationWithVisibleHeading: the last sub-heading
+    // whose top has reached the reading line (in container-scroll space)
+    // is the selection; before any has, the first one is.
+    let selectedSlug: string | null = null;
     for (let bi = 0; bi < proseBlocks.length; bi++) {
       const block = proseBlocks.at(bi);
       if (block?.kind !== "sub-heading") continue;
       const geo = layoutResult.blocks.at(bi);
       if (geo === undefined) continue;
 
-      lastSlug = block.subSlug;
       const top = geo.topY - scrollTop;
-      if (top >= readingLine - DRAWER_BAND_TOLERANCE) break;
+      if (selectedSlug !== null && top > readingLine + DRAWER_BAND_TOLERANCE) {
+        break;
+      }
+      selectedSlug = block.subSlug;
     }
 
-    if (lastSlug !== null && lastSlug !== activeSub) {
-      onScrollSub(section.id, lastSlug);
+    if (selectedSlug !== null && selectedSlug !== activeSub) {
+      onScrollSub(section.id, selectedSlug);
     }
   }
 

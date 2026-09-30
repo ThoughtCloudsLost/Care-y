@@ -462,40 +462,48 @@ describe("locationWithVisibleHeading", () => {
     setViewportScrollY(0);
   });
 
-  it("selects the first sub whose heading has not passed above the band", () => {
+  it("selects the first sub before any heading reaches the band", () => {
     setFlowGeometrySource(makeHeadingSource());
     expect(locationWithVisibleHeading()).toEqual({
       sectionId: "login",
       subSlug: "credentials",
     });
-    // Scroll the first heading above the band: the next one is selected.
+  });
+
+  it("keeps a long sub selected while its body is read at the band", () => {
+    // Regression: the look-ahead rule selected the next sub as soon as
+    // the current heading crossed the band. With a sub taller than the
+    // viewport, that moved the selection (and the phone) to a heading
+    // still below the fold while the visitor read the current body.
+    setFlowGeometrySource(makeHeadingSource());
+    // credentials heading well above the band, two-factor at 400
+    // (band 116), so the credentials body fills the band.
     setViewportScrollY(300);
     expect(locationWithVisibleHeading()).toEqual({
       sectionId: "login",
-      subSlug: "two-factor",
+      subSlug: "credentials",
     });
   });
 
-  it("keeps the aligned sub selected through sub-pixel overshoot", () => {
+  it("keeps the aligned sub selected through sub-pixel undershoot", () => {
     // Regression: alignment solves heading top == band exactly
-    // (credentials aligns at scrollY 84 here: 200 - band 116). Browser
-    // scroll rounding or a fixed-point residual can overshoot by a
-    // fraction, leaving the heading just above the band. A strict
-    // top >= band then flips selection to the next sub and fires a
-    // stale page-scroll intent that overrides the click that caused
-    // the alignment.
+    // (two-factor aligns at scrollY 584 here: 700 - band 116). Browser
+    // scroll rounding or a fixed-point residual can leave the heading
+    // a fraction below the band. A strict top <= band then hands the
+    // selection back to the previous sub and fires a stale page-scroll
+    // intent that overrides the click that caused the alignment.
     setFlowGeometrySource(makeHeadingSource());
-    setViewportScrollY(84);
-    expect(locationWithVisibleHeading()?.subSlug).toBe("credentials");
-    // Overshoot within tolerance still selects the aligned sub
-    setViewportScrollY(88);
-    expect(locationWithVisibleHeading()?.subSlug).toBe("credentials");
-    // Beyond tolerance the heading has genuinely passed the band
-    setViewportScrollY(89);
+    setViewportScrollY(584);
     expect(locationWithVisibleHeading()?.subSlug).toBe("two-factor");
+    // Undershoot within tolerance still selects the aligned sub
+    setViewportScrollY(580);
+    expect(locationWithVisibleHeading()?.subSlug).toBe("two-factor");
+    // Beyond tolerance the heading has not reached the band yet
+    setViewportScrollY(579);
+    expect(locationWithVisibleHeading()?.subSlug).toBe("credentials");
   });
 
-  it("falls back to the last sub once every heading is above the band", () => {
+  it("selects the last sub once its heading has reached the band", () => {
     setFlowGeometrySource(makeHeadingSource());
     setViewportScrollY(900);
     expect(locationWithVisibleHeading()).toEqual({
@@ -527,7 +535,7 @@ describe("locationWithVisibleHeading", () => {
     expect(latest).toEqual({ sectionId: "login", subSlug: "credentials" });
     const before = computeCount;
     // Only the scroll position changes; the source is untouched.
-    setViewportScrollY(300);
+    setViewportScrollY(600);
     flushSync();
     expect(computeCount).toBeGreaterThan(before);
     expect(latest).toEqual({ sectionId: "login", subSlug: "two-factor" });

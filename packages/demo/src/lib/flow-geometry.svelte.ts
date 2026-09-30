@@ -157,40 +157,38 @@ export function readingLineY(): number {
 }
 
 /**
- * The sub that should be selected: the first one whose heading has not
- * yet passed above the band.
- *
- * This replaces "the sub containing the band" as the selection rule. A
- * body block can span most of the viewport, so the band sits inside it
- * long after its heading has scrolled behind the header, leaving the
- * selection named by something the visitor can no longer see. Keying off
- * heading visibility instead guarantees the selected sub is always one
- * whose title is on screen.
- *
- * Falls back to the last sub once every heading is above the band, which
- * is the state at the bottom of a page.
- */
-
-/**
- * Slack (px) a heading may sit above the band and still count as "at"
- * it. Alignment scrolls place the target heading's top exactly on the
- * band (scrollTargetForBlock solves top == band), so with a strict
- * `top >= band` the aligned state rests on a knife edge: browser
+ * Slack (px) a heading may sit below the band and still count as having
+ * reached it. Alignment scrolls place the target heading's top exactly
+ * on the band (scrollTargetForBlock solves top == band), so with a
+ * strict `top <= band` the aligned state rests on a knife edge: browser
  * scroll rounding or a fixed-point residual (FIXED_POINT_EPSILON 1px)
- * can leave the heading a fraction ABOVE the band, flipping the
- * selection to the NEXT sub. That stale flip then fires a page-scroll
+ * can leave the heading a fraction BELOW the band, handing the selection
+ * back to the PREVIOUS sub. That stale flip then fires a page-scroll
  * intent that overrides the click that caused the alignment. The
  * tolerance absorbs both error sources while staying far below a line
  * height, so adjacent headings can never both qualify at rest.
  */
 const BAND_TOLERANCE = 4;
 
+/**
+ * The sub that should be selected: the last one whose heading has
+ * reached the band, so the selection names the sub being read at the
+ * band for as long as its body runs.
+ *
+ * The earlier rule selected the first heading still below the band.
+ * Once subs outgrew the viewport, that handed the selection to the next
+ * sub the moment the current heading crossed the band, while its own
+ * body filled the screen and the next heading was still below the fold.
+ *
+ * Before any heading reaches the band (the top of a page) the first sub
+ * is selected, which is where section-level targets resolve to.
+ */
 export function locationWithVisibleHeading(): FlowLocation | null {
   if (source === null) return null;
   if (typeof window === "undefined") return null;
 
   const band = readingLineY();
-  let last: FlowLocation | null = null;
+  let selected: FlowLocation | null = null;
 
   for (let bi = 0; bi < source.blocks.length; bi++) {
     const block = source.blocks.at(bi);
@@ -198,11 +196,11 @@ export function locationWithVisibleHeading(): FlowLocation | null {
     const geo = source.layoutResult.blocks.at(bi);
     if (geo === undefined) continue;
 
-    last = { sectionId: block.sectionId, subSlug: block.subSlug };
     const top = source.containerTop + geo.topY - viewportScrollY;
-    if (top >= band - BAND_TOLERANCE) return last;
+    if (selected !== null && top > band + BAND_TOLERANCE) break;
+    selected = { sectionId: block.sectionId, subSlug: block.subSlug };
   }
-  return last;
+  return selected;
 }
 
 /**
