@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The detail view includes a toggle between the conversation thread and a timeline view. The timeline replaces the message thread with a structured chronologic..." |
+* | "The timeline indexes a ticket's follow-ups by date. Notes, recorded events, and calls appear individually with their content. Ordinary messages are collapsed..." |
 *
 * @param {Demo_Narrative_Topic_Timeline_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

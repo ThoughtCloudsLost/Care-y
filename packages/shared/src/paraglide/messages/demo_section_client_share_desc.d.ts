@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A single use readable message sent to someone outside the system. The content is encrypted under a fresh random key that lives only in the URL fragment, and ..." |
+* | "A share link delivers one encrypted message to a reader who has no account in the system. The decryption key sits in the URL fragment, which browsers never i..." |
 *
 * @param {Demo_Section_Client_Share_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

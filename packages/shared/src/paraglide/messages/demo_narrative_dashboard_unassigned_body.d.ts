@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Open tickets not yet assigned to anyone. Once assigned, a ticket moves to the assignee's working list. **If counts differ.** The count in the section heading..." |
+* | "This section lists open tickets with no assignee from the queues the signed-in user belongs to. Tickets on hold are excluded. The lane has a filter button th..." |
 *
 * @param {Demo_Narrative_Dashboard_Unassigned_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

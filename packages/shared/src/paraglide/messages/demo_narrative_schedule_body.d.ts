@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The planned scope for shift scheduling is shifts that repeat on a schedule, assigning people to cover them, and a calendar showing where coverage is complete..." |
+* | "The schedule page defines recurring shifts with start and end times and assigns volunteers to cover them. A calendar shows coverage by day, week, or month. E..." |
 *
 * @param {Demo_Narrative_Schedule_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

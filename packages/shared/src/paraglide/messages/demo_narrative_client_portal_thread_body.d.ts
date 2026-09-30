@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The portal thread is a merged timeline of messages, voicemails, call entries, attachments, and contact corrections, sorted by date. The view can be narrowed ..." |
+* | "The portal thread merges the client's messages, the organization's replies, voicemails, call log entries, files and contact corrections into one sequence ord..." |
 *
 * @param {Demo_Narrative_Client_Portal_Thread_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

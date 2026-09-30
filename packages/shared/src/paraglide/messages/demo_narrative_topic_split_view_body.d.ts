@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "On wider screens, the ticket list supports a split view where the list and a ticket detail pane sit side by side. Selecting a ticket from the list opens its ..." |
+* | "A wide window shows the ticket list and an open ticket side by side. Choosing a ticket in the list replaces the open ticket in the second pane. The list keep..." |
 *
 * @param {Demo_Narrative_Topic_Split_View_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

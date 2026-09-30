@@ -6,30 +6,54 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Terminology_BodyInputs */
 
 const en_demo_narrative_admin_terminology_body = /** @type {(inputs: Demo_Narrative_Admin_Terminology_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Organizations rename the standard terms used throughout the interface to match their own language. Six term groups are available, each with a singular and a plural except the knowledge base group, and each group can be set independently for English and Spanish.
-**How it works.** Typing a singular fills in the plural until the plural field is edited by hand, and the sheet detects which plurals were manually set by comparing them against what the rule would produce. Reset restores the defaults for the language currently selected without touching the other, and saving applies the new words across the interface immediately without a reload.
-**Encryption.** The terminology configuration is encrypted under the organization key in the browser, while the support label shown to the visitor on the portal is stored as plaintext because the visitor sees it before authenticating.
-**Permissions.** Editing terminology requires the Manage organization identity permission.`)
+	return /** @type {LocalizedString} */ (`The terminology editor lets an organization rename the words the interface uses for its people and work. Each group is configured separately for English and Spanish, and both language sets are saved together. The groups that carry a singular and a plural are:
+- Team member role
+- Senior team member role
+- Person helped
+- Work item
+- Work group
+The reference library group carries one word. The browser encrypts the groups under the organization key and stores them as a single ciphertext blob the server writes without reading, because what an organization calls the people it serves reveals what the organization does. [[#privacy #encryption]]
+**Why does the handbook use "ticket", "queue" and "volunteer"?** The handbook uses the shipped defaults rather than any one organization's terminology, because it documents CARE-Y itself. When an organization sees its own words in the app, that text comes from this configuration. [[#admin-org]]
+**Auto-pluralization and reset.** Typing a singular fills the plural automatically until the user edits the plural by hand. The editor detects a hand-edited plural by comparing it against the rule's output. Reset restores the defaults for the language being edited and leaves the other language unchanged. Saving applies the new words across the interface without a reload. [[#client-data]]
+**What does the server hold?** The groups are one encrypted value the server cannot read. The support label that a visitor sees on the portal is stored in the clear on the same row, because a visitor reaches it before authenticating and cannot hold a key. [How encryption works](#deep-dive/how-encryption-works) covers the organization key. [[#encryption #server-holds]]
+**Who can edit terminology?** Editing terminology requires the Manage org identity permission, the same grant that covers [General info](#admin-org/general) and [Branding](#admin-org/branding). [[#permissions]]
+**The terminology column and the write path.** The ciphertext is \`org_config.encrypted_terminology\`, a \`bytea\` column added in \`packages/server/src/db/migrations/tenant/072_add_terminology_config.ts\` and written through the \`saveBrandingField\` procedure with JSON encrypted in the browser first. The reading side is \`packages/client/src/lib/terminology/\`. A Svelte context that feeds every screen reads the terminology on save. [[#encryption #client-data]]`)
 };
 
 const es_demo_narrative_admin_terminology_body = /** @type {(inputs: Demo_Narrative_Admin_Terminology_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las organizaciones renombran los términos estándar usados en toda la interfaz para adaptarlos a su propio lenguaje. Hay seis grupos de términos disponibles, cada uno con singular y plural excepto el grupo de la base de conocimiento, y cada grupo se puede configurar de forma independiente para inglés y español.
-**Cómo funciona.** Al escribir un singular se completa automáticamente el plural hasta que el campo de plural se edita a mano, y la hoja detecta qué plurales fueron editados manualmente comparándolos con lo que produciría la regla. Restablecer restaura los valores predeterminados del idioma seleccionado sin tocar el otro, y guardar aplica las nuevas palabras en toda la interfaz de inmediato sin recargar.
-**Cifrado.** La configuración de terminología se cifra con la clave de la organización en el navegador, mientras que la etiqueta de soporte que se muestra al visitante en el portal se almacena en texto plano porque el visitante la ve antes de autenticarse.
-**Permisos.** Editar la terminología requiere el permiso Cambiar como se presenta la organización.`)
+	return /** @type {LocalizedString} */ (`El editor de terminología permite a una organización renombrar las palabras que la interfaz usa para sus personas y su trabajo. Cada grupo se configura por separado en inglés y en español, y ambos conjuntos de idiomas se guardan juntos. Los grupos que llevan un singular y un plural son:
+- Rol de integrante del equipo
+- Rol de integrante sénior
+- Persona atendida
+- Unidad de trabajo
+- Grupo de trabajo
+El grupo de la biblioteca de referencia lleva una sola palabra. El navegador cifra los grupos con la clave de la organización y los almacena como un solo bloque de texto cifrado que el servidor escribe sin leer, porque el modo en que una organización llama a las personas a las que atiende revela a qué se dedica. [[#privacy #encryption]]
+**¿Por qué el manual usa "ticket", "cola" y "voluntario"?** El manual usa las palabras predeterminadas en lugar de la terminología de una organización concreta, porque documenta CARE-Y en sí. Cuando una organización ve sus propias palabras en la aplicación, ese texto proviene de esta configuración. [[#admin-org]]
+**Pluralización automática y restablecimiento.** Al escribir un singular se rellena el plural automáticamente hasta que la persona usuaria edita el plural a mano. El editor detecta un plural editado a mano comparándolo con lo que la regla habría producido. Restablecer devuelve los valores predeterminados del idioma que se está editando y deja el otro idioma como estaba. Guardar aplica las palabras nuevas en toda la interfaz sin recargar. [[#client-data]]
+**¿Qué guarda el servidor?** Los grupos son un solo valor cifrado que el servidor no puede leer. La etiqueta de apoyo que un visitante ve en el portal se guarda en claro en la misma fila, porque el visitante llega antes de autenticarse y no puede tener una clave. [Cómo funciona el cifrado](#deep-dive/how-encryption-works) trata la clave de la organización. [[#encryption #server-holds]]
+**¿Quién puede editar la terminología?** Editar la terminología requiere el permiso Gestionar identidad de la organización, la misma concesión que cubre [Información general](#admin-org/general) y [Marca](#admin-org/branding). [[#permissions]]
+**La columna de terminología y la ruta de escritura.** El texto cifrado es \`org_config.encrypted_terminology\`, una columna \`bytea\` añadida en \`packages/server/src/db/migrations/tenant/072_add_terminology_config.ts\` y escrita a través del procedimiento \`saveBrandingField\` con el JSON cifrado en el navegador primero. El lado que lee es \`packages/client/src/lib/terminology/\`. Un contexto de Svelte que alimenta cada pantalla lee la terminología al guardar. [[#encryption #client-data]]`)
 };
 
 const en_xa2_demo_narrative_admin_terminology_body = /** @type {(inputs: Demo_Narrative_Admin_Terminology_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Òrgànìzàtìòns rènàmè thè stàndàrd tèrms ùsèd thròùghòùt thè ìntèrfàcè tò màtch thèìr òwn làngùàgè. Sìx tèrm gròùps àrè àvàìlàblè, èàch wìth à sìngùlàr ànd à plùràl èxcèpt thè knòwlèdgè bàsè gròùp, ànd èàch gròùp càn bè sèt ìndèpèndèntly fòr Ènglìsh ànd Spànìsh.
- •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Hòw ìt wòrks. ••••** Typìng à sìngùlàr fìlls ìn thè plùràl ùntìl thè plùràl fìèld ìs èdìtèd by hànd, ànd thè shèèt dètècts whìch plùràls wèrè mànùàlly sèt by còmpàrìng thèm àgàìnst whàt thè rùlè wòùld pròdùcè. Rèsèt rèstòrès thè dèfàùlts fòr thè làngùàgè cùrrèntly sèlèctèd wìthòùt tòùchìng thè òthèr, ànd sàvìng àpplìès thè nèw wòrds àcròss thè ìntèrfàcè ìmmèdìàtèly wìthòùt à rèlòàd.
- ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Èncryptìòn. ••••** Thè tèrmìnòlògy cònfìgùràtìòn ìs èncryptèd ùndèr thè òrgànìzàtìòn kèy ìn thè bròwsèr, whìlè thè sùppòrt làbèl shòwn tò thè vìsìtòr òn thè pòrtàl ìs stòrèd às plàìntèxt bècàùsè thè vìsìtòr sèès ìt bèfòrè àùthèntìcàtìng.
- ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Pèrmìssìòns. ••••** Èdìtìng tèrmìnòlògy rèqùìrès thè Mànàgè òrgànìzàtìòn ìdèntìty pèrmìssìòn. •••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Thè tèrmìnòlògy èdìtòr lèts àn òrgànìzàtìòn rènàmè thè wòrds thè ìntèrfàcè ùsès fòr ìts pèòplè ànd wòrk. Èàch gròùp ìs cònfìgùrèd sèpàràtèly fòr Ènglìsh ànd Spànìsh, ànd bòth làngùàgè sèts àrè sàvèd tògèthèr. Thè gròùps thàt càrry à sìngùlàr ànd à plùràl àrè:
+- Tèàm mèmbèr ròlè
+- Sènìòr tèàm mèmbèr ròlè
+- Pèrsòn hèlpèd
+- Wòrk ìtèm
+- Wòrk gròùp
+Thè rèfèrèncè lìbràry gròùp càrrìès ònè wòrd. Thè bròwsèr èncrypts thè gròùps ùndèr thè òrgànìzàtìòn kèy ànd stòrès thèm às à sìnglè cìphèrtèxt blòb thè sèrvèr wrìtès wìthòùt rèàdìng, bècàùsè whàt àn òrgànìzàtìòn càlls thè pèòplè ìt sèrvès rèvèàls whàt thè òrgànìzàtìòn dòès. [[#prìvàcy #èncryptìòn]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Why dòès thè hàndbòòk ùsè "tìckèt", "qùèùè" ànd "vòlùntèèr"? ••••••••••••••••••** Thè hàndbòòk ùsès thè shìppèd dèfàùlts ràthèr thàn àny ònè òrgànìzàtìòn's tèrmìnòlògy, bècàùsè ìt dòcùmènts CÀRÈ-Y ìtsèlf. Whèn àn òrgànìzàtìòn sèès ìts òwn wòrds ìn thè àpp, thàt tèxt còmès fròm thìs cònfìgùràtìòn. [[#àdmìn-òrg]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Àùtò-plùràlìzàtìòn ànd rèsèt. •••••••••** Typìng à sìngùlàr fìlls thè plùràl àùtòmàtìcàlly ùntìl thè ùsèr èdìts thè plùràl by hànd. Thè èdìtòr dètècts à hànd-èdìtèd plùràl by còmpàrìng ìt àgàìnst thè rùlè's òùtpùt. Rèsèt rèstòrès thè dèfàùlts fòr thè làngùàgè bèìng èdìtèd ànd lèàvès thè òthèr làngùàgè ùnchàngèd. Sàvìng àpplìès thè nèw wòrds àcròss thè ìntèrfàcè wìthòùt à rèlòàd. [[#clìènt-dàtà]]
+ ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt dòès thè sèrvèr hòld? ••••••••** Thè gròùps àrè ònè èncryptèd vàlùè thè sèrvèr cànnòt rèàd. Thè sùppòrt làbèl thàt à vìsìtòr sèès òn thè pòrtàl ìs stòrèd ìn thè clèàr òn thè sàmè ròw, bècàùsè à vìsìtòr rèàchès ìt bèfòrè àùthèntìcàtìng ànd cànnòt hòld à kèy. [Hòw èncryptìòn wòrks](#dèèp-dìvè/hòw-èncryptìòn-wòrks) còvèrs thè òrgànìzàtìòn kèy. [[#èncryptìòn #sèrvèr-hòlds]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whò càn èdìt tèrmìnòlògy? ••••••••** Èdìtìng tèrmìnòlògy rèqùìrès thè Mànàgè òrg ìdèntìty pèrmìssìòn, thè sàmè grànt thàt còvèrs [Gènèràl ìnfò](#àdmìn-òrg/gènèràl) ànd [Bràndìng](#àdmìn-òrg/bràndìng). [[#pèrmìssìòns]]
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••**Thè tèrmìnòlògy còlùmn ànd thè wrìtè pàth. •••••••••••••** Thè cìphèrtèxt ìs \`òrg_cònfìg.èncryptèd_tèrmìnòlògy\`, à \`bytèà\` còlùmn àddèd ìn \`pàckàgès/sèrvèr/src/db/mìgràtìòns/tènànt/072_àdd_tèrmìnòlògy_cònfìg.ts\` ànd wrìttèn thròùgh thè \`sàvèBràndìngFìèld\` pròcèdùrè wìth JSÒN èncryptèd ìn thè bròwsèr fìrst. Thè rèàdìng sìdè ìs \`pàckàgès/clìènt/src/lìb/tèrmìnòlògy/\`. À Svèltè còntèxt thàt fèèds èvèry scrèèn rèàds thè tèrmìnòlògy òn sàvè. [[#èncryptìòn #clìènt-dàtà]] •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Organizations rename the standard terms used throughout the interface to match their own language. Six term groups are available, each with a singular and a ..." |
+* | "The terminology editor lets an organization rename the words the interface uses for its people and work. Each group is configured separately for English and ..." |
 *
 * @param {Demo_Narrative_Admin_Terminology_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

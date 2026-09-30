@@ -54,6 +54,10 @@
     "vite.config.ts",
     "vitest.config.ts",
     "vitest.smoke.config.ts",
+    "vite.seed-snapshot.config.ts",
+    "playwright.config.ts",
+    "e2e/**/*.ts",
+    "scripts/build-seed-snapshot.ts",
     "../client/src/lib/workers/shared-worker-types.d.ts",
     "../server/src/types/sodium-native.d.ts"
   ],

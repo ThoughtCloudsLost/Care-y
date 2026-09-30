@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Selection mode allows picking messages from the thread individually or all at once. **Copy.** The selection bar copies the decrypted text of every selected m..." |
+* | "Selection mode picks several messages from the thread and copies them as text to the device clipboard. The copied text is one line per message in thread orde..." |
 *
 * @param {Demo_Narrative_Topic_Message_Select_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

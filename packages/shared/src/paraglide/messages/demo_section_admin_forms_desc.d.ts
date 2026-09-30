@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The form builder is where intake forms are authored, localized, previewed, and configured. Form definitions are encrypted under a key anyone can derive from ..." |
+* | "The form builder is where the user authors, translates, previews and configures intake forms. Field labels, descriptions, messages and banner images are all ..." |
 *
 * @param {Demo_Section_Admin_Forms_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

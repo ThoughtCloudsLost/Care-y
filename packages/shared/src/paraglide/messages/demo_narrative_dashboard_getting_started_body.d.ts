@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A card at the top of the overview lists setup tasks, each linking to the relevant admin page. **Visibility.** The checklist is visible only to administrators..." |
+* | "A setup checklist on the dashboard guides initial configuration. Each item links to the admin page where it is completed. Only accounts with the Manage org i..." |
 *
 * @param {Demo_Narrative_Dashboard_Getting_Started_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

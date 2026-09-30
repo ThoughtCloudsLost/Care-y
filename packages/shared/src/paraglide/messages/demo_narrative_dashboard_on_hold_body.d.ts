@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Tickets the current volunteer has placed on hold. These are still open but set aside, typically while waiting for a response from a client or an external par..." |
+* | "This section lists every on-hold ticket from the queues the signed-in user belongs to, regardless of who placed the hold. In the stacked layout the section d..." |
 *
 * @param {Demo_Narrative_Dashboard_On_Hold_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

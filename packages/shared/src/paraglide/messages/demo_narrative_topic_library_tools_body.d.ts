@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The library list carries the same toolbox as the ticket list, tuned for articles. **View modes.** Table, rows, cards, and grid layouts, with the choice saved..." |
+* | "Four view modes are available, with sorting by creation date, last edit, or rating, and filters for category, author, a creation date range, and two rating b..." |
 *
 * @param {Demo_Narrative_Topic_Library_Tools_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

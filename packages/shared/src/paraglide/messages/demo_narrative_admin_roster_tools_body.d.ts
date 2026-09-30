@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The users tab has the same working tools as the ticket list. **Filters.** The roster's filter pills narrow results by role, status, key state, and queue memb..." |
+* | "Filtering, sorting and searching the roster all run in the browser after the full list has loaded, so none of them send search terms or filter selections to ..." |
 *
 * @param {Demo_Narrative_Admin_Roster_Tools_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

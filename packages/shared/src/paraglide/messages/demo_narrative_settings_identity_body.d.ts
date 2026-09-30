@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "**Display name.** The display name is encrypted with the organization key in the browser before being sent to the server. **Username.** The username is sent ..." |
+* | "The user has a display name visible on their work and a username used to sign in. The display name is encrypted in the browser before it reaches the server. ..." |
 *
 * @param {Demo_Narrative_Settings_Identity_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

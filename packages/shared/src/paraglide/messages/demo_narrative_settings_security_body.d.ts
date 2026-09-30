@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Two entries sit under the security heading beside two factor enrollment. **Review security briefing** opens the briefing from the login walkthrough. It expla..." |
+* | "The security briefing is part of onboarding and can be reopened from settings at any time. Reopening it does not write the seen flag. The flag is set only on..." |
 *
 * @param {Demo_Narrative_Settings_Security_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

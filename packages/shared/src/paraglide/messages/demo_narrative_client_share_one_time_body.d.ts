@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Each share link works only once. After the content has been shown, the server deletes the ciphertext in the same transaction that records the open, so the en..." |
+* | "Each share link can be opened once. The first open gets the message and the server deletes it at that moment, so a second open gets an already-opened state i..." |
 *
 * @param {Demo_Narrative_Client_Share_One_Time_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

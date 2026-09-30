@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When the user initiates an SMS reply or a phone call from a ticket, a brief notice appears reminding them that the channel is not encrypted. **SMS warning.**..." |
+* | "Sending a text or placing a call leaves the encrypted path. The browser warns once per channel per session that the phone provider can read or hear the conte..." |
 *
 * @param {Demo_Narrative_Topic_Exposure_Hints_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

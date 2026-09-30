@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Each ticket in the list shows an unread count when it has messages the volunteer has not yet read. The count reflects new messages since the volunteer last v..." |
+* | "Each ticket row shows how many replies the signed-in user has not read. [[#client-data #encryption]] **Where does the count come from?** Each account keeps o..." |
 *
 * @param {Demo_Narrative_Topic_Unread_Badges_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

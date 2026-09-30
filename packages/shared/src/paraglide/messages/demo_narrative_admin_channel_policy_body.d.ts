@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The channel policy controls which communication channels are available across the organization, with five channels that each have an independent toggle. **Ef..." |
+* | "The channel policy controls which communication channels the organization makes available. - SMS - Email - Secure links - Voice - One-time share links Every ..." |
 *
 * @param {Demo_Narrative_Admin_Channel_Policy_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

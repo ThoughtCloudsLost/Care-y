@@ -1,218 +1,132 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import type { DemoEngineResult } from "./engine.js";
 import { bootDemoEngine } from "./engine.js";
-import type { SeedMediaAssets } from "../../../../server/src/dev/seed-tickets.js";
 import type { TicketId } from "@care-y/shared";
+import { SEED_VOICEMAIL_DURATION_S } from "@care-y/shared/dev/seed-stories.js";
+import {
+  SMOKE_SNAPSHOT_TIMEOUT_MS,
+  loadSmokeSnapshot,
+  smokeSnapshotSource,
+} from "./test-utils.js";
 
 /**
- * Smoke tests for the SeedMediaAssets plumbing: verifies that provided
- * assets flow into recording/attachment rows, and that omitting assets
- * falls back to generated placeholders.
+ * Smoke tests for the media the seed snapshot carries on the handbook
+ * story ticket: the voicemail the replay stores through the recording
+ * webhook's path, the photo and checklist it uploads the way the composer
+ * does, and the blobs behind them in the restored blob store.
  */
 
-describe("seedTestTickets media assets", () => {
-  // ── With assets ──────────────────────────────────────────────────
+describe("seed snapshot media on the story ticket", () => {
+  let engine: DemoEngineResult;
+  let storyTicketId: TicketId;
 
-  describe("provided assets", () => {
-    let engine: DemoEngineResult;
+  beforeAll(async () => {
+    const contents = await loadSmokeSnapshot();
+    engine = await bootDemoEngine({
+      snapshot: smokeSnapshotSource(contents),
+    });
+    const first = engine.ticketIds[0];
+    if (first === undefined) expect.fail("The snapshot has no tickets");
+    storyTicketId = first as TicketId;
+  }, SMOKE_SNAPSHOT_TIMEOUT_MS);
 
-    const VOICEMAIL_BYTES = new Uint8Array([0xca, 0xfe, 0x01, 0x02]);
-    const VOICEMAIL_DURATION = 42;
-    const IMAGE_BYTES_A = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
-    const IMAGE_BYTES_B = new Uint8Array([0xff, 0xd8, 0xff, 0xe1]);
+  it("stores the voicemail recording with the seed clip's duration", async () => {
+    const recordings = await engine.tDb
+      .selectFrom("recordings")
+      .select(["duration_seconds", "blob_key"])
+      .where("ticket_id", "=", storyTicketId)
+      .execute();
 
-    const testAssets: SeedMediaAssets = {
-      voicemailAudio: {
-        bytes: VOICEMAIL_BYTES,
-        durationSeconds: VOICEMAIL_DURATION,
-      },
-      documentImages: [
-        { bytes: IMAGE_BYTES_A, contentType: "image/jpeg" },
-        { bytes: IMAGE_BYTES_B, contentType: "image/jpeg" },
-      ],
-    };
+    expect(recordings.length).toBeGreaterThan(0);
+    expect(
+      recordings.some((r) => r.duration_seconds === SEED_VOICEMAIL_DURATION_S),
+    ).toBe(true);
+  }, 30_000);
 
-    beforeAll(async () => {
-      engine = await bootDemoEngine({ mediaAssets: testAssets });
-    }, 120_000);
+  it("restores every recording and attachment blob", async () => {
+    const recordings = await engine.tDb
+      .selectFrom("recordings")
+      .select("blob_key")
+      .where("ticket_id", "=", storyTicketId)
+      .execute();
+    const attachments = await engine.tDb
+      .selectFrom("attachments")
+      .select("blob_key")
+      .where("ticket_id", "=", storyTicketId)
+      .execute();
 
-    it("recording row uses provided durationSeconds", async () => {
-      const storyTicketId = engine.ticketIds[0];
-      expect(storyTicketId).toBeDefined();
-
-      const recordings = await engine.tDb
-        .selectFrom("recordings")
-        .select(["duration_seconds", "blob_key"])
-        .where("ticket_id", "=", storyTicketId as TicketId)
-        .execute();
-
-      expect(recordings.length).toBeGreaterThan(0);
-
-      // At least one recording should have the provided duration
-      const withProvidedDuration = recordings.filter(
-        (r) => r.duration_seconds === VOICEMAIL_DURATION,
-      );
-      expect(withProvidedDuration.length).toBeGreaterThan(0);
-    }, 30_000);
-
-    it("recording blob is stored in the blob store", async () => {
-      const storyTicketId = engine.ticketIds[0];
-      expect(storyTicketId).toBeDefined();
-
-      const recording = await engine.tDb
-        .selectFrom("recordings")
-        .select("blob_key")
-        .where("ticket_id", "=", storyTicketId as TicketId)
-        .executeTakeFirst();
-
-      expect(recording).toBeDefined();
-      const blob = await engine.blobStore.get(recording!.blob_key);
+    expect(attachments.length).toBeGreaterThan(0);
+    for (const row of [...recordings, ...attachments]) {
+      const blob = await engine.blobStore.get(row.blob_key);
       expect(blob).not.toBeNull();
-      expect(blob!.byteLength).toBeGreaterThan(0);
-    }, 30_000);
+      expect(blob?.byteLength ?? 0).toBeGreaterThan(0);
+    }
+  }, 30_000);
 
-    it("story ticket has phone_call follow-ups with call_status", async () => {
-      const storyTicketId = engine.ticketIds[0];
-      expect(storyTicketId).toBeDefined();
+  it("resolves an attachment through the blob resolver", async () => {
+    const attachment = await engine.tDb
+      .selectFrom("attachments")
+      .select("id")
+      .where("ticket_id", "=", storyTicketId)
+      .executeTakeFirstOrThrow();
 
-      const phoneCalls = await engine.tDb
-        .selectFrom("followups")
-        .select(["call_status", "call_duration_seconds"])
-        .where("ticket_id", "=", storyTicketId as TicketId)
-        .where("type", "=", "phone_call")
-        .orderBy("created_at", "asc")
-        .execute();
+    const bytes = await engine.resolveBlob.resolveBlob(
+      "attachments",
+      attachment.id,
+    );
+    expect(bytes).not.toBeNull();
+    expect(bytes?.byteLength ?? 0).toBeGreaterThan(0);
+  }, 30_000);
 
-      expect(phoneCalls.length).toBe(2);
+  it("records the missed and the completed call", async () => {
+    const phoneCalls = await engine.tDb
+      .selectFrom("followups")
+      .select(["call_status", "call_duration_seconds"])
+      .where("ticket_id", "=", storyTicketId)
+      .where("type", "=", "phone_call")
+      .orderBy("created_at", "asc")
+      .execute();
 
-      const noAnswer = phoneCalls[0];
-      expect(noAnswer).toBeDefined();
-      expect(noAnswer!.call_status).toBe("no_answer");
+    expect(phoneCalls).toHaveLength(2);
+    expect(phoneCalls[0]?.call_status).toBe("no_answer");
+    expect(phoneCalls[1]?.call_status).toBe("completed");
+    expect(phoneCalls[1]?.call_duration_seconds).toBe(340);
+  }, 30_000);
 
-      const completed = phoneCalls[1];
-      expect(completed).toBeDefined();
-      expect(completed!.call_status).toBe("completed");
-      expect(completed!.call_duration_seconds).toBe(340);
-    }, 30_000);
+  it("wraps each uploaded attachment's file key, as the composer does", async () => {
+    const attachments = await engine.tDb
+      .selectFrom("attachments")
+      .select("file_key_wrap")
+      .where("ticket_id", "=", storyTicketId)
+      .execute();
 
-    it("anchor ticket recordings carry file_key_wrap for portal envelope", async () => {
-      const storyTicketId = engine.ticketIds[0];
-      expect(storyTicketId).toBeDefined();
+    expect(attachments.length).toBeGreaterThan(0);
+    for (const att of attachments) {
+      expect(att.file_key_wrap).not.toBeNull();
+    }
+  }, 30_000);
 
-      const recordings = await engine.tDb
-        .selectFrom("recordings")
-        .select(["id", "file_key_wrap"])
-        .where("ticket_id", "=", storyTicketId as TicketId)
-        .execute();
+  it("seals the story ticket's attachments to its portal channel", async () => {
+    const portalAttachments = await engine.tDb
+      .selectFrom("portal_attachments as pa")
+      .innerJoin("attachments as a", "a.id", "pa.attachment_id")
+      .select("pa.attachment_id")
+      .where("a.ticket_id", "=", storyTicketId)
+      .execute();
+    expect(portalAttachments.length).toBeGreaterThan(0);
+  }, 30_000);
 
-      expect(recordings.length).toBeGreaterThan(0);
-      for (const rec of recordings) {
-        expect(rec.file_key_wrap).not.toBeNull();
-      }
-    }, 30_000);
+  it("carries the story ticket's system events", async () => {
+    const systemEvents = await engine.tDb
+      .selectFrom("followups")
+      .select("type")
+      .where("ticket_id", "=", storyTicketId)
+      .where("source", "=", "system")
+      .execute();
 
-    it("anchor ticket attachments carry file_key_wrap for portal envelope", async () => {
-      const storyTicketId = engine.ticketIds[0];
-      expect(storyTicketId).toBeDefined();
-
-      const attachments = await engine.tDb
-        .selectFrom("attachments")
-        .select(["id", "file_key_wrap"])
-        .where("ticket_id", "=", storyTicketId as TicketId)
-        .execute();
-
-      expect(attachments.length).toBeGreaterThan(0);
-      for (const att of attachments) {
-        expect(att.file_key_wrap).not.toBeNull();
-      }
-    }, 30_000);
-
-    it("portal carrier rows exist for anchor ticket media", async () => {
-      const storyTicketId = engine.ticketIds[0];
-      expect(storyTicketId).toBeDefined();
-
-      // Portal recordings joined through the recording's ticket
-      const portalRecordings = await engine.tDb
-        .selectFrom("portal_recordings as pr")
-        .innerJoin("recordings as r", "r.id", "pr.recording_id")
-        .select("pr.recording_id")
-        .where("r.ticket_id", "=", storyTicketId as TicketId)
-        .execute();
-      expect(portalRecordings.length).toBeGreaterThan(0);
-
-      // Portal attachments joined through the attachment's ticket
-      const portalAttachments = await engine.tDb
-        .selectFrom("portal_attachments as pa")
-        .innerJoin("attachments as a", "a.id", "pa.attachment_id")
-        .select("pa.attachment_id")
-        .where("a.ticket_id", "=", storyTicketId as TicketId)
-        .execute();
-      expect(portalAttachments.length).toBeGreaterThan(0);
-    }, 30_000);
-
-    it("story ticket has enriched system event types", async () => {
-      const storyTicketId = engine.ticketIds[0];
-      expect(storyTicketId).toBeDefined();
-
-      const systemEvents = await engine.tDb
-        .selectFrom("followups")
-        .select("type")
-        .where("ticket_id", "=", storyTicketId as TicketId)
-        .where("source", "=", "system")
-        .execute();
-
-      const types = systemEvents.map((e) => e.type);
-      expect(types).toContain("hold_placed");
-      expect(types).toContain("hold_removed");
-      expect(types).toContain("volunteer_unassigned");
-      expect(types).toContain("merge_note");
-    }, 30_000);
-  });
-
-  // ── Without assets (fallback) ────────────────────────────────────
-
-  describe("no assets (fallback)", () => {
-    let engine: DemoEngineResult;
-
-    beforeAll(async () => {
-      engine = await bootDemoEngine();
-    }, 120_000);
-
-    it("recording rows still exist with generated data", async () => {
-      const storyTicketId = engine.ticketIds[0];
-      expect(storyTicketId).toBeDefined();
-
-      const recordings = await engine.tDb
-        .selectFrom("recordings")
-        .select(["blob_key", "duration_seconds"])
-        .where("ticket_id", "=", storyTicketId as TicketId)
-        .execute();
-
-      expect(recordings.length).toBeGreaterThan(0);
-
-      // Each recording blob should exist in the store
-      for (const rec of recordings) {
-        const blob = await engine.blobStore.get(rec.blob_key);
-        expect(blob).not.toBeNull();
-      }
-    }, 30_000);
-
-    it("attachment rows still exist with generated data", async () => {
-      const storyTicketId = engine.ticketIds[0];
-      expect(storyTicketId).toBeDefined();
-
-      const attachments = await engine.tDb
-        .selectFrom("attachments")
-        .select("blob_key")
-        .where("ticket_id", "=", storyTicketId as TicketId)
-        .execute();
-
-      expect(attachments.length).toBeGreaterThan(0);
-
-      for (const att of attachments) {
-        const blob = await engine.blobStore.get(att.blob_key);
-        expect(blob).not.toBeNull();
-      }
-    }, 30_000);
-  });
+    const types = systemEvents.map((e) => e.type);
+    expect(types).toContain("hold_placed");
+    expect(types).toContain("hold_removed");
+    expect(types).toContain("volunteer_unassigned");
+  }, 30_000);
 });

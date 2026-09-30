@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Thread filters narrow the visible messages by message type, author, or date. The server returns the matching set and the browser decrypts them locally. **Mes..." |
+* | "Filters narrow the ticket's case thread by entry kind, by author, and by a date range, and all three combine to select a smaller set. [[#client-data]] **What..." |
 *
 * @param {Demo_Narrative_Topic_Thread_Filters_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

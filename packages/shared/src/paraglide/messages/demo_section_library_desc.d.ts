@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A shared knowledge base for the organization. Article titles and bodies are encrypted with the organization key before storage." |
+* | "The library holds articles written and organized by the organization for its own reference. Article titles, excerpts and bodies are encrypted with the organi..." |
 *
 * @param {Demo_Section_Library_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

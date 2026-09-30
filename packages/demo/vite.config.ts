@@ -8,6 +8,7 @@ import {
   clientStaticAssetsPlugin,
   demoAliases,
   demoSplashPlugin,
+  seedSnapshotPlugin,
   serverHealthAliases,
   serverRedirectPlugin,
 } from "./vite";
@@ -93,6 +94,7 @@ export default defineConfig({
     svelte(),
     demoSplashPlugin(),
     clientStaticAssetsPlugin(),
+    seedSnapshotPlugin(),
   ],
   base: process.env.BASE_PATH ?? "/",
   define: {

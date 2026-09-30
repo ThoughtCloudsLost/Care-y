@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Organizations rename the standard terms used throughout the interface to match their own language. Six term groups are available, each with a singular and a ..." |
+* | "The terminology editor lets an organization rename the words the interface uses for its people and work. Each group is configured separately for English and ..." |
 *
 * @param {Demo_Narrative_Admin_Terminology_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

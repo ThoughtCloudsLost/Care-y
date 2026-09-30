@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Profile, password and encryption key management, appearance, and two factor authentication enrollment." |
+* | "The settings section covers what the user controls about their own account and device. Display names and language preferences are sealed to the organization ..." |
 *
 * @param {Demo_Section_Settings_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

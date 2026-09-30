@@ -6,9 +6,9 @@
  * and publish. Verifies the article appears in the library list
  * with a decrypted title.
  *
- * The seed-data setup creates KB articles via the server-side
- * devSeedKb mutation. This suite exercises the browser-side
- * creation flow that uses sealForOrgKey in the crypto Worker.
+ * The seed-data setup creates KB articles through the dev seed
+ * replay. This suite exercises the editor's creation flow that uses
+ * sealForOrgKey in the crypto Worker.
  */
 
 import { test, expect } from "./coverage-fixture";

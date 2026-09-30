@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Queues control how tickets are organized and routed. **Lifecycle.** Deleting a queue prompts for another queue to receive its tickets, so nothing is orphaned..." |
+* | "Queues are governed by three independent permissions. The Manage queues permission controls creation, reordering and deletion. The Manage queue membership pe..." |
 *
 * @param {Demo_Narrative_Admin_Queues_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

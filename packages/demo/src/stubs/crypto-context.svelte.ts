@@ -17,7 +17,7 @@
  * role switcher mutates the signed-in user's role.
  */
 
-import { Permission } from "@care-y/shared";
+import type { Permission } from "@care-y/shared";
 import { plainSet } from "../lib/non-reactive.js";
 import { RoleId } from "@care-y/shared";
 import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
@@ -408,29 +408,20 @@ function initOrgKeyManager(): OrgKeyManager {
 // Auth state (rune-backed for reactive consumers)
 // -----------------------------------------------------------------------
 
-const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
-  Permission.VIEW_CASES,
-  Permission.WRITE_CASE_NOTES,
-  Permission.VIEW_KNOWLEDGE_BASE,
-  Permission.EDIT_KNOWLEDGE_BASE,
-  Permission.VIEW_OWN_SHIFTS,
-  Permission.DELETE_KNOWLEDGE_BASE_ARTICLES,
-  Permission.MANAGE_USERS,
-  Permission.MANAGE_QUEUES,
-  Permission.MANAGE_PRESETS,
-  Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
-  Permission.VIEW_REPORTS,
-  Permission.DELETE_CLIENTS,
-  Permission.VIEW_CLIENTS,
-  Permission.MANAGE_ORG_IDENTITY,
-  Permission.MANAGE_KEYS,
-  Permission.MANAGE_INFRASTRUCTURE,
-  Permission.MANAGE_ROLES,
-]);
+/**
+ * Pre-boot placeholder. The only screen the phone shows before the
+ * engine boots is the login form, which reads no permissions. Once the
+ * engine is up, PhoneApp replaces this with the seeded admin's set from
+ * auth.me through setRoleAndPermissions, and the login fast-forward
+ * waits for that. Empty rather than a guess, so a surface that did
+ * render early would hide gated controls instead of offering ones the
+ * server might refuse.
+ */
+const PRE_BOOT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>();
 
 let currentUserId: string | undefined = $state("demo-user-001");
 let currentUserRoleId: string | undefined = $state(RoleId.ADMIN);
-let currentPermissions: ReadonlySet<Permission> = $state(DEFAULT_PERMISSIONS);
+let currentPermissions: ReadonlySet<Permission> = $state(PRE_BOOT_PERMISSIONS);
 
 // -----------------------------------------------------------------------
 // Public getters (mirror the real module's export names exactly)
@@ -466,11 +457,14 @@ export function getFollowUpDecryptCache(): FollowUpDecryptCacheType {
 }
 
 /**
- * Set by the trpc stub at init time to break the circular dependency.
- * The trpc stub calls registerTrpcForPreview() during its own module
- * init, which runs before any component calls getPreviewLoader().
+ * The trpc proxy the PreviewLoader queries through. crypto-context
+ * already reaches the trpc stub through the decrypt caches
+ * (async-decrypt-cache imports $lib/trpc), so the stub cannot import
+ * this module back without a cycle. Each entry (phone-main.ts,
+ * HealthApp.svelte) registers the proxy at boot, before it mounts
+ * anything that calls getPreviewLoader().
  */
-let trpcForPreview: {
+export interface PreviewTrpc {
   tickets: {
     recentFollowUps: {
       query: (input: { ticketIds: string[]; perTicket: number }) => Promise<{
@@ -479,13 +473,12 @@ let trpcForPreview: {
       }>;
     };
   };
-} | null = null;
+}
 
-/**
- * Called by the trpc stub to register the engine-backed trpc proxy.
- * This avoids a circular import between crypto-context and trpc.
- */
-export function registerTrpcForPreview(t: typeof trpcForPreview): void {
+let trpcForPreview: PreviewTrpc | null = null;
+
+/** Called by each entry at boot with the trpc stub's proxy. */
+export function registerTrpcForPreview(t: PreviewTrpc): void {
   trpcForPreview = t;
 }
 
@@ -493,7 +486,7 @@ export function getPreviewLoader(): PreviewLoader {
   if (previewLoader !== null) return previewLoader;
   if (trpcForPreview === null) {
     throw new DemoCryptoContextError(
-      "trpc not registered for preview loader. Ensure trpc stub is imported before getPreviewLoader().",
+      "trpc not registered for preview loader. The entry must call registerTrpcForPreview() before mounting.",
     );
   }
   const t = trpcForPreview;
@@ -624,6 +617,28 @@ let ensureKeyedPromise: Promise<void> | null = null;
 let ensureKeyedResult: LoginCryptoResult | null = null;
 let derivationRecording: readonly RecordedFlowEvent[] | null = null;
 
+/** Work to run on the keyed bridge before keying counts as done. */
+export type PostKeyStep = (bridge: CryptoBridgeType) => Promise<void>;
+
+let postKeyStep: PostKeyStep | null = null;
+
+/**
+ * Register work that must finish after the worker is keyed and before
+ * any queued decrypt runs or any ensureKeyed caller proceeds. The step
+ * gets the real, unpaced bridge, since paced decrypts wait for the
+ * keying this step is part of. The phone entry registers the seed read
+ * cursor reseal here. The step runs on every keying. The keepalive's
+ * re-keying runs it again, so it must be safe to repeat. A failing step
+ * fails ensureKeyed.
+ */
+export function setPostKeyStep(step: PostKeyStep): void {
+  postKeyStep = step;
+}
+
+async function runPostKeyStep(bridge: CryptoBridge): Promise<void> {
+  if (postKeyStep !== null) await postKeyStep(bridge);
+}
+
 /**
  * Reset the ensureKeyed memos so a subsequent call runs the full
  * derivation pipeline again. Called by the keepalive recovery path
@@ -658,6 +673,7 @@ export async function ensureKeyed(): Promise<void> {
 
   const bridge = initBridge();
   if (bridge.getState() === "KEYED") {
+    await runPostKeyStep(bridge);
     initPacingBridge().resolveKeyed();
     return;
   }
@@ -750,6 +766,10 @@ async function runEnsureKeyed(): Promise<void> {
   // knows a future getVolPublic failure is a silent idle-zero, not a
   // boot-time error.
   hasEverKeyed = true;
+
+  // Outside the flow recording on purpose: the recording is replayed as
+  // the login's own derivation, and this step is not part of it.
+  await runPostKeyStep(bridge);
 
   // Unblock all queued decrypt calls in the pacing wrapper
   pacing.resolveKeyed();

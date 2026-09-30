@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The secure portal lets a client continue the conversation with the organization. Access comes through a link sent by a volunteer, and the credential that unl..." |
+* | "The secure portal gives a client a private page to read and reply to messages from the organization. A user in the organization creates the link and hands it..." |
 *
 * @param {Demo_Section_Client_Portal_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

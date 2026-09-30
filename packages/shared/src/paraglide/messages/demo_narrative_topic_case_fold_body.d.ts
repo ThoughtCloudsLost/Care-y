@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The case fields below the header can be folded away. The title, status, and priority stay visible in the header above. **Encryption.** The description is enc..." |
+* | "Folding a ticket hides the description, the queue, who holds the ticket, and how long ago it was opened. The title, the priority, and whether the ticket is c..." |
 *
 * @param {Demo_Narrative_Topic_Case_Fold_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

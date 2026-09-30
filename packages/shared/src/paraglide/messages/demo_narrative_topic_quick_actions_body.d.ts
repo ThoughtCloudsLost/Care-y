@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Common operations on a ticket without opening it, accessed by swiping a ticket row. **Swipe directions.** Swipe right to reply. Swipe left to assign or place..." |
+* | "Quick actions are the common operations on a ticket, run without opening it. Rows in the ticket list carry them as a swipe gesture and cards carry them as bu..." |
 *
 * @param {Demo_Narrative_Topic_Quick_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

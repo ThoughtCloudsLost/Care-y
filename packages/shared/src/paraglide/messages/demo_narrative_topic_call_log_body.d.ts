@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Every call attempt between a volunteer and a client is logged in the thread with its outcome so the history of reaching a client stays visible inside the cas..." |
+* | "Every call placed or received on a ticket appears in the thread as a follow-up. The follow-up records the outcome, and a connected call also records its dura..." |
 *
 * @param {Demo_Narrative_Topic_Call_Log_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

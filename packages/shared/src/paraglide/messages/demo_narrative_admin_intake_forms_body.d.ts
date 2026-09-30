@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The intake forms section lists every form the organization has created. Web intake can be switched on or off for the whole organization, and when it is on an..." |
+* | "The intake forms list holds every form the organization has built. A single switch on this page turns web intake off for the whole organization. [[#portal]] ..." |
 *
 * @param {Demo_Narrative_Admin_Intake_Forms_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

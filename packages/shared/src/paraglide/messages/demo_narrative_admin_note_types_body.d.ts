@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The note types section holds two groups. The first is the configurable types the organization defines, each carrying a name, icon, and optional description e..." |
+* | "Each organization defines the categories that internal notes can carry, and each type has a name, an icon, and an optional description. The product also list..." |
 *
 * @param {Demo_Narrative_Admin_Note_Types_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -77,6 +77,10 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_topic_view_modes_heading(),
   demo_narrative_topic_view_modes_body: () =>
     m.demo_narrative_topic_view_modes_body(),
+  demo_narrative_topic_kanban_board_heading: () =>
+    m.demo_narrative_topic_kanban_board_heading(),
+  demo_narrative_topic_kanban_board_body: () =>
+    m.demo_narrative_topic_kanban_board_body(),
   demo_narrative_topic_select_mode_heading: () =>
     m.demo_narrative_topic_select_mode_heading(),
   demo_narrative_topic_select_mode_body: () =>
@@ -632,6 +636,62 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_client_share_exposure_heading(),
   demo_narrative_client_share_exposure_body: () =>
     m.demo_narrative_client_share_exposure_body(),
+
+  // Deep-dive reference articles
+  demo_section_deepdive_title: () => m.demo_section_deepdive_title(),
+  demo_section_deepdive_desc: () => m.demo_section_deepdive_desc(),
+  demo_narrative_deepdive_what_is_care_y_heading: () =>
+    m.demo_narrative_deepdive_what_is_care_y_heading(),
+  demo_narrative_deepdive_what_is_care_y_body: () =>
+    m.demo_narrative_deepdive_what_is_care_y_body(),
+  demo_narrative_deepdive_how_encryption_works_heading: () =>
+    m.demo_narrative_deepdive_how_encryption_works_heading(),
+  demo_narrative_deepdive_how_encryption_works_body: () =>
+    m.demo_narrative_deepdive_how_encryption_works_body(),
+  demo_narrative_deepdive_how_keys_are_derived_heading: () =>
+    m.demo_narrative_deepdive_how_keys_are_derived_heading(),
+  demo_narrative_deepdive_how_keys_are_derived_body: () =>
+    m.demo_narrative_deepdive_how_keys_are_derived_body(),
+  demo_narrative_deepdive_org_key_lifecycle_heading: () =>
+    m.demo_narrative_deepdive_org_key_lifecycle_heading(),
+  demo_narrative_deepdive_org_key_lifecycle_body: () =>
+    m.demo_narrative_deepdive_org_key_lifecycle_body(),
+  demo_narrative_deepdive_trust_boundary_heading: () =>
+    m.demo_narrative_deepdive_trust_boundary_heading(),
+  demo_narrative_deepdive_trust_boundary_body: () =>
+    m.demo_narrative_deepdive_trust_boundary_body(),
+  demo_narrative_deepdive_deployment_heading: () =>
+    m.demo_narrative_deepdive_deployment_heading(),
+  demo_narrative_deepdive_deployment_body: () =>
+    m.demo_narrative_deepdive_deployment_body(),
+  demo_narrative_deepdive_verifying_the_code_heading: () =>
+    m.demo_narrative_deepdive_verifying_the_code_heading(),
+  demo_narrative_deepdive_verifying_the_code_body: () =>
+    m.demo_narrative_deepdive_verifying_the_code_body(),
+  demo_narrative_deepdive_network_heading: () =>
+    m.demo_narrative_deepdive_network_heading(),
+  demo_narrative_deepdive_network_body: () =>
+    m.demo_narrative_deepdive_network_body(),
+  demo_narrative_deepdive_on_the_device_heading: () =>
+    m.demo_narrative_deepdive_on_the_device_heading(),
+  demo_narrative_deepdive_on_the_device_body: () =>
+    m.demo_narrative_deepdive_on_the_device_body(),
+  demo_narrative_deepdive_telephony_relay_heading: () =>
+    m.demo_narrative_deepdive_telephony_relay_heading(),
+  demo_narrative_deepdive_telephony_relay_body: () =>
+    m.demo_narrative_deepdive_telephony_relay_body(),
+  demo_narrative_deepdive_permission_system_heading: () =>
+    m.demo_narrative_deepdive_permission_system_heading(),
+  demo_narrative_deepdive_permission_system_body: () =>
+    m.demo_narrative_deepdive_permission_system_body(),
+  demo_narrative_deepdive_portal_channel_lifecycle_heading: () =>
+    m.demo_narrative_deepdive_portal_channel_lifecycle_heading(),
+  demo_narrative_deepdive_portal_channel_lifecycle_body: () =>
+    m.demo_narrative_deepdive_portal_channel_lifecycle_body(),
+  demo_narrative_deepdive_data_retention_heading: () =>
+    m.demo_narrative_deepdive_data_retention_heading(),
+  demo_narrative_deepdive_data_retention_body: () =>
+    m.demo_narrative_deepdive_data_retention_body(),
 
   // Coming-soon placeholder
   demo_coming_soon_title: () => m.demo_coming_soon_title(),

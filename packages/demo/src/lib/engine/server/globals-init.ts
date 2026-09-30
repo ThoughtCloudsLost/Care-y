@@ -7,12 +7,12 @@
  *
  * - Buffer: server code and PGlite bytea handling expect a global Buffer.
  * - process.env: migration 014 reads OPS_SECRETS_KEY at migration time.
- * - VITEST_WORKER_ID: @trpc/server computes its isServerDefault at module
- *   evaluation and accepts a truthy worker id as "server context". This
- *   is the only demo-owned way to run the real routers in a browser
- *   without editing the product's initTRPC call. Fake value, no secret.
+ * - VITEST_WORKER_ID: set by trpc-server-signal.ts, imported first here
+ *   for the Node snapshot builder. The browser entries import it ahead of
+ *   this module (see that file for why).
  */
 
+import "./trpc-server-signal.js";
 import { Buffer } from "buffer";
 
 if (typeof globalThis.Buffer === "undefined") {
@@ -110,6 +110,3 @@ const proc = globalThis.process as unknown as ProcessLike;
 // scanners on entropy shape even when obviously fake.
 export const FAKE_OPS_KEY_HEX: string = "0f".repeat(32);
 proc.env.OPS_SECRETS_KEY = FAKE_OPS_KEY_HEX;
-
-// Satisfy @trpc/server's isServerDefault check (see header comment).
-proc.env.VITEST_WORKER_ID = "1";

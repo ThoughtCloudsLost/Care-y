@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Automatic deletion accepts a window of 1 to 3,650 days, and both enabling and changing the value ask for confirmation. The confirmation states that deleted d..." |
+* | "A new organization starts with automatic deletion off. The user turns it on by choosing a window between 1 and 3,650 days; 365 is filled in as a starting poi..." |
 *
 * @param {Demo_Narrative_Admin_Retention_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -4,7 +4,8 @@
  * Runs registerCrypto (Argon2id -> OPRF -> deriveKeys -> initCryptoKeys)
  * and loginCrypto (Worker-based key derivation -> KEYED state), then
  * rotates the throwaway org keypair (from seed) with a real client-generated
- * Curve25519 keypair, seals KB articles client-side, and seeds test tickets.
+ * Curve25519 keypair, seals KB articles client-side, and runs the seed
+ * replay the Settings page dev seed runs.
  *
  * The org key rotation matches the production flow: the browser generates
  * the keypair, ECIES-wraps the secret for authorized volunteers, and uploads
@@ -31,6 +32,7 @@ import type { RegisterCryptoCallbacks } from "$lib/auth/register-crypto.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
+import { devSeedData } from "./dev-seed.js";
 
 const DEV_IDENTIFIER = "admin.dev";
 const DEV_PASSWORD = "dev-password-1234!";
@@ -39,20 +41,6 @@ function getBypass2fa(): { mutate: () => Promise<unknown> } {
   const route = trpc.auth.devBypass2fa;
   if (!route)
     throw new TypeError("devBypass2fa route missing (not in dev mode?)");
-  return route;
-}
-
-function getDevSeedTickets(): { mutate: () => Promise<unknown> } {
-  // tickets and devSeedTickets are both conditionally spread on the server
-  // (ticketDeps optional, devSeedTickets dev-only), so TypeScript doesn't
-  // guarantee their existence. This file only runs in dev mode.
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, runtime guard follows
-  const tickets = trpc.tickets as
-    Record<string, { mutate: () => Promise<unknown> }> | undefined;
-  const route = tickets?.devSeedTickets;
-  if (route === undefined) {
-    throw new TypeError("devSeedTickets route missing (not in dev mode?)");
-  }
   return route;
 }
 
@@ -1241,17 +1229,12 @@ export async function devAutoLogin(
     console.log("[dev] devSeedTelephony: telephony config seeded");
   }
 
-  // 8. Seed test tickets (server creates tickets with real ECIES key wraps)
-  await getDevSeedTickets().mutate();
-  console.log("[dev] devSeedTickets: tickets seeded");
-
-  // 9. Seed quarantine entries (sealed-box encrypted voicemails)
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, runtime guard follows
-  const devRouterAL = trpc.dev as unknown as
-    Record<string, { mutate: () => Promise<{ count: number }> }> | undefined;
-  const seedQ = devRouterAL?.seedQuarantine;
-  if (seedQ) {
-    const result = await seedQ.mutate();
-    console.log(`[dev] quarantine: ${String(result.count)} entries seeded`);
-  }
+  // 8. Seed data through the replay (tickets, quarantined voicemails and
+  // the rest), the same production mutations the Settings page dev seed
+  // uses. The dev-only routers it needs are checked before it writes.
+  // Progress callbacks carry step labels only, never seed content.
+  await devSeedData(bridge, orgKeyManager, (step) => {
+    console.log(`[dev] seed replay: ${step}`);
+  });
+  console.log("[dev] seed replay: done");
 }

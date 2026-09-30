@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "After signing in, the account page shows the same message thread and composer as the secure link portal, and the client can close the browser, return later, ..." |
+* | "An account gives the client a password-based way to reopen the same conversation on every visit. The encryption is the same as a secure link, and only the so..." |
 *
 * @param {Demo_Narrative_Client_Account_Thread_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

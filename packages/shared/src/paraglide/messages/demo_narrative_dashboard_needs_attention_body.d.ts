@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A per-volunteer list of tickets needing immediate action. **What qualifies.** A ticket appears here when it is open, not on hold, marked urgent or high prior..." |
+* | "A ticket belongs to this section when it meets every condition below. In the stacked layout the section disappears when no ticket qualifies, unless a filter ..." |
 *
 * @param {Demo_Narrative_Dashboard_Needs_Attention_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

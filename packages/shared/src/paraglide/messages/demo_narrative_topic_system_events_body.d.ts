@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Assignments, status changes, priority changes, holds, and merges are recorded in the thread as compact entries between messages, so the case history and the ..." |
+* | "Assignments, status changes, priority moves, queue moves, holds, and merges each appear in the conversation thread as a follow-up. The record of what was don..." |
 *
 * @param {Demo_Narrative_Topic_System_Events_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

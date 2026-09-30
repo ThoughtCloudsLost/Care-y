@@ -166,12 +166,6 @@ export const SECTIONS: readonly Section[] = [
     group: "org",
     subs: [
       {
-        slug: "language",
-        topic: "language",
-        headingKey: "demo_narrative_topic_language_heading",
-        bodyKey: "demo_narrative_topic_language_body",
-      },
-      {
         slug: "credentials",
         topic: "credentials",
         headingKey: "demo_narrative_topic_credentials_heading",
@@ -244,13 +238,6 @@ export const SECTIONS: readonly Section[] = [
       // The dashboard is a scroll-nav page: every sub except the
       // view switcher and the create button narrates a `#section-<id>`
       // block (routes/(app)/+page.svelte, the .scroll-target divs).
-      {
-        slug: "getting-started",
-        topic: "dashboard-getting-started",
-        headingKey: "demo_narrative_dashboard_getting_started_heading",
-        bodyKey: "demo_narrative_dashboard_getting_started_body",
-        highlight: { section: "getting-started" },
-      },
       {
         slug: "shift",
         topic: "dashboard-shift",
@@ -329,6 +316,18 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_dashboard_create_heading",
         bodyKey: "demo_narrative_dashboard_create_body",
       },
+      // Last on purpose: the checklist is an admin-only setup surface,
+      // a confusing opener for a reader meeting the dashboard for the
+      // first time. In the demo the card starts collapsed (see the
+      // dashboard/section-defaults stub), so narrating it means the
+      // scroll-nav tap expands it, which is the demonstration.
+      {
+        slug: "getting-started",
+        topic: "dashboard-getting-started",
+        headingKey: "demo_narrative_dashboard_getting_started_heading",
+        bodyKey: "demo_narrative_dashboard_getting_started_body",
+        highlight: { section: "getting-started" },
+      },
     ],
   },
   {
@@ -349,6 +348,12 @@ export const SECTIONS: readonly Section[] = [
         topic: "view-modes",
         headingKey: "demo_narrative_topic_view_modes_heading",
         bodyKey: "demo_narrative_topic_view_modes_body",
+      },
+      {
+        slug: "kanban-board",
+        topic: "kanban-board",
+        headingKey: "demo_narrative_topic_kanban_board_heading",
+        bodyKey: "demo_narrative_topic_kanban_board_body",
       },
       {
         slug: "stats",
@@ -1142,6 +1147,12 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_settings_appearance_body",
       },
       {
+        slug: "language",
+        topic: "language",
+        headingKey: "demo_narrative_topic_language_heading",
+        bodyKey: "demo_narrative_topic_language_body",
+      },
+      {
         slug: "two-factor",
         topic: "settings-2fa",
         headingKey: "demo_narrative_settings_twofa_heading",
@@ -1407,6 +1418,101 @@ export const SECTIONS: readonly Section[] = [
         highlight: {
           selectors: ['[data-testid="portal-hint-ok"]', ".share-content-block"],
         },
+      },
+    ],
+  },
+  // ---------------------------------------------------------------------
+  // Deep-dive reference articles
+  //
+  // Linked from entry-page prose via [text](#deep-dive/<slug>). No
+  // product route; the phone stays on its current screen while the
+  // handbook presents the article. Group "org" because the deep dives
+  // explain the system itself, not the client portal.
+  // ---------------------------------------------------------------------
+  {
+    id: "deep-dive",
+    titleKey: "demo_section_deepdive_title",
+    descKey: "demo_section_deepdive_desc",
+    routes: [],
+    group: "org",
+    subs: [
+      {
+        slug: "what-is-care-y",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_what_is_care_y_heading",
+        bodyKey: "demo_narrative_deepdive_what_is_care_y_body",
+      },
+      {
+        slug: "how-encryption-works",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_how_encryption_works_heading",
+        bodyKey: "demo_narrative_deepdive_how_encryption_works_body",
+      },
+      {
+        slug: "how-keys-are-derived",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_how_keys_are_derived_heading",
+        bodyKey: "demo_narrative_deepdive_how_keys_are_derived_body",
+      },
+      {
+        slug: "organization-key-lifecycle",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_org_key_lifecycle_heading",
+        bodyKey: "demo_narrative_deepdive_org_key_lifecycle_body",
+      },
+      {
+        slug: "the-trust-boundary",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_trust_boundary_heading",
+        bodyKey: "demo_narrative_deepdive_trust_boundary_body",
+      },
+      {
+        slug: "deployment",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_deployment_heading",
+        bodyKey: "demo_narrative_deepdive_deployment_body",
+      },
+      {
+        slug: "verifying-the-code",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_verifying_the_code_heading",
+        bodyKey: "demo_narrative_deepdive_verifying_the_code_body",
+      },
+      {
+        slug: "what-the-network-sees",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_network_heading",
+        bodyKey: "demo_narrative_deepdive_network_body",
+      },
+      {
+        slug: "on-the-device",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_on_the_device_heading",
+        bodyKey: "demo_narrative_deepdive_on_the_device_body",
+      },
+      {
+        slug: "the-telephony-relay",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_telephony_relay_heading",
+        bodyKey: "demo_narrative_deepdive_telephony_relay_body",
+      },
+      {
+        slug: "the-permission-system",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_permission_system_heading",
+        bodyKey: "demo_narrative_deepdive_permission_system_body",
+      },
+      {
+        slug: "portal-channel-lifecycle",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_portal_channel_lifecycle_heading",
+        bodyKey: "demo_narrative_deepdive_portal_channel_lifecycle_body",
+      },
+      {
+        slug: "data-retention",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_data_retention_heading",
+        bodyKey: "demo_narrative_deepdive_data_retention_body",
       },
     ],
   },
@@ -2035,6 +2141,22 @@ export function resolvePhoneCommand(
         routeSlug: subSlug,
         highlight: null,
       };
+    // Deep-dive articles have no product route. The phone stays on
+    // its current screen while the handbook presents the article.
+    // The detail "deep-dive" is a synthetic marker that only
+    // sectionMatchesPhone("deep-dive") accepts, so the convergence
+    // contract holds without claiming a real phone screen.
+    case "deep-dive":
+      return {
+        feature: "other",
+        detail: "deep-dive",
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic: null,
+        pulseDesktopOnly: false,
+        routeSlug: null,
+        highlight: null,
+      };
     // Page-side excursion sections never become a location, so no
     // phone command can be asked of them; an inert command keeps the
     // switch exhaustive without giving them a screen.
@@ -2141,6 +2263,11 @@ export function sectionMatchesPhone(
         subSlug !== null &&
         slugForRoute(routeId) === subSlug
       );
+    // Deep-dive articles have no phone screen. The synthetic detail
+    // "deep-dive" from resolvePhoneCommand is what the convergence
+    // contract checks.
+    case "deep-dive":
+      return feature === "other" && detail === "deep-dive";
     // Excursion sections are never a location, so no phone state can
     // match them.
     case "search-results":
@@ -2201,7 +2328,7 @@ export function bridgeStateToLocation(
   }
 
   if (feature === "home") {
-    return { sectionId: "dashboard", subSlug: "getting-started" };
+    return { sectionId: "dashboard", subSlug: "shift" };
   }
 
   if (feature === "library") {

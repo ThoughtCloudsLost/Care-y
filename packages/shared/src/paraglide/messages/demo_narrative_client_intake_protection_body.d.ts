@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The intake form encrypts every value the visitor types before it leaves the browser, the server cannot read the answers at any point, and nobody outside the ..." |
+* | "The browser encrypts the visitor's answers and contact details before anything leaves the device. The server receives ciphertext and holds no key that can op..." |
 *
 * @param {Demo_Narrative_Client_Intake_Protection_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

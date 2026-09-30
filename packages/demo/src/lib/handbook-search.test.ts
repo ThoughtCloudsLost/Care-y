@@ -11,6 +11,12 @@ import { getSub } from "./scroll-sections.js";
 const EN = "en";
 const ES = "es";
 
+/** A seam label present in the EN corpus (case-fold body, line 2). */
+const FOLD_LABEL = "The fold store and drag handling.";
+
+/** A question-style seam label in the EN corpus (case-fold body, line 1). */
+const FOLD_QUESTION_LABEL = "Where does the fold live?";
+
 /** The corpus resolves through paraglide's GLOBAL locale; the locale
  *  argument is a cache key and reactivity signal. Tests that need ES
  *  text must switch the global. */
@@ -116,26 +122,53 @@ describe("searchEntries", () => {
 
   it("label filter narrows to entries carrying the label", () => {
     const all = searchEntries("", EN, {
-      labels: ["Encryption."],
+      labels: [FOLD_LABEL],
       limit: 100,
     });
     expect(all.length).toBeGreaterThan(0);
     for (const hit of all) {
-      expect(hit.labels).toContain("Encryption.");
+      expect(hit.labels).toContain(FOLD_LABEL);
     }
+  });
+
+  it("label filter by a question label returns the entry carrying it", () => {
+    const hits = searchEntries("", EN, {
+      labels: [FOLD_QUESTION_LABEL],
+      limit: 100,
+    });
+    expect(hits.map((h) => `${h.sectionId}/${h.subSlug}`)).toContain(
+      "ticket-detail/case-fold",
+    );
+    for (const hit of hits) {
+      expect(hit.labels).toContain(FOLD_QUESTION_LABEL);
+    }
+  });
+
+  it("question label text scores as a label match", () => {
+    // "live" appears in the case-fold entry once, inside its question
+    // label, and not in its heading or tags. A label match outweighs a
+    // single body-line match, so the score exceeds the body weight.
+    const hits = searchEntries("live", EN, { limit: 100 });
+    const fold = hits.find(
+      (h) => h.sectionId === "ticket-detail" && h.subSlug === "case-fold",
+    );
+    expect(fold).toBeDefined();
+    expect(fold!.labels).toContain(FOLD_QUESTION_LABEL);
+    expect(fold!.score).toBeGreaterThan(1);
   });
 
   it("empty query with labels returns entries in taxonomy order", () => {
     const hits = searchEntries("", EN, {
-      labels: ["Encryption."],
+      labels: [FOLD_LABEL],
       limit: 100,
     });
     // Zero scores throughout; order is the corpus walk order, which is
     // stable across calls.
     const again = searchEntries("", EN, {
-      labels: ["Encryption."],
+      labels: [FOLD_LABEL],
       limit: 100,
     });
+    expect(hits.length).toBeGreaterThan(0);
     expect(hits.map((h) => h.subSlug)).toEqual(again.map((h) => h.subSlug));
     expect(hits.every((h) => h.score === 0)).toBe(true);
   });
@@ -147,5 +180,34 @@ describe("searchEntries", () => {
     expect(es.length).toBeGreaterThan(0);
     // The EN cache was not clobbered by the ES build.
     expect(searchEntries("encryption", EN).length).toBe(en.length);
+  });
+
+  it("every hit carries a tags array", () => {
+    const hits = searchEntries("encryption", EN);
+    for (const hit of hits) {
+      expect(Array.isArray(hit.tags)).toBe(true);
+    }
+  });
+
+  it("empty query with tags filter returns matching entries", () => {
+    // No entries carry tags yet (no tags in the corpus source), so
+    // this should return empty. The filter path is exercised: if tags
+    // were present, only entries carrying at least one would survive.
+    const hits = searchEntries("", EN, {
+      tags: ["nonexistent-tag"],
+      limit: 100,
+    });
+    expect(hits).toEqual([]);
+  });
+
+  it("mixed label+tag filter narrows to entries carrying both", () => {
+    // With tags: ["nonexistent-tag"], no entry can pass, even if it
+    // carries the label.
+    const hits = searchEntries("", EN, {
+      labels: ["Encryption."],
+      tags: ["nonexistent-tag"],
+      limit: 100,
+    });
+    expect(hits).toEqual([]);
   });
 });

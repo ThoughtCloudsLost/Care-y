@@ -149,3 +149,15 @@ export class OrgKeyNotLoadedError extends ClientError {
     this.name = "OrgKeyNotLoadedError";
   }
 }
+
+/**
+ * The seed replay stopped before finishing. Carries the failure that
+ * stopped it as `cause` when one was thrown underneath.
+ */
+export class SeedReplayError extends ClientError {
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = "SeedReplayError";
+    if (cause !== undefined) this.cause = cause;
+  }
+}

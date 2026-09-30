@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Voicemails from unknown callers land in the quarantine and wait for review. **Encryption.** Quarantine audio is sealed to the organization's public key befor..." |
+* | "A voicemail the system cannot attach to a ticket is sealed with the organization key and held in quarantine for manual routing. The system does not store the..." |
 *
 * @param {Demo_Narrative_Admin_Quarantine_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

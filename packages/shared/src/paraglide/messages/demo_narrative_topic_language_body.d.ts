@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The interface language is changeable before sign in and at any time after, and the change is immediate because both languages ship inside the app with nothin..." |
+* | "The user can switch the interface language before signing in or at any time afterward. English and Spanish are compiled into the app, and a switch takes effe..." |
 *
 * @param {Demo_Narrative_Topic_Language_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

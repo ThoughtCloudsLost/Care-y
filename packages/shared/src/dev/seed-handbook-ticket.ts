@@ -1,9 +1,8 @@
 /**
  * The handbook story ticket, "Help with housing", as plain data.
  *
- * The server's direct-insert seeder (also used by the demo) writes it row
- * by row, and the client's dev seeder replays it through the production
- * mutations, so both seeds carry the same thread. Authors are symbolic:
+ * The seed replay writes it through the production mutations for the dev
+ * Settings seed, e2e setup and the demo snapshot. Authors are symbolic:
  * "me" is the seeding volunteer, "other" is the volunteer who worked the
  * first shift before handing the ticket over.
  *
@@ -104,13 +103,8 @@ export const SEED_HANDBOOK_TICKET: SeedHandbookTicket = {
     // shift's volunteer (another roster user when available) handles
     // this stretch; the seeded volunteer takes over at the handoff
     // below, which is why the reassignment events name two people.
-    {
-      content: "Volunteer assigned",
-      source: "system",
-      type: "volunteer_assigned",
-      eventParams: { user: "other" },
-      agoMinutes: 4310,
-    },
+    // The client's opening messages come first; the volunteer picks the
+    // ticket up after them and replies.
     {
       content: "I need help finding a place to stay",
       source: "client",
@@ -120,6 +114,13 @@ export const SEED_HANDBOOK_TICKET: SeedHandbookTicket = {
       content: "My sister said I can only stay with her through the weekend",
       source: "client",
       agoMinutes: 4297,
+    },
+    {
+      content: "Volunteer assigned",
+      source: "system",
+      type: "volunteer_assigned",
+      eventParams: { user: "other" },
+      agoMinutes: 4290,
     },
     {
       content: "I can look into shelters in your area",

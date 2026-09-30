@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The general info section holds the organization name, country code, default interface language, and portal safe exit URL, and all four are stored as plaintex..." |
+* | "General information holds the organization's name, its country code, its default language and the address the client-facing quick exit navigates to, and all ..." |
 *
 * @param {Demo_Narrative_Admin_General_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

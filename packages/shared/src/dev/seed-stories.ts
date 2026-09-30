@@ -1,11 +1,12 @@
 /**
- * Deterministic ticket stories for the dev and demo seeders.
+ * Deterministic ticket stories for the seed replay.
  *
- * The server's direct-insert seeder and the client's production-endpoint
- * seeder both build their generated tickets from these stories, so the two
- * produce the same shape of work. Tickets spread over the last 30 days, each
- * one opens with an inbound event that could have created it, and the rest
- * of the thread is worked, held or closed the way a real line handles it.
+ * The replay writes these stories through the product's own endpoints for
+ * the dev Settings seed, e2e setup and the demo snapshot, so every seeded
+ * environment carries the same shape of work. Tickets spread over the last
+ * 30 days, each one opens with an inbound event that could have created
+ * it, and the rest of the thread is worked, held or closed the way a real
+ * line handles it.
  *
  * Dev-only. Exposed through the "./dev/seed-stories.js" subpath and never
  * from the package index, so production bundles do not pull it in.
@@ -14,7 +15,18 @@
 import { z } from "zod";
 import { ticketIdSchema, userIdSchema } from "../ids.js";
 import { base64String } from "../schemas/validators.js";
-import { callStatusSchema, type TicketPriority } from "../schemas/tickets.js";
+import {
+  callStatusSchema,
+  type FollowUpSource,
+  type FollowUpType,
+  type TicketPriority,
+} from "../schemas/tickets.js";
+
+/**
+ * Generated stories the dev Settings seed and e2e replay. e2e derives the
+ * titles it asserts on from buildSeedStories at this count.
+ */
+export const DEV_SEED_STORY_COUNT = 120;
 
 export type SeedQueue = "Intake" | "Crisis" | "Housing";
 /**
@@ -82,8 +94,8 @@ export interface SeedStory {
 }
 
 export interface SeedFollowUpShape {
-  readonly type: string;
-  readonly source: "client" | "volunteer" | "system";
+  readonly type: FollowUpType;
+  readonly source: FollowUpSource;
 }
 
 /** Input for the dev-only dev.applySeedTimeline procedure. */

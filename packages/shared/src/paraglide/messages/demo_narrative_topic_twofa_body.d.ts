@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A password alone is not enough to access case data. Every sign-in also requires a second factor to confirm identity through a separate channel. Five methods ..." |
+* | "For any account that has a second factor enrolled, the browser derives encryption keys only after that factor is verified. An account signing in for the firs..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

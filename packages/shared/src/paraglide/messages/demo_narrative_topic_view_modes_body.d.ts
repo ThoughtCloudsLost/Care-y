@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The ticket list supports five layout options. - **Table** presents tickets in a sortable data table with columns for each field - **Rows** show compact singl..." |
+* | "The ticket list's \"View as\" switcher offers Table, Compact rows, Cards, Grid, and Kanban board. The overview page keeps its own view-mode preference, covered..." |
 *
 * @param {Demo_Narrative_Topic_View_Modes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

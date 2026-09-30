@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The same person can end up as two client records, usually after calling from a new number, and the merge tool resolves this from the client detail sheet. **W..." |
+* | "Merging two client records sets one as the survivor and writes a pointer from the other into it. Neither record is rewritten. The merged-away record keeps it..." |
 *
 * @param {Demo_Narrative_Admin_Client_Merge_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

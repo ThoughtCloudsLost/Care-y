@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "These entries configure the external channels the organization uses to communicate with clients, and the channel policy entry determines which of those chann..." |
+* | "The communications section covers the channels an organization uses to reach clients and the rules that govern them. Provider credentials are encrypted with ..." |
 *
 * @param {Demo_Section_Admin_Comms_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

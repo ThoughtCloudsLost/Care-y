@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The user roster, queue configuration, and client list. User identifiers and queue names are encrypted with the organization key before storage. Client identi..." |
+* | "The group gives access to the user roster, queue management and the client list. The roster requires Manage users, queue management requires Manage queues, a..." |
 *
 * @param {Demo_Narrative_Admin_Hub_People_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

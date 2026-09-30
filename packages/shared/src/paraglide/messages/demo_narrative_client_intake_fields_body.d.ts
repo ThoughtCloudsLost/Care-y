@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When the organization has published a custom intake form, the intake page shows its configured fields instead of the built-in default. **Conditional fields.*..." |
+* | "Each organization can replace the built-in form with one carrying its own fields. The data field types are text, text area, dropdown, checkboxes, checkbox, d..." |
 *
 * @param {Demo_Narrative_Client_Intake_Fields_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

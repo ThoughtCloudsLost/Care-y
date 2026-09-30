@@ -40,7 +40,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     env:
@@ -81,3 +81,14 @@ jobs:
 
       - name: Verify built demo assets
         run: node packages/demo/scripts/verify-dist.mjs
+
+      # Nothing above runs the demo in a browser: the unit and smoke
+      # suites boot the engine under Node, and verify-dist only reads the
+      # built files. This loads the handbook and phone pages under both
+      # the dev server and the built dist and fails on any page error or
+      # an engine that never reports ready.
+      - name: Install Playwright Chromium
+        run: pnpm --filter @care-y/demo exec playwright install --with-deps chromium
+
+      - name: Boot demo in a browser
+        run: pnpm --filter @care-y/demo run test:boot

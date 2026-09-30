@@ -14,11 +14,11 @@ import { queryDb } from "./db-probe";
 /**
  * One-time share link E2E roundtrip.
  *
- * URL capture strategy: relay request interception. All seeded clients
- * share a phone record, so the share-link sheet opens in SMS mode. The
- * volunteer browser POSTs to /relay/sms with a JSON body containing the
- * full share URL (including the fragment key). We intercept that request
- * to capture the URL. The server uses a mock telephony provider in the
+ * URL capture strategy: relay request interception. Every client the seed
+ * replay creates has a phone number, so the share-link sheet opens in SMS
+ * mode. The volunteer browser POSTs to /relay/sms with a JSON body
+ * containing the full share URL (including the fragment key). We intercept
+ * that request to capture the URL. The server uses a mock telephony provider in the
  * e2e environment, so no real SMS is sent.
  *
  * Flow:

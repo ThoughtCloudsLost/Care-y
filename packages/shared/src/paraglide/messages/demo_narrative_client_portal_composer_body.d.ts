@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The portal reply composer encrypts each message in the browser before sending the ciphertext to the server, with a limit of 5000 characters and a counter tha..." |
+* | "The client encrypts each reply in the browser before sending it. The server receives and stores ciphertext it cannot open. [[#portal #encryption]] **Who can ..." |
 *
 * @param {Demo_Narrative_Client_Portal_Composer_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

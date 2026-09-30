@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Submitted intake forms appear as cards in the response viewer. A field whose definition has since been removed from the form shows a marker and its raw key r..." |
+* | "The viewer lists submissions for one custom form, newest first, twenty-five at a time. Each row arrives encrypted and decrypts in the browser. Viewing requir..." |
 *
 * @param {Demo_Narrative_Admin_Form_Responses_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

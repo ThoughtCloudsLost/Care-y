@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A client account gives a returning person durable access to their conversation thread without needing a new link each time. The account uses a username and p..." |
+* | "A client account lets the client return to the same conversation with a username and password instead of a link. The password runs through the same key deriv..." |
 *
 * @param {Demo_Section_Client_Account_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

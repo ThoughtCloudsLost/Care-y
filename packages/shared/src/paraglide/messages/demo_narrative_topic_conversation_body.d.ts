@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The main body of the ticket detail is a conversation thread showing messages between the volunteer and the client. **Decryption.** Each message is individual..." |
+* | "The unified case thread gathers everything said on a ticket into one sequence. It holds what the client sent, what the organization sent back, the notes writ..." |
 *
 * @param {Demo_Narrative_Topic_Conversation_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

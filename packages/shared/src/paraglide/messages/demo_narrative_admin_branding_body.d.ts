@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The organization's logo, two brand colors, and the text shown to the visitor on the portal are stored as plaintext on the server so pages visited before sign..." |
+* | "Branding holds the organization's logo, its two brand colors, the welcome text a visitor reads on the intake form, and the support label a client sees on por..." |
 *
 * @param {Demo_Narrative_Admin_Branding_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,5 +1,6 @@
 // Verifies the built demo dist for leaked env variable names, dev-gated
-// procedure keys, dev router wiring, and engine isolation. Run after
+// procedure keys, dev router wiring, engine isolation, and the shipped
+// seed snapshot. Run after
 // "pnpm --filter @care-y/demo run build" completes.
 //
 // Exit 0: all checks pass.
@@ -130,20 +131,26 @@ if (!failures.some((f) => f.startsWith("[A]"))) {
 
 // -------------------------------------------------------------------------
 // Check B: dev-gated procedure keys must be statically absent.
-// The server's development-only seed procedures (devSeedTickets, devSeedKb,
-// devSeedOrgKey) are guarded by NODE_ENV === "development". The demo env
-// module inlines NODE_ENV as "production", so the bundler should dead-code
-// eliminate them. If those procedure keys appear as object keys in the
-// bundle, it means the dead-code elimination failed and the dev router is
-// still wired in.
+// The server's development-only procedures (auth.devBypass2fa,
+// auth.devReEncryptDisplayName, keys.devSeedOrgKey and
+// telephonyAdmin.devSeedTelephony) are guarded by
+// NODE_ENV === "development". The demo env module inlines NODE_ENV as
+// "production", so the bundler should dead-code eliminate them. If those
+// procedure keys appear as object keys in the bundle, it means the
+// dead-code elimination failed and the dev router is still wired in.
 // -------------------------------------------------------------------------
 
-const devProcedures = ["devSeedTickets", "devSeedKb", "devSeedOrgKey"];
+const devProcedures = [
+  "devBypass2fa",
+  "devReEncryptDisplayName",
+  "devSeedOrgKey",
+  "devSeedTelephony",
+];
 
-// Match object-key forms like {"devSeedTickets": or ,devSeedTickets: which
+// Match object-key forms like {"devSeedOrgKey": or ,devSeedOrgKey: which
 // indicate the key is registered in a router or procedure map. A health
-// proof may contain the quoted string "devSeedTickets" followed by " in"
-// (a membership check); the colon requirement avoids that false positive.
+// proof may contain a quoted procedure name followed by " in" (a
+// membership check); the colon requirement avoids that false positive.
 const devKeyPatterns = devProcedures.map(
   (name) => new RegExp(`[,{]"?${name}"?\\s*:`, "g"),
 );
@@ -264,6 +271,62 @@ if (existsSync(phoneHtml)) {
   // A dist without phone.html means the build shape changed underneath
   // this script; fail loud rather than silently skipping the check.
   fail("D", "phone.html not found in dist.");
+}
+
+// -------------------------------------------------------------------------
+// Check E: the seed snapshot ships with the build.
+// The demo boots from three prebuilt files that seedSnapshotPlugin()
+// (vite.ts) emits as hashed assets. Without them every visit fails at
+// boot, so each must be present exactly once and non-empty, and the
+// manifest must read as a snapshot manifest.
+// -------------------------------------------------------------------------
+
+const assetsDir = join(DIST, "assets");
+const assetNames = existsSync(assetsDir) ? readdirSync(assetsDir) : [];
+const snapshotAssets = [
+  { part: "rows", pattern: /^seed-snapshot-rows-[\w-]+\.bin$/ },
+  { part: "blobs", pattern: /^seed-snapshot-blobs-[\w-]+\.bin$/ },
+  { part: "manifest", pattern: /^seed-snapshot-manifest-[\w-]+\.json$/ },
+];
+
+for (const { part, pattern } of snapshotAssets) {
+  const matches = assetNames.filter((name) => pattern.test(name));
+  if (matches.length !== 1) {
+    fail(
+      "E",
+      `Expected one seed snapshot ${part} file in dist/assets, found ${matches.length}.`,
+    );
+    continue;
+  }
+  const file = join(assetsDir, matches[0]);
+  const bytes = readFileSync(file);
+  if (bytes.byteLength === 0) {
+    fail("E", `Seed snapshot ${part} file ${matches[0]} is empty.`);
+    continue;
+  }
+  if (part === "manifest") {
+    let manifest;
+    try {
+      manifest = JSON.parse(bytes.toString("utf-8"));
+    } catch {
+      fail("E", `Seed snapshot manifest ${matches[0]} is not JSON.`);
+      continue;
+    }
+    if (
+      typeof manifest?.formatVersion !== "number" ||
+      typeof manifest?.buildNow !== "number" ||
+      !Array.isArray(manifest?.ticketIds)
+    ) {
+      fail(
+        "E",
+        `Seed snapshot manifest ${matches[0]} lacks formatVersion, buildNow or ticketIds.`,
+      );
+    }
+  }
+}
+
+if (!failures.some((f) => f.startsWith("[E]"))) {
+  passed.push("E: the seed snapshot's three files ship in dist/assets");
 }
 
 // -------------------------------------------------------------------------

@@ -237,12 +237,8 @@ describe("crypto-context (lazy real objects)", () => {
 
   describe("preview loader", () => {
     it("throws if trpc is not registered", () => {
-      // registerTrpcForPreview is called by trpc stub at init time.
-      // Since we mocked the modules, the trpc stub's init may not
-      // have run. The test verifies the guard exists.
-      // (If registerTrpcForPreview was already called by the trpc
-      // stub import, this test passes vacuously.)
-      expect(typeof registerTrpcForPreview).toBe("function");
+      // Nothing registers on import; each entry registers at boot.
+      expect(() => getPreviewLoader()).toThrow(/trpc not registered/);
     });
 
     it("getPreviewLoader works after registerTrpcForPreview", () => {
@@ -261,22 +257,11 @@ describe("crypto-context (lazy real objects)", () => {
   });
 
   describe("permissions seeding", () => {
-    it("defaults to a manager-level permission set", () => {
-      const getPerms = getCurrentPermissions();
-      const perms = getPerms();
-      expect(perms.has(Permission.VIEW_CASES)).toBe(true);
-      expect(perms.has(Permission.MANAGE_USERS)).toBe(true);
-      expect(perms.has(Permission.MANAGE_QUEUES)).toBe(true);
-    });
-
-    it("includes admin-level permissions by default (demo seeds as admin)", () => {
-      const getPerms = getCurrentPermissions();
-      const perms = getPerms();
-      expect(perms.has(Permission.MANAGE_ROLES)).toBe(true);
-      expect(perms.has(Permission.MANAGE_ORG_IDENTITY)).toBe(true);
-      expect(perms.has(Permission.MANAGE_KEYS)).toBe(true);
-      expect(perms.has(Permission.VIEW_CLIENTS)).toBe(true);
-      expect(perms.has(Permission.DELETE_CLIENTS)).toBe(true);
+    it("holds no permissions before the engine boots", () => {
+      // The pre-boot placeholder is empty: PhoneApp applies the seeded
+      // admin's server set once the engine is up, and nothing gated
+      // renders before that.
+      expect(defaultPermissions.size).toBe(0);
     });
 
     it("can be overridden via demoSeed", () => {
@@ -288,12 +273,13 @@ describe("crypto-context (lazy real objects)", () => {
       expect(perms.has(Permission.MANAGE_USERS)).toBe(false);
     });
 
-    it("resets to defaults via resetAuthDefaults", () => {
-      demoSeed({ permissions: new Set<Permission>() });
+    it("resets to the placeholder via resetAuthDefaults", () => {
+      demoSeed({ permissions: new Set<Permission>([Permission.MANAGE_USERS]) });
       resetAuthDefaults();
       const getPerms = getCurrentPermissions();
       const perms = getPerms();
-      expect(perms.has(Permission.MANAGE_USERS)).toBe(true);
+      expect(perms.has(Permission.MANAGE_USERS)).toBe(false);
+      expect(perms.size).toBe(0);
     });
   });
 

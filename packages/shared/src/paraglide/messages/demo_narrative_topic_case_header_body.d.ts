@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The header at the top of the ticket shows the title, current status, priority, assigned volunteer, and queue. **Encryption by field.** Title and description ..." |
+* | "The case header reports the ticket's title, the priority, whether the ticket is closed, the description, the queue, who holds the ticket and how long ago it ..." |
 *
 * @param {Demo_Narrative_Topic_Case_Header_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

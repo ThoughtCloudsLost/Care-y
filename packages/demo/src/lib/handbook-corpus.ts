@@ -3,8 +3,9 @@
  * across SECTIONS and ENTRY_SECTION.
  *
  * The corpus serves aggregation pages, which collect labelled seam
- * stretches (bold-prefixed paragraphs like "**Encryption.**") from
- * across the handbook into focused reference views.
+ * stretches (bold-prefixed paragraphs like "**Encryption.**" or
+ * "**Where does the fold live?**") from across the handbook into
+ * focused reference views.
  *
  * Pure functions only. No DOM, no Svelte runes.
  */
@@ -14,6 +15,7 @@ import { resolveStoryMessage } from "./story-messages.js";
 import {
   hasFlowMarkup,
   parseFlowMarkup,
+  extractTags,
   unitText,
   type MarkupUnit,
 } from "./flow-markup.js";
@@ -30,6 +32,8 @@ export interface CorpusEntry {
   readonly label: string | null;
   readonly plainText: string;
   readonly units: readonly MarkupUnit[];
+  /** Invisible search tags extracted from `[[#tag]]` blocks. */
+  readonly tags: readonly string[];
   /** True when this entry comes from ENTRY_SECTION (shares "login" id). */
   readonly isEntry: boolean;
 }
@@ -38,16 +42,24 @@ export interface CorpusEntry {
 // Label extraction
 //
 // A label is the text of the first run of a unit when that run is bold
-// and its text ends with ".". The plainText is the unit text without
-// the label run's contribution.
+// and its text ends with "." or "?". Statement labels ("**Encryption.**")
+// and question labels ("**Where does the fold live?**") are the same
+// kind of seam. The label keeps its terminator. The plainText is the
+// unit text without the label run's contribution.
 // -----------------------------------------------------------------------
+
+const LABEL_TERMINATORS: readonly string[] = [".", "?"];
+
+function isLabelText(text: string): boolean {
+  return LABEL_TERMINATORS.some((t) => text.endsWith(t));
+}
 
 function extractLabel(unit: MarkupUnit): {
   label: string | null;
   plainText: string;
 } {
   const firstRun = unit.runs[0];
-  if (firstRun !== undefined && firstRun.bold && firstRun.text.endsWith(".")) {
+  if (firstRun !== undefined && firstRun.bold && isLabelText(firstRun.text)) {
     const rest = unit.runs
       .slice(1)
       .map((r) => r.text)
@@ -110,8 +122,12 @@ function addKeyEntries(
   resolved: string,
   isEntry: boolean,
 ): void {
-  if (hasFlowMarkup(resolved)) {
-    const units = parseFlowMarkup(resolved);
+  // Strip search tags before parsing markup. Tags accumulate across
+  // all units of a key into one array per CorpusEntry.
+  const { cleaned, tags: keyTags } = extractTags(resolved);
+
+  if (hasFlowMarkup(cleaned)) {
+    const units = parseFlowMarkup(cleaned);
     for (let i = 0; i < units.length; i++) {
       const unit = units.at(i);
       if (unit === undefined) continue;
@@ -124,6 +140,7 @@ function addKeyEntries(
         label,
         plainText,
         units: [unit],
+        tags: keyTags,
         isEntry,
       });
     }
@@ -132,7 +149,7 @@ function addKeyEntries(
     const singleUnit: MarkupUnit = {
       kind: "paragraph",
       marker: null,
-      runs: [{ text: resolved, bold: false }],
+      runs: [{ text: cleaned, bold: false }],
     };
     out.push({
       sectionId,
@@ -140,8 +157,9 @@ function addKeyEntries(
       key,
       lineIdx: 0,
       label: null,
-      plainText: resolved,
+      plainText: cleaned,
       units: [singleUnit],
+      tags: keyTags,
       isEntry,
     });
   }

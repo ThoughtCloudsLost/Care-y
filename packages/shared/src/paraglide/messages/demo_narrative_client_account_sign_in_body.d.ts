@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The account page opens to a sign in form when there is no active session. **How it works.** The password never leaves the device. Signing in derives encrypti..." |
+* | "The sign-in form asks for a username and a password. It appears on a first visit, after a reload, and after the idle timeout or a closed tab clears the keys,..." |
 *
 * @param {Demo_Narrative_Client_Account_Sign_In_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

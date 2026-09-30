@@ -30,6 +30,7 @@ import {
   type Salt,
   type RistrettoPoint,
   type EciesOutput,
+  type Scalar,
 } from "@care-y/crypto";
 
 import type {
@@ -80,28 +81,33 @@ export interface DemoKeyDerivationResult {
 }
 
 /**
- * Run the exact client key derivation pipeline with a local
- * OPRF evaluate step (scalarmult by k) standing in for the server
- * hop. Returns volPublic only; volPrivate is NOT exported or stored,
- * matching the crypto v2 rule that no client private keys exist
- * server-side.
+ * Run the exact client key derivation pipeline with a local OPRF
+ * evaluate step (scalarmult by k) standing in for the server hop, and
+ * hand the resulting volPrivate to `use`. volPrivate is zeroed as soon as
+ * `use` returns or throws, so `use` must not keep a reference to it.
+ *
+ * Only the seeders call this, on the demo's own published credentials.
+ * The engine never stores volPrivate, matching the crypto v2 rule that
+ * no client private keys exist server-side.
  *
  * The evaluate step must use the same per-tag share the evaluate service
  * uses (ADR-091), not the master scalar. Login goes through the service
  * under volunteerTag(userId); if this derived under k directly, the
- * seeded volPublic would not be the key the visitor's login produces.
+ * seeded keys would not be the keys the visitor's login produces.
  *
  * @param password  - The demo admin password (plaintext string)
  * @param salt      - 16-byte Argon2id salt
  * @param oprfScalar - The demo OPRF master scalar k
  * @param userId - The volunteer whose tag scopes the evaluation
+ * @param use - Receives volPrivate; its return value is returned
  */
-export function deriveDemoVolPublic(
+export function withDemoVolPrivate<T>(
   password: string,
   salt: Uint8Array,
   oprfScalar: Uint8Array,
   userId: UserId,
-): DemoKeyDerivationResult {
+  use: (volPrivate: Scalar) => T,
+): T {
   const encoder = new TextEncoder();
   const passwordBytes = encoder.encode(password);
 
@@ -126,19 +132,41 @@ export function deriveDemoVolPublic(
     stretched,
   );
 
-  // 5. Derive master -> vol keys
+  // 5. Derive master -> vol private key
   const masterKey = deriveMasterKey(oprfOutput);
   const volPrivate = deriveVolunteerPrivateKey(masterKey);
-  const volPublic = deriveVolunteerPublicKey(volPrivate);
 
   // Zero intermediate material
   _sodium.memzero(stretched);
   _sodium.memzero(evaluated);
   _sodium.memzero(oprfOutput);
   _sodium.memzero(masterKey);
-  _sodium.memzero(volPrivate);
   _sodium.memzero(passwordBytes);
 
+  try {
+    return use(volPrivate);
+  } finally {
+    _sodium.memzero(volPrivate);
+  }
+}
+
+/**
+ * Predict the volPublic the visitor's login will derive for the demo
+ * admin. Returns volPublic only; volPrivate is zeroed before return.
+ */
+export function deriveDemoVolPublic(
+  password: string,
+  salt: Uint8Array,
+  oprfScalar: Uint8Array,
+  userId: UserId,
+): DemoKeyDerivationResult {
+  const volPublic = withDemoVolPrivate(
+    password,
+    salt,
+    oprfScalar,
+    userId,
+    (volPrivate) => deriveVolunteerPublicKey(volPrivate),
+  );
   return { volPublic };
 }
 

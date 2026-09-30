@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When a response was encrypted under a key the user does not hold, the response row shows the submission time but not the field values, so the user can see th..." |
+* | "A submission the user cannot decrypt still appears in the list with its arrival time and no answers. A second state reports a submission whose key material i..." |
 *
 * @param {Demo_Narrative_Admin_Response_Key_Not_Held_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

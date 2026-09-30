@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Changing a password runs the full key derivation pipeline. The browser processes the password through Argon2id, performs the OPRF exchange with the threshold..." |
+* | "A password change rebuilds the encryption keys from the new password and re-wraps every sealed copy those keys protect. The browser derives both the old and ..." |
 *
 * @param {Demo_Narrative_Settings_Password_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

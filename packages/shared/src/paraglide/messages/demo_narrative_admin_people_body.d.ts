@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The roster shows every user in the organization with their role and assigned queues. **Role management.** Each user holds one of three roles. The first two r..." |
+* | "The roster shows every account belonging to the organization, whether active or deactivated. Each account shows its role, key status and queue memberships. [..." |
 *
 * @param {Demo_Narrative_Admin_People_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The shift card shows the current or upcoming shift for the signed-in volunteer. **During a shift.** The card displays start and end times, a countdown, and t..." |
+* | "The shift summary shows the active shift window, time remaining, and how many open tickets are assigned to the user. [[#schedule #privacy]] **Open-ticket cou..." |
 *
 * @param {Demo_Narrative_Dashboard_Shift_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

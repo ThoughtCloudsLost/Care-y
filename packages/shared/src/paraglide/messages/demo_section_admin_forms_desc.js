@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_Forms_DescInputs */
 
 const en_demo_section_admin_forms_desc = /** @type {(inputs: Demo_Section_Admin_Forms_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The form builder is where intake forms are authored, localized, previewed, and configured. Form definitions are encrypted under a key anyone can derive from the organization's public key, while responses are encrypted to private keys and gated by a separate permission.`)
+	return /** @type {LocalizedString} */ (`The form builder is where the user authors, translates, previews and configures intake forms. Field labels, descriptions, messages and banner images are all readable by anyone who opens the form's public address. Answers are encrypted per case to individual accounts and cannot be read by the server. [How encryption works](#deep-dive/how-encryption-works) covers the two key trees, and [The permission system](#deep-dive/the-permission-system) covers the separation between editing forms and reading answers.`)
 };
 
 const es_demo_section_admin_forms_desc = /** @type {(inputs: Demo_Section_Admin_Forms_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El constructor de formularios es donde se crean, traducen, previsualizan y configuran los formularios de admisión. Las definiciones de formularios se cifran con una clave que cualquier persona puede derivar de la clave pública de la organización, mientras que las respuestas se cifran con claves privadas y están controladas por un permiso aparte.`)
+	return /** @type {LocalizedString} */ (`El constructor de formularios es donde la persona usuaria crea, traduce, previsualiza y configura los formularios de admisión. Las etiquetas de campo, las descripciones, los mensajes y las imágenes de portada son legibles para cualquier persona que abra la dirección pública del formulario. Las respuestas se cifran por caso para cuentas individuales y el servidor no puede leerlas. [Cómo funciona el cifrado](#deep-dive/how-encryption-works) trata los dos árboles de claves, y [El sistema de permisos](#deep-dive/the-permission-system) trata la separación entre editar formularios y leer respuestas.`)
 };
 
 const en_xa2_demo_section_admin_forms_desc = /** @type {(inputs: Demo_Section_Admin_Forms_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Thè fòrm bùìldèr ìs whèrè ìntàkè fòrms àrè àùthòrèd, lòcàlìzèd, prèvìèwèd, ànd cònfìgùrèd. Fòrm dèfìnìtìòns àrè èncryptèd ùndèr à kèy ànyònè càn dèrìvè fròm thè òrgànìzàtìòn's pùblìc kèy, whìlè rèspònsès àrè èncryptèd tò prìvàtè kèys ànd gàtèd by à sèpàràtè pèrmìssìòn. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Thè fòrm bùìldèr ìs whèrè thè ùsèr àùthòrs, trànslàtès, prèvìèws ànd cònfìgùrès ìntàkè fòrms. Fìèld làbèls, dèscrìptìòns, mèssàgès ànd bànnèr ìmàgès àrè àll rèàdàblè by ànyònè whò òpèns thè fòrm's pùblìc àddrèss. Ànswèrs àrè èncryptèd pèr càsè tò ìndìvìdùàl àccòùnts ànd cànnòt bè rèàd by thè sèrvèr. [Hòw èncryptìòn wòrks](#dèèp-dìvè/hòw-èncryptìòn-wòrks) còvèrs thè twò kèy trèès, ànd [Thè pèrmìssìòn systèm](#dèèp-dìvè/thè-pèrmìssìòn-systèm) còvèrs thè sèpàràtìòn bètwèèn èdìtìng fòrms ànd rèàdìng ànswèrs. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The form builder is where intake forms are authored, localized, previewed, and configured. Form definitions are encrypted under a key anyone can derive from ..." |
+* | "The form builder is where the user authors, translates, previews and configures intake forms. Field labels, descriptions, messages and banner images are all ..." |
 *
 * @param {Demo_Section_Admin_Forms_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

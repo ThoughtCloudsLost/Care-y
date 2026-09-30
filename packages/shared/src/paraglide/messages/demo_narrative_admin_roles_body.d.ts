@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The role reference pages summarize what users in each role can see and do, and the security status link on each page is in development. **Permissions.** View..." |
+* | "Each role has a reference page that lists the capabilities a manager or a volunteer can expect, in fixed wording that the organization's permission changes d..." |
 *
 * @param {Demo_Narrative_Admin_Roles_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When a secure link was created with a passphrase, the portal page shows a passphrase form before the thread, and the visitor enters the five word passphrase ..." |
+* | "When a secure link carries a passphrase, the client enters it before any message is decrypted. A passphrase set up with the secure link is generated from a w..." |
 *
 * @param {Demo_Narrative_Client_Portal_Passphrase_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

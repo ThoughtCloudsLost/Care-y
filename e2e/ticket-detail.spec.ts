@@ -358,10 +358,14 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     // Click "Preset replies" from the compose actions popover.
     await clickComposeAction(dialog, /preset replies/i);
 
-    // The preset sheet opens. Without seeded presets it shows the empty state.
-    await expect(page.getByText(/nothing here yet/i)).toBeVisible({
-      timeout: 5_000,
-    });
+    // The preset sheet opens with the seed replay's preset replies
+    // ("Acknowledgment" is the first of them, see PRESET_REPLIES in
+    // packages/client/src/lib/dev/seed-replay.ts).
+    await expect(page.getByText("Acknowledgment", { exact: true })).toBeVisible(
+      {
+        timeout: CRYPTO_TIMEOUT,
+      },
+    );
 
     // Dismiss the preset sheet and then the compose popover (two layers).
     await page.keyboard.press("Escape");
@@ -665,10 +669,11 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
   // ── 17. Navigate to ticket with media ───────────────────────────
 
-  test("voicemail player renders in Safety planning session ticket", async () => {
-    // Open a ticket with voicemail. In desktop split-view the ticket list
-    // is already visible, so openTicketByTitle clicks the card directly.
-    await openTicketByTitle(page, "Safety planning session");
+  test("voicemail player renders in Help with housing ticket", async () => {
+    // The handbook story ticket carries a client voicemail. In desktop
+    // split-view the ticket list is already visible, so openTicketByTitle
+    // clicks the card directly.
+    await openTicketByTitle(page, "Help with housing");
 
     // Wait for voicemail player to appear (it eagerly decrypts).
     // The player has a play button with aria-label.

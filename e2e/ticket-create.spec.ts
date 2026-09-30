@@ -1,13 +1,14 @@
 /**
  * Layer 3: Ticket creation through the production UI.
  *
- * Tests the full create ticket flow: open form, select client, fill fields,
- * submit (triggers CryptoBridge encryption in the Web Worker), and verify
- * the ticket appears in the list with a decrypted title.
+ * Tests the full create ticket flow. The form opens, a new caller's phone
+ * number creates the client, the fields are filled, submit triggers
+ * CryptoBridge encryption in the Web Worker, and the ticket appears in the
+ * list with a decrypted title.
  *
- * These tests exercise the same code paths a real user would use.
- * The seed-data setup project provides structural data (clients, queues)
- * but does NOT create tickets through the UI.
+ * These tests exercise the same code paths a real user would use. The
+ * seed-data setup replays the seed stories through the product's own
+ * endpoints before these tests run.
  */
 
 import { test, expect } from "./coverage-fixture";

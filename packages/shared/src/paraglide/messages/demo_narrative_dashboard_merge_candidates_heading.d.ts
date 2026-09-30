@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Merge candidates" |
+* | "Possible duplicates" |
 *
 * @param {Demo_Narrative_Dashboard_Merge_Candidates_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

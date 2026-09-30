@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The plus button in the navigation bar opens a creation menu. Options depend on the current role and permissions. All volunteers can create a new ticket by de..." |
+* | "The navigation bar's create button opens a menu of options gated by the signed-in account's permissions. The button does not appear when the account holds no..." |
 *
 * @param {Demo_Narrative_Dashboard_Create_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

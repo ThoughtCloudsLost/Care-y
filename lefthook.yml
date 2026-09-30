@@ -18,11 +18,16 @@ pre-commit:
       # them in parallel makes eslint see half-written types and fail on
       # unresolvable-type errors in arbitrary files.
       glob: "*.{ts,js,mjs,svelte,json}"
+      # set -e makes a typecheck failure fail the step; without it the step
+      # took the lint block's exit status. The two else-branch commands sit on
+      # separate lines because set -e ignores a failure on the left of &&.
       run: |
+        set -e
         if git diff --cached --name-only | grep -q 'messages/.*\.json$'; then
           pnpm run typecheck
         else
-          pnpm exec tsc --build && pnpm --filter @care-y/client exec svelte-check --tsconfig ./tsconfig.json
+          pnpm exec tsc --build
+          pnpm --filter @care-y/client exec svelte-check --tsconfig ./tsconfig.json
         fi
         lintable=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|js|mjs|svelte)$' || true)
         if [ -n "$lintable" ]; then

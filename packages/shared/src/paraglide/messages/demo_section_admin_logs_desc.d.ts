@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Both tabs on the logs page show plaintext metadata with a single decrypted name per row. The View reports permission gates the page, and the View audit log p..." |
+* | "The logs page holds a call history tab and an audit log tab. Each tab lists plaintext metadata with one name per row that the browser decrypts from organizat..." |
 *
 * @param {Demo_Section_Admin_Logs_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

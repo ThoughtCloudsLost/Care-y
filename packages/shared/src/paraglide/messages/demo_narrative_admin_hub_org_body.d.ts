@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Settings that shape the whole workspace: general info, branding, terminology, encryption keys, data retention, note types, and intake form management. Genera..." |
+* | "The organization group collects the settings that apply to the whole workspace, not to any single ticket, from naming and branding to retention and key custo..." |
 *
 * @param {Demo_Narrative_Admin_Hub_Org_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

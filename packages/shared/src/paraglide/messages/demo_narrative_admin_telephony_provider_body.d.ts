@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The telephony provider section configures how the organization connects to its phone service. **Two modes.** In managed mode the numbers are provisioned for ..." |
+* | "The provider connection gives an organization a path to the phone network under one of two arrangements. Self-managed telephony means the organization owns a..." |
 *
 * @param {Demo_Narrative_Admin_Telephony_Provider_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

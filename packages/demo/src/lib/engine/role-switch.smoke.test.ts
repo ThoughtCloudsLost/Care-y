@@ -1,15 +1,22 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import type { DemoEngineResult } from "./engine.js";
 import { bootDemoEngine } from "./engine.js";
+import {
+  SMOKE_SNAPSHOT_TIMEOUT_MS,
+  loadSmokeSnapshot,
+  smokeSnapshotSource,
+} from "./test-utils.js";
 import { isTrpcServerError } from "./caller-adapter.js";
-import { RoleId, Permission } from "@care-y/shared";
+import { RoleId, Permission, CLIENT_CHANNEL_PERMISSIONS } from "@care-y/shared";
+import { allowedQuickActions } from "$lib/tickets/quick-action-gates.js";
 
 /**
- * Smoke tests for setSignedInRole: the engine-level role switch that
- * mutates the signed-in user's role_id directly in the tenant DB and
- * returns the new permission set via auth.me. The client bridge is
- * already tested in bridge.test.ts and crypto-context.test.ts; these
- * tests cover the server half that touches PGlite.
+ * Smoke tests for signedInPermissions, the boot-time read of the seeded
+ * admin's permission set, and setSignedInRole, the engine-level role
+ * switch that mutates the signed-in user's role_id directly in the
+ * tenant DB and returns the new permission set via auth.me. The client
+ * bridge is already tested in bridge.test.ts and crypto-context.test.ts;
+ * these tests cover the server half that touches PGlite.
  *
  * Shares a single booted engine across all tests (PGlite boot is
  * expensive). Tests run sequentially because they mutate the same
@@ -21,7 +28,23 @@ import { RoleId, Permission } from "@care-y/shared";
 // and setSignedInRole's returned array causes a loud failure.
 const VOLUNTEER_PERMISSIONS: readonly Permission[] = [
   Permission.VIEW_CASES,
+  Permission.OPEN_CASES,
+  Permission.EDIT_CASE_SUMMARY,
   Permission.WRITE_CASE_NOTES,
+  Permission.CHANGE_CASE_STATUS,
+  Permission.LINK_CASES,
+  Permission.CLAIM_CASES,
+  Permission.ASSIGN_CASES,
+  Permission.DOWNLOAD_CASE_MEDIA,
+  Permission.SEND_CLIENT_SMS,
+  Permission.SEND_CLIENT_MEDIA,
+  Permission.SEND_CLIENT_EMAIL,
+  Permission.CALL_CLIENTS,
+  Permission.MESSAGE_CLIENTS_IN_PORTAL,
+  Permission.MANAGE_SHARE_LINKS,
+  Permission.MANAGE_PORTAL_CHANNEL,
+  Permission.RESET_CLIENT_LOGIN,
+  Permission.REVOKE_REPLY_LINKS,
   Permission.VIEW_KNOWLEDGE_BASE,
   Permission.EDIT_KNOWLEDGE_BASE,
   Permission.VIEW_OWN_SHIFTS,
@@ -57,8 +80,33 @@ describe("setSignedInRole", () => {
   let engine: DemoEngineResult;
 
   beforeAll(async () => {
-    engine = await bootDemoEngine();
-  }, 120_000);
+    engine = await bootDemoEngine({
+      snapshot: smokeSnapshotSource(await loadSmokeSnapshot()),
+    });
+  }, SMOKE_SNAPSHOT_TIMEOUT_MS);
+
+  // Runs first, before any switch, so it reads the role the snapshot
+  // seeded. PhoneApp applies this set at boot through
+  // setRoleAndPermissions, the same call a role switch makes.
+  it("signedInPermissions returns the seeded admin's set without changing the role", async () => {
+    const permissions = await engine.signedInPermissions();
+
+    expect(engine.adminCtx.user?.roleId).toBe(RoleId.ADMIN);
+    expect(permissions).toContain(Permission.MESSAGE_CLIENTS_IN_PORTAL);
+    expect(permissions).toContain(Permission.SEND_CLIENT_SMS);
+    for (const channelPerm of Object.values(CLIENT_CHANNEL_PERMISSIONS)) {
+      expect(permissions).toContain(channelPerm);
+    }
+    for (const adminPerm of ADMIN_ONLY_PERMISSIONS) {
+      expect(permissions).toContain(adminPerm);
+    }
+
+    // The ticket list's gated controls (card quick actions, swipe zones,
+    // the bulk bar) all render for the demo admin.
+    expect([...allowedQuickActions(new Set(permissions))].sort()).toEqual(
+      ["assign", "call", "hold", "reply", "take", "unhold"].sort(),
+    );
+  }, 30_000);
 
   it("switching to VOLUNTEER returns exactly the volunteer permission set", async () => {
     const permissions = await engine.setSignedInRole(RoleId.VOLUNTEER);
@@ -123,9 +171,9 @@ describe("setSignedInRole", () => {
   it("switching to MANAGER gives an intermediate permission set", async () => {
     const permissions = await engine.setSignedInRole(RoleId.MANAGER);
 
-    // Manager has VIEW_REPORTS but not MANAGE_ROLES.
+    // Manager has VIEW_REPORTS but not the admin-only user and role keys.
     expect(permissions).toContain(Permission.VIEW_REPORTS);
-    expect(permissions).toContain(Permission.MANAGE_USERS);
+    expect(permissions).not.toContain(Permission.MANAGE_USERS);
     expect(permissions).not.toContain(Permission.MANAGE_ROLES);
     expect(permissions).not.toContain(Permission.MANAGE_KEYS);
 

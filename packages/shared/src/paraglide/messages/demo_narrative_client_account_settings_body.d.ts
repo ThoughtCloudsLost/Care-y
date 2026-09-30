@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The account page keeps its controls in the drawer rather than inline on the page, and the drawer is empty until the client signs in. **Encryption.** The cont..." |
+* | "The drawer entries for managing an account require a sign-in. Without signing in, the drawer shows no account actions; the organization header, the theme tog..." |
 *
 * @param {Demo_Narrative_Client_Account_Settings_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

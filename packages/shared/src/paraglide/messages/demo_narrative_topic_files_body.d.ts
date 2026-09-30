@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers can attach files to a ticket, and each file is encrypted with the per ticket key before upload so the server stores only ciphertext along with the..." |
+* | "The browser seals a file before uploading it. Both the bytes and the filename reach the server as ciphertext. [[#encryption #client-data]] **What key does ea..." |
 *
 * @param {Demo_Narrative_Topic_Files_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

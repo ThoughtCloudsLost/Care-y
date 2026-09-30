@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The full article view shows the complete body text, file attachments, and voting controls. The body is decrypted locally from ciphertext stored on the server..." |
+* | "The browser fetches the article's encrypted body from the server, decrypts it with the organization key, and strips anything that could run as code before re..." |
 *
 * @param {Demo_Narrative_Library_Detail_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

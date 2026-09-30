@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "No phone number appears anywhere in the call log. The client alias on each row is decrypted in the browser with the organization key and is the only encrypte..." |
+* | "Every call and voicemail written to a ticket appears in the call history, sorted newest first and paged fifty at a time. The call history holds and shows no ..." |
 *
 * @param {Demo_Narrative_Admin_Call_Log_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

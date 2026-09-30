@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When a volunteer creates a ticket, the title and description are encrypted in the browser before they leave the device. The server stores the ciphertext and ..." |
+* | "Creating a ticket seals its title and description in the browser under a ticket key minted there. The server files the ciphertext and never holds the key. [[..." |
 *
 * @param {Demo_Narrative_Topic_New_Ticket_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

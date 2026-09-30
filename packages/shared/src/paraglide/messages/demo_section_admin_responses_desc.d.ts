@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Responses are the one form artifact encrypted to private keys rather than the derivable key used for form definitions, and reading them requires a separate p..." |
+* | "The responses section holds the answers that intake forms have collected. The questions on a form are public, but the answers are encrypted per case to indiv..." |
 *
 * @param {Demo_Section_Admin_Responses_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

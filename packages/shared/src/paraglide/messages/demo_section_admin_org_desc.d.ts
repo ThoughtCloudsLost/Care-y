@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "These entries cover settings that shape the whole workspace rather than any one ticket or person. General info and branding are stored without encryption so ..." |
+* | "The organization section holds workspace-level settings that no single ticket or person owns. General info and branding are plaintext so the login page and c..." |
 *
 * @param {Demo_Section_Admin_Org_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

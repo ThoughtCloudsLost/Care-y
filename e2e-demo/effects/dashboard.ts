@@ -83,8 +83,9 @@ export const EFFECTS: EffectMap = new Map([
   ],
 
   // dashboard-kb: mark-only. KBSection renders .kb-surface with
-  // .kb-row items when KB articles are loaded. The engine seeds
-  // articles via seed-kb.js (engine.ts line 351). Expanded by
+  // .kb-row items when KB articles are loaded. The demo snapshot
+  // carries the seed replay's KB articles (KB_ARTICLES in
+  // packages/client/src/lib/dev/seed-replay.ts). Expanded by
   // default.
   [
     "dashboard-kb",
@@ -102,10 +103,11 @@ export const EFFECTS: EffectMap = new Map([
 
   // dashboard-needs-attention: mark-only. Renders conditionally on
   // showNeedsAttention (+page.svelte line 363): true when tickets
-  // are loading OR needsAttention.length > 0. The seed creates
-  // urgent/high-priority unassigned tickets (seed-tickets.ts lines
-  // 184, 245, 306), which satisfy isNeedsAttention (filters.ts
-  // line 39: unassigned + urgent/high = needs attention). Expanded
+  // are loading OR needsAttention.length > 0. The seed stories
+  // include urgent/high-priority unassigned tickets (the urgentSms
+  // recent story in packages/shared/src/dev/seed-stories.ts is one),
+  // which satisfy isNeedsAttention (filters.ts line 39: unassigned +
+  // urgent/high = needs attention). Expanded
   // by default. Asserts the heading toggle, which is visible even
   // if the list is still loading.
   [
@@ -126,8 +128,8 @@ export const EFFECTS: EffectMap = new Map([
 
   // dashboard-my-tickets: mark-only. CollapsibleSection with
   // id="my-tickets". Always rendered (not conditional). Expanded
-  // by default. Seed assigns ~40% of tickets to the admin user
-  // (seed-tickets.ts line 652).
+  // by default. The seed stories assign about a quarter of the tickets
+  // to the seeding admin (planStories and draftStory in seed-stories.ts).
   [
     "dashboard-my-tickets",
     {
@@ -145,8 +147,8 @@ export const EFFECTS: EffectMap = new Map([
   // dashboard-unassigned: mark-only. Always rendered. Starts COLLAPSED
   // (collapsedSections initial set includes "unassigned", +page.svelte
   // line 507). The pulse tap EXPANDS it: isSectionToggleCollapsing
-  // (tap-pulse.ts:1204) returns false when aria-expanded="false", so
-  // the tap fires (PhoneApp.svelte:1289-1291). After expansion,
+  // (tap-pulse.ts) returns false when aria-expanded="false", so the
+  // tap fires (handlePulse in PhoneApp.svelte). After expansion,
   // .section-content renders (CollapsibleSection.svelte:100-111).
   // Asserts both the heading toggle and the expanded body content.
   [
@@ -169,8 +171,9 @@ export const EFFECTS: EffectMap = new Map([
 
   // dashboard-on-hold: mark-only. Renders conditionally on
   // showOnHold (+page.svelte line 358): true when tickets are
-  // loading OR on-hold count > 0. The seed creates 2 on-hold
-  // tickets (seed-tickets.ts lines 384, 427). Starts COLLAPSED
+  // loading OR on-hold count > 0. About 7% of the seed stories end
+  // on hold (planStories in seed-stories.ts), 4 at the demo's story
+  // count. Starts COLLAPSED
   // (collapsedSections initial set includes "on-hold", +page.svelte
   // line 507). The pulse tap EXPANDS it: isSectionToggleCollapsing
   // returns false for a collapsed toggle, so the tap fires. After
@@ -181,8 +184,8 @@ export const EFFECTS: EffectMap = new Map([
       description: "On-hold section expanded with content visible",
       visible: [
         // +page.svelte line 753: scroll target container. Rendered
-        // only when showOnHold is true; demo seed satisfies this
-        // via 2 on-hold tickets.
+        // only when showOnHold is true; the demo seed's on-hold
+        // tickets satisfy this.
         "#section-on-hold",
         // CollapsibleSection.svelte line 55-58: toggle button, now
         // aria-expanded="true" after the pulse tap expands it.

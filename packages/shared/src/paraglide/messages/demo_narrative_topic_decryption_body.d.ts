@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Ticket titles are stored as ciphertext on the server. The browser fetches and decrypts each title locally using the volunteer's encryption keys. **Performanc..." |
+* | "The title, the description, and the messages are encrypted in the browser before they reach the server. [[#encryption #keys]] **What does each field hold?** ..." |
 *
 * @param {Demo_Narrative_Topic_Decryption_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

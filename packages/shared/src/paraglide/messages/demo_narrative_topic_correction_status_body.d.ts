@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When a client updates their contact information through the portal, the change appears in the ticket thread as a flagged entry with a tinted background and a..." |
+* | "A contact correction appears in the unified case thread as its own follow-up type. It carries the phone number or email address a client reports as current. ..." |
 *
 * @param {Demo_Narrative_Topic_Correction_Status_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

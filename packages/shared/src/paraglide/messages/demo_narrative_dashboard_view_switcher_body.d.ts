@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The view switcher in the page header changes how ticket lists on the overview are displayed. Four modes are available: table, rows, cards, and grid. **Persis..." |
+* | "The view switcher sets the view mode for every ticket lane on the overview. The four view modes are table, rows, cards, and grid. The overview opens on cards..." |
 *
 * @param {Demo_Narrative_Dashboard_View_Switcher_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

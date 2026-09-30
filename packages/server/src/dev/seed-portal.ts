@@ -4,9 +4,9 @@
  * custom intake form exercising the form-builder feature set, and intake
  * responses including one row whose key nobody holds.
  *
- * Sits alongside seed-tickets and seed-kb as content seeding. Structural
- * seeding (org, users, queues) is the caller's job and must already have
- * run: every step here attaches to an existing seeded ticket.
+ * Runs after the seed replay as content seeding. Structural seeding (org,
+ * users, queues) and the replay are the caller's job and must already have
+ * run, because every step here attaches to an existing seeded ticket.
  *
  * Everything goes through the real portal services, so the crypto path is
  * the production one. Where the browser normally performs a step (the
@@ -821,11 +821,10 @@ async function seedShareLink(
 /**
  * Seal the anchor ticket's media to the portal channel.
  *
- * seedTestTickets writes recordings and attachments with the file-key
- * envelope on the anchor ticket: each blob is encrypted under a random
- * file key, and that key is wrapped under the ticket key in
- * `file_key_wrap`. No channel existed at that point, so the client
- * half was deferred.
+ * Media the seed wrote on the anchor ticket with the file-key envelope
+ * has each blob encrypted under a random file key, and that key wrapped
+ * under the ticket key in `file_key_wrap`. No channel existed at that
+ * point, so the client half was deferred.
  *
  * This function closes the loop: for every recording and attachment on
  * the anchor ticket that carries a file_key_wrap, it unwraps the file
@@ -1000,10 +999,10 @@ async function sealAnchorTicketMessages(
     .where("is_private", "=", false)
     .where("deleted_at", "is", null)
     .where("type", "in", [...MESSAGE_COPY_TYPES])
-    // System events carry no encrypted content under the Proton model
-    // (seed-tickets writes a zero-length buffer), and an absent type
-    // defaults to "message", so they reach the eligible set with nothing
-    // to decrypt. They are org chrome rather than conversation either way.
+    // System events carry no encrypted content under the Proton model,
+    // and an absent type defaults to "message", so they reach the eligible
+    // set with nothing to decrypt. They are org chrome rather than
+    // conversation either way.
     .where("source", "!=", "system")
     .where((eb) =>
       eb.not(

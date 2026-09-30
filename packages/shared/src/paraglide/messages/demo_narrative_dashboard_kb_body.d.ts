@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A preview of recently updated knowledge base articles. **Encryption.** Article titles are encrypted with the organization key. The server stores ciphertext a..." |
+* | "The knowledge base section shows the five most recently edited articles, newest edit first, under the section's category and author filters. The heading show..." |
 *
 * @param {Demo_Narrative_Dashboard_Kb_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

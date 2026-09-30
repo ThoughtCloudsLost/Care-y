@@ -13,10 +13,8 @@
  */
 
 import { z } from "zod";
-import { getEnv } from "../env.js";
 import {
   router,
-  authedProcedure,
   kbReadProcedure,
   kbEditProcedure,
   kbCategoryProcedure,
@@ -397,21 +395,5 @@ export function createKbRouter(deps: KBRouterDeps) {
         }));
       }),
     ),
-
-    // --- Dev-only: seed KB articles with sealed box encryption ---
-    ...(getEnv().NODE_ENV === "development"
-      ? {
-          devSeedKb: authedProcedure.mutation(
-            withErrorWrapping(async ({ ctx }) => {
-              const { seedKbArticles } = await import("../dev/seed-kb.js");
-              return seedKbArticles(
-                ctx.org.tenantDb,
-                ctx.org.sealedBox,
-                ctx.user.id,
-              );
-            }),
-          ),
-        }
-      : {}),
   });
 }

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "How encryption keys are derived" |
+* | "What a sign-in unlocks" |
 *
 * @param {Demo_Narrative_Topic_Key_Derivation_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

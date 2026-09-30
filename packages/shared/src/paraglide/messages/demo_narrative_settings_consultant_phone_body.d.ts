@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A user who takes calls from a personal phone can register it through a three step verification flow that confirms the number before activating it. **Removing..." |
+* | "The user registers a personal phone number for receiving forwarded calls. A verification code sent to that number must be confirmed before the server will co..." |
 *
 * @param {Demo_Narrative_Settings_Consultant_Phone_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

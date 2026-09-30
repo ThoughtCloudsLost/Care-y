@@ -33,7 +33,6 @@ import {
 
 const LOGIN_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "credentials",
-  "language",
   "twofa",
   "twofa-totp",
   "twofa-passkey",
@@ -49,6 +48,7 @@ const LIST_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "filters",
   "saved-filters",
   "view-modes",
+  "kanban-board",
   "select-mode",
   "page-search",
   "list-stats",
@@ -107,6 +107,7 @@ const SETTINGS_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "settings-security",
   "settings-notifications",
   "settings-consultant-phone",
+  "language",
 ]);
 
 /**
@@ -393,6 +394,15 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         candidates.add(m.view_switcher_cards({}, opts));
         candidates.add(m.view_switcher_grid({}, opts));
         candidates.add(m.view_switcher_kanban({}, opts));
+        break;
+      case "kanban-board":
+        // The board renders as the coming-soon EmptyState
+        // (tickets/+page.svelte:1474-1478), whose aria-label is its stamp
+        // (EmptyState.svelte:33). The placeholder only mounts once kanban
+        // mode is selected; until then the pulse marks the switcher's
+        // Kanban segment, which carries the same label.
+        candidates.add(m.view_switcher_kanban({}, opts));
+        candidates.add(m.kanban_coming_soon_title({}, opts));
         break;
       case "select-mode":
         candidates.add(m.tickets_select_mode({}, opts));
@@ -727,7 +737,8 @@ export function buildSmsTitleCandidates(): Set<string> {
 
 /**
  * Labels for the "Reply to client" entry inside the compose actions
- * popover (ComposeActions.svelte:98-106), across locales. The reply
+ * popover (the ComposeActions ListItem titled ticket_reply_to_client),
+ * across locales. The reply
  * choreography's second stage searches for this label alone so the
  * still-visible compose button does not win the aria pass.
  */
@@ -1063,6 +1074,10 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
       case "settings-password":
       case "dashboard-shift":
       case "dashboard-getting-started":
+      // Tapping the Kanban segment would swap the ticket list for the
+      // coming-soon placeholder, leaving the later list subs (quick
+      // actions on a ticket card) nothing to point at.
+      case "kanban-board":
       // None of the new topics are in TAP_TOPICS, so none is activated
       // by a real tap. The client arc is the deliberate part: a scripted
       // click in the portal would submit a help-seeker's form or send a

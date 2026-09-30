@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When a volunteer sends a reply, the message is encrypted on the device with the per ticket key before it reaches the server. The server stores the ciphertext..." |
+* | "A reply is encrypted in the browser under the ticket key before it leaves the device, and the server stores the result without holding a key that can open it..." |
 *
 * @param {Demo_Narrative_Topic_Reply_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -10,7 +10,7 @@ const en_demo_narrative_settings_security_heading = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_settings_security_heading = /** @type {(inputs: Demo_Narrative_Settings_Security_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Charla de seguridad`)
+	return /** @type {LocalizedString} */ (`Resumen de seguridad`)
 };
 
 const en_xa2_demo_narrative_settings_security_heading = /** @type {(inputs: Demo_Narrative_Settings_Security_HeadingInputs) => LocalizedString} */ () => {

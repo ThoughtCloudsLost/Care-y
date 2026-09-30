@@ -74,10 +74,12 @@ test.describe.serial("Mobile Layout Preserved (regression)", () => {
   test("tapping ticket navigates to full-page detail", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     // Each ticket card exposes a single "Open <ticket> <alias>" overlay
-    // button.
+    // button. The handbook story ticket is picked by title rather than
+    // list position.
     const card = page
-      .locator('[data-testid="ticket-card-wrap"]')
-      .first()
+      .locator('[data-testid="ticket-card-wrap"]', {
+        hasText: "Help with housing",
+      })
       .getByRole("button", { name: /^open /i });
     await card.click();
 

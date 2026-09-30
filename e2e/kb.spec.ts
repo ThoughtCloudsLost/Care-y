@@ -118,28 +118,34 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
   // ── 7. Article detail ─────────────────────────────────────────
 
   test("tapping an article shows rendered body content", async () => {
-    // Tap the first article in the list.
-    await page.getByText("Intake call checklist").click();
+    // Tap "Safety planning template". The voting tests below run on the
+    // article this test opens and expect no vote from this account yet.
+    // The seed replay votes as the seeding account on its first four
+    // articles, and this is the fifth (KB_ARTICLES in
+    // packages/client/src/lib/dev/seed-replay.ts).
+    await page.getByText("Safety planning template").click();
 
     // On desktop, the library uses split view with pushState (no URL change).
     // The article detail renders in the right pane.
     // The article title should be visible as an h1.
     await expect(
-      page.locator("h1").getByText("Intake call checklist"),
+      page.locator("h1").getByText("Safety planning template"),
     ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
     // The article body should be rendered (decrypted + DOMPurify-sanitized).
-    // Seed data for "Intake call checklist" contains "Before the call" as
-    // a heading in the ProseMirror JSON body.
-    await expect(page.getByText("Before the call")).toBeVisible({
+    // Seed data for "Safety planning template" contains "When to offer a
+    // safety plan" as a heading in the ProseMirror JSON body.
+    await expect(page.getByText("When to offer a safety plan")).toBeVisible({
       timeout: 10_000,
     });
   });
 
   test("article detail shows category and metadata", async () => {
-    // The "Intake call checklist" belongs to "Procedures" category.
-    // The navbar title also says "Procedures" (two matches expected).
-    await expect(page.getByText("Procedures").first()).toBeVisible();
+    // "Safety planning template" belongs to the "Safety" category.
+    // The navbar title also says "Safety" (two matches expected).
+    await expect(
+      page.getByText("Safety", { exact: true }).first(),
+    ).toBeVisible();
 
     // Metadata group contains the relative timestamp (author may be
     // absent when the volunteer decrypt cache has no entry).

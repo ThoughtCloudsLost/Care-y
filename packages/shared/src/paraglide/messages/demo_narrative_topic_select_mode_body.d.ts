@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Select mode allows picking multiple tickets for batch actions. **Available actions.** The bulk action bar appears above the ticket list with options that app..." |
+* | "Select mode lets the user pick several tickets so one action applies to all of them. The Select control beside the filters turns select mode on. A long press..." |
 *
 * @param {Demo_Narrative_Topic_Select_Mode_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

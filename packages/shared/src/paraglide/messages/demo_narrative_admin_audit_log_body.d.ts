@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The audit log records 47 event types spanning the full range of administrative and lifecycle actions across the organization. **What the server holds.** The ..." |
+* | "The audit log records administrative and lifecycle actions taken in the organization. Entries are only ever added. The service has no update path and no dele..." |
 *
 * @param {Demo_Narrative_Admin_Audit_Log_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

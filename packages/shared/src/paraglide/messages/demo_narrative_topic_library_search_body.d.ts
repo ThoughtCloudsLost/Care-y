@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The library has its own search bar that finds articles by fuzzy matching against decrypted titles and excerpts. **Full search.** If no matches are found amon..." |
+* | "Searching the library matches the term against the titles and excerpts already decrypted in the browser, orders the list by match quality, and sends no part ..." |
 *
 * @param {Demo_Narrative_Topic_Library_Search_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

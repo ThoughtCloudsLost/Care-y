@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_Logs_DescInputs */
 
 const en_demo_section_admin_logs_desc = /** @type {(inputs: Demo_Section_Admin_Logs_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Both tabs on the logs page show plaintext metadata with a single decrypted name per row. The View reports permission gates the page, and the View audit log permission gates the audit tab within it.`)
+	return /** @type {LocalizedString} */ (`The logs page holds a call history tab and an audit log tab. Each tab lists plaintext metadata with one name per row that the browser decrypts from organization-key ciphertext. An account holding the View reports permission has access to the call history tab, and an account holding the View audit log permission has access to the audit tab. Either permission opens the page. Call history rows belong to tickets, so the retention purge deletes them with the ticket. [Call history](#admin-logs/calls) and [Audit log](#admin-logs/audit) cover each tab, and [Data retention](#deep-dive/data-retention) covers the purge.`)
 };
 
 const es_demo_section_admin_logs_desc = /** @type {(inputs: Demo_Section_Admin_Logs_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ambas pestañas de la página de registros muestran metadatos en texto plano con un solo nombre descifrado por fila. El permiso Ver reportes y estadísticas controla el acceso a la página, y el permiso Leer el registro de auditoría controla la pestaña de auditoría dentro de ella.`)
+	return /** @type {LocalizedString} */ (`La página de registros tiene una pestaña de historial de llamadas y una pestaña de registro de auditoría. Cada pestaña muestra metadatos en texto plano con un nombre por fila que el navegador descifra a partir de texto cifrado con la clave de la organización. Una cuenta con el permiso Ver reportes tiene acceso a la pestaña de historial de llamadas, y una cuenta con el permiso Ver registro de auditoría tiene acceso a la pestaña de auditoría. Cualquiera de los dos permisos abre la página. Las filas del historial de llamadas pertenecen a tickets, de modo que la purga de retención las elimina junto con el ticket. [Historial de llamadas](#admin-logs/calls) y [Registro de auditoría](#admin-logs/audit) tratan cada pestaña, y [Retención de datos](#deep-dive/data-retention) trata la purga.`)
 };
 
 const en_xa2_demo_section_admin_logs_desc = /** @type {(inputs: Demo_Section_Admin_Logs_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Bòth tàbs òn thè lògs pàgè shòw plàìntèxt mètàdàtà wìth à sìnglè dècryptèd nàmè pèr ròw. Thè Vìèw rèpòrts pèrmìssìòn gàtès thè pàgè, ànd thè Vìèw àùdìt lòg pèrmìssìòn gàtès thè àùdìt tàb wìthìn ìt. ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Thè lògs pàgè hòlds à càll hìstòry tàb ànd àn àùdìt lòg tàb. Èàch tàb lìsts plàìntèxt mètàdàtà wìth ònè nàmè pèr ròw thàt thè bròwsèr dècrypts fròm òrgànìzàtìòn-kèy cìphèrtèxt. Àn àccòùnt hòldìng thè Vìèw rèpòrts pèrmìssìòn hàs àccèss tò thè càll hìstòry tàb, ànd àn àccòùnt hòldìng thè Vìèw àùdìt lòg pèrmìssìòn hàs àccèss tò thè àùdìt tàb. Èìthèr pèrmìssìòn òpèns thè pàgè. Càll hìstòry ròws bèlòng tò tìckèts, sò thè rètèntìòn pùrgè dèlètès thèm wìth thè tìckèt. [Càll hìstòry](#àdmìn-lògs/càlls) ànd [Àùdìt lòg](#àdmìn-lògs/àùdìt) còvèr èàch tàb, ànd [Dàtà rètèntìòn](#dèèp-dìvè/dàtà-rètèntìòn) còvèrs thè pùrgè. •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Both tabs on the logs page show plaintext metadata with a single decrypted name per row. The View reports permission gates the page, and the View audit log p..." |
+* | "The logs page holds a call history tab and an audit log tab. Each tab lists plaintext metadata with one name per row that the browser decrypts from organizat..." |
 *
 * @param {Demo_Section_Admin_Logs_DescInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
