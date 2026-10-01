@@ -130,7 +130,7 @@ export class SafeIntrospectionPostgresDialect extends PostgresDialect {
     }
 
     return {
-      getSchemas: () => inner.getSchemas(),
+      getSchemas: async () => inner.getSchemas(),
       getTables,
     };
   }

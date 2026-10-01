@@ -116,7 +116,6 @@ export function createLocalBlobStore(
       }
       try {
         // force: a missing directory is not an error, so a rerun succeeds.
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
         await fs.rm(path.join(resolved, orgSchema), {
           recursive: true,
           force: true,

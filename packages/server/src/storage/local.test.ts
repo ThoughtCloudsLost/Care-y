@@ -206,7 +206,6 @@ describe("LocalBlobStore", () => {
       expect(await store.exists(attachment)).toBe(false);
       expect(await store.exists(recording)).toBe(false);
       await expect(
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
         fs.access(path.join(tmpDir, ERASED_SCHEMA)),
       ).rejects.toThrow();
       expect(await store.get(kept)).toEqual(Buffer.from("k"));
