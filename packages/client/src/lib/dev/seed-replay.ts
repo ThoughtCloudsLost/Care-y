@@ -466,7 +466,7 @@ const SEED_FUNDS: readonly SeedFundDef[] = [
 
 interface SeedDisbursementDef {
   readonly fundIndex: number;
-  /** Generated story ticket the note lands on; null for fund-level spending. */
+  /** Index into the story tickets that stay open (the note lands there); null for fund-level spending. */
   readonly storyIndex: number | null;
   readonly amountMinor: number;
   readonly daysAgo: number;
@@ -1634,6 +1634,10 @@ async function runReplay(
   );
   let routedCount = 0;
   const storyTicketIds: string[] = [];
+  // Disbursements attach a case note, which a closed ticket refuses, so
+  // they draw from the stories that stay open. The outcome plan depends on
+  // the story count, so this is decided per story rather than by index.
+  const openStoryTicketIds: string[] = [];
 
   for (let i = 0; i < stories.length; i++) {
     const story = stories[i];
@@ -1683,6 +1687,9 @@ async function runReplay(
     }
 
     storyTicketIds.push(ticketId);
+    if (!story.steps.some((step) => step.kind === "close")) {
+      openStoryTicketIds.push(ticketId);
+    }
     const keyGeneration = await cacheTicketKey(ticketId);
 
     // Routing titles the ticket from the server's generic text. Rename it
@@ -2197,7 +2204,9 @@ async function runReplay(
       const fund = seeded[def.fundIndex];
       if (fund === undefined) continue;
       const ticketId =
-        def.storyIndex === null ? undefined : storyTicketIds[def.storyIndex];
+        def.storyIndex === null
+          ? undefined
+          : openStoryTicketIds[def.storyIndex];
       if (def.storyIndex !== null && ticketId === undefined) continue;
 
       const ledgerEntryId = newFundLedgerId();
