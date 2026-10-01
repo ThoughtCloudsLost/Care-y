@@ -18,7 +18,7 @@ pg.types.setTypeParser(pg.types.builtins.INT8, (val: string) =>
  *
  * DATABASE_URL comes from getEnv(), not process.env: in production it
  * carries the Postgres password and is loaded from the secrets file
- * (ADR-129). Entry points import env-bootstrap.ts first so the cache is
+ * (ADR-131). Entry points import env-bootstrap.ts first so the cache is
  * filled before this module is evaluated.
  */
 export const pgConnectionConfig: pg.ClientConfig = {

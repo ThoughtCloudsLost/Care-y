@@ -8,7 +8,7 @@
 // On migration failure: drops the schema (no half-provisioned orgs).
 
 // Must stay the first import: loads the secrets file and fills the getEnv()
-// cache before db.ts reads DATABASE_URL at import time (ADR-129).
+// cache before db.ts reads DATABASE_URL at import time (ADR-131).
 import "../env-bootstrap.js";
 import { sql } from "kysely";
 import { db, pool } from "./db.js";
