@@ -12,6 +12,7 @@ import {
   consultantKeys,
   orgKeyKeys,
   notificationKeys,
+  fundKeys,
 } from "./keys";
 
 describe("query key factories", () => {
@@ -108,6 +109,16 @@ describe("query key factories", () => {
       expect(orgKeyKeys.wrappedOrgKey()).toEqual(["keys", "wrappedOrgKey"]);
       expect(notificationKeys.all).toEqual(["notifications"]);
       expect(presetKeys.byQueue("q-1")).toEqual(["presets", "q-1"]);
+    });
+
+    it("fund list, ledger and settings nest under funds", () => {
+      for (const key of [
+        fundKeys.list(),
+        fundKeys.ledger(),
+        fundKeys.settings(),
+      ]) {
+        expect(key.slice(0, fundKeys.all.length)).toEqual(fundKeys.all);
+      }
     });
 
     it("consultantKeys.self nests under consultant", () => {

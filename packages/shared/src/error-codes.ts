@@ -96,6 +96,11 @@ export const ErrorCode = {
   SAVED_FILTER_NOT_FOUND: "SAVED_FILTER_NOT_FOUND",
   SAVED_FILTER_NOT_OWNER: "SAVED_FILTER_NOT_OWNER",
 
+  // --- Funds ---
+  FUND_NOT_FOUND: "FUND_NOT_FOUND",
+  // Someone else wrote the fund's balance after the caller read it.
+  FUND_BALANCE_STALE: "FUND_BALANCE_STALE",
+
   // --- Knowledge base ---
   KB_CATEGORY_NOT_FOUND: "KB_CATEGORY_NOT_FOUND",
   KB_ARTICLE_NOT_FOUND: "KB_ARTICLE_NOT_FOUND",

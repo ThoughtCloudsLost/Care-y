@@ -10,6 +10,10 @@
     isEmailInbound,
   } from "$lib/tickets/follow-up-utils.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
+  import {
+    readableNoteResult,
+    type FundNameResolver,
+  } from "$lib/funds/fund-display.js";
   import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import ConversationBubble from "$lib/components/tickets/ConversationBubble.svelte";
@@ -37,6 +41,11 @@
     currentUserId?: string;
     ontogglereaction?: (reaction: ReactionType) => void;
     resolveUserName?: (userId: string) => string;
+    /**
+     * Names the fund in a disbursement note. Without it the note reads
+     * as its amount and text alone.
+     */
+    resolveFundName?: FundNameResolver;
   }
 
   let {
@@ -51,6 +60,7 @@
     currentUserId,
     ontogglereaction,
     resolveUserName,
+    resolveFundName,
   }: FollowUpBubbleProps = $props();
 
   const kind = $derived(followUpKind(followUp));
@@ -65,7 +75,7 @@
   />
 {:else if kind === "note"}
   <PrivateNote
-    {result}
+    result={readableNoteResult(result, resolveFundName)}
     encryptedContent={followUp.encryptedContent}
     authorName={undefined}
     timestamp={followUp.createdAt}

@@ -32,6 +32,7 @@ describe("notificationEventTypeSchema", () => {
     "mention",
     "merge_completed",
     "voicemail_quarantined",
+    "fund_entry_recorded",
   ];
 
   it.each(validTypes)("accepts '%s'", (type) => {
@@ -137,6 +138,14 @@ describe("systemSseEventSchema", () => {
   it("accepts valid system SSE event", () => {
     const result = systemSseEventSchema.safeParse({
       type: "voicemail_quarantined",
+      timestamp: VALID_ISO,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a fund_entry_recorded system event", () => {
+    const result = systemSseEventSchema.safeParse({
+      type: "fund_entry_recorded",
       timestamp: VALID_ISO,
     });
     expect(result.success).toBe(true);

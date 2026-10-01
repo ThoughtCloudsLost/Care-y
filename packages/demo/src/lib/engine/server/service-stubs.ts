@@ -549,6 +549,15 @@ export async function buildServiceStubs(
     // The seed snapshot builder mounts the dev procedures on a separate
     // router of its own; this one never carries them.
     devDeps: null,
+    // Mirrors index.ts: the case note a disbursement writes goes through
+    // the same follow-up, audit and notification paths as ticketDeps. No
+    // SSE stream is served here, so no live events.
+    fundsDeps: {
+      createTicketAccess: createTicketAccessChecker,
+      createFollowUpSvc: createFollowUpService,
+      createAuditSvc: createAuditService,
+      notificationService: notificationServiceStub,
+    },
   });
 
   return {

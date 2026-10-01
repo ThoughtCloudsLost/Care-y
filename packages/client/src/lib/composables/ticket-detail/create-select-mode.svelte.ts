@@ -13,6 +13,10 @@ import {
   type VolunteerRecord,
 } from "$lib/tickets/resolve-volunteer.js";
 import type { toastStore as ToastStoreType } from "$lib/stores/toast.svelte.js";
+import {
+  readableNoteText,
+  type FundNameResolver,
+} from "$lib/funds/fund-display.js";
 
 type ToastStore = typeof ToastStoreType;
 
@@ -37,6 +41,11 @@ export interface SelectModeConfig {
   readonly followUpCache: FollowUpDecryptCache;
   readonly getTicketKeyWrap: () => TicketKeyWrap | null | undefined;
   readonly toastStore: ToastStore;
+  /**
+   * Names the fund in a copied disbursement note. Without it the copy
+   * carries the amount and the note but not the fund.
+   */
+  readonly resolveFundName?: FundNameResolver;
   readonly labels: {
     readonly oneCopied: string;
     readonly manyCopied: (count: string) => string;
@@ -115,7 +124,11 @@ export function createSelectMode(config: SelectModeConfig): SelectModeState {
         const result = resolveAsyncDecrypt(raw, true);
         content = matchDecryptResult(result, {
           loading: () => "[encrypted]",
-          ready: (v) => v,
+          // A disbursement note copies as its readable text, never as
+          // the envelope.
+          ready: (v) =>
+            readableNoteText(v, config.resolveFundName) ??
+            "[decryption error]",
           denied: () => "[access denied]",
           error: () => "[decryption error]",
         });

@@ -16,6 +16,7 @@ import {
   kbKeys,
   notificationKeys,
   adminKeys,
+  fundKeys,
 } from "$lib/query/keys";
 
 export interface SSEEvent {
@@ -149,6 +150,10 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
       void queryClient.invalidateQueries({
         queryKey: adminKeys.quarantine(),
       });
+      break;
+    // Carries no fund or amount. Balances refetch and decrypt again.
+    case "fund_entry_recorded":
+      void queryClient.invalidateQueries({ queryKey: fundKeys.all });
       break;
   }
 }

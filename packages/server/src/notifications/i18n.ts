@@ -16,6 +16,8 @@ export interface NotificationStrings {
   readonly followupAdded: (loginUrl: string) => string;
   readonly mentionNotification: (loginUrl: string) => string;
   readonly voicemailQuarantined: (loginUrl: string) => string;
+  /** A fund ledger entry was recorded. Names no fund, amount or case. */
+  readonly fundEntryRecorded: (loginUrl: string) => string;
   readonly smsPing: (loginUrl: string) => string;
   /** Short SMS carrying a phone verification code. No event details. */
   readonly verificationCode: (code: string) => string;
@@ -38,6 +40,8 @@ const EN: NotificationStrings = {
     `You were mentioned in a ticket note. Log in to view it: ${url}`,
   voicemailQuarantined: (url) =>
     `A voicemail could not be routed automatically and was quarantined. Log in to review it: ${url}`,
+  fundEntryRecorded: (url) =>
+    `A new entry was recorded in a fund. Log in to review it: ${url}`,
   smsPing: (url) => `You have a new notification. Visit ${url}`,
   verificationCode: (code) => `Your CARE-Y verification code is ${code}`,
   emailSubjectPrefix: "CARE-Y",
@@ -60,6 +64,8 @@ const ES: NotificationStrings = {
     `Se le ha mencionado en una nota de un caso. Inicie sesion para verlo: ${url}`,
   voicemailQuarantined: (url) =>
     `Un correo de voz no pudo ser dirigido automaticamente y fue puesto en cuarentena. Inicie sesion para revisarlo: ${url}`,
+  fundEntryRecorded: (url) =>
+    `Se registro un nuevo movimiento en un fondo. Inicie sesion para revisarlo: ${url}`,
   smsPing: (url) => `Tiene una nueva notificacion. Visite ${url}`,
   verificationCode: (code) => `Su codigo de verificacion de CARE-Y es ${code}`,
   emailSubjectPrefix: "CARE-Y",

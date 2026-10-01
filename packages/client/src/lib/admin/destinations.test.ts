@@ -3,6 +3,7 @@ import { Permission } from "@care-y/shared";
 import {
   ADMIN_DESTINATIONS,
   GROUP_ORDER,
+  canEnterAdminRoute,
   getVisibleDestinations,
   groupDestinations,
   type AdminGroup,
@@ -79,6 +80,8 @@ describe("getVisibleDestinations", () => {
       Permission.MANAGE_INTAKE_FORMS,
       Permission.VIEW_REPORTS,
       Permission.VIEW_AUDIT_LOG,
+      Permission.MANAGE_FUNDS,
+      Permission.AUDIT_FUNDS,
     ]);
     const visible = getVisibleDestinations(permissions);
 
@@ -130,6 +133,7 @@ describe("groupDestinations", () => {
       "retention",
       "note-types",
       "intake-forms",
+      "funds",
     ]);
   });
 });
@@ -183,5 +187,26 @@ describe("communications destinations", () => {
     for (const dest of commsDests) {
       expect(dest.permission).toBe(expected[dest.id]);
     }
+  });
+});
+
+describe("fund destinations", () => {
+  it("shows fund administration only with MANAGE_FUNDS", () => {
+    const ids = (perms: Permission[]): string[] =>
+      getVisibleDestinations(new Set(perms)).map((d) => d.id);
+
+    expect(ids([Permission.MANAGE_FUNDS])).toEqual(["funds"]);
+    expect(ids([Permission.VIEW_FUNDS])).toEqual([]);
+  });
+
+  it("shows the fund ledger only with AUDIT_FUNDS and admits it on that key", () => {
+    const auditor = new Set([Permission.AUDIT_FUNDS]);
+    const manager = new Set([Permission.MANAGE_FUNDS, Permission.VIEW_FUNDS]);
+
+    expect(getVisibleDestinations(auditor).map((d) => d.id)).toEqual([
+      "fund-ledger",
+    ]);
+    expect(canEnterAdminRoute(auditor, "/admin/funds")).toBe(true);
+    expect(canEnterAdminRoute(manager, "/admin/funds")).toBe(false);
   });
 });

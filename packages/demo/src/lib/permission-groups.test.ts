@@ -41,7 +41,7 @@ describe("permission-groups", () => {
     }
   });
 
-  it("there are exactly 8 groups", () => {
-    expect(GROUPS.length).toBe(8);
+  it("there are exactly 9 groups", () => {
+    expect(GROUPS.length).toBe(9);
   });
 });

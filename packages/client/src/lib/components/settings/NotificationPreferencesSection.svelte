@@ -201,6 +201,7 @@
     ["mention", () => m.notif_event_mention()],
     ["merge_completed", () => m.notif_event_merge_completed()],
     ["voicemail_quarantined", () => m.notif_event_voicemail_quarantined()],
+    ["fund_entry_recorded", () => m.notif_event_fund_entry_recorded()],
   ]);
 
   const CHANNEL_LABELS = new Map<NotificationChannel, () => string>([

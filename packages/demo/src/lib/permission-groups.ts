@@ -1,7 +1,7 @@
 /**
  * Permission grouping for the aggregation permission matrix.
  *
- * Mirrors the eight capability-area groups defined in
+ * Mirrors the nine capability-area groups defined in
  * packages/shared/src/roles.ts and used by the product's
  * RolePermissionsSection.svelte. Label keys reuse the existing
  * roles_group_* paraglide messages.
@@ -89,6 +89,15 @@ export const GROUPS: readonly PermissionGroupDef[] = [
     permissions: [
       Permission.MANAGE_INTAKE_FORMS,
       Permission.VIEW_INTAKE_RESPONSES,
+    ],
+  },
+  {
+    labelFn: () => m.roles_group_funds(),
+    permissions: [
+      Permission.VIEW_FUNDS,
+      Permission.AUDIT_FUNDS,
+      Permission.RECORD_DISBURSEMENTS,
+      Permission.MANAGE_FUNDS,
     ],
   },
   {
@@ -354,6 +363,23 @@ export const PERMISSION_LABELS: ReadonlyMap<Permission, PermissionLabelEntry> =
     [
       Permission.VIEW_OWN_SHIFTS,
       { labelFn: () => m.permission_view_own_shifts(), hintFn: null },
+    ],
+    // Funds
+    [
+      Permission.VIEW_FUNDS,
+      { labelFn: () => m.permission_view_funds(), hintFn: null },
+    ],
+    [
+      Permission.AUDIT_FUNDS,
+      { labelFn: () => m.permission_audit_funds(), hintFn: null },
+    ],
+    [
+      Permission.RECORD_DISBURSEMENTS,
+      { labelFn: () => m.permission_record_disbursements(), hintFn: null },
+    ],
+    [
+      Permission.MANAGE_FUNDS,
+      { labelFn: () => m.permission_manage_funds(), hintFn: null },
     ],
   ]);
 

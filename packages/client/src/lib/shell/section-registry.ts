@@ -51,6 +51,7 @@ import {
   Shredder,
   ClipboardPenLine,
   ClipboardList,
+  HandCoins,
   ChartColumn,
   KeyRound,
   Layers as LayersVol,
@@ -68,6 +69,7 @@ export const ORGANIZATION_SECTIONS: readonly ScrollSection[] = [
   { id: "retention", label: m.admin_tab_retention, icon: Shredder },
   { id: "note-types", label: m.admin_tab_note_types, icon: ClipboardPenLine },
   { id: "intake-forms", label: m.intake_forms_title, icon: ClipboardList },
+  { id: "funds", label: m.admin_tab_funds, icon: HandCoins },
 ];
 
 const ORGANIZATION_PERMISSIONS: ReadonlyMap<string, Permission> = new Map([
@@ -78,6 +80,7 @@ const ORGANIZATION_PERMISSIONS: ReadonlyMap<string, Permission> = new Map([
   ["retention", Permission.MANAGE_RETENTION],
   ["note-types", Permission.MANAGE_NOTE_TYPES],
   ["intake-forms", Permission.MANAGE_INTAKE_FORMS],
+  ["funds", Permission.MANAGE_FUNDS],
 ]);
 
 export const COMMUNICATIONS_SECTIONS: readonly ScrollSection[] = [

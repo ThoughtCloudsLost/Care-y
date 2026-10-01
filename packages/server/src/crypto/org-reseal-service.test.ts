@@ -17,7 +17,7 @@ import type {
   KeyGeneration,
   ResealTableName,
 } from "@care-y/shared";
-import { RESEAL_TABLE_NAMES } from "@care-y/shared";
+import { RESEAL_TABLE_NAMES, newFundLedgerId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("OrgResealService", () => {
   let testDb: TestDb;
@@ -1202,6 +1202,165 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgResealService", () => {
       });
 
       expect(result.rows).toHaveLength(0);
+    });
+  });
+
+  describe("fund accounting tables", () => {
+    beforeEach(async () => {
+      await testDb.db.deleteFrom("fund_ledger").execute();
+      await testDb.db.deleteFrom("funds").execute();
+    });
+
+    it("reseals funds.encrypted_payload and encrypted_balance and bumps the stamp", async () => {
+      const fund = await testDb.db
+        .insertInto("funds")
+        .values({
+          encrypted_payload: crypto.randomBytes(48),
+          encrypted_balance: crypto.randomBytes(40),
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      const pending = await service.resealPending({
+        table: "funds",
+        limit: 40,
+        excludeIds: [],
+      });
+      expect(pending.rows.map((r) => r.id)).toEqual([fund.id]);
+      expect(pending.rows[0]!.columns).toHaveProperty("encrypted_payload");
+      expect(pending.rows[0]!.columns).toHaveProperty("encrypted_balance");
+
+      const resealed = crypto.randomBytes(48);
+      const resealedBalance = crypto.randomBytes(40);
+      const result = await service.resealRows({
+        table: "funds",
+        rows: [
+          {
+            id: fund.id,
+            columns: {
+              encrypted_payload: resealed,
+              encrypted_balance: resealedBalance,
+            },
+          },
+        ],
+        skippedIds: [],
+      });
+      expect(result.resealed).toBe(1);
+
+      const row = await testDb.db
+        .selectFrom("funds")
+        .select([
+          "encrypted_payload",
+          "encrypted_balance",
+          "balance_version",
+          "org_key_generation",
+        ])
+        .where("id", "=", fund.id)
+        .executeTakeFirstOrThrow();
+      expect(Buffer.compare(row.encrypted_payload, resealed)).toBe(0);
+      expect(Buffer.compare(row.encrypted_balance, resealedBalance)).toBe(0);
+      // A reseal changes the key, not the balance, so the version stays.
+      expect(row.balance_version).toBe(0);
+      expect(row.org_key_generation).toBe(2);
+    });
+
+    it("reseals fund_ledger.encrypted_payload keyed on the client-minted id", async () => {
+      const id = newFundLedgerId();
+      await testDb.db
+        .insertInto("fund_ledger")
+        .values({
+          id,
+          encrypted_payload: crypto.randomBytes(64),
+          org_key_generation: 1,
+        })
+        .execute();
+
+      const status = await service.resealStatus();
+      const ledgerEntry = status.tables.find((t) => t.table === "fund_ledger");
+      expect(ledgerEntry!.pending).toBe(1);
+
+      const resealed = crypto.randomBytes(64);
+      await service.resealRows({
+        table: "fund_ledger",
+        rows: [{ id, columns: { encrypted_payload: resealed } }],
+        skippedIds: [],
+      });
+
+      const row = await testDb.db
+        .selectFrom("fund_ledger")
+        .select(["encrypted_payload", "org_key_generation"])
+        .where("id", "=", id)
+        .executeTakeFirstOrThrow();
+      expect(Buffer.compare(row.encrypted_payload, resealed)).toBe(0);
+      expect(row.org_key_generation).toBe(2);
+    });
+
+    it("returns and reseals queues.encrypted_fund_id when present", async () => {
+      const sealedFundId = crypto.randomBytes(40);
+      const queue = await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          encrypted_fund_id: sealedFundId,
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      const pending = await service.resealPending({
+        table: "queues",
+        limit: 40,
+        excludeIds: [],
+      });
+      const fetched = pending.rows.find((r) => r.id === queue.id);
+      expect(
+        Buffer.compare(fetched!.columns.encrypted_fund_id!, sealedFundId),
+      ).toBe(0);
+
+      const resealed = crypto.randomBytes(40);
+      await service.resealRows({
+        table: "queues",
+        rows: [
+          {
+            id: queue.id,
+            columns: {
+              encrypted_name: crypto.randomBytes(16),
+              encrypted_fund_id: resealed,
+            },
+          },
+        ],
+        skippedIds: [],
+      });
+
+      const row = await testDb.db
+        .selectFrom("queues")
+        .select(["encrypted_fund_id", "org_key_generation"])
+        .where("id", "=", queue.id)
+        .executeTakeFirstOrThrow();
+      expect(Buffer.compare(row.encrypted_fund_id!, resealed)).toBe(0);
+      expect(row.org_key_generation).toBe(2);
+    });
+
+    it("omits a null encrypted_fund_id from the pending record", async () => {
+      await testDb.db
+        .insertInto("queues")
+        .values({
+          encrypted_name: crypto.randomBytes(16),
+          sort_order: 1,
+          org_key_generation: 1,
+        })
+        .execute();
+
+      const result = await service.resealPending({
+        table: "queues",
+        limit: 40,
+        excludeIds: [],
+      });
+
+      expect(result.rows[0]!.columns).not.toHaveProperty("encrypted_fund_id");
     });
   });
 });

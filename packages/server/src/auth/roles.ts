@@ -62,6 +62,9 @@ const VOLUNTEER_PERMISSIONS: ReadonlySet<Permission> = new Set([
   Permission.EDIT_KNOWLEDGE_BASE,
   // Declared, no feature yet
   Permission.VIEW_OWN_SHIFTS,
+  // Funds: seeing them and recording aid given from a case are casework
+  Permission.VIEW_FUNDS,
+  Permission.RECORD_DISBURSEMENTS,
 ]);
 
 const MANAGER_PERMISSIONS: ReadonlySet<Permission> = new Set([
@@ -103,6 +106,8 @@ const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set([
   Permission.WRITE_AUTOMATIC_REPLIES,
   Permission.MANAGE_VOICEMAIL_QUARANTINE,
   Permission.MANAGE_ESCALATION,
+  Permission.AUDIT_FUNDS,
+  Permission.MANAGE_FUNDS,
 ]);
 
 export const ROLE_CONFIG: ReadonlyMap<RoleIdValue, RoleConfig> = new Map([

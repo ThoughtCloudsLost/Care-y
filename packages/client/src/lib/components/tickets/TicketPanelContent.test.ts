@@ -18,6 +18,7 @@ import type * as ShellContext from "$lib/shell/context.js";
 import type * as PanelNotesSection from "./PanelNotesSection.svelte";
 import type * as PanelMediaSection from "./PanelMediaSection.svelte";
 import type * as PortalTierSection from "./PortalTierSection.svelte";
+import type * as FundBalanceLine from "./FundBalanceLine.svelte";
 import { getMockPermissions } from "$mocks/permissions.js";
 
 // --- Mocks ---
@@ -176,6 +177,11 @@ vi.mock("./PanelMediaSection.svelte", async (importOriginal) => ({
 
 vi.mock("./PortalTierSection.svelte", async (importOriginal) => ({
   ...(await importOriginal<typeof PortalTierSection>()),
+  default: () => null,
+}));
+
+vi.mock("./FundBalanceLine.svelte", async (importOriginal) => ({
+  ...(await importOriginal<typeof FundBalanceLine>()),
   default: () => null,
 }));
 

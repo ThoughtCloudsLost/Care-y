@@ -57,6 +57,7 @@
   import {
     createDeleteConfirm,
     createNoteEdit,
+    createDisbursementEdit,
     createContentEdit,
     createNotificationSheet,
     createShareSheet,
@@ -131,6 +132,11 @@
   import { untrack } from "svelte";
   import { recentViews } from "$lib/search/recent-views.js";
   import { buildPendingFollowUpEntry } from "$lib/composables/ticket-detail/pending-follow-up.js";
+  import {
+    createCaseFund,
+    createFundStore,
+  } from "$lib/funds/fund-store.svelte.js";
+  import { readableNoteText } from "$lib/funds/fund-display.js";
 
   let {
     ticketId,
@@ -329,6 +335,33 @@
     canReplyToClient && canCall(permissions, "tickets.uploadAttachment"),
   );
   const canAddNote = $derived(canUseInline(permissions, "writeCaseNotes"));
+
+  // Disbursements: recorded from the compose menu when the case's queue
+  // has a fund, corrected from the note's context menu. Needs the fund
+  // cache (VIEW_FUNDS) to compute the next sealed balance.
+  const fundStore = createFundStore();
+  const caseFund = createCaseFund(() => ticketId, fundStore);
+  const canRecordDisbursement = $derived(
+    fundStore.enabled &&
+      canCall(permissions, "funds.recordDisbursement") &&
+      caseFund.fund !== undefined,
+  );
+
+  function resolveFundName(fundId: string): string | undefined {
+    return fundStore.fund(fundId)?.name;
+  }
+
+  /**
+   * Decrypted follow-up text as search and copy should see it: a
+   * disbursement envelope becomes its readable text; one that fails to
+   * parse counts as undecryptable.
+   */
+  function searchableText(plaintext: string | undefined): string | undefined {
+    if (plaintext === undefined || plaintext === DECRYPT_ERROR_SENTINEL) {
+      return plaintext;
+    }
+    return readableNoteText(plaintext, resolveFundName) ?? DECRYPT_ERROR_SENTINEL;
+  }
 
   const readCursor = createReadCursor({
     getTicketId: () => ticketId,
@@ -559,6 +592,7 @@
     followUpCache,
     getTicketKeyWrap: () => ticket?.keyWrap ?? null,
     toastStore,
+    resolveFundName,
     labels: {
       oneCopied: m.ticket_one_message_copied(),
       manyCopied: (count: string) => m.ticket_messages_copied({ count }),
@@ -676,7 +710,7 @@
     if (overlay.term == null || !displayFollowUpsForSearch) return [];
     return searchFollowUps(
       displayFollowUpsForSearch,
-      followUpCache,
+      { get: (id: string) => searchableText(followUpCache.get(id)) },
       overlay.term,
       DECRYPT_ERROR_SENTINEL,
       fuzzySearch,
@@ -737,7 +771,7 @@
     const unregister = registerSearchProvider(
       createConversationSearchProvider({
         getFollowUps: () => fups,
-        getDecryptedContent: (id: string) => cache.get(id),
+        getDecryptedContent: (id: string) => searchableText(cache.get(id)),
         resolveAuthorName: (source: string, createdBy: string | null) => {
           if (source === "system") return undefined;
           if (source === "client") return clientAlias;
@@ -886,6 +920,7 @@
   });
 
   const noteEdit = createNoteEdit();
+  const disbursementEdit = createDisbursementEdit();
 
   // --- Context menu + lightbox (composables) ---
 
@@ -913,6 +948,8 @@
       noteEdit.open(followUpId, content, noteTypeId),
     oneditmessage: (followUpId, content) =>
       openEditMessage(followUpId, content),
+    oneditdisbursement: (followUpId, envelope) =>
+      disbursementEdit.open({ followUpId, envelope }),
     ondelete: (followUpId) => deleteConfirm.openConfirm(followUpId),
   });
 
@@ -1392,6 +1429,7 @@
   currentAssigneeId={ticket?.assignedTo ?? null}
   {deleteConfirm}
   {noteEdit}
+  {disbursementEdit}
   {contentEdit}
   {notificationSheet}
   {exposureHint}
@@ -1488,6 +1526,7 @@
       }
     : undefined}
   {canAddNote}
+  {canRecordDisbursement}
   ondraftset={(body: string) => {
     setDraftForMode(ticketId, "reply", body);
     compose?.activateReply();

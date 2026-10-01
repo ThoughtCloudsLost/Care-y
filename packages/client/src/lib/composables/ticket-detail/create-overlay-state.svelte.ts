@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/svelte-query";
 import { ticketKeys } from "$lib/query/keys.js";
 import type { toastStore as ToastStoreType } from "$lib/stores/toast.svelte.js";
+import type { DisbursementEdit } from "$lib/components/tickets/disbursement-types.js";
 
 type ToastStore = typeof ToastStoreType;
 
@@ -125,6 +126,40 @@ export function createNoteEdit(): NoteEditState {
       editFollowUpId = undefined;
       editContent = undefined;
       editNoteTypeId = undefined;
+    },
+  };
+}
+
+// ── Disbursement edit sheet ──
+
+export interface DisbursementEditState {
+  readonly sheetOpen: boolean;
+  /**
+   * The disbursement being corrected. Kept after dismiss so the sheet
+   * keeps its content while it slides away; the next open replaces it.
+   */
+  readonly edit: DisbursementEdit | undefined;
+  open(edit: DisbursementEdit): void;
+  dismiss(): void;
+}
+
+export function createDisbursementEdit(): DisbursementEditState {
+  let sheetOpen = $state(false);
+  let current = $state<DisbursementEdit | undefined>(undefined);
+
+  return {
+    get sheetOpen(): boolean {
+      return sheetOpen;
+    },
+    get edit(): DisbursementEdit | undefined {
+      return current;
+    },
+    open(edit: DisbursementEdit): void {
+      current = edit;
+      sheetOpen = true;
+    },
+    dismiss(): void {
+      sheetOpen = false;
     },
   };
 }

@@ -265,6 +265,18 @@ export const PROCEDURE_PERMISSIONS = {
   "savedFilters.share": Permission.VIEW_CASES,
   "savedFilters.unshare": Permission.VIEW_CASES,
 
+  // --- funds ---
+  "funds.list": Permission.VIEW_FUNDS,
+  "funds.listLedger": Permission.AUDIT_FUNDS,
+  "funds.create": Permission.MANAGE_FUNDS,
+  "funds.update": Permission.MANAGE_FUNDS,
+  "funds.recordDisbursement": Permission.RECORD_DISBURSEMENTS,
+  "funds.recordAdjustment": Permission.MANAGE_FUNDS,
+  "funds.reviseDisbursement": Permission.RECORD_DISBURSEMENTS,
+  "funds.setBalance": Permission.MANAGE_FUNDS,
+  "funds.getSettings": Permission.MANAGE_FUNDS,
+  "funds.updateSettings": Permission.MANAGE_FUNDS,
+
   // --- dev ---
   "dev.resetSeedData": Permission.MANAGE_ROLES,
   "dev.seedQuarantine": Permission.MANAGE_ROLES,

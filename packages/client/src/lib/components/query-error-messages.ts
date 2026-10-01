@@ -128,6 +128,10 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.SAVED_FILTER_NOT_FOUND]: () => m.error_saved_filter_not_found(),
   [ErrorCode.SAVED_FILTER_NOT_OWNER]: () => m.error_saved_filter_not_owner(),
 
+  // Funds
+  [ErrorCode.FUND_NOT_FOUND]: () => m.error_fund_not_found(),
+  [ErrorCode.FUND_BALANCE_STALE]: () => m.error_fund_balance_stale(),
+
   // Queues / presets / media
   [ErrorCode.QUEUE_NOT_FOUND]: () => m.error_queue_not_found(withTerms()),
   [ErrorCode.CANNOT_DELETE_LAST_QUEUE]: () =>

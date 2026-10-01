@@ -40,6 +40,9 @@ const SEED_TABLES_DELETE_ORDER: readonly (keyof TenantDatabase)[] = [
   "kb_votes",
   "kb_attachments",
   "audit_log",
+  // fund rows name no other table in plaintext
+  "fund_ledger",
+  "funds",
   // depend on followups
   "attachments",
   "recordings",

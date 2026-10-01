@@ -33,6 +33,9 @@ export interface OrgConfigService {
   setIntakeQueue(queueId: QueueId | null): Promise<void>;
   getChannelPolicy(): Promise<ChannelPolicy>;
   updateChannelPolicy(input: UpdateChannelPolicyInput): Promise<void>;
+  /** Whether MANAGE_FUNDS holders are notified of every ledger entry. */
+  getNotifyFundManagers(): Promise<boolean>;
+  setNotifyFundManagers(value: boolean): Promise<void>;
 }
 
 export function createOrgConfigService(
@@ -171,6 +174,30 @@ export function createOrgConfigService(
       if (!hasUpdate) return;
 
       const result = await query.executeTakeFirst();
+      if (result.numUpdatedRows === 0n) {
+        throw new NotFoundError("Org config not found");
+      }
+    },
+
+    async getNotifyFundManagers(): Promise<boolean> {
+      const config = await tenantDb
+        .selectFrom("org_config")
+        .select("notify_fund_managers")
+        .executeTakeFirst();
+
+      if (!config) {
+        throw new NotFoundError("Org config not found");
+      }
+
+      return config.notify_fund_managers;
+    },
+
+    async setNotifyFundManagers(value: boolean): Promise<void> {
+      const result = await tenantDb
+        .updateTable("org_config")
+        .set({ notify_fund_managers: value })
+        .executeTakeFirst();
+
       if (result.numUpdatedRows === 0n) {
         throw new NotFoundError("Org config not found");
       }

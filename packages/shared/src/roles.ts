@@ -164,4 +164,14 @@ export enum Permission {
   VIEW_AUDIT_LOG = "view_audit_log",
   /** No shifts feature exists yet. Declared so it is not reinvented. */
   VIEW_OWN_SHIFTS = "view_own_shifts",
+
+  // --- Funds ---
+  /** Fund names and balances, which a volunteer needs on a case. */
+  VIEW_FUNDS = "view_funds",
+  /** The full ledger: amounts, dates and recorders across every case. */
+  AUDIT_FUNDS = "audit_funds",
+  /** Recording money spent on a case is casework. */
+  RECORD_DISBURSEMENTS = "record_disbursements",
+  /** Creating funds, correcting balances and choosing who hears of entries. */
+  MANAGE_FUNDS = "manage_funds",
 }

@@ -384,6 +384,8 @@ function getNotificationBody(
       return strings.followupAdded(loginUrl);
     case "voicemail_quarantined":
       return strings.voicemailQuarantined(loginUrl);
+    case "fund_entry_recorded":
+      return strings.fundEntryRecorded(loginUrl);
   }
 }
 
@@ -407,5 +409,7 @@ function getSubjectLine(eventType: NotificationEventType): string {
       return "Client merge completed";
     case "voicemail_quarantined":
       return "Voicemail quarantined";
+    case "fund_entry_recorded":
+      return "Fund entry recorded";
   }
 }

@@ -28,6 +28,8 @@ import {
   RadioTower,
   ScrollText,
   ClipboardList,
+  HandCoins,
+  ReceiptText,
 } from "@lucide/svelte";
 
 export type AdminGroup =
@@ -217,6 +219,16 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     permission: Permission.MANAGE_INTAKE_FORMS,
     implemented: true,
   },
+  {
+    id: "funds",
+    group: "organization",
+    icon: HandCoins,
+    label: m.panel_funds,
+    subtitle: m.hub_funds_subtitle,
+    path: "/admin/organization?tab=funds",
+    permission: Permission.MANAGE_FUNDS,
+    implemented: true,
+  },
 
   // ANALYTICS
   {
@@ -267,6 +279,16 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     subtitle: m.hub_audit_log_subtitle,
     path: "/admin/logs?tab=audit",
     permission: Permission.VIEW_AUDIT_LOG,
+    implemented: true,
+  },
+  {
+    id: "fund-ledger",
+    group: "analytics",
+    icon: ReceiptText,
+    label: m.funds_page_title,
+    subtitle: m.hub_fund_ledger_subtitle,
+    path: "/admin/funds",
+    permission: Permission.AUDIT_FUNDS,
     implemented: true,
   },
 

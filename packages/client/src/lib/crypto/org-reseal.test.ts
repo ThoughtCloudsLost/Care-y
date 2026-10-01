@@ -199,6 +199,8 @@ describe("org-reseal", () => {
       expect(TRAILING_TIER_TABLES).not.toContain("clients");
       expect(TRAILING_TIER_TABLES).toContain("queues");
       expect(TRAILING_TIER_TABLES).toContain("org_config");
+      expect(TRAILING_TIER_TABLES).toContain("funds");
+      expect(TRAILING_TIER_TABLES).toContain("fund_ledger");
     });
   });
 

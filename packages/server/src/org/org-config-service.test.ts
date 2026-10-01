@@ -114,6 +114,23 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
         await resetOrgConfig(db);
       });
     });
+
+    describe("notify fund managers", () => {
+      it("defaults to true", async () => {
+        const svc = createOrgConfigService(db);
+        await expect(svc.getNotifyFundManagers()).resolves.toBe(true);
+      });
+
+      it("persists a change and reads it back", async () => {
+        const svc = createOrgConfigService(db);
+
+        await svc.setNotifyFundManagers(false);
+        await expect(svc.getNotifyFundManagers()).resolves.toBe(false);
+
+        await svc.setNotifyFundManagers(true);
+        await expect(svc.getNotifyFundManagers()).resolves.toBe(true);
+      });
+    });
   });
 
   describe("with no org_config row (fresh schema)", () => {
@@ -141,6 +158,18 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
           countryCode: "+34",
         }),
       ).rejects.toThrow(NotFoundError);
+    }, 30_000);
+
+    it("getNotifyFundManagers rejects with NotFoundError when the row is missing", async () => {
+      const svc = createOrgConfigService(testDb.db);
+      await expect(svc.getNotifyFundManagers()).rejects.toThrow(NotFoundError);
+    }, 30_000);
+
+    it("setNotifyFundManagers rejects with NotFoundError when the row is missing", async () => {
+      const svc = createOrgConfigService(testDb.db);
+      await expect(svc.setNotifyFundManagers(false)).rejects.toThrow(
+        NotFoundError,
+      );
     }, 30_000);
   });
 

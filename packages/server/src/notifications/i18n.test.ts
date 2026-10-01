@@ -49,7 +49,16 @@ describe("getStrings", () => {
     expect(strings.followupAdded(url)).toContain(url);
     expect(strings.mentionNotification(url)).toContain(url);
     expect(strings.voicemailQuarantined(url)).toContain(url);
+    expect(strings.fundEntryRecorded(url)).toContain(url);
     expect(strings.smsPing(url)).toContain(url);
+  });
+
+  it("returns Spanish fundEntryRecorded with login URL", () => {
+    const strings = getStrings("es");
+    const url = "https://org.care-y.app/login";
+    const msg = strings.fundEntryRecorded(url);
+    expect(msg).toContain("fondo");
+    expect(msg).toContain(url);
   });
 
   it("returns Spanish voicemailQuarantined with login URL", () => {

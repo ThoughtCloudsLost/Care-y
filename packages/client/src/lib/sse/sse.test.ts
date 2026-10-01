@@ -118,6 +118,17 @@ describe("handleEvent", () => {
     );
   });
 
+  // ["funds"] is the root of the fund list, ledger and settings keys, so
+  // every balance refetches when another user records an entry.
+  it("invalidates the fund cache on fund_entry_recorded", () => {
+    handleEvent({ type: "fund_entry_recorded" }, qc);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["funds"],
+    });
+  });
+
   it("does nothing for unknown event types", () => {
     handleEvent({ type: "unknown:event" }, qc);
 

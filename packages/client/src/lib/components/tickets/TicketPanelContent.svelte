@@ -56,6 +56,7 @@
   import PanelMediaSection from "./PanelMediaSection.svelte";
   import PortalTierSection from "./PortalTierSection.svelte";
   import LinkedCasesSection from "./LinkedCasesSection.svelte";
+  import FundBalanceLine from "./FundBalanceLine.svelte";
   import { onKeyActivate, labelToggleInput } from "$lib/utils/a11y.js";
   import { enabledTicketId } from "$lib/tickets/queries.js";
   import type { TicketAction } from "$lib/tickets/types.js";
@@ -307,6 +308,9 @@
   <PanelNotesSection {ticketId} {keyWrap} {onnotetap} />
 
   <LinkedCasesSection {ticketId} onlink={() => onaction("linkCases")} />
+
+  <!-- The queue's fund and its balance; renders nothing without one. -->
+  <FundBalanceLine {ticketId} />
 
   <PortalTierSection
     {ticketId}

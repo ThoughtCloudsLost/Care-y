@@ -325,6 +325,9 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
     has: vi.fn().mockReturnValue(false),
   }),
   getCurrentPermissions: () => () => new Set<string>(),
+  getOrgKeyManager: () => ({
+    encryptText: vi.fn().mockResolvedValue("sealed"),
+  }),
 }));
 
 // vi.mock required: buffer-encoding barrel imports from @care-y/crypto

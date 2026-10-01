@@ -58,6 +58,12 @@
     decryptQueueAppearance,
     type QueueAppearance,
   } from "$lib/utils/queue-appearance.js";
+  import {
+    createFundStore,
+    decryptQueueFundId,
+  } from "$lib/funds/fund-store.svelte.js";
+  import { formatAmount } from "$lib/funds/fund-display.js";
+  import { isBelowZero } from "$lib/funds/balances.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import {
     getNavbarOverrideCtx,
@@ -416,6 +422,26 @@
     queryFn: async () => ticketRouter.myQueues.query(),
   }));
 
+  // Queue tiles show the sealed balance of the fund each queue maps to,
+  // decrypted in the browser from the shared fund cache.
+  const fundStore = createFundStore();
+
+  function queueFundBalance(queue: {
+    readonly id: string;
+    readonly encryptedFundId: string | null;
+  }): { amount: string; belowZero: boolean } | undefined {
+    if (!fundStore.enabled) return undefined;
+    const fundId = decryptQueueFundId(orgCache, queue);
+    if (fundId === null) return undefined;
+    const fund = fundStore.fund(fundId);
+    if (fund?.balance == null) return undefined;
+    const { balanceMinor } = fund.balance;
+    return {
+      amount: formatAmount(balanceMinor, fund.currency),
+      belowZero: isBelowZero(balanceMinor),
+    };
+  }
+
   const shiftQuery = createQuery(() => ({
     queryKey: ticketsKeys.dashboardInfo(),
     queryFn: async () => ticketRouter.dashboardInfo.query(),
@@ -767,6 +793,7 @@
       openCount: Number(q.openCount),
       urgentCount: Number(q.urgentCount),
       appearance: decryptQueueAppearance(orgCache, q),
+      fundBalance: queueFundBalance(q),
     })),
   );
 

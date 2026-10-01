@@ -523,6 +523,7 @@ async function keyAndReplay(
     // the structural seed wrote the telephony config instead. The caller
     // adapter answers every path, so absence has to be stated here.
     telephonyAdmin: {},
+    funds: requireRouter(app.funds, "funds"),
   };
 
   // Clients are resolved through the relay endpoint, as the new-ticket

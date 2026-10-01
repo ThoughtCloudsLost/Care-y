@@ -79,6 +79,13 @@
     Permission.VIEW_INTAKE_RESPONSES,
   ];
 
+  const FUND_PERMISSIONS: readonly Permission[] = [
+    Permission.VIEW_FUNDS,
+    Permission.AUDIT_FUNDS,
+    Permission.RECORD_DISBURSEMENTS,
+    Permission.MANAGE_FUNDS,
+  ];
+
   const RUNNING_ORG_PERMISSIONS: readonly Permission[] = [
     Permission.MANAGE_ROLES,
     Permission.MANAGE_USERS,
@@ -185,6 +192,14 @@
       Permission.VIEW_INTAKE_RESPONSES,
       () => m.permission_view_intake_responses(),
     ],
+    // Funds
+    [Permission.VIEW_FUNDS, () => m.permission_view_funds()],
+    [Permission.AUDIT_FUNDS, () => m.permission_audit_funds()],
+    [
+      Permission.RECORD_DISBURSEMENTS,
+      () => m.permission_record_disbursements(),
+    ],
+    [Permission.MANAGE_FUNDS, () => m.permission_manage_funds()],
     // Running the organisation
     [Permission.MANAGE_ROLES, () => m.permission_manage_roles()],
     [Permission.MANAGE_USERS, () => m.permission_manage_users()],
@@ -264,6 +279,11 @@
       key: "intake",
       title: () => m.roles_group_intake(),
       permissions: INTAKE_PERMISSIONS,
+    },
+    {
+      key: "funds",
+      title: () => m.roles_group_funds(),
+      permissions: FUND_PERMISSIONS,
     },
     {
       key: "running_org",

@@ -569,6 +569,27 @@ describe("createQueueInputSchema", () => {
         .success,
     ).toBe(false);
   });
+
+  it("accepts an optional encryptedFundId", () => {
+    const result = createQueueInputSchema.safeParse({
+      encryptedName: "AQIDBA==",
+      encryptedColor: "AQIDBA==",
+      encryptedIcon: "AQIDBA==",
+      encryptedFundId: "AQIDBA==",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a null encryptedFundId on create", () => {
+    expect(
+      createQueueInputSchema.safeParse({
+        encryptedName: "AQIDBA==",
+        encryptedColor: "AQIDBA==",
+        encryptedIcon: "AQIDBA==",
+        encryptedFundId: null,
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("updateQueueInputSchema", () => {
@@ -587,6 +608,34 @@ describe("updateQueueInputSchema", () => {
       encryptedIcon: "AQIDBA==",
     });
     expect(result.success).toBe(true);
+  });
+
+  it("accepts a sealed encryptedFundId", () => {
+    const result = updateQueueInputSchema.safeParse({
+      queueId: VALID_UUID,
+      encryptedFundId: "AQIDBA==",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts null encryptedFundId to clear the fund", () => {
+    const result = updateQueueInputSchema.safeParse({
+      queueId: VALID_UUID,
+      encryptedFundId: null,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.encryptedFundId).toBeNull();
+    }
+  });
+
+  it("rejects a non-base64 encryptedFundId", () => {
+    expect(
+      updateQueueInputSchema.safeParse({
+        queueId: VALID_UUID,
+        encryptedFundId: "not!base64",
+      }).success,
+    ).toBe(false);
   });
 });
 

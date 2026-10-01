@@ -151,6 +151,7 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
   "mention",
   "merge_completed",
   "voicemail_quarantined",
+  "fund_entry_recorded",
 ] as const;
 
 /**

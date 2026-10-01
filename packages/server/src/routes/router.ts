@@ -61,6 +61,7 @@ import {
 } from "./client-portal.js";
 import { createSavedFiltersRouter } from "./saved-filters.js";
 import { createPrefBlobsRouter } from "./pref-blobs.js";
+import { createFundsRouter, type FundsRouterDeps } from "./funds.js";
 
 function healthCheck(): { status: "ok" } {
   return { status: "ok" };
@@ -106,6 +107,7 @@ export interface OptionalRouterDeps {
    * leaves those endpoints degraded, not absent.
    */
   readonly keysDeps: KeysRouterDeps | null;
+  readonly fundsDeps: FundsRouterDeps | null;
 }
 
 export interface RouterDeps extends OptionalRouterDeps {
@@ -185,5 +187,8 @@ export function createAppRouter(deps: RouterDeps) {
       : {}),
     ...(deps.devDeps !== null ? { dev: createDevRouter(deps.devDeps) } : {}),
     ...(deps.savedFilters ? { savedFilters: createSavedFiltersRouter() } : {}),
+    ...(deps.fundsDeps !== null
+      ? { funds: createFundsRouter(deps.fundsDeps) }
+      : {}),
   });
 }

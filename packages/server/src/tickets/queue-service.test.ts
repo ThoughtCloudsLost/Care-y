@@ -97,6 +97,37 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
     expect(updated.encryptedName.toString()).toBe("Recolor");
   });
 
+  it("create stores a sealed fund id and listActive returns it", async () => {
+    const q = await svc.create({
+      ...queueInput("Funded"),
+      encryptedFundId: encName("sealed-fund"),
+    });
+    expect(q.encryptedFundId?.toString()).toBe("sealed-fund");
+
+    const found = (await svc.listActive()).find((x) => x.id === q.id);
+    expect(found?.encryptedFundId?.toString()).toBe("sealed-fund");
+  });
+
+  it("create without a fund leaves encryptedFundId null", async () => {
+    const q = await svc.create(queueInput("Unfunded"));
+    expect(q.encryptedFundId).toBeNull();
+  });
+
+  it("update sets, keeps and clears the sealed fund id", async () => {
+    const q = await svc.create(queueInput("Refund"));
+
+    const mapped = await svc.update(q.id, {
+      encryptedFundId: encName("fund-a"),
+    });
+    expect(mapped.encryptedFundId?.toString()).toBe("fund-a");
+
+    const untouched = await svc.update(q.id, { escalateDays: 2 });
+    expect(untouched.encryptedFundId?.toString()).toBe("fund-a");
+
+    const cleared = await svc.update(q.id, { encryptedFundId: null });
+    expect(cleared.encryptedFundId).toBeNull();
+  });
+
   it("returns null color and icon for queues created before migration 078", async () => {
     const legacy = await createTestQueue(testDb.db, { label: "LegacyStyle" });
     const list = await svc.listActive();

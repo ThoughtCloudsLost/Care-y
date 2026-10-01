@@ -25,6 +25,7 @@ export const notificationEventTypeSchema = z.enum([
   "mention",
   "merge_completed",
   "voicemail_quarantined",
+  "fund_entry_recorded",
 ]);
 export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 
@@ -52,7 +53,7 @@ export type SseEvent = z.infer<typeof sseEventSchema>;
 // --- System SSE event (ticketless notifications, e.g., voicemail quarantine) ---
 
 export const systemSseEventSchema = z.object({
-  type: z.literal("voicemail_quarantined"),
+  type: z.enum(["voicemail_quarantined", "fund_entry_recorded"]),
   timestamp: z.iso.datetime(),
 });
 export type SystemSseEvent = z.infer<typeof systemSseEventSchema>;

@@ -47,6 +47,29 @@ describe("ROLE_CONFIG", () => {
     }
   });
 
+  it("grants VIEW_FUNDS and RECORD_DISBURSEMENTS from volunteer up and MANAGE_FUNDS to admin only", () => {
+    expect(hasPermission(RoleId.VOLUNTEER, Permission.VIEW_FUNDS)).toBe(true);
+    expect(hasPermission(RoleId.MANAGER, Permission.VIEW_FUNDS)).toBe(true);
+    expect(hasPermission(RoleId.ADMIN, Permission.VIEW_FUNDS)).toBe(true);
+    expect(
+      hasPermission(RoleId.VOLUNTEER, Permission.RECORD_DISBURSEMENTS),
+    ).toBe(true);
+    expect(hasPermission(RoleId.MANAGER, Permission.RECORD_DISBURSEMENTS)).toBe(
+      true,
+    );
+    expect(hasPermission(RoleId.VOLUNTEER, Permission.MANAGE_FUNDS)).toBe(
+      false,
+    );
+    expect(hasPermission(RoleId.MANAGER, Permission.MANAGE_FUNDS)).toBe(false);
+    expect(hasPermission(RoleId.ADMIN, Permission.MANAGE_FUNDS)).toBe(true);
+  });
+
+  it("grants AUDIT_FUNDS to admin only", () => {
+    expect(hasPermission(RoleId.VOLUNTEER, Permission.AUDIT_FUNDS)).toBe(false);
+    expect(hasPermission(RoleId.MANAGER, Permission.AUDIT_FUNDS)).toBe(false);
+    expect(hasPermission(RoleId.ADMIN, Permission.AUDIT_FUNDS)).toBe(true);
+  });
+
   it("roles have strictly increasing level values", () => {
     const volunteer = ROLE_CONFIG.get(RoleId.VOLUNTEER)!;
     const manager = ROLE_CONFIG.get(RoleId.MANAGER)!;

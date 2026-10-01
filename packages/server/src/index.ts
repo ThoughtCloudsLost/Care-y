@@ -854,6 +854,16 @@ const appRouter = createAppRouter({
     pendingClients,
     liveEvents: ticketLiveEvents,
   },
+  // Same sources as ticketDeps: the case note a disbursement writes goes
+  // through the same follow-up, audit and notification paths.
+  fundsDeps: {
+    createTicketAccess: createTicketAccessChecker,
+    createFollowUpSvc: createFollowUpService,
+    createAuditSvc: createAuditService,
+    notificationService,
+    fieldEncryptor: encryptor,
+    liveEvents: ticketLiveEvents,
+  },
   clientDeps: {
     createClientSvc: (tDb, orgId, onTicketChanged) =>
       createClientService({

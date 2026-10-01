@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { fundIdSchema, fundLedgerIdSchema } from "@care-y/shared";
 import {
   createContextMenu,
   type ContextMenuCallbacks,
@@ -92,6 +93,35 @@ describe("createContextMenu", () => {
       menu.dispatch("edit");
 
       expect(cb.onedit).toHaveBeenCalledWith("fu-1", "", null);
+    });
+
+    it("editDisbursement hands the envelope to the correction sheet", () => {
+      const cb = makeCallbacks({ oneditdisbursement: vi.fn() });
+      const menu = createContextMenu(cb);
+      const envelope = {
+        v: 1 as const,
+        kind: "disbursement" as const,
+        ledgerEntryId: fundLedgerIdSchema.parse(globalThis.crypto.randomUUID()),
+        fundId: fundIdSchema.parse(globalThis.crypto.randomUUID()),
+        amountMinor: 2_000,
+        currency: "USD",
+        note: "Bus pass",
+      };
+      menu.show(makeEvent({ followUpId: "fu-7", disbursement: envelope }));
+
+      menu.dispatch("editDisbursement");
+
+      expect(cb.oneditdisbursement).toHaveBeenCalledWith("fu-7", envelope);
+    });
+
+    it("editDisbursement does nothing for a note without an envelope", () => {
+      const cb = makeCallbacks({ oneditdisbursement: vi.fn() });
+      const menu = createContextMenu(cb);
+      menu.show(makeEvent());
+
+      menu.dispatch("editDisbursement");
+
+      expect(cb.oneditdisbursement).not.toHaveBeenCalled();
     });
 
     it("delete calls ondelete with followUpId", () => {

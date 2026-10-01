@@ -58,6 +58,7 @@ const DECLINABLE = [
   "clientPortal",
   "dev",
   "savedFilters",
+  "funds",
 ];
 
 describe("createAppRouter mounting", () => {
