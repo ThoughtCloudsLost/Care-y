@@ -1,0 +1,60 @@
+<!doctype html>
+<!--
+  Served by Caddy at the apex domain and never by the app. Deliberately
+  inert: no scripts, no external resources, no organization lookup. A list
+  or search of organizations here would let anyone enumerate who uses the
+  service. Colors match the default theme's splash screen in app.html.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>CARE-Y</title>
+    <style>
+      body {
+        box-sizing: border-box;
+        min-height: 100vh;
+        margin: 0;
+        padding: 2rem 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        font-size: 1.0625rem;
+        line-height: 1.5;
+        background: #1a1713;
+        color: rgba(255, 255, 255, 0.85);
+      }
+
+      main {
+        max-width: 32rem;
+      }
+
+      @media (prefers-color-scheme: light) {
+        body {
+          background: #f5f1e8;
+          color: rgba(0, 0, 0, 0.8);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>If you were given a specific link, please use that link directly.</p>
+      <p>
+        If you need help, contact the person or organization who referred you.
+      </p>
+      <div lang="es">
+        <p>Si te dieron un enlace específico, por favor úsalo directamente.</p>
+        <p>
+          Si necesitas ayuda, comunícate con la persona u organización que te
+          remitió.
+        </p>
+      </div>
+    </main>
+  </body>
+</html>

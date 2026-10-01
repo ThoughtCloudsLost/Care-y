@@ -1,0 +1,30 @@
+# Categories for the generated notes on each GitHub Release, matched by pull
+# request label in this order. A pull request labelled changelog:skip is left
+# out. Unmatched pull requests land under "Other changes"; without a "*"
+# category GitHub would drop them from the notes.
+changelog:
+  exclude:
+    labels:
+      - changelog:skip
+  categories:
+    - title: Security
+      labels:
+        - security
+    - title: Features
+      labels:
+        - enhancement
+    - title: Fixes
+      labels:
+        - bug
+    - title: Documentation
+      labels:
+        - documentation
+    # The labels Dependabot applies.
+    - title: Dependencies
+      labels:
+        - dependencies
+        - github_actions
+        - javascript
+    - title: Other changes
+      labels:
+        - "*"

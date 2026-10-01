@@ -1,6 +1,6 @@
 // Environment variable validation.
 // Exports lazy accessors so importing this module does NOT trigger validation.
-// index.ts calls loadSecretsFile() then initEnv(source); initEnv fills the cache getEnv() reads.
+// env-bootstrap.ts calls loadSecretsFile() then initEnv(source); initEnv fills the cache getEnv() reads.
 // All env vars are declared here. Add new vars as features are built.
 
 import { z } from "zod";
@@ -118,6 +118,14 @@ const envSchema = z.object({
   // receiver stays plaintext SMTP (port 25 opportunistic-TLS reality).
   INBOUND_SMTP_TLS_KEY_PATH: z.string().optional(),
   INBOUND_SMTP_TLS_CERT_PATH: z.string().optional(),
+
+  // Domain the org subdomains hang off, without scheme or path. The
+  // operator CLIs build setup links as https://<slug>.<CAREY_APP_DOMAIN>/setup/<token>.
+  // Production: the apex domain the wildcard certificate covers.
+  CAREY_APP_DOMAIN: z
+    .string()
+    .min(1, "CAREY_APP_DOMAIN must not be empty")
+    .default("localhost:5173"),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

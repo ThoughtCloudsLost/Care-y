@@ -1,0 +1,98 @@
+# syntax=docker/dockerfile:1
+# Production images. One dependency graph, two runtime targets:
+#   --target api   API server (packages/server), run by tsx as in development
+#   --target web   SvelteKit server (adapter-node output), run by `node build`
+#
+# Base image, corepack cache, install flags and the uid 1001 user follow the
+# development Dockerfile. node:22-slim (Debian, glibc) because sodium-native
+# does not ship musl prebuilds.
+
+# ── builder ──────────────────────────────────────────────────────────
+FROM node:22-slim AS builder
+# The release tag. The release workflow passes --build-arg CAREY_VERSION=vX.Y.Z.
+ARG CAREY_VERSION=dev
+# Read by the client build (SvelteKit $env/static/public) and the api startup log.
+ENV PUBLIC_CAREY_VERSION=$CAREY_VERSION
+ENV COREPACK_HOME=/app/.corepack
+RUN corepack enable pnpm
+WORKDIR /app
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY patches/ ./patches/
+COPY packages/server/package.json ./packages/server/
+COPY packages/client/package.json ./packages/client/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/crypto/package.json ./packages/crypto/
+# --ignore-scripts skips the root postinstall (lefthook install), which needs
+# git; the native addons the runtime needs are rebuilt explicitly.
+RUN pnpm install --frozen-lockfile --ignore-scripts && pnpm rebuild sodium-native esbuild
+COPY packages ./packages
+COPY tsconfig.json tsconfig.base.json ./
+# Paraglide compiles per package; both are required before the client build.
+# `pnpm --filter @care-y/client build` runs `vite build`, which adapter-node
+# writes to packages/client/build.
+RUN pnpm --filter @care-y/shared build:paraglide \
+ && pnpm --filter @care-y/client build:paraglide \
+ && pnpm --filter @care-y/client build
+# Drop dev dependencies so neither runtime image carries build or test
+# tooling. `pnpm prune` does not support workspaces (pnpm.io/cli/prune), so
+# remove every node_modules and reinstall production dependencies only.
+RUN rm -rf node_modules packages/*/node_modules \
+ && pnpm install --prod --frozen-lockfile --ignore-scripts \
+ && pnpm rebuild sodium-native esbuild
+
+# ── api ──────────────────────────────────────────────────────────────
+FROM node:22-slim AS api
+ARG CAREY_VERSION=dev
+ENV PUBLIC_CAREY_VERSION=$CAREY_VERSION
+# Corepack cache comes from the builder so pnpm resolves without a download
+# (required for read_only: true).
+ENV COREPACK_HOME=/app/.corepack
+RUN corepack enable pnpm
+# Same users as the development Dockerfile. uid 1001 matches the host service
+# user that owns /etc/care-y/secrets.env. GID 3001 (oprf-ipc) is the shared
+# group for the OPRF sidecar sockets (0770). /app/data is the blob store mount.
+RUN groupadd --system appgroup \
+    && groupadd --system --gid 3001 oprf-ipc \
+    && useradd --system --gid appgroup --uid 1001 --groups oprf-ipc appuser \
+    && mkdir -p /app/data && chown 1001:1001 /app/data
+COPY --from=builder --chown=1001:1001 /app /app
+COPY --chmod=755 deploy/entrypoint.sh /app/deploy/entrypoint.sh
+# Deployable host files, refreshed on the host by the deploy script from the
+# pulled image. prod.env is never part of the image.
+COPY docker-compose.prod.yml deploy/caddy/Caddyfile static/apex.html /opt/care-y-dist/
+WORKDIR /app
+USER 1001
+# The entrypoint sets `ulimit -c 0`, then execs the command.
+ENTRYPOINT ["/app/deploy/entrypoint.sh"]
+CMD ["pnpm", "--filter", "@care-y/server", "exec", "tsx", "src/index.ts"]
+
+# ── web ──────────────────────────────────────────────────────────────
+FROM node:22-slim AS web
+# Keep the workspace layout so pnpm's symlinks in packages/client/node_modules
+# still resolve into /app/node_modules/.pnpm. adapter-node externalises the
+# packages listed under `dependencies` in packages/client/package.json and
+# bundles everything else with Rollup (SEC-260); the externalised ones are
+# resolved from these node_modules at runtime.
+#
+# @care-y/server is a client dependency for its router types only (every
+# import from it is `import type`). packages/server is not copied here, so its
+# symlink in packages/client/node_modules dangles. That is harmless only while
+# no runtime import exists: vite.config.ts bundles @care-y/* into the SSR
+# output (ssr.noExternal), so a value import would pull server code into this
+# bundle, and the server's own dependencies (pg, kysely, sodium-native) are not
+# client dependencies, so nothing makes them resolvable from this stage and the
+# importing module would fail to load. Keep every import from @care-y/server
+# type-only.
+COPY --from=builder --chown=1001:1001 /app/node_modules /app/node_modules
+COPY --from=builder --chown=1001:1001 /app/packages/client/build /app/packages/client/build
+COPY --from=builder --chown=1001:1001 /app/packages/client/package.json /app/packages/client/package.json
+COPY --from=builder --chown=1001:1001 /app/packages/client/node_modules /app/packages/client/node_modules
+COPY --from=builder --chown=1001:1001 /app/packages/shared /app/packages/shared
+COPY --from=builder --chown=1001:1001 /app/packages/crypto /app/packages/crypto
+COPY --chmod=755 deploy/entrypoint.sh /app/deploy/entrypoint.sh
+WORKDIR /app/packages/client
+USER 1001
+ENV PORT=3001 HOST=0.0.0.0
+# The entrypoint sets `ulimit -c 0`, then execs the command.
+ENTRYPOINT ["/app/deploy/entrypoint.sh"]
+CMD ["node", "build"]

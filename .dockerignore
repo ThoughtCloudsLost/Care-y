@@ -1,3 +1,13 @@
+# Build context rules shared by every image built from this directory:
+#   Dockerfile       development (production target) and test targets
+#   Dockerfile.oprf  OPRF sidecars
+#   Dockerfile.prod  production api and web targets. It copies all of
+#                    packages/ (client sources included) plus
+#                    deploy/entrypoint.sh, docker-compose.prod.yml,
+#                    deploy/caddy/Caddyfile and static/apex.html.
+# A pattern without a leading **/ matches at the context root only, so
+# anything that must stay out of nested package directories needs that form.
+
 # Dependencies rebuilt inside container (matches nested dirs too)
 # (packages/*/node_modules has pnpm symlinks with host-absolute paths).
 **/node_modules
@@ -13,11 +23,22 @@
 .env
 .env.*
 *.local
+# Nested copies: Dockerfile.prod copies the whole packages/ tree.
+**/.env
+**/.env.*
+# Local TLS material (mkcert dev certificates live in packages/client/.certs).
+**/.certs
+**/*.pem
+**/*.key
 
 # Build artifacts and caches
 dist
 coverage
 build
+# Host build outputs inside packages; the prod builder regenerates them.
+packages/*/build
+packages/*/dist
+**/.svelte-kit
 
 # IDE and editor
 *.swp
@@ -41,3 +62,8 @@ THIRD_PARTY_LICENSES
 **/*.test.ts
 **/*.spec.ts
 **/__tests__
+
+# Static demo site, built and published separately and never part of an
+# image. The prod builder's first install sees only the four packages whose
+# manifests it copies; its production reinstall must see the same set.
+packages/demo

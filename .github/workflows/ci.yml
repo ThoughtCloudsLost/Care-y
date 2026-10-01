@@ -112,7 +112,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Shellcheck provisioning scripts
-        working-directory: deploy/provision
+        working-directory: deploy
         run: |
           shellcheck --version
           find . -name '*.sh' -print0 | xargs -0 shellcheck --external-sources --source-path=SCRIPTDIR

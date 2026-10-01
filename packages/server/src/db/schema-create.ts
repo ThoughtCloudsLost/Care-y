@@ -7,8 +7,11 @@
 // Called during org onboarding and admin setup wizard.
 // On migration failure: drops the schema (no half-provisioned orgs).
 
+// Must stay the first import: loads the secrets file and fills the getEnv()
+// cache before db.ts reads DATABASE_URL at import time (ADR-131).
+import "../env-bootstrap.js";
 import { sql } from "kysely";
-import { db, tenantDb } from "./db.js";
+import { db, pool } from "./db.js";
 import {
   isValidOrgSchemaName,
   schemaExists,
@@ -45,7 +48,7 @@ await db.schema.createSchema(schemaName).execute();
 console.log(`Created schema: ${schemaName}`);
 
 // Run tenant migrations. On failure, drop schema to keep state clean.
-const migrator = createTenantMigrator(tenantDb(parsedSchema), schemaName);
+const migrator = createTenantMigrator(pool, parsedSchema);
 const { error, results } = await migrator.migrateToLatest();
 logMigrationResults(schemaName, results);
 
