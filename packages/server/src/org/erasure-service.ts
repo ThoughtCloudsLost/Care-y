@@ -50,13 +50,7 @@ import {
 
 /** Step names as they appear in ErasureStepError and the CLI output. */
 export type ErasureStep =
-  | "claim"
-  | "snapshot"
-  | "blobs"
-  | "schema"
-  | "rows"
-  | "subaccount"
-  | "audit";
+  "claim" | "snapshot" | "blobs" | "schema" | "rows" | "subaccount" | "audit";
 
 /** Closes a managed-mode subaccount with the platform's master credentials. */
 export type CloseSubaccount = (

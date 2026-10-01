@@ -175,10 +175,7 @@ export interface InboundEmailDomainsTable {
 // --- Org erasure (deletion requests and platform audit) ---
 
 export type DeletionRequestStatus =
-  | "pending"
-  | "cancelled"
-  | "processing"
-  | "done";
+  "pending" | "cancelled" | "processing" | "done";
 
 export interface DeletionRequestsTable {
   id: Generated<DeletionRequestId>;
