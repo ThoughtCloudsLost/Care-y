@@ -16,6 +16,7 @@ import {
   kbKeys,
   notificationKeys,
   adminKeys,
+  orgDeletionKeys,
 } from "$lib/query/keys";
 
 export interface SSEEvent {
@@ -148,6 +149,12 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
     case "voicemail_quarantined":
       void queryClient.invalidateQueries({
         queryKey: adminKeys.quarantine(),
+      });
+      break;
+    case "org_deletion_requested":
+    case "org_deletion_cancelled":
+      void queryClient.invalidateQueries({
+        queryKey: orgDeletionKeys.status(),
       });
       break;
   }

@@ -31,6 +31,8 @@ const LOADED_KEYS = [
   "DATABASE_URL", // carries the Postgres password; db.ts reads it via getEnv()
   "DATABASE_ADMIN_URL", // carries the owner role's password; createAdminPool() reads it
   "DATABASE_APP_ROLE", // a role name, not a secret; kept next to the two URLs
+  "OPERATOR_ALERT_EMAIL", // the host operator's address, not an org admin's
+  "JOBS_HEARTBEAT_URL", // whoever holds it can mark the scheduler healthy
 ] as const;
 
 const LOADED_KEY_SET: ReadonlySet<string> = new Set<string>(LOADED_KEYS);

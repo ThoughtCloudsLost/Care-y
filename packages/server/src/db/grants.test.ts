@@ -2,7 +2,12 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { sql, type Kysely } from "kysely";
-import type { HashedIp, TicketId, UserId } from "@care-y/shared";
+import {
+  newOrgId,
+  type HashedIp,
+  type TicketId,
+  type UserId,
+} from "@care-y/shared";
 import { createTestDb, type TestDb } from "../test-utils.js";
 import {
   applyAllGrants,
@@ -152,6 +157,47 @@ describe.skipIf(!process.env.DATABASE_URL)("database grants (DB)", () => {
     );
   }
 
+  /**
+   * Inserts one platform_audit_log row as the role and checks UPDATE and
+   * DELETE fail.
+   */
+  async function expectPlatformErasureAuditLogAppendOnly(
+    roleName: string,
+  ): Promise<void> {
+    await asRole(
+      testDb.platformDb,
+      roleName,
+      async (platform: Kysely<PlatformDatabase>) => {
+        const row = await platform
+          .insertInto("platform_audit_log")
+          .values({
+            action: "org_erased",
+            org_id: newOrgId(),
+            actor: "grants-test",
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const updateErr = await rejectionOf(
+          platform
+            .updateTable("platform_audit_log")
+            .set({ actor: "rewritten" })
+            .where("id", "=", row.id)
+            .execute(),
+        );
+        expect(isPgPermissionDenied(updateErr)).toBe(true);
+
+        const deleteErr = await rejectionOf(
+          platform
+            .deleteFrom("platform_audit_log")
+            .where("id", "=", row.id)
+            .execute(),
+        );
+        expect(isPgPermissionDenied(deleteErr)).toBe(true);
+      },
+    );
+  }
+
   beforeAll(async () => {
     testDb = await createTestDb();
     pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
@@ -165,11 +211,15 @@ describe.skipIf(!process.env.DATABASE_URL)("database grants (DB)", () => {
     for (const role of [appRole, allGrantsRole]) {
       await dropTestRole(role);
     }
-    // Rows the roles inserted into the platform audit table outlive the test
+    // Rows the roles inserted into the platform audit tables outlive the test
     // schema, so they are removed by marker here.
     await testDb.platformDb
       .deleteFrom("oprf_audit_log")
       .where("hashed_ip", "=", "grants-test" as HashedIp)
+      .execute();
+    await testDb.platformDb
+      .deleteFrom("platform_audit_log")
+      .where("actor", "=", "grants-test")
       .execute();
     await pool.end();
     await testDb.cleanup();
@@ -201,6 +251,12 @@ describe.skipIf(!process.env.DATABASE_URL)("database grants (DB)", () => {
     await applyPlatformGrants(pool, appRole);
 
     await expectPlatformAuditLogAppendOnly(appRole);
+  });
+
+  it("the role may insert into public.platform_audit_log but not update or delete it", async () => {
+    await applyPlatformGrants(pool, appRole);
+
+    await expectPlatformErasureAuditLogAppendOnly(appRole);
   });
 
   it("running the grants a second time succeeds and leaves the revokes in place", async () => {

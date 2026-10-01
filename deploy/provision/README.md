@@ -8,7 +8,7 @@ Bash scripts that turn a fresh Ubuntu 24.04 server with LUKS full-disk encryptio
 - `installimage/post-install.sh`: runs once inside the new system during installimage and adds Dropbear to the initramfs, so the disk can be unlocked over SSH on port 2222.
 - `lib.sh`: shared settings and helpers, sourced by every other script. Host parameters (user names, the service uid, ports, paths) live at the top of this file and nowhere else.
 - `dropbear-keys.sh`: `sync` applies the team public-key set to the initramfs and verifies the rebuilt image; `list` reads the registered keys back from the boot initramfs.
-- `provision.sh`: runs the numbered scripts from `10-users-ssh.sh` to `40-secrets.sh` in order, then `99-verify.sh`.
+- `provision.sh`: runs the numbered scripts from `10-users-ssh.sh` to `50-logging.sh` in order, then `99-verify.sh`.
 - `10-users-ssh.sh`: the `care-y` service user (uid 1001, no shell, no sudo) and the `carey-admin` operator (SSH key only, sudo with a password), plus the sshd hardening drop-in.
 - `20-network.sh`: UFW (22, 80 and 443 open), Fail2ban for sshd, security-only unattended upgrades with automatic reboots off.
 - `30-memory-docker.sh`: core dumps disabled at every layer, swap on zram only, Docker Engine from Docker's apt repository with a daemon-wide core limit of 0.

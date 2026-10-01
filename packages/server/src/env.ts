@@ -140,6 +140,29 @@ const envSchema = z.object({
     .string()
     .regex(/^[a-z_][a-z0-9_]*$/)
     .optional(),
+
+  // Where the dead-job sweep sends its alert: the host operator's address,
+  // never an org admin's. Required in production (see the refinement
+  // below); unset in dev and tests, where the sweep is not registered.
+  OPERATOR_ALERT_EMAIL: z.email().optional(),
+
+  // Heartbeat monitor URL the job scheduler pings after each clean poll
+  // cycle. Anyone holding it can mark the scheduler healthy, so it lives in
+  // the secrets file and stays out of every log line. Unset disables the
+  // ping.
+  JOBS_HEARTBEAT_URL: z.url().optional(),
+});
+
+// Cross-field rules that one field's schema cannot express.
+const refinedEnvSchema = envSchema.superRefine((env, ctx) => {
+  if (env.NODE_ENV === "production" && env.OPERATOR_ALERT_EMAIL === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["OPERATOR_ALERT_EMAIL"],
+      message: "OPERATOR_ALERT_EMAIL is required in production",
+      input: env.OPERATOR_ALERT_EMAIL,
+    });
+  }
 });
 
 export type EnvVars = z.infer<typeof envSchema>;
@@ -160,7 +183,7 @@ export class EnvValidationError extends Error {
  * Throws EnvValidationError on failure.
  */
 export function validateEnv(source: NodeJS.ProcessEnv = process.env): EnvVars {
-  const parsed = envSchema.safeParse(source);
+  const parsed = refinedEnvSchema.safeParse(source);
   if (!parsed.success) {
     throw new EnvValidationError(parsed.error.issues);
   }

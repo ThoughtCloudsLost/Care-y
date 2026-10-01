@@ -1,0 +1,12 @@
+# Daily trigger for care-y-org-erase.service (same name, so no Unit= line
+# is needed). Persistent=true runs a missed erasure pass at the next boot.
+[Unit]
+Description=Daily CARE-Y org erasure pass
+
+[Timer]
+OnCalendar=*-*-* 04:23:00
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -7,15 +7,26 @@ export type {
   JobStatus,
   BackoffStrategy,
   EnqueueOptions,
+  DeadJobReader,
+  DeadJobSummary,
 } from "./queue.js";
 export { JobQueueError } from "./queue.js";
 
 import type { Kysely } from "kysely";
 import type { PlatformDatabase } from "../db/types.js";
-import type { JobQueue } from "./queue.js";
-import { createPostgresJobQueue } from "./postgres-queue.js";
+import type { DeadJobReader, JobQueue } from "./queue.js";
+import {
+  createPostgresJobQueue,
+  type PostgresJobQueueOptions,
+} from "./postgres-queue.js";
 
-/** Creates a JobQueue backed by the platform Postgres instance. */
-export function createJobQueue(db: Kysely<PlatformDatabase>): JobQueue {
-  return createPostgresJobQueue(db);
+/**
+ * Creates a JobQueue backed by the platform Postgres instance. The same
+ * object reads dead jobs for the operator alert.
+ */
+export function createJobQueue(
+  db: Kysely<PlatformDatabase>,
+  queueOptions?: PostgresJobQueueOptions,
+): JobQueue & DeadJobReader {
+  return createPostgresJobQueue(db, queueOptions);
 }

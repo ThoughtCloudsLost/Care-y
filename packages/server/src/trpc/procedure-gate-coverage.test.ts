@@ -288,6 +288,21 @@ describe("procedure gate coverage", () => {
     ).toEqual([]);
   });
 
+  it("gates every org deletion procedure and allowlists none", () => {
+    // Erasure requests are destructive org state; none may ever be ungated.
+    const deletionPaths = allPaths.filter((p) => p.startsWith("orgDeletion."));
+
+    expect(deletionPaths.sort()).toEqual([
+      "orgDeletion.cancel",
+      "orgDeletion.request",
+      "orgDeletion.status",
+    ]);
+    for (const path of deletionPaths) {
+      expect(path in PROCEDURE_PERMISSIONS, path).toBe(true);
+      expect(path in UNGATED_PROCEDURES, path).toBe(false);
+    }
+  });
+
   it("does not double-list a procedure in both manifests", () => {
     const doubled: string[] = [];
     for (const path of Object.keys(UNGATED_PROCEDURES)) {

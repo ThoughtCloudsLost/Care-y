@@ -96,6 +96,7 @@
     Permission.VIEW_REPORTS,
     Permission.VIEW_AUDIT_LOG,
     Permission.VIEW_OWN_SHIFTS,
+    Permission.REQUEST_ORG_DELETION,
   ];
 
   /** Locked permissions cannot be reassigned from Admin. */
@@ -217,6 +218,10 @@
     [Permission.VIEW_REPORTS, () => m.permission_view_reports()],
     [Permission.VIEW_AUDIT_LOG, () => m.permission_view_audit_log()],
     [Permission.VIEW_OWN_SHIFTS, () => m.permission_view_own_shifts()],
+    [
+      Permission.REQUEST_ORG_DELETION,
+      () => m.permission_request_org_deletion(),
+    ],
   ]);
 
   function permissionLabel(perm: Permission): string {

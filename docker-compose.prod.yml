@@ -46,6 +46,13 @@ services:
         # keep the address inside the subnet at the bottom of this file.
         ipv4_address: 172.28.0.10
     depends_on: [web, api]
+    # Every service logs to the host journal, which keeps 14 days and
+    # forwards nothing (deploy/journald/care-y.conf). The tag becomes the
+    # journal's SYSLOG_IDENTIFIER (SEC-269): journalctl -t care-y-caddy.
+    logging:
+      driver: journald
+      options:
+        tag: care-y-caddy
 
   web:
     image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER must be set in prod.env}/care-y-web:${IMAGE_TAG:?IMAGE_TAG must be set in prod.env}
@@ -75,6 +82,10 @@ services:
       # exceed. File uploads go to the api's /api/blobs route, never here.
       - BODY_SIZE_LIMIT=1M
     networks: [internal]
+    logging:
+      driver: journald
+      options:
+        tag: care-y-web
 
   api:
     image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER must be set in prod.env}/care-y-api:${IMAGE_TAG:?IMAGE_TAG must be set in prod.env}
@@ -128,6 +139,10 @@ services:
         condition: service_started
       oprf-b:
         condition: service_started
+    logging:
+      driver: journald
+      options:
+        tag: care-y-api
 
   db:
     image: postgres:16-alpine
@@ -149,6 +164,10 @@ services:
       test: ["CMD-SHELL", "pg_isready -U carey"]
       interval: 10s
       retries: 6
+    logging:
+      driver: journald
+      options:
+        tag: care-y-db
 
   oprf-a:
     image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER must be set in prod.env}/care-y-oprf:${IMAGE_TAG:?IMAGE_TAG must be set in prod.env}
@@ -181,6 +200,10 @@ services:
         bind:
           create_host_path: false
     networks: [internal]
+    logging:
+      driver: journald
+      options:
+        tag: care-y-oprf-a
 
   oprf-b:
     image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER must be set in prod.env}/care-y-oprf:${IMAGE_TAG:?IMAGE_TAG must be set in prod.env}
@@ -213,6 +236,10 @@ services:
         bind:
           create_host_path: false
     networks: [internal]
+    logging:
+      driver: journald
+      options:
+        tag: care-y-oprf-b
 
 secrets:
   db_password:

@@ -25,14 +25,15 @@ function createMockQueryClient(cache?: Record<string, unknown>): QueryClient {
 
 describe("section-registry", () => {
   describe("static section arrays", () => {
-    it("ORGANIZATION_SECTIONS has 7 entries", () => {
-      expect(ORGANIZATION_SECTIONS).toHaveLength(7);
+    it("ORGANIZATION_SECTIONS has 8 entries", () => {
+      expect(ORGANIZATION_SECTIONS).toHaveLength(8);
       expect(ORGANIZATION_SECTIONS.map((s) => s.id)).toEqual([
         "general",
         "branding",
         "terminology",
         "keys",
         "retention",
+        "org-deletion",
         "note-types",
         "intake-forms",
       ]);
@@ -227,8 +228,16 @@ describe("section-registry", () => {
       const ids = sections.map((s) => s.id);
       expect(ids).not.toContain("keys");
       expect(ids).not.toContain("intake-forms");
+      expect(ids).not.toContain("org-deletion");
       expect(ids).toContain("general");
       expect(ids).toContain("branding");
+    });
+
+    it("lists the deletion section only for REQUEST_ORG_DELETION", () => {
+      const perms = new Set([Permission.REQUEST_ORG_DELETION]);
+      const qc = createMockQueryClient();
+      const sections = getHoverSections("/admin/organization", perms, qc);
+      expect(sections.map((s) => s.id)).toEqual(["org-deletion"]);
     });
 
     it("returns empty for routes not in the registry", () => {

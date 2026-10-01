@@ -30,6 +30,9 @@ const SMTP_PASSWORD = "file-smtp-password-value";
 const DB_ADMIN_URL =
   "postgresql://carey:test-file-owner-password@db:5432/carey";
 const DB_APP_ROLE = "carey_app";
+const OPERATOR_ALERT_EMAIL = "operator@example.org";
+const JOBS_HEARTBEAT_URL =
+  "https://heartbeat.example.invalid/ping/placeholder-token";
 
 const ALL_KEYS_CONTENT = [
   `OPS_SECRETS_KEY=${OPS_KEY}`,
@@ -45,6 +48,8 @@ const ALL_KEYS_CONTENT = [
   `SMTP_PASSWORD=${SMTP_PASSWORD}`,
   `DATABASE_ADMIN_URL=${DB_ADMIN_URL}`,
   `DATABASE_APP_ROLE=${DB_APP_ROLE}`,
+  `OPERATOR_ALERT_EMAIL=${OPERATOR_ALERT_EMAIL}`,
+  `JOBS_HEARTBEAT_URL=${JOBS_HEARTBEAT_URL}`,
   "",
 ].join("\n");
 
@@ -55,6 +60,12 @@ function baseEnv(): NodeJS.ProcessEnv {
     SESSION_SECRET: "a".repeat(64),
     DATABASE_URL: "postgresql://localhost:5432/test",
   };
+}
+
+// baseEnv plus the operator address production validation requires, for
+// tests whose fixture file does not carry it.
+function validatableEnv(): NodeJS.ProcessEnv {
+  return { ...baseEnv(), OPERATOR_ALERT_EMAIL };
 }
 
 function spyOnConsoleLog() {
@@ -112,6 +123,8 @@ describe("loadSecretsFile", () => {
       expect(source.SMTP_PASSWORD).toBe(SMTP_PASSWORD);
       expect(source.DATABASE_ADMIN_URL).toBe(DB_ADMIN_URL);
       expect(source.DATABASE_APP_ROLE).toBe(DB_APP_ROLE);
+      expect(source.OPERATOR_ALERT_EMAIL).toBe(OPERATOR_ALERT_EMAIL);
+      expect(source.JOBS_HEARTBEAT_URL).toBe(JOBS_HEARTBEAT_URL);
       // Pre-set values carry through.
       expect(source.DATABASE_URL).toBe(before.DATABASE_URL);
 
@@ -131,6 +144,8 @@ describe("loadSecretsFile", () => {
         "SMTP_PASSWORD",
         "DATABASE_ADMIN_URL",
         "DATABASE_APP_ROLE",
+        "OPERATOR_ALERT_EMAIL",
+        "JOBS_HEARTBEAT_URL",
       ]);
       expect(report.ignoredKeys).toEqual([]);
     });
@@ -149,7 +164,7 @@ describe("loadSecretsFile", () => {
 
       const { source } = loadSecretsFile({
         path,
-        env: baseEnv(),
+        env: validatableEnv(),
         nodeEnv: "production",
       });
       const validated = validateEnv(source);
@@ -165,7 +180,7 @@ describe("loadSecretsFile", () => {
 
       const { source } = loadSecretsFile({
         path,
-        env: baseEnv(),
+        env: validatableEnv(),
         nodeEnv: "production",
       });
       initEnv(source);
@@ -413,7 +428,7 @@ describe("loadSecretsFile", () => {
 
     // Production boot where the URL lives only in the secrets file.
     function envWithoutDatabaseUrl(): NodeJS.ProcessEnv {
-      const env = baseEnv();
+      const env = validatableEnv();
       delete env.DATABASE_URL;
       return env;
     }
@@ -469,7 +484,7 @@ describe("loadSecretsFile", () => {
 
       const { source, report } = loadSecretsFile({
         path,
-        env: { ...baseEnv(), OPS_SECRETS_KEY: OPS_KEY },
+        env: { ...validatableEnv(), OPS_SECRETS_KEY: OPS_KEY },
         nodeEnv: "production",
       });
       const validated = validateEnv(source);
@@ -490,6 +505,36 @@ describe("loadSecretsFile", () => {
       );
       expect(line).not.toContain(DB_ADMIN_URL);
       expect(line).not.toContain("typo-value");
+    });
+  });
+
+  describe("operator alert address and heartbeat URL", () => {
+    it("loads both keys, validateEnv accepts them, and the log line names keys only", () => {
+      const path = writeFixture(
+        `OPERATOR_ALERT_EMAIL=${OPERATOR_ALERT_EMAIL}\nJOBS_HEARTBEAT_URL=${JOBS_HEARTBEAT_URL}\n`,
+        0o600,
+      );
+
+      const { source, report } = loadSecretsFile({
+        path,
+        env: { ...baseEnv(), OPS_SECRETS_KEY: OPS_KEY },
+        nodeEnv: "production",
+      });
+      const validated = validateEnv(source);
+
+      expect(validated.OPERATOR_ALERT_EMAIL).toBe(OPERATOR_ALERT_EMAIL);
+      expect(validated.JOBS_HEARTBEAT_URL).toBe(JOBS_HEARTBEAT_URL);
+      expect(report.loadedKeys).toEqual([
+        "OPERATOR_ALERT_EMAIL",
+        "JOBS_HEARTBEAT_URL",
+      ]);
+
+      const line = String(logSpy.mock.calls[0]?.[0]);
+      expect(line).toBe(
+        "secrets file: loaded OPERATOR_ALERT_EMAIL, JOBS_HEARTBEAT_URL",
+      );
+      expect(line).not.toContain(OPERATOR_ALERT_EMAIL);
+      expect(line).not.toContain("placeholder-token");
     });
   });
 });

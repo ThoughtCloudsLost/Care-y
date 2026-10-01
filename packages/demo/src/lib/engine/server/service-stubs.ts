@@ -549,6 +549,9 @@ export async function buildServiceStubs(
     // The seed snapshot builder mounts the dev procedures on a separate
     // router of its own; this one never carries them.
     devDeps: null,
+    // Declined: a request here could never be processed, because erasure
+    // runs only from the operator CLI on a real host.
+    orgDeletionDeps: null,
   });
 
   return {

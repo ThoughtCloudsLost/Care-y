@@ -32,6 +32,8 @@ describe("notificationEventTypeSchema", () => {
     "mention",
     "merge_completed",
     "voicemail_quarantined",
+    "org_deletion_requested",
+    "org_deletion_cancelled",
   ];
 
   it.each(validTypes)("accepts '%s'", (type) => {
@@ -141,6 +143,17 @@ describe("systemSseEventSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it.each(["org_deletion_requested", "org_deletion_cancelled"])(
+    "accepts the org deletion event '%s'",
+    (type) => {
+      const result = systemSseEventSchema.safeParse({
+        type,
+        timestamp: VALID_ISO,
+      });
+      expect(result.success).toBe(true);
+    },
+  );
 
   it("rejects missing type", () => {
     expect(

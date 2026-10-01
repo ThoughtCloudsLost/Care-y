@@ -1,7 +1,16 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import pg from "pg";
-import { sql, Kysely } from "kysely";
+import {
+  sql,
+  DummyDriver,
+  Kysely,
+  PostgresAdapter,
+  PostgresIntrospector,
+  PostgresQueryCompiler,
+  type KyselyPlugin,
+} from "kysely";
 import { FileMigrationProvider, Migrator } from "kysely/migration";
+import { jobIdSchema, type JobId } from "@care-y/shared";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import type { PlatformDatabase } from "../db/types.js";
@@ -46,6 +55,84 @@ describe("computeBackoffMs", () => {
   it("handles zero base delay", () => {
     expect(computeBackoffMs("exponential", 0, 0)).toBe(0);
     expect(computeBackoffMs("linear", 0, 0)).toBe(0);
+  });
+});
+
+// A Kysely instance with no database behind it: every query resolves with
+// zero rows. The plugin, when given, throws while compiling the first UPDATE,
+// which in a poll cycle is the claim statement.
+function createStubDb(options: {
+  readonly failClaim: boolean;
+}): Kysely<PlatformDatabase> {
+  const db = new Kysely<PlatformDatabase>({
+    dialect: {
+      createAdapter: () => new PostgresAdapter(),
+      createDriver: () => new DummyDriver(),
+      createIntrospector: (kysely) => new PostgresIntrospector(kysely),
+      createQueryCompiler: () => new PostgresQueryCompiler(),
+    },
+  });
+  if (!options.failClaim) return db;
+
+  const failingClaim: KyselyPlugin = {
+    transformQuery(args) {
+      if (args.node.kind === "UpdateQueryNode") {
+        throw new JobQueueError("claim statement failed");
+      }
+      return args.node;
+    },
+    transformResult(args) {
+      return Promise.resolve(args.result);
+    },
+  };
+  return db.withPlugin(failingClaim);
+}
+
+describe("onPollComplete", () => {
+  it("fires once after a clean poll cycle", async () => {
+    const onPollComplete = vi.fn();
+    const localQueue = createPostgresJobQueue(
+      createStubDb({ failClaim: false }),
+      { onPollComplete },
+    );
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- a registered queue is what makes the cycle reach the claim
+    localQueue.process("stub-queue", async () => {});
+
+    // Only the immediate first cycle runs inside this test.
+    localQueue.start(60_000);
+    try {
+      await vi.waitFor(() => {
+        expect(onPollComplete).toHaveBeenCalled();
+      });
+      expect(onPollComplete).toHaveBeenCalledTimes(1);
+    } finally {
+      await localQueue.stop();
+    }
+  });
+
+  it("does not fire when the claim statement throws", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockReturnValue(undefined);
+    const onPollComplete = vi.fn();
+    const localQueue = createPostgresJobQueue(
+      createStubDb({ failClaim: true }),
+      { onPollComplete },
+    );
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- a registered queue is what makes the cycle reach the claim
+    localQueue.process("stub-queue", async () => {});
+
+    localQueue.start(60_000);
+    try {
+      await vi.waitFor(() => {
+        expect(errorSpy).toHaveBeenCalledWith(
+          "JobQueue poll error:",
+          "claim statement failed",
+        );
+      });
+      expect(onPollComplete).not.toHaveBeenCalled();
+    } finally {
+      await localQueue.stop();
+      errorSpy.mockRestore();
+    }
   });
 });
 
@@ -340,6 +427,68 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(all).toEqual(
         Array.from({ length: 5 }, (_, i) => `job-${String(i)}`),
       );
+    });
+
+    it("claim skips a row locked by another connection", async () => {
+      const processed: string[] = [];
+
+      const localQueue = createPostgresJobQueue(testDb.db);
+      localQueue.process("locked-queue", async (payload) => {
+        processed.push(String(payload.jobTag));
+      });
+
+      // Enqueued first, so without SKIP LOCKED the claim would reach it
+      // first and wait on the lock instead of moving past it.
+      const lockedId = jobIdSchema.parse(
+        await localQueue.enqueue("locked-queue", { jobTag: "locked" }),
+      );
+      const freeId = jobIdSchema.parse(
+        await localQueue.enqueue("locked-queue", { jobTag: "free" }),
+      );
+
+      async function statusOf(id: JobId): Promise<string | undefined> {
+        const row = await testDb.db
+          .selectFrom("pending_jobs")
+          .select("status")
+          .where("id", "=", id)
+          .executeTakeFirst();
+        return row?.status;
+      }
+
+      try {
+        await testDb.db.transaction().execute(async (trx) => {
+          // The row lock holds until this transaction ends.
+          await trx
+            .selectFrom("pending_jobs")
+            .select("id")
+            .where("id", "=", lockedId)
+            .forUpdate()
+            .execute();
+
+          localQueue.start(50);
+
+          await vi.waitFor(
+            async () => {
+              expect(await statusOf(freeId)).toBe("completed");
+            },
+            { timeout: 5000, interval: 100 },
+          );
+
+          expect(await statusOf(lockedId)).toBe("pending");
+          expect(processed).toEqual(["free"]);
+        });
+
+        // Released, the skipped row is claimed on a later poll.
+        await vi.waitFor(
+          async () => {
+            expect(await statusOf(lockedId)).toBe("completed");
+          },
+          { timeout: 5000, interval: 100 },
+        );
+        expect(processed).toEqual(["free", "locked"]);
+      } finally {
+        await localQueue.stop();
+      }
     });
   },
 );

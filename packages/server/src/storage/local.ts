@@ -5,7 +5,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { BlobCategory, BlobStore } from "./store.js";
+import type { BlobCategory, BlobStore, OrgBlobSweeper } from "./store.js";
 import { BlobStoreError } from "./store.js";
 import type { BlobKey, OrgSchema } from "@care-y/shared";
 import { blobKeySchema } from "@care-y/shared";
@@ -42,7 +42,9 @@ function assertSafeInputs(orgSchema: OrgSchema, category: string): void {
   }
 }
 
-export function createLocalBlobStore(basePath: string): BlobStore {
+export function createLocalBlobStore(
+  basePath: string,
+): BlobStore & OrgBlobSweeper {
   const resolved = path.resolve(basePath);
 
   function keyToPath(key: string): string {
@@ -103,6 +105,26 @@ export function createLocalBlobStore(basePath: string): BlobStore {
         return true;
       } catch {
         return false;
+      }
+    },
+
+    async deleteOrg(orgSchema: OrgSchema): Promise<void> {
+      // The check put() applies. A name that passes it has no separator or
+      // dot segment and resolves to a direct child of the base path.
+      if (!VALID_ORG_SCHEMA.test(orgSchema)) {
+        throw new BlobStoreError(`Invalid org schema: ${orgSchema}`);
+      }
+      try {
+        // force: a missing directory is not an error, so a rerun succeeds.
+        await fs.rm(path.join(resolved, orgSchema), {
+          recursive: true,
+          force: true,
+        });
+      } catch (err: unknown) {
+        throw new BlobStoreError(
+          `Failed to delete org blobs: ${orgSchema}`,
+          err,
+        );
       }
     },
   };

@@ -219,6 +219,11 @@ export const notificationKeys = {
   preferences: () => [...notificationKeys.all, "preferences"] as const,
 };
 
+export const orgDeletionKeys = {
+  all: ["orgDeletion"] as const,
+  status: () => [...orgDeletionKeys.all, "status"] as const,
+};
+
 /** Search, sort, and filter state that scopes a client list query. */
 export interface ClientListKeyParams {
   readonly query: string;
