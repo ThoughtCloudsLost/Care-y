@@ -1,0 +1,240 @@
+# Production compose. Lives in /opt/care-y on the host and always runs with
+# the non-secret settings file:
+#
+#   docker compose --env-file prod.env -f docker-compose.prod.yml <command>
+#
+# prod.env is described in deploy/prod.env.example. Secrets never pass through
+# this file's environment blocks; each one reaches only the container that
+# needs it, from a file under /etc/care-y:
+#   secrets.env    api: bind-mounted read-only and read by the server's
+#                  secrets loader, never through env_file (ADR-129)
+#   db_password    db: compose secret read by the image entrypoint (SEC-253)
+#   caddy.env      caddy: env_file (DNS API token and ACME settings)
+#   oprf/*.share   one share file per OPRF container
+#
+# Caddy's 80 and 443 are the only published ports. Docker-published ports
+# bypass UFW (SEC-216), so every other service is reachable only on the
+# compose network.
+
+services:
+  caddy:
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER must be set in prod.env}/care-y-caddy:${IMAGE_TAG:?IMAGE_TAG must be set in prod.env}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    # CF_API_TOKEN, CADDY_ACME_EMAIL, CADDY_ACME_CA
+    # (deploy/caddy/caddy.env.example). Caddy only; no other service reads it.
+    env_file: /etc/care-y/caddy.env
+    environment:
+      # Not secret. Substituted into the Caddyfile's {$VAR} placeholders.
+      - CAREY_APP_DOMAIN=${CAREY_APP_DOMAIN:?CAREY_APP_DOMAIN must be set in prod.env}
+      - CAREY_APEX_HOST=${CAREY_APEX_HOST:?CAREY_APEX_HOST must be set in prod.env}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./static/apex.html:/srv/apex/index.html:ro
+      # Operator-managed. The canary route serves canary.txt from here and
+      # answers 404 while the directory is empty.
+      - /opt/care-y/canary:/srv/canary:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      internal:
+        # Pinned so the api can trust exactly this peer: TRUSTED_PROXIES on
+        # the api service names the same address. Change both together, and
+        # keep the address inside the subnet at the bottom of this file.
+        ipv4_address: 172.28.0.10
+    depends_on: [web, api]
+
+  web:
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER must be set in prod.env}/care-y-web:${IMAGE_TAG:?IMAGE_TAG must be set in prod.env}
+    restart: unless-stopped
+    user: "1001"
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    tmpfs:
+      - /tmp
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      # No ORIGIN: it takes a single value and every org has its own
+      # origin, so adapter-node builds the origin from these headers
+      # (SEC-260). Caddy sets them on every proxied request and replaces any
+      # client-supplied values (SEC-254), and this container is reachable
+      # only from the compose network.
+      - PROTOCOL_HEADER=x-forwarded-proto
+      - HOST_HEADER=x-forwarded-host
+      - ADDRESS_HEADER=X-Forwarded-For
+      # One trusted proxy (Caddy) in front: read the right-most address.
+      - XFF_DEPTH=1
+      # adapter-node's default is 512K, which intake form ciphertext can
+      # exceed. File uploads go to the api's /api/blobs route, never here.
+      - BODY_SIZE_LIMIT=1M
+    networks: [internal]
+
+  api:
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER must be set in prod.env}/care-y-api:${IMAGE_TAG:?IMAGE_TAG must be set in prod.env}
+    restart: unless-stopped
+    user: "1001"
+    # PID 1 is pnpm, which does not reap children or forward signals.
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 768m
+    cpus: "1.0"
+    # Killed before db under memory pressure.
+    oom_score_adj: 500
+    tmpfs:
+      - /tmp
+    # Non-secret settings only, and deliberately no env_file. Secrets
+    # (DATABASE_URL among them) come from the secrets.env mount below and
+    # stay out of the process environment (ADR-129).
+    environment:
+      - NODE_ENV=production
+      - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL:?WEBHOOK_BASE_URL must be set in prod.env}
+      # Caddy's pinned address (see the caddy service). X-Forwarded-For is
+      # honored only from this peer.
+      - TRUSTED_PROXIES=172.28.0.10
+      - INTAKE_POW_DIFFICULTY=${INTAKE_POW_DIFFICULTY:-16}
+      # The operator CLIs build setup links with it.
+      - CAREY_APP_DOMAIN=${CAREY_APP_DOMAIN:?CAREY_APP_DOMAIN must be set in prod.env}
+      - BLOB_STORE_TYPE=local
+      - BLOB_STORE_PATH=/app/data
+      # Same as the env.ts defaults; stated so they visibly match the socket
+      # paths the OPRF services are given.
+      - OPRF_SOCKET_A=/run/oprf/oprf-a.sock
+      - OPRF_SOCKET_B=/run/oprf/oprf-b.sock
+    volumes:
+      - type: bind
+        source: /etc/care-y/secrets.env
+        target: /etc/care-y/secrets.env
+        read_only: true
+        bind:
+          # A missing file is an error. Without this, Docker would create an
+          # empty directory at the host path in its place.
+          create_host_path: false
+      - oprf_sockets:/run/oprf
+      - blob_data:/app/data
+    networks: [internal]
+    depends_on:
+      db:
+        condition: service_healthy
+      oprf-a:
+        condition: service_started
+      oprf-b:
+        condition: service_started
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # Kept alive in preference to the app containers under memory pressure.
+    oom_score_adj: -500
+    environment:
+      - POSTGRES_USER=carey
+      - POSTGRES_DB=carey
+      # The image entrypoint reads the password from this file (SEC-253).
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [internal]
+    # No ports: the database is reachable only on the compose network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carey"]
+      interval: 10s
+      retries: 6
+
+  oprf-a:
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER must be set in prod.env}/care-y-oprf:${IMAGE_TAG:?IMAGE_TAG must be set in prod.env}
+    restart: unless-stopped
+    user: "2001"
+    # PID 1 is pnpm, which does not reap children or forward signals.
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: "0.25"
+    # A core dump of this process would put its key share on disk.
+    ulimits:
+      core:
+        soft: 0
+        hard: 0
+    tmpfs:
+      - /tmp
+    environment:
+      - OPRF_SOCKET_PATH=/run/oprf/oprf-a.sock
+      - OPRF_SHARE_FILE=/etc/care-y/oprf/oprf-a.share
+    volumes:
+      - oprf_sockets:/run/oprf
+      # This container's share only. The other share stays out of it.
+      - type: bind
+        source: /etc/care-y/oprf/oprf-a.share
+        target: /etc/care-y/oprf/oprf-a.share
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [internal]
+
+  oprf-b:
+    image: ghcr.io/${GHCR_OWNER:?GHCR_OWNER must be set in prod.env}/care-y-oprf:${IMAGE_TAG:?IMAGE_TAG must be set in prod.env}
+    restart: unless-stopped
+    user: "2001"
+    # PID 1 is pnpm, which does not reap children or forward signals.
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: "0.25"
+    # A core dump of this process would put its key share on disk.
+    ulimits:
+      core:
+        soft: 0
+        hard: 0
+    tmpfs:
+      - /tmp
+    environment:
+      - OPRF_SOCKET_PATH=/run/oprf/oprf-b.sock
+      - OPRF_SHARE_FILE=/etc/care-y/oprf/oprf-b.share
+    volumes:
+      - oprf_sockets:/run/oprf
+      # This container's share only. The other share stays out of it.
+      - type: bind
+        source: /etc/care-y/oprf/oprf-b.share
+        target: /etc/care-y/oprf/oprf-b.share
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [internal]
+
+secrets:
+  db_password:
+    # 0600 root on the host.
+    file: /etc/care-y/db_password
+
+volumes:
+  postgres_data:
+  blob_data:
+  caddy_data:
+  caddy_config:
+  oprf_sockets:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=1m,uid=2001,gid=3001,mode=0770
+
+networks:
+  internal:
+    driver: bridge
+    ipam:
+      config:
+        # Fixed so Caddy's pinned address above stays valid.
+        - subnet: 172.28.0.0/24

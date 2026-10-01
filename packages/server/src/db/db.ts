@@ -2,6 +2,7 @@ import pg from "pg";
 import { Kysely, PostgresDialect } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "./types.js";
 import type { OrgSchema } from "@care-y/shared";
+import { getEnv } from "../env.js";
 
 // int8 (PostgreSQL bigint) is returned as string by pg by default.
 // Override the parser so COUNT(*) and other int8 results come back as number.
@@ -14,17 +15,27 @@ pg.types.setTypeParser(pg.types.builtins.INT8, (val: string) =>
  * Connection settings shared by the pool and by any dedicated client that
  * must hold one session open. LISTEN registers the current session only,
  * so a listener cannot use a pooled connection.
+ *
+ * DATABASE_URL comes from getEnv(), not process.env: in production it
+ * carries the Postgres password and is loaded from the secrets file
+ * (ADR-129). Entry points import env-bootstrap.ts first so the cache is
+ * filled before this module is evaluated.
  */
 export const pgConnectionConfig: pg.ClientConfig = {
-  connectionString: process.env.DATABASE_URL,
+  connectionString: getEnv().DATABASE_URL,
 };
 
-const dialect = new PostgresDialect({
-  pool: new pg.Pool({
-    ...pgConnectionConfig,
-    max: 10,
-  }),
+/**
+ * The process-wide connection pool behind `db` and every `tenantDb()`.
+ * Exported for callers that build their own Kysely instance over the same
+ * connections instead of opening a second pool.
+ */
+export const pool = new pg.Pool({
+  ...pgConnectionConfig,
+  max: 10,
 });
+
+const dialect = new PostgresDialect({ pool });
 
 // Platform-level Kysely instance. Queries the `public` schema by default.
 // Platform tables (orgs, telephony_config, deletion_requests) go through this instance.

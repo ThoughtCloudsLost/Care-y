@@ -123,3 +123,4 @@ docs/sbom/
 
 /docs/*
 !/docs/images/
+!/docs/deploy/

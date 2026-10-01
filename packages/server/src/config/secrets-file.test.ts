@@ -392,4 +392,57 @@ describe("loadSecretsFile", () => {
       ).toThrow(SecretsFileError);
     });
   });
+
+  describe("DATABASE_URL", () => {
+    const FILE_DB_URL =
+      "postgresql://carey:test-file-db-password@db:5432/carey";
+
+    // Production boot where the URL lives only in the secrets file.
+    function envWithoutDatabaseUrl(): NodeJS.ProcessEnv {
+      const env = baseEnv();
+      delete env.DATABASE_URL;
+      return env;
+    }
+
+    it("loads DATABASE_URL from the file and validateEnv accepts it", () => {
+      const path = writeFixture(
+        `OPS_SECRETS_KEY=${OPS_KEY}\nDATABASE_URL=${FILE_DB_URL}\n`,
+        0o600,
+      );
+      const env = envWithoutDatabaseUrl();
+      const before = { ...env };
+
+      const { source, report } = loadSecretsFile({
+        path,
+        env,
+        nodeEnv: "production",
+      });
+
+      expect(source.DATABASE_URL).toBe(FILE_DB_URL);
+      expect(validateEnv(source).DATABASE_URL).toBe(FILE_DB_URL);
+      expect(report.loadedKeys).toEqual(["OPS_SECRETS_KEY", "DATABASE_URL"]);
+      expect(report.ignoredKeys).toEqual([]);
+      expect(env).toEqual(before);
+    });
+
+    it("throws naming DATABASE_URL and neither value when it is also pre-set", () => {
+      const path = writeFixture(`DATABASE_URL=${FILE_DB_URL}\n`, 0o600);
+      const envValue =
+        "postgresql://carey:test-env-db-password@localhost:5432/carey";
+      const env = { ...baseEnv(), DATABASE_URL: envValue };
+
+      let caught: unknown;
+      try {
+        loadSecretsFile({ path, env, nodeEnv: "production" });
+      } catch (err: unknown) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(SecretsFileError);
+      const message = caught instanceof Error ? caught.message : "";
+      expect(message).toContain("DATABASE_URL");
+      expect(message).not.toContain(FILE_DB_URL);
+      expect(message).not.toContain(envValue);
+    });
+  });
 });

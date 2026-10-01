@@ -1,29 +1,22 @@
-import { initEnv, EnvValidationError } from "./env.js";
-import { extractErrorMessage, SecretsFileError } from "./errors.js";
+// Must stay the first import. It loads the secrets file and fills the
+// getEnv() cache before any module below is evaluated; db.ts reads
+// DATABASE_URL through getEnv() at import time (ADR-129).
+import "./env-bootstrap.js";
+import { getEnv, type EnvVars } from "./env.js";
+import { extractErrorMessage } from "./errors.js";
 import { configureTrustedProxies } from "./http/request-utils.js";
-import { loadSecretsFile } from "./config/secrets-file.js";
 
-// Validate env vars before anything else. Exits with a clear error if
-// required vars are missing or malformed (same fail-fast as original).
-// In production the secrets file is merged into a separate source object
-// first; its values never enter process.env. initEnv() stores the result
-// so every later getEnv() call reads the merged config.
-try {
-  const { source } = loadSecretsFile();
-  const env = initEnv(source);
-  // Hand the trusted-proxy list to the request helpers here rather than
-  // letting them read the environment themselves. They are bundled into
-  // the demo, which runs the routers in a browser, so the environment
-  // read has to stay on this side. Applied before the listener starts,
-  // so no request can be served with an unconfigured list.
-  configureTrustedProxies(env.TRUSTED_PROXIES);
-} catch (err) {
-  if (err instanceof EnvValidationError || err instanceof SecretsFileError) {
-    console.error(err.message);
-    process.exit(1);
-  }
-  throw err;
-}
+// env-bootstrap.ts has already validated the env (secrets file merged into
+// a separate source object in production, never into process.env) and
+// exits with the error message when that fails, so getEnv() here returns
+// the cached config.
+//
+// Hand the trusted-proxy list to the request helpers here rather than
+// letting them read the environment themselves. They are bundled into
+// the demo, which runs the routers in a browser, so the environment
+// read has to stay on this side. Applied before the listener starts,
+// so no request can be served with an unconfigured list.
+configureTrustedProxies(getEnv().TRUSTED_PROXIES);
 
 import type {
   IncomingMessage,
@@ -33,9 +26,8 @@ import type {
 import { createServer } from "node:http";
 import { hkdfSync } from "node:crypto";
 import { createHTTPHandler } from "@trpc/server/adapters/standalone";
-import { db, pgConnectionConfig, tenantDb } from "./db/db.js";
+import { db, pgConnectionConfig, pool, tenantDb } from "./db/db.js";
 import { sql } from "kysely";
-import { getEnv, type EnvVars } from "./env.js";
 import { createOrgService } from "./org/service.js";
 import { createPasswordHasher } from "./auth/password.js";
 import {
@@ -529,7 +521,7 @@ const blobStore: BlobStore = createBlobStore(
   env.BLOB_STORE_PATH,
 );
 
-const orgService = createOrgService(db, tenantDb);
+const orgService = createOrgService(db, tenantDb, pool);
 const hasher = createPasswordHasher();
 const { loginLimiter, saltLimiter } = createAuthRateLimiters();
 const emailSender = createEmailSender({

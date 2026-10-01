@@ -1,0 +1,120 @@
+# Production reverse proxy. Terminates TLS for the apex and every tenant
+# subdomain, routes tenant hosts to the web and api containers, and serves
+# the apex page, the canary and the webhook endpoints.
+#
+# Environment (docker-compose.prod.yml):
+#   CAREY_APP_DOMAIN, CAREY_APEX_HOST
+#       non-secret, substituted when this file is parsed ({$VAR})
+#   CF_API_TOKEN, CADDY_ACME_EMAIL, CADDY_ACME_CA
+#       from /etc/care-y/caddy.env, resolved at runtime ({env.VAR}) so the
+#       token never appears in the adapted config (see caddy.env.example)
+#
+# HSTS, CSP and upgrade-insecure-requests are set by the app. Do not add
+# them here; a second copy would drift.
+#
+# No access log is configured. If one is ever added, /relay/* and
+# /webhooks/* must stay out of it.
+
+{
+	email {env.CADDY_ACME_EMAIL}
+	# Let's Encrypt staging until routing is proven, then production (SEC-255).
+	acme_ca {env.CADDY_ACME_CA}
+	# caddy-ratelimit registers this position itself; stated so it is visible.
+	order rate_limit before basic_auth
+	servers {
+		# No trusted_proxies: nothing sits in front of Caddy (Cloudflare is
+		# DNS only), so {client_ip} is the connection's remote address (SEC-258).
+	}
+}
+
+# Tenant routing table. Defined once so any other site block imports it
+# instead of copying it. Mirrors the dev proxy table in
+# packages/client/vite.config.ts, plus /api/forms, which the API serves and
+# the intake form editor and renderer fetch same-origin but the dev table
+# does not list. Caddy passes the incoming Host header to these plain-HTTP
+# upstreams unchanged, which org resolution relies on (SEC-254).
+(app_routes) {
+	# Prefix stripped, as the dev proxy's /trpc rewrite does.
+	handle_path /trpc/* {
+		reverse_proxy api:3000
+	}
+	# /sse/events becomes /notifications/stream and the query string is kept,
+	# as the dev proxy's rewrite does. handle_path would leave "/" as the
+	# remainder and add a trailing slash.
+	handle /sse/events* {
+		rewrite * /notifications/stream?{query}
+		reverse_proxy api:3000 {
+			# Low-latency mode: no response buffering on the event stream.
+			flush_interval -1
+		}
+	}
+	handle /relay/* {
+		reverse_proxy api:3000
+	}
+	handle /api/greetings* {
+		reverse_proxy api:3000
+	}
+	handle /api/blobs* {
+		reverse_proxy api:3000
+	}
+	handle /api/branding* {
+		reverse_proxy api:3000
+	}
+	handle /api/forms* {
+		reverse_proxy api:3000
+	}
+	handle /manifest.webmanifest {
+		reverse_proxy api:3000
+	}
+	handle {
+		reverse_proxy web:3001
+	}
+}
+
+# Every tenant. An unknown slug is proxied like any other and the app answers
+# 404. Caddy holds no org list, since a lookup here would be an enumeration
+# vector.
+*.{$CAREY_APP_DOMAIN} {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+	# First-line intake limit ahead of the app's own limiter. The regexp
+	# catches the procedure inside a batched tRPC URL, which an exact path
+	# match would miss. ipv6_prefix puts a whole /64 in one bucket so
+	# rotating addresses inside it does not reset the count (SEC-259).
+	rate_limit {
+		zone intake {
+			match {
+				path_regexp ^/trpc/.*clientPortal\.submitIntake
+			}
+			key {client_ip}
+			events 3
+			window 1h
+			ipv6_prefix 64
+		}
+	}
+	import app_routes
+}
+
+# Apex: the inert static page, the canary and the webhook endpoints. Nothing
+# else here reaches the app.
+{$CAREY_APEX_HOST} {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+	handle /webhooks/* {
+		reverse_proxy api:3000
+	}
+	# file_server appends the request path to root, so the file name is
+	# fixed: the operator publishes /opt/care-y/canary/canary.txt, and the
+	# route answers 404 until that file exists.
+	handle /canary {
+		rewrite * /canary.txt
+		root * /srv/canary
+		file_server
+	}
+	handle {
+		root * /srv/apex
+		file_server
+	}
+}

@@ -28,6 +28,7 @@ const LOADED_KEYS = [
   "SMTP_SECURE",
   "SMTP_USER",
   "SMTP_PASSWORD",
+  "DATABASE_URL", // carries the Postgres password; db.ts reads it via getEnv()
 ] as const;
 
 const LOADED_KEY_SET: ReadonlySet<string> = new Set<string>(LOADED_KEYS);

@@ -17,13 +17,13 @@
     "postal-mime": "^3.0.0",
     "smtp-server": "3.19.13",
     "sodium-native": "^5.1.0",
+    "tsx": "4.23.13",
     "zod": "4.6.2"
   },
   "devDependencies": {
     "@types/node": "26.5.1",
     "@types/nodemailer": "8.0.0",
     "@types/pg": "8.23.1",
-    "@types/smtp-server": "^3.5.11",
-    "tsx": "4.23.13"
+    "@types/smtp-server": "^3.5.11"
   }
 }
