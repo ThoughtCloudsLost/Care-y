@@ -24,6 +24,7 @@ CAREY_BACKUP_DIR="/var/backups/care-y-provision"
 # Public inbound TCP ports: 22 SSH, 80 ACME HTTP-01 and the HTTPS redirect,
 # 443 HTTPS.
 CAREY_PUBLIC_TCP_PORTS=(22 80 443)
+if [ "${CAREY_SKIP_WEB_PORTS:-0}" = "1" ]; then CAREY_PUBLIC_TCP_PORTS=(22); fi # backup host: no web server
 
 # Exported so a CAREY_TEAM_KEYS_DIR override reaches every script that
 # provision.sh runs.

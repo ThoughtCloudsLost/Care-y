@@ -6,19 +6,29 @@
 //
 // Called during org onboarding and admin setup wizard.
 // On migration failure: drops the schema (no half-provisioned orgs).
+// Connects through createAdminPool() so the schema and its tables belong to
+// the owner role, then grants DATABASE_APP_ROLE access when it is set.
 
 // Must stay the first import: loads the secrets file and fills the getEnv()
 // cache before db.ts reads DATABASE_URL at import time (ADR-129).
 import "../env-bootstrap.js";
-import { sql } from "kysely";
-import { db, pool } from "./db.js";
+import { Kysely, PostgresDialect, sql } from "kysely";
+import { createAdminPool } from "./db.js";
+import { applyTenantGrants } from "./grants.js";
 import {
   isValidOrgSchemaName,
   schemaExists,
   createTenantMigrator,
   logMigrationResults,
 } from "./schema-utils.js";
+import type { PlatformDatabase } from "./types.js";
+import { getEnv } from "../env.js";
 import { orgSchemaNameSchema } from "@care-y/shared";
+
+const pool = createAdminPool();
+const db = new Kysely<PlatformDatabase>({
+  dialect: new PostgresDialect({ pool }),
+});
 
 const schemaName = process.argv[2];
 
@@ -60,6 +70,12 @@ if (error !== undefined) {
   console.error("Schema dropped. Org provisioning aborted.");
   await db.destroy();
   process.exit(1);
+}
+
+const appRole = getEnv().DATABASE_APP_ROLE;
+if (appRole !== undefined) {
+  await applyTenantGrants(pool, schemaName, appRole);
+  console.log(`Granted ${appRole} access to "${schemaName}".`);
 }
 
 console.log(`Org schema "${schemaName}" provisioned successfully.`);

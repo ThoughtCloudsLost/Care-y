@@ -1,9 +1,10 @@
 // Must stay the first import: loads the secrets file and fills the getEnv()
 // cache before db.ts reads DATABASE_URL at import time (ADR-129).
 import "../env-bootstrap.js";
-import type { Kysely } from "kysely";
+import { Kysely, PostgresDialect } from "kysely";
 import type { Pool } from "pg";
-import { db, pool } from "./db.js";
+import { createAdminPool } from "./db.js";
+import { applyAllGrants } from "./grants.js";
 import {
   createPlatformMigrator,
   createTenantMigrator,
@@ -11,15 +12,29 @@ import {
   logMigrationResults,
 } from "./schema-utils.js";
 import type { PlatformDatabase } from "./types.js";
+import { pruneOprfAuditLog } from "../crypto/oprf-audit.js";
+import { getEnv } from "../env.js";
 import { orgSchemaNameSchema, type OrgSchema } from "@care-y/shared";
 
 // CLI usage:
 //   migrate.ts [down] [--platform | --schema=org_<uuid> | --all-schemas]
+//   migrate.ts --grants
+//   migrate.ts --prune-oprf-audit
 //
 //   --platform            - platform migrations only (default when no flag given)
 //   --schema=org_<uuid>   - tenant migrations for one schema
 //   --all-schemas         - platform first, then all org_* tenant schemas
 //   down                  - roll back one migration (combine with any target flag)
+//   --grants              - give DATABASE_APP_ROLE DML on public and every
+//                           org_* schema, UPDATE and DELETE revoked on the
+//                           audit tables; skipped when the role is unset.
+//                           Runs no migrations.
+//   --prune-oprf-audit    - delete OPRF audit rows past retention. Runs no
+//                           migrations.
+//
+// Every run connects through createAdminPool(), which is the owner role when
+// DATABASE_ADMIN_URL is set. Tables created here belong to the owner, not to
+// the runtime role.
 
 /** Connections main() migrates over. The caller owns and closes them. */
 export interface MigrationConnections {
@@ -51,6 +66,21 @@ async function runMigrator(
   }
 }
 
+async function runGrants(pool: Pool): Promise<void> {
+  const appRole = getEnv().DATABASE_APP_ROLE;
+  if (appRole === undefined) {
+    console.log("grants: DATABASE_APP_ROLE unset, skipped");
+    return;
+  }
+  await applyAllGrants(pool, appRole);
+  console.log("grants: applied to public and every org_* schema");
+}
+
+async function runOprfAuditPrune(db: Kysely<PlatformDatabase>): Promise<void> {
+  const deleted = await pruneOprfAuditLog(db, new Date());
+  console.log(`oprf-audit-prune: deleted ${String(deleted)} rows`);
+}
+
 // --- Main ---
 
 /**
@@ -60,8 +90,16 @@ async function runMigrator(
  */
 export async function main(
   args: readonly string[],
-  connections: MigrationConnections = { db, pool },
+  connections: MigrationConnections,
 ): Promise<void> {
+  const grants = args.includes("--grants");
+  const pruneOprfAudit = args.includes("--prune-oprf-audit");
+  if (grants || pruneOprfAudit) {
+    if (grants) await runGrants(connections.pool);
+    if (pruneOprfAudit) await runOprfAuditPrune(connections.db);
+    return;
+  }
+
   const direction = args.includes("down") ? "down" : "up";
   const schemaFlag = args.find((a) => a.startsWith("--schema="));
   const targetSchema =
@@ -93,6 +131,15 @@ export async function main(
 // Run only when executed as a script, not when a test imports main().
 const entryArg = process.argv[1] ?? "";
 if (entryArg.endsWith("migrate.ts") || entryArg.endsWith("migrate.js")) {
-  await main(process.argv.slice(2));
-  await db.destroy();
+  const adminPool = createAdminPool();
+  const adminDb = new Kysely<PlatformDatabase>({
+    dialect: new PostgresDialect({ pool: adminPool }),
+  });
+  try {
+    await main(process.argv.slice(2), { db: adminDb, pool: adminPool });
+  } finally {
+    // Ends the pool directly: destroying a Kysely instance that never ran a
+    // query does not reach the pool.
+    await adminPool.end();
+  }
 }

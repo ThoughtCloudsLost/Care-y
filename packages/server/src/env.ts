@@ -126,6 +126,20 @@ const envSchema = z.object({
     .string()
     .min(1, "CAREY_APP_DOMAIN must not be empty")
     .default("localhost:5173"),
+
+  // Owner-role connection string (production: the carey role). Migrations,
+  // the operator CLIs and the grants step connect with it through
+  // createAdminPool(); DATABASE_URL carries the runtime role. Unset in dev
+  // and tests, where the admin pool is the ordinary DATABASE_URL pool.
+  DATABASE_ADMIN_URL: z.string().min(1).optional(),
+
+  // Runtime role the grants step gives DML on every table, with UPDATE and
+  // DELETE revoked on the audit tables (production: carey_app). Unset in
+  // dev and tests, where grants are skipped.
+  DATABASE_APP_ROLE: z
+    .string()
+    .regex(/^[a-z_][a-z0-9_]*$/)
+    .optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

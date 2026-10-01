@@ -1,8 +1,21 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { Kysely, sql } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
+import { applyTenantGrants } from "../db/grants.js";
+import type * as Grants from "../db/grants.js";
 import { createOrgService, type OrgOperatorService } from "./service.js";
+
+// ESM bindings rule out vi.spyOn on the grants module, so the mock wraps the
+// real applyTenantGrants: calls are recorded and still reach the database.
+vi.mock("../db/grants.js", async (importOriginal) => {
+  const original = await importOriginal<typeof Grants>();
+  return {
+    ...original,
+    applyTenantGrants: vi.fn(original.applyTenantGrants),
+  };
+});
 // Provisioning migrates the new org schema through createTenantMigrator, whose
 // introspector reads only that schema's catalog rows, so a schema dropped by a
 // concurrently running test file cannot fail it. The platform instance below
@@ -356,6 +369,46 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
     await expect(
       service.hasActiveUsers("nonexistent-users-xyz"),
     ).rejects.toThrow(NotFoundError);
+  });
+
+  it("createOrg with appRole applies tenant grants once to the new schema", async () => {
+    // A throwaway nologin role stands in for the runtime role. DROP OWNED BY
+    // revokes the grants so DROP ROLE succeeds.
+    const appRole = `test_orgsvc_app_${randomUUID().slice(0, 8)}`;
+    await sql`CREATE ROLE ${sql.id(appRole)} NOLOGIN`.execute(platformDb);
+    try {
+      vi.mocked(applyTenantGrants).mockClear();
+      const grantingService = createOrgService(
+        platformDb,
+        tenantDbFor,
+        pool,
+        appRole,
+      );
+
+      const org = await grantingService.createOrg({ slug: "test-org-grants" });
+      createdSchemas.push(org.schemaName);
+      createdOrgIds.push(org.id);
+
+      expect(applyTenantGrants).toHaveBeenCalledTimes(1);
+      expect(applyTenantGrants).toHaveBeenCalledWith(
+        pool,
+        org.schemaName,
+        appRole,
+      );
+    } finally {
+      await sql`DROP OWNED BY ${sql.id(appRole)}`.execute(platformDb);
+      await sql`DROP ROLE ${sql.id(appRole)}`.execute(platformDb);
+    }
+  });
+
+  it("createOrg without appRole applies no grants", async () => {
+    vi.mocked(applyTenantGrants).mockClear();
+
+    const org = await service.createOrg({ slug: "test-org-no-grants" });
+    createdSchemas.push(org.schemaName);
+    createdOrgIds.push(org.id);
+
+    expect(applyTenantGrants).not.toHaveBeenCalled();
   });
 });
 

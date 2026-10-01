@@ -1,0 +1,12 @@
+# Daily trigger for care-y-oprf-audit-prune.service (same name, so no Unit=
+# line is needed). Persistent=true runs a missed prune at the next boot.
+[Unit]
+Description=Daily CARE-Y OPRF audit log prune
+
+[Timer]
+OnCalendar=*-*-* 04:07:00
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

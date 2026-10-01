@@ -17,7 +17,14 @@ import { createOrgService } from "../org/service.js";
 
 await withCli("org:create", async (ctx, args) => {
   const slug = singlePositional(args, "org:create <slug>");
-  const orgService = createOrgService(ctx.platformDb, ctx.tenantDbFactory);
+  // The tenant migrator runs on the owner-role pool, and the runtime role
+  // receives its grants on the new schema when DATABASE_APP_ROLE is set.
+  const orgService = createOrgService(
+    ctx.platformDb,
+    ctx.tenantDbFactory,
+    ctx.adminPool,
+    getEnv().DATABASE_APP_ROLE,
+  );
   const org = await orgService.createOrg({ slug });
   console.log(
     buildSetupUrl(getEnv().CAREY_APP_DOMAIN, org.slug, org.setupToken),

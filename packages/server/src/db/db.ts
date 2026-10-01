@@ -58,3 +58,21 @@ export function tenantDb(orgSchema: OrgSchema): Kysely<TenantDatabase> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- .withSchema() preserves source type param; runtime instance is correct, TS can't express the schema swap
   return db.withSchema(orgSchema) as unknown as Kysely<TenantDatabase>;
 }
+
+/**
+ * Pool for the database owner role, used by migrations, the operator CLIs
+ * and the grants step. Everything that creates, alters or drops an object,
+ * or deletes from an audit table, goes through it: the runtime role behind
+ * DATABASE_URL owns nothing and may only append to the audit tables.
+ *
+ * Returns a new pool over DATABASE_ADMIN_URL when it is set (production),
+ * else the process `pool` above (dev and tests, where one role does
+ * everything). Either way the caller ends it when done.
+ *
+ * @returns the owner-role pool, or the process pool when no admin URL is set
+ */
+export function createAdminPool(): pg.Pool {
+  const adminUrl = getEnv().DATABASE_ADMIN_URL;
+  if (adminUrl === undefined) return pool;
+  return new pg.Pool({ connectionString: adminUrl });
+}

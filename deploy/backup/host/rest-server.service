@@ -1,0 +1,53 @@
+# Managed by deploy/backup/host/provision-backup-host.sh. Do not edit by hand.
+#
+# Hardening follows the upstream example (examples/systemd/rest-server.service
+# in the rest-server repository). That example is socket-activated, so it
+# also sets PrivateNetwork=yes and RestrictAddressFamilies=none. This unit
+# opens its own listener on :8000, so it keeps the host network and allows
+# the IP address families instead.
+
+[Unit]
+Description=restic REST server (append-only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=restic
+Group=restic
+ExecStart=/usr/local/bin/rest-server --path /srv/restic --listen :8000 \
+  --append-only --private-repos --htpasswd-file /etc/restic-server/.htpasswd \
+  --tls --tls-cert /etc/restic-server/cert.pem --tls-key /etc/restic-server/key.pem
+Restart=on-failure
+RestartSec=5
+
+# Repository files stay readable by the restic user only.
+UMask=077
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/restic
+PrivateTmp=true
+ProtectHome=true
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+PrivateDevices=true
+PrivateUsers=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+ProtectHostname=true
+RemoveIPC=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target

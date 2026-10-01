@@ -1,0 +1,14 @@
+# Deletes OPRF audit log rows past their 7-day retention. Runs as the
+# database owner role through migrate.ts, because the runtime role the API
+# connects as may only insert into the audit tables. Started daily by
+# care-y-oprf-audit-prune.timer.
+[Unit]
+Description=CARE-Y OPRF audit log prune (owner role)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/care-y
+ExecStart=/usr/bin/docker compose --env-file prod.env -f docker-compose.prod.yml run --rm api pnpm --filter @care-y/server exec tsx src/db/migrate.ts --prune-oprf-audit
+NoNewPrivileges=true

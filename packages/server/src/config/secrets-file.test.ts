@@ -27,6 +27,9 @@ const TWILIO_TOKEN = "file-twilio-token-value";
 const TWILIO_API_KEY_SID = `SK${"2".repeat(32)}`;
 const TWILIO_API_KEY_SECRET = "file-twilio-api-key-secret-value";
 const SMTP_PASSWORD = "file-smtp-password-value";
+const DB_ADMIN_URL =
+  "postgresql://carey:test-file-owner-password@db:5432/carey";
+const DB_APP_ROLE = "carey_app";
 
 const ALL_KEYS_CONTENT = [
   `OPS_SECRETS_KEY=${OPS_KEY}`,
@@ -40,6 +43,8 @@ const ALL_KEYS_CONTENT = [
   "SMTP_SECURE=true",
   "SMTP_USER=platform-mailer",
   `SMTP_PASSWORD=${SMTP_PASSWORD}`,
+  `DATABASE_ADMIN_URL=${DB_ADMIN_URL}`,
+  `DATABASE_APP_ROLE=${DB_APP_ROLE}`,
   "",
 ].join("\n");
 
@@ -102,6 +107,8 @@ describe("loadSecretsFile", () => {
       expect(source.SMTP_SECURE).toBe("true");
       expect(source.SMTP_USER).toBe("platform-mailer");
       expect(source.SMTP_PASSWORD).toBe(SMTP_PASSWORD);
+      expect(source.DATABASE_ADMIN_URL).toBe(DB_ADMIN_URL);
+      expect(source.DATABASE_APP_ROLE).toBe(DB_APP_ROLE);
       // Pre-set values carry through.
       expect(source.DATABASE_URL).toBe(before.DATABASE_URL);
 
@@ -119,6 +126,8 @@ describe("loadSecretsFile", () => {
         "SMTP_SECURE",
         "SMTP_USER",
         "SMTP_PASSWORD",
+        "DATABASE_ADMIN_URL",
+        "DATABASE_APP_ROLE",
       ]);
       expect(report.ignoredKeys).toEqual([]);
     });
@@ -443,6 +452,39 @@ describe("loadSecretsFile", () => {
       expect(message).toContain("DATABASE_URL");
       expect(message).not.toContain(FILE_DB_URL);
       expect(message).not.toContain(envValue);
+    });
+  });
+
+  describe("admin URL and app role", () => {
+    it("loads both keys, validateEnv accepts them, and an unknown key is still ignored", () => {
+      const path = writeFixture(
+        `DATABASE_ADMIN_URL=${DB_ADMIN_URL}\nDATABASE_APP_ROLE=${DB_APP_ROLE}\nDATABASE_OWNER_URL=typo-value\n`,
+        0o600,
+      );
+
+      const { source, report } = loadSecretsFile({
+        path,
+        env: { ...baseEnv(), OPS_SECRETS_KEY: OPS_KEY },
+        nodeEnv: "production",
+      });
+      const validated = validateEnv(source);
+
+      expect(validated.DATABASE_ADMIN_URL).toBe(DB_ADMIN_URL);
+      expect(validated.DATABASE_APP_ROLE).toBe(DB_APP_ROLE);
+      expect(source.DATABASE_OWNER_URL).toBeUndefined();
+      expect(report.loadedKeys).toEqual([
+        "DATABASE_ADMIN_URL",
+        "DATABASE_APP_ROLE",
+      ]);
+      expect(report.ignoredKeys).toEqual(["DATABASE_OWNER_URL"]);
+
+      expect(logSpy).toHaveBeenCalledTimes(1);
+      const line = String(logSpy.mock.calls[0]?.[0]);
+      expect(line).toBe(
+        "secrets file: loaded DATABASE_ADMIN_URL, DATABASE_APP_ROLE; ignored DATABASE_OWNER_URL",
+      );
+      expect(line).not.toContain(DB_ADMIN_URL);
+      expect(line).not.toContain("typo-value");
     });
   });
 });
