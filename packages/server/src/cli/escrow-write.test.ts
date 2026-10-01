@@ -263,7 +263,10 @@ describe("runEscrowWrite", () => {
     workDir = mkdtempSync(join(tmpdir(), "escrow-write-"));
     outDir = join(workDir, "usb");
     secretPath = join(workDir, "restic.password");
+    // Paths are built from the temporary directory this test created
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     mkdirSync(outDir);
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     writeFileSync(secretPath, RESTIC_PASSWORD, { mode: 0o600 });
     logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -284,11 +287,16 @@ describe("runEscrowWrite", () => {
 
     const jsonPath = join(outDir, JSON_NAME);
     const sidecarPath = `${jsonPath}.sha256`;
+    // Paths are built from the temporary directory this test created
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     const jsonBytes = readFileSync(jsonPath);
     const digest = createHash("sha256").update(jsonBytes).digest("hex");
 
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     expect(readFileSync(sidecarPath, "utf8")).toBe(`${digest}  ${JSON_NAME}\n`);
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     expect(statSync(jsonPath).mode & 0o777).toBe(0o600);
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     expect(statSync(sidecarPath).mode & 0o777).toBe(0o600);
 
     const parsed = JSON.parse(jsonBytes.toString("utf8")) as EscrowEnvelope;
@@ -308,6 +316,8 @@ describe("runEscrowWrite", () => {
   });
 
   it("refuses to overwrite an existing escrow file without prompting", async () => {
+    // Paths are built from the temporary directory this test created
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     writeFileSync(join(outDir, JSON_NAME), "existing");
     const io = fakeIo(SIX_WORDS, SIX_WORDS);
 
@@ -316,10 +326,13 @@ describe("runEscrowWrite", () => {
     expect(code).toBe(1);
     expect(lastError()).toContain("already exists");
     expect(io.promptPassphrase).not.toHaveBeenCalled();
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     expect(readFileSync(join(outDir, JSON_NAME), "utf8")).toBe("existing");
   });
 
   it("refuses when only the sidecar already exists", async () => {
+    // Paths are built from the temporary directory this test created
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     writeFileSync(join(outDir, `${JSON_NAME}.sha256`), "existing");
     const io = fakeIo(SIX_WORDS, SIX_WORDS);
 
@@ -327,6 +340,7 @@ describe("runEscrowWrite", () => {
 
     expect(code).toBe(1);
     expect(lastError()).toContain("already exists");
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     expect(existsSync(join(outDir, JSON_NAME))).toBe(false);
   });
 
@@ -337,6 +351,8 @@ describe("runEscrowWrite", () => {
 
     expect(code).toBe(1);
     expect(io.promptPassphrase).toHaveBeenCalledTimes(1);
+    // Path is built from the temporary directory this test created
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     expect(existsSync(join(outDir, JSON_NAME))).toBe(false);
   });
 
@@ -347,6 +363,8 @@ describe("runEscrowWrite", () => {
 
     expect(code).toBe(1);
     expect(lastError()).toContain("do not match");
+    // Path is built from the temporary directory this test created
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     expect(existsSync(join(outDir, JSON_NAME))).toBe(false);
   });
 
@@ -404,6 +422,8 @@ describe("runEscrowWrite", () => {
   });
 
   it("refuses an empty backup-key file", async () => {
+    // Path is built from the temporary directory this test created
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     writeFileSync(secretPath, "\n");
 
     const code = await runEscrowWrite(

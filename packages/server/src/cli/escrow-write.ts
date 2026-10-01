@@ -207,6 +207,7 @@ function hexNibble(byte: number | undefined): number {
 export function decodeOpsSecretsKey(fileBytes: Uint8Array): Uint8Array {
   let start = 0;
   let end = fileBytes.length;
+  // eslint-disable-next-line security/detect-object-injection -- Uint8Array indexed by a numeric loop bound kept below fileBytes.length
   while (start < end && isAsciiWhitespace(fileBytes[start])) start++;
   while (end > start && isAsciiWhitespace(fileBytes[end - 1])) end--;
 
@@ -223,6 +224,7 @@ export function decodeOpsSecretsKey(fileBytes: Uint8Array): Uint8Array {
       key.fill(0);
       throw notHex;
     }
+    // eslint-disable-next-line security/detect-object-injection -- Uint8Array write indexed by loop counter bounded by OPS_KEY_BYTES
     key[i] = high * 16 + low;
   }
   return key;
@@ -268,6 +270,8 @@ function parseEscrowArgs(argv: readonly string[]): EscrowArgs {
 
 async function assertDirectory(outDir: string): Promise<void> {
   try {
+    // Operator-supplied CLI path, required absolute by parseEscrowArgs
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     const stats = await stat(outDir);
     if (stats.isDirectory()) return;
   } catch (err: unknown) {
@@ -285,6 +289,9 @@ function alreadyExists(path: string): ConflictError {
 async function assertAbsent(path: string): Promise<void> {
   try {
     // lstat: a dangling symlink at the path also counts as existing.
+    // The path joins the absolute out-dir (checked by parseEscrowArgs and
+    // assertDirectory) with a name built from the parsed escrow type and date.
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     await lstat(path);
   } catch (err: unknown) {
     if (errnoCode(err) === "ENOENT") return;
@@ -300,6 +307,8 @@ async function readSecret(
 ): Promise<Uint8Array> {
   let fileBytes: Buffer;
   try {
+    // Operator-supplied CLI path, required absolute by parseEscrowArgs
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     fileBytes = await readFile(secretPath);
   } catch (err: unknown) {
     if (errnoCode(err) !== "ENOENT") throw err;
@@ -353,6 +362,10 @@ async function readConfirmedPassphrase(io: EscrowWriteIo): Promise<Uint8Array> {
 /** Creates the file with mode 0600 and fails if the path already exists. */
 async function openExclusive(path: string): Promise<FileHandle> {
   try {
+    // The path joins the absolute out-dir (checked by parseEscrowArgs and
+    // assertDirectory) with a name built from the parsed escrow type and date;
+    // "wx" fails if anything already exists at the path.
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     return await open(path, "wx", 0o600);
   } catch (err: unknown) {
     if (errnoCode(err) !== "EEXIST") throw err;
@@ -420,7 +433,7 @@ async function writeEscrow(
  * History is disabled so readline keeps no copy of the line.
  */
 async function promptHiddenOnTty(question: string): Promise<string> {
-  if (process.stdin.isTTY !== true) {
+  if (!process.stdin.isTTY) {
     throw new ValidationError(
       "the passphrase must be typed at a terminal; stdin is not a TTY",
     );
