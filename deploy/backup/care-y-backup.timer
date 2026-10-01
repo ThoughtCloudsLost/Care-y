@@ -1,0 +1,13 @@
+# Daily trigger for care-y-backup.service (same name, so no Unit= line is
+# needed). Persistent=true starts a backup missed while the host was down as
+# soon as the timer is active again, still subject to RandomizedDelaySec.
+[Unit]
+Description=Nightly CARE-Y database backup
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

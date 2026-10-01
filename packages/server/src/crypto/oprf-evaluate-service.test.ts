@@ -102,9 +102,6 @@ function makeDeps(): OprfEvaluateServiceDeps {
     async logFailure(): Promise<void> {
       /* noop: assertions in this file use thrown errors */
     },
-    dispose(): void {
-      /* noop */
-    },
   };
   return {
     evaluator,

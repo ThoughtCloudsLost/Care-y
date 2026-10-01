@@ -9,6 +9,7 @@ import {
   SafeIntrospectionPostgresDialect,
 } from "./schema-utils.js";
 import type { PlatformDatabase } from "./types.js";
+import { getEnv } from "../env.js";
 
 // main() runs the same code path as the CLI, called without spawning it.
 // The platform instance uses the catalog-only dialect so a schema dropped
@@ -72,4 +73,24 @@ describe.skipIf(!process.env.DATABASE_URL)("migrate main (DB)", () => {
       expect(await isFullyMigrated(schema)).toBe(true);
     }
   }, 120_000);
+
+  it("--grants with DATABASE_APP_ROLE unset skips without touching the database", async () => {
+    expect(getEnv().DATABASE_APP_ROLE).toBeUndefined();
+    const connectSpy = vi.spyOn(pool, "connect");
+    const querySpy = vi.spyOn(pool, "query");
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      await main(["--grants"], { db: platformDb, pool });
+
+      expect(connectSpy).not.toHaveBeenCalled();
+      expect(querySpy).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalledWith(
+        "grants: DATABASE_APP_ROLE unset, skipped",
+      );
+    } finally {
+      connectSpy.mockRestore();
+      querySpy.mockRestore();
+      logSpy.mockRestore();
+    }
+  });
 });

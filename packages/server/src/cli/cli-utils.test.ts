@@ -8,6 +8,8 @@ import {
   type MockInstance,
 } from "vitest";
 import { ConflictError, ValidationError } from "../errors.js";
+import type * as EnvBootstrap from "../env-bootstrap.js";
+import type * as DbModule from "../db/db.js";
 import {
   withCli,
   singlePositional,
@@ -15,14 +17,16 @@ import {
   type CliRun,
 } from "./cli-utils.js";
 
-// vi.mock required: withCli closes the process pool on every path, and
+// vi.mock required: withCli ends the owner-role pool on every path, and
 // these cases exercise exit codes, not the database. The loader is mocked
-// out too so the harness imports without a secrets file or DB settings.
+// out too so the harness imports without a secrets file. The real db.ts
+// builds its pool without connecting, and building Kysely instances over
+// the stub pool opens no connection either.
 const mockDestroy = vi.fn(async () => undefined);
-vi.mock("../env-bootstrap.js", () => ({}));
-vi.mock("../db/db.js", () => ({
-  db: { destroy: () => mockDestroy() },
-  tenantDb: vi.fn(),
+vi.mock("../env-bootstrap.js", () => ({}) satisfies typeof EnvBootstrap);
+vi.mock("../db/db.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof DbModule>()),
+  createAdminPool: () => ({ end: () => mockDestroy() }),
 }));
 
 describe("withCli", () => {

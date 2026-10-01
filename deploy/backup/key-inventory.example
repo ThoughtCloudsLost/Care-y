@@ -1,0 +1,4 @@
+# /etc/care-y/ops-key-versions (root:root 0600)
+# One key_version per line that the operator can still decrypt: the live key
+# and every retired key held in sealed escrow. Maintained by ops-key-rotation.md.
+1

@@ -1,0 +1,20 @@
+# Nightly full database backup to the restic repository on the backup host.
+# Installed by deploy/backup/install-restic.sh and started daily by
+# care-y-backup.timer. backup-full.sh reads /etc/care-y/restic.env itself,
+# so no credential appears in this unit or in `systemctl show`.
+[Unit]
+Description=CARE-Y nightly database backup (restic)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/care-y/deploy/backup/backup-full.sh
+# ProtectHome hides root's home directory, where restic would otherwise keep
+# its cache.
+CacheDirectory=care-y-backup
+CacheDirectoryMode=0700
+Environment=RESTIC_CACHE_DIR=/var/cache/care-y-backup
+NoNewPrivileges=true
+ProtectHome=true

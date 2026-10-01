@@ -26,6 +26,7 @@ import type {
 import type { Pool } from "pg";
 import { isPgUniqueViolation } from "../db/pg-errors.js";
 import { pool as defaultPool } from "../db/db.js";
+import { applyTenantGrants } from "../db/grants.js";
 import { createTenantMigrator } from "../db/schema-utils.js";
 import {
   ValidationError,
@@ -207,12 +208,18 @@ async function insertDefaultOrgConfig(
 /**
  * `pool` backs the tenant migrator, which builds its own schema-scoped
  * Kysely instance over it (see createTenantMigrator). It defaults to the
- * process pool from db.ts; index.ts passes it explicitly.
+ * process pool from db.ts; index.ts passes it explicitly. The org:create
+ * CLI passes the owner-role pool from createAdminPool().
+ *
+ * `appRole`, when given, is the runtime database role: createOrg grants it
+ * access to the new schema over `pool` right after the tenant migrations
+ * (applyTenantGrants). Callers that have env pass DATABASE_APP_ROLE.
  */
 export function createOrgService(
   platformDb: Kysely<PlatformDatabase>,
   tenantDbFactory: (schema: OrgSchema) => Kysely<TenantDatabase>,
   pool: Pool = defaultPool,
+  appRole?: string,
 ): OrgOperatorService {
   async function requireOrgBySlug(raw: string): Promise<OrgRecord> {
     const slug = parseSlug(raw);
@@ -254,6 +261,9 @@ export function createOrgService(
       try {
         await createPostgresSchema(platformDb, orgId, schemaName);
         await runTenantMigrations(pool, schemaName);
+        if (appRole !== undefined) {
+          await applyTenantGrants(pool, schemaName, appRole);
+        }
         await insertDefaultOrgConfig(tenantDbFactory(schemaName));
       } catch (err: unknown) {
         await rollbackOrg(platformDb, orgId, schemaName);

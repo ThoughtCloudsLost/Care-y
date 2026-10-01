@@ -15,3 +15,18 @@ export function isPgUniqueViolation(err: unknown): boolean {
     err.code === PG_UNIQUE_VIOLATION
   );
 }
+
+const PG_INSUFFICIENT_PRIVILEGE = "42501";
+
+/**
+ * True for SQLSTATE 42501 (insufficient_privilege): the current role lacks
+ * the privilege the statement needs, such as UPDATE on an append-only table.
+ */
+export function isPgPermissionDenied(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    err.code === PG_INSUFFICIENT_PRIVILEGE
+  );
+}

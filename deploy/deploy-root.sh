@@ -47,6 +47,9 @@ docker rm "$cid" >/dev/null
 step=migrate
 docker compose --env-file prod.env -f docker-compose.prod.yml run --rm api \
   pnpm --filter @care-y/server exec tsx src/db/migrate.ts --all-schemas
+step=grants
+docker compose --env-file prod.env -f docker-compose.prod.yml run --rm api \
+  pnpm --filter @care-y/server exec tsx src/db/migrate.ts --grants
 step=up
 docker compose --env-file prod.env -f docker-compose.prod.yml up -d --remove-orphans
 step=apex-probe
