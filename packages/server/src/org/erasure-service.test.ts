@@ -290,7 +290,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createErasureService", () => {
       .selectFrom("platform_audit_log")
       .selectAll()
       .where("org_id", "=", orgId)
-      .orderBy("id", "asc")
+      .orderBy("created_at", "asc")
       .execute();
   }
 
