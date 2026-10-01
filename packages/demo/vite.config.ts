@@ -99,7 +99,7 @@ export default defineConfig({
   base: process.env.BASE_PATH ?? "/",
   define: {
     // Production builds statically replace process.env with {}, so the
-    // globals-init runtime polyfill cannot reach migration 014's key
+    // globals-init runtime polyfill cannot reach a bare process.env key
     // read. Inline the OBVIOUSLY FAKE constant at build time.
     "process.env.OPS_SECRETS_KEY": JSON.stringify("0f".repeat(32)),
   },

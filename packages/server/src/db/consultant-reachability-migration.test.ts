@@ -4,7 +4,7 @@ import { createTestDb, createTestUser, type TestDb } from "../test-utils.js";
 import type { OpsPhoneHash } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)(
-  "087_consultant_reachability migration",
+  "consultants reachability columns",
   () => {
     let testDb: TestDb;
 

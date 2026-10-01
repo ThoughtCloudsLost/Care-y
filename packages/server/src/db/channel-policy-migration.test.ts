@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { up, down } from "./migrations/tenant/111_channel_policy.js";
 import { createTestDb } from "../test-utils.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "./types.js";
@@ -13,7 +12,7 @@ const COLUMNS = [
 ] as const;
 
 describe.skipIf(!process.env.DATABASE_URL)(
-  "migration 111: channel_policy",
+  "org_config channel policy columns",
   () => {
     let db: Kysely<TenantDatabase>;
     let cleanup: () => Promise<void>;
@@ -65,28 +64,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .updateTable("org_config")
         .set({ channel_sms_enabled: true, channel_voice_enabled: true })
         .execute();
-    });
-
-    it("down drops columns, up re-applies cleanly", async () => {
-      const migrationDb = db as unknown as Kysely<unknown>;
-      await down(migrationDb);
-
-      // Columns are gone: selecting them should fail
-      await expect(
-        db
-          .selectFrom("org_config")
-          .select("channel_sms_enabled" as never)
-          .execute(),
-      ).rejects.toThrow();
-
-      // Re-apply so afterAll cleanup succeeds
-      await up(migrationDb);
-
-      const row = await db
-        .selectFrom("org_config")
-        .select("channel_sms_enabled")
-        .executeTakeFirstOrThrow();
-      expect(row.channel_sms_enabled).toBe(true);
     });
   },
 );

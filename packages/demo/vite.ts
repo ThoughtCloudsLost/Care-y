@@ -87,8 +87,8 @@ export const serverHealthAliases: readonly HealthAlias[] = [
   // removed its sodium-native import, so the real module runs in-browser.
 
   // sodium-native (the package itself) - libsodium-wrappers-sumo bridge
-  // WHY: migration 014 (and other reachable files) import sodium-native
-  // directly; a package-level shim covers every importer at once.
+  // WHY: reachable server files (argon2id-hash.ts among them) import
+  // sodium-native directly; a package-level shim covers every importer.
   {
     find: "sodium-native",
     replacement: resolve(`${shimDir}/sodium-native-shim.ts`),

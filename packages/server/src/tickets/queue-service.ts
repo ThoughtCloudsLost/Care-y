@@ -5,7 +5,7 @@
  * tier) before storage. The server never sees the plaintext values. Each
  * queue carries a sort_order for client-controlled ordering and an
  * escalate_days threshold used by the auto-escalation job. Color and icon
- * are nullable: queues created before migration 078 have no value and the
+ * are nullable: queues without a stored value leave both null and the
  * client renders defaults.
  */
 

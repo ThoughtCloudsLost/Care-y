@@ -4,7 +4,7 @@ import { createTestDb, createTestUser, type TestDb } from "../test-utils.js";
 import type { QueueId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)(
-  "084_create_notification_preferences migration",
+  "notification_preferences schema",
   () => {
     let testDb: TestDb;
 

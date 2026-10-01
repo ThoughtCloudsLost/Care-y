@@ -6,7 +6,7 @@
  * makes it evaluate ahead of everything else in the graph.
  *
  * - Buffer: server code and PGlite bytea handling expect a global Buffer.
- * - process.env: migration 014 reads OPS_SECRETS_KEY at migration time.
+ * - process.env: carries the fake OPS_SECRETS_KEY for any bare env read.
  * - VITEST_WORKER_ID: set by trpc-server-signal.ts, imported first here
  *   for the Node snapshot builder. The browser entries import it ahead of
  *   this module (see that file for why).
@@ -101,11 +101,10 @@ if (typeof globalThis.process === "undefined") {
 
 const proc = globalThis.process as unknown as ProcessLike;
 
-// Obviously fake 64-hex ops key: migration 014's backfill derivation
-// needs a syntactically valid value. Never a real secret. Exported so
-// demo code reads the constant directly; production builds statically
+// Obviously fake 64-hex ops key. Never a real secret. Exported so demo
+// code reads the constant directly; production builds statically
 // replace process.env reads, so runtime env access is unreliable there
-// (the vite config define covers the migration's bare read).
+// (the vite config define covers any bare read).
 // Computed, not a literal: a 64-char hex string literal trips secret
 // scanners on entropy shape even when obviously fake.
 export const FAKE_OPS_KEY_HEX: string = "0f".repeat(32);

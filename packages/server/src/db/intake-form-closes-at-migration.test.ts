@@ -1,12 +1,12 @@
 /**
- * Migration 097: nullable closes_at timestamptz on intake_forms.
+ * Nullable closes_at timestamptz on intake_forms.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createTestDb, type TestDb } from "../test-utils.js";
 
 describe.skipIf(!process.env.DATABASE_URL)(
-  "migration 097_intake_form_closes_at",
+  "intake_forms closes_at column",
   () => {
     let testDb: TestDb;
 

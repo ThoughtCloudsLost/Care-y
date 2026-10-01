@@ -1004,7 +1004,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Unique index from migration 106
+  // portal_messages unique index
   // -----------------------------------------------------------------------
 
   describe("portal_messages unique index", () => {
