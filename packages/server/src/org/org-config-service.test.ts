@@ -44,7 +44,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
       testDb = await createTestDb();
       db = testDb.db;
       // Insert omits default_language and default_country_code so the DB
-      // defaults apply (migrations 069 and 015 respectively).
+      // column defaults apply.
       await db
         .insertInto("org_config")
         // care-y-ignore-next-line ast-pii-in-db-write -- plaintext branding column (ADR-094)

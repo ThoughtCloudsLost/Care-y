@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createTestDb, type TestDb } from "../test-utils.js";
 
 describe.skipIf(!process.env.DATABASE_URL)(
-  "086_create_role_permission_overrides migration",
+  "role_permission_overrides schema",
   () => {
     let testDb: TestDb;
 

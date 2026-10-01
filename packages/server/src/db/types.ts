@@ -300,7 +300,7 @@ export interface WrappedOrgKeysTable {
   key_version: ColumnType<number, number | undefined, number>;
 }
 
-// --- Ticket key wraps (CREATE TABLE in migration 025) ---
+// --- Ticket key wraps ---
 // Each volunteer gets one wrap per ticket per key_generation.
 export interface TicketKeyWrapsTable {
   id: Generated<TicketKeyWrapId>;
@@ -1062,7 +1062,7 @@ export interface NotificationOutboxTable {
   completed_at: Date | null;
   failed_at: Date | null;
   last_error: string | null;
-  // Migration 101: lifecycle event columns
+  // Lifecycle event columns
   note_type_id: NoteTypeId | null;
   encrypted_mentioned_pseudonyms: Buffer | null;
   escalation_rule_id: EscalationRuleId | null;

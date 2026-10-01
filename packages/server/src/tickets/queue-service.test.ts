@@ -128,7 +128,7 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
     expect(cleared.encryptedFundId).toBeNull();
   });
 
-  it("returns null color and icon for queues created before migration 078", async () => {
+  it("returns null color and icon for queues without a stored color or icon", async () => {
     const legacy = await createTestQueue(testDb.db, { label: "LegacyStyle" });
     const list = await svc.listActive();
     const found = list.find((x) => x.id === legacy.id);

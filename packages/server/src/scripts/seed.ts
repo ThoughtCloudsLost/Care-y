@@ -461,7 +461,7 @@ async function seed(): Promise<void> {
     .execute();
   console.log("Seeded mock telephony config (platform table).");
 
-  // Tenant table: org_config purpose SIDs (migration 022 columns).
+  // Tenant table: org_config purpose SID columns.
   // These are provider SID identifiers (e.g. "PNdev001"), not numbers.
   // care-y-ignore-next-line no-plaintext-db-write -- SIDs are opaque provider identifiers, not PII
   await tenantDatabase

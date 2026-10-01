@@ -1,11 +1,11 @@
 /**
  * Queue color/icon resolution.
  *
- * Queue color and icon are org-key encrypted picker tokens (tenant
- * migration 078). This module is the single place that turns a queue
- * record into renderable appearance values: it decrypts through the
- * shared OrgDecryptCache and falls back to the defaults for queues
- * created before the migration, unknown tokens, and pending decrypts.
+ * Queue color and icon are org-key encrypted picker tokens. This module
+ * is the single place that turns a queue record into renderable
+ * appearance values: it decrypts through the shared OrgDecryptCache and
+ * falls back to the defaults for queues without a stored value, unknown
+ * tokens, and pending decrypts.
  */
 
 import type { Component } from "svelte";

@@ -229,7 +229,7 @@ export async function purgeClient(
 /**
  * Returns ticket IDs for closed tickets whose most recent follow-up
  * created_at is older than the cutoff date. The followups_ticket_activity_idx
- * (migration 044) makes this lateral max efficient.
+ * makes this lateral max efficient.
  *
  * Tickets with no follow-ups at all use tickets.created_at as their last
  * activity (a ticket with no activity is as old as it gets).

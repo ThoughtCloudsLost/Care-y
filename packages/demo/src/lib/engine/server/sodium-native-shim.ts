@@ -2,8 +2,8 @@
  * Browser shim for the `sodium-native` package itself.
  *
  * Some server files import sodium-native directly and are reachable in
- * the demo graph (migration 014's secretbox backfill above all). Rather
- * than alias each importer, this shim stands in for the whole package,
+ * the demo graph (argon2id-hash.ts among them). Rather than alias each
+ * importer, this shim stands in for the whole package,
  * implementing exactly the subset those files use over
  * libsodium-wrappers-sumo. Any other property access throws with the
  * missing name (fail loud, no silent no-ops).
