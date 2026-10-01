@@ -80,8 +80,7 @@
     edit?: DisbursementEdit;
   }
 
-  let { opened, ondismiss, ticketId, edit }: DisbursementSheetProps =
-    $props();
+  let { opened, ondismiss, ticketId, edit }: DisbursementSheetProps = $props();
 
   const fundsRouter = requireRouter(trpc.funds, "funds");
   const cryptoBridge = getCryptoBridge();
@@ -227,7 +226,11 @@
     const followUpId = newFollowupId();
     const encryptedPayload = await sealLedgerPayload(
       orgKeyManager,
-      disbursementPayload({ fundId: target.id, recordedBy, amountMinor: minor }),
+      disbursementPayload({
+        fundId: target.id,
+        recordedBy,
+        amountMinor: minor,
+      }),
     );
     const encryptedContent = await encryptNote(
       followUpId,

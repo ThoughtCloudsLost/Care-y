@@ -111,7 +111,7 @@ vi.mock("$lib/funds/fund-store.svelte.js", async (importOriginal) => ({
   // the write a readable balance so the recomputed figure can be checked.
   createBalanceWriter: (): BalanceWriter => ({
     write: () => Promise.reject(new Error("not used here")),
-    set: async <T,>(
+    set: async <T>(
       fundId: string,
       balanceMinor: number,
       run: (balance: BalanceWrite) => Promise<T>,
@@ -259,8 +259,7 @@ describe("Fund ledger page", () => {
       expect(mockSetBalance).toHaveBeenCalledTimes(1);
     });
     const balance = mockSetBalance.mock.calls[0]?.[0].balance as
-      | BalanceWrite
-      | undefined;
+      BalanceWrite | undefined;
     expect(balance?.fundId).toBe(FUND);
     expect(balance?.expectedVersion).toBe(7);
     expect(JSON.parse(balance?.encryptedBalance ?? "null")).toEqual({

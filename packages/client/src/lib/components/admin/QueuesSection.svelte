@@ -374,7 +374,8 @@
     currentFundId: string | null,
   ): boolean {
     return (
-      fundStore.isLoading || (encryptedFundId !== null && currentFundId === null)
+      fundStore.isLoading ||
+      (encryptedFundId !== null && currentFundId === null)
     );
   }
 

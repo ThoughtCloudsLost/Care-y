@@ -360,7 +360,9 @@
     if (plaintext === undefined || plaintext === DECRYPT_ERROR_SENTINEL) {
       return plaintext;
     }
-    return readableNoteText(plaintext, resolveFundName) ?? DECRYPT_ERROR_SENTINEL;
+    return (
+      readableNoteText(plaintext, resolveFundName) ?? DECRYPT_ERROR_SENTINEL
+    );
   }
 
   const readCursor = createReadCursor({

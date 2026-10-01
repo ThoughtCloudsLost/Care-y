@@ -244,7 +244,8 @@
     }
     adjustSaving = true;
     try {
-      const amountMinor = adjustDirection === "add" ? adjustMinor : -adjustMinor;
+      const amountMinor =
+        adjustDirection === "add" ? adjustMinor : -adjustMinor;
       const id = newFundLedgerId();
       const encryptedPayload = await sealLedgerPayload(
         orgKeyManager,

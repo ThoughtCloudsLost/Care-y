@@ -1709,7 +1709,10 @@
                       authorName={resolveVolunteerName(fu.createdBy)}
                       timestamp={fu.createdAt}
                       isOwn={fu.createdBy === currentUserId}
-                      noteTypeName={noteEyebrowName(contentResult, fu.noteTypeId)}
+                      noteTypeName={noteEyebrowName(
+                        contentResult,
+                        fu.noteTypeId,
+                      )}
                       noteTypeIcon={resolveNoteTypeIcon(fu.noteTypeId)}
                       onopenedit={onopenedit && !isEnvelopeResult(contentResult)
                         ? () => {

@@ -752,10 +752,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       await svc.resetSeedData();
 
-      const funds = await testDb.db
-        .selectFrom("funds")
-        .select("id")
-        .execute();
+      const funds = await testDb.db.selectFrom("funds").select("id").execute();
       const entries = await testDb.db
         .selectFrom("fund_ledger")
         .select("id")

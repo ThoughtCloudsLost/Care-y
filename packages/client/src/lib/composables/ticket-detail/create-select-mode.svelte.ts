@@ -127,8 +127,7 @@ export function createSelectMode(config: SelectModeConfig): SelectModeState {
           // A disbursement note copies as its readable text, never as
           // the envelope.
           ready: (v) =>
-            readableNoteText(v, config.resolveFundName) ??
-            "[decryption error]",
+            readableNoteText(v, config.resolveFundName) ?? "[decryption error]",
           denied: () => "[access denied]",
           error: () => "[decryption error]",
         });

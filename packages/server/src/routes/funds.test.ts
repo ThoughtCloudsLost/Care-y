@@ -548,9 +548,7 @@ describe.skipIf(!process.env.DATABASE_URL)("funds router", () => {
       const ids = (await callerFor(admin).funds.listLedger()).entries.map(
         (e) => e.id,
       );
-      expect(ids).toEqual(
-        expect.arrayContaining([reversalId, replacementId]),
-      );
+      expect(ids).toEqual(expect.arrayContaining([reversalId, replacementId]));
       const note = await testDb.db
         .selectFrom("followups")
         .select("encrypted_content")

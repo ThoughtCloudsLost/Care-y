@@ -31,7 +31,9 @@
 
   const fund = $derived(caseFund.fund);
   const balanceMinor = $derived(fund?.balance?.balanceMinor ?? null);
-  const belowZero = $derived(balanceMinor !== null && isBelowZero(balanceMinor));
+  const belowZero = $derived(
+    balanceMinor !== null && isBelowZero(balanceMinor),
+  );
 
   const balanceLabel = $derived.by((): string | undefined => {
     if (fund === undefined || balanceMinor === null) return undefined;

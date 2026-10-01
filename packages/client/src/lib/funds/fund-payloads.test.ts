@@ -198,9 +198,9 @@ describe("ledger payloads", () => {
     expect(revision.replacement.fundId).toBe(FUND);
     // Money put back by the smaller correction.
     expect(revision.deltaMinor).toBe(1_500);
-    expect(
-      revision.deltaMinor,
-    ).toBe(revision.reversal.amountMinor + revision.replacement.amountMinor);
+    expect(revision.deltaMinor).toBe(
+      revision.reversal.amountMinor + revision.replacement.amountMinor,
+    );
   });
 
   it("seals and opens a ledger payload", async () => {

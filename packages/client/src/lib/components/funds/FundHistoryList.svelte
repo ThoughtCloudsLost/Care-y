@@ -41,8 +41,7 @@
 
   function entryLabel(entry: LedgerEntryView): string {
     return (
-      ENTRY_LABELS.get(entry.payload.entryType)?.() ??
-      m.fund_entry_adjustment()
+      ENTRY_LABELS.get(entry.payload.entryType)?.() ?? m.fund_entry_adjustment()
     );
   }
 

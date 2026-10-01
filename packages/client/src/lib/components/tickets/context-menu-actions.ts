@@ -9,11 +9,7 @@
 import type { DisbursementNoteEnvelope } from "@care-y/shared";
 
 export type ContextActionId =
-  | "copy"
-  | "edit"
-  | "editMessage"
-  | "editDisbursement"
-  | "delete";
+  "copy" | "edit" | "editMessage" | "editDisbursement" | "delete";
 
 export interface ContextAction {
   readonly id: ContextActionId;
