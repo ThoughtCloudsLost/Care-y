@@ -12,7 +12,7 @@
  */
 
 // Must stay the first import: loads the secrets file and fills the
-// getEnv() cache before db.ts is evaluated (ADR-129).
+// getEnv() cache before db.ts is evaluated (ADR-131).
 import "./env-bootstrap.js";
 import { getSodium } from "@care-y/crypto";
 import { getEnv } from "./env.js";

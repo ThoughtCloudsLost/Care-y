@@ -1,4 +1,4 @@
-// Production secrets file loader (ADR-129).
+// Production secrets file loader (ADR-131).
 // Reads /etc/care-y/secrets.env and returns a merged source object for
 // initEnv(). Nothing from the file is ever assigned to process.env:
 // the validated config object is the only place the values live.
@@ -134,7 +134,7 @@ function parseSecretsFile(content: string): Map<string, string> {
 }
 
 /**
- * Production only (ADR-129): opens the secrets file with O_NOFOLLOW, checks
+ * Production only (ADR-131): opens the secrets file with O_NOFOLLOW, checks
  * the mode on the opened descriptor (mode & 0o077 must be zero), parses it,
  * and returns a merged source object for initEnv(). Secrets never enter
  * process.env; the validated config object is the only place they exist.

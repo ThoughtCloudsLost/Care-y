@@ -3,7 +3,7 @@
  *
  * db.ts reads DATABASE_URL through getEnv() at import time, so in
  * production the value comes from the secrets file via initEnv(source) and
- * never from process.env (ADR-129). Each case resets the module registry
+ * never from process.env (ADR-131). Each case resets the module registry
  * and imports fresh copies of env.ts and db.ts, so the import-time read
  * sees the config the case sets up. No connection is opened.
  */

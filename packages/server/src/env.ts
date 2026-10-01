@@ -184,7 +184,7 @@ export function _resetEnvCache(): void {
  * Validates `source` and stores the result as the config every getEnv()
  * caller reads. Production startup passes the merged source from
  * loadSecretsFile(), so file secrets reach getEnv() consumers without ever
- * entering process.env (ADR-129). Throws EnvValidationError on failure and
+ * entering process.env (ADR-131). Throws EnvValidationError on failure and
  * leaves the cache untouched.
  */
 export function initEnv(source: NodeJS.ProcessEnv = process.env): EnvVars {

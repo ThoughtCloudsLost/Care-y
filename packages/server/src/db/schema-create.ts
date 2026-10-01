@@ -10,7 +10,7 @@
 // the owner role, then grants DATABASE_APP_ROLE access when it is set.
 
 // Must stay the first import: loads the secrets file and fills the getEnv()
-// cache before db.ts reads DATABASE_URL at import time (ADR-129).
+// cache before db.ts reads DATABASE_URL at import time (ADR-131).
 import "../env-bootstrap.js";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import { createAdminPool } from "./db.js";

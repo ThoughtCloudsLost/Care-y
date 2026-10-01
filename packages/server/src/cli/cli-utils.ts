@@ -8,7 +8,7 @@
  */
 
 // Must stay the first import: loads the secrets file and fills the
-// getEnv() cache before db.ts reads DATABASE_URL at import time (ADR-129).
+// getEnv() cache before db.ts reads DATABASE_URL at import time (ADR-131).
 // CLI entry files import this module before anything that reaches db.ts.
 import "../env-bootstrap.js";
 import { parseArgs } from "node:util";

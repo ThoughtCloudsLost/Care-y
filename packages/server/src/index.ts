@@ -1,6 +1,6 @@
 // Must stay the first import. It loads the secrets file and fills the
 // getEnv() cache before any module below is evaluated; db.ts reads
-// DATABASE_URL through getEnv() at import time (ADR-129).
+// DATABASE_URL through getEnv() at import time (ADR-131).
 import "./env-bootstrap.js";
 import { getEnv, type EnvVars } from "./env.js";
 import { extractErrorMessage } from "./errors.js";
