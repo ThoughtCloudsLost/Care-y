@@ -16,7 +16,9 @@ import type { Kysely } from "kysely";
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
     .createTable("platform_audit_log")
-    .addColumn("id", "serial", (col) => col.primaryKey())
+    .addColumn("id", "uuid", (col) =>
+      col.primaryKey().defaultTo(db.fn("gen_random_uuid")),
+    )
     .addColumn("action", "text", (col) => col.notNull())
     .addColumn("org_id", "uuid", (col) => col.notNull())
     .addColumn("actor", "text", (col) => col.notNull())

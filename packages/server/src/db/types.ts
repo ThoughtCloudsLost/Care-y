@@ -24,6 +24,7 @@ import type {
   OrgConfigId,
   JobId,
   OprfAuditId,
+  PlatformAuditLogId,
   TicketId,
   TicketKeyWrapId,
   WebauthnCredentialRowId,
@@ -203,7 +204,7 @@ export interface DeletionRequestsTable {
 }
 
 export interface PlatformAuditLogTable {
-  id: Generated<number>;
+  id: Generated<PlatformAuditLogId>;
   action: "org_erased" | "erasure_subaccount_failed";
   /** Plain uuid, no FK: the orgs row is gone by the time the row is written. */
   org_id: OrgId;

@@ -327,6 +327,9 @@ export type JobId = z.infer<typeof jobIdSchema>;
 export const oprfAuditIdSchema = z.uuid().brand<"OprfAuditId">();
 export type OprfAuditId = z.infer<typeof oprfAuditIdSchema>;
 
+export const platformAuditLogIdSchema = z.uuid().brand<"PlatformAuditLogId">();
+export type PlatformAuditLogId = z.infer<typeof platformAuditLogIdSchema>;
+
 /** `deletion_requests.id` (public schema). */
 export const deletionRequestIdSchema = z.uuid().brand<"DeletionRequestId">();
 export type DeletionRequestId = z.infer<typeof deletionRequestIdSchema>;

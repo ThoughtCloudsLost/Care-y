@@ -226,7 +226,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .returningAll()
         .executeTakeFirstOrThrow();
 
-      expect(typeof row.id).toBe("number");
+      expect(typeof row.id).toBe("string");
       expect(row.action).toBe("org_erased");
       expect(row.org_id).toBe(orgId);
       expect(row.actor).toBe(suiteActor);

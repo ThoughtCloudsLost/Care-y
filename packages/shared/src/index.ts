@@ -935,6 +935,7 @@ export {
   orgConfigIdSchema,
   jobIdSchema,
   oprfAuditIdSchema,
+  platformAuditLogIdSchema,
   deletionRequestIdSchema,
   type EscalationRuleId,
   type NotificationPreferenceId,
@@ -942,6 +943,7 @@ export {
   type OrgConfigId,
   type JobId,
   type OprfAuditId,
+  type PlatformAuditLogId,
   type DeletionRequestId,
   // Intake forms
   intakeFormIdSchema,
