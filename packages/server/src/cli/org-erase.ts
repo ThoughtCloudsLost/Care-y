@@ -154,19 +154,23 @@ export async function runOrgErase(
   }
 }
 
-/**
- * The blob sweeper for the configured backend. Every backend in
- * BlobStoreType must sweep an org, so a new one fails to compile here
- * until it does.
- */
+// Every backend in BlobStoreType must sweep an org: a missing key in this
+// record is a compile error until the new backend has a sweeper.
+const blobSweepers: Record<
+  BlobStoreType,
+  (basePath: string) => OrgBlobSweeper
+> = {
+  local: createLocalBlobStore,
+};
+
+/** The blob sweeper for the configured backend. */
 function createBlobSweeper(
   type: BlobStoreType,
   basePath: string,
 ): OrgBlobSweeper {
-  switch (type) {
-    case "local":
-      return createLocalBlobStore(basePath);
-  }
+  // `type` is a closed Zod-validated union from env.ts, not user input
+  // eslint-disable-next-line security/detect-object-injection
+  return blobSweepers[type](basePath);
 }
 
 /**
