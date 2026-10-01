@@ -171,9 +171,13 @@ jobs:
             "$CADDY_IMAGE:$GITHUB_SHA" \
             caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
-      # The env files under /etc/care-y exist only on the host.
+      # The env files under /etc/care-y exist only on the host. Compose checks
+      # that a service's env_file exists even under --no-env-resolution (the
+      # runner's 2.38 does; 5.x skips the check), so the token-stripped copy
+      # from the Caddyfile step stands in for the host's Caddy env file.
       - name: Validate production compose file
         run: |
+          sudo install -D -m 0644 "$RUNNER_TEMP/caddy.env" /etc/care-y/caddy.env
           docker compose --env-file deploy/prod.env.example \
             --file docker-compose.prod.yml config --quiet --no-env-resolution
 
