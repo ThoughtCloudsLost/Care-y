@@ -180,7 +180,7 @@ export type FundPayload = z.infer<typeof fundPayloadSchema>;
  */
 export const fundBalancePayloadSchema = z.object({
   v: z.literal(1),
-  balanceMinor: z.number().int().safe(),
+  balanceMinor: z.number().int(),
 });
 export type FundBalancePayload = z.infer<typeof fundBalancePayloadSchema>;
 
@@ -202,7 +202,7 @@ export type FundEntryType = z.infer<typeof fundEntryTypeSchema>;
 export const fundLedgerPayloadSchema = z
   .object({
     v: z.literal(1),
-    amountMinor: z.number().int().safe(),
+    amountMinor: z.number().int(),
     entryType: fundEntryTypeSchema,
     fundId: fundIdSchema,
     recordedAt: z.iso.datetime(),
@@ -235,7 +235,7 @@ export const disbursementNoteEnvelopeSchema = z.object({
   kind: z.literal("disbursement"),
   ledgerEntryId: fundLedgerIdSchema,
   fundId: fundIdSchema,
-  amountMinor: z.number().int().safe(),
+  amountMinor: z.number().int(),
   currency: currencyCodeSchema,
   note: z.string(),
 });

@@ -167,12 +167,47 @@ export function isBelowZero(amountMinor: number): boolean {
 
 // ── Amount input ────────────────────────────────────────────────────
 
+const MAX_WHOLE_DIGITS = 12;
+const MAX_FRACTION_DIGITS = 2;
+
+/** True for a non-empty run of ASCII digits and nothing else. */
+function isDigitRun(text: string): boolean {
+  if (text.length === 0) return false;
+  for (const ch of text) {
+    if (ch < "0" || ch > "9") return false;
+  }
+  return true;
+}
+
 /**
- * Digits, then optionally one decimal separator and one or two digits.
- * Both "." and "," are accepted as the separator because the app ships
- * in English and Spanish. Group separators are not accepted.
+ * Split a typed amount into its whole and fraction digits, checked
+ * character by character rather than with a regex. The whole part is 1
+ * to 12 ASCII digits, optionally followed by one decimal separator and
+ * then one or two digits. Both "." and "," are accepted as the separator
+ * because the app ships in English and Spanish. Group separators are not
+ * accepted, so a second separator of either kind rejects the input. The
+ * fraction is empty when no separator is present. Null for any other
+ * shape.
  */
-const MAJOR_AMOUNT_PATTERN = /^(\d{1,12})(?:[.,](\d{1,2}))?$/;
+function splitMajorAmount(
+  text: string,
+): { readonly whole: string; readonly fraction: string } | null {
+  const dot = text.indexOf(".");
+  const comma = text.indexOf(",");
+  if (dot !== -1 && comma !== -1) return null;
+  const separator = dot !== -1 ? dot : comma;
+  if (separator === -1) {
+    if (text.length > MAX_WHOLE_DIGITS || !isDigitRun(text)) return null;
+    return { whole: text, fraction: "" };
+  }
+  const whole = text.slice(0, separator);
+  const fraction = text.slice(separator + 1);
+  if (whole.length > MAX_WHOLE_DIGITS || !isDigitRun(whole)) return null;
+  if (fraction.length > MAX_FRACTION_DIGITS || !isDigitRun(fraction)) {
+    return null;
+  }
+  return { whole, fraction };
+}
 
 /**
  * Convert a typed major-unit amount ("12.50", "12,5", "12") into a
@@ -180,10 +215,10 @@ const MAJOR_AMOUNT_PATTERN = /^(\d{1,12})(?:[.,](\d{1,2}))?$/;
  * malformed, or more than two decimals.
  */
 export function parseMajorAmount(input: string): number | null {
-  const match = MAJOR_AMOUNT_PATTERN.exec(input.trim());
-  if (match === null) return null;
-  const whole = Number(match[1]);
-  const fraction = Number((match[2] ?? "").padEnd(2, "0"));
+  const parts = splitMajorAmount(input.trim());
+  if (parts === null) return null;
+  const whole = Number(parts.whole);
+  const fraction = Number(parts.fraction.padEnd(MAX_FRACTION_DIGITS, "0"));
   const minor = whole * 100 + fraction;
   if (!Number.isSafeInteger(minor) || minor <= 0) return null;
   return minor;

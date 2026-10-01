@@ -131,6 +131,7 @@ function toBalanceWrite(balance: FundBalanceInput): FundBalanceWrite {
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export function createFundsRouter(deps: FundsRouterDeps) {
   // The tickets router's audit and outbox path, so a disbursement note is
   // announced exactly as a note written from the case.

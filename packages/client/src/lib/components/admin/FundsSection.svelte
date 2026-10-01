@@ -124,8 +124,7 @@
       : undefined,
   );
   const fundDirty = $derived(
-    editingFund === null ||
-      editName.trim() !== editingFund.name ||
+    editName.trim() !== editingFund?.name ||
       normalizedCurrency !== editingFund.currency,
   );
   const canSaveFund = $derived(

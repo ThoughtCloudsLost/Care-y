@@ -39,9 +39,13 @@ export interface LifecycleTicket {
   readonly assignedTo: UserId | null;
 }
 
+/**
+ * Members are function-typed properties rather than methods, so callers
+ * can destructure them. None of them reads `this`.
+ */
 export interface LifecycleNotifier {
   /** Best-effort audit entry, never blocks. */
-  audit(tDb: OrgContext["tenantDb"], entry: AuditEntry): void;
+  readonly audit: (tDb: OrgContext["tenantDb"], entry: AuditEntry) => void;
   /**
    * Audit entry plus outbox notice. The drainer re-resolves recipients at
    * dispatch time (never stored).
@@ -51,7 +55,7 @@ export interface LifecycleNotifier {
    * transaction the route controls. There is a residual window where the
    * mutation commits and the enqueue does not.
    */
-  auditAndNotify(
+  readonly auditAndNotify: (
     ctx: LifecycleActor,
     // Routers raise lifecycle events only. Quarantine and merge
     // notifications are dispatched from their own services, so keeping
@@ -62,19 +66,19 @@ export interface LifecycleNotifier {
     auditEntry: AuditEntry,
     mentionedPseudonyms?: string[],
     noteTypeId?: NoteTypeId,
-  ): void;
+  ) => void;
   /**
    * Outbox notice alone. Durable-only (not inside a transaction).
    * Mentioned pseudonyms are OPS-encrypted before storage to avoid
    * persisting a volunteer interaction graph in plaintext.
    */
-  enqueueLifecycleNotification(
+  readonly enqueueLifecycleNotification: (
     ctx: LifecycleActor,
     eventType: OutboxEventType,
     ticket: LifecycleTicket,
     mentionedPseudonyms?: string[],
     noteTypeId?: NoteTypeId,
-  ): void;
+  ) => void;
 }
 
 export function createLifecycleNotifier(

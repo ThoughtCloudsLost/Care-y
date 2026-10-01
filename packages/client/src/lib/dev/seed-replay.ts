@@ -2092,7 +2092,7 @@ async function runReplay(
       throw new SeedReplayError("The seeding account has no valid user id");
     }
     const sealer: FundSealer = {
-      encryptText: (plaintext) =>
+      encryptText: async (plaintext) =>
         Promise.resolve(seal(plaintext, orgPublicKey)),
     };
     const daysAgo = (days: number): Date =>

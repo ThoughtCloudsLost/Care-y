@@ -44,7 +44,6 @@
     getCurrentPermissions,
   } from "$lib/crypto/context.js";
   import {
-    Permission,
     hasNoteEnvelopeMarker,
     type FollowUpListInput,
     type ReactionSummary,
@@ -1082,7 +1081,10 @@
               disbursement !== undefined &&
               fundStore.enabled &&
               canCall(permissions, "funds.reviseDisbursement"),
-            canReviseOthers: permissions.has(Permission.MANAGE_FUNDS),
+            canReviseOthers: canUseInline(
+              permissions,
+              "reviseOthersDisbursements",
+            ),
           }
         : undefined,
     );

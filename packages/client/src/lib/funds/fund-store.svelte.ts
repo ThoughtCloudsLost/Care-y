@@ -346,7 +346,7 @@ export function createBalanceWriter(store: FundStore): BalanceWriter {
       };
     },
     reload: async (fundId) => {
-      const list = await queryClient.fetchQuery({
+      const list = await queryClient.query({
         queryKey: fundKeys.list(),
         queryFn: async (): Promise<FundList> =>
           requireRouter(trpc.funds, "funds").list.query(),
