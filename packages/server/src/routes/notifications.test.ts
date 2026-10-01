@@ -610,7 +610,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .executeTakeFirstOrThrow();
       expect(row.user_id).toBe(userA.id);
       // DB contract: endpoint and both browser keys are stored as text
-      // for later web push delivery (migration 041).
+      // for later web push delivery.
       expect(row.key_p256dh).toBe("p256dh-key-a1-v1");
       expect(row.key_auth).toBe("auth-key-a1-v1");
     });

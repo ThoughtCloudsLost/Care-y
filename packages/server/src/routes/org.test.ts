@@ -314,8 +314,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const caller = buildDbCaller();
       const result = await caller.org.getOrgGeneral();
 
-      // Fresh org_config row: name is null, defaults from migrations
-      // (default_country_code defaults to "+1" per tenant migration 015)
+      // Fresh org_config row: name is null, column defaults apply
+      // (default_country_code defaults to "+1")
       expect(result).toEqual({
         name: null,
         defaultLanguage: "en",

@@ -953,7 +953,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       testDb = await createTestDb();
 
       // org_config starts empty in a fresh schema. The handler reads email
-      // branding from it; the migration 040 column defaults apply on insert.
+      // branding from it; the email branding column defaults apply on insert.
       await testDb.db
         .insertInto("org_config")
         .values({ pii_retention_days: null })
@@ -1034,7 +1034,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       const mail = onlySent(transport);
       // From header is wire format. Values come from the org_config column
-      // defaults (migration 040) on the seeded row.
+      // defaults on the seeded row.
       expect(mail.from).toContain("CARE-Y Hotline");
       expect(mail.from).toContain("notify@care-y.app");
     });
@@ -1042,7 +1042,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("brands the From header with org-configured name and address", async () => {
       await testDb.db
         .updateTable("org_config")
-        // care-y-ignore-next-line no-plaintext-db-write -- email_from_name/email_from_address are org branding config, stored plaintext by design (migration 040), not client/volunteer PII
+        // care-y-ignore-next-line no-plaintext-db-write -- email_from_name/email_from_address are org branding config, stored plaintext by design, not client/volunteer PII
         .set({
           email_from_name: "Harbor Line",
           email_from_address: "desk@harbor.example",

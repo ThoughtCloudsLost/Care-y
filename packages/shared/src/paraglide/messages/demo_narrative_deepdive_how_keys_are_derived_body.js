@@ -28,7 +28,7 @@ There is no private key, no encrypted shard, and no password hash used in deriva
 - \`packages/crypto/src/oprf.ts\` holds blinding, finalizing, tagged share derivation, Lagrange combination and proactive refresh, and \`packages/crypto/src/derive.ts\` holds the Argon2id floor, the master key, the organization unwrap key and the user keypair. [[#keys]]
 - \`packages/server/src/crypto/oprf-process.ts\` performs evaluation, reached through \`oprf-ipc.ts\` over Unix sockets defined in \`packages/server/src/env.ts\`, with the share loaded into \`sodium_malloc\` memory and a canary beside it. [[#keys #server-holds]]
 - \`packages/client/src/lib/auth/login-crypto.ts\` and the workers under \`packages/client/src/lib/workers/\` orchestrate the client side. [[#keys]]
-- \`packages/server/src/db/migrations/tenant/004_create_user_keys.ts\` with \`012_extend_user_keys.ts\` define the storage shape. [[#keys #server-holds]]`)
+- The \`user_keys\` table in \`packages/server/src/db/migrations/tenant/001_baseline.ts\` defines the storage shape. [[#keys #server-holds]]`)
 };
 
 const es_demo_narrative_deepdive_how_keys_are_derived_body = /** @type {(inputs: Demo_Narrative_Deepdive_How_Keys_Are_Derived_BodyInputs) => LocalizedString} */ () => {
@@ -54,7 +54,7 @@ No hay clave privada, ni fragmento cifrado, ni hash de contraseña utilizado en 
 - \`packages/crypto/src/oprf.ts\` contiene el cegado, la finalización, la derivación de partes etiquetadas, la combinación de Lagrange y el refresco proactivo, y \`packages/crypto/src/derive.ts\` contiene el mínimo de Argon2id, la clave maestra, la clave de desenvoltura de la organización y el par de claves de la persona usuaria. [[#keys]]
 - \`packages/server/src/crypto/oprf-process.ts\` realiza la evaluación y se alcanza a través de \`oprf-ipc.ts\` por sockets Unix definidos en \`packages/server/src/env.ts\`, con la parte cargada en memoria de \`sodium_malloc\` y un canario junto a ella. [[#keys #server-holds]]
 - \`packages/client/src/lib/auth/login-crypto.ts\` y los workers bajo \`packages/client/src/lib/workers/\` orquestan el lado del cliente. [[#keys]]
-- \`packages/server/src/db/migrations/tenant/004_create_user_keys.ts\` junto con \`012_extend_user_keys.ts\` definen la forma del almacenamiento. [[#keys #server-holds]]`)
+- La tabla \`user_keys\`, en \`packages/server/src/db/migrations/tenant/001_baseline.ts\`, define la forma del almacenamiento. [[#keys #server-holds]]`)
 };
 
 const en_xa2_demo_narrative_deepdive_how_keys_are_derived_body = /** @type {(inputs: Demo_Narrative_Deepdive_How_Keys_Are_Derived_BodyInputs) => LocalizedString} */ () => {
@@ -80,7 +80,7 @@ Thèrè ìs nò prìvàtè kèy, nò èncryptèd shàrd, ànd nò pàsswòrd hà
 - \`pàckàgès/cryptò/src/òprf.ts\` hòlds blìndìng, fìnàlìzìng, tàggèd shàrè dèrìvàtìòn, Làgràngè còmbìnàtìòn ànd pròàctìvè rèfrèsh, ànd \`pàckàgès/cryptò/src/dèrìvè.ts\` hòlds thè Àrgòn2ìd flòòr, thè màstèr kèy, thè òrgànìzàtìòn ùnwràp kèy ànd thè ùsèr kèypàìr. [[#kèys]]
 - \`pàckàgès/sèrvèr/src/cryptò/òprf-pròcèss.ts\` pèrfòrms èvàlùàtìòn, rèàchèd thròùgh \`òprf-ìpc.ts\` òvèr Ùnìx sòckèts dèfìnèd ìn \`pàckàgès/sèrvèr/src/ènv.ts\`, wìth thè shàrè lòàdèd ìntò \`sòdìùm_màllòc\` mèmòry ànd à cànàry bèsìdè ìt. [[#kèys #sèrvèr-hòlds]]
 - \`pàckàgès/clìènt/src/lìb/àùth/lògìn-cryptò.ts\` ànd thè wòrkèrs ùndèr \`pàckàgès/clìènt/src/lìb/wòrkèrs/\` òrchèstràtè thè clìènt sìdè. [[#kèys]]
-- \`pàckàgès/sèrvèr/src/db/mìgràtìòns/tènànt/004_crèàtè_ùsèr_kèys.ts\` wìth \`012_èxtènd_ùsèr_kèys.ts\` dèfìnè thè stòràgè shàpè. [[#kèys #sèrvèr-hòlds]] •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
+- Thè \`ùsèr_kèys\` tàblè ìn \`pàckàgès/sèrvèr/src/db/mìgràtìòns/tènànt/001_bàsèlìnè.ts\` dèfìnès thè stòràgè shàpè. [[#kèys #sèrvèr-hòlds]] •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 
 /**

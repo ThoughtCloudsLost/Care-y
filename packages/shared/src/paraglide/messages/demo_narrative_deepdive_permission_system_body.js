@@ -31,7 +31,7 @@ Role IDs in the database are deliberately opaque strings rather than readable na
 **The Permission enum and the override surface.** [[#permissions]]
 - \`packages/shared/src/roles.ts\` holds the \`Permission\` enum and its grouping. The enum is append-only after deployment because renaming a member orphans every override row that names it. [[#permissions]]
 - \`packages/server/src/auth/roles.ts\` holds role defaults, the lock set, the merge function, the cache, the override repository and the permission-holder queries that intake and notification targeting use, with request-time gating in \`role-middleware.ts\`. [[#permissions]]
-- \`packages/server/src/db/migrations/tenant/086_create_role_permission_overrides.ts\` defines the override table. [[#permissions #server-holds]]
+- The override table is \`role_permission_overrides\` in \`packages/server/src/db/migrations/tenant/001_baseline.ts\`. [[#permissions #server-holds]]
 - \`packages/client/src/lib/components/admin/RolePermissionsSection.svelte\` is the administrative surface, and \`packages/client/src/lib/shell/section-registry.ts\` maps sections to permissions for client-side gating. [[#permissions]]`)
 };
 
@@ -60,7 +60,7 @@ Los identificadores de rol en la base de datos son cadenas opacas a propósito y
 **La enumeración Permission y la superficie de excepciones.** [[#permissions]]
 - \`packages/shared/src/roles.ts\` contiene la enumeración \`Permission\` y su agrupación. La enumeración es de solo añadir después del despliegue porque renombrar un miembro deja huérfana toda fila de excepción que lo nombre. [[#permissions]]
 - \`packages/server/src/auth/roles.ts\` contiene los valores predeterminados de los roles, el conjunto bloqueado, la función de combinación, la caché, el repositorio de excepciones y las consultas de quién tiene un permiso que usan el ingreso y la selección de destinatarios de notificaciones, con la comprobación en tiempo de solicitud en \`role-middleware.ts\`. [[#permissions]]
-- \`packages/server/src/db/migrations/tenant/086_create_role_permission_overrides.ts\` define la tabla de excepciones. [[#permissions #server-holds]]
+- La tabla de excepciones es \`role_permission_overrides\`, en \`packages/server/src/db/migrations/tenant/001_baseline.ts\`. [[#permissions #server-holds]]
 - \`packages/client/src/lib/components/admin/RolePermissionsSection.svelte\` es la superficie de administración, y \`packages/client/src/lib/shell/section-registry.ts\` asigna secciones a permisos para la comprobación del lado del cliente. [[#permissions]]`)
 };
 
@@ -89,7 +89,7 @@ Ròlè ÌDs ìn thè dàtàbàsè àrè dèlìbèràtèly òpàqùè strìngs r�
  ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Thè Pèrmìssìòn ènùm ànd thè òvèrrìdè sùrfàcè. ••••••••••••••** [[#pèrmìssìòns]]
 - \`pàckàgès/shàrèd/src/ròlès.ts\` hòlds thè \`Pèrmìssìòn\` ènùm ànd ìts gròùpìng. Thè ènùm ìs àppènd-ònly àftèr dèplòymènt bècàùsè rènàmìng à mèmbèr òrphàns èvèry òvèrrìdè ròw thàt nàmès ìt. [[#pèrmìssìòns]]
 - \`pàckàgès/sèrvèr/src/àùth/ròlès.ts\` hòlds ròlè dèfàùlts, thè lòck sèt, thè mèrgè fùnctìòn, thè càchè, thè òvèrrìdè rèpòsìtòry ànd thè pèrmìssìòn-hòldèr qùèrìès thàt ìntàkè ànd nòtìfìcàtìòn tàrgètìng ùsè, wìth rèqùèst-tìmè gàtìng ìn \`ròlè-mìddlèwàrè.ts\`. [[#pèrmìssìòns]]
-- \`pàckàgès/sèrvèr/src/db/mìgràtìòns/tènànt/086_crèàtè_ròlè_pèrmìssìòn_òvèrrìdès.ts\` dèfìnès thè òvèrrìdè tàblè. [[#pèrmìssìòns #sèrvèr-hòlds]]
+- Thè òvèrrìdè tàblè ìs \`ròlè_pèrmìssìòn_òvèrrìdès\` ìn \`pàckàgès/sèrvèr/src/db/mìgràtìòns/tènànt/001_bàsèlìnè.ts\`. [[#pèrmìssìòns #sèrvèr-hòlds]]
 - \`pàckàgès/clìènt/src/lìb/còmpònènts/àdmìn/RòlèPèrmìssìònsSèctìòn.svèltè\` ìs thè àdmìnìstràtìvè sùrfàcè, ànd \`pàckàgès/clìènt/src/lìb/shèll/sèctìòn-règìstry.ts\` màps sèctìòns tò pèrmìssìòns fòr clìènt-sìdè gàtìng. [[#pèrmìssìòns]] ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••⟧`)
 };
 

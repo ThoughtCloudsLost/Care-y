@@ -40,7 +40,7 @@ function insertTestRow(
 }
 
 describe.skipIf(!process.env.DATABASE_URL)(
-  "108_client_emails migration",
+  "emails table and clients.email_id",
   () => {
     let testDb: TestDb;
 

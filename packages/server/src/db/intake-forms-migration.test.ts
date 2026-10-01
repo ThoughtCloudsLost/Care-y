@@ -10,7 +10,7 @@ import {
 } from "../test-utils.js";
 import { newTicketId } from "@care-y/shared";
 
-describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
+describe.skipIf(!process.env.DATABASE_URL)("intake forms schema", () => {
   let testDb: TestDb;
 
   beforeAll(async () => {
@@ -590,7 +590,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
   });
 
   // -------------------------------------------------------------------
-  // 095_intake_field_keys: field_key column and response form_id index
+  // intake_form_fields.field_key column and response form_id index
   // -------------------------------------------------------------------
 
   it("intake_form_fields has field_key column", async () => {
@@ -692,7 +692,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
   });
 
   // -------------------------------------------------------------------
-  // 096_intake_form_meta: encrypted_form_meta column
+  // intake_forms.encrypted_form_meta column
   // -------------------------------------------------------------------
 
   it("intake_forms has nullable encrypted_form_meta column", async () => {

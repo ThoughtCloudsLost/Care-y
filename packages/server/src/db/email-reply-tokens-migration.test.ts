@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { up, down } from "./migrations/tenant/110_email_reply_tokens.js";
 import {
   createTestDb,
   createTestTicketFixture,
@@ -9,134 +8,109 @@ import type { ReplyTokenHash } from "@care-y/shared";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "./types.js";
 
-describe.skipIf(!process.env.DATABASE_URL)(
-  "migration 110: email_reply_tokens",
-  () => {
-    let db: Kysely<TenantDatabase>;
-    let cleanup: () => Promise<void>;
-    let fixture: TestTicketFixture;
+describe.skipIf(!process.env.DATABASE_URL)("email_reply_tokens schema", () => {
+  let db: Kysely<TenantDatabase>;
+  let cleanup: () => Promise<void>;
+  let fixture: TestTicketFixture;
 
-    beforeAll(async () => {
-      const t = await createTestDb();
-      db = t.db;
-      cleanup = t.cleanup;
-      fixture = await createTestTicketFixture(db);
-    });
+  beforeAll(async () => {
+    const t = await createTestDb();
+    db = t.db;
+    cleanup = t.cleanup;
+    fixture = await createTestTicketFixture(db);
+  });
 
-    afterAll(async () => {
-      await cleanup();
-    });
+  afterAll(async () => {
+    await cleanup();
+  });
 
-    it("inserts a reply token row referencing a ticket", async () => {
-      await db
+  it("inserts a reply token row referencing a ticket", async () => {
+    await db
+      .insertInto("email_reply_tokens")
+      .values({
+        ticket_id: fixture.ticketId,
+        token_hash: "hash-aaa" as ReplyTokenHash,
+      })
+      .execute();
+
+    const row = await db
+      .selectFrom("email_reply_tokens")
+      .selectAll()
+      .where("token_hash", "=", "hash-aaa" as ReplyTokenHash)
+      .executeTakeFirstOrThrow();
+
+    expect(row.ticket_id).toBe(fixture.ticketId);
+    expect(row.revoked_at).toBeNull();
+    expect(row.created_at).toBeInstanceOf(Date);
+  });
+
+  it("rejects duplicate token_hash", async () => {
+    await expect(
+      db
         .insertInto("email_reply_tokens")
         .values({
           ticket_id: fixture.ticketId,
           token_hash: "hash-aaa" as ReplyTokenHash,
         })
-        .execute();
+        .execute(),
+    ).rejects.toThrow();
+  });
 
-      const row = await db
-        .selectFrom("email_reply_tokens")
-        .selectAll()
-        .where("token_hash", "=", "hash-aaa" as ReplyTokenHash)
-        .executeTakeFirstOrThrow();
+  it("allows multiple tokens per ticket with different hashes", async () => {
+    await db
+      .insertInto("email_reply_tokens")
+      .values({
+        ticket_id: fixture.ticketId,
+        token_hash: "hash-bbb" as ReplyTokenHash,
+      })
+      .execute();
 
-      expect(row.ticket_id).toBe(fixture.ticketId);
-      expect(row.revoked_at).toBeNull();
-      expect(row.created_at).toBeInstanceOf(Date);
-    });
+    const rows = await db
+      .selectFrom("email_reply_tokens")
+      .selectAll()
+      .where("ticket_id", "=", fixture.ticketId)
+      .execute();
 
-    it("rejects duplicate token_hash", async () => {
-      await expect(
-        db
-          .insertInto("email_reply_tokens")
-          .values({
-            ticket_id: fixture.ticketId,
-            token_hash: "hash-aaa" as ReplyTokenHash,
-          })
-          .execute(),
-      ).rejects.toThrow();
-    });
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+  });
 
-    it("allows multiple tokens per ticket with different hashes", async () => {
-      await db
-        .insertInto("email_reply_tokens")
-        .values({
-          ticket_id: fixture.ticketId,
-          token_hash: "hash-bbb" as ReplyTokenHash,
-        })
-        .execute();
+  it("email_reply_footer column exists on org_config and defaults to null", async () => {
+    // A fresh test schema has no org_config row; seed one so the
+    // column default is observable.
+    await db
+      .insertInto("org_config")
+      .values({ pii_retention_days: null })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
 
-      const rows = await db
-        .selectFrom("email_reply_tokens")
-        .selectAll()
-        .where("ticket_id", "=", fixture.ticketId)
-        .execute();
+    const row = await db
+      .selectFrom("org_config")
+      .select("email_reply_footer")
+      .executeTakeFirst();
 
-      expect(rows.length).toBeGreaterThanOrEqual(2);
-    });
+    expect(row).toBeDefined();
+    expect(row?.email_reply_footer).toBeNull();
+  });
 
-    it("email_reply_footer column exists on org_config and defaults to null", async () => {
-      // A fresh test schema has no org_config row; seed one so the
-      // column default is observable.
-      await db
-        .insertInto("org_config")
-        .values({ pii_retention_days: null })
-        .onConflict((oc) => oc.doNothing())
-        .execute();
+  it("deletes tokens when their ticket is deleted (cascade)", async () => {
+    // The e2e harness and the dev reset both DELETE FROM tickets and
+    // rely on every ticket-rooted table cascading.
+    const second = await createTestTicketFixture(db);
+    await db
+      .insertInto("email_reply_tokens")
+      .values({
+        ticket_id: second.ticketId,
+        token_hash: "hash-ccc" as ReplyTokenHash,
+      })
+      .execute();
 
-      const row = await db
-        .selectFrom("org_config")
-        .select("email_reply_footer")
-        .executeTakeFirst();
+    await db.deleteFrom("tickets").where("id", "=", second.ticketId).execute();
 
-      expect(row).toBeDefined();
-      expect(row?.email_reply_footer).toBeNull();
-    });
-
-    it("deletes tokens when their ticket is deleted (cascade)", async () => {
-      // The e2e harness and the dev reset both DELETE FROM tickets and
-      // rely on every ticket-rooted table cascading.
-      const second = await createTestTicketFixture(db);
-      await db
-        .insertInto("email_reply_tokens")
-        .values({
-          ticket_id: second.ticketId,
-          token_hash: "hash-ccc" as ReplyTokenHash,
-        })
-        .execute();
-
-      await db
-        .deleteFrom("tickets")
-        .where("id", "=", second.ticketId)
-        .execute();
-
-      const rows = await db
-        .selectFrom("email_reply_tokens")
-        .selectAll()
-        .where("token_hash", "=", "hash-ccc" as ReplyTokenHash)
-        .execute();
-      expect(rows).toHaveLength(0);
-    });
-
-    it("down removes the table and column, up re-applies cleanly", async () => {
-      // Migration signatures take Kysely<unknown> (the Migrator's view);
-      // Kysely's type parameter is invariant, so the tenant-typed test
-      // instance needs an explicit widening for the direct call.
-      const migrationDb = db as unknown as Kysely<unknown>;
-      await down(migrationDb);
-
-      // email_reply_tokens table is gone
-      await expect(
-        db
-          .insertInto("email_reply_tokens" as never)
-          .values({ ticket_id: "x", token_hash: "x" } as never)
-          .execute(),
-      ).rejects.toThrow();
-
-      // Re-apply so afterAll cleanup succeeds
-      await up(migrationDb);
-    });
-  },
-);
+    const rows = await db
+      .selectFrom("email_reply_tokens")
+      .selectAll()
+      .where("token_hash", "=", "hash-ccc" as ReplyTokenHash)
+      .execute();
+    expect(rows).toHaveLength(0);
+  });
+});
