@@ -77,6 +77,7 @@ const PROD_ENV = {
   SESSION_SECRET: "a".repeat(64),
   DATABASE_URL: "postgresql://localhost:5432/test",
   OPS_SECRETS_KEY: "ab".repeat(32),
+  OPERATOR_ALERT_EMAIL: "operator@example.org",
 };
 
 const TEST_ENV = {
@@ -101,9 +102,6 @@ function makeDeps(): OprfEvaluateServiceDeps {
   const auditLogger: OprfAuditLogger = {
     async logFailure(): Promise<void> {
       /* noop: assertions in this file use thrown errors */
-    },
-    dispose(): void {
-      /* noop */
     },
   };
   return {

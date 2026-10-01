@@ -103,6 +103,10 @@ const EXEMPT = new Map([
     "OprfAuditLogTable.user_id",
     "Audit subject, not a row reference: holds a user uuid for volunteer and account evaluations or an OPRF tag string for channel evaluations (ADR-091, migration platform/009). No brand exists for the union and it is never joined against.",
   ],
+  [
+    "DeletionRequestsTable.provider_subaccount_sid",
+    "Telephony provider's own subaccount identifier (a Twilio SID), captured so erasure can close the subaccount after the telephony row is gone; not a row in this database.",
+  ],
 ]);
 
 /** Strip wrappers and nullability so `Generated<TicketId> | null` reduces to `TicketId`. */

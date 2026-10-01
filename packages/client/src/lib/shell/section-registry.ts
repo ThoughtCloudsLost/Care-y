@@ -57,6 +57,7 @@ import {
   Layers as LayersVol,
   ShieldUser,
   HeartHandshake,
+  Trash,
 } from "@lucide/svelte";
 
 // ── Static section arrays ──────────────────────────────────────────
@@ -67,6 +68,7 @@ export const ORGANIZATION_SECTIONS: readonly ScrollSection[] = [
   { id: "terminology", label: m.admin_tab_terminology, icon: Languages },
   { id: "keys", label: m.admin_tab_keys, icon: Key },
   { id: "retention", label: m.admin_tab_retention, icon: Shredder },
+  { id: "org-deletion", label: m.admin_tab_org_deletion, icon: Trash },
   { id: "note-types", label: m.admin_tab_note_types, icon: ClipboardPenLine },
   { id: "intake-forms", label: m.intake_forms_title, icon: ClipboardList },
   { id: "funds", label: m.admin_tab_funds, icon: HandCoins },
@@ -78,6 +80,7 @@ const ORGANIZATION_PERMISSIONS: ReadonlyMap<string, Permission> = new Map([
   ["terminology", Permission.MANAGE_ORG_IDENTITY],
   ["keys", Permission.MANAGE_KEYS],
   ["retention", Permission.MANAGE_RETENTION],
+  ["org-deletion", Permission.REQUEST_ORG_DELETION],
   ["note-types", Permission.MANAGE_NOTE_TYPES],
   ["intake-forms", Permission.MANAGE_INTAKE_FORMS],
   ["funds", Permission.MANAGE_FUNDS],

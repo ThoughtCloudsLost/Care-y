@@ -219,6 +219,13 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
     m.error_password_change_required(),
   [ErrorCode.PASSWORD_UNCHANGED]: () => m.error_password_unchanged(),
   [ErrorCode.STALE_KEY_WRAPS]: () => m.error_stale_key_wraps(),
+
+  // Org deletion requests
+  [ErrorCode.DELETION_ALREADY_REQUESTED]: () =>
+    m.error_deletion_already_requested(),
+  [ErrorCode.DELETION_NOT_CANCELLABLE]: () =>
+    m.error_deletion_not_cancellable(),
+  [ErrorCode.DELETION_SLUG_MISMATCH]: () => m.error_deletion_slug_mismatch(),
 };
 
 /** Type guard: returns true when the string is a recognized ErrorCode value. */

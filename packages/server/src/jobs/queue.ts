@@ -2,6 +2,8 @@
 // Backed by Postgres (FOR UPDATE SKIP LOCKED). No Redis dependency.
 // Payloads must never contain PII (IDs and references only).
 
+import type { JobId, OrgId } from "@care-y/shared";
+
 export type JobStatus = "pending" | "active" | "completed" | "failed" | "dead";
 
 export type BackoffStrategy = "exponential" | "linear";
@@ -40,6 +42,28 @@ export interface JobQueue {
 
   /** Stop polling and wait for in-flight jobs to finish. Called on graceful shutdown. */
   stop(): Promise<void>;
+}
+
+/**
+ * Reads dead jobs for the operator alert. Separate from JobQueue so only
+ * the dead-job sweep receives it.
+ */
+export interface DeadJobReader {
+  /**
+   * Jobs marked dead after `since`, oldest first. Returns the summary fields
+   * only: the payload and the error text are never read, because either can
+   * quote data.
+   */
+  listDeadSince(since: Date): Promise<DeadJobSummary[]>;
+}
+
+/** What an operator alert may say about a dead job. Nothing else leaves the row. */
+export interface DeadJobSummary {
+  readonly id: JobId;
+  readonly queue: string;
+  /** The payload's `orgId` when it carries a valid one, otherwise null. */
+  readonly orgId: OrgId | null;
+  readonly failedAt: Date;
 }
 
 export class JobQueueError extends Error {

@@ -120,9 +120,6 @@ function createSpyAuditLogger(): OprfAuditLogger & {
     ): Promise<void> {
       calls.push({ userId, ip: ipAddress, reason });
     },
-    dispose(): void {
-      /* noop */
-    },
   };
 }
 

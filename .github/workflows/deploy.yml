@@ -1,0 +1,238 @@
+name: Release
+
+# A release is a deploy. Pushing a vX.Y.Z tag that points at a commit on main
+# with a passing CI run builds the images at that commit, publishes them to
+# GHCR tagged with the commit SHA and the version, creates the GitHub Release
+# with generated notes (categories in .github/release.yml), and deploys once a
+# reviewer approves the production environment. Merges to main run CI only.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+# One release at a time. A second tag waits instead of cancelling a release
+# that may be part way through a deploy.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  # Same opt-in as ci.yml: any action still built for an older Node runtime
+  # runs on Node 24 ahead of the forced migration.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  verify:
+    name: Verify release commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout
+      actions: read # gh run list
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Every later step names the release by GITHUB_SHA: the image tags, the
+      # deploy command and the host's IMAGE_TAG.
+      - name: Tag resolves to GITHUB_SHA
+        run: |
+          commit="$(git rev-parse 'HEAD^{commit}')"
+          if [ "$commit" != "$GITHUB_SHA" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME points at $commit, not GITHUB_SHA $GITHUB_SHA"
+            exit 1
+          fi
+
+      - name: Tag commit is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA is not on main"
+            exit 1
+          fi
+
+      # workflow_run cannot be combined with a tag trigger, so this step is
+      # what keeps a commit with failing CI from being released.
+      - name: CI passed at this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI \
+            --commit "$GITHUB_SHA" --status success --json databaseId --jq 'length')"
+          if [ "$runs" -eq 0 ]; then
+            echo "::error::No successful CI run for $GITHUB_SHA"
+            exit 1
+          fi
+
+  build:
+    name: Build, check and publish
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write # gh release create
+      packages: write # push to ghcr.io
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: false
+
+      # Image references must be lowercase; the owner name may not be.
+      - name: Image names
+        run: |
+          prefix="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          {
+            echo "API_IMAGE=$prefix/care-y-api"
+            echo "WEB_IMAGE=$prefix/care-y-web"
+            echo "CADDY_IMAGE=$prefix/care-y-caddy"
+            echo "OPRF_IMAGE=$prefix/care-y-oprf"
+          } >>"$GITHUB_ENV"
+
+      # Tagged with the commit SHA (what the host runs) and the version (what
+      # people refer to). Never :latest.
+      - name: Build api image
+        run: |
+          docker build --file Dockerfile.prod --target api \
+            --build-arg CAREY_VERSION="$GITHUB_REF_NAME" \
+            --tag "$API_IMAGE:$GITHUB_SHA" --tag "$API_IMAGE:$GITHUB_REF_NAME" .
+
+      - name: Build web image
+        run: |
+          docker build --file Dockerfile.prod --target web \
+            --build-arg CAREY_VERSION="$GITHUB_REF_NAME" \
+            --tag "$WEB_IMAGE:$GITHUB_SHA" --tag "$WEB_IMAGE:$GITHUB_REF_NAME" .
+
+      - name: Build caddy image
+        run: |
+          docker build \
+            --tag "$CADDY_IMAGE:$GITHUB_SHA" --tag "$CADDY_IMAGE:$GITHUB_REF_NAME" \
+            deploy/caddy
+
+      - name: Build oprf image
+        run: |
+          docker build --file Dockerfile.oprf \
+            --tag "$OPRF_IMAGE:$GITHUB_SHA" --tag "$OPRF_IMAGE:$GITHUB_REF_NAME" .
+
+      - name: Smoke api image
+        run: |
+          image="$API_IMAGE:$GITHUB_SHA"
+          # tsx must survive the production-only reinstall.
+          docker run --rm "$image" pnpm --filter @care-y/server exec tsx --version
+          uid="$(docker run --rm "$image" id -u)"
+          if [ "$uid" != 1001 ]; then
+            echo "::error::api image runs as uid $uid, expected 1001"
+            exit 1
+          fi
+          core="$(docker run --rm "$image" sh -c 'ulimit -c')"
+          if [ "$core" != 0 ]; then
+            echo "::error::api image core limit is $core, expected 0"
+            exit 1
+          fi
+
+      - name: Smoke web image
+        run: |
+          image="$WEB_IMAGE:$GITHUB_SHA"
+          core="$(docker run --rm "$image" sh -c 'ulimit -c')"
+          if [ "$core" != 0 ]; then
+            echo "::error::web image core limit is $core, expected 0"
+            exit 1
+          fi
+          # Importing the server entry resolves every externalised dependency
+          # and starts listening. A module that fails to resolve ends the
+          # process, so the container must still be running after 3 seconds.
+          cid="$(docker run --detach --env NODE_ENV=production "$image" \
+            node -e 'import("./build/index.js")')"
+          sleep 3
+          state="$(docker inspect --format '{{.State.Status}}' "$cid")"
+          docker logs "$cid"
+          docker rm --force "$cid" >/dev/null
+          if [ "$state" != running ]; then
+            echo "::error::web server did not start (container state: $state)"
+            exit 1
+          fi
+
+      # The Cloudflare module checks the token's format when it provisions,
+      # and the example file carries a placeholder that fails that check.
+      # Forty zeros pass it; validate makes no API call.
+      - name: Validate Caddyfile
+        run: |
+          grep -v '^CF_API_TOKEN=' deploy/caddy/caddy.env.example >"$RUNNER_TEMP/caddy.env"
+          docker run --rm \
+            --volume "$PWD/deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            --env-file deploy/prod.env.example \
+            --env-file "$RUNNER_TEMP/caddy.env" \
+            --env CF_API_TOKEN="$(printf '%040d' 0)" \
+            "$CADDY_IMAGE:$GITHUB_SHA" \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+      # The env files under /etc/care-y exist only on the host.
+      - name: Validate production compose file
+        run: |
+          docker compose --env-file deploy/prod.env.example \
+            --file docker-compose.prod.yml config --quiet --no-env-resolution
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish images
+        run: |
+          for image in "$API_IMAGE" "$WEB_IMAGE" "$CADDY_IMAGE" "$OPRF_IMAGE"; do
+            docker push "$image:$GITHUB_SHA"
+            docker push "$image:$GITHUB_REF_NAME"
+          done
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+
+  deploy:
+    name: Deploy to production
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # The required reviewer is configured on this environment in the
+    # repository settings.
+    environment: production
+    permissions:
+      contents: read
+
+    steps:
+      # The key's only authorized use on the host is the forced command,
+      # which accepts "deploy <40-hex sha>" and nothing else. The host key is
+      # pinned: no trust on first use.
+      #
+      # The remote output is discarded here, on the runner: the migration
+      # runner names every tenant schema, and this log is public. The host
+      # keeps the full output in /var/log/care-y/deploy.log. Only the exit
+      # code reaches this job.
+      - name: Deploy
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          umask 077
+          key="$RUNNER_TEMP/deploy_key"
+          known_hosts="$RUNNER_TEMP/known_hosts"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" >"$key"
+          printf '%s\n' "$DEPLOY_HOST_KEY" >"$known_hosts"
+          if ! ssh -i "$key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
+            "deploy@$DEPLOY_HOST" "deploy $GITHUB_SHA" >/dev/null 2>&1; then
+            echo "::error::Deploy of $GITHUB_SHA failed. Details are in the host's deploy log."
+            exit 1
+          fi

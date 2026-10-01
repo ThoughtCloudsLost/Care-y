@@ -11,6 +11,7 @@ import {
   OprfError,
   PowRequiredError,
   RateLimitError,
+  SecretsFileError,
   ValidationError,
   extractErrorMessage,
   isAppError,
@@ -243,6 +244,35 @@ describe("AppError hierarchy", () => {
       expect(err).toBeInstanceOf(AppError);
     });
   });
+
+  describe("SecretsFileError", () => {
+    it("is non-operational", () => {
+      const err = new SecretsFileError("secrets file not found");
+      expect(err.isOperational).toBe(false);
+    });
+
+    it("has correct code and httpStatus", () => {
+      const err = new SecretsFileError("loose mode");
+      expect(err.code).toBe("SECRETS_FILE_ERROR");
+      expect(err.httpStatus).toBe(500);
+    });
+
+    it("has correct name", () => {
+      const err = new SecretsFileError("symlink refused");
+      expect(err.name).toBe("SecretsFileError");
+    });
+
+    it("preserves the message", () => {
+      const err = new SecretsFileError("specific failure");
+      expect(err.message).toBe("specific failure");
+    });
+
+    it("is an instance of Error and AppError", () => {
+      const err = new SecretsFileError("test");
+      expect(err).toBeInstanceOf(Error);
+      expect(err).toBeInstanceOf(AppError);
+    });
+  });
 });
 
 describe("isAppError", () => {
@@ -257,6 +287,7 @@ describe("isAppError", () => {
     expect(isAppError(new InternalError("test"))).toBe(true);
     expect(isAppError(new OprfError("test"))).toBe(true);
     expect(isAppError(new PowRequiredError("challenge", 16))).toBe(true);
+    expect(isAppError(new SecretsFileError("test"))).toBe(true);
   });
 
   it("returns false for plain Error", () => {

@@ -76,6 +76,18 @@ describe("getStrings", () => {
     expect(msg).toContain("quarantined");
     expect(msg).toContain(url);
   });
+
+  it.each(["en", "es"])(
+    "returns %s org deletion templates carrying the login URL and the waiting period",
+    (locale) => {
+      const strings = getStrings(locale);
+      const url = "https://org.care-y.app/login";
+      const requested = strings.orgDeletionRequested(url);
+      expect(requested).toContain(url);
+      expect(requested).toContain("30");
+      expect(strings.orgDeletionCancelled(url)).toContain(url);
+    },
+  );
 });
 
 describe("buildLoginUrl", () => {

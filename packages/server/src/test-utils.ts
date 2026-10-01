@@ -18,16 +18,7 @@ import { existsSync } from "node:fs";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import pg from "pg";
-import {
-  Kysely,
-  PostgresDialect,
-  sql,
-  type DatabaseIntrospector,
-  type Insertable,
-  type PostgresDialectConfig,
-  type Selectable,
-  type TableMetadata,
-} from "kysely";
+import { Kysely, sql, type Insertable, type Selectable } from "kysely";
 import { FileMigrationProvider, Migrator } from "kysely/migration";
 import type {
   PlatformDatabase,
@@ -35,6 +26,7 @@ import type {
   UsersTable,
   SessionsTable,
 } from "./db/types.js";
+import { SafeIntrospectionPostgresDialect } from "./db/schema-utils.js";
 import type { BlobStore, BlobCategory } from "./storage/store.js";
 import type { OrgSchema, BlobKey } from "@care-y/shared";
 import {
@@ -242,75 +234,10 @@ export class TestSetupError extends Error {
   }
 }
 
-/**
- * Postgres dialect whose introspector survives a concurrent `DROP SCHEMA`.
- *
- * Kysely's Migrator decides whether its bookkeeping tables already exist by
- * listing every table in the database and filtering the result in JavaScript.
- * That listing calls two functions per row that re-resolve a name against the
- * live catalog rather than the query snapshot: `has_schema_privilege()` in the
- * where clause and `pg_get_serial_sequence()` in the select list. Both raise
- * `schema "<name>" does not exist` when the schema is gone, so a `DROP SCHEMA`
- * committed by a concurrently running test file fails an unrelated file's
- * migration before its first migration runs.
- *
- * This introspector reads `pg_class` and `pg_namespace` directly and calls
- * neither function, so a dropped schema simply drops out of the result. Pass a
- * schema to narrow it further, which also takes the cost from every column in
- * the database down to every table in one schema.
- *
- * The Migrator reads only `name` and `schema` from each entry, so the narrowed
- * result carries everything its one caller uses. Nothing else in the codebase
- * reads `db.introspection`.
- */
-export class SafeIntrospectionPostgresDialect extends PostgresDialect {
-  readonly #schema: string | undefined;
-
-  constructor(config: PostgresDialectConfig, schema?: string) {
-    super(config);
-    this.#schema = schema;
-  }
-
-  override createIntrospector(
-    db: Kysely<PlatformDatabase>,
-  ): DatabaseIntrospector {
-    const schema = this.#schema;
-    const inner = super.createIntrospector(db);
-
-    async function getTables(): Promise<TableMetadata[]> {
-      // Catalog query, every object schema-qualified. Same system-schema
-      // exclusions as Kysely's own introspector, minus the two calls that
-      // resolve names outside the snapshot.
-      const schemaFilter =
-        schema === undefined
-          ? sql`ns.nspname !~ '^pg_' and ns.nspname <> 'information_schema' and ns.nspname <> 'crdb_internal'`
-          : sql`ns.nspname = ${schema}`;
-
-      const result = await sql<{
-        name: string;
-        kind: string;
-        schema: string;
-      }>`select c.relname as name, c.relkind as kind, ns.nspname as schema
-         from pg_catalog.pg_class as c
-         join pg_catalog.pg_namespace as ns on c.relnamespace = ns.oid
-         where ${schemaFilter}
-           and c.relkind in ('r', 'v', 'p', 'f')`.execute(db);
-
-      return result.rows.map((row) => ({
-        name: row.name,
-        isView: row.kind === "v",
-        isForeign: row.kind === "f",
-        schema: row.schema,
-        columns: [],
-      }));
-    }
-
-    return {
-      getSchemas: () => inner.getSchemas(),
-      getTables,
-    };
-  }
-}
+// The scoped introspection dialect is the production one from
+// db/schema-utils.ts. Re-exported so test files keep importing their DB
+// helpers from one module.
+export { SafeIntrospectionPostgresDialect };
 
 export interface TestDb {
   /** Kysely instance scoped to the test schema (tenant tables). */
@@ -1261,6 +1188,7 @@ export const NO_OPTIONAL_ROUTERS: OptionalRouterDeps = {
   devDeps: null,
   savedFilters: false,
   keysDeps: null,
+  orgDeletionDeps: null,
   fundsDeps: null,
 };
 
@@ -1305,6 +1233,7 @@ export const ALL_OPTIONAL_ROUTERS: OptionalRouterDeps = {
   devDeps: everyDepPresent(),
   savedFilters: true,
   keysDeps: everyDepPresent(),
+  orgDeletionDeps: everyDepPresent(),
   fundsDeps: everyDepPresent(),
 };
 

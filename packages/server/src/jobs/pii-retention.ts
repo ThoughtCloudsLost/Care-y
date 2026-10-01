@@ -2,19 +2,21 @@
  * PII retention purge job.
  *
  * Recurring daily job that hard-deletes closed tickets whose last activity
- * (latest followups.created_at) is older than org_config.pii_retention_days.
+ * (latest followups.created_at, or tickets.created_at without follow-ups) is
+ * older than org_config.pii_retention_days.
  *
- * A client row (along with phone, email, portal channel, and account) is
- * deleted only when that client's last ticket is the one being purged:
- * clients with any open or recently-active ticket are untouched.
+ * A client row (with its portal channels and account, and its phone and email
+ * rows when no other client references them) is deleted only when that
+ * client's last ticket is the one being purged: clients with any open or
+ * recently-active ticket are untouched.
  *
  * Deletion order: blobs first (recordings, attachments), then tracked_calls
  * rows (no FK), then ticket rows (DB cascades handle child tables), then
  * orphaned clients.
  *
- * Provider-side call/message/recording logs for purged tickets are enqueued
- * onto the "log-deletion" queue so telephony provider records are cleaned up
- * asynchronously.
+ * Each tracked_calls row still attached to a purged ticket gets a provider
+ * call-log deletion on the "log-deletion" queue. The telephony handlers delete
+ * stored messages and recordings at the provider when they arrive, not here.
  *
  * Logs row counts per org schema and nothing else (no IDs, no PII).
  */

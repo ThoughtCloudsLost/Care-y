@@ -10,6 +10,7 @@
     ClipboardPenLine,
     ClipboardList,
     Languages,
+    Trash,
     HandCoins,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -23,6 +24,7 @@
   import NoteTypesSection from "$lib/components/admin/NoteTypesSection.svelte";
   import IntakeFormsSection from "$lib/components/admin/IntakeFormsSection.svelte";
   import TerminologySection from "$lib/components/admin/TerminologySection.svelte";
+  import DeletionRequestSection from "$lib/components/admin/DeletionRequestSection.svelte";
   import FundsSection from "$lib/components/admin/FundsSection.svelte";
 
   const permissionsGetter = getCurrentPermissions();
@@ -63,6 +65,13 @@
       icon: Shredder,
       permission: Permission.MANAGE_RETENTION,
       component: RetentionSection,
+    },
+    {
+      id: "org-deletion",
+      label: m.admin_tab_org_deletion,
+      icon: Trash,
+      permission: Permission.REQUEST_ORG_DELETION,
+      component: DeletionRequestSection,
     },
     {
       id: "note-types",

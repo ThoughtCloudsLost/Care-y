@@ -255,6 +255,55 @@ export class SecondFactorLimitError extends AppError {
   readonly httpStatus = 429;
 }
 
+/**
+ * Production secrets file refused at startup (missing, symlinked, loose
+ * mode, unparseable, or a key also set in the environment). Messages name
+ * keys only, never values, so printing the message is safe.
+ */
+export class SecretsFileError extends AppError {
+  readonly code = "SECRETS_FILE_ERROR" as const;
+  readonly httpStatus = 500;
+
+  constructor(message: string) {
+    super(message, false); // non-operational: indicates a misconfiguration
+  }
+}
+
+/**
+ * One step of an org erasure failed. Carries the step name and the class
+ * name of the underlying error, nothing else. A cause's message can quote
+ * a slug, a schema name or provider response text and is dropped here.
+ * The org:erase CLI prints the two fields on its `deferred` line.
+ */
+export class ErasureStepError extends AppError {
+  readonly code = "ERASURE_STEP_ERROR" as const;
+  readonly httpStatus = 500;
+  readonly step: string;
+  readonly causeName: string;
+
+  constructor(step: string, causeName: string) {
+    super(`erasure step ${step} failed: ${causeName}`, false);
+    this.step = step;
+    this.causeName = causeName;
+  }
+
+  /**
+   * Wraps a caught value, keeping only its class name.
+   *
+   * @param step - the erasure step that threw
+   * @param cause - the caught value
+   * @returns the step error; the cause itself is not retained
+   */
+  static fromCause(step: string, cause: unknown): ErasureStepError {
+    return new ErasureStepError(step, errorClassName(cause));
+  }
+}
+
+/** Class name of a caught value; non-Error values report their typeof. */
+function errorClassName(err: unknown): string {
+  return err instanceof Error ? err.constructor.name : typeof err;
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }

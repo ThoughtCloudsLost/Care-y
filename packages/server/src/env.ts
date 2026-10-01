@@ -1,6 +1,6 @@
 // Environment variable validation.
 // Exports lazy accessors so importing this module does NOT trigger validation.
-// Call validateEnv() explicitly in index.ts for fail-fast startup behavior.
+// env-bootstrap.ts calls loadSecretsFile() then initEnv(source); initEnv fills the cache getEnv() reads.
 // All env vars are declared here. Add new vars as features are built.
 
 import { z } from "zod";
@@ -118,6 +118,51 @@ const envSchema = z.object({
   // receiver stays plaintext SMTP (port 25 opportunistic-TLS reality).
   INBOUND_SMTP_TLS_KEY_PATH: z.string().optional(),
   INBOUND_SMTP_TLS_CERT_PATH: z.string().optional(),
+
+  // Domain the org subdomains hang off, without scheme or path. The
+  // operator CLIs build setup links as https://<slug>.<CAREY_APP_DOMAIN>/setup/<token>.
+  // Production: the apex domain the wildcard certificate covers.
+  CAREY_APP_DOMAIN: z
+    .string()
+    .min(1, "CAREY_APP_DOMAIN must not be empty")
+    .default("localhost:5173"),
+
+  // Owner-role connection string (production: the carey role). Migrations,
+  // the operator CLIs and the grants step connect with it through
+  // createAdminPool(); DATABASE_URL carries the runtime role. Unset in dev
+  // and tests, where the admin pool is the ordinary DATABASE_URL pool.
+  DATABASE_ADMIN_URL: z.string().min(1).optional(),
+
+  // Runtime role the grants step gives DML on every table, with UPDATE and
+  // DELETE revoked on the audit tables (production: carey_app). Unset in
+  // dev and tests, where grants are skipped.
+  DATABASE_APP_ROLE: z
+    .string()
+    .regex(/^[a-z_][a-z0-9_]*$/)
+    .optional(),
+
+  // Where the dead-job sweep sends its alert: the host operator's address,
+  // never an org admin's. Required in production (see the refinement
+  // below); unset in dev and tests, where the sweep is not registered.
+  OPERATOR_ALERT_EMAIL: z.email().optional(),
+
+  // Heartbeat monitor URL the job scheduler pings after each clean poll
+  // cycle. Anyone holding it can mark the scheduler healthy, so it lives in
+  // the secrets file and stays out of every log line. Unset disables the
+  // ping.
+  JOBS_HEARTBEAT_URL: z.url().optional(),
+});
+
+// Cross-field rules that one field's schema cannot express.
+const refinedEnvSchema = envSchema.superRefine((env, ctx) => {
+  if (env.NODE_ENV === "production" && env.OPERATOR_ALERT_EMAIL === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["OPERATOR_ALERT_EMAIL"],
+      message: "OPERATOR_ALERT_EMAIL is required in production",
+      input: env.OPERATOR_ALERT_EMAIL,
+    });
+  }
 });
 
 export type EnvVars = z.infer<typeof envSchema>;
@@ -132,9 +177,13 @@ export class EnvValidationError extends Error {
   }
 }
 
-/** Parses and validates process.env against the schema. Throws EnvValidationError on failure. */
-export function validateEnv(): EnvVars {
-  const parsed = envSchema.safeParse(process.env);
+/**
+ * Parses and validates `source` (process.env by default) against the schema.
+ * Pure: never touches the getEnv() cache; initEnv() is the only cache writer.
+ * Throws EnvValidationError on failure.
+ */
+export function validateEnv(source: NodeJS.ProcessEnv = process.env): EnvVars {
+  const parsed = refinedEnvSchema.safeParse(source);
   if (!parsed.success) {
     throw new EnvValidationError(parsed.error.issues);
   }
@@ -152,4 +201,17 @@ export function getEnv(): EnvVars {
 /** Resets the cached env. Test-only: allows re-validation after changing process.env. */
 export function _resetEnvCache(): void {
   cached = null;
+}
+
+/**
+ * Validates `source` and stores the result as the config every getEnv()
+ * caller reads. Production startup passes the merged source from
+ * loadSecretsFile(), so file secrets reach getEnv() consumers without ever
+ * entering process.env (ADR-131). Throws EnvValidationError on failure and
+ * leaves the cache untouched.
+ */
+export function initEnv(source: NodeJS.ProcessEnv = process.env): EnvVars {
+  const env = validateEnv(source);
+  cached = env;
+  return env;
 }

@@ -1,24 +1,45 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { Kysely, sql } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
-import { createOrgService, type OrgService } from "./service.js";
-// Provisioning migrates a fresh org schema, and Kysely's stock introspector
-// reads the whole database to decide whether the migration table exists. A
-// schema dropped by a concurrently running test file fails that read, so these
-// tests supply an introspector that only reads the catalog. The runtime path
-// builds its own instance and still carries the exposure; it is tracked
-// separately.
-import { SafeIntrospectionPostgresDialect } from "../test-utils.js";
-import { ValidationError, ConflictError, InternalError } from "../errors.js";
+import { applyTenantGrants } from "../db/grants.js";
+import type * as Grants from "../db/grants.js";
+import { createOrgService, type OrgOperatorService } from "./service.js";
+
+// ESM bindings rule out vi.spyOn on the grants module, so the mock wraps the
+// real applyTenantGrants: calls are recorded and still reach the database.
+vi.mock("../db/grants.js", async (importOriginal) => {
+  const original = await importOriginal<typeof Grants>();
+  return {
+    ...original,
+    applyTenantGrants: vi.fn(original.applyTenantGrants),
+  };
+});
+// Provisioning migrates the new org schema through createTenantMigrator, whose
+// introspector reads only that schema's catalog rows, so a schema dropped by a
+// concurrently running test file cannot fail it. The platform instance below
+// uses the same catalog-only dialect.
+import {
+  SafeIntrospectionPostgresDialect,
+  createTestUser,
+} from "../test-utils.js";
+import {
+  ValidationError,
+  ConflictError,
+  InternalError,
+  NotFoundError,
+} from "../errors.js";
+import { ErrorCode } from "@care-y/shared";
 import type { OrgId, OrgSchema, OrgSlug } from "@care-y/shared";
 
 // OrgService creates real PostgreSQL schemas. Mocking is not viable because
 // createOrg exercises CREATE SCHEMA, migration execution, and org_config
 // insertion. We need a live database.
 describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
+  let pool: pg.Pool;
   let platformDb: Kysely<PlatformDatabase>;
-  let service: OrgService;
+  let service: OrgOperatorService;
   const createdSchemas: OrgSchema[] = [];
   const createdOrgIds: OrgId[] = [];
 
@@ -28,7 +49,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
   );
 
   beforeAll(() => {
-    const pool = new pg.Pool({
+    pool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
       max: 5,
     });
@@ -40,7 +61,9 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
       return platformDb.withSchema(schema) as unknown as Kysely<TenantDatabase>;
     }
 
-    service = createOrgService(platformDb, tenantDbFactory);
+    // Tenant migrations run over this file's pool, which afterAll ends,
+    // rather than over db.ts's process pool.
+    service = createOrgService(platformDb, tenantDbFactory, pool);
   });
 
   afterAll(async () => {
@@ -236,16 +259,168 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
     const decoded = Buffer.from(org.setupToken, "base64url");
     expect(decoded.length).toBe(32);
   });
+
+  function tenantDbFor(schemaName: OrgSchema): Kysely<TenantDatabase> {
+    return platformDb.withSchema(
+      schemaName,
+    ) as unknown as Kysely<TenantDatabase>;
+  }
+
+  async function storedTokenHash(orgId: OrgId): Promise<Buffer | null> {
+    const row = await platformDb
+      .selectFrom("orgs")
+      .select("setup_token_hash")
+      .where("id", "=", orgId)
+      .executeTakeFirstOrThrow();
+    return row.setup_token_hash;
+  }
+
+  it("resetSetupToken on an org without users replaces the token", async () => {
+    const org = await service.createOrg({ slug: "test-org-reset-fresh" });
+
+    createdSchemas.push(org.schemaName);
+    createdOrgIds.push(org.id);
+
+    const reset = await service.resetSetupToken("test-org-reset-fresh");
+
+    expect(reset.id).toBe(org.id);
+    expect(reset.slug).toBe("test-org-reset-fresh");
+    expect(reset.setupToken).not.toBe(org.setupToken);
+    expect(Buffer.from(reset.setupToken, "base64url").length).toBe(32);
+    expect(await service.validateSetupToken(org.id, org.setupToken)).toBe(
+      false,
+    );
+    expect(await service.validateSetupToken(org.id, reset.setupToken)).toBe(
+      true,
+    );
+  });
+
+  it("resetSetupToken reissues a token after the old one was consumed", async () => {
+    const org = await service.createOrg({ slug: "test-org-reset-consumed" });
+
+    createdSchemas.push(org.schemaName);
+    createdOrgIds.push(org.id);
+
+    await service.consumeSetupToken(org.id);
+    const reset = await service.resetSetupToken("test-org-reset-consumed");
+
+    expect(await service.validateSetupToken(org.id, reset.setupToken)).toBe(
+      true,
+    );
+  });
+
+  it("resetSetupToken throws ORG_ALREADY_SETUP and keeps the hash when the org has a user", async () => {
+    const org = await service.createOrg({ slug: "test-org-reset-active" });
+
+    createdSchemas.push(org.schemaName);
+    createdOrgIds.push(org.id);
+
+    await createTestUser(tenantDbFor(org.schemaName), { orgId: org.id });
+    const hashBefore = await storedTokenHash(org.id);
+
+    const attempt = service.resetSetupToken("test-org-reset-active");
+    await expect(attempt).rejects.toThrow(ConflictError);
+    await expect(attempt).rejects.toThrow(ErrorCode.ORG_ALREADY_SETUP);
+
+    expect(await storedTokenHash(org.id)).toEqual(hashBefore);
+    expect(await service.validateSetupToken(org.id, org.setupToken)).toBe(true);
+  });
+
+  it("resetSetupToken refuses an org whose only user is deactivated", async () => {
+    const org = await service.createOrg({ slug: "test-org-reset-inactive" });
+
+    createdSchemas.push(org.schemaName);
+    createdOrgIds.push(org.id);
+
+    await createTestUser(tenantDbFor(org.schemaName), {
+      orgId: org.id,
+      overrides: { is_active: false },
+    });
+
+    await expect(
+      service.resetSetupToken("test-org-reset-inactive"),
+    ).rejects.toThrow(ErrorCode.ORG_ALREADY_SETUP);
+  });
+
+  it("resetSetupToken throws NotFoundError for an unknown slug", async () => {
+    await expect(
+      service.resetSetupToken("nonexistent-reset-xyz"),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("resetSetupToken rejects an invalid slug with ValidationError", async () => {
+    await expect(service.resetSetupToken("x")).rejects.toThrow(ValidationError);
+  });
+
+  it("hasActiveUsers is false for a fresh org and true once a user exists", async () => {
+    const org = await service.createOrg({ slug: "test-org-has-users" });
+
+    createdSchemas.push(org.schemaName);
+    createdOrgIds.push(org.id);
+
+    expect(await service.hasActiveUsers("test-org-has-users")).toBe(false);
+
+    await createTestUser(tenantDbFor(org.schemaName), { orgId: org.id });
+
+    expect(await service.hasActiveUsers("test-org-has-users")).toBe(true);
+  });
+
+  it("hasActiveUsers throws NotFoundError for an unknown slug", async () => {
+    await expect(
+      service.hasActiveUsers("nonexistent-users-xyz"),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("createOrg with appRole applies tenant grants once to the new schema", async () => {
+    // A throwaway nologin role stands in for the runtime role. DROP OWNED BY
+    // revokes the grants so DROP ROLE succeeds.
+    const appRole = `test_orgsvc_app_${randomUUID().slice(0, 8)}`;
+    await sql`CREATE ROLE ${sql.id(appRole)} NOLOGIN`.execute(platformDb);
+    try {
+      vi.mocked(applyTenantGrants).mockClear();
+      const grantingService = createOrgService(
+        platformDb,
+        tenantDbFor,
+        pool,
+        appRole,
+      );
+
+      const org = await grantingService.createOrg({ slug: "test-org-grants" });
+      createdSchemas.push(org.schemaName);
+      createdOrgIds.push(org.id);
+
+      expect(applyTenantGrants).toHaveBeenCalledTimes(1);
+      expect(applyTenantGrants).toHaveBeenCalledWith(
+        pool,
+        org.schemaName,
+        appRole,
+      );
+    } finally {
+      await sql`DROP OWNED BY ${sql.id(appRole)}`.execute(platformDb);
+      await sql`DROP ROLE ${sql.id(appRole)}`.execute(platformDb);
+    }
+  });
+
+  it("createOrg without appRole applies no grants", async () => {
+    vi.mocked(applyTenantGrants).mockClear();
+
+    const org = await service.createOrg({ slug: "test-org-no-grants" });
+    createdSchemas.push(org.schemaName);
+    createdOrgIds.push(org.id);
+
+    expect(applyTenantGrants).not.toHaveBeenCalled();
+  });
 });
 
 // -----------------------------------------------------------------------
 // Fault injection: exercises rollback and error-wrapping paths that
-// require a failing tenantDbFactory. Still needs a real DB for the
+// require a failing tenantDbFactory or migration pool. Still needs a real DB for the
 // platform-level operations (INSERT into orgs, CREATE SCHEMA).
 // -----------------------------------------------------------------------
 describe.skipIf(!process.env.DATABASE_URL)(
   "OrgService (fault injection)",
   () => {
+    let pool: pg.Pool;
     let platformDb: Kysely<PlatformDatabase>;
 
     pg.types.setTypeParser(pg.types.builtins.INT8, (val: string) =>
@@ -253,7 +428,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     );
 
     beforeAll(() => {
-      const pool = new pg.Pool({
+      pool = new pg.Pool({
         connectionString: process.env.DATABASE_URL,
         max: 5,
       });
@@ -291,13 +466,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
     async function createRestrictedDb(
       roleName: string,
     ): Promise<Kysely<PlatformDatabase>> {
-      const pool = new pg.Pool({
+      const restrictedPool = new pg.Pool({
         connectionString: process.env.DATABASE_URL,
         max: 1,
         idleTimeoutMillis: 0,
       });
       const db = new Kysely<PlatformDatabase>({
-        dialect: new SafeIntrospectionPostgresDialect({ pool }),
+        dialect: new SafeIntrospectionPostgresDialect({ pool: restrictedPool }),
       });
       try {
         await sql`SET ROLE ${sql.id(roleName)}`.execute(db);
@@ -309,22 +484,30 @@ describe.skipIf(!process.env.DATABASE_URL)(
     }
 
     it("rolls back org row and schema when tenant migration fails", async () => {
-      // tenantDbFactory returns a Kysely instance that will fail during migration
-      // because withSchema on a nonexistent schema is valid, but the Migrator
-      // will fail when it tries to create the migration tracking table.
-      // Instead, we use a factory that throws immediately to simulate a
-      // catastrophic failure.
-      function failingTenantDbFactory(): Kysely<TenantDatabase> {
-        // createOrg calls tenantDbFactory twice: once for migrations, once for org_config.
-        // Throw on the first call to simulate migration failure.
-        throw new TypeError("Simulated tenant DB failure");
+      // Tenant migrations run over the pool argument. This pool points at a
+      // database that does not exist, so the migrator's first connection
+      // fails with a genuine Postgres error after CREATE SCHEMA succeeded.
+      const url = new URL(process.env.DATABASE_URL ?? "");
+      url.pathname = "/carey_no_such_database";
+      const failingPool = new pg.Pool({
+        connectionString: url.toString(),
+        max: 1,
+      });
+
+      try {
+        const service = createOrgService(
+          platformDb,
+          (schema) =>
+            platformDb.withSchema(schema) as unknown as Kysely<TenantDatabase>,
+          failingPool,
+        );
+
+        await expect(
+          service.createOrg({ slug: "test-fault-migration" }),
+        ).rejects.toThrow(InternalError);
+      } finally {
+        await failingPool.end();
       }
-
-      const service = createOrgService(platformDb, failingTenantDbFactory);
-
-      await expect(
-        service.createOrg({ slug: "test-fault-migration" }),
-      ).rejects.toThrow(InternalError);
 
       // Verify the org row was cleaned up (rollbackOrg).
       const row = await platformDb
@@ -339,12 +522,43 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // but the absence of the org row is sufficient proof of rollback.
     });
 
+    it("rolls back org row and schema when org_config insertion fails", async () => {
+      // createOrg calls tenantDbFactory once, for the org_config insert,
+      // after the tenant migrations have succeeded over the pool. Throwing
+      // there simulates a failure at the last provisioning step.
+      function failingTenantDbFactory(): Kysely<TenantDatabase> {
+        throw new TypeError("Simulated tenant DB failure");
+      }
+
+      const service = createOrgService(
+        platformDb,
+        failingTenantDbFactory,
+        pool,
+      );
+
+      await expect(
+        service.createOrg({ slug: "test-fault-org-config" }),
+      ).rejects.toThrow(InternalError);
+
+      // Verify the org row was cleaned up (rollbackOrg).
+      const row = await platformDb
+        .selectFrom("orgs")
+        .selectAll()
+        .where("slug", "=", "test-fault-org-config" as OrgSlug)
+        .executeTakeFirst();
+      expect(row).toBeUndefined();
+
+      // Verify the schema was cleaned up (rollbackOrg drops it).
+      // We can't know the exact schema name since it uses randomUUID,
+      // but the absence of the org row is sufficient proof of rollback.
+    });
+
     it("wraps non-InternalError exceptions with extractErrorMessage", async () => {
       function failingFactory(): Kysely<TenantDatabase> {
         throw new TypeError("type mismatch in factory");
       }
 
-      const service = createOrgService(platformDb, failingFactory);
+      const service = createOrgService(platformDb, failingFactory, pool);
 
       await expect(
         service.createOrg({ slug: "test-fault-wrap" }),
@@ -364,7 +578,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         throw new InternalError("original internal error");
       }
 
-      const service = createOrgService(platformDb, failingFactory);
+      const service = createOrgService(platformDb, failingFactory, pool);
 
       await expect(
         service.createOrg({ slug: "test-fault-internal" }),
@@ -403,7 +617,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
 
       try {
-        const service = createOrgService(restrictedDb, realFactory);
+        const service = createOrgService(restrictedDb, realFactory, pool);
 
         await expect(service.createOrg({ slug })).rejects.toThrow(
           InternalError,
@@ -444,7 +658,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
 
       try {
-        const service = createOrgService(restrictedDb, realFactory);
+        const service = createOrgService(restrictedDb, realFactory, pool);
 
         let caught: unknown;
         try {

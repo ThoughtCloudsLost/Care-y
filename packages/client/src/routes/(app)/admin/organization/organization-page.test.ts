@@ -51,6 +51,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_tab_branding: () => "Branding",
   admin_tab_keys: () => "Keys",
   admin_tab_retention: () => "Retention",
+  admin_tab_org_deletion: () => "Deletion",
   admin_tab_reports: () => "Reports",
   admin_tab_note_types: () => "Follow-Ups",
   admin_tab_terminology: () => "Terminology",
@@ -117,6 +118,18 @@ vi.mock("$lib/components/admin/KeysSection.svelte", async () => {
 });
 
 vi.mock("$lib/components/admin/RetentionSection.svelte", async () => {
+  // Passthrough replaces the component; a surface assertion (not
+  // importOriginal, which would load the real component tree) guards
+  // the module shape.
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
+
+vi.mock("$lib/components/admin/DeletionRequestSection.svelte", async () => {
   // Passthrough replaces the component; a surface assertion (not
   // importOriginal, which would load the real component tree) guards
   // the module shape.
@@ -201,6 +214,7 @@ const ALL_ORG_PERMISSIONS: readonly Permission[] = [
   Permission.MANAGE_ORG_IDENTITY,
   Permission.MANAGE_KEYS,
   Permission.MANAGE_RETENTION,
+  Permission.REQUEST_ORG_DELETION,
   Permission.MANAGE_NOTE_TYPES,
   Permission.MANAGE_INTAKE_FORMS,
   Permission.VIEW_REPORTS,
@@ -246,10 +260,17 @@ describe("Organization page", () => {
 
       expect(mockGoto).not.toHaveBeenCalled();
     });
+
+    it("does not redirect when user has REQUEST_ORG_DELETION", () => {
+      setPermissions(Permission.REQUEST_ORG_DELETION);
+      renderPage();
+
+      expect(mockGoto).not.toHaveBeenCalled();
+    });
   });
 
   describe("section rendering", () => {
-    it("renders all 7 section anchors with full permissions", () => {
+    it("renders all 8 section anchors with full permissions", () => {
       const { container } = renderPage();
 
       expect(container.querySelector("#section-general")).toBeTruthy();
@@ -257,6 +278,7 @@ describe("Organization page", () => {
       expect(container.querySelector("#section-terminology")).toBeTruthy();
       expect(container.querySelector("#section-keys")).toBeTruthy();
       expect(container.querySelector("#section-retention")).toBeTruthy();
+      expect(container.querySelector("#section-org-deletion")).toBeTruthy();
       expect(container.querySelector("#section-note-types")).toBeTruthy();
       expect(container.querySelector("#section-intake-forms")).toBeTruthy();
     });
@@ -270,8 +292,19 @@ describe("Organization page", () => {
       expect(container.querySelector("#section-branding")).toBeNull();
       expect(container.querySelector("#section-terminology")).toBeNull();
       expect(container.querySelector("#section-retention")).toBeNull();
+      expect(container.querySelector("#section-org-deletion")).toBeNull();
       expect(container.querySelector("#section-note-types")).toBeNull();
       expect(container.querySelector("#section-intake-forms")).toBeNull();
+    });
+
+    it("renders the deletion section only with REQUEST_ORG_DELETION", () => {
+      setPermissions(Permission.REQUEST_ORG_DELETION);
+      const { container } = renderPage();
+
+      expect(container.querySelector("#section-org-deletion")).toBeTruthy();
+      expect(container.querySelector("#section-general")).toBeNull();
+      expect(container.querySelector("#section-keys")).toBeNull();
+      expect(container.querySelector("#section-retention")).toBeNull();
     });
 
     it("renders the funds section only with MANAGE_FUNDS", () => {
@@ -304,6 +337,7 @@ describe("Organization page", () => {
       expect(container.querySelector("#section-retention")).toBeTruthy();
       expect(container.querySelector("#section-note-types")).toBeTruthy();
       expect(container.querySelector("#section-keys")).toBeNull();
+      expect(container.querySelector("#section-org-deletion")).toBeNull();
       expect(container.querySelector("#section-intake-forms")).toBeNull();
     });
   });
@@ -329,13 +363,14 @@ describe("Organization page", () => {
       const { container } = renderPage();
 
       const divs = container.querySelectorAll(".csp-section");
-      expect(divs).toHaveLength(7);
+      expect(divs).toHaveLength(8);
       expect(divs[0]?.id).toBe("section-general");
       expect(divs[1]?.id).toBe("section-branding");
       expect(divs[2]?.id).toBe("section-terminology");
       expect(divs[3]?.id).toBe("section-keys");
       expect(divs[4]?.id).toBe("section-retention");
-      expect(divs[5]?.id).toBe("section-note-types");
+      expect(divs[5]?.id).toBe("section-org-deletion");
+      expect(divs[6]?.id).toBe("section-note-types");
     });
   });
 });

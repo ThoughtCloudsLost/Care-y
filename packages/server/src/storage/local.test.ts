@@ -180,6 +180,67 @@ describe("LocalBlobStore", () => {
     });
   });
 
+  describe("deleteOrg", () => {
+    const ERASED_SCHEMA = orgSchemaNameSchema.parse(
+      "org_0e0e0000-0000-4000-8000-000000000789",
+    );
+    const KEPT_SCHEMA = orgSchemaNameSchema.parse(
+      "org_0f0f0000-0000-4000-8000-000000000987",
+    );
+
+    it("removes the org's directory across categories and leaves other orgs alone", async () => {
+      const attachment = await store.put(
+        ERASED_SCHEMA,
+        "attachment",
+        Buffer.from("a"),
+      );
+      const recording = await store.put(
+        ERASED_SCHEMA,
+        "recording",
+        Buffer.from("r"),
+      );
+      const kept = await store.put(KEPT_SCHEMA, "attachment", Buffer.from("k"));
+
+      await store.deleteOrg(ERASED_SCHEMA);
+
+      expect(await store.exists(attachment)).toBe(false);
+      expect(await store.exists(recording)).toBe(false);
+      await expect(
+        fs.access(path.join(tmpDir, ERASED_SCHEMA)),
+      ).rejects.toThrow();
+      expect(await store.get(kept)).toEqual(Buffer.from("k"));
+    });
+
+    it("is idempotent (no error when the org has no directory)", async () => {
+      await store.deleteOrg(ERASED_SCHEMA);
+      await expect(store.deleteOrg(ERASED_SCHEMA)).resolves.toBeUndefined();
+    });
+
+    it("refuses an invalid schema name before touching the filesystem", async () => {
+      // A sibling of the base directory that a traversal would reach.
+      const outside = await fs.mkdtemp(
+        path.join(os.tmpdir(), "blobstore-outside-"),
+      );
+      try {
+        const traversal = path.relative(tmpDir, outside);
+        await expect(store.deleteOrg(traversal as OrgSchema)).rejects.toThrow(
+          BlobStoreError,
+        );
+        await expect(store.deleteOrg("" as OrgSchema)).rejects.toThrow(
+          BlobStoreError,
+        );
+        await expect(
+          store.deleteOrg("org_abc/../.." as OrgSchema),
+        ).rejects.toThrow(BlobStoreError);
+        // eslint-disable-next-line security/detect-non-literal-fs-filename
+        const outsideStat = await fs.stat(outside);
+        expect(outsideStat.isDirectory()).toBe(true);
+      } finally {
+        await fs.rm(outside, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe("path traversal defense", () => {
     it("rejects org schema with path separators", async () => {
       await expect(

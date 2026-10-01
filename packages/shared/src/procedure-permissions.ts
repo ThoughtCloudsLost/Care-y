@@ -265,6 +265,11 @@ export const PROCEDURE_PERMISSIONS = {
   "savedFilters.share": Permission.VIEW_CASES,
   "savedFilters.unshare": Permission.VIEW_CASES,
 
+  // --- orgDeletion ---
+  "orgDeletion.request": Permission.REQUEST_ORG_DELETION,
+  "orgDeletion.cancel": Permission.REQUEST_ORG_DELETION,
+  "orgDeletion.status": Permission.REQUEST_ORG_DELETION,
+
   // --- funds ---
   "funds.list": Permission.VIEW_FUNDS,
   "funds.listLedger": Permission.AUDIT_FUNDS,

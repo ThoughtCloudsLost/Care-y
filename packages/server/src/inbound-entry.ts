@@ -11,8 +11,11 @@
  * hasher, the receiver, and graceful shutdown. No HTTP, no tRPC.
  */
 
+// Must stay the first import: loads the secrets file and fills the
+// getEnv() cache before db.ts is evaluated (ADR-131).
+import "./env-bootstrap.js";
 import { getSodium } from "@care-y/crypto";
-import { validateEnv } from "./env.js";
+import { getEnv } from "./env.js";
 import { db, tenantDb } from "./db/db.js";
 import {
   createReplyTokenHasher,
@@ -21,7 +24,11 @@ import {
 import { createInboundReceiver } from "./email/inbound-receiver.js";
 
 async function main(): Promise<void> {
-  const env = validateEnv();
+  // env-bootstrap.ts validated the env at import (secrets file merged into
+  // a separate source object in production, never into process.env). A
+  // SecretsFileError or EnvValidationError from that step prints its
+  // message and exits 1 during module evaluation, before main() runs.
+  const env = getEnv();
 
   if (!env.INBOUND_SMTP_ENABLED) {
     console.log("Inbound SMTP receiver disabled (INBOUND_SMTP_ENABLED)");

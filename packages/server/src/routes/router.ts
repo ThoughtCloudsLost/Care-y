@@ -61,6 +61,10 @@ import {
 } from "./client-portal.js";
 import { createSavedFiltersRouter } from "./saved-filters.js";
 import { createPrefBlobsRouter } from "./pref-blobs.js";
+import {
+  createOrgDeletionRouter,
+  type OrgDeletionRouterDeps,
+} from "./org-deletion.js";
 import { createFundsRouter, type FundsRouterDeps } from "./funds.js";
 
 function healthCheck(): { status: "ok" } {
@@ -107,6 +111,7 @@ export interface OptionalRouterDeps {
    * leaves those endpoints degraded, not absent.
    */
   readonly keysDeps: KeysRouterDeps | null;
+  readonly orgDeletionDeps: OrgDeletionRouterDeps | null;
   readonly fundsDeps: FundsRouterDeps | null;
 }
 
@@ -187,6 +192,9 @@ export function createAppRouter(deps: RouterDeps) {
       : {}),
     ...(deps.devDeps !== null ? { dev: createDevRouter(deps.devDeps) } : {}),
     ...(deps.savedFilters ? { savedFilters: createSavedFiltersRouter() } : {}),
+    ...(deps.orgDeletionDeps !== null
+      ? { orgDeletion: createOrgDeletionRouter(deps.orgDeletionDeps) }
+      : {}),
     ...(deps.fundsDeps !== null
       ? { funds: createFundsRouter(deps.fundsDeps) }
       : {}),

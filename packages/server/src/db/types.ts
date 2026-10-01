@@ -24,6 +24,7 @@ import type {
   OrgConfigId,
   JobId,
   OprfAuditId,
+  PlatformAuditLogId,
   TicketId,
   TicketKeyWrapId,
   WebauthnCredentialRowId,
@@ -100,6 +101,7 @@ import type {
   ReplyTokenHash,
   InboundEmailDomainId,
   PrefBlobKind,
+  DeletionRequestId,
   FundId,
   FundLedgerId,
 } from "@care-y/shared";
@@ -173,6 +175,46 @@ export interface InboundEmailDomainsTable {
   updated_at: ColumnType<Date, Date | undefined, Date>;
 }
 
+// --- Org erasure (deletion requests and platform audit) ---
+
+export type DeletionRequestStatus =
+  "pending" | "cancelled" | "processing" | "done";
+
+export interface DeletionRequestsTable {
+  id: Generated<DeletionRequestId>;
+  /** Plain uuid, no FK: the row outlives the orgs row. Unique while status is pending or processing. */
+  org_id: OrgId;
+  /** Null when the CLI --now path created the row. */
+  requested_by: UserId | null;
+  requested_at: ColumnType<Date, Date | undefined, never>;
+  cooling_off_until: Date;
+  status: DeletionRequestStatus;
+  cancelled_by: UserId | null;
+  cancelled_at: Date | null;
+  snapshot_at: Date | null;
+  blobs_deleted_at: Date | null;
+  schema_dropped_at: Date | null;
+  rows_deleted_at: Date | null;
+  subaccount_closed_at: Date | null;
+  /**
+   * Managed-mode Twilio subaccount SID, captured before the telephony_config
+   * row is deleted. Null for an org with its own account or no telephony.
+   */
+  provider_subaccount_sid: string | null;
+  /** Error class name only, never a message with content. */
+  last_error: string | null;
+}
+
+export interface PlatformAuditLogTable {
+  id: Generated<PlatformAuditLogId>;
+  action: "org_erased" | "erasure_subaccount_failed";
+  /** Plain uuid, no FK: the orgs row is gone by the time the row is written. */
+  org_id: OrgId;
+  /** UserId as text, or "cli". */
+  actor: string;
+  created_at: ColumnType<Date, Date | undefined, never>;
+}
+
 export interface PlatformDatabase {
   orgs: OrgsTable;
   oprf_config: OprfConfigTable;
@@ -181,7 +223,8 @@ export interface PlatformDatabase {
   telephony_config: TelephonyConfigTable;
   vapid_config: VapidConfigTable;
   inbound_email_domains: InboundEmailDomainsTable;
-  // Production (deletion_requests)
+  deletion_requests: DeletionRequestsTable;
+  platform_audit_log: PlatformAuditLogTable;
 }
 
 export interface UsersTable {

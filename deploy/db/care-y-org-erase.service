@@ -1,0 +1,16 @@
+# Processes org deletion requests past their cooling-off: snapshot, blob
+# sweep, schema drop, platform rows, subaccount closure. org-erase.sh takes
+# the pre-deletion snapshot with backup-org.sh on the host, then runs
+# org-erase.ts in a one-off api container as the database owner role,
+# because the runtime role the API connects as cannot drop a schema or
+# delete platform rows. Started daily by care-y-org-erase.timer.
+[Unit]
+Description=CARE-Y org erasure pass (owner role)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/care-y/deploy/db/org-erase.sh
+NoNewPrivileges=true

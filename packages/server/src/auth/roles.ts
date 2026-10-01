@@ -106,6 +106,7 @@ const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set([
   Permission.WRITE_AUTOMATIC_REPLIES,
   Permission.MANAGE_VOICEMAIL_QUARANTINE,
   Permission.MANAGE_ESCALATION,
+  Permission.REQUEST_ORG_DELETION,
   Permission.AUDIT_FUNDS,
   Permission.MANAGE_FUNDS,
 ]);

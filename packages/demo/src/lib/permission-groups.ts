@@ -119,6 +119,7 @@ export const GROUPS: readonly PermissionGroupDef[] = [
       Permission.VIEW_REPORTS,
       Permission.VIEW_AUDIT_LOG,
       Permission.VIEW_OWN_SHIFTS,
+      Permission.REQUEST_ORG_DELETION,
     ],
   },
 ];
@@ -363,6 +364,10 @@ export const PERMISSION_LABELS: ReadonlyMap<Permission, PermissionLabelEntry> =
     [
       Permission.VIEW_OWN_SHIFTS,
       { labelFn: () => m.permission_view_own_shifts(), hintFn: null },
+    ],
+    [
+      Permission.REQUEST_ORG_DELETION,
+      { labelFn: () => m.permission_request_org_deletion(), hintFn: null },
     ],
     // Funds
     [

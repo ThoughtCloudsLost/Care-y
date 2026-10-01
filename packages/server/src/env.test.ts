@@ -2,7 +2,8 @@
  * Unit tests for environment variable validation.
  *
  * Covers: validateEnv (success + failure), getEnv caching,
- * _resetEnvCache, and EnvValidationError formatting.
+ * _resetEnvCache, the initEnv cache handoff, and EnvValidationError
+ * formatting.
  *
  * Saves and restores process.env around each test to avoid
  * leaking state between suites.
@@ -12,6 +13,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   validateEnv,
   getEnv,
+  initEnv,
   _resetEnvCache,
   EnvValidationError,
 } from "./env.js";
@@ -24,6 +26,8 @@ const VALID_ENV = {
   OPS_SECRETS_KEY: "ab".repeat(32),
   CORS_ORIGIN: "http://localhost:5173",
 };
+
+const OPERATOR_ALERT_EMAIL = "operator@example.org";
 
 describe("env validation", () => {
   let savedEnv: NodeJS.ProcessEnv;
@@ -69,6 +73,8 @@ describe("env validation", () => {
     it("accepts each valid NODE_ENV value", () => {
       for (const value of ["development", "test", "production"] as const) {
         Object.assign(process.env, VALID_ENV);
+        // Production also requires the operator alert address.
+        process.env.OPERATOR_ALERT_EMAIL = OPERATOR_ALERT_EMAIL;
         process.env.NODE_ENV = value;
 
         expect(validateEnv().NODE_ENV).toBe(value);
@@ -207,6 +213,64 @@ describe("env validation", () => {
     });
   });
 
+  // --- Operator alerting ---
+
+  describe("operator alerting vars", () => {
+    const HEARTBEAT_URL =
+      "https://heartbeat.example.invalid/ping/placeholder-token";
+
+    it("fails production validation without OPERATOR_ALERT_EMAIL, naming the variable", () => {
+      let caught: unknown;
+      try {
+        validateEnv({ ...VALID_ENV, NODE_ENV: "production" });
+      } catch (err: unknown) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(EnvValidationError);
+      const message = caught instanceof Error ? caught.message : "";
+      expect(message).toContain(
+        "OPERATOR_ALERT_EMAIL: OPERATOR_ALERT_EMAIL is required in production",
+      );
+    });
+
+    it("accepts production with OPERATOR_ALERT_EMAIL set", () => {
+      const env = validateEnv({
+        ...VALID_ENV,
+        NODE_ENV: "production",
+        OPERATOR_ALERT_EMAIL,
+      });
+
+      expect(env.OPERATOR_ALERT_EMAIL).toBe(OPERATOR_ALERT_EMAIL);
+    });
+
+    it.each(["development", "test"])(
+      "leaves OPERATOR_ALERT_EMAIL optional in %s",
+      (nodeEnv) => {
+        const env = validateEnv({ ...VALID_ENV, NODE_ENV: nodeEnv });
+
+        expect(env.OPERATOR_ALERT_EMAIL).toBeUndefined();
+        expect(env.JOBS_HEARTBEAT_URL).toBeUndefined();
+      },
+    );
+
+    it("rejects an OPERATOR_ALERT_EMAIL that is not an email address", () => {
+      expect(() =>
+        validateEnv({ ...VALID_ENV, OPERATOR_ALERT_EMAIL: "operator" }),
+      ).toThrow(EnvValidationError);
+    });
+
+    it("accepts a JOBS_HEARTBEAT_URL and rejects a value that is not a URL", () => {
+      expect(
+        validateEnv({ ...VALID_ENV, JOBS_HEARTBEAT_URL: HEARTBEAT_URL })
+          .JOBS_HEARTBEAT_URL,
+      ).toBe(HEARTBEAT_URL);
+      expect(() =>
+        validateEnv({ ...VALID_ENV, JOBS_HEARTBEAT_URL: "not a url" }),
+      ).toThrow(EnvValidationError);
+    });
+  });
+
   // --- getEnv caching ---
 
   describe("getEnv", () => {
@@ -228,6 +292,63 @@ describe("env validation", () => {
 
       expect(first).not.toBe(second);
       expect(second.CORS_ORIGIN).toBe("http://other:4000");
+    });
+  });
+
+  // --- initEnv cache handoff ---
+
+  describe("initEnv", () => {
+    // A key the source carries but process.env does not.
+    const API_KEY_SID = `SK${"2".repeat(32)}`;
+
+    function sourceWithApiKey(): NodeJS.ProcessEnv {
+      return { ...VALID_ENV, TWILIO_API_KEY_SID: API_KEY_SID };
+    }
+
+    it("fills the getEnv cache without re-validating process.env", () => {
+      // process.env alone would fail validation, so a lazy re-validation
+      // inside getEnv() would throw instead of returning the cached config.
+      delete process.env.SESSION_SECRET;
+      delete process.env.OPS_SECRETS_KEY;
+      delete process.env.TWILIO_API_KEY_SID;
+
+      const initialized = initEnv(sourceWithApiKey());
+      const env = getEnv();
+
+      expect(env).toBe(initialized);
+      expect(env.TWILIO_API_KEY_SID).toBe(API_KEY_SID);
+      expect(process.env.TWILIO_API_KEY_SID).toBeUndefined();
+    });
+
+    it("throws EnvValidationError on an invalid source and leaves the cache untouched", () => {
+      const initialized = initEnv(sourceWithApiKey());
+      const { SESSION_SECRET: _, ...invalid } = VALID_ENV;
+
+      expect(() => initEnv(invalid)).toThrow(EnvValidationError);
+      expect(getEnv()).toBe(initialized);
+    });
+  });
+
+  describe("validateEnv purity", () => {
+    const API_KEY_SID = `SK${"3".repeat(32)}`;
+
+    it("does not expose a source-only key through getEnv after reset", () => {
+      Object.assign(process.env, VALID_ENV);
+      delete process.env.TWILIO_API_KEY_SID;
+
+      validateEnv({ ...VALID_ENV, TWILIO_API_KEY_SID: API_KEY_SID });
+      _resetEnvCache();
+
+      expect(getEnv().TWILIO_API_KEY_SID).toBeUndefined();
+    });
+
+    it("does not fill an empty cache", () => {
+      Object.assign(process.env, VALID_ENV);
+      delete process.env.TWILIO_API_KEY_SID;
+
+      validateEnv({ ...VALID_ENV, TWILIO_API_KEY_SID: API_KEY_SID });
+
+      expect(getEnv().TWILIO_API_KEY_SID).toBeUndefined();
     });
   });
 

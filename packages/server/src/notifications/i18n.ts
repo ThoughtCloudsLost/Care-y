@@ -7,6 +7,8 @@
 // cannot decrypt them, so outbound notifications use generic phrasing.
 // Volunteers see the full queue name after logging in to the app.
 
+import { ORG_DELETION_COOLING_OFF_DAYS } from "@care-y/shared";
+
 type SupportedLocale = "en" | "es";
 
 export interface NotificationStrings {
@@ -16,6 +18,9 @@ export interface NotificationStrings {
   readonly followupAdded: (loginUrl: string) => string;
   readonly mentionNotification: (loginUrl: string) => string;
   readonly voicemailQuarantined: (loginUrl: string) => string;
+  /** Names no requester and no data; states the cooling-off period only. */
+  readonly orgDeletionRequested: (loginUrl: string) => string;
+  readonly orgDeletionCancelled: (loginUrl: string) => string;
   /** A fund ledger entry was recorded. Names no fund, amount or case. */
   readonly fundEntryRecorded: (loginUrl: string) => string;
   readonly smsPing: (loginUrl: string) => string;
@@ -40,6 +45,12 @@ const EN: NotificationStrings = {
     `You were mentioned in a ticket note. Log in to view it: ${url}`,
   voicemailQuarantined: (url) =>
     `A voicemail could not be routed automatically and was quarantined. Log in to review it: ${url}`,
+  orgDeletionRequested: (url) =>
+    `A request was made to delete this organization and all of its data. ` +
+    `The deletion runs after a ${String(ORG_DELETION_COOLING_OFF_DAYS)}-day waiting period and can be cancelled until then. ` +
+    `Log in to review it: ${url}`,
+  orgDeletionCancelled: (url) =>
+    `The request to delete this organization was cancelled. No data will be deleted. Log in to review it: ${url}`,
   fundEntryRecorded: (url) =>
     `A new entry was recorded in a fund. Log in to review it: ${url}`,
   smsPing: (url) => `You have a new notification. Visit ${url}`,
@@ -64,6 +75,12 @@ const ES: NotificationStrings = {
     `Se le ha mencionado en una nota de un caso. Inicie sesion para verlo: ${url}`,
   voicemailQuarantined: (url) =>
     `Un correo de voz no pudo ser dirigido automaticamente y fue puesto en cuarentena. Inicie sesion para revisarlo: ${url}`,
+  orgDeletionRequested: (url) =>
+    `Se solicito eliminar esta organizacion y todos sus datos. ` +
+    `La eliminacion se realizara despues de un periodo de espera de ${String(ORG_DELETION_COOLING_OFF_DAYS)} dias y se puede cancelar hasta entonces. ` +
+    `Inicie sesion para revisarla: ${url}`,
+  orgDeletionCancelled: (url) =>
+    `Se cancelo la solicitud de eliminar esta organizacion. No se eliminara ningun dato. Inicie sesion para revisarla: ${url}`,
   fundEntryRecorded: (url) =>
     `Se registro un nuevo movimiento en un fondo. Inicie sesion para revisarlo: ${url}`,
   smsPing: (url) => `Tiene una nueva notificacion. Visite ${url}`,

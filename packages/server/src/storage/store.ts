@@ -66,6 +66,19 @@ export interface BlobStore {
   exists(key: BlobKey): Promise<boolean>;
 }
 
+/**
+ * Removes every blob an org has stored. Separate from BlobStore so only
+ * org erasure, which runs in the org:erase CLI, receives the capability.
+ */
+export interface OrgBlobSweeper {
+  /**
+   * Delete every blob stored for an org, across all categories. Used by
+   * org erasure before the schema is dropped. Idempotent: no error when
+   * the org has no blobs or they are already gone.
+   */
+  deleteOrg(orgSchema: OrgSchema): Promise<void>;
+}
+
 export class BlobStoreError extends Error {
   constructor(
     message: string,

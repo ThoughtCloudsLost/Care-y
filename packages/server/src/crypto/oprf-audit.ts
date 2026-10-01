@@ -1,12 +1,10 @@
 import { createHmac, hkdfSync } from "node:crypto";
 import type { Kysely } from "kysely";
 import type { PlatformDatabase } from "../db/types.js";
-import { createCleanupInterval } from "../utils/intervals.js";
 import type { HashedIp } from "@care-y/shared";
 
 const AUDIT_KEY_INFO = "care-y-oprf-audit-v1";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 export type OprfFailureReason =
   | "rate_limited"
@@ -28,8 +26,6 @@ export interface OprfAuditLogger {
     ipAddress: string,
     reason: OprfFailureReason,
   ): Promise<void>;
-  /** Stop the cleanup interval (for tests). */
-  dispose(): void;
 }
 
 /**
@@ -72,19 +68,6 @@ export function createOprfAuditLogger(
     return dailyCacheKey;
   }
 
-  const dispose = createCleanupInterval(CLEANUP_INTERVAL_MS, () => {
-    const cutoff = new Date(now() - RETENTION_MS);
-    db.deleteFrom("oprf_audit_log")
-      .where("timestamp", "<", cutoff)
-      .execute()
-      .catch((err: unknown) => {
-        console.error(
-          "OPRF audit log cleanup failed:",
-          err instanceof Error ? err.message : String(err),
-        );
-      });
-  });
-
   return {
     async logFailure(
       subject: string,
@@ -102,7 +85,27 @@ export function createOprfAuditLogger(
         })
         .execute();
     },
-
-    dispose,
   };
+}
+
+/**
+ * Deletes OPRF audit rows older than the retention window. The runtime
+ * role may not DELETE from this table, so this runs only from
+ * `migrate.ts --prune-oprf-audit` over the owner-role pool, on a daily
+ * systemd timer.
+ *
+ * @param db - platform Kysely instance over the owner-role pool
+ * @param now - current time; rows older than now minus 7 days are deleted
+ * @returns the number of rows deleted
+ */
+export async function pruneOprfAuditLog(
+  db: Kysely<PlatformDatabase>,
+  now: Date,
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - RETENTION_MS);
+  const result = await db
+    .deleteFrom("oprf_audit_log")
+    .where("timestamp", "<", cutoff)
+    .executeTakeFirst();
+  return Number(result.numDeletedRows);
 }

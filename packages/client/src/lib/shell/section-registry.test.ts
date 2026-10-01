@@ -33,6 +33,7 @@ describe("section-registry", () => {
         "terminology",
         "keys",
         "retention",
+        "org-deletion",
         "note-types",
         "intake-forms",
         "funds",
@@ -228,8 +229,16 @@ describe("section-registry", () => {
       const ids = sections.map((s) => s.id);
       expect(ids).not.toContain("keys");
       expect(ids).not.toContain("intake-forms");
+      expect(ids).not.toContain("org-deletion");
       expect(ids).toContain("general");
       expect(ids).toContain("branding");
+    });
+
+    it("lists the deletion section only for REQUEST_ORG_DELETION", () => {
+      const perms = new Set([Permission.REQUEST_ORG_DELETION]);
+      const qc = createMockQueryClient();
+      const sections = getHoverSections("/admin/organization", perms, qc);
+      expect(sections.map((s) => s.id)).toEqual(["org-deletion"]);
     });
 
     it("returns empty for routes not in the registry", () => {
