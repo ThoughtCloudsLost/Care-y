@@ -96,6 +96,8 @@ describe.skipIf(!process.env.DATABASE_URL)("database grants (DB)", () => {
           .values({
             event_type: "grants_test",
             actor_id: randomUUID() as UserId,
+            ticket_id: null,
+            metadata: {},
           })
           .returning("id")
           .executeTakeFirstOrThrow();
