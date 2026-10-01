@@ -466,13 +466,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
     async function createRestrictedDb(
       roleName: string,
     ): Promise<Kysely<PlatformDatabase>> {
-      const pool = new pg.Pool({
+      const restrictedPool = new pg.Pool({
         connectionString: process.env.DATABASE_URL,
         max: 1,
         idleTimeoutMillis: 0,
       });
       const db = new Kysely<PlatformDatabase>({
-        dialect: new SafeIntrospectionPostgresDialect({ pool }),
+        dialect: new SafeIntrospectionPostgresDialect({ pool: restrictedPool }),
       });
       try {
         await sql`SET ROLE ${sql.id(roleName)}`.execute(db);
