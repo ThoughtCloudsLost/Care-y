@@ -37,6 +37,8 @@ const SERVER_SOURCES: Record<string, string> = import.meta.glob(
 const NOT_REACHABLE_FROM_DEMO: Readonly<Record<string, string>> = {
   "index.ts": "HTTP server entry point; the demo builds the router directly",
   "test-utils.ts": "test helper, never imported by engine or router code",
+  "cli/escrow-write.ts":
+    "operator CLI run on the host; the demo never imports cli/ entry points",
 };
 
 /** Strip the glob prefix so keys read as paths under server/src. */
