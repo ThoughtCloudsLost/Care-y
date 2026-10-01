@@ -1,6 +1,6 @@
 // Must stay the first import. It loads the secrets file and fills the
 // getEnv() cache before any module below is evaluated; db.ts reads
-// DATABASE_URL through getEnv() at import time (ADR-129).
+// DATABASE_URL through getEnv() at import time (ADR-131).
 import "./env-bootstrap.js";
 import { getEnv, type EnvVars } from "./env.js";
 import { extractErrorMessage } from "./errors.js";
@@ -29,6 +29,7 @@ import { createHTTPHandler } from "@trpc/server/adapters/standalone";
 import { db, pgConnectionConfig, pool, tenantDb } from "./db/db.js";
 import { sql } from "kysely";
 import { createOrgService } from "./org/service.js";
+import { createDeletionRequestService } from "./org/deletion-request-service.js";
 import { createPasswordHasher } from "./auth/password.js";
 import {
   createInMemoryRateLimiter,
@@ -194,6 +195,11 @@ import {
   registerOutboxDrainHandler,
   OUTBOX_DRAIN_QUEUE,
 } from "./jobs/notification-outbox-drain.js";
+import {
+  registerDeadJobAlertHandler,
+  DEAD_JOB_ALERT_QUEUE,
+} from "./jobs/dead-job-alert.js";
+import { createHeartbeatPing } from "./jobs/heartbeat.js";
 import { runEscalationCheck } from "./tickets/escalation-service.js";
 import type {
   OrgId,
@@ -543,7 +549,14 @@ const notificationEmailSender = createNotificationEmailSender(emailSender);
 const pushSender = createPushNotificationSender(vapidKeys, "admin@care-y.app");
 
 // Job queue created early so NotificationService can use it during routing.
-const jobQueue = createJobQueue(db);
+// With JOBS_HEARTBEAT_URL set, every clean poll cycle pings the heartbeat
+// monitor so a scheduler that stops polling raises an alert.
+const jobQueue = createJobQueue(
+  db,
+  env.JOBS_HEARTBEAT_URL === undefined
+    ? undefined
+    : { onPollComplete: createHeartbeatPing(env.JOBS_HEARTBEAT_URL, fetch) },
+);
 
 const preferencesService = createNotificationPreferencesService();
 
@@ -914,6 +927,18 @@ const appRouter = createAppRouter({
     liveEvents: ticketLiveEvents,
   },
   devDeps: env.NODE_ENV !== "production" ? { blobStore } : null,
+  // Runtime pool: submitting, cancelling and reading a request needs no
+  // owner privileges. Erasure itself runs only from the org:erase CLI.
+  orgDeletionDeps: {
+    createDeletionRequestSvc: (org) =>
+      createDeletionRequestService({
+        platformDb: db,
+        tenantDb: org.tenantDb,
+        orgSchema: org.orgSchema,
+        orgSlug: org.orgSlug,
+        notificationService,
+      }),
+  },
 });
 
 export type AppRouter = typeof appRouter;
@@ -1052,6 +1077,21 @@ registerPiiRetentionHandler(
   ticketLiveEvents,
 );
 
+// Dead-job alert: every 15 minutes, one email to the host operator listing
+// jobs that ran out of retries. Production refuses to start without the
+// address (env.ts); without it elsewhere, the sweep is not registered.
+if (env.OPERATOR_ALERT_EMAIL !== undefined) {
+  registerDeadJobAlertHandler({
+    queue: jobQueue,
+    deadJobReader: jobQueue,
+    sender: emailSender,
+    to: env.OPERATOR_ALERT_EMAIL,
+    from: env.SMTP_FROM,
+    hostLabel: env.CAREY_APP_DOMAIN,
+    now: () => new Date(),
+  });
+}
+
 // Notification outbox drain: polls tenant outbox tables for durable
 // intake notification dispatch (~5 second interval).
 registerOutboxDrainHandler(jobQueue, {
@@ -1088,6 +1128,9 @@ await ensureRecurringJob(db, jobQueue, PORTAL_EXPIRY_QUEUE);
 await ensureRecurringJob(db, jobQueue, SHARE_CLEANUP_QUEUE);
 await ensureRecurringJob(db, jobQueue, OUTBOX_DRAIN_QUEUE);
 await ensureRecurringJob(db, jobQueue, PII_RETENTION_QUEUE);
+if (env.OPERATOR_ALERT_EMAIL !== undefined) {
+  await ensureRecurringJob(db, jobQueue, DEAD_JOB_ALERT_QUEUE);
+}
 jobQueue.start();
 console.log("Job queue started");
 

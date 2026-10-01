@@ -103,6 +103,7 @@ const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set([
   Permission.WRITE_AUTOMATIC_REPLIES,
   Permission.MANAGE_VOICEMAIL_QUARANTINE,
   Permission.MANAGE_ESCALATION,
+  Permission.REQUEST_ORG_DELETION,
 ]);
 
 export const ROLE_CONFIG: ReadonlyMap<RoleIdValue, RoleConfig> = new Map([

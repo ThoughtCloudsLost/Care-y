@@ -15,6 +15,7 @@ STEPS=(
   20-network.sh
   30-memory-docker.sh
   40-secrets.sh
+  50-logging.sh
   99-verify.sh
 )
 

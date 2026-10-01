@@ -384,6 +384,10 @@ function getNotificationBody(
       return strings.followupAdded(loginUrl);
     case "voicemail_quarantined":
       return strings.voicemailQuarantined(loginUrl);
+    case "org_deletion_requested":
+      return strings.orgDeletionRequested(loginUrl);
+    case "org_deletion_cancelled":
+      return strings.orgDeletionCancelled(loginUrl);
   }
 }
 
@@ -407,5 +411,9 @@ function getSubjectLine(eventType: NotificationEventType): string {
       return "Client merge completed";
     case "voicemail_quarantined":
       return "Voicemail quarantined";
+    case "org_deletion_requested":
+      return "Organization deletion requested";
+    case "org_deletion_cancelled":
+      return "Organization deletion cancelled";
   }
 }

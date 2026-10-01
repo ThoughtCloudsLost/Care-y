@@ -15,7 +15,10 @@ import type { PlatformDatabase } from "./types.js";
 
 /** Tables the application role may only INSERT into and SELECT from. */
 export const APPEND_ONLY_TENANT_TABLES = ["audit_log"] as const;
-export const APPEND_ONLY_PLATFORM_TABLES = ["oprf_audit_log"] as const;
+export const APPEND_ONLY_PLATFORM_TABLES = [
+  "oprf_audit_log",
+  "platform_audit_log",
+] as const;
 
 const PLATFORM_SCHEMA = "public";
 
@@ -81,8 +84,8 @@ async function applyInTransaction(
 }
 
 /**
- * Grants on the platform tables in `public`, with `oprf_audit_log`
- * append-only.
+ * Grants on the platform tables in `public`, with `oprf_audit_log` and
+ * `platform_audit_log` append-only.
  *
  * @param pool - owner-role pool (createAdminPool)
  * @param appRole - the runtime role

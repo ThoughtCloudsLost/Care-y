@@ -77,6 +77,7 @@ const PROD_ENV = {
   SESSION_SECRET: "a".repeat(64),
   DATABASE_URL: "postgresql://localhost:5432/test",
   OPS_SECRETS_KEY: "ab".repeat(32),
+  OPERATOR_ALERT_EMAIL: "operator@example.org",
 };
 
 const TEST_ENV = {

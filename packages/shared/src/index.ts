@@ -935,12 +935,14 @@ export {
   orgConfigIdSchema,
   jobIdSchema,
   oprfAuditIdSchema,
+  deletionRequestIdSchema,
   type EscalationRuleId,
   type NotificationPreferenceId,
   type NotificationScopeId,
   type OrgConfigId,
   type JobId,
   type OprfAuditId,
+  type DeletionRequestId,
   // Intake forms
   intakeFormIdSchema,
   intakeFormFieldIdSchema,
@@ -1076,6 +1078,13 @@ export {
   type PrefBlobGetInput,
   type PrefBlobPutInput,
 } from "./schemas/pref-blobs.js";
+
+// --- Org deletion request schemas ---
+export {
+  ORG_DELETION_COOLING_OFF_DAYS,
+  requestOrgDeletionInputSchema,
+  type RequestOrgDeletionInput,
+} from "./schemas/org-deletion.js";
 
 // --- Self-blob envelope schema factory ---
 export {

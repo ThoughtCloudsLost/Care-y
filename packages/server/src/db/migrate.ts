@@ -1,5 +1,5 @@
 // Must stay the first import: loads the secrets file and fills the getEnv()
-// cache before db.ts reads DATABASE_URL at import time (ADR-129).
+// cache before db.ts reads DATABASE_URL at import time (ADR-131).
 import "../env-bootstrap.js";
 import { Kysely, PostgresDialect } from "kysely";
 import type { Pool } from "pg";

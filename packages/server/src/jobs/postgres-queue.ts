@@ -2,9 +2,16 @@
 // ~150 lines of real logic. Same mechanism as pg-boss, minus the dependency.
 // If this ever proves insufficient, swap to pg-boss behind the same interface.
 
-import { sql, type Kysely } from "kysely";
+import { sql, type Kysely, type NotNull } from "kysely";
+import { orgIdSchema } from "@care-y/shared";
 import type { PlatformDatabase } from "../db/types.js";
-import type { JobQueue, EnqueueOptions, BackoffStrategy } from "./queue.js";
+import type {
+  JobQueue,
+  EnqueueOptions,
+  BackoffStrategy,
+  DeadJobReader,
+  DeadJobSummary,
+} from "./queue.js";
 import { JobQueueError } from "./queue.js";
 
 /** Default poll interval: 5 seconds. */
@@ -46,7 +53,18 @@ export function computeBackoffMs(
   return Math.min(delay, MAX_DELAY_MS);
 }
 
-export function createPostgresJobQueue(db: Kysely<PlatformDatabase>): JobQueue {
+export interface PostgresJobQueueOptions {
+  /**
+   * Called at the end of every poll cycle that completed without an error,
+   * never after one that threw. The scheduler heartbeat hangs off it.
+   */
+  readonly onPollComplete?: () => void;
+}
+
+export function createPostgresJobQueue(
+  db: Kysely<PlatformDatabase>,
+  queueOptions?: PostgresJobQueueOptions,
+): JobQueue & DeadJobReader {
   const handlers = new Map<string, JobHandler>();
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let polling = false;
@@ -68,41 +86,47 @@ export function createPostgresJobQueue(db: Kysely<PlatformDatabase>): JobQueue {
       // of transaction, and a standalone SELECT is its own transaction).
       // Multiple Node processes can poll the same table without
       // double-claiming a job.
-      const jobs = await sql<{
-        id: string;
-        queue: string;
-        payload: Record<string, unknown>;
-        retry_count: number;
-        max_retries: number;
-        backoff: BackoffStrategy;
-        base_delay_ms: number;
-      }>`
-        UPDATE pending_jobs
-        SET status = 'active', started_at = now()
-        WHERE id IN (
-          SELECT id
-          FROM pending_jobs
-          WHERE status = 'pending'
-            AND next_attempt <= now()
-            AND queue IN (${sql.join(registeredQueues)})
-          ORDER BY next_attempt
-          FOR UPDATE SKIP LOCKED
-          LIMIT ${sql.lit(POLL_BATCH_SIZE)}
+      const jobs = await db
+        .updateTable("pending_jobs")
+        .set({ status: "active", started_at: sql<Date>`now()` })
+        .where("id", "in", (eb) =>
+          eb
+            .selectFrom("pending_jobs")
+            .select("id")
+            .where("status", "=", "pending")
+            .where("next_attempt", "<=", sql<Date>`now()`)
+            .where("queue", "in", registeredQueues)
+            .orderBy("next_attempt", "asc")
+            .limit(POLL_BATCH_SIZE)
+            .forUpdate()
+            .skipLocked(),
         )
-        RETURNING id, queue, payload, retry_count, max_retries, backoff, base_delay_ms
-      `.execute(db);
+        .returning([
+          "id",
+          "queue",
+          "payload",
+          "retry_count",
+          "max_retries",
+          "backoff",
+          "base_delay_ms",
+        ])
+        // The column is text; enqueue is its only writer and takes a
+        // BackoffStrategy, and computeBackoffMs treats any other value
+        // as linear.
+        .$narrowType<{ backoff: BackoffStrategy }>()
+        .execute();
 
-      for (const job of jobs.rows) {
+      for (const job of jobs) {
         const handler = handlers.get(job.queue);
         if (!handler) {
           // Unreachable in practice (the claim filters to registered
           // queues and handlers are never unregistered), but a claimed
           // row must never strand in active, so release it.
-          await sql`
-            UPDATE pending_jobs
-            SET status = 'pending', started_at = NULL
-            WHERE id = ${job.id}::uuid
-          `.execute(db);
+          await db
+            .updateTable("pending_jobs")
+            .set({ status: "pending", started_at: null })
+            .where("id", "=", job.id)
+            .execute();
           continue;
         }
 
@@ -111,25 +135,27 @@ export function createPostgresJobQueue(db: Kysely<PlatformDatabase>): JobQueue {
           await handler(job.payload);
 
           // Success
-          await sql`
-            UPDATE pending_jobs
-            SET status = 'completed', completed_at = now()
-            WHERE id = ${job.id}::uuid
-          `.execute(db);
+          await db
+            .updateTable("pending_jobs")
+            .set({ status: "completed", completed_at: sql<Date>`now()` })
+            .where("id", "=", job.id)
+            .execute();
         } catch (err: unknown) {
           const nextRetry = job.retry_count + 1;
           const errorMsg = err instanceof Error ? err.message : String(err);
 
           if (nextRetry >= job.max_retries) {
             // Exhausted retries. Mark dead.
-            await sql`
-              UPDATE pending_jobs
-              SET status = 'dead',
-                  failed_at = now(),
-                  retry_count = ${nextRetry},
-                  error = ${errorMsg}
-              WHERE id = ${job.id}::uuid
-            `.execute(db);
+            await db
+              .updateTable("pending_jobs")
+              .set({
+                status: "dead",
+                failed_at: sql<Date>`now()`,
+                retry_count: nextRetry,
+                error: errorMsg,
+              })
+              .where("id", "=", job.id)
+              .execute();
           } else {
             // Schedule retry with backoff.
             const delayMs = computeBackoffMs(
@@ -137,14 +163,19 @@ export function createPostgresJobQueue(db: Kysely<PlatformDatabase>): JobQueue {
               nextRetry,
               job.base_delay_ms,
             );
-            await sql`
-              UPDATE pending_jobs
-              SET status = 'pending',
-                  retry_count = ${nextRetry},
-                  next_attempt = now() + ${delayMs}::integer * interval '1 millisecond',
-                  error = ${errorMsg}
-              WHERE id = ${job.id}::uuid
-            `.execute(db);
+            await db
+              .updateTable("pending_jobs")
+              .set({
+                status: "pending",
+                retry_count: nextRetry,
+                // Interval arithmetic has no builder form, so it stays a
+                // sql fragment. It runs on the database clock, the same
+                // clock the claim compares next_attempt against.
+                next_attempt: sql<Date>`now() + ${delayMs}::integer * interval '1 millisecond'`,
+                error: errorMsg,
+              })
+              .where("id", "=", job.id)
+              .execute();
           }
         } finally {
           inFlightCount--;
@@ -153,11 +184,20 @@ export function createPostgresJobQueue(db: Kysely<PlatformDatabase>): JobQueue {
 
       // Cleanup old completed/dead jobs (piggyback on poll cycle).
       // Runs a lightweight DELETE, not a separate scheduled task.
-      await sql`
-        DELETE FROM pending_jobs
-        WHERE status IN ('completed', 'dead')
-          AND COALESCE(completed_at, failed_at) < now() - ${RETENTION_DAYS}::integer * interval '1 day'
-      `.execute(db);
+      await db
+        .deleteFrom("pending_jobs")
+        .where("status", "in", ["completed", "dead"])
+        .where((eb) =>
+          eb(
+            eb.fn.coalesce("completed_at", "failed_at"),
+            "<",
+            // Interval arithmetic has no builder form; see the retry branch.
+            sql<Date>`now() - ${RETENTION_DAYS}::integer * interval '1 day'`,
+          ),
+        )
+        .execute();
+
+      queueOptions?.onPollComplete?.();
     } catch (err: unknown) {
       // Log but don't crash. The next poll cycle will retry.
       console.error(
@@ -181,20 +221,20 @@ export function createPostgresJobQueue(db: Kysely<PlatformDatabase>): JobQueue {
       const baseDelay = options?.baseDelayMs ?? BASE_DELAY_MS;
 
       try {
-        const result = await sql<{ id: string }>`
-          INSERT INTO pending_jobs (queue, payload, max_retries, backoff, base_delay_ms, next_attempt)
-          VALUES (
-            ${queue},
-            ${JSON.stringify(payload)}::jsonb,
-            ${maxRetries},
-            ${backoff},
-            ${baseDelay},
-            now() + ${delay}::integer * interval '1 millisecond'
-          )
-          RETURNING id
-        `.execute(db);
+        const row = await db
+          .insertInto("pending_jobs")
+          .values({
+            queue,
+            payload,
+            max_retries: maxRetries,
+            backoff,
+            base_delay_ms: baseDelay,
+            // Interval arithmetic has no builder form; see the retry branch.
+            next_attempt: sql<Date>`now() + ${delay}::integer * interval '1 millisecond'`,
+          })
+          .returning("id")
+          .executeTakeFirst();
 
-        const row = result.rows[0];
         if (!row) {
           throw new JobQueueError("INSERT returned no rows");
         }
@@ -238,6 +278,39 @@ export function createPostgresJobQueue(db: Kysely<PlatformDatabase>): JobQueue {
         console.error(
           `JobQueue shutdown: ${String(inFlightCount)} jobs still in-flight after 30s`,
         );
+      }
+    },
+
+    async listDeadSince(since: Date): Promise<DeadJobSummary[]> {
+      try {
+        const rows = await db
+          .selectFrom("pending_jobs")
+          .select([
+            "id",
+            "queue",
+            "failed_at",
+            // Only the orgId field is extracted, inside Postgres, so the
+            // rest of the payload never leaves the database.
+            sql<string | null>`payload ->> 'orgId'`.as("payload_org_id"),
+          ])
+          .where("status", "=", "dead")
+          .where("failed_at", ">", since)
+          .orderBy("failed_at", "asc")
+          // The comparison above excludes rows whose failed_at is null.
+          .$narrowType<{ failed_at: NotNull }>()
+          .execute();
+
+        return rows.map((row) => {
+          const parsedOrgId = orgIdSchema.safeParse(row.payload_org_id);
+          return {
+            id: row.id,
+            queue: row.queue,
+            orgId: parsedOrgId.success ? parsedOrgId.data : null,
+            failedAt: row.failed_at,
+          };
+        });
+      } catch (err: unknown) {
+        throw new JobQueueError("Failed to list dead jobs", err);
       }
     },
   };

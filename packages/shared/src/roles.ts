@@ -164,4 +164,9 @@ export enum Permission {
   VIEW_AUDIT_LOG = "view_audit_log",
   /** No shifts feature exists yet. Declared so it is not reinvented. */
   VIEW_OWN_SHIFTS = "view_own_shifts",
+  /**
+   * Submit, cancel and read the organisation's erasure request. Erasure
+   * itself runs later from the operator CLI, never through this key.
+   */
+  REQUEST_ORG_DELETION = "request_org_deletion",
 }

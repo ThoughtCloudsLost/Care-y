@@ -27,6 +27,8 @@ const VALID_ENV = {
   CORS_ORIGIN: "http://localhost:5173",
 };
 
+const OPERATOR_ALERT_EMAIL = "operator@example.org";
+
 describe("env validation", () => {
   let savedEnv: NodeJS.ProcessEnv;
 
@@ -71,6 +73,8 @@ describe("env validation", () => {
     it("accepts each valid NODE_ENV value", () => {
       for (const value of ["development", "test", "production"] as const) {
         Object.assign(process.env, VALID_ENV);
+        // Production also requires the operator alert address.
+        process.env.OPERATOR_ALERT_EMAIL = OPERATOR_ALERT_EMAIL;
         process.env.NODE_ENV = value;
 
         expect(validateEnv().NODE_ENV).toBe(value);
@@ -206,6 +210,64 @@ describe("env validation", () => {
 
       const env = validateEnv();
       expect(env.SMTP_FROM).toBe("noreply@care-y.app");
+    });
+  });
+
+  // --- Operator alerting ---
+
+  describe("operator alerting vars", () => {
+    const HEARTBEAT_URL =
+      "https://heartbeat.example.invalid/ping/placeholder-token";
+
+    it("fails production validation without OPERATOR_ALERT_EMAIL, naming the variable", () => {
+      let caught: unknown;
+      try {
+        validateEnv({ ...VALID_ENV, NODE_ENV: "production" });
+      } catch (err: unknown) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(EnvValidationError);
+      const message = caught instanceof Error ? caught.message : "";
+      expect(message).toContain(
+        "OPERATOR_ALERT_EMAIL: OPERATOR_ALERT_EMAIL is required in production",
+      );
+    });
+
+    it("accepts production with OPERATOR_ALERT_EMAIL set", () => {
+      const env = validateEnv({
+        ...VALID_ENV,
+        NODE_ENV: "production",
+        OPERATOR_ALERT_EMAIL,
+      });
+
+      expect(env.OPERATOR_ALERT_EMAIL).toBe(OPERATOR_ALERT_EMAIL);
+    });
+
+    it.each(["development", "test"])(
+      "leaves OPERATOR_ALERT_EMAIL optional in %s",
+      (nodeEnv) => {
+        const env = validateEnv({ ...VALID_ENV, NODE_ENV: nodeEnv });
+
+        expect(env.OPERATOR_ALERT_EMAIL).toBeUndefined();
+        expect(env.JOBS_HEARTBEAT_URL).toBeUndefined();
+      },
+    );
+
+    it("rejects an OPERATOR_ALERT_EMAIL that is not an email address", () => {
+      expect(() =>
+        validateEnv({ ...VALID_ENV, OPERATOR_ALERT_EMAIL: "operator" }),
+      ).toThrow(EnvValidationError);
+    });
+
+    it("accepts a JOBS_HEARTBEAT_URL and rejects a value that is not a URL", () => {
+      expect(
+        validateEnv({ ...VALID_ENV, JOBS_HEARTBEAT_URL: HEARTBEAT_URL })
+          .JOBS_HEARTBEAT_URL,
+      ).toBe(HEARTBEAT_URL);
+      expect(() =>
+        validateEnv({ ...VALID_ENV, JOBS_HEARTBEAT_URL: "not a url" }),
+      ).toThrow(EnvValidationError);
     });
   });
 

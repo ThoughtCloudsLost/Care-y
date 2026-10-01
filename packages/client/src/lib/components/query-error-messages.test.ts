@@ -402,6 +402,20 @@ const expectedMessages: Array<{ code: ErrorCodeType; expected: string }> = [
     code: ErrorCode.STALE_KEY_WRAPS,
     expected: m.error_stale_key_wraps(),
   },
+
+  // Org deletion requests
+  {
+    code: ErrorCode.DELETION_ALREADY_REQUESTED,
+    expected: m.error_deletion_already_requested(),
+  },
+  {
+    code: ErrorCode.DELETION_NOT_CANCELLABLE,
+    expected: m.error_deletion_not_cancellable(),
+  },
+  {
+    code: ErrorCode.DELETION_SLUG_MISMATCH,
+    expected: m.error_deletion_slug_mismatch(),
+  },
 ];
 
 describe("errorCodeMap per-code mapping", () => {

@@ -10,7 +10,7 @@
  */
 
 // Must stay the first import: cli-utils boots the secrets loader before
-// anything below reaches db.ts (ADR-129).
+// anything below reaches db.ts (ADR-131).
 import { buildSetupUrl, singlePositional, withCli } from "./cli-utils.js";
 import { getEnv } from "../env.js";
 import { createOrgService } from "../org/service.js";

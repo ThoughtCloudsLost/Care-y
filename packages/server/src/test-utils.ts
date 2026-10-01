@@ -1188,6 +1188,7 @@ export const NO_OPTIONAL_ROUTERS: OptionalRouterDeps = {
   devDeps: null,
   savedFilters: false,
   keysDeps: null,
+  orgDeletionDeps: null,
 };
 
 /**
@@ -1231,6 +1232,7 @@ export const ALL_OPTIONAL_ROUTERS: OptionalRouterDeps = {
   devDeps: everyDepPresent(),
   savedFilters: true,
   keysDeps: everyDepPresent(),
+  orgDeletionDeps: everyDepPresent(),
 };
 
 /**

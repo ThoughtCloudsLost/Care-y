@@ -182,6 +182,14 @@ export const ErrorCode = {
   PASSWORD_UNCHANGED: "PASSWORD_UNCHANGED",
   /** A ticket key wrap was granted after the client fetched its list; refetch and retry. */
   STALE_KEY_WRAPS: "STALE_KEY_WRAPS",
+
+  // --- Org deletion requests ---
+  /** The org already has a pending or processing deletion request. */
+  DELETION_ALREADY_REQUESTED: "DELETION_ALREADY_REQUESTED",
+  /** No pending request inside its cooling-off period exists to cancel. */
+  DELETION_NOT_CANCELLABLE: "DELETION_NOT_CANCELLABLE",
+  /** The typed confirmation does not match the org's slug. */
+  DELETION_SLUG_MISMATCH: "DELETION_SLUG_MISMATCH",
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
