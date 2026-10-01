@@ -102,6 +102,8 @@ import type {
   InboundEmailDomainId,
   PrefBlobKind,
   DeletionRequestId,
+  FundId,
+  FundLedgerId,
 } from "@care-y/shared";
 
 export interface OrgsTable {
@@ -307,6 +309,8 @@ export interface OrgConfigTable {
   channel_voice_enabled: ColumnType<boolean, boolean | undefined, boolean>;
   channel_share_link_enabled: ColumnType<boolean, boolean | undefined, boolean>;
   current_key_generation: Generated<number>;
+  // Tell MANAGE_FUNDS holders about every ledger entry (default true)
+  notify_fund_managers: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -515,6 +519,7 @@ export interface QueuesTable {
   encrypted_color: Buffer | null; // org-key sealed picker token, null pre-078
   encrypted_icon: Buffer | null; // org-key sealed picker token, null pre-078
   org_key_generation: Generated<number>;
+  encrypted_fund_id: Buffer | null; // org-key sealed FundId, null when unmapped
 }
 
 export interface TicketsTable {
@@ -1106,6 +1111,33 @@ export interface NotificationOutboxTable {
   escalation_rule_id: EscalationRuleId | null;
 }
 
+// --- Fund accounting (ADR-109) ---
+// Every descriptive field is inside the org-key sealed payload. No fund_id,
+// user or time-of-day column on the ledger: those live in the ciphertext.
+
+export interface FundsTable {
+  id: Generated<FundId>;
+  encrypted_payload: Buffer;
+  // Org-key sealed running balance, rewritten by the client with every entry
+  encrypted_balance: Buffer;
+  // Compare-and-set counter, bumped by the server on every balance write
+  balance_version: Generated<number>;
+  is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  sort_order: number;
+  org_key_generation: Generated<number>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface FundLedgerTable {
+  id: FundLedgerId; // client-minted
+  encrypted_payload: Buffer;
+  org_key_generation: Generated<number>;
+  // Day granularity, stamped by the database. Read it cast to text: the
+  // pg driver turns a date into a local-midnight Date.
+  entry_date: ColumnType<Date, never, never>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -1197,4 +1229,7 @@ export interface TenantDatabase {
   email_reply_tokens: EmailReplyTokensTable;
   // Per-user preference documents
   user_pref_blobs: UserPrefBlobsTable;
+  // Fund accounting
+  funds: FundsTable;
+  fund_ledger: FundLedgerTable;
 }

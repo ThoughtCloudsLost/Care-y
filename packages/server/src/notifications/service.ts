@@ -388,6 +388,8 @@ function getNotificationBody(
       return strings.orgDeletionRequested(loginUrl);
     case "org_deletion_cancelled":
       return strings.orgDeletionCancelled(loginUrl);
+    case "fund_entry_recorded":
+      return strings.fundEntryRecorded(loginUrl);
   }
 }
 
@@ -415,5 +417,7 @@ function getSubjectLine(eventType: NotificationEventType): string {
       return "Organization deletion requested";
     case "org_deletion_cancelled":
       return "Organization deletion cancelled";
+    case "fund_entry_recorded":
+      return "Fund entry recorded";
   }
 }

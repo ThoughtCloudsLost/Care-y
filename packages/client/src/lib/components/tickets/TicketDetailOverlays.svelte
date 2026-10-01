@@ -15,6 +15,7 @@
   } from "$lib/components/tickets/CallOptionsContent.svelte";
   import CloseResolutionSheet from "$lib/components/tickets/CloseResolutionSheet.svelte";
   import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
+  import DisbursementSheet from "$lib/components/tickets/DisbursementSheet.svelte";
   import ShareLinkSheet from "$lib/components/tickets/ShareLinkSheet.svelte";
   import TicketContentEditSheet from "$lib/components/tickets/TicketContentEditSheet.svelte";
   import TicketNotificationSheet from "$lib/components/tickets/TicketNotificationSheet.svelte";
@@ -31,6 +32,7 @@
   import type {
     DeleteConfirmState,
     NoteEditState,
+    DisbursementEditState,
     ContentEditState,
     NotificationSheetState,
     ShareSheetState,
@@ -89,6 +91,7 @@
     currentAssigneeId: string | null;
     deleteConfirm: DeleteConfirmState;
     noteEdit: NoteEditState;
+    disbursementEdit: DisbursementEditState;
     contentEdit: ContentEditState;
     notificationSheet: NotificationSheetState;
     exposureHint: ExposureHintState;
@@ -117,6 +120,8 @@
     ondraftset: (body: string) => void;
     /** Shows "Add internal note" in the compose menu. */
     canAddNote: boolean;
+    /** Shows "Record disbursement" in the compose menu. */
+    canRecordDisbursement?: boolean;
     voiceEnabled?: boolean;
     shareLinkEnabled?: boolean;
     secureLinkEnabled?: boolean;
@@ -166,6 +171,7 @@
     currentAssigneeId,
     deleteConfirm,
     noteEdit,
+    disbursementEdit,
     contentEdit,
     notificationSheet,
     exposureHint,
@@ -193,6 +199,7 @@
     onemailclient,
     ondraftset,
     canAddNote,
+    canRecordDisbursement = false,
     voiceEnabled = true,
     shareLinkEnabled = true,
     secureLinkEnabled = true,
@@ -258,6 +265,7 @@
   {onattach}
   {onemailclient}
   {canAddNote}
+  {canRecordDisbursement}
 />
 
 <ShellPopover
@@ -375,6 +383,17 @@
     deleteConfirm.openConfirm(followUpId);
   }}
 />
+
+<!-- Corrections come from a disbursement note's context menu. Mounted on
+     the first one, so a case nobody corrects opens no fund queries here. -->
+{#if disbursementEdit.edit !== undefined}
+  <DisbursementSheet
+    opened={disbursementEdit.sheetOpen}
+    ondismiss={() => disbursementEdit.dismiss()}
+    {ticketId}
+    edit={disbursementEdit.edit}
+  />
+{/if}
 
 <ShareLinkSheet
   opened={shareSheet.sheetOpen}

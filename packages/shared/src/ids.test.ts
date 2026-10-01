@@ -6,6 +6,8 @@ import {
   newVoicemailQuarantineId,
   newClientAccountId,
   newFormAssetId,
+  newFundLedgerId,
+  fundLedgerIdSchema,
   channelSecretSchema,
   phoneMatchHashSchema,
   emailMatchHashSchema,
@@ -82,6 +84,20 @@ describe("newFormAssetId", () => {
 
   it("produces distinct values on consecutive calls", () => {
     expect(newFormAssetId()).not.toBe(newFormAssetId());
+  });
+});
+
+describe("newFundLedgerId", () => {
+  it("returns a UUID-shaped string", () => {
+    expect(newFundLedgerId()).toMatch(UUID_PATTERN);
+  });
+
+  it("produces distinct values on consecutive calls", () => {
+    expect(newFundLedgerId()).not.toBe(newFundLedgerId());
+  });
+
+  it("parses under fundLedgerIdSchema", () => {
+    expect(fundLedgerIdSchema.safeParse(newFundLedgerId()).success).toBe(true);
   });
 });
 

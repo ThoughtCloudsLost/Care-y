@@ -80,6 +80,7 @@ function replayClient(): SeedReplayClient {
     telephonyAdmin: {
       devSeedTelephony: trpc.telephonyAdmin?.devSeedTelephony,
     },
+    ...(trpc.funds !== undefined ? { funds: trpc.funds } : {}),
   };
 }
 

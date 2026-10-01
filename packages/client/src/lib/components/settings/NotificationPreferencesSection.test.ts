@@ -16,7 +16,7 @@ import {
 
 describe("NotificationPreferencesSection constants", () => {
   it("exports the expected event types and channels", () => {
-    expect(NOTIFICATION_EVENT_TYPES).toHaveLength(9);
+    expect(NOTIFICATION_EVENT_TYPES).toHaveLength(10);
     expect(NOTIFICATION_CHANNELS).toHaveLength(3);
   });
 
@@ -32,6 +32,7 @@ describe("NotificationPreferencesSection constants", () => {
       "mention",
       "merge_completed",
       "voicemail_quarantined",
+      "fund_entry_recorded",
     ]);
     for (const eventType of NOTIFICATION_EVENT_TYPES) {
       expect(validEvents.has(eventType)).toBe(true);

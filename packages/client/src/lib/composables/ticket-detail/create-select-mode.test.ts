@@ -5,6 +5,12 @@ import {
   type SelectableFollowUp,
 } from "./create-select-mode.svelte.js";
 import type { VolunteerRecord } from "$lib/tickets/resolve-volunteer.js";
+import {
+  NOTE_ENVELOPE_MARKER,
+  fundIdSchema,
+  newFundLedgerId,
+} from "@care-y/shared";
+import { disbursementNoteContent } from "$lib/funds/fund-payloads.js";
 
 const mockToastStore = {
   current: null as { id: number; message: string; duration: number } | null,
@@ -197,6 +203,49 @@ describe("createSelectMode", () => {
       const clipboardText = writeText.mock.calls[0]![0] as string;
       expect(clipboardText).toContain("calm-pebble-7:");
       expect(clipboardText).toContain("hello from client");
+    });
+
+    it("copies a disbursement note as readable text, not the envelope", async () => {
+      const writeText = vi
+        .fn<(text: string) => Promise<void>>()
+        .mockResolvedValue(undefined);
+      Object.assign(navigator, { clipboard: { writeText } });
+      const fundId = fundIdSchema.parse(crypto.randomUUID());
+      const envelope = disbursementNoteContent({
+        ledgerEntryId: newFundLedgerId(),
+        fundId,
+        amountMinor: 4_500,
+        currency: "USD",
+        note: "Gas card for the clinic",
+      });
+
+      const sm = createSelectMode(
+        makeConfig({
+          getTicketKeyWrap: () => fakeKeyWrap,
+          followUpCache: {
+            decryptContent: vi.fn(() => envelope),
+          } as unknown as SelectModeConfig["followUpCache"],
+          resolveFundName: (id: string) =>
+            id === fundId ? "Transit and gas" : undefined,
+        }),
+      );
+      sm.toggle("fu-note");
+
+      await sm.copySelected([
+        makeFollowUp({
+          id: "fu-note",
+          source: "volunteer",
+          type: "internal_note",
+          createdBy: null,
+        }),
+      ]);
+
+      const clipboardText = writeText.mock.calls[0]![0] as string;
+      expect(clipboardText).toContain("$45.00");
+      expect(clipboardText).toContain("Transit and gas");
+      expect(clipboardText).toContain("Gas card for the clinic");
+      expect(clipboardText).not.toContain(NOTE_ENVELOPE_MARKER);
+      expect(clipboardText).not.toContain("ledgerEntryId");
     });
 
     it("labels system events with [System]", async () => {

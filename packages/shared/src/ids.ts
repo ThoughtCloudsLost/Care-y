@@ -250,6 +250,24 @@ export const savedFilterIdSchema = z.uuid().brand<"SavedFilterId">();
 export type SavedFilterId = z.infer<typeof savedFilterIdSchema>;
 
 // ---------------------------------------------------------------------------
+// Funds
+// ---------------------------------------------------------------------------
+
+/**
+ * `funds.id`. Also carried inside sealed payloads (a ledger entry's fund,
+ * a queue's `encrypted_fund_id`), never in a plaintext column elsewhere.
+ */
+export const fundIdSchema = z.uuid().brand<"FundId">();
+export type FundId = z.infer<typeof fundIdSchema>;
+
+/**
+ * `fund_ledger.id`. Client-minted so the case note envelope can name the
+ * entry it records before the row exists.
+ */
+export const fundLedgerIdSchema = z.uuid().brand<"FundLedgerId">();
+export type FundLedgerId = z.infer<typeof fundLedgerIdSchema>;
+
+// ---------------------------------------------------------------------------
 // Knowledge base
 // ---------------------------------------------------------------------------
 
@@ -716,6 +734,11 @@ export function newFormAssetId(): FormAssetId {
 /** Mint a saved filter id. */
 export function newSavedFilterId(): SavedFilterId {
   return randomId() as SavedFilterId;
+}
+
+/** Mint a fund ledger entry id. Client-minted; the case note envelope names it. */
+export function newFundLedgerId(): FundLedgerId {
+  return randomId() as FundLedgerId;
 }
 
 /**

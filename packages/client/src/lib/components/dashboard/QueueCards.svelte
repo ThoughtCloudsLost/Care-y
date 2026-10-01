@@ -9,12 +9,20 @@
   import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
   import type { QueueAppearance } from "$lib/utils/queue-appearance.js";
 
+  /** The available balance of the fund the queue draws on. */
+  interface QueueFundBalance {
+    /** Formatted in the fund's currency. */
+    amount: string;
+    belowZero: boolean;
+  }
+
   interface QueueInfo {
     id: string;
     name: string | null;
     openCount: number;
     urgentCount: number;
     appearance?: QueueAppearance;
+    fundBalance?: QueueFundBalance;
   }
 
   interface QueueCardsProps {
@@ -44,9 +52,20 @@
   function tileAriaLabel(queue: QueueInfo): string {
     const name = queue.name ?? "...";
     const open = m.dashboard_queues_open_count({ count: queue.openCount });
-    return queue.urgentCount > 0
-      ? `${name}, ${open}, ${urgentLabel(queue.urgentCount)}`
-      : `${name}, ${open}`;
+    const base =
+      queue.urgentCount > 0
+        ? `${name}, ${open}, ${urgentLabel(queue.urgentCount)}`
+        : `${name}, ${open}`;
+    return queue.fundBalance === undefined
+      ? base
+      : `${base}, ${balanceLabel(queue.fundBalance)}`;
+  }
+
+  // A balance below zero reads as a fact in words, never as an alarm.
+  function balanceLabel(balance: QueueFundBalance): string {
+    return balance.belowZero
+      ? m.fund_available_below_zero({ amount: balance.amount })
+      : m.fund_available_amount({ amount: balance.amount });
   }
 </script>
 
@@ -87,6 +106,14 @@
                 >{urgentLabel(queue.urgentCount)}</span
               >{/if}
           </span>
+          {#if queue.fundBalance}
+            <span
+              class="queue-balance num"
+              class:queue-balance-below={queue.fundBalance.belowZero}
+            >
+              {balanceLabel(queue.fundBalance)}
+            </span>
+          {/if}
         </button>
       {/each}
     </div>
@@ -162,6 +189,18 @@
     content: "·";
     margin: 0 0.35em;
     color: var(--muted);
+  }
+
+  .queue-balance {
+    font-size: var(--text-xs);
+    color: var(--ink-2);
+  }
+
+  /* Below zero is distinct but neutral: muted italic, never a red alarm.
+     The words carry the meaning, so hue is not the only signal. */
+  .queue-balance-below {
+    color: var(--muted);
+    font-style: italic;
   }
 
   .queue-tile-placeholder {

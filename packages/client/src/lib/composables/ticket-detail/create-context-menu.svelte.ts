@@ -1,3 +1,4 @@
+import type { DisbursementNoteEnvelope } from "@care-y/shared";
 import type {
   ContextActionId,
   ContextMenuEvent,
@@ -13,6 +14,10 @@ export interface ContextMenuCallbacks {
     noteTypeId: string | null,
   ) => void;
   readonly oneditmessage?: (followUpId: string, plaintext: string) => void;
+  readonly oneditdisbursement?: (
+    followUpId: string,
+    envelope: DisbursementNoteEnvelope,
+  ) => void;
   readonly ondelete: (followUpId: string) => void;
 }
 
@@ -58,6 +63,14 @@ export function createContextMenu(
           snapshot.followUpId,
           snapshot.plaintext ?? "",
         );
+        break;
+      case "editDisbursement":
+        if (snapshot.disbursement !== undefined) {
+          callbacks.oneditdisbursement?.(
+            snapshot.followUpId,
+            snapshot.disbursement,
+          );
+        }
         break;
       case "delete":
         callbacks.ondelete(snapshot.followUpId);

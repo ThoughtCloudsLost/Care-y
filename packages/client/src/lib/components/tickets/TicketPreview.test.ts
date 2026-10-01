@@ -3,6 +3,12 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import TicketPreview from "./TicketPreview.svelte";
+import {
+  NOTE_ENVELOPE_MARKER,
+  fundIdSchema,
+  newFundLedgerId,
+} from "@care-y/shared";
+import { disbursementNoteContent } from "$lib/funds/fund-payloads.js";
 
 // IntersectionObserver stub for DecryptPlaceholder
 vi.stubGlobal(
@@ -322,6 +328,27 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(note?.textContent).not.toContain("Internal");
     // Notes are blocks, not directional bubbles.
     expect(container.querySelector("[data-direction]")).toBeNull();
+  });
+
+  it("previews a disbursement note as its amount and text", () => {
+    mockDecryptContent.mockReturnValue(
+      disbursementNoteContent({
+        ledgerEntryId: newFundLedgerId(),
+        fundId: fundIdSchema.parse(globalThis.crypto.randomUUID()),
+        amountMinor: 4_500,
+        currency: "USD",
+        note: "Gas card",
+      }),
+    );
+    const fu = makeFollowUp({ type: "internal_note", source: "volunteer" });
+    const { container } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu], multiline: true },
+    });
+
+    const text = container.querySelector(".mini-note")?.textContent ?? "";
+    expect(text).toContain("$45.00");
+    expect(text).not.toContain(NOTE_ENVELOPE_MARKER);
+    expect(text).not.toContain("ledgerEntryId");
   });
 
   it("renders multiple follow-ups with correct alignment", () => {

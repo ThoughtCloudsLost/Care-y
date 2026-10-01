@@ -13,6 +13,7 @@ import type * as ShellPopoverNS from "$lib/shell/ShellPopover.svelte";
 import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
 import type * as PresetReplyContentNS from "$lib/components/tickets/PresetReplyContent.svelte";
 import type * as InternalNoteSheetNS from "$lib/components/tickets/InternalNoteSheet.svelte";
+import type * as DisbursementSheetNS from "$lib/components/tickets/DisbursementSheet.svelte";
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
   (await import("$mocks/with-terms.js")).withTermsMock(
@@ -59,6 +60,15 @@ vi.mock(
         await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
       ).default as unknown as (typeof InternalNoteSheetNS)["default"],
     }) satisfies typeof InternalNoteSheetNS,
+);
+vi.mock(
+  "$lib/components/tickets/DisbursementSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof DisbursementSheetNS)["default"],
+    }) satisfies typeof DisbursementSheetNS,
 );
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
@@ -112,5 +122,25 @@ describe("ComposeActions", () => {
     });
 
     expect(container.textContent).toContain(m.ticket_add_internal_note());
+  });
+
+  it("hides the disbursement item unless the caller allows it", () => {
+    const { container } = render(ComposeActions, {
+      props: { ...baseProps, canAddNote: true },
+    });
+
+    expect(container.textContent).not.toContain(m.assist_record());
+  });
+
+  it("renders the disbursement item next to the note item when allowed", () => {
+    const { container } = render(ComposeActions, {
+      props: { ...baseProps, canAddNote: true, canRecordDisbursement: true },
+    });
+    const text = container.textContent;
+
+    expect(text).toContain(m.assist_record());
+    expect(text.indexOf(m.ticket_add_internal_note())).toBeLessThan(
+      text.indexOf(m.assist_record()),
+    );
   });
 });

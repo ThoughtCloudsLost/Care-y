@@ -56,6 +56,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_tab_note_types: () => "Follow-Ups",
   admin_tab_terminology: () => "Terminology",
   intake_forms_title: () => "Intake Forms",
+  admin_tab_funds: () => "Funds",
   admin_org_title: () => "Organization",
   admin_org_no_access: () => "No access",
 }));
@@ -165,6 +166,18 @@ vi.mock("$lib/components/admin/IntakeFormsSection.svelte", async () => {
 });
 
 vi.mock("$lib/components/admin/TerminologySection.svelte", async () => {
+  // Passthrough replaces the component; a surface assertion (not
+  // importOriginal, which would load the real component tree) guards
+  // the module shape.
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
+
+vi.mock("$lib/components/admin/FundsSection.svelte", async () => {
   // Passthrough replaces the component; a surface assertion (not
   // importOriginal, which would load the real component tree) guards
   // the module shape.
@@ -292,6 +305,22 @@ describe("Organization page", () => {
       expect(container.querySelector("#section-general")).toBeNull();
       expect(container.querySelector("#section-keys")).toBeNull();
       expect(container.querySelector("#section-retention")).toBeNull();
+    });
+
+    it("renders the funds section only with MANAGE_FUNDS", () => {
+      setPermissions(Permission.MANAGE_FUNDS);
+      const { container } = renderPage();
+
+      expect(mockGoto).not.toHaveBeenCalled();
+      expect(container.querySelector("#section-funds")).toBeTruthy();
+      expect(container.querySelector("#section-general")).toBeNull();
+    });
+
+    it("hides the funds section from someone who can only view funds", () => {
+      setPermissions(Permission.MANAGE_ORG_IDENTITY, Permission.VIEW_FUNDS);
+      const { container } = renderPage();
+
+      expect(container.querySelector("#section-funds")).toBeNull();
     });
 
     it("renders each org-identity section only with its own key", () => {

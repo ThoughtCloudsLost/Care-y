@@ -179,6 +179,9 @@ export const createQueueInputSchema = z.object({
   encryptedColor: base64String("encryptedColor"),
   encryptedIcon: base64String("encryptedIcon"),
   escalateDays: z.number().int().min(0).max(MAX_ESCALATION_DAYS).default(0),
+  // Org-key sealed fund id: cases in this queue preselect the fund. The
+  // server never reads the mapping (ADR-109).
+  encryptedFundId: base64String("encryptedFundId").optional(),
 });
 export type CreateQueueInput = z.infer<typeof createQueueInputSchema>;
 
@@ -188,6 +191,8 @@ export const updateQueueInputSchema = z.object({
   encryptedColor: base64String("encryptedColor").optional(),
   encryptedIcon: base64String("encryptedIcon").optional(),
   escalateDays: z.number().int().min(0).max(MAX_ESCALATION_DAYS).optional(),
+  // null clears the queue's fund, undefined leaves it unchanged.
+  encryptedFundId: base64String("encryptedFundId").nullable().optional(),
 });
 export type UpdateQueueInput = z.infer<typeof updateQueueInputSchema>;
 

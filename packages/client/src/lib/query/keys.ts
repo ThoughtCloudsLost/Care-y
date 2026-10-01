@@ -269,6 +269,15 @@ export const intakeFormKeys = {
     [...intakeFormKeys.responses(formId), "page", cursor] as const,
 };
 
+// Funds (with their sealed balances), the ledger and the fund settings
+// form one family. A write or a fund SSE event invalidates all of it.
+export const fundKeys = {
+  all: ["funds"] as const,
+  list: () => [...fundKeys.all, "list"] as const,
+  ledger: () => [...fundKeys.all, "ledger"] as const,
+  settings: () => [...fundKeys.all, "settings"] as const,
+};
+
 export const portalKeys = {
   all: ["portal"] as const,
   orgPublicKey: () => [...portalKeys.all, "orgPublicKey"] as const,

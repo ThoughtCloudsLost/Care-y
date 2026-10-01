@@ -9,7 +9,7 @@ import {
   type Mock,
 } from "vitest";
 import { getSodium, requireSodium, encode } from "@care-y/crypto";
-import { RoleId } from "@care-y/shared";
+import { NOTE_ENVELOPE_MARKER, RoleId } from "@care-y/shared";
 import { SEED_HANDBOOK_TICKET } from "@care-y/shared/dev/seed-handbook-ticket.js";
 import { SeedReplayError } from "$lib/errors.js";
 import {
@@ -21,7 +21,8 @@ import {
   type SeedReplayDeps,
 } from "./seed-replay.js";
 
-const ADMIN_ID = "admin-user";
+// A real UUID: fund entries record the seeding account as a UserId.
+const ADMIN_ID = "8f0c7a52-4c1e-4b8e-9d6a-3f2b1c0d9e7a";
 const VOICEMAIL = new Uint8Array([0, 1, 2, 3, 4, 5]);
 
 class FakeProcedureError extends Error {
@@ -87,6 +88,16 @@ function createFakeServer(): FakeServer {
   const writeOne = (input: unknown): void => {
     const ticketId = readString(input, "ticketId");
     followUps.set(ticketId, (followUps.get(ticketId) ?? 0) + 1);
+  };
+  // Funds keep a balance version the way the server does: every entry
+  // bumps it by one.
+  const fundVersions = new Map<string, number>();
+  const recordEntry = (input: unknown): { balanceVersion: number } => {
+    const balance = readField(input, "balance");
+    const fundId = readString(balance, "fundId");
+    const next = (fundVersions.get(fundId) ?? 0) + 1;
+    fundVersions.set(fundId, next);
+    return { balanceVersion: next };
   };
 
   const handlers = new Map<string, Handler>([
@@ -159,6 +170,26 @@ function createFakeServer(): FakeServer {
       (input) => ({ attachmentId: readString(input, "attachmentId") }),
     ],
     ["telephonyAdmin.devSeedTelephony", () => ({ skipped: false })],
+    [
+      "funds.create",
+      () => {
+        const id = globalThis.crypto.randomUUID();
+        fundVersions.set(id, 0);
+        return { id };
+      },
+    ],
+    [
+      "funds.list",
+      () => ({
+        funds: [...fundVersions].map(([id, balanceVersion]) => ({
+          id,
+          balanceVersion,
+          orgKeyGeneration: 1,
+        })),
+      }),
+    ],
+    ["funds.recordAdjustment", recordEntry],
+    ["funds.recordDisbursement", recordEntry],
   ]);
   for (const path of [
     "tickets.createFollowUp",
@@ -450,6 +481,64 @@ describe("seedReplay", () => {
     ).toBe(audio);
     for (const input of inputsOf(server.calls, "dev.seedVoicemail")) {
       expect(readField(input, "audio")).toBe(audio);
+    }
+  });
+
+  it("creates funds, links queues and records fund entries", async () => {
+    await seedReplay(deps);
+
+    const funds = inputsOf(server.calls, "funds.create");
+    expect(funds.length).toBeGreaterThan(0);
+    const linkedQueues = inputsOf(server.calls, "tickets.updateQueue").filter(
+      (input) => readField(input, "encryptedFundId") !== undefined,
+    );
+    expect(linkedQueues).toHaveLength(funds.length);
+    expect(
+      inputsOf(server.calls, "funds.recordAdjustment").length,
+    ).toBeGreaterThan(0);
+
+    // Case disbursements carry an encrypted envelope note; fund-level
+    // spending carries none.
+    const disbursements = inputsOf(server.calls, "funds.recordDisbursement");
+    const withNote = disbursements.filter(
+      (input) => readField(input, "caseNote") !== undefined,
+    );
+    expect(withNote.length).toBeGreaterThan(0);
+    expect(withNote.length).toBeLessThan(disbursements.length);
+    const envelopes = fake.encrypted.filter((e) =>
+      e.plaintext.startsWith(NOTE_ENVELOPE_MARKER),
+    );
+    expect(envelopes).toHaveLength(withNote.length);
+  });
+
+  it("chains each fund's balance version and seals under the row's generation", async () => {
+    await seedReplay(deps);
+
+    for (const created of inputsOf(server.calls, "funds.create")) {
+      expect(readField(created, "encryptedBalance")).toEqual(
+        expect.any(String),
+      );
+    }
+
+    const entries = [
+      ...inputsOf(server.calls, "funds.recordAdjustment"),
+      ...inputsOf(server.calls, "funds.recordDisbursement"),
+    ];
+    expect(entries.length).toBeGreaterThan(0);
+    const seen = new Map<string, number>();
+    for (const entry of server.calls
+      .filter(
+        (c) =>
+          c.path === "funds.recordAdjustment" ||
+          c.path === "funds.recordDisbursement",
+      )
+      .map((c) => c.input)) {
+      const balance = readField(entry, "balance");
+      const fundId = readString(balance, "fundId");
+      const expected = seen.get(fundId) ?? 0;
+      expect(readField(balance, "expectedVersion")).toBe(expected);
+      expect(readField(balance, "orgKeyGeneration")).toBe(1);
+      seen.set(fundId, expected + 1);
     }
   });
 

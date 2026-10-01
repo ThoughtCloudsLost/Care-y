@@ -44,11 +44,12 @@
     getCurrentPermissions,
   } from "$lib/crypto/context.js";
   import {
+    hasNoteEnvelopeMarker,
     type FollowUpListInput,
     type ReactionSummary,
     type ReactionType,
   } from "@care-y/shared";
-  import { canUseInline } from "$lib/auth/procedure-gates.js";
+  import { canCall, canUseInline } from "$lib/auth/procedure-gates.js";
 
   type FollowUpType = NonNullable<FollowUpListInput["types"]>[number];
   type MediaFlag = NonNullable<FollowUpListInput["mediaFlags"]>[number];
@@ -104,6 +105,13 @@
     type GroupedFollowUp,
   } from "$lib/tickets/follow-up-utils.js";
   import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
+  import { createFundStore } from "$lib/funds/fund-store.svelte.js";
+  import {
+    isEnvelopeResult,
+    readableNoteResult,
+    readableNoteText,
+  } from "$lib/funds/fund-display.js";
+  import { openDisbursementNote } from "$lib/funds/fund-payloads.js";
 
   import { computeGaps } from "$lib/tickets/gap-indicators.js";
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
@@ -343,6 +351,29 @@
     const id = noteTypeId ?? noteTypesQuery.data.defaultNoteTypeId ?? undefined;
     if (id === undefined) return undefined;
     return noteTypesQuery.data.types.find((t) => t.id === id);
+  }
+
+  // Disbursement notes carry an envelope instead of typed text. The
+  // fund cache names the fund; the note block shows readable text, and
+  // correcting one goes through the context menu's disbursement sheet,
+  // not the note editor.
+  const fundStore = createFundStore();
+
+  function resolveFundName(fundId: string): string | undefined {
+    return fundStore.fund(fundId)?.name;
+  }
+
+  function noteDisplayResult(result: DecryptResult): DecryptResult {
+    return readableNoteResult(result, resolveFundName);
+  }
+
+  function noteEyebrowName(
+    result: DecryptResult,
+    noteTypeId: string | null,
+  ): string | undefined {
+    return isEnvelopeResult(result)
+      ? m.fund_note_eyebrow()
+      : resolveNoteTypeName(noteTypeId);
   }
 
   function resolveNoteTypeName(noteTypeId: string | null): string | undefined {
@@ -1012,6 +1043,27 @@
   }
 
   function openContextMenu(fu: ContextMenuTarget): void {
+    if (!decrypt || fu.encryptedContent == null) return;
+
+    const result = decrypt.followUp(
+      fu.id,
+      fu.encryptedContent,
+      fu.keyWrap,
+      fu.portalWrap,
+    );
+    const raw = result.status === "ready" ? result.value : undefined;
+    // A disbursement note copies as its readable text and is corrected
+    // through the disbursement sheet, never the plain note editor.
+    const disbursement =
+      fu.type === "internal_note" && raw !== undefined
+        ? (openDisbursementNote(raw) ?? undefined)
+        : undefined;
+    const isEnvelope = raw !== undefined && hasNoteEnvelopeMarker(raw);
+    const plaintext =
+      raw === undefined
+        ? undefined
+        : (readableNoteText(raw, resolveFundName) ?? undefined);
+
     const actions = getContextMenuActions(
       fu,
       currentUserId,
@@ -1020,24 +1072,30 @@
         copy: m.common_copy(),
         editNote: m.ticket_edit_note(),
         editMessage: m.ticket_edit_message_title(),
+        editDisbursement: m.assist_edit_title(),
         deleteNote: m.ticket_delete_note(),
       },
+      isEnvelope
+        ? {
+            canRevise:
+              disbursement !== undefined &&
+              fundStore.enabled &&
+              canCall(permissions, "funds.reviseDisbursement"),
+            canReviseOthers: canUseInline(
+              permissions,
+              "reviseOthersDisbursements",
+            ),
+          }
+        : undefined,
     );
-    if (actions.length === 0 || !decrypt || fu.encryptedContent == null) return;
-
-    const result = decrypt.followUp(
-      fu.id,
-      fu.encryptedContent,
-      fu.keyWrap,
-      fu.portalWrap,
-    );
-    const plaintext = result.status === "ready" ? result.value : undefined;
+    if (actions.length === 0) return;
 
     oncontextmenu?.({
       followUpId: fu.id,
       actions,
       plaintext,
       noteTypeId: fu.noteTypeId ?? null,
+      disbursement,
     });
   }
 
@@ -1327,6 +1385,7 @@
           {clientAlias}
           reactions={getReactions(fu.id)}
           {currentUserId}
+          {resolveFundName}
         />
       </div>
     {/each}
@@ -1432,11 +1491,11 @@
               />
             {:else if kind === "note"}
               <PrivateNote
-                result={recResult}
+                result={noteDisplayResult(recResult)}
                 authorName={resolveVolunteerName(rec.createdBy)}
                 timestamp={rec.createdAt}
                 isOwn={rec.createdBy === currentUserId}
-                noteTypeName={resolveNoteTypeName(rec.noteTypeId)}
+                noteTypeName={noteEyebrowName(recResult, rec.noteTypeId)}
                 noteTypeIcon={resolveNoteTypeIcon(rec.noteTypeId)}
                 {searchTerm}
                 reactions={getReactions(rec.id)}
@@ -1605,7 +1664,12 @@
                       : "article"}
                   aria-label={kind === "system"
                     ? undefined
-                    : bubbleAriaLabel(fu, contentResult)}
+                    : bubbleAriaLabel(
+                        fu,
+                        kind === "note"
+                          ? noteDisplayResult(contentResult)
+                          : contentResult,
+                      )}
                   aria-selected={selectModeActive ? isSelected : undefined}
                   onkeydown={selectModeActive
                     ? (e: KeyboardEvent) => {
@@ -1641,13 +1705,16 @@
                     />
                   {:else if kind === "note"}
                     <PrivateNote
-                      result={contentResult}
+                      result={noteDisplayResult(contentResult)}
                       authorName={resolveVolunteerName(fu.createdBy)}
                       timestamp={fu.createdAt}
                       isOwn={fu.createdBy === currentUserId}
-                      noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
+                      noteTypeName={noteEyebrowName(
+                        contentResult,
+                        fu.noteTypeId,
+                      )}
                       noteTypeIcon={resolveNoteTypeIcon(fu.noteTypeId)}
-                      onopenedit={onopenedit
+                      onopenedit={onopenedit && !isEnvelopeResult(contentResult)
                         ? () => {
                             const text =
                               contentResult.status === "ready"

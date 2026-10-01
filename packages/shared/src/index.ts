@@ -616,6 +616,47 @@ export {
   type SetIntakeQueueInput,
 } from "./schemas/voicemail-quarantine.js";
 
+// --- Fund accounting schemas ---
+export {
+  createFundInputSchema,
+  updateFundInputSchema,
+  disbursementCaseNoteInputSchema,
+  fundBalanceInputSchema,
+  fundLedgerEntryInputSchema,
+  recordDisbursementInputSchema,
+  recordAdjustmentInputSchema,
+  reviseDisbursementInputSchema,
+  setFundBalanceInputSchema,
+  updateFundSettingsInputSchema,
+  currencyCodeSchema,
+  fundProviderLinkSchema,
+  fundPayloadSchema,
+  fundBalancePayloadSchema,
+  fundEntryTypeSchema,
+  fundLedgerPayloadSchema,
+  NOTE_ENVELOPE_MARKER,
+  disbursementNoteEnvelopeSchema,
+  hasNoteEnvelopeMarker,
+  encodeNoteEnvelope,
+  decodeNoteEnvelope,
+  type CreateFundInput,
+  type UpdateFundInput,
+  type DisbursementCaseNoteInput,
+  type FundBalanceInput,
+  type FundLedgerEntryInput,
+  type RecordDisbursementInput,
+  type RecordAdjustmentInput,
+  type ReviseDisbursementInput,
+  type SetFundBalanceInput,
+  type UpdateFundSettingsInput,
+  type FundProviderLink,
+  type FundPayload,
+  type FundBalancePayload,
+  type FundEntryType,
+  type FundLedgerPayload,
+  type DisbursementNoteEnvelope,
+} from "./schemas/funds.js";
+
 // --- Terminology schemas ---
 export {
   terminologyLabelsSchema,
@@ -915,6 +956,11 @@ export {
   type PresetReplyId,
   type SavedFilterId,
   type AuditLogId,
+  // Funds
+  fundIdSchema,
+  fundLedgerIdSchema,
+  type FundId,
+  type FundLedgerId,
   // Knowledge base
   kbCategoryIdSchema,
   kbItemIdSchema,
@@ -1039,6 +1085,7 @@ export {
   newShareId,
   newClientAccountId,
   newKeyGeneration,
+  newFundLedgerId,
 } from "./ids.js";
 
 // --- Branded locale types ---

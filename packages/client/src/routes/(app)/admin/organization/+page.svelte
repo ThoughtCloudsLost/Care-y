@@ -11,6 +11,7 @@
     ClipboardList,
     Languages,
     Trash,
+    HandCoins,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
@@ -24,6 +25,7 @@
   import IntakeFormsSection from "$lib/components/admin/IntakeFormsSection.svelte";
   import TerminologySection from "$lib/components/admin/TerminologySection.svelte";
   import DeletionRequestSection from "$lib/components/admin/DeletionRequestSection.svelte";
+  import FundsSection from "$lib/components/admin/FundsSection.svelte";
 
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
@@ -95,6 +97,13 @@
           ),
         oncreateform: () => void goto(resolve("/admin/forms")),
       },
+    },
+    {
+      id: "funds",
+      label: m.admin_tab_funds,
+      icon: HandCoins,
+      permission: Permission.MANAGE_FUNDS,
+      component: FundsSection,
     },
   ];
 

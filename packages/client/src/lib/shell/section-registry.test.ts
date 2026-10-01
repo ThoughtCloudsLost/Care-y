@@ -36,6 +36,7 @@ describe("section-registry", () => {
         "org-deletion",
         "note-types",
         "intake-forms",
+        "funds",
       ]);
     });
 

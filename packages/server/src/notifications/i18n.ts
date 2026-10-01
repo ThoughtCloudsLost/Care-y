@@ -21,6 +21,8 @@ export interface NotificationStrings {
   /** Names no requester and no data; states the cooling-off period only. */
   readonly orgDeletionRequested: (loginUrl: string) => string;
   readonly orgDeletionCancelled: (loginUrl: string) => string;
+  /** A fund ledger entry was recorded. Names no fund, amount or case. */
+  readonly fundEntryRecorded: (loginUrl: string) => string;
   readonly smsPing: (loginUrl: string) => string;
   /** Short SMS carrying a phone verification code. No event details. */
   readonly verificationCode: (code: string) => string;
@@ -49,6 +51,8 @@ const EN: NotificationStrings = {
     `Log in to review it: ${url}`,
   orgDeletionCancelled: (url) =>
     `The request to delete this organization was cancelled. No data will be deleted. Log in to review it: ${url}`,
+  fundEntryRecorded: (url) =>
+    `A new entry was recorded in a fund. Log in to review it: ${url}`,
   smsPing: (url) => `You have a new notification. Visit ${url}`,
   verificationCode: (code) => `Your CARE-Y verification code is ${code}`,
   emailSubjectPrefix: "CARE-Y",
@@ -77,6 +81,8 @@ const ES: NotificationStrings = {
     `Inicie sesion para revisarla: ${url}`,
   orgDeletionCancelled: (url) =>
     `Se cancelo la solicitud de eliminar esta organizacion. No se eliminara ningun dato. Inicie sesion para revisarla: ${url}`,
+  fundEntryRecorded: (url) =>
+    `Se registro un nuevo movimiento en un fondo. Inicie sesion para revisarlo: ${url}`,
   smsPing: (url) => `Tiene una nueva notificacion. Visite ${url}`,
   verificationCode: (code) => `Su codigo de verificacion de CARE-Y es ${code}`,
   emailSubjectPrefix: "CARE-Y",

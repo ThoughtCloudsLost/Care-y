@@ -49,6 +49,9 @@
   import { systemEventLabel } from "$lib/tickets/system-event-label.js";
   import { formatCallLabel } from "$lib/tickets/call-label.js";
   import { emailPreviewText } from "$lib/editor/email-schema.js";
+  // A disbursement note previews as its amount and text. A card list
+  // holds no fund cache, so the fund's name is left out.
+  import { readableNoteResult } from "$lib/funds/fund-display.js";
 
   interface Props {
     ticketId: string;
@@ -240,7 +243,9 @@
             {truncate(formatCallLabel(fu), 40)}
           </div>
         {:else}
-          {@const result = followUpCache.decryptPreview(ticketId, fu)}
+          {@const rawResult = followUpCache.decryptPreview(ticketId, fu)}
+          {@const result =
+            kind === "note" ? readableNoteResult(rawResult) : rawResult}
           {@const content = isDecryptReady(result) ? result.value : undefined}
           {#if kind === "note"}
             {@const NoteIcon = resolveIcon(fu.noteTypeId)}

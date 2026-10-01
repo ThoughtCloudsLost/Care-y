@@ -1,7 +1,7 @@
 <!--
   Shared compose actions menu (+ button). Used by both the ticket detail
   route and the quick-reply sheet. Renders the popover menu, preset reply
-  sheet, and internal note sheet.
+  sheet, internal note sheet, and disbursement sheet.
 -->
 <script lang="ts">
   import { List as KList, ListItem } from "konsta/svelte";
@@ -12,6 +12,7 @@
     NotepadTextDashed,
     MessageSquare,
     Mail,
+    HandCoins,
   } from "@lucide/svelte";
   import { PORTAL_ALLOWED_CONTENT_TYPES } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
@@ -20,6 +21,7 @@
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import PresetReplyContent from "$lib/components/tickets/PresetReplyContent.svelte";
   import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
+  import DisbursementSheet from "$lib/components/tickets/DisbursementSheet.svelte";
 
   interface ComposeActionsProps {
     opened: boolean;
@@ -44,6 +46,11 @@
     onemailclient?: () => void;
     /** Shows "Add internal note" when the account may write case notes. */
     canAddNote: boolean;
+    /**
+     * Shows "Record disbursement" when the account may read funds and
+     * record disbursements, and the case's queue has a fund.
+     */
+    canRecordDisbursement?: boolean;
   }
 
   let {
@@ -57,12 +64,14 @@
     onattach,
     onemailclient,
     canAddNote,
+    canRecordDisbursement = false,
   }: ComposeActionsProps = $props();
 
   let fileInputEl = $state<HTMLInputElement | null>(null);
 
   let presetSheetOpen = $state(false);
   let noteSheetOpen = $state(false);
+  let disbursementSheetOpen = $state(false);
 
   function handleReply(): void {
     ondismiss();
@@ -93,6 +102,11 @@
   function handleNote(): void {
     ondismiss();
     noteSheetOpen = true;
+  }
+
+  function handleDisbursement(): void {
+    ondismiss();
+    disbursementSheetOpen = true;
   }
 
   function handleTextClient(): void {
@@ -132,6 +146,13 @@
       <ListItem title={m.ticket_add_internal_note()} onclick={handleNote}>
         {#snippet media()}
           <NotepadTextDashed size={20} aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/if}
+    {#if canRecordDisbursement}
+      <ListItem title={m.assist_record()} onclick={handleDisbursement}>
+        {#snippet media()}
+          <HandCoins size={20} aria-hidden="true" />
         {/snippet}
       </ListItem>
     {/if}
@@ -202,3 +223,13 @@
   }}
   {ticketId}
 />
+
+{#if canRecordDisbursement}
+  <DisbursementSheet
+    opened={disbursementSheetOpen}
+    ondismiss={() => {
+      disbursementSheetOpen = false;
+    }}
+    {ticketId}
+  />
+{/if}

@@ -152,6 +152,10 @@ describe("es.json values differ from en.json", () => {
     // Product name (proper noun, not translated)
     ["app_name", "product name"],
     ["demo_app_brand", "product name"],
+    [
+      "admin_funds_currency_placeholder",
+      "ISO 4217 currency code shown as the example value",
+    ],
 
     // Interpolation-only templates (the visible content is a variable, not translatable text)
     ["intake_page_issue_row", "interpolation-only: {field}: {error}"],

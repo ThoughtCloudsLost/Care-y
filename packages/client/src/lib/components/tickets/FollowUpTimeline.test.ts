@@ -7,6 +7,12 @@ import type {
   ClusterRecord,
 } from "./follow-up-timeline-types.js";
 import type * as MessagesNS from "$lib/paraglide/messages.js";
+import {
+  NOTE_ENVELOPE_MARKER,
+  fundIdSchema,
+  newFundLedgerId,
+} from "@care-y/shared";
+import { disbursementNoteContent } from "$lib/funds/fund-payloads.js";
 
 // Mock i18n (FollowUpTimeline uses several message functions).
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
@@ -462,6 +468,55 @@ describe("FollowUpTimeline component (timeline mode)", () => {
             accessibleName.startsWith(`Jump to: ${expected},`),
         }),
       ).toBeTruthy();
+    });
+  });
+
+  describe("disbursement notes", () => {
+    const fundId = fundIdSchema.parse(globalThis.crypto.randomUUID());
+
+    function renderNote(decrypted: string): void {
+      render(FollowUpTimelineHarness, {
+        props: {
+          timelineActive: true,
+          resolveDecrypted: () => decrypted,
+          items: [
+            makeItem("d-1", {
+              source: "volunteer",
+              type: "internal_note",
+              createdAt: isoAt(0, 9, 0),
+            }),
+          ],
+        },
+      });
+    }
+
+    it("labels an envelope note with its amount instead of the raw content", () => {
+      renderNote(
+        disbursementNoteContent({
+          ledgerEntryId: newFundLedgerId(),
+          fundId,
+          amountMinor: 2_500,
+          currency: "USD",
+          note: "Groceries",
+        }),
+      );
+
+      const row = screen.getByRole("button", {
+        name: (accessibleName) => accessibleName.startsWith("Jump to: "),
+      });
+      const name = row.getAttribute("aria-label") ?? "";
+      expect(name).toContain("$25.00");
+      expect(name).not.toContain(NOTE_ENVELOPE_MARKER);
+      expect(name).not.toContain("ledgerEntryId");
+    });
+
+    it("never shows the raw content of a malformed envelope", () => {
+      renderNote(`${NOTE_ENVELOPE_MARKER}{"v":1}`);
+
+      const row = screen.getByRole("button", {
+        name: (accessibleName) => accessibleName.startsWith("Jump to: "),
+      });
+      expect(row.getAttribute("aria-label") ?? "").not.toContain('{"v":1}');
     });
   });
 

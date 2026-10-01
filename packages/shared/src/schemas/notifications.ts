@@ -27,6 +27,7 @@ export const notificationEventTypeSchema = z.enum([
   "voicemail_quarantined",
   "org_deletion_requested",
   "org_deletion_cancelled",
+  "fund_entry_recorded",
 ]);
 export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 
@@ -58,6 +59,7 @@ export const systemSseEventSchema = z.object({
     "voicemail_quarantined",
     "org_deletion_requested",
     "org_deletion_cancelled",
+    "fund_entry_recorded",
   ]),
   timestamp: z.iso.datetime(),
 });

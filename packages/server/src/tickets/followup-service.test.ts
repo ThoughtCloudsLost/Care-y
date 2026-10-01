@@ -24,6 +24,9 @@ import {
   newAttachmentId,
   channelSecretSchema,
   type FollowupId,
+  type TicketId,
+  type UserId,
+  type QueueId,
   type NoteTypeId,
   type KeyGeneration,
   type BlobKey,
@@ -2801,6 +2804,262 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
       expect(sources).toContain("client");
       // Volunteer follow-ups are excluded when includeClientSource is
       // the only filter (the OR clause only includes source='client')
+    });
+  });
+
+  // --- createWithin / finishCreate (caller-owned transaction) ---
+
+  describe("createWithin", () => {
+    /** Thrown inside a test transaction to force its rollback. */
+    class RollbackForTest extends Error {}
+
+    function noteInput(ticketId: TicketId, id: FollowupId = newFollowupId()) {
+      return {
+        id,
+        ticketId,
+        encryptedContent: Buffer.from("envelope-note"),
+        source: "volunteer",
+        type: "internal_note",
+        isPrivate: true,
+        mentionedPseudonyms: [],
+        attachments: [],
+      };
+    }
+
+    async function followUpExists(id: FollowupId): Promise<boolean> {
+      const row = await testDb.db
+        .selectFrom("followups")
+        .select("id")
+        .where("id", "=", id)
+        .executeTakeFirst();
+      return row !== undefined;
+    }
+
+    it("leaves no follow-up behind when the outer transaction rolls back", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      const id = newFollowupId();
+
+      await expect(
+        testDb.db.transaction().execute(async (trx) => {
+          const result = await svc.createWithin(
+            trx,
+            userId,
+            noteInput(ticketId, id),
+          );
+          expect(result.row.id).toBe(id);
+          throw new RollbackForTest("roll back");
+        }),
+      ).rejects.toBeInstanceOf(RollbackForTest);
+
+      expect(await followUpExists(id)).toBe(false);
+    });
+
+    it("commits with the outer transaction and finishCreate returns the record", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+      const live = createFollowUpService(testDb.db, access, {
+        onTicketChanged,
+      });
+      const id = newFollowupId();
+
+      const result = await testDb.db
+        .transaction()
+        .execute(async (trx) =>
+          live.createWithin(trx, userId, noteInput(ticketId, id)),
+        );
+      // Nothing is announced until the caller finishes after commit.
+      expect(onTicketChanged).not.toHaveBeenCalled();
+      expect(result.resolvedChannel).toBeNull();
+
+      const record = live.finishCreate(result, ticketId);
+      expect(record.id).toBe(id);
+      expect(record.type).toBe("internal_note");
+      expect(record.isPrivate).toBe(true);
+      expect(onTicketChanged).toHaveBeenCalledTimes(1);
+      expect(onTicketChanged).toHaveBeenCalledWith(ticketId);
+      expect(await followUpExists(id)).toBe(true);
+    });
+
+    it("rejects a user without access to the ticket", async () => {
+      const { ticketId } = await createTicketFixture();
+      const outsider = await createTestUser(testDb.db);
+      const id = newFollowupId();
+
+      await expect(
+        testDb.db
+          .transaction()
+          .execute(async (trx) =>
+            svc.createWithin(trx, outsider.id, noteInput(ticketId, id)),
+          ),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(await followUpExists(id)).toBe(false);
+    });
+
+    it("rejects a closed ticket", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      await testDb.db
+        .updateTable("tickets")
+        .set({ status: "closed" })
+        .where("id", "=", ticketId)
+        .execute();
+      const id = newFollowupId();
+
+      await expect(
+        testDb.db
+          .transaction()
+          .execute(async (trx) =>
+            svc.createWithin(trx, userId, noteInput(ticketId, id)),
+          ),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(await followUpExists(id)).toBe(false);
+    });
+  });
+
+  // --- updateInternalNoteWithin / finishUpdate (caller-owned transaction) ---
+
+  describe("updateInternalNoteWithin", () => {
+    /** Thrown inside a test transaction to force its rollback. */
+    class RollbackForTest extends Error {}
+
+    async function noteBy(userId: UserId, ticketId: TicketId) {
+      return svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("original-note"),
+        source: "volunteer",
+        type: "internal_note",
+        isPrivate: true,
+        mentionedPseudonyms: [],
+      });
+    }
+
+    async function contentOf(id: FollowupId): Promise<string> {
+      const row = await testDb.db
+        .selectFrom("followups")
+        .select("encrypted_content")
+        .where("id", "=", id)
+        .executeTakeFirstOrThrow();
+      return row.encrypted_content.toString();
+    }
+
+    async function grantAccess(
+      userId: UserId,
+      queueId: QueueId,
+    ): Promise<void> {
+      await testDb.db
+        .insertInto("queue_assignments")
+        .values({ queue_id: queueId, user_id: userId })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+    }
+
+    it("keeps the old content when the outer transaction rolls back", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      const note = await noteBy(userId, ticketId);
+
+      await expect(
+        testDb.db.transaction().execute(async (trx) => {
+          await svc.updateInternalNoteWithin(
+            trx,
+            userId,
+            note.id,
+            Buffer.from("rewritten-note"),
+          );
+          throw new RollbackForTest("roll back");
+        }),
+      ).rejects.toBeInstanceOf(RollbackForTest);
+
+      expect(await contentOf(note.id)).toBe("original-note");
+    });
+
+    it("commits with the outer transaction and finishUpdate announces it", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      const onTicketChanged = vi.fn<TicketChangeListener>();
+      const live = createFollowUpService(testDb.db, access, {
+        onTicketChanged,
+      });
+      const note = await noteBy(userId, ticketId);
+      onTicketChanged.mockClear();
+
+      const result = await testDb.db
+        .transaction()
+        .execute(async (trx) =>
+          live.updateInternalNoteWithin(
+            trx,
+            userId,
+            note.id,
+            Buffer.from("rewritten-note"),
+          ),
+        );
+      expect(onTicketChanged).not.toHaveBeenCalled();
+      expect(result.previousNoteTypeId).toBeNull();
+
+      const record = live.finishUpdate(result);
+      expect(record.id).toBe(note.id);
+      expect(onTicketChanged).toHaveBeenCalledWith(ticketId);
+      expect(await contentOf(note.id)).toBe("rewritten-note");
+    });
+
+    it("refuses another author's note by default", async () => {
+      const { userId, ticketId, queueId } = await createTicketFixture();
+      const note = await noteBy(userId, ticketId);
+      const other = await createTestUser(testDb.db);
+      await grantAccess(other.id, queueId);
+
+      await expect(
+        testDb.db
+          .transaction()
+          .execute(async (trx) =>
+            svc.updateInternalNoteWithin(
+              trx,
+              other.id,
+              note.id,
+              Buffer.from("not-yours"),
+            ),
+          ),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(await contentOf(note.id)).toBe("original-note");
+    });
+
+    it("rewrites another author's note when the caller allows any author", async () => {
+      const { userId, ticketId, queueId } = await createTicketFixture();
+      const note = await noteBy(userId, ticketId);
+      const other = await createTestUser(testDb.db);
+      await grantAccess(other.id, queueId);
+
+      await testDb.db
+        .transaction()
+        .execute(async (trx) =>
+          svc.updateInternalNoteWithin(
+            trx,
+            other.id,
+            note.id,
+            Buffer.from("corrected"),
+            { anyAuthor: true },
+          ),
+        );
+      expect(await contentOf(note.id)).toBe("corrected");
+    });
+
+    it("rejects a user without access to the ticket even with any author allowed", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      const note = await noteBy(userId, ticketId);
+      const outsider = await createTestUser(testDb.db);
+
+      await expect(
+        testDb.db
+          .transaction()
+          .execute(async (trx) =>
+            svc.updateInternalNoteWithin(
+              trx,
+              outsider.id,
+              note.id,
+              Buffer.from("not-yours"),
+              { anyAuthor: true },
+            ),
+          ),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(await contentOf(note.id)).toBe("original-note");
     });
   });
 });

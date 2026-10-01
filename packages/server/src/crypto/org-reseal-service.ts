@@ -42,6 +42,8 @@ import {
   intakeFormFieldIdSchema,
   clientMergeEventIdSchema,
   savedFilterIdSchema,
+  fundIdSchema,
+  fundLedgerIdSchema,
   emailIdSchema,
   aliasHashSchema,
   phoneMatchHashSchema,
@@ -98,7 +100,12 @@ interface ResealTableSpec {
  */
 const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
   queues: {
-    columns: ["encrypted_name", "encrypted_color", "encrypted_icon"],
+    columns: [
+      "encrypted_name",
+      "encrypted_color",
+      "encrypted_icon",
+      "encrypted_fund_id",
+    ],
     countPending: async (db, gen) => {
       const r = await db
         .selectFrom("queues")
@@ -111,7 +118,13 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
       if (onlyIds?.length === 0) return [];
       let q = db
         .selectFrom("queues")
-        .select(["id", "encrypted_name", "encrypted_color", "encrypted_icon"])
+        .select([
+          "id",
+          "encrypted_name",
+          "encrypted_color",
+          "encrypted_icon",
+          "encrypted_fund_id",
+        ])
         .where("org_key_generation", "<", gen)
         .orderBy("id")
         .limit(limit);
@@ -138,6 +151,8 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           columns.encrypted_color = r.encrypted_color;
         if (r.encrypted_icon !== null)
           columns.encrypted_icon = r.encrypted_icon;
+        if (r.encrypted_fund_id !== null)
+          columns.encrypted_fund_id = r.encrypted_fund_id;
         return { id: r.id, columns };
       });
     },
@@ -153,6 +168,9 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
             : {}),
           ...(cols.encrypted_icon !== undefined
             ? { encrypted_icon: cols.encrypted_icon }
+            : {}),
+          ...(cols.encrypted_fund_id !== undefined
+            ? { encrypted_fund_id: cols.encrypted_fund_id }
             : {}),
           org_key_generation: gen,
         })
@@ -1302,6 +1320,124 @@ const RESEAL_TABLES_RECORD: Record<ResealTableName, ResealTableSpec> = {
           org_key_generation: gen,
         })
         .where("id", "=", savedFilterIdSchema.parse(id))
+        .where("org_key_generation", "<", gen)
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows);
+    },
+  },
+
+  // Fund payloads and sealed running balances, and ledger entries
+  // (ADR-109).
+  funds: {
+    columns: ["encrypted_payload", "encrypted_balance"],
+    countPending: async (db, gen) => {
+      const r = await db
+        .selectFrom("funds")
+        .select(db.fn.countAll().as("count"))
+        .where("org_key_generation", "<", gen)
+        .executeTakeFirstOrThrow();
+      return toCount(r);
+    },
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
+      let q = db
+        .selectFrom("funds")
+        .select(["id", "encrypted_payload", "encrypted_balance"])
+        .where("org_key_generation", "<", gen)
+        .orderBy("id")
+        .limit(limit);
+      if (excludeIds.length > 0) {
+        q = q.where(
+          "id",
+          "not in",
+          excludeIds.map((v) => fundIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => fundIdSchema.parse(v)),
+        );
+      }
+      const rows = await q.execute();
+      return rows.map((r) => {
+        const columns: Record<string, Buffer> = {
+          encrypted_payload: r.encrypted_payload,
+          encrypted_balance: r.encrypted_balance,
+        };
+        return { id: r.id, columns };
+      });
+    },
+    resealRow: async (tx, id, cols, gen) => {
+      const result = await tx
+        .updateTable("funds")
+        .set({
+          ...(cols.encrypted_payload !== undefined
+            ? { encrypted_payload: cols.encrypted_payload }
+            : {}),
+          ...(cols.encrypted_balance !== undefined
+            ? { encrypted_balance: cols.encrypted_balance }
+            : {}),
+          org_key_generation: gen,
+        })
+        .where("id", "=", fundIdSchema.parse(id))
+        .where("org_key_generation", "<", gen)
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows);
+    },
+  },
+
+  fund_ledger: {
+    columns: ["encrypted_payload"],
+    countPending: async (db, gen) => {
+      const r = await db
+        .selectFrom("fund_ledger")
+        .select(db.fn.countAll().as("count"))
+        .where("org_key_generation", "<", gen)
+        .executeTakeFirstOrThrow();
+      return toCount(r);
+    },
+    fetchPending: async (db, gen, limit, excludeIds, onlyIds) => {
+      if (onlyIds?.length === 0) return [];
+      let q = db
+        .selectFrom("fund_ledger")
+        .select(["id", "encrypted_payload"])
+        .where("org_key_generation", "<", gen)
+        .orderBy("id")
+        .limit(limit);
+      if (excludeIds.length > 0) {
+        q = q.where(
+          "id",
+          "not in",
+          excludeIds.map((v) => fundLedgerIdSchema.parse(v)),
+        );
+      }
+      if (onlyIds !== undefined && onlyIds.length > 0) {
+        q = q.where(
+          "id",
+          "in",
+          onlyIds.map((v) => fundLedgerIdSchema.parse(v)),
+        );
+      }
+      const rows = await q.execute();
+      return rows.map((r) => {
+        const columns: Record<string, Buffer> = {
+          encrypted_payload: r.encrypted_payload,
+        };
+        return { id: r.id, columns };
+      });
+    },
+    resealRow: async (tx, id, cols, gen) => {
+      const result = await tx
+        .updateTable("fund_ledger")
+        .set({
+          ...(cols.encrypted_payload !== undefined
+            ? { encrypted_payload: cols.encrypted_payload }
+            : {}),
+          org_key_generation: gen,
+        })
+        .where("id", "=", fundLedgerIdSchema.parse(id))
         .where("org_key_generation", "<", gen)
         .executeTakeFirst();
       return Number(result.numUpdatedRows);

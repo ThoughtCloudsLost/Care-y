@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { QueryClient } from "@tanstack/svelte-query";
+import { fundIdSchema, fundLedgerIdSchema } from "@care-y/shared";
 import {
   createDeleteConfirm,
   createNoteEdit,
+  createDisbursementEdit,
 } from "./create-overlay-state.svelte.js";
 import type * as ToastNS from "$lib/stores/toast.svelte.js";
 
@@ -142,5 +144,41 @@ describe("createNoteEdit", () => {
     expect(ne.followUpId).toBeUndefined();
     expect(ne.content).toBeUndefined();
     expect(ne.noteTypeId).toBeUndefined();
+  });
+});
+
+describe("createDisbursementEdit", () => {
+  const edit = {
+    followUpId: "fu-5",
+    envelope: {
+      v: 1 as const,
+      kind: "disbursement" as const,
+      ledgerEntryId: fundLedgerIdSchema.parse(globalThis.crypto.randomUUID()),
+      fundId: fundIdSchema.parse(globalThis.crypto.randomUUID()),
+      amountMinor: 1_500,
+      currency: "USD",
+      note: "",
+    },
+  };
+
+  it("starts closed with nothing to edit", () => {
+    const state = createDisbursementEdit();
+    expect(state.sheetOpen).toBe(false);
+    expect(state.edit).toBeUndefined();
+  });
+
+  it("opens on the given disbursement", () => {
+    const state = createDisbursementEdit();
+    state.open(edit);
+    expect(state.sheetOpen).toBe(true);
+    expect(state.edit).toBe(edit);
+  });
+
+  it("closes but keeps the disbursement while the sheet slides away", () => {
+    const state = createDisbursementEdit();
+    state.open(edit);
+    state.dismiss();
+    expect(state.sheetOpen).toBe(false);
+    expect(state.edit).toBe(edit);
   });
 });

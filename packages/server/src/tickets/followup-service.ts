@@ -6,9 +6,17 @@
  * volunteer per ticket). See ReadCursorService.
  */
 
-import type { Kysely, SelectQueryBuilder } from "kysely";
-import type { TenantDatabase } from "../db/types.js";
-import type { TicketAccessChecker } from "./access.js";
+import type {
+  Kysely,
+  SelectQueryBuilder,
+  Selectable,
+  Transaction,
+} from "kysely";
+import type { FollowupsTable, TenantDatabase } from "../db/types.js";
+import {
+  createTicketAccessChecker,
+  type TicketAccessChecker,
+} from "./access.js";
 import type { TicketChangeListener } from "./ticket-live-events.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import { mediaExistsSelects } from "./query-helpers.js";
@@ -152,8 +160,52 @@ export interface FollowUpListOpts {
   userRoleId?: string;
 }
 
+/**
+ * What `createWithin` leaves for `finishCreate`: the inserted row and the
+ * portal channel a client copy landed on, if any.
+ */
+export interface CreateWithinResult {
+  readonly row: Selectable<FollowupsTable>;
+  readonly resolvedChannel: PortalChannelRow | null;
+}
+
+/**
+ * What `updateInternalNoteWithin` leaves for `finishUpdate`: the rewritten
+ * row and the note type it carried before.
+ */
+export interface UpdateWithinResult {
+  readonly row: Selectable<FollowupsTable>;
+  readonly previousNoteTypeId: NoteTypeId | null;
+}
+
+export interface UpdateInternalNoteWithinOptions {
+  /**
+   * Let the caller rewrite a note someone else wrote. The caller decides
+   * who may; without it the author-only rule of `updateInternalNote`
+   * applies.
+   */
+  readonly anyAuthor?: boolean;
+}
+
 export interface FollowUpService {
   create(userId: UserId, input: CreateFollowUpInput): Promise<FollowUpRecord>;
+  /**
+   * The checks and writes of `create`, run on a transaction the caller
+   * owns, so a follow-up can commit or roll back with the caller's own
+   * rows. Nothing observable happens until the caller commits and then
+   * calls `finishCreate`.
+   */
+  createWithin(
+    trx: Transaction<TenantDatabase>,
+    userId: UserId,
+    input: CreateFollowUpInput,
+  ): Promise<CreateWithinResult>;
+  /**
+   * The after-commit half of `create`: portal nudge, reply-window reset
+   * and the live ticket-change event. Call only once the transaction
+   * `createWithin` ran on has committed.
+   */
+  finishCreate(result: CreateWithinResult, ticketId: TicketId): FollowUpRecord;
   listByTicket(
     userId: UserId,
     ticketId: TicketId,
@@ -217,6 +269,25 @@ export interface FollowUpService {
     encryptedContent: Buffer,
     portalCopy?: PortalCopyInput,
   ): Promise<FollowUpRecord>;
+  /**
+   * The checks and write of `updateInternalNote`, run on a transaction the
+   * caller owns, so a note edit can commit or roll back with the caller's
+   * own rows. The note type is left as it is. Nothing observable happens
+   * until the caller commits and then calls `finishUpdate`.
+   */
+  updateInternalNoteWithin(
+    trx: Transaction<TenantDatabase>,
+    userId: UserId,
+    followUpId: FollowupId,
+    encryptedContent: Buffer,
+    opts?: UpdateInternalNoteWithinOptions,
+  ): Promise<UpdateWithinResult>;
+  /**
+   * The after-commit half of `updateInternalNote`: the live ticket-change
+   * event. Call only once the transaction `updateInternalNoteWithin` ran
+   * on has committed.
+   */
+  finishUpdate(result: UpdateWithinResult): FollowUpRecord;
 }
 
 /**
@@ -448,127 +519,235 @@ export interface FollowUpServiceDeps {
   readonly onTicketChanged?: TicketChangeListener;
 }
 
+/**
+ * @param access Used by the read, edit and delete methods that check case
+ * access. `create`, `createWithin` and `updateInternalNoteWithin` do not
+ * use it: their check runs through `createTicketAccessChecker` bound to
+ * the write's own transaction, so a checker injected here has no effect
+ * on creating a follow-up or on an edit made inside a caller's
+ * transaction.
+ */
 export function createFollowUpService(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
   deps?: FollowUpServiceDeps,
 ): FollowUpService {
-  return {
-    async create(userId, input) {
-      await access.assertAccess(userId, input.ticketId);
+  /**
+   * Access and open-ticket checks, then the row, client copy and
+   * attachment links, all against the caller's transaction.
+   */
+  async function createWithin(
+    trx: Transaction<TenantDatabase>,
+    userId: UserId,
+    input: CreateFollowUpInput,
+  ): Promise<CreateWithinResult> {
+    // The check reads through the caller's transaction rather than the
+    // injected checker's handle. A second handle would need a second pool
+    // connection while this transaction holds one, and on a
+    // single-connection driver (the demo's PGlite) it would wait forever.
+    await createTicketAccessChecker(trx).assertAccess(userId, input.ticketId);
 
-      // Verify ticket is open
-      const ticket = await db
-        .selectFrom("tickets")
-        .select(["id", "status", "client_id"])
-        .where("id", "=", input.ticketId)
-        .executeTakeFirst();
+    // Verify ticket is open
+    const ticket = await trx
+      .selectFrom("tickets")
+      .select(["id", "status", "client_id"])
+      .where("id", "=", input.ticketId)
+      .executeTakeFirst();
 
-      if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
-      if (ticket.status !== "open") {
-        throw new NotFoundError(ErrorCode.CANNOT_FOLLOWUP_CLOSED_TICKET);
+    if (!ticket) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+    if (ticket.status !== "open") {
+      throw new NotFoundError(ErrorCode.CANNOT_FOLLOWUP_CLOSED_TICKET);
+    }
+
+    let channel: PortalChannelRow | null = null;
+    const inserted = await trx
+      .insertInto("followups")
+      .values({
+        id: input.id,
+        ticket_id: input.ticketId,
+        source: input.source,
+        type: input.type,
+        is_private: input.isPrivate,
+        mentioned_pseudonyms: JSON.stringify(input.mentionedPseudonyms),
+        encrypted_content: input.encryptedContent,
+        created_by: userId,
+        note_type_id: input.noteTypeId ?? null,
+        call_sid: input.callSid ?? null,
+        call_status: input.callStatus ?? null,
+        call_duration_seconds: input.callDurationSeconds ?? null,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    // When portalCopy is present, resolve the client's ACTIVE channel
+    // inside the transaction and store the client copy atomically.
+    // Kind-agnostic: volunteer reply copies must reach secure_link,
+    // intake_continuation, and account channels alike.
+    const attachments = input.attachments ?? [];
+    // A message may carry a client copy of its text, of its files, or
+    // of both, and any of the three needs the channel resolved.
+    const wantsClientCopy =
+      input.portalCopy !== undefined ||
+      attachments.some((a) => a.portalCopy !== undefined);
+
+    if (wantsClientCopy) {
+      const activeChannel = await findActiveChannel(trx, ticket.client_id);
+
+      if (activeChannel) {
+        channel = activeChannel;
+        if (input.portalCopy) {
+          await storeClientCopy(
+            trx,
+            activeChannel.id,
+            input.id,
+            input.portalCopy,
+          );
+        }
+      } else {
+        // Channel revoked between page load and send; silent drop with warn log.
+        // The org copy (follow-up) is the truth.
+        console.warn("Portal copy dropped: no active channel for client");
       }
+    }
 
-      // The transaction returns the resolved portal channel alongside the
-      // row (a closure-mutated outer variable would defeat narrowing).
-      const { row, resolvedChannel } = await db
-        .transaction()
-        .execute(async (trx) => {
-          let channel: PortalChannelRow | null = null;
-          const inserted = await trx
-            .insertInto("followups")
-            .values({
-              id: input.id,
-              ticket_id: input.ticketId,
-              source: input.source,
-              type: input.type,
-              is_private: input.isPrivate,
-              mentioned_pseudonyms: JSON.stringify(input.mentionedPseudonyms),
-              encrypted_content: input.encryptedContent,
-              created_by: userId,
-              note_type_id: input.noteTypeId ?? null,
-              call_sid: input.callSid ?? null,
-              call_status: input.callStatus ?? null,
-              call_duration_seconds: input.callDurationSeconds ?? null,
-            })
-            .returningAll()
-            .executeTakeFirstOrThrow();
-
-          // When portalCopy is present, resolve the client's ACTIVE channel
-          // inside the transaction and store the client copy atomically.
-          // Kind-agnostic: volunteer reply copies must reach secure_link,
-          // intake_continuation, and account channels alike.
-          const attachments = input.attachments ?? [];
-          // A message may carry a client copy of its text, of its files, or
-          // of both, and any of the three needs the channel resolved.
-          const wantsClientCopy =
-            input.portalCopy !== undefined ||
-            attachments.some((a) => a.portalCopy !== undefined);
-
-          if (wantsClientCopy) {
-            const activeChannel = await findActiveChannel(
-              trx,
-              ticket.client_id,
-            );
-
-            if (activeChannel) {
-              channel = activeChannel;
-              if (input.portalCopy) {
-                await storeClientCopy(
-                  trx,
-                  activeChannel.id,
-                  input.id,
-                  input.portalCopy,
-                );
-              }
-            } else {
-              // Channel revoked between page load and send; silent drop with warn log.
-              // The org copy (follow-up) is the truth.
-              console.warn("Portal copy dropped: no active channel for client");
-            }
-          }
-
-          // Tie uploads to this follow-up. An id that matches no pending
-          // upload on this ticket fails the whole write rather than
-          // producing a message that silently lost its file.
-          for (const att of attachments) {
-            const linked = await attachToFollowUp(
-              trx,
-              att.attachmentId,
-              input.ticketId,
-              input.id,
-            );
-            if (!linked) {
-              throw new NotFoundError(ErrorCode.ATTACHMENT_NOT_FOUND);
-            }
-            if (att.portalCopy && channel !== null) {
-              await insertClientWrap(trx, {
-                attachmentId: att.attachmentId,
-                channelRowId: channel.id,
-                followupId: input.id,
-                direction: "to_client",
-                copy: att.portalCopy,
-              });
-            }
-          }
-
-          return { row: inserted, resolvedChannel: channel };
+    // Tie uploads to this follow-up. An id that matches no pending
+    // upload on this ticket fails the whole write rather than
+    // producing a message that silently lost its file.
+    for (const att of attachments) {
+      const linked = await attachToFollowUp(
+        trx,
+        att.attachmentId,
+        input.ticketId,
+        input.id,
+      );
+      if (!linked) {
+        throw new NotFoundError(ErrorCode.ATTACHMENT_NOT_FOUND);
+      }
+      if (att.portalCopy && channel !== null) {
+        await insertClientWrap(trx, {
+          attachmentId: att.attachmentId,
+          channelRowId: channel.id,
+          followupId: input.id,
+          direction: "to_client",
+          copy: att.portalCopy,
         });
-
-      // After commit: fire-and-forget nudge when a channel was resolved
-      if (resolvedChannel !== null && deps?.portalMessageDeps) {
-        void nudgeClient(db, deps.portalMessageDeps, resolvedChannel);
       }
+    }
 
-      // After commit: an org reply landed on the channel, so the client's
-      // reply window clears. Independent of portalMessageDeps: the reset
-      // must fire even where nudge deps are not wired.
-      if (resolvedChannel !== null) {
-        deps?.onPortalOrgReply?.(resolvedChannel.id);
-      }
+    return { row: inserted, resolvedChannel: channel };
+  }
 
-      deps?.onTicketChanged?.(input.ticketId);
-      return toRecord(row);
+  function finishCreate(
+    result: CreateWithinResult,
+    ticketId: TicketId,
+  ): FollowUpRecord {
+    const { row, resolvedChannel } = result;
+
+    // After commit: fire-and-forget nudge when a channel was resolved
+    if (resolvedChannel !== null && deps?.portalMessageDeps) {
+      void nudgeClient(db, deps.portalMessageDeps, resolvedChannel);
+    }
+
+    // After commit: an org reply landed on the channel, so the client's
+    // reply window clears. Independent of portalMessageDeps: the reset
+    // must fire even where nudge deps are not wired.
+    if (resolvedChannel !== null) {
+      deps?.onPortalOrgReply?.(resolvedChannel.id);
+    }
+
+    deps?.onTicketChanged?.(ticketId);
+    return toRecord(row);
+  }
+
+  /**
+   * Checks and rewrite of an internal note on the given handle. The
+   * access checker is passed in so a caller's transaction can check
+   * through its own connection, as `createWithin` does.
+   */
+  async function editInternalNote(
+    handle: Kysely<TenantDatabase>,
+    checker: TicketAccessChecker,
+    userId: UserId,
+    followUpId: FollowupId,
+    encryptedContent: Buffer,
+    noteTypeId: NoteTypeId | undefined,
+    anyAuthor: boolean,
+  ): Promise<UpdateWithinResult> {
+    const existing = await handle
+      .selectFrom("followups")
+      .selectAll()
+      .where("id", "=", followUpId)
+      .executeTakeFirst();
+
+    if (!existing) throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
+
+    await checker.assertAccess(userId, existing.ticket_id);
+
+    if (existing.type !== "internal_note") {
+      throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_EDITABLE);
+    }
+    if (existing.source !== "volunteer") {
+      throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_EDITABLE);
+    }
+    if (existing.deleted_at !== null) {
+      throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
+    }
+
+    const updates: Record<string, unknown> = {
+      encrypted_content: encryptedContent,
+    };
+    if (noteTypeId !== undefined) {
+      updates.note_type_id = noteTypeId;
+    }
+
+    let update = handle
+      .updateTable("followups")
+      .set(updates)
+      .where("id", "=", followUpId);
+    if (!anyAuthor) {
+      update = update.where("created_by", "=", userId);
+    }
+    const row = await update.returningAll().executeTakeFirst();
+
+    if (!row) throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_OWNED);
+    return { row, previousNoteTypeId: existing.note_type_id ?? null };
+  }
+
+  function finishUpdate(result: UpdateWithinResult): FollowUpRecord {
+    deps?.onTicketChanged?.(result.row.ticket_id);
+    return toRecord(result.row);
+  }
+
+  return {
+    createWithin,
+    finishCreate,
+    finishUpdate,
+
+    async updateInternalNoteWithin(
+      trx,
+      userId,
+      followUpId,
+      encryptedContent,
+      opts,
+    ) {
+      // Checked through the caller's transaction for the reason given in
+      // createWithin.
+      return editInternalNote(
+        trx,
+        createTicketAccessChecker(trx),
+        userId,
+        followUpId,
+        encryptedContent,
+        undefined,
+        opts?.anyAuthor ?? false,
+      );
+    },
+
+    async create(userId, input) {
+      const result = await db
+        .transaction()
+        .execute(async (trx) => createWithin(trx, userId, input));
+      return finishCreate(result, input.ticketId);
     },
 
     async listByTicket(userId, ticketId, opts) {
@@ -900,46 +1079,18 @@ export function createFollowUpService(
     },
 
     async updateInternalNote(userId, followUpId, encryptedContent, noteTypeId) {
-      const existing = await db
-        .selectFrom("followups")
-        .selectAll()
-        .where("id", "=", followUpId)
-        .executeTakeFirst();
-
-      if (!existing) throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
-
-      await access.assertAccess(userId, existing.ticket_id);
-
-      if (existing.type !== "internal_note") {
-        throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_EDITABLE);
-      }
-      if (existing.source !== "volunteer") {
-        throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_EDITABLE);
-      }
-      if (existing.deleted_at !== null) {
-        throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
-      }
-
-      const updates: Record<string, unknown> = {
-        encrypted_content: encryptedContent,
-      };
-      if (noteTypeId !== undefined) {
-        updates.note_type_id = noteTypeId;
-      }
-
-      const row = await db
-        .updateTable("followups")
-        .set(updates)
-        .where("id", "=", followUpId)
-        .where("created_by", "=", userId)
-        .returningAll()
-        .executeTakeFirst();
-
-      if (!row) throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_OWNED);
-      deps?.onTicketChanged?.(existing.ticket_id);
+      const result = await editInternalNote(
+        db,
+        access,
+        userId,
+        followUpId,
+        encryptedContent,
+        noteTypeId,
+        false,
+      );
       return {
-        record: toRecord(row),
-        previousNoteTypeId: existing.note_type_id ?? null,
+        record: finishUpdate(result),
+        previousNoteTypeId: result.previousNoteTypeId,
       };
     },
 

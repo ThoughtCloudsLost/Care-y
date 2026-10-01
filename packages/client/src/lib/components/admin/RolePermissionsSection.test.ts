@@ -184,6 +184,11 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "Also opens the call history, which covers every call the organization handled across all queues.",
   permission_not_yet_built_hint: () =>
     "View own shifts has nothing behind it yet. It is listed so its name stays settled, but granting it changes nothing until shift scheduling is built.",
+  // Funds
+  permission_view_funds: () => "View funds",
+  permission_audit_funds: () => "Audit funds",
+  permission_record_disbursements: () => "Record disbursements",
+  permission_manage_funds: () => "Manage funds",
   // Running the organization
   permission_manage_roles: () => "Manage roles",
   permission_manage_users: () => "Manage users",
@@ -209,6 +214,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   roles_group_knowledge_base: () => "Knowledge base",
   roles_group_queues: () => "Queues",
   roles_group_intake: () => "Intake",
+  roles_group_funds: () => "Funds",
   roles_group_running_org: () => "Running the organization",
   // Shared UI
   roles_toggle_aria: ({
@@ -388,7 +394,7 @@ describe("RolePermissionsSection", () => {
 
   afterEach(cleanup);
 
-  it("renders all Permission rows across eight groups", async () => {
+  it("renders all Permission rows across nine groups", async () => {
     renderSection();
     await vi.waitFor(() => {
       expect(screen.getByText("View cases")).toBeTruthy();
@@ -422,6 +428,13 @@ describe("RolePermissionsSection", () => {
     expect(screen.getByText("Intake")).toBeTruthy();
     expect(screen.getByText("View intake responses")).toBeTruthy();
 
+    // Funds group
+    expect(screen.getByText("Funds")).toBeTruthy();
+    expect(screen.getByText("View funds")).toBeTruthy();
+    expect(screen.getByText("Audit funds")).toBeTruthy();
+    expect(screen.getByText("Record disbursements")).toBeTruthy();
+    expect(screen.getByText("Manage funds")).toBeTruthy();
+
     // Running the organization group
     expect(screen.getByText("Running the organization")).toBeTruthy();
     expect(screen.getByText("Manage keys")).toBeTruthy();
@@ -434,13 +447,13 @@ describe("RolePermissionsSection", () => {
     await vi.waitFor(() => {
       expect(screen.getByText("View cases")).toBeTruthy();
     });
-    // Eight groups, each with Volunteer/Manager/Admin column headers = 24 total
+    // Nine groups, each with Volunteer/Manager/Admin column headers = 27 total
     const volHeaders = screen.getAllByText("Volunteer");
-    expect(volHeaders.length).toBe(8);
+    expect(volHeaders.length).toBe(9);
     const mgrHeaders = screen.getAllByText("Manager");
-    expect(mgrHeaders.length).toBe(8);
+    expect(mgrHeaders.length).toBe(9);
     const admHeaders = screen.getAllByText("Admin");
-    expect(admHeaders.length).toBe(8);
+    expect(admHeaders.length).toBe(9);
   });
 
   it("renders locked cells as disabled toggles", async () => {

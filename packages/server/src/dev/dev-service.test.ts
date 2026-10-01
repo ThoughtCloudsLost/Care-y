@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getSodium } from "@care-y/crypto";
-import type { OrgSchema, TicketId, UserId } from "@care-y/shared";
+import {
+  newFundLedgerId,
+  type OrgSchema,
+  type TicketId,
+  type UserId,
+} from "@care-y/shared";
 import {
   createMemoryBlobStore,
   createTestDb,
@@ -709,6 +714,51 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .where("ticket_id", "=", ticketId)
         .execute();
       expect(events.map((e) => e.type)).toContain("status_opened");
+    });
+  },
+);
+
+describe.skipIf(!process.env.DATABASE_URL)(
+  "DevService.resetSeedData (DB)",
+  () => {
+    let testDb: TestDb;
+    let svc: DevService;
+
+    beforeAll(async () => {
+      testDb = await createTestDb();
+      svc = createDevService(testDb.db);
+    }, 30_000);
+
+    afterAll(async () => {
+      await testDb.cleanup();
+    });
+
+    it("clears funds and the fund ledger so re-seeding does not duplicate them", async () => {
+      await testDb.db
+        .insertInto("funds")
+        .values({
+          encrypted_payload: Buffer.from("seed-fund"),
+          encrypted_balance: Buffer.from("seed-balance"),
+          sort_order: 1,
+        })
+        .execute();
+      await testDb.db
+        .insertInto("fund_ledger")
+        .values({
+          id: newFundLedgerId(),
+          encrypted_payload: Buffer.from("seed-entry"),
+        })
+        .execute();
+
+      await svc.resetSeedData();
+
+      const funds = await testDb.db.selectFrom("funds").select("id").execute();
+      const entries = await testDb.db
+        .selectFrom("fund_ledger")
+        .select("id")
+        .execute();
+      expect(funds).toEqual([]);
+      expect(entries).toEqual([]);
     });
   },
 );

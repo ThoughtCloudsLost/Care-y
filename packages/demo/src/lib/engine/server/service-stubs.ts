@@ -552,6 +552,15 @@ export async function buildServiceStubs(
     // Declined: a request here could never be processed, because erasure
     // runs only from the operator CLI on a real host.
     orgDeletionDeps: null,
+    // Mirrors index.ts: the case note a disbursement writes goes through
+    // the same follow-up, audit and notification paths as ticketDeps. No
+    // SSE stream is served here, so no live events.
+    fundsDeps: {
+      createTicketAccess: createTicketAccessChecker,
+      createFollowUpSvc: createFollowUpService,
+      createAuditSvc: createAuditService,
+      notificationService: notificationServiceStub,
+    },
   });
 
   return {

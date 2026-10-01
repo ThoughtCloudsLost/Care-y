@@ -172,7 +172,6 @@ import type {
   ReactionSummary,
   TicketStatus,
   TicketPriority,
-  NoteTypeId,
 } from "@care-y/shared";
 import {
   ErrorCode,
@@ -208,11 +207,7 @@ import {
   convertBlobForReseed,
   listTicketsForClient,
 } from "../portal/reseed-service.js";
-import {
-  enqueueNotificationDurable,
-  encryptMentionedPseudonyms,
-} from "../notifications/outbox.js";
-import type { OutboxEventType } from "../notifications/outbox.js";
+import { createLifecycleNotifier } from "../notifications/lifecycle-notifier.js";
 import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
@@ -279,7 +274,7 @@ import {
   channelSecretSchema,
   clientIdSchema,
 } from "@care-y/shared";
-import type { UserId, QueueId, TicketId } from "@care-y/shared";
+import type { UserId, QueueId } from "@care-y/shared";
 
 import { b64, b64n, b64KeyWrap } from "../utils/ciphertext-wire.js";
 import {
@@ -636,80 +631,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     return deps.createMediaSvc(tDb, deps.blobStore, access);
   }
 
-  // Audit helper: best-effort, never blocks. No-op when audit service not injected.
-  function audit(tDb: OrgContext["tenantDb"], entry: AuditEntry): void {
-    if (!deps.createAuditSvc) return;
-    const svc = deps.createAuditSvc(tDb);
-    void svc.log(entry);
-  }
-
-  /**
-   * Combined audit + outbox enqueue for ticket lifecycle events.
-   * Logs the audit entry, enqueues a notification into the outbox.
-   * The drainer re-resolves recipients at dispatch time (never stored).
-   *
-   * Enqueue is durable-only (not atomic with the mutation) because the
-   * route handler calls this after the service method returns, outside
-   * any transaction the route controls. There is a residual window where
-   * the mutation commits and the enqueue does not.
-   */
-  function auditAndNotify(
-    ctx: { org: OrgContext; user: { id: UserId } },
-    // The ticket router only raises lifecycle events. Quarantine and merge
-    // notifications are dispatched from their own services, so keeping this
-    // narrow means a new event type has to be handled rather than coerced.
-    eventType: OutboxEventType,
-    ticket: { id: TicketId; queueId: QueueId; assignedTo: UserId | null },
-    auditEntry: AuditEntry,
-    mentionedPseudonyms: string[] = [],
-    noteTypeId?: NoteTypeId,
-  ): void {
-    audit(ctx.org.tenantDb, auditEntry);
-    enqueueLifecycleNotification(
-      ctx,
-      eventType,
-      ticket,
-      mentionedPseudonyms,
-      noteTypeId,
-    );
-  }
-
-  /**
-   * Enqueue a lifecycle notification into the outbox. Durable-only
-   * (not inside a transaction). Mentioned pseudonyms are OPS-encrypted
-   * before storage to avoid persisting a volunteer interaction graph
-   * in plaintext.
-   */
-  function enqueueLifecycleNotification(
-    ctx: { org: OrgContext; user: { id: UserId } },
-    // Narrowed to the events the outbox handles, so an unsupported event
-    // is a compile error at the call site rather than a cast here.
-    eventType: OutboxEventType,
-    ticket: { id: TicketId; queueId: QueueId; assignedTo: UserId | null },
-    mentionedPseudonyms: string[] = [],
-    noteTypeId?: NoteTypeId,
-  ): void {
-    const encryptor = deps.fieldEncryptor;
-    const encryptedMentions =
-      encryptor !== undefined
-        ? encryptMentionedPseudonyms(mentionedPseudonyms, encryptor)
-        : undefined;
-
-    void enqueueNotificationDurable(ctx.org.tenantDb, {
-      eventType,
-      ticketId: ticket.id,
-      queueId: ticket.queueId,
-      formId: null,
-      actorUserId: ctx.user.id,
-      noteTypeId,
-      encryptedMentionedPseudonyms: encryptedMentions,
-    }).catch((err: unknown) => {
-      console.error(
-        "Outbox enqueue failed:",
-        err instanceof Error ? err.message : String(err),
-      );
-    });
-  }
+  // Audit and outbox helpers, shared with the funds router so a note
+  // written there is audited and announced exactly as one written here.
+  // Audit is best-effort and a no-op when the audit service is not injected.
+  const { audit, auditAndNotify, enqueueLifecycleNotification } =
+    createLifecycleNotifier(deps);
 
   /**
    * Applies role-based contact formatting to a ticket record. Phone and
@@ -1665,6 +1591,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           encryptedIcon: Buffer.from(input.encryptedIcon, "base64"),
           escalateDays: input.escalateDays,
           orgKeyGeneration: ctx.org.sealedBox.generation,
+          encryptedFundId:
+            input.encryptedFundId !== undefined
+              ? Buffer.from(input.encryptedFundId, "base64")
+              : undefined,
         });
         audit(ctx.org.tenantDb, {
           eventType: "queue_created",
@@ -1676,6 +1606,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           encryptedName: b64(queue.encryptedName),
           encryptedColor: b64n(queue.encryptedColor),
           encryptedIcon: b64n(queue.encryptedIcon),
+          encryptedFundId: b64n(queue.encryptedFundId),
         };
       }),
     ),
@@ -1689,6 +1620,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           encryptedName: b64(q.encryptedName),
           encryptedColor: b64n(q.encryptedColor),
           encryptedIcon: b64n(q.encryptedIcon),
+          encryptedFundId: b64n(q.encryptedFundId),
         }));
       }),
     ),
@@ -1710,6 +1642,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               ? Buffer.from(input.encryptedIcon, "base64")
               : undefined,
           escalateDays: input.escalateDays,
+          // null clears the queue's fund, undefined leaves it alone
+          encryptedFundId:
+            input.encryptedFundId == null
+              ? input.encryptedFundId
+              : Buffer.from(input.encryptedFundId, "base64"),
         });
         audit(ctx.org.tenantDb, {
           eventType: "queue_updated",
@@ -1721,6 +1658,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           encryptedName: b64(queue.encryptedName),
           encryptedColor: b64n(queue.encryptedColor),
           encryptedIcon: b64n(queue.encryptedIcon),
+          encryptedFundId: b64n(queue.encryptedFundId),
         };
       }),
     ),
@@ -2072,6 +2010,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             encryptedName: b64(q.encryptedName),
             encryptedColor: b64n(q.encryptedColor),
             encryptedIcon: b64n(q.encryptedIcon),
+            encryptedFundId: b64n(q.encryptedFundId),
           }));
       }),
     ),

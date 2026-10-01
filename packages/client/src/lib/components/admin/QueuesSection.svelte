@@ -23,6 +23,7 @@
   import { adminKeys, queueKeys } from "$lib/query/keys.js";
   import {
     getOrgDecryptCache,
+    getOrgKeyManager,
     getCurrentPermissions,
   } from "$lib/crypto/context.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -44,6 +45,13 @@
   import QueueMemberPicker from "./QueueMemberPicker.svelte";
   import QueueWatcherPicker from "./QueueWatcherPicker.svelte";
   import QueueEditor from "./QueueEditor.svelte";
+  import RichSelect from "$lib/components/inputs/RichSelect.svelte";
+  import type { RichSelectOption } from "$lib/components/inputs/rich-select.js";
+  import {
+    createFundStore,
+    decryptQueueFundId,
+    queueFundCacheKey,
+  } from "$lib/funds/fund-store.svelte.js";
 
   interface QueuesSectionProps {
     readonly autoAction?: string | null;
@@ -67,6 +75,9 @@
   const canRemoveWatcher = $derived(
     canCall(permissions, "tickets.removeQueueWatcher"),
   );
+  const canSetQueueFund = $derived(canCall(permissions, "tickets.updateQueue"));
+  const orgKeyManager = getOrgKeyManager();
+  const fundStore = createFundStore();
 
   // ── Queries ──
 
@@ -295,6 +306,77 @@
   function handleClearIntakeQueue(): void {
     if (setIntakeQueueMutation.isPending) return;
     setIntakeQueueMutation.mutate({ queueId: null });
+  }
+
+  // ── Queue fund (cases in the queue preselect it) ──
+
+  const setQueueFundMutation = createMutation(() => ({
+    mutationFn: async (input: { queueId: string; fundId: string | null }) => {
+      // The mapping is sealed like the queue's name: the server never
+      // learns which fund a queue draws on.
+      const encryptedFundId =
+        input.fundId === null
+          ? null
+          : await orgKeyManager.encryptText(input.fundId);
+      return ticketRouter.updateQueue.mutate({
+        queueId: input.queueId,
+        encryptedFundId,
+      });
+    },
+    onSuccess: async (
+      _data: unknown,
+      variables: { queueId: string; fundId: string | null },
+    ) => {
+      haptic();
+      const msg = m.admin_queue_fund_saved(withTerms());
+      toastStore.show(msg);
+      announceToLiveRegion("polite", msg);
+      // Refetch first so the cleared cache entry decrypts the new
+      // ciphertext rather than the old one still in the list.
+      await queryClient.invalidateQueries({ queryKey: queueKeys.all });
+      orgCache.delete(queueFundCacheKey(variables.queueId));
+    },
+    onError: () => {
+      toastStore.show(m.error_generic());
+    },
+  }));
+
+  /** Active funds, plus the queue's current fund when it was deactivated. */
+  function queueFundOptions(currentFundId: string | null): RichSelectOption[] {
+    const options: RichSelectOption[] = [
+      { value: "", label: m.admin_queue_fund_none() },
+    ];
+    for (const fund of fundStore.activeFunds) {
+      options.push({ value: fund.id, label: fund.name });
+    }
+    const current =
+      currentFundId === null ? undefined : fundStore.fund(currentFundId);
+    if (current !== undefined && !current.isActive) {
+      options.push({ value: current.id, label: current.name });
+    }
+    return options;
+  }
+
+  /** The picker's change handler for one queue. "" clears the fund. */
+  function fundChangeHandler(queueId: string): (value: string) => void {
+    return (value) => {
+      if (setQueueFundMutation.isPending) return;
+      setQueueFundMutation.mutate({
+        queueId,
+        fundId: value === "" ? null : value,
+      });
+    };
+  }
+
+  /** Funds still loading, or the queue's own sealed fund id decrypting. */
+  function fundPickerLoading(
+    encryptedFundId: string | null,
+    currentFundId: string | null,
+  ): boolean {
+    return (
+      fundStore.isLoading ||
+      (encryptedFundId !== null && currentFundId === null)
+    );
   }
 
   // ── Reorder ──
@@ -751,6 +833,37 @@
                   {/if}
                 </div>
               {/if}
+
+              <!-- Fund section (cases in this queue preselect the fund) -->
+              {#if fundStore.enabled && canSetQueueFund}
+                {@const currentFundId = decryptQueueFundId(orgCache, queue)}
+                <div
+                  class="watcher-section"
+                  role="region"
+                  aria-label={m.admin_queue_fund_title()}
+                >
+                  <h4 class="watcher-heading">
+                    {m.admin_queue_fund_title()}
+                  </h4>
+                  <p class="watcher-hint">
+                    {m.admin_queue_fund_hint(withTerms())}
+                  </p>
+                  {#if fundPickerLoading(queue.encryptedFundId, currentFundId)}
+                    <div class="member-loading">
+                      <span class="text-sm text-[--muted]">...</span>
+                    </div>
+                  {:else}
+                    <RichSelect
+                      label={m.admin_queue_fund_label()}
+                      value={currentFundId ?? ""}
+                      options={queueFundOptions(currentFundId)}
+                      onchange={fundChangeHandler(queue.id)}
+                      disabled={setQueueFundMutation.isPending}
+                      listClass="queue-fund-select-list"
+                    />
+                  {/if}
+                </div>
+              {/if}
             {/if}
           </div>
         </Card>
@@ -1039,6 +1152,10 @@
     color: var(--muted);
     margin: 0;
     line-height: 1.4;
+  }
+
+  :global(.queue-fund-select-list) {
+    margin: 0 !important;
   }
 
   /* ── Reassignment sheet ── */

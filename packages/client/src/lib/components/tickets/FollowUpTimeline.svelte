@@ -19,8 +19,12 @@
     ChevronDown,
     Link2,
     Mail,
+    HandCoins,
     type LucideIcon,
   } from "@lucide/svelte";
+  import { hasNoteEnvelopeMarker } from "@care-y/shared";
+  import { openDisbursementNote } from "$lib/funds/fund-payloads.js";
+  import { disbursementSummary } from "$lib/funds/fund-display.js";
   import * as m from "$lib/paraglide/messages.js";
   import { resolveFollowUpTypeIcon } from "$lib/utils/note-type-icons.js";
   import { needsDateSeparator, formatDateSeparator } from "$lib/utils/time.js";
@@ -116,7 +120,21 @@
     return false;
   }
 
+  /**
+   * Decrypted note content that carries a note envelope. Checked on the
+   * first character; anything else is a plain note.
+   */
+  function envelopeContent(item: TimelineItem): string | undefined {
+    if (followUpKind(item) !== "note") return undefined;
+    const decrypted = resolveDecrypted(item.id);
+    if (decrypted === undefined || !hasNoteEnvelopeMarker(decrypted)) {
+      return undefined;
+    }
+    return decrypted;
+  }
+
   function landmarkIcon(item: TimelineItem): Component {
+    if (envelopeContent(item) !== undefined) return HandCoins;
     const variant = followUpRenderVariant(item);
     if (variant === "email") return Mail;
     if (variant === "share") return Link2;
@@ -179,6 +197,14 @@
 
     if (variant === "correction") {
       return m.followup_type_contact_correction();
+    }
+
+    const envelope = envelopeContent(item);
+    if (envelope !== undefined) {
+      const opened = openDisbursementNote(envelope);
+      return opened === null
+        ? m.fund_note_eyebrow()
+        : disbursementSummary(opened);
     }
 
     if (followUpKind(item) === "note") {

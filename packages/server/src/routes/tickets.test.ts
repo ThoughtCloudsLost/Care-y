@@ -1412,6 +1412,44 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(updated.encryptedColor).toBe(testEncryptedContent(0x12));
       });
 
+      it("carries the sealed fund id through create, list, update and clear", async () => {
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        const created = await caller.tickets.createQueue({
+          encryptedName: testEncryptedContent(0x31),
+          encryptedColor: testEncryptedContent(0x32),
+          encryptedIcon: testEncryptedContent(0x33),
+          encryptedFundId: testEncryptedContent(0x34),
+        });
+        expect(created.encryptedFundId).toBe(testEncryptedContent(0x34));
+
+        const listed = (await caller.tickets.listQueues()).find(
+          (q) => q.id === created.id,
+        );
+        expect(listed?.encryptedFundId).toBe(testEncryptedContent(0x34));
+
+        const remapped = await caller.tickets.updateQueue({
+          queueId: created.id,
+          encryptedFundId: testEncryptedContent(0x35),
+        });
+        expect(remapped.encryptedFundId).toBe(testEncryptedContent(0x35));
+
+        const kept = await caller.tickets.updateQueue({
+          queueId: created.id,
+          escalateDays: 4,
+        });
+        expect(kept.encryptedFundId).toBe(testEncryptedContent(0x35));
+
+        const cleared = await caller.tickets.updateQueue({
+          queueId: created.id,
+          encryptedFundId: null,
+        });
+        expect(cleared.encryptedFundId).toBeNull();
+      });
+
       it("reassigns every ticket to the target queue before deleting a queue", async () => {
         const admin = await createTestUser(tenantDb, {
           overrides: { role_id: RoleId.ADMIN },

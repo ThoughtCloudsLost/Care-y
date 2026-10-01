@@ -3,7 +3,7 @@
  * Seed data replay through the product's own endpoints.
  *
  * Creates users, queues, branding, KB categories, note types, KB articles,
- * clients and tickets, presets and telephony config with the same tRPC
+ * clients and tickets, presets, funds and telephony config with the same tRPC
  * mutations the production UI uses, then fixes timing with the dev-only
  * procedures. Doubles as an integration test for the create pipelines.
  *
@@ -26,12 +26,15 @@ import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
 import {
   RoleId,
+  fundIdSchema,
   newTicketId,
   newFollowupId,
+  newFundLedgerId,
   newAttachmentId,
   portalContentTypeSchema,
   type EscalationTarget,
   type FollowUpSource,
+  type FundId,
   type FollowUpType,
   type RoleIdValue,
   type TicketPriority,
@@ -51,6 +54,18 @@ import {
   generateSeedTextFile,
   type SeedHandbookFollowUp,
 } from "@care-y/shared/dev/seed-handbook-ticket.js";
+import {
+  adjustmentPayload,
+  disbursementNoteContent,
+  disbursementPayload,
+  recorderId,
+  sealBalancePayload,
+  sealFundPayload,
+  sealLedgerPayload,
+  type FundSealer,
+} from "$lib/funds/fund-payloads.js";
+import { balanceAfter } from "$lib/funds/balances.js";
+import type { BalanceWrite } from "$lib/funds/fund-store.svelte.js";
 
 // ── Dependencies ─────────────────────────────────────────────────────
 
@@ -61,6 +76,7 @@ type BrandingClient = NonNullable<AppClient["branding"]>;
 type QuarantineClient = NonNullable<AppClient["voicemailQuarantine"]>;
 type DevClient = NonNullable<AppClient["dev"]>;
 type TelephonyAdminClient = NonNullable<AppClient["telephonyAdmin"]>;
+type FundsClient = NonNullable<AppClient["funds"]>;
 
 /**
  * The tRPC procedures the replay calls, and no others, typed from the app
@@ -122,6 +138,14 @@ export interface SeedReplayClient {
    */
   readonly telephonyAdmin: Partial<
     Pick<TelephonyAdminClient, "devSeedTelephony">
+  >;
+  /**
+   * The server mounts funds only where it wires the fund service. Where
+   * it is absent the replay creates no funds.
+   */
+  readonly funds?: Pick<
+    FundsClient,
+    "create" | "list" | "recordAdjustment" | "recordDisbursement"
   >;
 }
 
@@ -397,6 +421,97 @@ const SEED_USERS: readonly SeedReplayUser[] = [
 ];
 
 const SEED_PASSWORD = "dev-password-1234!";
+
+// ── Funds ───────────────────────────────────────────────────────────
+// Amounts are minor units (cents). The transit fund ends below zero, so
+// the neutral negative styling has something to show.
+
+interface SeedFundDef {
+  readonly name: string;
+  readonly currency: string;
+  /** Queue whose cases preselect this fund, by index into QUEUES. */
+  readonly queueIndex: number;
+  readonly adjustments: readonly {
+    readonly amountMinor: number;
+    readonly daysAgo: number;
+  }[];
+}
+
+const SEED_FUNDS: readonly SeedFundDef[] = [
+  {
+    name: "Emergency housing",
+    currency: "USD",
+    queueIndex: 2,
+    adjustments: [
+      { amountMinor: 250_000, daysAgo: 28 },
+      { amountMinor: 60_000, daysAgo: 9 },
+    ],
+  },
+  {
+    name: "Transit and gas",
+    currency: "USD",
+    queueIndex: 0,
+    adjustments: [{ amountMinor: 20_000, daysAgo: 21 }],
+  },
+  {
+    name: "Groceries",
+    currency: "USD",
+    queueIndex: 1,
+    adjustments: [
+      { amountMinor: 40_000, daysAgo: 14 },
+      { amountMinor: -5_000, daysAgo: 3 },
+    ],
+  },
+];
+
+interface SeedDisbursementDef {
+  readonly fundIndex: number;
+  /** Index into the story tickets that stay open (the note lands there); null for fund-level spending. */
+  readonly storyIndex: number | null;
+  readonly amountMinor: number;
+  readonly daysAgo: number;
+  readonly note: string;
+}
+
+const SEED_DISBURSEMENTS: readonly SeedDisbursementDef[] = [
+  {
+    fundIndex: 0,
+    storyIndex: 0,
+    amountMinor: 85_000,
+    daysAgo: 20,
+    note: "Three nights at a motel while a shelter bed opens up.",
+  },
+  {
+    fundIndex: 0,
+    storyIndex: 2,
+    amountMinor: 120_000,
+    daysAgo: 6,
+    note: "First month's deposit, paid to the landlord directly.",
+  },
+  {
+    fundIndex: 1,
+    storyIndex: 1,
+    amountMinor: 4_500,
+    daysAgo: 12,
+    note: "Gas card for the drive to the clinic.",
+  },
+  {
+    fundIndex: 1,
+    storyIndex: null,
+    amountMinor: 18_000,
+    daysAgo: 5,
+    note: "",
+  },
+  {
+    fundIndex: 2,
+    storyIndex: 3,
+    amountMinor: 7_500,
+    daysAgo: 4,
+    note: "Grocery store gift card.",
+  },
+];
+
+const DAY_MS = 86_400_000;
 
 // ── Preset replies ──────────────────────────────────────────────────
 
@@ -1519,6 +1634,10 @@ async function runReplay(
   );
   let routedCount = 0;
   const storyTicketIds: string[] = [];
+  // Disbursements attach a case note, which a closed ticket refuses, so
+  // they draw from the stories that stay open. The outcome plan depends on
+  // the story count, so this is decided per story rather than by index.
+  const openStoryTicketIds: string[] = [];
 
   for (let i = 0; i < stories.length; i++) {
     const story = stories[i];
@@ -1568,6 +1687,9 @@ async function runReplay(
     }
 
     storyTicketIds.push(ticketId);
+    if (!story.steps.some((step) => step.kind === "close")) {
+      openStoryTicketIds.push(ticketId);
+    }
     const keyGeneration = await cacheTicketKey(ticketId);
 
     // Routing titles the ticket from the server's generic text. Rename it
@@ -1962,6 +2084,174 @@ async function runReplay(
       encryptedBody: seal(preset.body, orgPublicKey),
     });
     console.log(`[dev-seed] Created preset reply: ${preset.title}`);
+  }
+
+  // ── Step 7b: Funds ──────────────────────────────────────────────────
+  // Funds, queue links, adjustments and disbursements through the same
+  // procedures the fund admin section and the disbursement sheet use.
+  // Every entry carries the fund's next sealed balance and the version it
+  // builds on, tracked here as the writes land.
+  const fundsRouter = client.funds;
+  if (fundsRouter) {
+    progress("Creating funds...");
+    const recordedBy = recorderId(adminId);
+    if (recordedBy === null) {
+      throw new SeedReplayError("The seeding account has no valid user id");
+    }
+    const sealer: FundSealer = {
+      encryptText: async (plaintext) =>
+        Promise.resolve(seal(plaintext, orgPublicKey)),
+    };
+    const daysAgo = (days: number): Date =>
+      new Date(Date.now() - days * DAY_MS);
+
+    interface SeededFund {
+      readonly id: FundId;
+      readonly currency: string;
+      balanceMinor: number;
+      version: number;
+      /** The generation the server stamped on the row; the seal matches it. */
+      orgKeyGeneration: number;
+    }
+
+    /** The balance half of the next entry on `fund`, then advance it. */
+    async function nextBalance(
+      fund: SeededFund,
+      deltaMinor: number,
+    ): Promise<BalanceWrite> {
+      return {
+        fundId: fund.id,
+        encryptedBalance: await sealBalancePayload(
+          sealer,
+          balanceAfter(fund.balanceMinor, deltaMinor),
+        ),
+        expectedVersion: fund.version,
+        orgKeyGeneration: fund.orgKeyGeneration,
+      };
+    }
+
+    function landed(
+      fund: SeededFund,
+      deltaMinor: number,
+      result: { readonly balanceVersion: number },
+    ): void {
+      fund.balanceMinor = balanceAfter(fund.balanceMinor, deltaMinor);
+      fund.version = result.balanceVersion;
+    }
+
+    const seeded: SeededFund[] = [];
+    for (const def of SEED_FUNDS) {
+      const created = await fundsRouter.create.mutate({
+        encryptedPayload: await sealFundPayload(sealer, {
+          name: def.name,
+          currency: def.currency,
+        }),
+        encryptedBalance: await sealBalancePayload(sealer, 0),
+      });
+      const fundId = fundIdSchema.parse(created.id);
+      const queue = queues[def.queueIndex];
+      if (queue !== undefined) {
+        await ticketRouter.updateQueue.mutate({
+          queueId: queue.id,
+          encryptedFundId: seal(fundId, orgPublicKey),
+        });
+      }
+      seeded.push({
+        id: fundId,
+        currency: def.currency,
+        balanceMinor: 0,
+        version: 0,
+        orgKeyGeneration: 0,
+      });
+      console.log(`[dev-seed] Created fund: ${def.name}`);
+    }
+
+    // The rows were just created under the org key sealing this seed, so
+    // their stamped generation is the one every balance below is sealed
+    // under.
+    const listed = await fundsRouter.list.query();
+    for (const fund of seeded) {
+      const row = listed.funds.find((f) => f.id === fund.id);
+      if (row === undefined) {
+        throw new SeedReplayError("A seeded fund is missing from the list");
+      }
+      fund.version = row.balanceVersion;
+      fund.orgKeyGeneration = row.orgKeyGeneration;
+    }
+
+    for (const [index, def] of SEED_FUNDS.entries()) {
+      const fund = seeded[index];
+      if (fund === undefined) continue;
+      for (const adjustment of def.adjustments) {
+        const result = await fundsRouter.recordAdjustment.mutate({
+          id: newFundLedgerId(),
+          encryptedPayload: await sealLedgerPayload(
+            sealer,
+            adjustmentPayload({
+              fundId: fund.id,
+              recordedBy,
+              amountMinor: adjustment.amountMinor,
+              recordedAt: daysAgo(adjustment.daysAgo),
+            }),
+          ),
+          balance: await nextBalance(fund, adjustment.amountMinor),
+        });
+        landed(fund, adjustment.amountMinor, result);
+      }
+    }
+
+    for (const def of SEED_DISBURSEMENTS) {
+      const fund = seeded[def.fundIndex];
+      if (fund === undefined) continue;
+      const ticketId =
+        def.storyIndex === null
+          ? undefined
+          : openStoryTicketIds[def.storyIndex];
+      if (def.storyIndex !== null && ticketId === undefined) continue;
+
+      const ledgerEntryId = newFundLedgerId();
+      const encryptedPayload = await sealLedgerPayload(
+        sealer,
+        disbursementPayload({
+          fundId: fund.id,
+          recordedBy,
+          amountMinor: def.amountMinor,
+          recordedAt: daysAgo(def.daysAgo),
+        }),
+      );
+      const deltaMinor = -def.amountMinor;
+      const balance = await nextBalance(fund, deltaMinor);
+      if (ticketId === undefined) {
+        const result = await fundsRouter.recordDisbursement.mutate({
+          id: ledgerEntryId,
+          encryptedPayload,
+          balance,
+        });
+        landed(fund, deltaMinor, result);
+        continue;
+      }
+      await cacheTicketKey(ticketId);
+      const followUpId = newFollowupId();
+      const encryptedContent = await bridge.encrypt(
+        ticketId,
+        followupSlot(followUpId),
+        disbursementNoteContent({
+          ledgerEntryId,
+          fundId: fund.id,
+          amountMinor: def.amountMinor,
+          currency: fund.currency,
+          note: def.note,
+        }),
+      );
+      const result = await fundsRouter.recordDisbursement.mutate({
+        id: ledgerEntryId,
+        encryptedPayload,
+        balance,
+        caseNote: { followUpId, ticketId, encryptedContent },
+      });
+      landed(fund, deltaMinor, result);
+    }
+    console.log("[dev-seed] Fund entries recorded");
   }
 
   // ── Step 8: KB votes ────────────────────────────────────────────────

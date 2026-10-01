@@ -169,4 +169,14 @@ export enum Permission {
    * itself runs later from the operator CLI, never through this key.
    */
   REQUEST_ORG_DELETION = "request_org_deletion",
+
+  // --- Funds ---
+  /** Fund names and balances, which a volunteer needs on a case. */
+  VIEW_FUNDS = "view_funds",
+  /** The full ledger: amounts, dates and recorders across every case. */
+  AUDIT_FUNDS = "audit_funds",
+  /** Recording money spent on a case is casework. */
+  RECORD_DISBURSEMENTS = "record_disbursements",
+  /** Creating funds, correcting balances and choosing who hears of entries. */
+  MANAGE_FUNDS = "manage_funds",
 }

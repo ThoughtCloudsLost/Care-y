@@ -7,7 +7,13 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import {
+  NOTE_ENVELOPE_MARKER,
+  fundIdSchema,
+  newFundLedgerId,
+} from "@care-y/shared";
 import { LOADING, type DecryptResult } from "$lib/crypto/decrypt-result.js";
+import { disbursementNoteContent } from "$lib/funds/fund-payloads.js";
 import FollowUpBubble from "./FollowUpBubble.svelte";
 
 // IntersectionObserver stub for DecryptPlaceholder
@@ -270,5 +276,45 @@ describe("FollowUpBubble (email_outbound)", () => {
     });
 
     expect(getByTestId("email-channel-chip")).toBeTruthy();
+  });
+});
+
+describe("FollowUpBubble (disbursement note)", () => {
+  const fundId = fundIdSchema.parse(globalThis.crypto.randomUUID());
+  const envelope = disbursementNoteContent({
+    ledgerEntryId: newFundLedgerId(),
+    fundId,
+    amountMinor: 12_000,
+    currency: "USD",
+    note: "Deposit paid to the landlord",
+  });
+
+  it("renders the envelope as readable text", () => {
+    const { container } = render(FollowUpBubble, {
+      props: {
+        followUp: makeFollowUp("internal_note", "volunteer"),
+        result: ready(envelope),
+        resolveFundName: (id: string) =>
+          id === fundId ? "Emergency housing" : undefined,
+      },
+    });
+    const text = container.textContent;
+
+    expect(text).toContain("$120.00");
+    expect(text).toContain("Emergency housing");
+    expect(text).toContain("Deposit paid to the landlord");
+    expect(text).not.toContain(NOTE_ENVELOPE_MARKER);
+    expect(text).not.toContain("ledgerEntryId");
+  });
+
+  it("leaves a typed note as it is", () => {
+    const { container } = render(FollowUpBubble, {
+      props: {
+        followUp: makeFollowUp("internal_note", "volunteer"),
+        result: ready("Called back, no answer"),
+      },
+    });
+
+    expect(container.textContent).toContain("Called back, no answer");
   });
 });

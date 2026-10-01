@@ -6,6 +6,7 @@ const labels = {
   editNote: "Edit Note",
   deleteNote: "Delete Note",
   editMessage: "Edit",
+  editDisbursement: "Edit disbursement",
 };
 
 describe("getContextMenuActions", () => {
@@ -118,5 +119,45 @@ describe("getContextMenuActions", () => {
     );
     expect(actions).toHaveLength(1);
     expect(actions[0]!.id).toBe("copy");
+  });
+
+  describe("disbursement notes", () => {
+    const note = {
+      type: "internal_note",
+      source: "volunteer",
+      createdBy: "user-1",
+    };
+
+    it("offers the disbursement editor instead of the note editor", () => {
+      const ids = getContextMenuActions(note, "user-1", false, labels, {
+        canRevise: true,
+        canReviseOthers: false,
+      }).map((a) => a.id);
+      expect(ids).toEqual(["copy", "editDisbursement", "delete"]);
+    });
+
+    it("drops both editors without the revise permission", () => {
+      const ids = getContextMenuActions(note, "user-1", false, labels, {
+        canRevise: false,
+        canReviseOthers: false,
+      }).map((a) => a.id);
+      expect(ids).toEqual(["copy", "delete"]);
+    });
+
+    it("lets a fund manager correct someone else's disbursement", () => {
+      const ids = getContextMenuActions(note, "user-2", false, labels, {
+        canRevise: true,
+        canReviseOthers: true,
+      }).map((a) => a.id);
+      expect(ids).toEqual(["copy", "editDisbursement"]);
+    });
+
+    it("keeps other people's disbursements closed to everyone else", () => {
+      const ids = getContextMenuActions(note, "user-2", false, labels, {
+        canRevise: true,
+        canReviseOthers: false,
+      }).map((a) => a.id);
+      expect(ids).toEqual(["copy"]);
+    });
   });
 });

@@ -6,7 +6,8 @@
  * queue carries a sort_order for client-controlled ordering and an
  * escalate_days threshold used by the auto-escalation job. Color and icon
  * are nullable: queues without a stored value leave both null and the
- * client renders defaults.
+ * client renders defaults. A queue may also carry a sealed fund id so cases
+ * in it preselect that fund; the server never reads the mapping.
  */
 
 import type { Kysely } from "kysely";
@@ -21,6 +22,8 @@ export interface QueueRecord {
   readonly encryptedName: Buffer;
   readonly encryptedColor: Buffer | null;
   readonly encryptedIcon: Buffer | null;
+  /** Org-key sealed FundId the queue preselects; null when unmapped. */
+  readonly encryptedFundId: Buffer | null;
   readonly sortOrder: number;
   readonly escalateDays: number;
   readonly isActive: boolean;
@@ -39,6 +42,7 @@ export interface QueueService {
     encryptedIcon: Buffer;
     escalateDays?: number;
     orgKeyGeneration: number;
+    encryptedFundId?: Buffer;
   }): Promise<QueueRecord>;
   listActive(): Promise<QueueRecord[]>;
   update(
@@ -48,6 +52,8 @@ export interface QueueService {
       encryptedColor?: Buffer;
       encryptedIcon?: Buffer;
       escalateDays?: number;
+      /** null clears the mapping; undefined leaves it unchanged. */
+      encryptedFundId?: Buffer | null;
     },
   ): Promise<QueueRecord>;
   reorder(items: { queueId: QueueId; sortOrder: number }[]): Promise<void>;
@@ -59,6 +65,7 @@ interface QueueRow {
   encrypted_name: Buffer;
   encrypted_color: Buffer | null;
   encrypted_icon: Buffer | null;
+  encrypted_fund_id: Buffer | null;
   sort_order: number;
   escalate_days: number;
   is_active: boolean;
@@ -79,6 +86,7 @@ function toRecord(row: QueueRow, counts: QueueCounts = {}): QueueRecord {
     encryptedName: row.encrypted_name,
     encryptedColor: row.encrypted_color,
     encryptedIcon: row.encrypted_icon,
+    encryptedFundId: row.encrypted_fund_id,
     sortOrder: row.sort_order,
     escalateDays: row.escalate_days,
     isActive: row.is_active,
@@ -145,6 +153,9 @@ export function createQueueService(
           ...(input.escalateDays !== undefined
             ? { escalate_days: input.escalateDays }
             : {}),
+          ...(input.encryptedFundId !== undefined
+            ? { encrypted_fund_id: input.encryptedFundId }
+            : {}),
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -160,6 +171,7 @@ export function createQueueService(
           "q.encrypted_name",
           "q.encrypted_color",
           "q.encrypted_icon",
+          "q.encrypted_fund_id",
           "q.sort_order",
           "q.escalate_days",
           "q.is_active",
@@ -224,6 +236,8 @@ export function createQueueService(
         updates.encrypted_icon = input.encryptedIcon;
       if (input.escalateDays !== undefined)
         updates.escalate_days = input.escalateDays;
+      if (input.encryptedFundId !== undefined)
+        updates.encrypted_fund_id = input.encryptedFundId;
 
       if (Object.keys(updates).length === 0) {
         // No fields to update, just return current

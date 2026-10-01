@@ -1,6 +1,7 @@
 <!--
   Notes section for the ticket panel. Owns its own query, pagination,
   and decryption. Renders the skeleton, note list, and load-more control.
+  A disbursement note shows its readable text, never the envelope.
 -->
 <script lang="ts">
   import { followupSlot } from "@care-y/crypto";
@@ -27,6 +28,8 @@
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import LoadMore from "$lib/components/ui/LoadMore.svelte";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
+  import { createFundStore } from "$lib/funds/fund-store.svelte.js";
+  import { readableNoteResult } from "$lib/funds/fund-display.js";
 
   interface PanelNotesSectionProps {
     ticketId: string;
@@ -107,6 +110,14 @@
   function resolveVolunteerName(userId: string | null): string | undefined {
     return resolveVolName(userId, volunteerMap, orgCache);
   }
+
+  // --- Fund names for disbursement notes ---
+
+  const fundStore = createFundStore();
+
+  function resolveFundName(fundId: string): string | undefined {
+    return fundStore.fund(fundId)?.name;
+  }
 </script>
 
 {#if notesQuery.isLoading}
@@ -130,15 +141,18 @@
   <BlockTitle class="!mt-6 !-mb-2">{m.ticket_panel_notes()}</BlockTitle>
   <List class="!my-3">
     {#each notes as note (note.id)}
-      {@const noteResult = resolveAsyncDecrypt(
-        followUpCache.decryptContent(
-          note.id,
-          ticketId,
-          followupSlot(note.id),
-          keyWrap,
-          note.encryptedContent,
+      {@const noteResult = readableNoteResult(
+        resolveAsyncDecrypt(
+          followUpCache.decryptContent(
+            note.id,
+            ticketId,
+            followupSlot(note.id),
+            keyWrap,
+            note.encryptedContent,
+          ),
+          keyWrap !== null,
         ),
-        keyWrap !== null,
+        resolveFundName,
       )}
       {@const authorName =
         resolveVolunteerName(note.createdBy) ??

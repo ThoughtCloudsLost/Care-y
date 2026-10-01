@@ -48,7 +48,9 @@ export const SECTION_ROUTES: Record<
     "/(app)/admin/volunteer",
   ],
   "admin-comms": ["/(app)/admin/communications"],
-  "admin-org": ["/(app)/admin/organization"],
+  // The fund ledger page is the Organization page's drill-down; its own
+  // sub-section lands with the handbook units that describe it.
+  "admin-org": ["/(app)/admin/organization", "/(app)/admin/funds"],
   "admin-forms": ["/(app)/admin/forms"],
   "admin-responses": ["/(app)/admin/forms/responses"],
   "admin-logs": ["/(app)/admin/logs"],

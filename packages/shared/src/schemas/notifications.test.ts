@@ -34,6 +34,7 @@ describe("notificationEventTypeSchema", () => {
     "voicemail_quarantined",
     "org_deletion_requested",
     "org_deletion_cancelled",
+    "fund_entry_recorded",
   ];
 
   it.each(validTypes)("accepts '%s'", (type) => {
@@ -154,6 +155,14 @@ describe("systemSseEventSchema", () => {
       expect(result.success).toBe(true);
     },
   );
+
+  it("accepts a fund_entry_recorded system event", () => {
+    const result = systemSseEventSchema.safeParse({
+      type: "fund_entry_recorded",
+      timestamp: VALID_ISO,
+    });
+    expect(result.success).toBe(true);
+  });
 
   it("rejects missing type", () => {
     expect(

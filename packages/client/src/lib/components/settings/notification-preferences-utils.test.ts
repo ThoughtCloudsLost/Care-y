@@ -182,8 +182,8 @@ describe("hasQueueOverrides", () => {
 });
 
 describe("constant arrays", () => {
-  it("has 9 event types", () => {
-    expect(NOTIFICATION_EVENT_TYPES).toHaveLength(9);
+  it("has 10 event types", () => {
+    expect(NOTIFICATION_EVENT_TYPES).toHaveLength(10);
   });
 
   it("has 3 channels", () => {
