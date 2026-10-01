@@ -7,7 +7,16 @@ set -euo pipefail
 # stdout, kept as fd 3: the tag and "ok", or the step that failed.
 exec 3>&1
 step=log-setup
-trap 'rc=$?; if (( rc == 0 )); then echo "deploy $tag: ok" >&3; else echo "deploy ${tag:-?}: failed at $step" >&3; fi; exit "$rc"' EXIT
+on_exit() {
+  local rc=$?
+  if [[ $rc -eq 0 ]]; then
+    echo "deploy $tag: ok" >&3
+  else
+    echo "deploy ${tag:-?}: failed at $step" >&3
+  fi
+  exit "$rc"
+}
+trap on_exit EXIT
 log_dir=/var/log/care-y
 log=$log_dir/deploy.log
 [[ -d $log_dir ]] || install -d -m 0700 -o root -g root "$log_dir"
