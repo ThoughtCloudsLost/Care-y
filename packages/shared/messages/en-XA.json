@@ -2743,7 +2743,7 @@
   "permission_view_audit_log": "⟦Vìèw àùdìt lòg •••••⟧",
   "permission_view_own_shifts": "⟦Vìèw òwn shìfts •••••⟧",
   "permission_view_funds": "⟦Vìèw fùnds •••⟧",
-  "permission_audit_funds": "⟦Àùdìt fùnd lèdgèr ••••••⟧",
+  "permission_audit_funds": "⟦Àùdìt fùnds ••••⟧",
   "permission_record_disbursements": "⟦Rècòrd dìsbùrsèmènts ••••••⟧",
   "permission_manage_funds": "⟦Mànàgè fùnds ••••⟧",
   "roles_toggle_aria": "⟦{permission} fòr  ••{role}⟧",

@@ -145,7 +145,9 @@ export interface DisbursementEditState {
 
 export function createDisbursementEdit(): DisbursementEditState {
   let sheetOpen = $state(false);
-  let current = $state<DisbursementEdit | undefined>(undefined);
+  // The edit record is replaced whole, never mutated in place, so raw state
+  // keeps the caller's object identity.
+  let current = $state.raw<DisbursementEdit | undefined>(undefined);
 
   return {
     get sheetOpen(): boolean {

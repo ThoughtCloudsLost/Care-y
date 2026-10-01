@@ -6,21 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Permission_Audit_FundsInputs */
 
 const en_permission_audit_funds = /** @type {(inputs: Permission_Audit_FundsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Audit fund ledger`)
+	return /** @type {LocalizedString} */ (`Audit funds`)
 };
 
 const es_permission_audit_funds = /** @type {(inputs: Permission_Audit_FundsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Auditar el libro de fondos`)
+	return /** @type {LocalizedString} */ (`Auditar fondos`)
 };
 
 const en_xa2_permission_audit_funds = /** @type {(inputs: Permission_Audit_FundsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`⟦Àùdìt fùnd lèdgèr ••••••⟧`)
+	return /** @type {LocalizedString} */ (`⟦Àùdìt fùnds ••••⟧`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Audit fund ledger" |
+* | "Audit funds" |
 *
 * @param {Permission_Audit_FundsInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

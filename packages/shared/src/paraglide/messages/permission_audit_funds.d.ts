@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Audit fund ledger" |
+* | "Audit funds" |
 *
 * @param {Permission_Audit_FundsInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

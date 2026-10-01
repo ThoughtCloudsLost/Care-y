@@ -2743,7 +2743,7 @@
   "permission_view_audit_log": "Ver registro de auditoría",
   "permission_view_own_shifts": "Ver turnos propios",
   "permission_view_funds": "Ver fondos",
-  "permission_audit_funds": "Auditar el libro de fondos",
+  "permission_audit_funds": "Auditar fondos",
   "permission_record_disbursements": "Registrar desembolsos",
   "permission_manage_funds": "Gestionar fondos",
   "roles_toggle_aria": "{permission} para {role}",

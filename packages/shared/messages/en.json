@@ -2743,7 +2743,7 @@
   "permission_view_audit_log": "View audit log",
   "permission_view_own_shifts": "View own shifts",
   "permission_view_funds": "View funds",
-  "permission_audit_funds": "Audit fund ledger",
+  "permission_audit_funds": "Audit funds",
   "permission_record_disbursements": "Record disbursements",
   "permission_manage_funds": "Manage funds",
   "roles_toggle_aria": "{permission} for {role}",
