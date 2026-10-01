@@ -4,12 +4,12 @@ How to deploy CARE-Y for one organization on your own server. The system runs as
 
 ## Prerequisites
 
-| Requirement | Minimum |
-| ----------- | ------- |
-| Server | Ubuntu 24.04 (x86_64), 2 vCPU, 4 GB RAM, 40 GB disk, public IPv4 |
-| Docker Engine | Docker CE with the compose plugin (v2) |
-| Domain | A domain you control, on a DNS provider that Caddy supports for DNS-01 challenges (Cloudflare, Route 53, etc.) |
-| TLS | A DNS API token scoped to the domain's zone (read zone, edit DNS records) |
+| Requirement   | Minimum                                                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------------------------- |
+| Server        | Ubuntu 24.04 (x86_64), 2 vCPU, 4 GB RAM, 40 GB disk, public IPv4                                               |
+| Docker Engine | Docker CE with the compose plugin (v2)                                                                         |
+| Domain        | A domain you control, on a DNS provider that Caddy supports for DNS-01 challenges (Cloudflare, Route 53, etc.) |
+| TLS           | A DNS API token scoped to the domain's zone (read zone, edit DNS records)                                      |
 
 The server must be provisioned and hardened before this guide applies. Full-disk encryption and the secrets file layout are covered separately.
 
@@ -19,10 +19,10 @@ Commands on the server run from an operator account that has `sudo` rights but i
 
 Create two A records pointing at the server's IPv4 address, both with DNS only (no proxy, no CDN):
 
-| Type | Name | Value |
-| ---- | ---- | ----- |
-| A | `<domain>` | Server IPv4 |
-| A | `*.<domain>` | Server IPv4 |
+| Type | Name         | Value       |
+| ---- | ------------ | ----------- |
+| A    | `<domain>`   | Server IPv4 |
+| A    | `*.<domain>` | Server IPv4 |
 
 The apex record serves the static landing page and webhook endpoints. The wildcard record routes each organization's subdomain to the application.
 
@@ -30,10 +30,10 @@ The apex record serves the static landing page and webhook endpoints. The wildca
 
 CAA records restrict which certificate authorities can issue certificates for the domain. Add the authorities Caddy uses by default:
 
-| Type | Name | Value |
-| ---- | ---- | ----- |
-| CAA | `<domain>` | `0 issue "letsencrypt.org"` |
-| CAA | `<domain>` | `0 issue "sectigo.com"` |
+| Type | Name       | Value                       |
+| ---- | ---------- | --------------------------- |
+| CAA  | `<domain>` | `0 issue "letsencrypt.org"` |
+| CAA  | `<domain>` | `0 issue "sectigo.com"`     |
 
 After the first successful certificate issuance, tighten the records with `accounturi` to bind them to your ACME account. The ACME account URI appears in Caddy's certificate storage (the `caddy_data` volume, under `acme/`).
 
@@ -61,11 +61,11 @@ A single line: the Postgres password, generated with at least 32 random characte
 
 Caddy's credentials. Mode `0600`, owned by `root`. The application containers never see this file.
 
-| Key | Value |
-| --- | ----- |
-| `CF_API_TOKEN` | DNS API token scoped to the domain's zone |
-| `CADDY_ACME_EMAIL` | Contact address for the ACME account |
-| `CADDY_ACME_CA` | ACME directory URL (see "First deploy" below) |
+| Key                | Value                                         |
+| ------------------ | --------------------------------------------- |
+| `CF_API_TOKEN`     | DNS API token scoped to the domain's zone     |
+| `CADDY_ACME_EMAIL` | Contact address for the ACME account          |
+| `CADDY_ACME_CA`    | ACME directory URL (see "First deploy" below) |
 
 For the Cloudflare DNS plugin, the token needs `Zone.Zone:Read` and `Zone.DNS:Edit` permissions, with zone resources limited to the application domain.
 
@@ -73,10 +73,10 @@ For the Cloudflare DNS plugin, the token needs `Zone.Zone:Read` and `Zone.DNS:Ed
 
 Two OPRF key share files, one per sidecar. Mode `0700` on the directory (owned by `root:root`), mode `0600` on each file (owned by uid 2001, the OPRF container user).
 
-| File | Container |
-| ---- | --------- |
-| `oprf-a.share` | `oprf-a` |
-| `oprf-b.share` | `oprf-b` |
+| File           | Container |
+| -------------- | --------- |
+| `oprf-a.share` | `oprf-a`  |
+| `oprf-b.share` | `oprf-b`  |
 
 Generate both shares with the `generate-oprf-shares.ts` script inside the API container. Each sidecar receives only its own share file through a bind mount. The full key exists only during the generation step and is not stored anywhere on the running system.
 
@@ -84,13 +84,13 @@ Generate both shares with the `generate-oprf-shares.ts` script inside the API co
 
 The working directory for the compose stack, owned by `root`:
 
-| Path | Content |
-| ---- | ------- |
-| `docker-compose.prod.yml` | The production compose file |
-| `prod.env` | Non-secret settings (below) |
-| `deploy/caddy/Caddyfile` | Caddy's configuration |
-| `static/apex.html` | The static landing page served at the apex domain |
-| `canary/` | The warrant canary directory (below) |
+| Path                      | Content                                           |
+| ------------------------- | ------------------------------------------------- |
+| `docker-compose.prod.yml` | The production compose file                       |
+| `prod.env`                | Non-secret settings (below)                       |
+| `deploy/caddy/Caddyfile`  | Caddy's configuration                             |
+| `static/apex.html`        | The static landing page served at the apex domain |
+| `canary/`                 | The warrant canary directory (below)              |
 
 Copy `docker-compose.prod.yml`, `deploy/caddy/Caddyfile` and `static/apex.html` from the repository at the release you deploy, keeping those relative paths. The compose file bind-mounts the Caddyfile and the apex page from them, and Caddy does not start while either is missing. Each deploy refreshes all three files from the API image with `docker cp`, which needs `deploy/caddy/` and `static/` to exist already.
 
@@ -98,13 +98,13 @@ The deploy scripts are not kept here. Provisioning installs them as `/usr/local/
 
 `prod.env` holds the non-secret settings the compose file substitutes:
 
-| Key | Purpose |
-| --- | ------- |
-| `GHCR_OWNER` | Owner of the image repositories on the container registry (lowercase) |
-| `IMAGE_TAG` | The 40-character commit SHA of the running release |
-| `CAREY_APEX_HOST` | The bare domain (e.g. `example.org`) |
-| `CAREY_APP_DOMAIN` | The domain org subdomains hang off (normally the same as the apex) |
-| `WEBHOOK_BASE_URL` | `https://<apex host>`, the base URL telephony providers call |
+| Key                     | Purpose                                                                   |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `GHCR_OWNER`            | Owner of the image repositories on the container registry (lowercase)     |
+| `IMAGE_TAG`             | The 40-character commit SHA of the running release                        |
+| `CAREY_APEX_HOST`       | The bare domain (e.g. `example.org`)                                      |
+| `CAREY_APP_DOMAIN`      | The domain org subdomains hang off (normally the same as the apex)        |
+| `WEBHOOK_BASE_URL`      | `https://<apex host>`, the base URL telephony providers call              |
 | `INTAKE_POW_DIFFICULTY` | Proof-of-work difficulty for the public intake form, in leading zero bits |
 
 ### `/opt/care-y/canary/`

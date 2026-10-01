@@ -15,14 +15,14 @@ The backup host is a second Ubuntu 24.04 VPS, at a different provider and in a d
 
 ## rest-server flags
 
-| Flag | Effect |
-|------|--------|
-| `--path /srv/restic` | Repository root, owned by the `restic` user, mode 0700. |
-| `--listen :8000` | The only port the service opens. |
-| `--append-only` | Clients can add snapshots but cannot delete or overwrite existing data. The flag applies to the whole server, so no HTTP user is exempt from it. A compromised primary can add history but cannot destroy it. |
-| `--private-repos` | Each htpasswd user can reach only the repository at `/<user>`, which is `/srv/restic/<user>` on disk. |
-| `--htpasswd-file /etc/restic-server/.htpasswd` | One bcrypt entry, for the primary host. rest-server refuses to start when the file cannot be opened. |
-| `--tls`, `--tls-cert`, `--tls-key` | TLS with a self-signed certificate. The primary pins this certificate with restic's `--cacert`, so it trusts this one peer and no public CA. The host needs no domain name, no ACME and no port 80. |
+| Flag                                           | Effect                                                                                                                                                                                                        |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--path /srv/restic`                           | Repository root, owned by the `restic` user, mode 0700.                                                                                                                                                       |
+| `--listen :8000`                               | The only port the service opens.                                                                                                                                                                              |
+| `--append-only`                                | Clients can add snapshots but cannot delete or overwrite existing data. The flag applies to the whole server, so no HTTP user is exempt from it. A compromised primary can add history but cannot destroy it. |
+| `--private-repos`                              | Each htpasswd user can reach only the repository at `/<user>`, which is `/srv/restic/<user>` on disk.                                                                                                         |
+| `--htpasswd-file /etc/restic-server/.htpasswd` | One bcrypt entry, for the primary host. rest-server refuses to start when the file cannot be opened.                                                                                                          |
+| `--tls`, `--tls-cert`, `--tls-key`             | TLS with a self-signed certificate. The primary pins this certificate with restic's `--cacert`, so it trusts this one peer and no public CA. The host needs no domain name, no ACME and no port 80.           |
 
 The unit runs rest-server as the `restic` user with the systemd hardening from the upstream example unit. The upstream example is socket-activated; this unit opens its own listener, so it keeps the host network.
 
