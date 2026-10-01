@@ -67,8 +67,11 @@ describe("loadSecretsFile", () => {
 
   function writeFixture(content: string, mode: number): string {
     const path = join(dir, "secrets.env");
+    // Path is built from the temporary directory this test created
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     writeFileSync(path, content, "utf-8");
     // chmod after write so the process umask cannot widen or narrow the mode.
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     chmodSync(path, mode);
     return path;
   }
@@ -194,6 +197,8 @@ describe("loadSecretsFile", () => {
     it("refuses a symlink to a 0600 file", () => {
       const target = writeFixture(`OPS_SECRETS_KEY=${OPS_KEY}\n`, 0o600);
       const link = join(dir, "linked-secrets.env");
+      // Paths are built from the temporary directory this test created
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
       symlinkSync(target, link);
 
       expect(() =>

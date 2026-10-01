@@ -71,6 +71,9 @@ function errnoCode(err: unknown): string | undefined {
 /** Opens the file without following a symlink at the final path component. */
 function openNoFollow(path: string): number {
   try {
+    // Path is the fixed SECRETS_FILE_PATH (tests inject a temp path), opened
+    // with O_NOFOLLOW so a symlink at the final component is refused
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     return openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   } catch (err: unknown) {
     const code = errnoCode(err);
@@ -105,6 +108,8 @@ function readCheckedFile(path: string): string {
         `Secrets file ${path} has mode ${mode}; group and world bits must be clear (expected 600)`,
       );
     }
+    // Reads the O_NOFOLLOW descriptor whose type and mode were checked above
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     return readFileSync(fd, "utf-8");
   } finally {
     closeSync(fd);
@@ -165,6 +170,7 @@ export function loadSecretsFile(opts?: LoadSecretsOptions): SecretsFileResult {
     }
   }
 
+  // eslint-disable-next-line security/detect-object-injection -- key passed the LOADED_KEY_SET allowlist above, never arbitrary file content
   const conflicts = [...loaded.keys()].filter((key) => env[key] !== undefined);
   if (conflicts.length > 0) {
     throw new SecretsFileError(
@@ -174,6 +180,7 @@ export function loadSecretsFile(opts?: LoadSecretsOptions): SecretsFileResult {
 
   const source: NodeJS.ProcessEnv = { ...env };
   for (const [key, value] of loaded) {
+    // eslint-disable-next-line security/detect-object-injection -- key passed the LOADED_KEY_SET allowlist above, never arbitrary file content
     source[key] = value;
   }
 
