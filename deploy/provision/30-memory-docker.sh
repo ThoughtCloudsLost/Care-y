@@ -41,11 +41,15 @@ write_file /etc/security/limits.d/50-care-y-coredump.conf 0644 <<'EOF'
 * hard core 0
 EOF
 
-# Ubuntu's crash reporter. 24.04 ships no apport.service (interception runs
-# via apport-coredump-hook@.service); enabled=0 in /etc/default/apport is the
-# documented off switch, and the core_pattern sysctl above overrides it anyway.
-if [ -f /etc/default/apport ]; then
-  sed -i 's/^enabled=.*/enabled=0/' /etc/default/apport
+# Ubuntu's crash reporter. On the 24.04 cloud image apport.service is enabled
+# and, at boot, resets fs.suid_dumpable to 2 and kernel.core_pattern to its
+# own pipe after sysctl.d has been applied, so enabled=0 in /etc/default/apport
+# is not enough. A host that must never keep a dump has no use for a crash
+# reporter: remove the package, then re-apply the sysctls.
+if dpkg-query -W -f '${Status}' apport 2>/dev/null | grep -q 'install ok installed'; then
+  DEBIAN_FRONTEND=noninteractive apt-get purge -y -q apport
+  sysctl --system >/dev/null
+  log "removed apport; core-dump sysctls re-applied"
 fi
 
 # --- Swap: zram only ------------------------------------------------------
