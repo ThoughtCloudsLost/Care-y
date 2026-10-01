@@ -6,7 +6,7 @@ set -euo pipefail
 # caller (and so the public Actions log) gets one summary line on the original
 # stdout, kept as fd 3: the tag and "ok", or the step that failed.
 exec 3>&1
-step=log-setup
+step='log-setup'
 on_exit() {
   local rc=$?
   if [[ $rc -eq 0 ]]; then
