@@ -12,7 +12,8 @@
  */
 
 import { getSodium } from "@care-y/crypto";
-import { validateEnv } from "./env.js";
+import { initEnv } from "./env.js";
+import { loadSecretsFile } from "./config/secrets-file.js";
 import { db, tenantDb } from "./db/db.js";
 import {
   createReplyTokenHasher,
@@ -21,7 +22,13 @@ import {
 import { createInboundReceiver } from "./email/inbound-receiver.js";
 
 async function main(): Promise<void> {
-  const env = validateEnv();
+  // Same loading order as index.ts. In production the secrets file is
+  // merged into a separate source object (never process.env), and
+  // initEnv() caches the result for every later getEnv() call. A
+  // SecretsFileError or EnvValidationError reaches the startup catch
+  // below, which prints the message and exits non-zero.
+  const { source } = loadSecretsFile();
+  const env = initEnv(source);
 
   if (!env.INBOUND_SMTP_ENABLED) {
     console.log("Inbound SMTP receiver disabled (INBOUND_SMTP_ENABLED)");

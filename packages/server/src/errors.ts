@@ -255,6 +255,20 @@ export class SecondFactorLimitError extends AppError {
   readonly httpStatus = 429;
 }
 
+/**
+ * Production secrets file refused at startup (missing, symlinked, loose
+ * mode, unparseable, or a key also set in the environment). Messages name
+ * keys only, never values, so printing the message is safe.
+ */
+export class SecretsFileError extends AppError {
+  readonly code = "SECRETS_FILE_ERROR" as const;
+  readonly httpStatus = 500;
+
+  constructor(message: string) {
+    super(message, false); // non-operational: indicates a misconfiguration
+  }
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }

@@ -1,6 +1,6 @@
 // Environment variable validation.
 // Exports lazy accessors so importing this module does NOT trigger validation.
-// Call validateEnv() explicitly in index.ts for fail-fast startup behavior.
+// index.ts calls loadSecretsFile() then initEnv(source); initEnv fills the cache getEnv() reads.
 // All env vars are declared here. Add new vars as features are built.
 
 import { z } from "zod";
@@ -132,9 +132,13 @@ export class EnvValidationError extends Error {
   }
 }
 
-/** Parses and validates process.env against the schema. Throws EnvValidationError on failure. */
-export function validateEnv(): EnvVars {
-  const parsed = envSchema.safeParse(process.env);
+/**
+ * Parses and validates `source` (process.env by default) against the schema.
+ * Pure: never touches the getEnv() cache; initEnv() is the only cache writer.
+ * Throws EnvValidationError on failure.
+ */
+export function validateEnv(source: NodeJS.ProcessEnv = process.env): EnvVars {
+  const parsed = envSchema.safeParse(source);
   if (!parsed.success) {
     throw new EnvValidationError(parsed.error.issues);
   }
@@ -152,4 +156,17 @@ export function getEnv(): EnvVars {
 /** Resets the cached env. Test-only: allows re-validation after changing process.env. */
 export function _resetEnvCache(): void {
   cached = null;
+}
+
+/**
+ * Validates `source` and stores the result as the config every getEnv()
+ * caller reads. Production startup passes the merged source from
+ * loadSecretsFile(), so file secrets reach getEnv() consumers without ever
+ * entering process.env (ADR-131). Throws EnvValidationError on failure and
+ * leaves the cache untouched.
+ */
+export function initEnv(source: NodeJS.ProcessEnv = process.env): EnvVars {
+  const env = validateEnv(source);
+  cached = env;
+  return env;
 }

@@ -98,3 +98,21 @@ jobs:
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Host provisioning scripts run as root and edit auth-critical config.
+  # shellcheck comes preinstalled on the runner image: no action, no install.
+  shellcheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Shellcheck provisioning scripts
+        working-directory: deploy/provision
+        run: |
+          shellcheck --version
+          find . -name '*.sh' -print0 | xargs -0 shellcheck --external-sources --source-path=SCRIPTDIR

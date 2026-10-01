@@ -19,6 +19,9 @@
 *.env* text eol=lf
 Dockerfile text eol=lf
 docker-compose*.yml text eol=lf
+Dockerfile.* text eol=lf
+# Host-side files (systemd units, Caddyfile, examples) run on Linux only
+deploy/** text eol=lf
 
 # Lockfiles - treat as generated, always LF
 pnpm-lock.yaml text eol=lf -diff linguist-generated
