@@ -11,12 +11,6 @@ const envSchema = z.object({
   // threshold, bootstrap rate limit, dev-only routes).
   NODE_ENV: z.enum(["development", "test", "production"]),
 
-  // The session signing key must be set even in dev to avoid accidental plaintext sessions.
-  // Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-  SESSION_SECRET: z
-    .string()
-    .min(64, "SESSION_SECRET must be at least 64 hex chars (32 bytes)"),
-
   // Database connection
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
 

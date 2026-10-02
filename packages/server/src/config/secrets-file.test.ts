@@ -57,7 +57,6 @@ const ALL_KEYS_CONTENT = [
 function baseEnv(): NodeJS.ProcessEnv {
   return {
     NODE_ENV: "production",
-    SESSION_SECRET: "a".repeat(64),
     DATABASE_URL: "postgresql://localhost:5432/test",
   };
 }
