@@ -267,6 +267,15 @@ export type FundId = z.infer<typeof fundIdSchema>;
 export const fundLedgerIdSchema = z.uuid().brand<"FundLedgerId">();
 export type FundLedgerId = z.infer<typeof fundLedgerIdSchema>;
 
+/**
+ * `donation_connections.id` (platform schema). One per connected donation
+ * provider account; an org may hold several.
+ */
+export const donationConnectionIdSchema = z
+  .uuid()
+  .brand<"DonationConnectionId">();
+export type DonationConnectionId = z.infer<typeof donationConnectionIdSchema>;
+
 // ---------------------------------------------------------------------------
 // Knowledge base
 // ---------------------------------------------------------------------------

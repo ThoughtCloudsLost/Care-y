@@ -68,6 +68,13 @@ export interface ErasureDeps {
   readonly secretsEncryptor: SecretsEncryptor;
   /** closeTwilioSubaccount from telephony/twilio.ts in the CLI wiring. */
   readonly closeSubaccount: CloseSubaccount;
+  /**
+   * Removes the provider-side webhooks of the org's donation connections
+   * before step 5 deletes their rows; the donation connection service's
+   * removeWebhooksForOrg in the CLI wiring. Best effort and never throws.
+   * Null skips the provider calls; the rows are deleted either way.
+   */
+  readonly removeDonationWebhooks: ((orgId: OrgId) => Promise<void>) | null;
   readonly now: () => Date;
 }
 
@@ -279,14 +286,24 @@ export function createErasureService(deps: ErasureDeps): ErasureService {
 
   /**
    * Step 5 in one transaction: capture the managed subaccount SID, then
-   * delete the org's platform rows. telephony_config and
-   * inbound_email_domains reference orgs with ON DELETE RESTRICT, so they
-   * go first. vapid_config is a platform singleton with no org rows.
+   * delete the org's platform rows. telephony_config,
+   * inbound_email_domains and donation_connections reference orgs with ON
+   * DELETE RESTRICT, so they go first. vapid_config is a platform
+   * singleton with no org rows.
+   *
+   * The donation webhooks are removed at the provider before the
+   * transaction opens, so no network call holds it open. A rerun after a
+   * failed transaction removes them again, which the provider treats as
+   * already gone.
    */
   async function deletePlatformRows(
     conn: Kysely<PlatformDatabase>,
     row: RequestRow,
   ): Promise<RequestRow> {
+    if (deps.removeDonationWebhooks !== null) {
+      await deps.removeDonationWebhooks(row.org_id);
+    }
+
     return conn.transaction().execute(async (trx) => {
       const telephony = await trx
         .selectFrom("telephony_config")
@@ -308,6 +325,10 @@ export function createErasureService(deps: ErasureDeps): ErasureService {
         .execute();
       await trx
         .deleteFrom("inbound_email_domains")
+        .where("org_id", "=", row.org_id)
+        .execute();
+      await trx
+        .deleteFrom("donation_connections")
         .where("org_id", "=", row.org_id)
         .execute();
       // Jobs still queued for the org would fail against a missing org,

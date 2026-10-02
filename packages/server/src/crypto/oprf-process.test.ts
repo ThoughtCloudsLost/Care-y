@@ -8,7 +8,7 @@ import {
   afterEach,
 } from "vitest";
 import { randomBytes } from "node:crypto";
-import { createConnection, Socket } from "node:net";
+import { createConnection, createServer, Socket } from "node:net";
 import { unlinkSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,9 +21,10 @@ import {
   getShare,
   handleConnection,
   startOprfProcess,
+  removeStaleSocket,
   type ProcessConfig,
 } from "./oprf-process.js";
-import { CryptoError } from "../errors.js";
+import { ConfigError, CryptoError } from "../errors.js";
 import { DOCKER_OPRF_AVAILABLE, DOCKER_SOCKET_A } from "../test-utils.js";
 
 const IS_LINUX = process.platform === "linux";
@@ -318,6 +319,77 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
   },
 );
 
+describe.skipIf(!IS_LINUX)("removeStaleSocket", () => {
+  const socketDir = tmpdir();
+
+  it("does nothing when no file is at the path", () => {
+    const socketPath = join(socketDir, `oprf-stale-none-${Date.now()}.sock`);
+    expect(() => {
+      removeStaleSocket(socketPath);
+    }).not.toThrow();
+  });
+
+  it("removes a socket left by a process that did not clean up", async () => {
+    const socketPath = join(socketDir, `oprf-stale-left-${Date.now()}.sock`);
+    const previous = createServer();
+    await new Promise<void>((resolve) => previous.listen(socketPath, resolve));
+    // Drop the listener without letting close() unlink the path, as an
+    // exit or SIGKILL mid-close does.
+    previous.unref();
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- deterministic temp path for test socket
+    expect(existsSync(socketPath)).toBe(true);
+
+    removeStaleSocket(socketPath);
+
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- deterministic temp path for test socket
+    expect(existsSync(socketPath)).toBe(false);
+    previous.close();
+  });
+
+  it("refuses a path occupied by a file that is not a socket", () => {
+    const filePath = join(socketDir, `oprf-stale-file-${Date.now()}.sock`);
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- deterministic temp path for test file
+    writeFileSync(filePath, "not a socket");
+    try {
+      expect(() => {
+        removeStaleSocket(filePath);
+      }).toThrow(ConfigError);
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- deterministic temp path for test file
+      expect(existsSync(filePath)).toBe(true);
+    } finally {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- deterministic temp path for test file
+      unlinkSync(filePath);
+    }
+  });
+
+  it("lets startOprfProcess listen where a stale socket was left", async () => {
+    const socketPath = join(socketDir, `oprf-stale-start-${Date.now()}.sock`);
+    const previous = createServer();
+    await new Promise<void>((resolve) => previous.listen(socketPath, resolve));
+    previous.unref();
+
+    const server = await startOprfProcess({
+      socketPath,
+      shareHex: randomBytes(32).toString("hex"),
+      dropUser: undefined,
+      dropGroup: undefined,
+    });
+    await new Promise<void>((resolve) => {
+      const check = (): void => {
+        if (server.listening) resolve();
+        else setTimeout(check, 10);
+      };
+      check();
+    });
+
+    expect(server.listening).toBe(true);
+    server.close();
+    previous.close();
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- deterministic temp path for test socket
+    if (existsSync(socketPath)) unlinkSync(socketPath);
+  });
+});
+
 describe.skipIf(!IS_LINUX)("dropCredentials (via startOprfProcess)", () => {
   const socketDir = tmpdir();
 
@@ -611,7 +683,12 @@ describe.skipIf(!IS_LINUX)("shutdown (via signal handler)", () => {
     ) => void;
     shutdownHandler();
 
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    // Exit waits for close to remove the socket file.
+    await vi.waitFor(() => {
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- deterministic temp path for test socket
+    expect(existsSync(socketPath)).toBe(false);
 
     // Clean up the registered listeners to avoid cross-test pollution
     process.removeListener("SIGTERM", shutdownHandler);

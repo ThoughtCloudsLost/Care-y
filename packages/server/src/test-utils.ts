@@ -1190,6 +1190,7 @@ export const NO_OPTIONAL_ROUTERS: OptionalRouterDeps = {
   keysDeps: null,
   orgDeletionDeps: null,
   fundsDeps: null,
+  donationsDeps: null,
 };
 
 /**
@@ -1235,6 +1236,7 @@ export const ALL_OPTIONAL_ROUTERS: OptionalRouterDeps = {
   keysDeps: everyDepPresent(),
   orgDeletionDeps: everyDepPresent(),
   fundsDeps: everyDepPresent(),
+  donationsDeps: everyDepPresent(),
 };
 
 /**

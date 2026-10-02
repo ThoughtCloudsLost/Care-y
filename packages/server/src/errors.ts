@@ -304,6 +304,17 @@ function errorClassName(err: unknown): string {
   return err instanceof Error ? err.constructor.name : typeof err;
 }
 
+/**
+ * A donation provider call failed for a reason on the provider's side or
+ * the network's: rate limited, a server error, no answer, or a body that
+ * did not match its documented shape. The message is an error code, never
+ * provider response text or a credential.
+ */
+export class DonationProviderError extends AppError {
+  readonly code = "DONATION_PROVIDER_ERROR" as const;
+  readonly httpStatus = 502;
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }

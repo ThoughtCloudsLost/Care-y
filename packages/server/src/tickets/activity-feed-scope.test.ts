@@ -52,6 +52,8 @@ const ORG_EVENTS: readonly [AuditEventType, Permission][] = [
   ["voicemail_quarantined", Permission.MANAGE_VOICEMAIL_QUARANTINE],
   ["voicemail_quarantine_dismissed", Permission.MANAGE_VOICEMAIL_QUARANTINE],
   ["intake_responses_exported", Permission.VIEW_INTAKE_RESPONSES],
+  ["donation_connection_saved", Permission.MANAGE_FUNDS],
+  ["donation_connection_removed", Permission.MANAGE_FUNDS],
 ];
 
 const EXCLUDED_EVENTS: readonly AuditEventType[] = [

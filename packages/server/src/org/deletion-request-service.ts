@@ -21,7 +21,7 @@ import {
   type OrgId,
   type OrgSchema,
   type OrgSlug,
-  type SystemSseEvent,
+  type SystemNotificationEventType,
   type UserId,
 } from "@care-y/shared";
 import type {
@@ -120,7 +120,7 @@ export function createDeletionRequestService(
    */
   async function notifyHolders(
     orgId: OrgId,
-    eventType: SystemSseEvent["type"],
+    eventType: SystemNotificationEventType,
   ): Promise<void> {
     try {
       const recipients = await listActiveUserIdsWithPermission(

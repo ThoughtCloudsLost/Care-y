@@ -563,6 +563,8 @@ export async function buildServiceStubs(
         createNoteTypeService(svcTDb, secretsEncryptor),
       notificationService: notificationServiceStub,
     },
+    // Declined: the demo makes no calls to a donation provider.
+    donationsDeps: null,
   });
 
   return {

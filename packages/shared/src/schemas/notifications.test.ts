@@ -164,6 +164,14 @@ describe("systemSseEventSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts a funds_inflow_changed system event", () => {
+    const result = systemSseEventSchema.safeParse({
+      type: "funds_inflow_changed",
+      timestamp: VALID_ISO,
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects missing type", () => {
     expect(
       systemSseEventSchema.safeParse({
