@@ -152,6 +152,7 @@ describe("es.json values differ from en.json", () => {
     // Product name (proper noun, not translated)
     ["app_name", "product name"],
     ["demo_app_brand", "product name"],
+    ["admin_donations_provider_givebutter", "provider name (proper noun)"],
     [
       "admin_funds_currency_placeholder",
       "ISO 4217 currency code shown as the example value",
