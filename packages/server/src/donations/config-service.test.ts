@@ -278,6 +278,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(provider.registerWebhook).not.toHaveBeenCalled();
       });
 
+      it("serialises concurrent saves of one new key into a single connection", async () => {
+        const { service } = setup();
+        const provider = fakeProvider();
+        const apiKey = newKey(provider);
+
+        const results = await Promise.all([
+          service.saveGivebutter(orgId, { apiKey }, audit()),
+          service.saveGivebutter(orgId, { apiKey }, audit()),
+        ]);
+
+        expect(results[0].id).toBe(results[1].id);
+        const matching = (await service.list(orgId)).filter(
+          (c) => c.keyHint === apiKey.slice(-4),
+        );
+        expect(matching).toHaveLength(1);
+        expect(provider.registerWebhook).toHaveBeenCalledTimes(1);
+      });
+
       it("keeps the connection without a webhook when registration fails", async () => {
         const { service } = setup();
         const provider = fakeProvider();
@@ -288,7 +306,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         await expect(
           service.saveGivebutter(orgId, { apiKey }, audit()),
-        ).rejects.toBeInstanceOf(DonationProviderError);
+        ).rejects.toThrow(ErrorCode.DONATION_WEBHOOK_NOT_REGISTERED);
 
         const saved = (await service.list(orgId)).find(
           (c) => c.keyHint === apiKey.slice(-4),
@@ -312,7 +330,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         await expect(
           service.saveGivebutter(orgId, { apiKey }, audit()),
-        ).rejects.toThrow(ErrorCode.DONATION_PROVIDER_UNAVAILABLE);
+        ).rejects.toThrow(ErrorCode.DONATION_WEBHOOK_NOT_REGISTERED);
 
         expect(provider.deleteWebhook).toHaveBeenCalledWith("wh_nosecret");
         const saved = (await service.list(orgId)).find(

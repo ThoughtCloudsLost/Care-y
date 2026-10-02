@@ -11,7 +11,7 @@
  */
 
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import type { Kysely, Transaction } from "kysely";
+import { sql, type Kysely, type Transaction } from "kysely";
 import {
   ErrorCode,
   donationConnectionIdSchema,
@@ -244,6 +244,7 @@ export function createDonationConnectionService(
    * is compared in constant time.
    */
   async function findByKey(
+    handle: Kysely<PlatformDatabase> | Transaction<PlatformDatabase>,
     orgId: OrgId,
     provider: InflowProviderId,
     apiKey: string,
@@ -251,7 +252,7 @@ export function createDonationConnectionService(
     | { id: DonationConnectionId; created_at: Date; config: ConnectionSecrets }
     | undefined
   > {
-    const rows = await db
+    const rows = await handle
       .selectFrom("donation_connections")
       .select(["id", "config", "created_at"])
       .where("org_id", "=", orgId)
@@ -372,10 +373,18 @@ export function createDonationConnectionService(
       await candidate.listFunds();
 
       // The same key saved again updates its connection rather than
-      // adding a second row for it.
-      const existing = await findByKey(orgId, provider, input.apiKey);
-      if (existing !== undefined) {
-        await db.transaction().execute(async (trx) => {
+      // adding a second row for it. Nothing in the table can enforce that
+      // (the key lives only inside the sealed blob), so saves for one org
+      // run one at a time: a transaction-scoped advisory lock keyed on the
+      // org serialises the lookup and the write that depends on it. The
+      // row and its audit entry commit before the webhook call, so the
+      // network round trip never holds the lock or the transaction open.
+      const stored = await db.transaction().execute(async (trx) => {
+        await sql`select pg_advisory_xact_lock(hashtext(${orgId}))`.execute(
+          trx,
+        );
+        const existing = await findByKey(trx, orgId, provider, input.apiKey);
+        if (existing !== undefined) {
           await trx
             .updateTable("donation_connections")
             .set({
@@ -392,32 +401,14 @@ export function createDonationConnectionService(
             existing.id,
             provider,
           );
-        });
-
-        let config = existing.config;
-        if (config.webhookId === undefined) {
-          config = await registerWebhookFor(
-            candidate,
-            orgId,
-            existing.id,
-            config,
-          );
-        } else {
-          factory.invalidate(existing.id);
+          return {
+            id: existing.id,
+            created_at: existing.created_at,
+            config: existing.config,
+          };
         }
 
-        return toWire({
-          id: existing.id,
-          provider,
-          created_at: existing.created_at,
-          config,
-        });
-      }
-
-      const connectionId = donationConnectionIdSchema.parse(randomUUID());
-      // The row and its audit entry commit before the webhook call, so
-      // the network round trip never holds the transaction open.
-      const inserted = await db.transaction().execute(async (trx) => {
+        const connectionId = donationConnectionIdSchema.parse(randomUUID());
         const row = await trx
           .insertInto("donation_connections")
           .values({
@@ -435,20 +426,42 @@ export function createDonationConnectionService(
           connectionId,
           provider,
         );
-        return row;
+        return {
+          id: connectionId,
+          created_at: row.created_at,
+          config: submitted,
+        };
       });
 
-      const config = await registerWebhookFor(
-        candidate,
-        orgId,
-        connectionId,
-        submitted,
-      );
+      let config = stored.config;
+      if (config.webhookId === undefined) {
+        // The row exists whether or not the provider registers the
+        // webhook, so a failure here reports that state by its own code:
+        // the admin sees the saved connection and the remove-and-retry
+        // path rather than a generic provider error and no card.
+        try {
+          config = await registerWebhookFor(
+            candidate,
+            orgId,
+            stored.id,
+            config,
+          );
+        } catch (err: unknown) {
+          if (err instanceof DonationProviderError) {
+            throw new DonationProviderError(
+              ErrorCode.DONATION_WEBHOOK_NOT_REGISTERED,
+            );
+          }
+          throw err;
+        }
+      } else {
+        factory.invalidate(stored.id);
+      }
 
       return toWire({
-        id: connectionId,
+        id: stored.id,
         provider,
-        created_at: inserted.created_at,
+        created_at: stored.created_at,
         config,
       });
     },

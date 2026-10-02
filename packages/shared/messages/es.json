@@ -3471,6 +3471,7 @@
   "error_donation_connection_not_found": "Esa conexión con el proveedor de donaciones ya no existe.",
   "error_donation_provider_rejected": "El proveedor de donaciones rechazó la clave de API. Revisa la clave e inténtalo de nuevo.",
   "error_donation_provider_unavailable": "No se pudo contactar con el proveedor de donaciones. Inténtalo de nuevo en un minuto.",
+  "error_donation_webhook_not_registered": "La conexión se guardó, pero no se pudo registrar el webhook de donaciones. Quita la conexión y vuelve a añadirla para reintentarlo.",
   "onboarding_step_password": "Contraseña",
   "onboarding_password_heading": "Elige tu propia contraseña",
   "onboarding_password_desc": "Un administrador estableció la contraseña temporal con la que iniciaste sesión. Las claves que protegen tu cuenta se derivan de tu contraseña, así que elige la tuya ahora.",

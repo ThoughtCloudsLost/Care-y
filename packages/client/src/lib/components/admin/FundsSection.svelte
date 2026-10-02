@@ -39,6 +39,7 @@
     TriangleAlert,
   } from "@lucide/svelte";
   import {
+    ErrorCode,
     currencyCodeSchema,
     newFundLedgerId,
     saveGivebutterConnectionInputSchema,
@@ -195,8 +196,23 @@
     },
     onError: (err: unknown) => {
       toastStore.show(getErrorMessage(err), 3000);
+      // The provider may have refused the webhook after the server stored
+      // the key. The connection exists in that case, so the list refetches
+      // and the sheet closes either way: the saved card shows the
+      // remove-and-retry sentence, and the key never lingers in the field.
+      if (isDonationWebhookNotRegistered(err)) {
+        closeConnectSheet();
+      }
+      invalidateDonations();
     },
   }));
+
+  function isDonationWebhookNotRegistered(err: unknown): boolean {
+    return (
+      err instanceof Error &&
+      err.message === ErrorCode.DONATION_WEBHOOK_NOT_REGISTERED
+    );
+  }
 
   const canSaveConnection = $derived(
     saveGivebutterConnectionInputSchema.safeParse({

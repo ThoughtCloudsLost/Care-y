@@ -3471,6 +3471,7 @@
   "error_donation_connection_not_found": "⟦Thàt dònàtìòn pròvìdèr cònnèctìòn nò lòngèr èxìsts. ••••••••••••••••⟧",
   "error_donation_provider_rejected": "⟦Thè dònàtìòn pròvìdèr rèfùsèd thè ÀPÌ kèy. Chèck thè kèy ànd try àgàìn. ••••••••••••••••••••••⟧",
   "error_donation_provider_unavailable": "⟦Thè dònàtìòn pròvìdèr còùld nòt bè rèàchèd. Try àgàìn ìn à mìnùtè. ••••••••••••••••••••⟧",
+  "error_donation_webhook_not_registered": "⟦Thè cònnèctìòn wàs sàvèd, bùt thè dònàtìòn wèbhòòk còùld nòt bè règìstèrèd. Rèmòvè thè cònnèctìòn ànd àdd ìt àgàìn tò rètry. ••••••••••••••••••••••••••••••••••••••⟧",
   "onboarding_step_password": "⟦Pàsswòrd •••⟧",
   "onboarding_password_heading": "⟦Chòòsè Yòùr Òwn Pàsswòrd ••••••••⟧",
   "onboarding_password_desc": "⟦Àn àdmìnìstràtòr sèt thè tèmpòràry pàsswòrd yòù sìgnèd ìn wìth. Thè kèys thàt pròtèct yòùr àccòùnt àrè dèrìvèd fròm yòùr pàsswòrd, sò chòòsè yòùr òwn nòw. •••••••••••••••••••••••••••••••••••••••••••••••⟧",

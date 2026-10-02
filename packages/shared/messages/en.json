@@ -3471,6 +3471,7 @@
   "error_donation_connection_not_found": "That donation provider connection no longer exists.",
   "error_donation_provider_rejected": "The donation provider refused the API key. Check the key and try again.",
   "error_donation_provider_unavailable": "The donation provider could not be reached. Try again in a minute.",
+  "error_donation_webhook_not_registered": "The connection was saved, but the donation webhook could not be registered. Remove the connection and add it again to retry.",
   "onboarding_step_password": "Password",
   "onboarding_password_heading": "Choose Your Own Password",
   "onboarding_password_desc": "An administrator set the temporary password you signed in with. The keys that protect your account are derived from your password, so choose your own now.",

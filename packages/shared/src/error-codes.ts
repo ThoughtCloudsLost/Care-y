@@ -205,6 +205,8 @@ export const ErrorCode = {
   DONATION_PROVIDER_REJECTED: "DONATION_PROVIDER_REJECTED",
   /** The donation provider could not be reached, was rate limiting, or answered with a server error or an unreadable body. */
   DONATION_PROVIDER_UNAVAILABLE: "DONATION_PROVIDER_UNAVAILABLE",
+  /** The connection was stored but the provider did not register its webhook; the admin removes and re-adds it to retry. */
+  DONATION_WEBHOOK_NOT_REGISTERED: "DONATION_WEBHOOK_NOT_REGISTERED",
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
