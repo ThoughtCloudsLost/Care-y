@@ -1,0 +1,36 @@
+name: PR label
+
+# Every pull request carries one changelog label before it can merge, so
+# the generated release notes (.github/release.yml) file it under
+# Security, Features, Fixes, Documentation or Dependencies instead of
+# "Other changes". changelog:skip is the deliberate opt-out for housekeeping
+# nobody needs to read about. The check reruns when labels change, so a
+# forgotten label is fixed by adding one, not by pushing.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-label:
+    name: pr-label
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: One changelog label is present
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+        run: |
+          allowed="security enhancement bug documentation dependencies github_actions javascript changelog:skip"
+          for label in $LABELS; do
+            for ok in $allowed; do
+              if [ "$label" = "$ok" ]; then
+                echo "labelled: $label"
+                exit 0
+              fi
+            done
+          done
+          echo "::error::This pull request has no changelog label. Add one of: $allowed"
+          exit 1
