@@ -276,6 +276,15 @@ export const fundKeys = {
   list: () => [...fundKeys.all, "list"] as const,
   ledger: () => [...fundKeys.all, "ledger"] as const,
   settings: () => [...fundKeys.all, "settings"] as const,
+  // Outside the ["funds"] family on purpose: a ledger write never changes
+  // what the provider raised, so invalidateFunds and fund_entry_recorded
+  // leave the relay alone. Only funds_inflow_changed refetches it.
+  providerFunds: () => ["providerFunds"] as const,
+};
+
+export const donationKeys = {
+  all: ["donations"] as const,
+  connections: () => [...donationKeys.all, "connections"] as const,
 };
 
 export const portalKeys = {

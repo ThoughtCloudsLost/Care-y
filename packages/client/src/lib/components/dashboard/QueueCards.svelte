@@ -9,12 +9,18 @@
   import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
   import type { QueueAppearance } from "$lib/utils/queue-appearance.js";
 
-  /** The available balance of the fund the queue draws on. */
-  interface QueueFundBalance {
-    /** Formatted in the fund's currency. */
-    amount: string;
-    belowZero: boolean;
-  }
+  /**
+   * The available balance of the fund the queue draws on, or unavailable
+   * when the provider's raised total could not be read.
+   */
+  type QueueFundBalance =
+    | {
+        kind: "amount";
+        /** Formatted in the fund's currency. */
+        amount: string;
+        belowZero: boolean;
+      }
+    | { kind: "unavailable" };
 
   interface QueueInfo {
     id: string;
@@ -61,11 +67,19 @@
       : `${base}, ${balanceLabel(queue.fundBalance)}`;
   }
 
-  // A balance below zero reads as a fact in words, never as an alarm.
+  // A balance below zero reads as a fact in words, never as an alarm. A
+  // raised total that could not be read is said in words, never as zero.
   function balanceLabel(balance: QueueFundBalance): string {
+    if (balance.kind === "unavailable") {
+      return m.fund_balance_raised_unavailable();
+    }
     return balance.belowZero
       ? m.fund_available_below_zero({ amount: balance.amount })
       : m.fund_available_amount({ amount: balance.amount });
+  }
+
+  function balanceBelowZero(balance: QueueFundBalance): boolean {
+    return balance.kind === "amount" && balance.belowZero;
   }
 </script>
 
@@ -107,11 +121,13 @@
               >{/if}
           </span>
           {#if queue.fundBalance}
+            {@const balance = queue.fundBalance}
             <span
               class="queue-balance num"
-              class:queue-balance-below={queue.fundBalance.belowZero}
+              class:queue-balance-below={balanceBelowZero(balance)}
+              class:queue-balance-unavailable={balance.kind === "unavailable"}
             >
-              {balanceLabel(queue.fundBalance)}
+              {balanceLabel(balance)}
             </span>
           {/if}
         </button>
@@ -197,8 +213,10 @@
   }
 
   /* Below zero is distinct but neutral: muted italic, never a red alarm.
-     The words carry the meaning, so hue is not the only signal. */
-  .queue-balance-below {
+     The words carry the meaning, so hue is not the only signal. A raised
+     total the provider could not supply takes the same treatment. */
+  .queue-balance-below,
+  .queue-balance-unavailable {
     color: var(--muted);
     font-style: italic;
   }

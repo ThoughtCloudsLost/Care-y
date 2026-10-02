@@ -425,23 +425,30 @@
     queryFn: async () => ticketRouter.myQueues.query(),
   }));
 
-  // Queue tiles show the sealed balance of the fund each queue maps to,
-  // decrypted in the browser from the shared fund cache.
+  // Queue tiles show the available figure of the fund each queue maps to
+  // (its sealed balance plus what a linked provider raised), decrypted in
+  // the browser from the shared fund cache.
   const fundStore = createFundStore();
 
   function queueFundBalance(queue: {
     readonly id: string;
     readonly encryptedFundId: string | null;
-  }): { amount: string; belowZero: boolean } | undefined {
+  }):
+    | { kind: "amount"; amount: string; belowZero: boolean }
+    | { kind: "unavailable" }
+    | undefined {
     if (!fundStore.enabled) return undefined;
     const fundId = decryptQueueFundId(orgCache, queue);
     if (fundId === null) return undefined;
     const fund = fundStore.fund(fundId);
-    if (fund?.balance == null) return undefined;
-    const { balanceMinor } = fund.balance;
+    if (fund === undefined) return undefined;
+    const { available } = fund;
+    if (available.kind === "pending") return undefined;
+    if (available.kind === "unavailable") return { kind: "unavailable" };
     return {
-      amount: formatAmount(balanceMinor, fund.currency),
-      belowZero: isBelowZero(balanceMinor),
+      kind: "amount",
+      amount: formatAmount(available.minor, fund.currency),
+      belowZero: isBelowZero(available.minor),
     };
   }
 

@@ -49,7 +49,7 @@ export function createDonationsRouter(deps: DonationsRouterDeps) {
         withErrorWrapping(
           async ({ ctx, input }): Promise<DonationConnectionWire> => {
             return svc.saveGivebutter(ctx.org.orgId, input, {
-              tenantDb: ctx.org.tenantDb,
+              orgSchema: ctx.org.orgSchema,
               actorId: ctx.user.id,
             });
           },
@@ -61,7 +61,7 @@ export function createDonationsRouter(deps: DonationsRouterDeps) {
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           await svc.remove(ctx.org.orgId, input.connectionId, {
-            tenantDb: ctx.org.tenantDb,
+            orgSchema: ctx.org.orgSchema,
             actorId: ctx.user.id,
           });
           return { success: true as const };

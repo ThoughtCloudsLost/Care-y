@@ -170,25 +170,39 @@ function fund(overrides: Partial<FundView> = {}): FundView {
     sortOrder: 0,
     orgKeyGeneration: 1,
     balance: { balanceMinor: 50_000, version: 7 },
+    raised: { kind: "unlinked" },
+    available: { kind: "amount", minor: 50_000 },
     ...overrides,
   };
 }
 
-/** Ledger totals whose sum is the given amount. */
-function totalsOf(availableMinor: number): LedgerTotals {
-  return computeLedgerTotals([
-    {
-      id: "entry-1",
-      payload: {
-        v: 1,
-        amountMinor: availableMinor,
-        entryType: "adjustment",
-        fundId: FUND,
-        recordedAt: "2026-09-20T10:00:00.000Z",
-        recordedBy: AUDITOR,
+/** A fund linked to a provider that raised `raisedMinor`. */
+function linkedFund(raisedMinor: number): FundView {
+  return fund({
+    providerLink: { connectionId: "c-1", externalFundId: "gb-1" },
+    raised: { kind: "amount", minor: raisedMinor },
+    available: { kind: "amount", minor: 50_000 + raisedMinor },
+  });
+}
+
+/** Ledger totals whose sum is the given amount, plus any raised. */
+function totalsOf(ledgerSumMinor: number, raised = 0): LedgerTotals {
+  return computeLedgerTotals(
+    [
+      {
+        id: "entry-1",
+        payload: {
+          v: 1,
+          amountMinor: ledgerSumMinor,
+          entryType: "adjustment",
+          fundId: FUND,
+          recordedAt: "2026-09-20T10:00:00.000Z",
+          recordedBy: AUDITOR,
+        },
       },
-    },
-  ]);
+    ],
+    raised,
+  );
 }
 
 const PageModule = await import("./+page.svelte");
@@ -248,6 +262,20 @@ describe("Fund ledger page", () => {
     expect(text).not.toContain(m.fund_recompute_action());
   });
 
+  it("says nothing about recomputing when only raised separates the figures", () => {
+    setPermissions(Permission.AUDIT_FUNDS, Permission.MANAGE_FUNDS);
+    funds = [linkedFund(12_000)];
+    ledgerTotals = totalsOf(50_000, 12_000);
+    const { container } = render(PageModule.default);
+    const text = container.textContent;
+
+    expect(text).toContain(formatAmount(62_000, "USD"));
+    expect(text).not.toContain(m.fund_recompute_action());
+    expect(text).not.toContain(
+      m.fund_recompute_mismatch({ amount: formatAmount(62_000, "USD") }),
+    );
+  });
+
   it("reseals the balance from the ledger at the version it read", async () => {
     setPermissions(Permission.AUDIT_FUNDS, Permission.MANAGE_FUNDS);
     ledgerTotals = totalsOf(48_000);
@@ -262,6 +290,29 @@ describe("Fund ledger page", () => {
       BalanceWrite | undefined;
     expect(balance?.fundId).toBe(FUND);
     expect(balance?.expectedVersion).toBe(7);
+    expect(JSON.parse(balance?.encryptedBalance ?? "null")).toEqual({
+      v: 1,
+      balanceMinor: 48_000,
+    });
+  });
+
+  it("reseals the ledger sum without raised", async () => {
+    setPermissions(Permission.AUDIT_FUNDS, Permission.MANAGE_FUNDS);
+    funds = [linkedFund(12_000)];
+    ledgerTotals = totalsOf(48_000, 12_000);
+    const { container, getByText } = render(PageModule.default);
+
+    expect(container.textContent).toContain(
+      m.fund_recompute_mismatch({ amount: formatAmount(48_000, "USD") }),
+    );
+
+    await fireEvent.click(getByText(m.fund_recompute_action()));
+
+    await waitFor(() => {
+      expect(mockSetBalance).toHaveBeenCalledTimes(1);
+    });
+    const balance = mockSetBalance.mock.calls[0]?.[0].balance as
+      BalanceWrite | undefined;
     expect(JSON.parse(balance?.encryptedBalance ?? "null")).toEqual({
       v: 1,
       balanceMinor: 48_000,

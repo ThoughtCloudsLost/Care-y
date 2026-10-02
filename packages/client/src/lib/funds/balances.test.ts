@@ -15,6 +15,7 @@ import {
   indexById,
   isBelowZero,
   ledgerMatchesBalance,
+  ledgerSum,
   minorToMajorInput,
   parseMajorAmount,
   reversedEntryIds,
@@ -143,6 +144,43 @@ describe("groupByFund and computeLedgerTotalsByFund", () => {
     expect(totals.get(FUND_A)?.available).toBe(600);
     expect(totals.get(FUND_B)?.available).toBe(300);
   });
+
+  it("gives each fund its raised figure from the map", () => {
+    const totals = computeLedgerTotalsByFund(
+      [
+        entry(1_000, "adjustment"),
+        entry(300, "adjustment", { fundId: FUND_B }),
+      ],
+      new Map([[FUND_A, 5_000]]),
+    );
+    expect(totals.get(FUND_A)?.raised).toBe(5_000);
+    expect(totals.get(FUND_A)?.available).toBe(6_000);
+    expect(totals.get(FUND_B)?.raised).toBe(0);
+  });
+
+  it("reports raised for a linked fund with no entries", () => {
+    const totals = computeLedgerTotalsByFund(
+      [entry(1_000, "adjustment")],
+      new Map([[FUND_B, 2_500]]),
+    );
+    expect(totals.get(FUND_B)).toEqual({
+      raised: 2_500,
+      adjusted: 0,
+      disbursed: 0,
+      available: 2_500,
+    });
+  });
+});
+
+describe("ledgerSum", () => {
+  it("is adjusted minus disbursed, without raised", () => {
+    const totals = computeLedgerTotals(
+      [entry(1_000, "adjustment"), entry(-250, "disbursement")],
+      500,
+    );
+    expect(ledgerSum(totals)).toBe(750);
+    expect(totals.available).toBe(1_250);
+  });
 });
 
 describe("ledgerMatchesBalance", () => {
@@ -157,6 +195,15 @@ describe("ledgerMatchesBalance", () => {
 
   it("counts a new fund with no entries as zero", () => {
     expect(ledgerMatchesBalance(EMPTY_TOTALS, 0)).toBe(true);
+  });
+
+  it("ignores raised: the sealed balance never holds it", () => {
+    const totals = computeLedgerTotals(
+      [entry(1_000, "adjustment"), entry(-250, "disbursement")],
+      500,
+    );
+    expect(ledgerMatchesBalance(totals, 750)).toBe(true);
+    expect(ledgerMatchesBalance(totals, 1_250)).toBe(false);
   });
 });
 

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
  * FundBalanceLine tests: the case panel's one line for the queue's fund.
- * Shows the fund's name and sealed balance, spells out a balance below
- * zero, and renders nothing without fund access or a queue fund.
+ * Shows the fund's name and available figure, spells out a balance below
+ * zero, says a raised total the provider could not supply in words, and
+ * renders nothing without fund access or a queue fund.
  *
  * The fund cache is stubbed so no query or Worker runs.
  */
@@ -44,7 +45,10 @@ if (typeof Element.prototype.animate !== "function") {
   }) as unknown as Element["animate"];
 }
 
-function fund(balanceMinor: number | null): FundView {
+function fund(
+  balanceMinor: number | null,
+  overrides: Partial<FundView> = {},
+): FundView {
   return {
     id: FUND,
     name: "Emergency housing",
@@ -54,6 +58,12 @@ function fund(balanceMinor: number | null): FundView {
     sortOrder: 0,
     orgKeyGeneration: 1,
     balance: balanceMinor === null ? null : { balanceMinor, version: 3 },
+    raised: { kind: "unlinked" },
+    available:
+      balanceMinor === null
+        ? { kind: "pending" }
+        : { kind: "amount", minor: balanceMinor },
+    ...overrides,
   };
 }
 
@@ -87,6 +97,42 @@ describe("FundBalanceLine", () => {
     expect(container.textContent).toContain(
       m.fund_available_below_zero({ amount: formatAmount(-1_200, "USD") }),
     );
+  });
+
+  it("shows the sealed balance plus raised for a linked fund", () => {
+    caseFund = {
+      fundId: FUND,
+      fund: fund(42_500, {
+        providerLink: { connectionId: "c-1", externalFundId: "gb-1" },
+        raised: { kind: "amount", minor: 7_500 },
+        available: { kind: "amount", minor: 50_000 },
+      }),
+    };
+    const { container } = render(FundBalanceLine, {
+      props: { ticketId: "t-1" },
+    });
+
+    expect(container.textContent).toContain(
+      m.fund_available_amount({ amount: formatAmount(50_000, "USD") }),
+    );
+  });
+
+  it("says the raised total is unavailable instead of a number", () => {
+    caseFund = {
+      fundId: FUND,
+      fund: fund(42_500, {
+        providerLink: { connectionId: "c-1", externalFundId: "gb-1" },
+        raised: { kind: "unavailable" },
+        available: { kind: "unavailable" },
+      }),
+    };
+    const { container } = render(FundBalanceLine, {
+      props: { ticketId: "t-1" },
+    });
+    const text = container.textContent;
+
+    expect(text).toContain(m.fund_balance_raised_unavailable());
+    expect(text).not.toContain("$");
   });
 
   it("keeps the row while the balance decrypts", () => {

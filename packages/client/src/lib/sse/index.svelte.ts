@@ -163,9 +163,13 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
       void queryClient.invalidateQueries({ queryKey: fundKeys.all });
       break;
     // A donation provider reported new gifts. The event names neither the
-    // provider nor the fund, so every fund query refetches.
+    // provider nor the fund, so every fund query refetches, and so do the
+    // provider totals the raised figures come from.
     case "funds_inflow_changed":
       void queryClient.invalidateQueries({ queryKey: fundKeys.all });
+      void queryClient.invalidateQueries({
+        queryKey: fundKeys.providerFunds(),
+      });
       break;
   }
 }

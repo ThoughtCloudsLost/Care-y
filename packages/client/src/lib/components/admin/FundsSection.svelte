@@ -1,7 +1,8 @@
 <!--
-  Fund administration: create and edit funds (name and currency),
-  deactivate them, record adjustments, and choose whether fund managers
-  hear about every ledger entry.
+  Fund administration: create and edit funds (name, currency and the
+  donation provider fund each one is linked to), deactivate them, record
+  adjustments, choose whether fund managers hear about every ledger
+  entry, and connect or remove donation provider accounts.
 
   Anatomy follows NoteTypesSection (card of tappable rows, create/edit
   sheet with a deactivate action at the foot) and the ChannelPolicySection
@@ -12,9 +13,12 @@
 -->
 <script lang="ts">
   import {
+    BlockTitle,
     Card,
+    DialogButton,
     List,
     ListInput,
+    Preloader,
     Segmented,
     SegmentedButton,
     Toggle,
@@ -24,12 +28,29 @@
     createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { BellRing, HandCoins, Pencil, Plus, Scale } from "@lucide/svelte";
-  import { currencyCodeSchema, newFundLedgerId } from "@care-y/shared";
+  import {
+    BellRing,
+    CircleCheckBig,
+    HandCoins,
+    Pencil,
+    Plus,
+    Save,
+    Scale,
+    TriangleAlert,
+  } from "@lucide/svelte";
+  import {
+    currencyCodeSchema,
+    newFundLedgerId,
+    saveGivebutterConnectionInputSchema,
+    type DonationConnectionId,
+    type FundProviderLink,
+    type InflowProviderId,
+    type RemoveDonationConnectionInput,
+  } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
-  import { fundKeys } from "$lib/query/keys.js";
+  import { donationKeys, fundKeys } from "$lib/query/keys.js";
   import {
     getCurrentPermissions,
     getCurrentUserId,
@@ -42,14 +63,20 @@
   import { getErrorMessage } from "$lib/components/query-error-messages.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import Register from "$lib/components/Register.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
   import RichSelect from "$lib/components/inputs/RichSelect.svelte";
+  import type { RichSelectOption } from "$lib/components/inputs/rich-select.js";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import {
     createBalanceWriter,
     createFundStore,
     invalidateFunds,
+    providerLinkKey,
     type FundView,
   } from "$lib/funds/fund-store.svelte.js";
   import {
@@ -72,6 +99,14 @@
     canCall(permissions, "funds.recordAdjustment"),
   );
   const canReadSettings = $derived(canCall(permissions, "funds.getSettings"));
+  // The demo build declines the donations router.
+  const donationsMounted = trpc.donations !== undefined;
+  const canManageDonations = $derived(
+    donationsMounted && canCall(permissions, "donations.listConnections"),
+  );
+  const canReadProviderFunds = $derived(
+    donationsMounted && canCall(permissions, "donations.listProviderFunds"),
+  );
 
   const fundStore = createFundStore();
   const balanceWriter = createBalanceWriter(fundStore);
@@ -102,13 +137,176 @@
     },
   }));
 
+  // ── Donation providers ──
+
+  const connectionsQuery = createQuery(() => ({
+    queryKey: donationKeys.connections(),
+    queryFn: async () =>
+      requireRouter(trpc.donations, "donations").listConnections.query(),
+    enabled: canManageDonations,
+  }));
+
+  const connections = $derived(connectionsQuery.data?.connections ?? []);
+
+  const PROVIDER_NAMES = new Map<InflowProviderId, () => string>([
+    ["givebutter", m.admin_donations_provider_givebutter],
+  ]);
+
+  function providerName(provider: InflowProviderId): string {
+    return PROVIDER_NAMES.get(provider)?.() ?? provider;
+  }
+
+  function invalidateDonations(): void {
+    void queryClient.invalidateQueries({
+      queryKey: donationKeys.connections(),
+    });
+    void queryClient.invalidateQueries({ queryKey: fundKeys.providerFunds() });
+  }
+
+  // Connect sheet. The typed key lives only in this field, and only
+  // until the sheet closes.
+  let connectSheetOpen = $state(false);
+  let apiKeyInput = $state("");
+
+  function openConnectSheet(): void {
+    apiKeyInput = "";
+    connectSheetOpen = true;
+  }
+
+  function closeConnectSheet(): void {
+    connectSheetOpen = false;
+    apiKeyInput = "";
+  }
+
+  // The key is read from the field when the request is built, not passed
+  // as mutation variables, so the mutation cache never holds it.
+  const saveConnectionMutation = createMutation(() => ({
+    mutationFn: async () =>
+      requireRouter(
+        trpc.donations,
+        "donations",
+      ).saveGivebutterConnection.mutate({ apiKey: apiKeyInput.trim() }),
+    onSuccess: () => {
+      haptic();
+      toastStore.show(m.admin_donations_connection_saved());
+      announceToLiveRegion("polite", m.admin_donations_connection_saved());
+      closeConnectSheet();
+      invalidateDonations();
+    },
+    onError: (err: unknown) => {
+      toastStore.show(getErrorMessage(err), 3000);
+    },
+  }));
+
+  const canSaveConnection = $derived(
+    saveGivebutterConnectionInputSchema.safeParse({
+      apiKey: apiKeyInput.trim(),
+    }).success && !saveConnectionMutation.isPending,
+  );
+
+  function handleSaveConnection(): void {
+    if (!canSaveConnection) return;
+    saveConnectionMutation.mutate();
+  }
+
+  // Remove confirm.
+  let removeDialogOpen = $state(false);
+  let removeTarget = $state<DonationConnectionId | null>(null);
+
+  function startRemove(connectionId: DonationConnectionId): void {
+    removeTarget = connectionId;
+    removeDialogOpen = true;
+  }
+
+  function closeRemoveDialog(): void {
+    removeDialogOpen = false;
+    removeTarget = null;
+  }
+
+  const removeConnectionMutation = createMutation(() => ({
+    mutationFn: async (input: RemoveDonationConnectionInput) =>
+      requireRouter(trpc.donations, "donations").removeConnection.mutate(input),
+    onSuccess: () => {
+      haptic();
+      toastStore.show(m.admin_donations_connection_removed());
+      announceToLiveRegion("polite", m.admin_donations_connection_removed());
+      invalidateDonations();
+    },
+    onError: (err: unknown) => {
+      toastStore.show(getErrorMessage(err), 3000);
+    },
+  }));
+
+  function confirmRemove(): void {
+    if (removeTarget === null) return;
+    removeConnectionMutation.mutate({ connectionId: removeTarget });
+    closeRemoveDialog();
+  }
+
+  // ── Provider funds (for linking) ──
+
+  const providerFundsQuery = createQuery(() => ({
+    queryKey: fundKeys.providerFunds(),
+    queryFn: async () =>
+      requireRouter(trpc.donations, "donations").listProviderFunds.query(),
+    enabled: canReadProviderFunds,
+  }));
+
+  function linkValue(link: FundProviderLink | null): string {
+    return link === null ? "" : providerLinkKey(link);
+  }
+
+  // A connection id is a uuid and holds no ":", so the first one ends it;
+  // the external id after it is taken whole.
+  function linkFromValue(value: string): FundProviderLink | null {
+    const separator = value.indexOf(":");
+    if (separator <= 0) return null;
+    return {
+      connectionId: value.slice(0, separator),
+      externalFundId: value.slice(separator + 1),
+    };
+  }
+
   // ── Fund create/edit sheet ──
 
   let fundSheetOpen = $state(false);
   let editingFund = $state<FundView | null>(null);
   let editName = $state("");
   let editCurrency = $state("");
+  let editLink = $state("");
   let fundSaving = $state(false);
+
+  const savedLink = $derived(linkValue(editingFund?.providerLink ?? null));
+  const linkOptions = $derived.by((): RichSelectOption[] => {
+    const options: RichSelectOption[] = [
+      { value: "", label: m.fund_link_none() },
+    ];
+    for (const providerFund of providerFundsQuery.data?.funds ?? []) {
+      const value = providerLinkKey({
+        connectionId: providerFund.connectionId,
+        externalFundId: providerFund.externalId,
+      });
+      if (options.some((o) => o.value === value)) continue;
+      options.push({
+        value,
+        label:
+          providerFund.code === null
+            ? providerFund.name
+            : `${providerFund.name} (${providerFund.code})`,
+      });
+    }
+    // A link the provider does not list stays selectable, so saving the
+    // sheet never drops it without the admin choosing to.
+    if (!options.some((o) => o.value === savedLink)) {
+      options.push({
+        value: savedLink,
+        label: providerFundsQuery.isLoading
+          ? m.common_loading()
+          : m.fund_link_missing(),
+      });
+    }
+    return options;
+  });
 
   const isCreateMode = $derived(editingFund === null);
   const fundSheetTitle = $derived(
@@ -125,7 +323,8 @@
   );
   const fundDirty = $derived(
     editName.trim() !== editingFund?.name ||
-      normalizedCurrency !== editingFund.currency,
+      normalizedCurrency !== editingFund.currency ||
+      editLink !== savedLink,
   );
   const canSaveFund = $derived(
     editName.trim().length > 0 && currencyValid && fundDirty && !fundSaving,
@@ -135,6 +334,7 @@
     editingFund = null;
     editName = "";
     editCurrency = "";
+    editLink = "";
     fundSheetOpen = true;
   }
 
@@ -142,6 +342,7 @@
     editingFund = fund;
     editName = fund.name;
     editCurrency = fund.currency;
+    editLink = linkValue(fund.providerLink);
     fundSheetOpen = true;
   }
 
@@ -164,7 +365,7 @@
       const encryptedPayload = await sealFundPayload(orgKeyManager, {
         name: editName,
         currency: normalizedCurrency,
-        providerLink: editingFund?.providerLink ?? null,
+        providerLink: linkFromValue(editLink),
       });
       if (editingFund === null) {
         await fundsRouter.create.mutate({
@@ -267,12 +468,19 @@
   }
 
   function balanceLine(fund: FundView): string {
-    if (fund.balance === null) return fund.currency;
-    const { balanceMinor } = fund.balance;
-    const amount = formatAmount(balanceMinor, fund.currency);
-    return isBelowZero(balanceMinor)
-      ? m.fund_available_below_zero({ amount })
-      : m.fund_available_amount({ amount });
+    const { available } = fund;
+    switch (available.kind) {
+      case "pending":
+        return fund.currency;
+      case "unavailable":
+        return m.fund_balance_raised_unavailable();
+      case "amount": {
+        const amount = formatAmount(available.minor, fund.currency);
+        return isBelowZero(available.minor)
+          ? m.fund_available_below_zero({ amount })
+          : m.fund_available_amount({ amount });
+      }
+    }
   }
 </script>
 
@@ -367,6 +575,79 @@
   </Card>
 {/if}
 
+{#if canManageDonations}
+  <BlockTitle>{m.admin_donations_title()}</BlockTitle>
+  {#if connectionsQuery.isLoading}
+    <Card raised contentWrap={false} class="funds-card">
+      <div class="donation-card-inner">
+        <div class="status-row">
+          <div class="status-icon status-attention">
+            <HandCoins size={24} aria-hidden="true" />
+          </div>
+          <div class="status-text">
+            <InlineSkeleton width="10rem" />
+            <InlineSkeleton width="6rem" />
+          </div>
+        </div>
+      </div>
+    </Card>
+  {:else if connectionsQuery.isError}
+    <QueryError
+      error={connectionsQuery.error}
+      onretry={() => void connectionsQuery.refetch()}
+    />
+  {:else}
+    {#each connections as connection (connection.id)}
+      <Card raised contentWrap={false} class="funds-card">
+        <div class="donation-card-inner">
+          <div class="status-row">
+            <div
+              class="status-icon"
+              class:ok={connection.webhookRegistered}
+              class:status-attention={!connection.webhookRegistered}
+            >
+              {#if connection.webhookRegistered}
+                <CircleCheckBig size={24} aria-hidden="true" />
+              {:else}
+                <TriangleAlert size={24} aria-hidden="true" />
+              {/if}
+            </div>
+            <div class="status-text">
+              <p class="status-headline">
+                {providerName(connection.provider)}
+              </p>
+              <p class="status-detail">
+                {m.admin_donations_key_ending({ hint: connection.keyHint })}
+              </p>
+              <p class="status-detail">
+                {connection.webhookRegistered
+                  ? m.admin_donations_webhook_registered()
+                  : m.admin_donations_webhook_not_registered()}
+              </p>
+            </div>
+          </div>
+          <SoftButton
+            onclick={() => startRemove(connection.id)}
+            disabled={removeConnectionMutation.isPending}
+            aria-label={m.admin_donations_remove() +
+              " " +
+              m.admin_donations_key_ending({ hint: connection.keyHint })}
+            full
+          >
+            {m.admin_donations_remove()}
+          </SoftButton>
+        </div>
+      </Card>
+    {/each}
+    <div class="donations-actions">
+      <SoftButton onclick={openConnectSheet} full>
+        <Plus size={16} aria-hidden="true" />
+        {m.admin_donations_connect_givebutter()}
+      </SoftButton>
+    </div>
+  {/if}
+{/if}
+
 <!-- Create / edit sheet -->
 <ShellSheet
   opened={fundSheetOpen}
@@ -409,6 +690,26 @@
         inputClass="funds-currency-input"
       />
     </List>
+
+    {#if canReadProviderFunds}
+      <RichSelect
+        label={m.fund_link_label()}
+        value={editLink}
+        options={linkOptions}
+        onchange={(value: string) => {
+          editLink = value;
+        }}
+        disabled={fundSaving ||
+          providerFundsQuery.isLoading ||
+          providerFundsQuery.isError}
+        listClass="edit-sheet-list"
+      />
+      {#if providerFundsQuery.isError}
+        <Register kind="careful" role="status">
+          {m.fund_link_unavailable()}
+        </Register>
+      {/if}
+    {/if}
 
     <Register kind="protected">
       {m.admin_funds_protected()}
@@ -508,6 +809,70 @@
     </List>
   </div>
 </ShellSheet>
+
+<!-- Connect Givebutter sheet -->
+<ShellSheet
+  opened={connectSheetOpen}
+  ondismiss={closeConnectSheet}
+  ariaLabel={m.admin_donations_connect_givebutter()}
+  title={m.admin_donations_connect_givebutter()}
+>
+  {#snippet headerRight()}
+    <SoftButton onclick={handleSaveConnection} disabled={!canSaveConnection}>
+      {#if saveConnectionMutation.isPending}
+        <Preloader class="w-4 h-4" />
+      {:else}
+        <Save size={16} aria-hidden="true" />
+      {/if}
+      {m.common_save()}
+    </SoftButton>
+  {/snippet}
+
+  <div class="edit-sheet-body">
+    <List nested class="edit-sheet-list">
+      <PasswordInput
+        label={m.admin_donations_api_key_label()}
+        autocomplete="off"
+        bind:value={apiKeyInput}
+        disabled={saveConnectionMutation.isPending}
+      />
+    </List>
+
+    <Register kind="note">
+      {m.admin_donations_api_key_hint()}
+    </Register>
+  </div>
+</ShellSheet>
+
+<!-- Remove connection confirmation -->
+<ShellDialog
+  opened={removeDialogOpen}
+  ondismiss={closeRemoveDialog}
+  title={m.admin_donations_remove()}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">
+      {m.admin_donations_remove_confirm()}
+    </p>
+    <Register kind="note">
+      {m.admin_donations_remove_webhook_note()}
+    </Register>
+  {/snippet}
+  {#snippet buttons()}
+    <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
+    <DialogButton onclick={closeRemoveDialog}>
+      {m.common_cancel()}
+    </DialogButton>
+    <!-- care-y-ignore-next-line no-click-without-keyboard -- DialogButton renders a native <button> -->
+    <DialogButton
+      strong
+      class={DIALOG_DESTRUCTIVE_CLASS}
+      onclick={confirmRemove}
+    >
+      {m.admin_donations_remove()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   :global(.funds-card) {
@@ -654,6 +1019,42 @@
 
   :global(.adjust-direction-seg) {
     width: 100%;
+  }
+
+  /* ── Donation providers ── */
+
+  .donation-card-inner {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    padding: var(--card-pad-y) var(--card-pad-x);
+  }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+  }
+
+  .status-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .status-headline {
+    font-weight: 600;
+    font-size: var(--text-base);
+  }
+
+  .status-detail {
+    font-size: var(--text-sm);
+    color: var(--muted);
+  }
+
+  .donations-actions {
+    margin: var(--space-sm) var(--space-md);
   }
 
   .deactivate-action {
