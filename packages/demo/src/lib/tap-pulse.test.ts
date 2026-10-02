@@ -6,6 +6,7 @@ import {
   buildActivationCandidates,
   buildSmsTitleCandidates,
   buildReplyTitleCandidates,
+  buildDisbursementTitleCandidates,
   buildComposeDismissCandidates,
   buildCloseReopenCandidates,
   findTopicElement,
@@ -510,6 +511,32 @@ describe("ticket-disbursement candidates", () => {
     for (const label of buildTopicCandidates("compose-actions")) {
       expect(candidates.has(label)).toBe(false);
     }
+  });
+});
+
+describe("buildDisbursementTitleCandidates", () => {
+  it("contains only the popover entry label, not the trigger or sheet title", () => {
+    const candidates = buildDisbursementTitleCandidates();
+    expect(candidates.has("Record disbursement")).toBe(true);
+    const full = buildTopicCandidates("ticket-disbursement");
+    for (const label of candidates) {
+      expect(full.has(label)).toBe(true);
+    }
+    // Stage 2 rings the popover entry only; the sheet title belongs to
+    // a surface the narration must not open.
+    expect(candidates.has("Edit disbursement")).toBe(false);
+    // The compose trigger stays visible while the popover mounts and
+    // would win the match over the entry.
+    for (const label of buildTopicCandidates("compose-actions")) {
+      expect(candidates.has(label)).toBe(false);
+    }
+  });
+
+  it("keeps ticket-disbursement out of the tap path", () => {
+    // A tap on the entry would open DisbursementSheet; the
+    // choreography rings it instead.
+    expect(TAP_TOPICS.has("ticket-disbursement")).toBe(false);
+    expect(buildActivationCandidates("ticket-disbursement").size).toBe(0);
   });
 });
 

@@ -777,6 +777,21 @@ export function buildNoteTitleCandidates(): Set<string> {
   return candidates;
 }
 
+/**
+ * Stage-2 candidates for the ticket-disbursement choreography: the
+ * compose-actions popover's "Record disbursement" entry alone. The
+ * sheet title (assist_edit_title) is left out because the narration
+ * only points at the entry, and the compose trigger's label is left
+ * out for the same reason as the notes helper.
+ */
+export function buildDisbursementTitleCandidates(): Set<string> {
+  const candidates = new Set<string>();
+  for (const locale of locales) {
+    candidates.add(m.assist_record({}, { locale }));
+  }
+  return candidates;
+}
+
 /** The compose-actions trigger label, for staged flows that open it. */
 export function buildComposeTriggerCandidates(): Set<string> {
   const candidates = new Set<string>();
@@ -1074,9 +1089,9 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
       case "close-reopen":
       case "message-actions":
       case "exposure-hints":
-      // Visual-only. Its entry sits inside the compose-actions popover,
-      // and PhoneApp runs no two-stage choreography to reach it the way
-      // it does for notes.
+      // Never tapped. PhoneApp's two-stage choreography opens the
+      // compose-actions popover and rings the Record disbursement entry
+      // without clicking it, because the click would open the sheet.
       case "ticket-disbursement":
       case "settings-appearance":
       case "library-vote":

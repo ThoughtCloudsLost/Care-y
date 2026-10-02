@@ -84,6 +84,7 @@
     buildSmsTitleCandidates,
     buildReplyTitleCandidates,
     buildNoteTitleCandidates,
+    buildDisbursementTitleCandidates,
     buildComposeTriggerCandidates,
     buildComposeDismissCandidates,
     buildCloseReopenCandidates,
@@ -1502,6 +1503,60 @@
         requestAnimationFrame(() => r());
       });
       if (stale()) return;
+    }
+
+    // ticket-disbursement: two-stage choreography on the notes model
+    // below. Record disbursement is an entry inside the compose-actions
+    // popover (ComposeActions.svelte), so a direct label match cannot
+    // reach it. Stage 1: click the compose actions trigger. Stage 2:
+    // wait for the popover's Record disbursement entry and ring it
+    // without clicking, because the click would open DisbursementSheet.
+    // The open popover mutates nothing; the next pulse's
+    // dismissOpenOverlays closes it. This runs ahead of the generic
+    // label resolution because the topic's labels only exist while the
+    // popover, the sheet or a note's context menu is open, so that
+    // poll would wait out its full timeout before reaching here.
+    if (pulseTopic === "ticket-disbursement") {
+      const trigger = await resolveTopicElement(
+        document,
+        buildComposeTriggerCandidates(),
+        stale,
+      );
+      if (stale()) return;
+      if (trigger === null) {
+        markPulseTarget(pulseTopic, "missing");
+        return;
+      }
+      // Closes a popover or sheet left open by an aborted run (or by
+      // the compose-actions sub's tap) before this run opens its own.
+      dismissOpenOverlays(trigger);
+      renderPulseMarker(trigger);
+      const triggerClickable = findClickableTarget(trigger);
+      if (triggerClickable === null) {
+        markPulseTarget(pulseTopic, "marked", trigger);
+        return;
+      }
+      triggerClickable.click();
+      const entryEl = await waitForElement(
+        document,
+        buildDisbursementTitleCandidates(),
+        stale,
+      );
+      if (stale()) return;
+      if (entryEl === null) {
+        // The popover opened without the entry (no fund on the queue,
+        // or no permission): the tap is all this run performed.
+        markPulseTarget(pulseTopic, "tapped", trigger);
+        return;
+      }
+      // Same paint delay the notes stage-2 click waits out, so the
+      // popover has settled before the ring and the log read its rect.
+      await new Promise<void>((r) => setTimeout(r, 150));
+      if (stale()) return;
+      const entryTarget = findClickableTarget(entryEl) ?? entryEl;
+      renderPulseMarker(entryTarget);
+      markPulseTarget(pulseTopic, "marked", entryTarget);
+      return;
     }
 
     // Tap topics get the real interaction (the marker taps the actual
