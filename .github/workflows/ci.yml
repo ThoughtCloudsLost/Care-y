@@ -10,28 +10,29 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The three expensive legs (type check, lint, tests) run as separate jobs so
+# the wall clock is the slowest leg rather than their sum. The "ci" job at
+# the end reports their combined result under the one context the main
+# branch ruleset requires, so the ruleset does not change when a leg does.
+env:
+  # pnpm/action-setup and gitleaks/gitleaks-action have not yet released
+  # Node 24 builds. This opts them into Node 24 ahead of the June 2026
+  # forced migration.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
-  ci:
+  check:
     runs-on: ubuntu-24.04
-    # Reaching the test phase costs about 13 minutes on its own (install,
-    # type check, lint, format). The 20 minute ceiling left roughly 6 minutes
-    # for tests and coverage, which is less than the suite needs.
-    timeout-minutes: 35
+    timeout-minutes: 15
     permissions:
       contents: read # checkout
-      pull-requests: read
       security-events: write # gitleaks SARIF upload
-    env:
-      # pnpm/action-setup and gitleaks/gitleaks-action have not yet released
-      # Node 24 builds. This opts them into Node 24 ahead of the June 2026
-      # forced migration.
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # gitleaks scans the commit range
 
       - name: Install pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -48,9 +49,6 @@ jobs:
       - name: Type check
         run: pnpm run typecheck
 
-      - name: Lint (strict)
-        run: pnpm run lint:strict
-
       # Identifier columns must carry branded types (ADR-074). Type checking
       # cannot catch a NEW column added as a bare string, since nothing yet
       # compares it to anything.
@@ -59,6 +57,78 @@ jobs:
 
       - name: Format check
         run: pnpm run format
+
+      - name: Secret scanning
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Typed linting resolves the compiled messages, which are not tracked.
+      - name: Compile paraglide
+        run: pnpm --filter @care-y/shared run build:paraglide && pnpm --filter @care-y/client run build:paraglide
+
+      # The ESLint cache only helps across runs if it survives the runner.
+      # Keyed on the lockfile and the lint config so a rule change starts
+      # cold; the sha suffix makes every run save its own entry and the
+      # restore-keys prefix picks the newest one up.
+      - name: Restore ESLint cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.cache/eslint
+          key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.js') }}-${{ github.sha }}
+          restore-keys: |
+            eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.js') }}-
+
+      # A fresh checkout gives every file a new mtime, so the cache has to
+      # compare content, not metadata. Linting threads stay off in the
+      # package script because the 8 GB development machines cannot hold
+      # several typed-lint workers at once; the runner can.
+      - name: Lint (strict)
+        run: pnpm run lint:strict --cache-strategy content --concurrency auto
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read # checkout
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Create test .env
         run: |
@@ -86,17 +156,40 @@ jobs:
       - name: Start test containers
         run: docker compose -f docker-compose.test.yml up -d --build --wait
 
+      # Coverage instrumentation taxes every test file. Pull requests run
+      # the suite plain; the push to main after a merge runs it with
+      # coverage and enforces the thresholds in coverage-thresholds.json.
+      - name: Tests
+        if: github.event_name == 'pull_request'
+        run: docker compose -f docker-compose.test.yml exec app pnpm vitest run
+
       - name: Tests + coverage
+        if: github.event_name == 'push'
         run: docker compose -f docker-compose.test.yml exec app pnpm vitest run --coverage
 
       - name: Stop test containers
         if: always()
         run: docker compose -f docker-compose.test.yml down
 
-      - name: Secret scanning
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+  # The one context the main branch ruleset requires. Runs whether or not
+  # the legs passed, and fails unless every one of them succeeded, so a
+  # cancelled or skipped leg cannot read as green.
+  ci:
+    needs: [check, lint, test]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+
+    steps:
+      - name: Every leg succeeded
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "check lint test: $RESULTS"
+          for r in $RESULTS; do
+            [ "$r" = "success" ] || { echo "::error::a CI leg did not succeed ($RESULTS)"; exit 1; }
+          done
 
   # Host provisioning scripts run as root and edit auth-critical config.
   # shellcheck comes preinstalled on the runner image: no action, no install.
