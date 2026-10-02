@@ -1,5 +1,3 @@
- 
-
 # CARE-Y
 
 **Care Anonymized, Redacted, Encrypted - ████**

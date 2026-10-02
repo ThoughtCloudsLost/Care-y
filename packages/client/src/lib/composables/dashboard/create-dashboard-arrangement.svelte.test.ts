@@ -65,8 +65,11 @@ interface Layout {
   dashboard: HTMLElement;
   band: HTMLElement;
   lanes: HTMLElement;
-  /** A lane's list body; unset for a layout whose lanes are not laid out. */
-  laneBody: HTMLElement | undefined;
+  /**
+   * A lane's list body; unset for a layout whose lanes are not laid out,
+   * null for one whose body has unmounted.
+   */
+  laneBody: HTMLElement | null | undefined;
 }
 
 /**
@@ -198,7 +201,9 @@ describe("isBoardEligible", () => {
 describe("chromeAboveLaneBodies", () => {
   it("is how far below the dashboard's top the lane bodies start", () => {
     const { dashboard, laneBody } = buildLayout();
-    if (laneBody === undefined) throw new Error("no lane body");
+    if (laneBody === undefined || laneBody === null) {
+      throw new Error("no lane body");
+    }
     expect(chromeAboveLaneBodies(dashboard, laneBody)).toBe(300);
   });
 });
@@ -261,6 +266,17 @@ describe("createDashboardArrangement", () => {
     expect(arrangement.boardHeight).toBeUndefined();
   });
 
+  it("treats a lane body that has unmounted as absent", () => {
+    const layout = buildLayout();
+    styles.set(layout.lanes, {
+      gridTemplateColumns: "300px 300px 300px 300px",
+    });
+    layout.laneBody = null;
+    const arrangement = createArrangement(layout);
+    expect(arrangement.lanesPerRow).toBe(4);
+    expect(arrangement.board).toBe(false);
+  });
+
   it("stays out of board mode while the dashboard is nested below its scroller's root", () => {
     const layout = buildLayout();
     const wrapper = document.createElement("div");
@@ -284,7 +300,9 @@ describe("createDashboardArrangement", () => {
     const arrangement = createArrangement(layout);
     expect(arrangement.board).toBe(true);
 
-    if (layout.laneBody === undefined) throw new Error("no lane body");
+    if (layout.laneBody === undefined || layout.laneBody === null) {
+      throw new Error("no lane body");
+    }
     setBox(layout.laneBody, SQUEEZED_BODY_TOP);
     resize(layout.band);
     expect(arrangement.board).toBe(false);
@@ -295,7 +313,9 @@ describe("createDashboardArrangement", () => {
     const layout = buildLayout();
     styles.set(layout.lanes, { gridTemplateColumns: FOUR_ACROSS });
     const arrangement = createArrangement(layout);
-    if (layout.laneBody === undefined) throw new Error("no lane body");
+    if (layout.laneBody === undefined || layout.laneBody === null) {
+      throw new Error("no lane body");
+    }
 
     setBox(layout.laneBody, SQUEEZED_BODY_TOP);
     resize(layout.dashboard);
@@ -311,7 +331,9 @@ describe("createDashboardArrangement", () => {
     const layout = buildLayout();
     styles.set(layout.lanes, { gridTemplateColumns: FOUR_ACROSS });
     const arrangement = createArrangement(layout);
-    if (layout.laneBody === undefined) throw new Error("no lane body");
+    if (layout.laneBody === undefined || layout.laneBody === null) {
+      throw new Error("no lane body");
+    }
 
     setBox(layout.laneBody, SQUEEZED_BODY_TOP);
     resize(layout.laneBody);

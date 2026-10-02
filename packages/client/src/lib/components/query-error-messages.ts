@@ -143,6 +143,7 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.NOTE_TYPE_NOT_FOUND]: () => m.error_note_type_not_found(),
   [ErrorCode.CANNOT_DEACTIVATE_DEFAULT_NOTE_TYPE]: () =>
     m.error_cannot_deactivate_default_note_type(),
+  [ErrorCode.NOTE_TYPE_RESERVED]: () => m.error_note_type_reserved(),
   // Intentional: INSUFFICIENT_ROLE maps to the generic error message.
   // The specific permission error is not shown to users to avoid
   // leaking role structure information.

@@ -655,6 +655,9 @@ export {
   type FundEntryType,
   type FundLedgerPayload,
   type DisbursementNoteEnvelope,
+  DISBURSEMENT_NOTE_TYPE_KEY,
+  ensureDisbursementNoteTypeInputSchema,
+  type EnsureDisbursementNoteTypeInput,
 } from "./schemas/funds.js";
 
 // --- Terminology schemas ---

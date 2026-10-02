@@ -1,7 +1,7 @@
 <!--
-  Record or correct a disbursement from a case. Same anatomy as
-  InternalNoteSheet: shell sheet, save in the header, a Note register
-  saying who sees what, a RichSelect picker, then the inputs. Owns its
+  Record or correct a disbursement from a case. It has the same anatomy
+  as InternalNoteSheet, a shell sheet with save in the header, a Note
+  register saying who sees what, a RichSelect picker, then the inputs. Owns its
   encryption, mutation and dismiss lifecycle; callers provide ticketId,
   opened/ondismiss, and the disbursement when correcting one.
 
@@ -31,7 +31,7 @@
   } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
-  import { ticketKeys } from "$lib/query/keys.js";
+  import { noteTypeKeys, ticketKeys } from "$lib/query/keys.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import {
@@ -217,11 +217,30 @@
     );
   }
 
+  /**
+   * Every disbursement note carries the org's disbursement note type. The
+   * first save in an org creates it, sealed under the Org Key like any
+   * other note type.
+   */
+  async function ensureNoteType(): Promise<void> {
+    const result = await fundsRouter.ensureDisbursementNoteType.mutate({
+      encryptedName: await orgKeyManager.encryptText(
+        m.fund_disbursement_note_type_name(),
+      ),
+      encryptedIcon: await orgKeyManager.encryptText("hand-coins"),
+    });
+    if (result.created) {
+      // The timeline resolves the new type's name and icon from this list.
+      void queryClient.invalidateQueries({ queryKey: noteTypeKeys.all });
+    }
+  }
+
   async function recordNew(
     target: FundView,
     recordedBy: UserId,
     minor: number,
   ): Promise<void> {
+    await ensureNoteType();
     const ledgerEntryId = newFundLedgerId();
     const followUpId = newFollowupId();
     const encryptedPayload = await sealLedgerPayload(
@@ -253,6 +272,7 @@
     recordedBy: UserId,
     minor: number,
   ): Promise<void> {
+    await ensureNoteType();
     const { envelope } = current;
     const revision = disbursementRevision({
       envelope,
@@ -315,7 +335,9 @@
         queryKey: ticketKeys.followUps(ticketId),
       });
     } catch (err: unknown) {
-      // Both calls are single transactions: a failure saved nothing.
+      // The note type request runs first and is idempotent. The record and
+      // revise calls are each one transaction, so a failure there saves
+      // nothing.
       toastStore.show(getErrorMessage(err), 3000);
     } finally {
       saving = false;

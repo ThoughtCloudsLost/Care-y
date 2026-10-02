@@ -190,6 +190,10 @@ function createFakeServer(): FakeServer {
     ],
     ["funds.recordAdjustment", recordEntry],
     ["funds.recordDisbursement", recordEntry],
+    [
+      "funds.ensureDisbursementNoteType",
+      () => ({ id: nextId("disbursement-note-type"), created: true }),
+    ],
   ]);
   for (const path of [
     "tickets.createFollowUp",
@@ -509,6 +513,22 @@ describe("seedReplay", () => {
       e.plaintext.startsWith(NOTE_ENVELOPE_MARKER),
     );
     expect(envelopes).toHaveLength(withNote.length);
+
+    // The disbursement note type is ensured once, before the first case
+    // note that carries it.
+    const ensured = server.calls.findIndex(
+      (c) => c.path === "funds.ensureDisbursementNoteType",
+    );
+    const firstCaseNote = server.calls.findIndex(
+      (c) =>
+        c.path === "funds.recordDisbursement" &&
+        readField(c.input, "caseNote") !== undefined,
+    );
+    expect(
+      inputsOf(server.calls, "funds.ensureDisbursementNoteType"),
+    ).toHaveLength(1);
+    expect(ensured).toBeGreaterThanOrEqual(0);
+    expect(ensured).toBeLessThan(firstCaseNote);
   });
 
   it("chains each fund's balance version and seals under the row's generation", async () => {

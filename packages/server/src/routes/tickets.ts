@@ -274,7 +274,7 @@ import {
   channelSecretSchema,
   clientIdSchema,
 } from "@care-y/shared";
-import type { UserId, QueueId } from "@care-y/shared";
+import type { NoteTypeId, UserId, QueueId } from "@care-y/shared";
 
 import { b64, b64n, b64KeyWrap } from "../utils/ciphertext-wire.js";
 import {
@@ -441,6 +441,23 @@ function buildSearchRoutes(
       }),
     ),
   };
+}
+
+/**
+ * Refuse a system note type on an ordinary note write. The ordinary note
+ * routes never assign a reserved type, so a reserved type can only be
+ * given by the flow that owns it.
+ */
+async function refuseReservedNoteType(
+  factory: ((tDb: OrgContext["tenantDb"]) => NoteTypeService) | undefined,
+  tDb: OrgContext["tenantDb"],
+  noteTypeId: NoteTypeId | undefined,
+): Promise<void> {
+  if (noteTypeId === undefined || factory === undefined) return;
+  const systemKey = await factory(tDb).getSystemKey(noteTypeId);
+  if (typeof systemKey === "string") {
+    throw new ForbiddenError(ErrorCode.NOTE_TYPE_RESERVED);
+  }
 }
 
 function buildNoteTypeRoutes(
@@ -981,6 +998,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             ctx.user.roleId,
             permissionForFollowUpType(input.type),
           );
+          await refuseReservedNoteType(
+            deps.createNoteTypeSvc,
+            ctx.org.tenantDb,
+            input.noteTypeId,
+          );
           if (
             input.type === "internal_note" &&
             input.noteTypeId !== undefined &&
@@ -1187,6 +1209,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(updateInternalNoteInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
+          await refuseReservedNoteType(
+            deps.createNoteTypeSvc,
+            ctx.org.tenantDb,
+            input.noteTypeId,
+          );
           const svc = followUpWriteSvc(ctx.org);
           const { record, previousNoteTypeId } = await svc.updateInternalNote(
             ctx.user.id,

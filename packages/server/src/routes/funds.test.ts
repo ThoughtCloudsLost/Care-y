@@ -37,12 +37,15 @@ import {
   mockRes,
   seedOrgPublicKey,
   testSealedBox,
+  TEST_OPS_KEY,
   TEST_ORG_ID,
   type TestDb,
 } from "../test-utils.js";
 import { createTicketAccessChecker } from "../tickets/access.js";
 import { createFollowUpService } from "../tickets/followup-service.js";
 import { createAuditService } from "../tickets/audit.js";
+import { createNoteTypeService } from "../tickets/note-type-service.js";
+import { createSecretsEncryptor, deriveSecretsKey } from "../config/secrets.js";
 import type { NotificationService } from "../notifications/service.js";
 import { invalidateRolePermissionCache } from "../auth/roles.js";
 
@@ -52,17 +55,27 @@ const ENC_ENTRY = encode(Buffer.from("sealed-ledger-payload"));
 const ENC_NOTE = encode(Buffer.from("ticket-key-envelope-note"));
 const ENC_NOTE_2 = encode(Buffer.from("ticket-key-envelope-note-2"));
 const ENC_BALANCE = encode(Buffer.from("sealed-balance"));
+const ENC_TYPE_NAME = encode(Buffer.from("sealed-note-type-name"));
+const ENC_TYPE_ICON = encode(Buffer.from("sealed-note-type-icon"));
+
+// OPS-tier encryptor for note type escalation targets, keyed with the
+// committed test key as in the tickets router tests.
+const testSecretsEncryptor = createSecretsEncryptor(
+  deriveSecretsKey(TEST_OPS_KEY),
+);
 
 describe.skipIf(!process.env.DATABASE_URL)("funds router", () => {
   let testDb: TestDb;
   let volunteer: Selectable<UsersTable>;
   let admin: Selectable<UsersTable>;
+  let disbursementTypeId: string;
 
   const deps: FundsRouterDeps = {
     createTicketAccess: (db) => createTicketAccessChecker(db),
     createFollowUpSvc: (db, access, followUpDeps) =>
       createFollowUpService(db, access, followUpDeps),
     createAuditSvc: (db) => createAuditService(db),
+    createNoteTypeSvc: (db) => createNoteTypeService(db, testSecretsEncryptor),
     notificationService: {
       dispatch: vi.fn<NotificationService["dispatch"]>(),
       dispatchTicketless: vi
@@ -134,6 +147,13 @@ describe.skipIf(!process.env.DATABASE_URL)("funds router", () => {
     admin = await createTestUser(testDb.db, {
       overrides: { role_id: RoleId.ADMIN },
     });
+    // Every disbursement case note carries the org's disbursement note
+    // type; the client ensures it before the first write.
+    const ensured = await callerFor(admin).funds.ensureDisbursementNoteType({
+      encryptedName: ENC_TYPE_NAME,
+      encryptedIcon: ENC_TYPE_ICON,
+    });
+    disbursementTypeId = ensured.id;
   }, 30_000);
 
   afterAll(async () => {
@@ -333,6 +353,37 @@ describe.skipIf(!process.env.DATABASE_URL)("funds router", () => {
     });
   });
 
+  describe("disbursement note type", () => {
+    it("returns the existing type without creating another", async () => {
+      const caller = callerFor(volunteer);
+      const again = await caller.funds.ensureDisbursementNoteType({
+        encryptedName: ENC_TYPE_NAME,
+        encryptedIcon: ENC_TYPE_ICON,
+      });
+      expect(again).toEqual({ id: disbursementTypeId, created: false });
+
+      const rows = await testDb.db
+        .selectFrom("note_types")
+        .select("id")
+        .where("system_key", "is not", null)
+        .execute();
+      expect(rows.map((r) => r.id)).toEqual([disbursementTypeId]);
+    });
+
+    it("audits the creation once", async () => {
+      await vi.waitFor(async () => {
+        const audit = await testDb.db
+          .selectFrom("audit_log")
+          .select(["event_type", "actor_id"])
+          .where("event_type", "=", "note_type_created")
+          .execute();
+        expect(audit).toEqual([
+          { event_type: "note_type_created", actor_id: admin.id },
+        ]);
+      });
+    });
+  });
+
   describe("funds", () => {
     it("creates, lists and updates a fund as base64url ciphertext", async () => {
       const caller = callerFor(admin);
@@ -428,11 +479,12 @@ describe.skipIf(!process.env.DATABASE_URL)("funds router", () => {
 
       const note = await testDb.db
         .selectFrom("followups")
-        .select(["type", "is_private", "encrypted_content"])
+        .select(["type", "is_private", "note_type_id", "encrypted_content"])
         .where("id", "=", followUpId)
         .executeTakeFirstOrThrow();
       expect(note.type).toBe("internal_note");
       expect(note.is_private).toBe(true);
+      expect(note.note_type_id).toBe(disbursementTypeId);
       expect(encode(note.encrypted_content)).toBe(ENC_NOTE);
     });
 

@@ -762,6 +762,7 @@ export interface NoteTypesTable {
     RoleIdValue
   >;
   created_at: Generated<Date>;
+  system_key: string | null;
 }
 
 export interface FollowupReactionsTable {

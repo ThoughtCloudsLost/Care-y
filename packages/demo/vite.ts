@@ -289,13 +289,19 @@ export function nodeEngineAliases(): Alias[] {
  * Inject the production splash into phone.html at serve/build time.
  *
  * Production paints #splash from static markup in the client's app.html
- * before any JS loads. The phone iframe must do the same: a component-
- * rendered splash appears only after the whole dev module graph loads,
- * leaving seconds of white. Extracting from app.html here (instead of
- * hand-copying) keeps the demo from drifting when the splash changes.
+ * before any JS loads, styled by the client's static splash stylesheet.
+ * The phone iframe must do the same: a component-rendered splash appears
+ * only after the whole dev module graph loads, leaving seconds of white.
+ * Extracting from the client's files here (instead of hand-copying) keeps
+ * the demo from drifting when the splash changes. The stylesheet is
+ * inlined because the demo has no CSP and serves no /styles/ path.
  * DemoSplash.svelte still owns dismissal via the body.hydrated class.
  */
-export function injectDemoSplash(html: string, appHtml: string): string {
+export function injectDemoSplash(
+  html: string,
+  appHtml: string,
+  splashCss: string,
+): string {
   // Extract the blocking scheme script that reads localStorage
   // "care-y-color-scheme" and applies theme classes before first
   // paint. Strip the nonce attribute (the demo has no CSP).
@@ -308,13 +314,16 @@ export function injectDemoSplash(html: string, appHtml: string): string {
           .replace(/ nonce='[^']*'/, "")
       : "";
 
-  // Every style block that targets #splash, with the SvelteKit
-  // nonce template attribute stripped (the demo has no CSP nonce).
-  const styles = [...appHtml.matchAll(/<style[^>]*>[\s\S]*?<\/style>/g)]
+  // The client's splash stylesheet, inlined. Any inline style block in
+  // the template that still targets #splash is carried along too, with
+  // the SvelteKit nonce template attribute stripped.
+  const inlineStyles = [...appHtml.matchAll(/<style[^>]*>[\s\S]*?<\/style>/g)]
     .map((match) => match[0])
     .filter((block) => block.includes("#splash"))
-    .map((block) => block.replace(/<style[^>]*>/, "<style>"))
-    .join("\n");
+    .map((block) => block.replace(/<style[^>]*>/, "<style>"));
+  const styles = [`<style>\n${splashCss}\n</style>`, ...inlineStyles].join(
+    "\n",
+  );
 
   // The splash div is flat (img + span), so a non-greedy match
   // ends at the correct closing tag.
@@ -343,6 +352,7 @@ export function injectDemoSplash(html: string, appHtml: string): string {
 
 export function demoSplashPlugin(): Plugin {
   const appHtmlPath = resolve("../client/src/app.html");
+  const splashCssPath = resolve("../client/static/styles/splash.css");
 
   return {
     name: "care-y-demo-splash",
@@ -353,8 +363,10 @@ export function demoSplashPlugin(): Plugin {
 
         // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time constant derived from import.meta.url, no user input
         const appHtml = readFileSync(appHtmlPath, "utf8");
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time constant derived from import.meta.url, no user input
+        const splashCss = readFileSync(splashCssPath, "utf8");
 
-        return injectDemoSplash(html, appHtml);
+        return injectDemoSplash(html, appHtml, splashCss);
       },
     },
   };

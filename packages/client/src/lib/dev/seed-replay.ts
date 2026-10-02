@@ -145,7 +145,11 @@ export interface SeedReplayClient {
    */
   readonly funds?: Pick<
     FundsClient,
-    "create" | "list" | "recordAdjustment" | "recordDisbursement"
+    | "create"
+    | "list"
+    | "recordAdjustment"
+    | "recordDisbursement"
+    | "ensureDisbursementNoteType"
   >;
 }
 
@@ -2200,6 +2204,9 @@ async function runReplay(
       }
     }
 
+    // Every case note below carries the disbursement note type, which the
+    // first one has to bring into existence.
+    let disbursementNoteTypeEnsured = false;
     for (const def of SEED_DISBURSEMENTS) {
       const fund = seeded[def.fundIndex];
       if (fund === undefined) continue;
@@ -2229,6 +2236,14 @@ async function runReplay(
         });
         landed(fund, deltaMinor, result);
         continue;
+      }
+      if (!disbursementNoteTypeEnsured) {
+        // Dev seed only, always English, so the name is a literal.
+        await fundsRouter.ensureDisbursementNoteType.mutate({
+          encryptedName: seal("Disbursement", orgPublicKey),
+          encryptedIcon: seal("hand-coins", orgPublicKey),
+        });
+        disbursementNoteTypeEnsured = true;
       }
       await cacheTicketKey(ticketId);
       const followUpId = newFollowupId();
