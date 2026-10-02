@@ -87,6 +87,7 @@ const ADMIN_SUB_PATHS: ReadonlySet<string> = new Set([
   "forms",
   "forms/responses",
   "logs",
+  "funds",
 ]);
 
 /**
@@ -253,12 +254,17 @@ function resolveFeature(pathname: string): {
     // Admin areas
     if (ctx.area === "admin") {
       // The product's nav map has entries for the five admin areas only
-      // (shell/nav-context.ts), so /admin/forms, its responses view and
-      // /admin/logs all resolve to the bare "admin" area and would be
-      // indistinguishable from the hub. Recover the sub-path here rather
+      // (shell/nav-context.ts), so /admin/forms, its responses view,
+      // /admin/logs and /admin/funds all resolve to the bare "admin" area
+      // and would be indistinguishable from the hub. Recover the sub-path here rather
       // than adding demo-only entries to the product's map.
       const sub = pathname.replace(/^\/admin\/?/, "").replace(/\/$/, "");
-      if (sub === "forms" || sub === "forms/responses" || sub === "logs") {
+      if (
+        sub === "forms" ||
+        sub === "forms/responses" ||
+        sub === "logs" ||
+        sub === "funds"
+      ) {
         return { feature: "admin", detail: sub, ctx };
       }
       return { feature: "admin", detail: null, ctx };

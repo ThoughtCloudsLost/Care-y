@@ -500,6 +500,19 @@ describe("buildReplyTitleCandidates", () => {
   });
 });
 
+describe("ticket-disbursement candidates", () => {
+  it("name the popover entry and the edit action, not the compose trigger", () => {
+    const candidates = buildTopicCandidates("ticket-disbursement");
+    expect(candidates.has("Record disbursement")).toBe(true);
+    expect(candidates.has("Edit disbursement")).toBe(true);
+    // The trigger is always on screen and would win the match before
+    // the popover entry mounts.
+    for (const label of buildTopicCandidates("compose-actions")) {
+      expect(candidates.has(label)).toBe(false);
+    }
+  });
+});
+
 describe("buildComposeDismissCandidates", () => {
   it("returns non-empty candidates", () => {
     const candidates = buildComposeDismissCandidates();

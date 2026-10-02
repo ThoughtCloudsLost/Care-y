@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The compose menu offers a reply on the client's encrypted channel, a text, an email, a file, a preset reply, or an internal note. [[#client-data]] **Which op..." |
+* | "The compose menu offers a reply on the client's encrypted channel, a text, an email, a file, a preset reply, an internal note, or a recorded disbursement. [[..." |
 *
 * @param {Demo_Narrative_Topic_Compose_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The panel holds the client's contact details and their channel, the notes and files on the ticket, and the actions available on it: - Editing - Assigning - C..." |
+* | "The panel holds the client's contact details and their channel, the notes and files on the ticket, the fund balance for the case's queue, and the actions ava..." |
 *
 * @param {Demo_Narrative_Topic_Case_Panel_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

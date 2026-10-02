@@ -484,6 +484,18 @@ export const SECTIONS: readonly Section[] = [
         // panel's actions rather than from the thread.
         highlight: { selectors: [".share-sheet-body", ".case-header"] },
       },
+      // The fund line renders inside the case panel just above
+      // PortalTierSection (TicketPanelContent.svelte:312), so it closes
+      // the panel run after the three portal-tier subs rather than
+      // splitting them. .fund-balance only mounts once the balance
+      // decrypts; the case header stands in until then.
+      {
+        slug: "fund-balance",
+        topic: null,
+        headingKey: "demo_narrative_topic_fund_balances_heading",
+        bodyKey: "demo_narrative_topic_fund_balances_body",
+        highlight: { selectors: [".fund-balance", ".case-header"] },
+      },
       {
         slug: "thread-filters",
         topic: "thread-filters",
@@ -608,6 +620,16 @@ export const SECTIONS: readonly Section[] = [
         topic: "compose-actions",
         headingKey: "demo_narrative_topic_compose_actions_heading",
         bodyKey: "demo_narrative_topic_compose_actions_body",
+      },
+      // Record disbursement is an entry in the compose-actions popover
+      // (ComposeActions.svelte:153), and neither it nor the trigger
+      // carries a class or testid, so the topic's label match is the
+      // target.
+      {
+        slug: "disbursement",
+        topic: "ticket-disbursement",
+        headingKey: "demo_narrative_topic_disbursement_heading",
+        bodyKey: "demo_narrative_topic_disbursement_body",
       },
       {
         slug: "outbound-edit",
@@ -927,8 +949,9 @@ export const SECTIONS: readonly Section[] = [
     descKey: "demo_section_admin_org_desc",
     routes: SECTION_ROUTES["admin-org"],
     group: "org",
-    // Scroll-nav page (CollapsibleSectionPage). Every sub slug matches
-    // its section id 1:1 (admin/organization/+page.svelte:27-67).
+    // Scroll-nav page (CollapsibleSectionPage). Every sub slug except
+    // fund-ledger matches its section id 1:1
+    // (admin/organization/+page.svelte:33-109).
     subs: [
       {
         slug: "general",
@@ -966,6 +989,13 @@ export const SECTIONS: readonly Section[] = [
         highlight: { section: "retention" },
       },
       {
+        slug: "org-deletion",
+        topic: null,
+        headingKey: "demo_narrative_admin_org_deletion_heading",
+        bodyKey: "demo_narrative_admin_org_deletion_body",
+        highlight: { section: "org-deletion" },
+      },
+      {
         slug: "note-types",
         topic: "admin-note-types",
         headingKey: "demo_narrative_admin_note_types_heading",
@@ -981,6 +1011,26 @@ export const SECTIONS: readonly Section[] = [
         // (admin/organization/+page.svelte:73). It is the list the two
         // form sections below open their detail from.
         highlight: { section: "intake-forms" },
+      },
+      {
+        slug: "funds",
+        topic: null,
+        headingKey: "demo_narrative_admin_funds_heading",
+        bodyKey: "demo_narrative_admin_funds_body",
+        highlight: { section: "funds" },
+      },
+      // The one admin-org sub that is not a section of the Organization
+      // page: the ledger is that page's drill-down on its own route
+      // (admin/funds/+page.svelte), so the phone moves there and the
+      // slug carries no section id. The balance cards head the page;
+      // the page root stands in while they load.
+      {
+        slug: "fund-ledger",
+        topic: null,
+        headingKey: "demo_narrative_admin_fund_ledger_heading",
+        bodyKey: "demo_narrative_admin_fund_ledger_body",
+        routes: SUB_ROUTES["admin-org/fund-ledger"],
+        highlight: { selectors: [".fund-tile", ".funds-page"] },
       },
     ],
   },
@@ -1128,6 +1178,20 @@ export const SECTIONS: readonly Section[] = [
     routes: SECTION_ROUTES.settings,
     group: "org",
     subs: [
+      // The account panel is what the navbar identity button opens
+      // below desktop width (AvatarPanel.svelte, mounted by AppShell),
+      // and its Settings button is the way to this page, so it leads.
+      // The ring lands on the panel when it is open, otherwise on the
+      // button that opens it.
+      {
+        slug: "account-panel",
+        topic: null,
+        headingKey: "demo_narrative_settings_account_panel_heading",
+        bodyKey: "demo_narrative_settings_account_panel_body",
+        highlight: {
+          selectors: [".avatar-panel", '[data-testid="shell-identity"]'],
+        },
+      },
       {
         slug: "identity",
         topic: "settings-profile",
@@ -1308,11 +1372,24 @@ export const SECTIONS: readonly Section[] = [
         topic: "client-quick-exit",
         headingKey: "demo_narrative_client_quick_exit_heading",
         bodyKey: "demo_narrative_client_quick_exit_body",
-        // QuickExit mounts on every state of this page and the account
-        // page (portal/[channelId]/+page.svelte:353). The control is
+        // QuickExit mounts once in ClientShell, so it is present on
+        // every client page (ClientShell.svelte:209). The control is
         // real and stays mounted; phone-main.ts intercepts its trigger
         // so narrating it cannot navigate the iframe off-site.
         highlight: { selectors: ['[data-testid="quick-exit"]'] },
+      },
+      // ClientDrawer is the sheet the client navbar's identity button
+      // opens on every client page (ClientDrawer.svelte, mounted by
+      // ClientShell). Same fallback as the account sign-out sub: the
+      // drawer when it is open, otherwise the button that opens it.
+      {
+        slug: "drawer",
+        topic: null,
+        headingKey: "demo_narrative_client_drawer_heading",
+        bodyKey: "demo_narrative_client_drawer_body",
+        highlight: {
+          selectors: [".client-drawer", '[data-testid="shell-identity"]'],
+        },
       },
       {
         slug: "account-upgrade",
@@ -1378,8 +1455,12 @@ export const SECTIONS: readonly Section[] = [
         topic: "client-account-sign-out",
         headingKey: "demo_narrative_client_account_sign_out_heading",
         bodyKey: "demo_narrative_client_account_sign_out_body",
+        // Sign out is a client drawer action (account/+page.svelte, the
+        // drawer actions it hands the shell), not part of the settings
+        // block. The ring lands on the drawer when it is open, otherwise
+        // on the navbar button that opens it.
         highlight: {
-          selectors: [".settings-section", '[data-testid="account-settings"]'],
+          selectors: [".client-drawer", '[data-testid="shell-identity"]'],
         },
       },
     ],
@@ -1513,6 +1594,12 @@ export const SECTIONS: readonly Section[] = [
         topic: null,
         headingKey: "demo_narrative_deepdive_data_retention_heading",
         bodyKey: "demo_narrative_deepdive_data_retention_body",
+      },
+      {
+        slug: "fund-records",
+        topic: null,
+        headingKey: "demo_narrative_deepdive_fund_records_heading",
+        bodyKey: "demo_narrative_deepdive_fund_records_body",
       },
     ],
   },
@@ -1988,10 +2075,12 @@ export function resolvePhoneCommand(
         routeSlug: null,
         highlight,
       };
+    // The fund ledger is the Organization page's drill-down on its own
+    // route; every other sub narrates a section of the Organization page.
     case "admin-org":
       return {
         feature: "admin",
-        detail: "organization",
+        detail: subSlug === "fund-ledger" ? "funds" : "organization",
         loginTarget: null,
         openSearch: false,
         pulseTopic,
@@ -2223,8 +2312,14 @@ export function sectionMatchesPhone(
       );
     case "admin-comms":
       return feature === "admin" && detail === "communications";
+    // Sub-aware: the fund ledger sub lives on its own page and every
+    // other sub on the Organization page, so a scroll between them must
+    // move the phone. With no sub named, either page belongs here.
     case "admin-org":
-      return feature === "admin" && detail === "organization";
+      if (feature !== "admin") return false;
+      if (subSlug === "fund-ledger") return detail === "funds";
+      if (subSlug !== null) return detail === "organization";
+      return detail === "organization" || detail === "funds";
     // The router strips the query before storing detail, so these match
     // on the path portion alone. Without that strip the story could
     // never converge here: the command carries "forms?id=..." while the
@@ -2353,6 +2448,9 @@ export function bridgeStateToLocation(
     }
     if (detail === "organization") {
       return { sectionId: "admin-org", subSlug: "general" };
+    }
+    if (detail === "funds") {
+      return { sectionId: "admin-org", subSlug: "fund-ledger" };
     }
     if (detail === "communications") {
       return { sectionId: "admin-comms", subSlug: "provider" };

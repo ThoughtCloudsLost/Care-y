@@ -48,8 +48,6 @@ export const SECTION_ROUTES: Record<
     "/(app)/admin/volunteer",
   ],
   "admin-comms": ["/(app)/admin/communications"],
-  // The fund ledger page is the Organization page's drill-down; its own
-  // sub-section lands with the handbook units that describe it.
   "admin-org": ["/(app)/admin/organization", "/(app)/admin/funds"],
   "admin-forms": ["/(app)/admin/forms"],
   "admin-responses": ["/(app)/admin/forms/responses"],
@@ -73,6 +71,7 @@ export const SUB_ROUTES: Readonly<Record<string, readonly string[]>> = {
   "library/vote": ["/(app)/library/[articleId]"],
   "library/editor": ["/(app)/library/new", "/(app)/library/[articleId]/edit"],
   "client-intake/fields": ["/(client)/intake/[slug]"],
+  "admin-org/fund-ledger": ["/(app)/admin/funds"],
 };
 
 /**

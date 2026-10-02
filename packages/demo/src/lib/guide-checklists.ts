@@ -28,7 +28,8 @@ export type GuideSlug =
   | "invite-volunteer"
   | "configure-intake-form"
   | "export-responses"
-  | "verify-server-blindness";
+  | "verify-server-blindness"
+  | "record-a-disbursement";
 
 export interface GuideStep {
   readonly bodyKey: string;
@@ -299,6 +300,28 @@ const GUIDES: readonly GuideDef[] = [
       {
         bodyKey: "demo_guide_verify_server_blindness_step4",
         target: { sectionId: "admin-org", subSlug: "keys" },
+      },
+    ],
+  },
+  {
+    slug: "record-a-disbursement",
+    titleKey: "demo_guide_record_a_disbursement_title",
+    steps: [
+      {
+        bodyKey: "demo_guide_record_a_disbursement_step1",
+        target: { sectionId: "ticket-detail", subSlug: "fund-balance" },
+      },
+      {
+        bodyKey: "demo_guide_record_a_disbursement_step2",
+        target: { sectionId: "ticket-detail", subSlug: "disbursement" },
+      },
+      {
+        bodyKey: "demo_guide_record_a_disbursement_step3",
+        target: { sectionId: "ticket-detail", subSlug: "notes" },
+      },
+      {
+        bodyKey: "demo_guide_record_a_disbursement_step4",
+        target: { sectionId: "admin-org", subSlug: "fund-ledger" },
       },
     ],
   },

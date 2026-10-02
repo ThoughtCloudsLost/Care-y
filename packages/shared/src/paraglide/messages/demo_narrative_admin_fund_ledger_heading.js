@@ -10,7 +10,7 @@ const en_demo_narrative_admin_fund_ledger_heading = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_admin_fund_ledger_heading = /** @type {(inputs: Demo_Narrative_Admin_Fund_Ledger_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Libro mayor de fondos`)
+	return /** @type {LocalizedString} */ (`Libro de fondos`)
 };
 
 const en_xa2_demo_narrative_admin_fund_ledger_heading = /** @type {(inputs: Demo_Narrative_Admin_Fund_Ledger_HeadingInputs) => LocalizedString} */ () => {

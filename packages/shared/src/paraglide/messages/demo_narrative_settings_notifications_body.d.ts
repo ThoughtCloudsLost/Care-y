@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Each event type has a separate switch for push, email and text message, and the user controls which channels carry which events. The in-app feed delivers all..." |
+* | "The notification settings let the user choose which channels carry an event by toggling separate switches for push, email and text message. The in-app feed d..." |
 *
 * @param {Demo_Narrative_Settings_Notifications_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

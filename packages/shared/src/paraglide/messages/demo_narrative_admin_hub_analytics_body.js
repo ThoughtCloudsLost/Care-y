@@ -8,6 +8,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 const en_demo_narrative_admin_hub_analytics_body = /** @type {(inputs: Demo_Narrative_Admin_Hub_Analytics_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`The analytics group collects the reporting and logging destinations under separate permission gates. [[#permissions #metadata]]
 - The Impact, Operations, and Research dashboards and [Call history](#admin-logs/calls) require the View reports permission.
+- [Fund ledger](#admin-org/fund-ledger) requires the Audit funds permission.
 - [Audit log](#admin-logs/audit) requires the View audit log permission, so an organization can grant charting and call records without exposing who performed which action.
 **What do the dashboards read?** Server-side charts aggregate plaintext metadata.
 - Ticket counts
@@ -22,6 +23,7 @@ Volunteer names and queue names are organization-key ciphertext that the browser
 const es_demo_narrative_admin_hub_analytics_body = /** @type {(inputs: Demo_Narrative_Admin_Hub_Analytics_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`El grupo de analíticas reúne los destinos de informes y de registros bajo permisos separados. [[#permissions #metadata]]
 - Los paneles Impacto, Operaciones y Estudios y el [Historial de llamadas](#admin-logs/calls) requieren el permiso Ver reportes.
+- El [Libro mayor de fondos](#admin-org/fund-ledger) requiere el permiso Auditar fondos.
 - El [Registro de auditoría](#admin-logs/audit) requiere el permiso Ver registro de auditoría, así que una organización puede conceder gráficos y registros de llamadas sin exponer quién realizó cada acción.
 **¿Qué leen los paneles?** Los gráficos del lado del servidor agregan metadatos en texto plano.
 - Conteos de tickets
@@ -36,8 +38,9 @@ Los nombres de las personas voluntarias y los nombres de las colas son texto cif
 const en_xa2_demo_narrative_admin_hub_analytics_body = /** @type {(inputs: Demo_Narrative_Admin_Hub_Analytics_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`⟦Thè ànàlytìcs gròùp còllècts thè rèpòrtìng ànd lòggìng dèstìnàtìòns ùndèr sèpàràtè pèrmìssìòn gàtès. [[#pèrmìssìòns #mètàdàtà]]
 - Thè Ìmpàct, Òpèràtìòns, ànd Rèsèàrch dàshbòàrds ànd [Càll hìstòry](#àdmìn-lògs/càlls) rèqùìrè thè Vìèw rèpòrts pèrmìssìòn.
+- [Fùnd lèdgèr](#àdmìn-òrg/fùnd-lèdgèr) rèqùìrès thè Àùdìt fùnds pèrmìssìòn.
 - [Àùdìt lòg](#àdmìn-lògs/àùdìt) rèqùìrès thè Vìèw àùdìt lòg pèrmìssìòn, sò àn òrgànìzàtìòn càn grànt chàrtìng ànd càll rècòrds wìthòùt èxpòsìng whò pèrfòrmèd whìch àctìòn.
- ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt dò thè dàshbòàrds rèàd? •••••••••** Sèrvèr-sìdè chàrts àggrègàtè plàìntèxt mètàdàtà.
+ •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••**Whàt dò thè dàshbòàrds rèàd? •••••••••** Sèrvèr-sìdè chàrts àggrègàtè plàìntèxt mètàdàtà.
 - Tìckèt còùnts
 - Tìmèstàmps
 - Qùèùè àssìgnmènts

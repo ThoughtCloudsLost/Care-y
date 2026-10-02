@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Fund administration lives on the Organization page as a section gated on the Manage funds permission, in the same shape as Note types and Intake forms. The s..." |
+* | "The Funds section on the Organization page lists every fund the organization has created, active and deactivated. Tapping a row opens its name and currency f..." |
 *
 * @param {Demo_Narrative_Admin_Funds_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

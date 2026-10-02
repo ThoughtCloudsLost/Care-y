@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The audit log records administrative and lifecycle actions taken in the organization. Entries are only ever added. The service has no update path and no dele..." |
+* | "The audit log records administrative and lifecycle actions taken in the organization. Fund administration, organization deletion requests, and organization d..." |
 *
 * @param {Demo_Narrative_Admin_Audit_Log_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

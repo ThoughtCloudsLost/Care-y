@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Signing out ends the server-side session, expires the cookie and zeroes the keys the tab holds. The page returns to the sign-in form. [[#portal #keys]] **Wha..." |
+* | "Signing out wipes the keys in the browser first, then ends the server-side session and expires the cookie. The page shows a voluntary sign-out confirmation a..." |
 *
 * @param {Demo_Narrative_Client_Account_Sign_Out_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

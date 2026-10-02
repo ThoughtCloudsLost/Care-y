@@ -85,7 +85,7 @@ describe("guide-checklists", () => {
     expect(guide).toBeUndefined();
   });
 
-  it("defines all 12 guides", () => {
-    expect(GUIDES.length).toBe(12);
+  it("defines all 13 guides", () => {
+    expect(GUIDES.length).toBe(13);
   });
 });

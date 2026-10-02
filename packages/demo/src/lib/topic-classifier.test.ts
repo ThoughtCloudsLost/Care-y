@@ -151,6 +151,19 @@ describe("classifyDemoLabel", () => {
     expect(classifyDemoLabel("Save note", detailCtx)).toBe("notes");
   });
 
+  // -- ticket-disbursement --
+  it("classifies the compose-actions disbursement entry", () => {
+    expect(classifyDemoLabel("Record disbursement", detailCtx)).toBe(
+      "ticket-disbursement",
+    );
+  });
+
+  it("classifies the edit disbursement action", () => {
+    expect(classifyDemoLabel("Edit disbursement", detailCtx)).toBe(
+      "ticket-disbursement",
+    );
+  });
+
   // -- case-fold --
   it("classifies ticket details label", () => {
     expect(classifyDemoLabel("Ticket details", detailCtx)).toBe("case-fold");

@@ -509,6 +509,17 @@ function buildLabelMap(): ClassifierCaches {
     register(map, disambig, m.ticket_edit_note({}, opts), "notes");
     register(map, disambig, m.ticket_save_note({}, opts), "notes");
 
+    // --- ticket-disbursement ---
+    // The compose-actions entry and the edit action on a disbursement
+    // note. Neither label is used outside the ticket detail.
+    register(map, disambig, m.assist_record({}, opts), "ticket-disbursement");
+    register(
+      map,
+      disambig,
+      m.assist_edit_title({}, opts),
+      "ticket-disbursement",
+    );
+
     // --- case-fold ---
     register(map, disambig, m.ticket_case_details(terms, opts), "case-fold");
     register(

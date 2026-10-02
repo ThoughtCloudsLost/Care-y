@@ -10,7 +10,7 @@ const en_demo_narrative_topic_disbursement_heading = /** @type {(inputs: Demo_Na
 };
 
 const es_demo_narrative_topic_disbursement_heading = /** @type {(inputs: Demo_Narrative_Topic_Disbursement_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Registrar un desembolso`)
+	return /** @type {LocalizedString} */ (`Registro de un desembolso`)
 };
 
 const en_xa2_demo_narrative_topic_disbursement_heading = /** @type {(inputs: Demo_Narrative_Topic_Disbursement_HeadingInputs) => LocalizedString} */ () => {

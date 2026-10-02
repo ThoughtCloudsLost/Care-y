@@ -232,6 +232,7 @@ export type DemoTopic =
   | "ticket-share-link"
   | "ticket-share-status"
   | "ticket-outbound-edit"
+  | "ticket-disbursement"
   | "ticket-correction-status"
   | "ticket-email-thread"
   | "admin-role-permissions"
@@ -323,6 +324,7 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   "ticket-correction-status",
   "ticket-email-thread",
   "compose-actions",
+  "ticket-disbursement",
   "ticket-outbound-edit",
   "reply",
   "message-select",

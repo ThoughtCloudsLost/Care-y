@@ -432,6 +432,10 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_settings_consultant_phone_heading(),
   demo_narrative_settings_consultant_phone_body: () =>
     m.demo_narrative_settings_consultant_phone_body(),
+  demo_narrative_settings_account_panel_heading: () =>
+    m.demo_narrative_settings_account_panel_heading(),
+  demo_narrative_settings_account_panel_body: () =>
+    m.demo_narrative_settings_account_panel_body(),
 
   // Dashboard (new subs)
   demo_narrative_dashboard_merge_candidates_heading: () =>
@@ -468,6 +472,14 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_topic_outbound_edit_heading(),
   demo_narrative_topic_outbound_edit_body: () =>
     m.demo_narrative_topic_outbound_edit_body(),
+  demo_narrative_topic_fund_balances_heading: () =>
+    m.demo_narrative_topic_fund_balances_heading(),
+  demo_narrative_topic_fund_balances_body: () =>
+    m.demo_narrative_topic_fund_balances_body(),
+  demo_narrative_topic_disbursement_heading: () =>
+    m.demo_narrative_topic_disbursement_heading(),
+  demo_narrative_topic_disbursement_body: () =>
+    m.demo_narrative_topic_disbursement_body(),
 
   // Admin people (new subs)
   demo_narrative_admin_role_permissions_heading: () =>
@@ -480,6 +492,17 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_admin_intake_forms_heading(),
   demo_narrative_admin_intake_forms_body: () =>
     m.demo_narrative_admin_intake_forms_body(),
+  demo_narrative_admin_org_deletion_heading: () =>
+    m.demo_narrative_admin_org_deletion_heading(),
+  demo_narrative_admin_org_deletion_body: () =>
+    m.demo_narrative_admin_org_deletion_body(),
+  demo_narrative_admin_funds_heading: () =>
+    m.demo_narrative_admin_funds_heading(),
+  demo_narrative_admin_funds_body: () => m.demo_narrative_admin_funds_body(),
+  demo_narrative_admin_fund_ledger_heading: () =>
+    m.demo_narrative_admin_fund_ledger_heading(),
+  demo_narrative_admin_fund_ledger_body: () =>
+    m.demo_narrative_admin_fund_ledger_body(),
 
   // Admin forms section (5 subs)
   demo_section_admin_forms_title: () => m.demo_section_admin_forms_title(),
@@ -591,6 +614,10 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_client_quick_exit_heading(),
   demo_narrative_client_quick_exit_body: () =>
     m.demo_narrative_client_quick_exit_body(),
+  demo_narrative_client_drawer_heading: () =>
+    m.demo_narrative_client_drawer_heading(),
+  demo_narrative_client_drawer_body: () =>
+    m.demo_narrative_client_drawer_body(),
   demo_narrative_client_portal_upgrade_heading: () =>
     m.demo_narrative_client_portal_upgrade_heading(),
   demo_narrative_client_portal_upgrade_body: () =>
@@ -692,6 +719,10 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_deepdive_data_retention_heading(),
   demo_narrative_deepdive_data_retention_body: () =>
     m.demo_narrative_deepdive_data_retention_body(),
+  demo_narrative_deepdive_fund_records_heading: () =>
+    m.demo_narrative_deepdive_fund_records_heading(),
+  demo_narrative_deepdive_fund_records_body: () =>
+    m.demo_narrative_deepdive_fund_records_body(),
 
   // Coming-soon placeholder
   demo_coming_soon_title: () => m.demo_coming_soon_title(),

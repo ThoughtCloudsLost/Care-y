@@ -495,6 +495,28 @@ describe("resolvePhoneCommand", () => {
     expect(cmd.pulseTopic).toBe("admin-general");
   });
 
+  it("resolves admin-org/fund-ledger to the funds detail", () => {
+    const cmd = resolvePhoneCommand(
+      "admin-org",
+      "fund-ledger",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("admin");
+    expect(cmd.detail).toBe("funds");
+    expect(cmd.pulseTopic).toBeNull();
+    expect(cmd.highlight?.selectors).toEqual([".fund-tile", ".funds-page"]);
+  });
+
+  it("keeps the other new admin-org subs on the organization page", () => {
+    for (const slug of ["org-deletion", "funds"]) {
+      const cmd = resolvePhoneCommand("admin-org", slug, TICKET_ID, ARTICLE_ID);
+      expect(cmd.feature).toBe("admin");
+      expect(cmd.detail).toBe("organization");
+      expect(cmd.highlight?.section).toBe(slug);
+    }
+  });
+
   it("resolves admin-comms/phone-lines to admin with communications detail", () => {
     const cmd = resolvePhoneCommand(
       "admin-comms",
@@ -752,6 +774,11 @@ describe("bridgeStateToLocation", () => {
     expect(loc).toEqual({ sectionId: "admin-org", subSlug: "general" });
   });
 
+  it("maps admin feature with funds detail to admin-org/fund-ledger", () => {
+    const loc = bridgeStateToLocation("admin", "funds", false, null, null);
+    expect(loc).toEqual({ sectionId: "admin-org", subSlug: "fund-ledger" });
+  });
+
   it("maps admin feature with communications detail to admin-comms", () => {
     const loc = bridgeStateToLocation(
       "admin",
@@ -863,6 +890,58 @@ describe("sectionMatchesPhone", () => {
     expect(sectionMatchesPhone("admin-org", "admin", null, false)).toBe(false);
     expect(
       sectionMatchesPhone("admin-org", "admin", "communications", false),
+    ).toBe(false);
+  });
+
+  it("matches admin-org per sub between the organization and funds pages", () => {
+    // No sub named: either page belongs to the section.
+    expect(sectionMatchesPhone("admin-org", "admin", "funds", false)).toBe(
+      true,
+    );
+    // The ledger sub converges only on its own page.
+    expect(
+      sectionMatchesPhone(
+        "admin-org",
+        "admin",
+        "funds",
+        false,
+        null,
+        "fund-ledger",
+      ),
+    ).toBe(true);
+    expect(
+      sectionMatchesPhone(
+        "admin-org",
+        "admin",
+        "organization",
+        false,
+        null,
+        "fund-ledger",
+      ),
+    ).toBe(false);
+    // Every other sub converges only on the organization page.
+    expect(
+      sectionMatchesPhone(
+        "admin-org",
+        "admin",
+        "organization",
+        false,
+        null,
+        "funds",
+      ),
+    ).toBe(true);
+    expect(
+      sectionMatchesPhone("admin-org", "admin", "funds", false, null, "funds"),
+    ).toBe(false);
+    expect(
+      sectionMatchesPhone(
+        "admin-org",
+        "tickets",
+        "funds",
+        false,
+        null,
+        "fund-ledger",
+      ),
     ).toBe(false);
   });
 
@@ -986,9 +1065,9 @@ describe("SECTIONS taxonomy", () => {
     expect(tickets?.subs).toHaveLength(13);
   });
 
-  it("ticket-detail has 27 subs", () => {
+  it("ticket-detail has 29 subs", () => {
     const detail = SECTIONS.find((s) => s.id === "ticket-detail");
-    expect(detail?.subs).toHaveLength(27);
+    expect(detail?.subs).toHaveLength(29);
   });
 
   it("search has 3 subs", () => {
@@ -1016,9 +1095,9 @@ describe("SECTIONS taxonomy", () => {
     expect(comms?.subs).toHaveLength(7);
   });
 
-  it("admin-org has 7 subs", () => {
+  it("admin-org has 10 subs", () => {
     const org = SECTIONS.find((s) => s.id === "admin-org");
-    expect(org?.subs).toHaveLength(7);
+    expect(org?.subs).toHaveLength(10);
   });
 
   it("admin-forms has 5 subs", () => {
@@ -1041,9 +1120,9 @@ describe("SECTIONS taxonomy", () => {
     expect(schedule?.subs).toHaveLength(1);
   });
 
-  it("settings has 8 subs", () => {
+  it("settings has 9 subs", () => {
     const settings = SECTIONS.find((s) => s.id === "settings");
-    expect(settings?.subs).toHaveLength(8);
+    expect(settings?.subs).toHaveLength(9);
   });
 
   it("client-intake has 6 subs", () => {
@@ -1056,9 +1135,9 @@ describe("SECTIONS taxonomy", () => {
     expect(privacy?.subs).toHaveLength(1);
   });
 
-  it("client-portal has 5 subs", () => {
+  it("client-portal has 6 subs", () => {
     const portal = SECTIONS.find((s) => s.id === "client-portal");
-    expect(portal?.subs).toHaveLength(5);
+    expect(portal?.subs).toHaveLength(6);
   });
 
   it("client-account has 5 subs", () => {
@@ -1069,6 +1148,26 @@ describe("SECTIONS taxonomy", () => {
   it("client-share has 3 subs", () => {
     const share = SECTIONS.find((s) => s.id === "client-share");
     expect(share?.subs).toHaveLength(3);
+  });
+
+  it("places the fund, account-panel and drawer subs beside their neighbors", () => {
+    /** Slug that directly follows `slug` in the section, or null. */
+    function nextSlug(sectionId: string, slug: string): string | null {
+      const subs = SECTIONS.find((s) => s.id === sectionId)?.subs ?? [];
+      const i = subs.findIndex((sub) => sub.slug === slug);
+      return i === -1 ? null : (subs[i + 1]?.slug ?? null);
+    }
+    // The three portal-tier subs stay directly after case-panel.
+    expect(nextSlug("ticket-detail", "case-panel")).toBe("portal-tier");
+    expect(nextSlug("ticket-detail", "share-link")).toBe("fund-balance");
+    expect(nextSlug("ticket-detail", "compose-actions")).toBe("disbursement");
+    expect(nextSlug("admin-org", "retention")).toBe("org-deletion");
+    expect(nextSlug("admin-org", "intake-forms")).toBe("funds");
+    expect(nextSlug("admin-org", "funds")).toBe("fund-ledger");
+    expect(nextSlug("client-portal", "quick-exit")).toBe("drawer");
+    expect(nextSlug("deep-dive", "data-retention")).toBe("fund-records");
+    const settings = SECTIONS.find((s) => s.id === "settings");
+    expect(settings?.subs[0]?.slug).toBe("account-panel");
   });
 });
 
@@ -1273,6 +1372,11 @@ describe("sectionForRoute", () => {
   it("resolves /(app)/admin/organization to the admin-org section", () => {
     const result = sectionForRoute("/(app)/admin/organization");
     expect(result).toEqual({ sectionId: "admin-org", subSlug: null });
+  });
+
+  it("resolves /(app)/admin/funds to admin-org/fund-ledger sub", () => {
+    const result = sectionForRoute("/(app)/admin/funds");
+    expect(result).toEqual({ sectionId: "admin-org", subSlug: "fund-ledger" });
   });
 
   it("resolves /(app) to dashboard with null sub", () => {
@@ -1616,6 +1720,10 @@ describe("highlight coverage", () => {
       ["ticket-detail", "media-images"],
       ["ticket-detail", "files"],
       ["ticket-detail", "call-log"],
+      ["ticket-detail", "fund-balance"],
+      ["admin-org", "fund-ledger"],
+      ["settings", "account-panel"],
+      ["client-portal", "drawer"],
       ["search", "overlay"],
       ["search", "entities"],
       ["search", "how-it-works"],
@@ -1653,10 +1761,10 @@ describe("highlight coverage", () => {
 // -----------------------------------------------------------------------
 
 describe("deep-dive section", () => {
-  it("is registered in SECTIONS with 13 subs", () => {
+  it("is registered in SECTIONS with 14 subs", () => {
     const dd = SECTIONS.find((s) => s.id === "deep-dive");
     expect(dd).toBeDefined();
-    expect(dd!.subs).toHaveLength(13);
+    expect(dd!.subs).toHaveLength(14);
   });
 
   it("has empty routes (no product route)", () => {
@@ -1692,6 +1800,7 @@ describe("deep-dive section", () => {
     expect(slugs).toContain("the-permission-system");
     expect(slugs).toContain("portal-channel-lifecycle");
     expect(slugs).toContain("data-retention");
+    expect(slugs).toContain("fund-records");
   });
 
   it("parseHash resolves #deep-dive/<slug> to the section and sub", () => {

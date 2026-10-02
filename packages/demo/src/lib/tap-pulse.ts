@@ -82,6 +82,7 @@ const DETAIL_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "ticket-correction-status",
   "ticket-email-thread",
   "ticket-outbound-edit",
+  "ticket-disbursement",
 ]);
 
 const DASHBOARD_TOPICS: ReadonlySet<DemoTopic> = new Set([
@@ -435,6 +436,16 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         candidates.add(m.ticket_add_internal_note({}, opts));
         candidates.add(m.ticket_edit_note({}, opts));
         candidates.add(m.ticket_save_note({}, opts));
+        break;
+      case "ticket-disbursement":
+        // The compose-actions popover entry (ComposeActions.svelte:153)
+        // and the sheet title, which DisbursementSheet shares with the
+        // context-menu action on a disbursement note
+        // (TicketDetail.svelte:1075). The compose trigger's own label
+        // is left out: it is always on screen and would win the match
+        // before the popover entry mounts.
+        candidates.add(m.assist_record({}, opts));
+        candidates.add(m.assist_edit_title({}, opts));
         break;
       case "case-fold":
         candidates.add(m.ticket_case_details(terms, opts));
@@ -1063,6 +1074,10 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
       case "close-reopen":
       case "message-actions":
       case "exposure-hints":
+      // Visual-only. Its entry sits inside the compose-actions popover,
+      // and PhoneApp runs no two-stage choreography to reach it the way
+      // it does for notes.
+      case "ticket-disbursement":
       case "settings-appearance":
       case "library-vote":
       case "library-editor":
@@ -1528,7 +1543,7 @@ export const TOPIC_SELECTORS: ReadonlyMap<DemoTopic, readonly string[]> =
     ],
     [
       "client-account-sign-out",
-      [".settings-section", '[data-testid="account-settings"]'],
+      [".client-drawer", '[data-testid="shell-identity"]'],
     ],
     ["client-share-view", [".share-content-block", ".share-heading"]],
     ["client-share-one-time", [".share-one-time-notice", ".link-error-body"]],

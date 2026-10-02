@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "CARE-Y ships as one codebase and one Docker image that runs in two deployment types. A hosted multi-tenant deployment at care-y.app serves many organizations..." |
+* | "CARE-Y ships as one codebase and four container images (API, web, reverse proxy, and OPRF evaluator) that run in two deployment types. A hosted multi-tenant ..." |
 *
 * @param {Demo_Narrative_Deepdive_Deployment_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

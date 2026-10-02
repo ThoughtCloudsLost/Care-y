@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Recording a disbursement is a compose action alongside the internal note, offered when the case's queue carries a fund and the user holds the Record disburse..." |
+* | "Recording a disbursement is a compose action gated on the Record disbursements and View funds permissions together, and available only when the case's queue ..." |
 *
 * @param {Demo_Narrative_Topic_Disbursement_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options
