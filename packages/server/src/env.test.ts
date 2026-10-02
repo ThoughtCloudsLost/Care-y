@@ -21,7 +21,6 @@ import {
 // Minimum valid env for the schema to pass.
 const VALID_ENV = {
   NODE_ENV: "development",
-  SESSION_SECRET: "a".repeat(64),
   DATABASE_URL: "postgresql://localhost:5432/test",
   OPS_SECRETS_KEY: "ab".repeat(32),
   CORS_ORIGIN: "http://localhost:5173",
@@ -56,7 +55,6 @@ describe("env validation", () => {
       const env = validateEnv();
 
       expect(env.NODE_ENV).toBe("development");
-      expect(env.SESSION_SECRET).toBe(VALID_ENV.SESSION_SECRET);
       expect(env.DATABASE_URL).toBe(VALID_ENV.DATABASE_URL);
       expect(env.OPS_SECRETS_KEY).toBe(VALID_ENV.OPS_SECRETS_KEY);
       expect(env.CORS_ORIGIN).toBe(VALID_ENV.CORS_ORIGIN);
@@ -90,14 +88,6 @@ describe("env validation", () => {
       expect(env.CORS_ORIGIN).toBe("http://localhost:5173");
     });
 
-    it("throws EnvValidationError when SESSION_SECRET is missing", () => {
-      const { SESSION_SECRET: _, ...rest } = VALID_ENV;
-      Object.assign(process.env, rest);
-      delete process.env.SESSION_SECRET;
-
-      expect(() => validateEnv()).toThrow(EnvValidationError);
-    });
-
     it("throws EnvValidationError when DATABASE_URL is missing", () => {
       const { DATABASE_URL: _, ...rest } = VALID_ENV;
       Object.assign(process.env, rest);
@@ -124,13 +114,6 @@ describe("env validation", () => {
     it("throws when OPS_SECRETS_KEY is too short", () => {
       Object.assign(process.env, VALID_ENV);
       process.env.OPS_SECRETS_KEY = "ab".repeat(16); // 32 chars, need 64
-
-      expect(() => validateEnv()).toThrow(EnvValidationError);
-    });
-
-    it("throws when SESSION_SECRET is too short", () => {
-      Object.assign(process.env, VALID_ENV);
-      process.env.SESSION_SECRET = "short";
 
       expect(() => validateEnv()).toThrow(EnvValidationError);
     });
@@ -308,7 +291,6 @@ describe("env validation", () => {
     it("fills the getEnv cache without re-validating process.env", () => {
       // process.env alone would fail validation, so a lazy re-validation
       // inside getEnv() would throw instead of returning the cached config.
-      delete process.env.SESSION_SECRET;
       delete process.env.OPS_SECRETS_KEY;
       delete process.env.TWILIO_API_KEY_SID;
 
@@ -322,7 +304,7 @@ describe("env validation", () => {
 
     it("throws EnvValidationError on an invalid source and leaves the cache untouched", () => {
       const initialized = initEnv(sourceWithApiKey());
-      const { SESSION_SECRET: _, ...invalid } = VALID_ENV;
+      const { OPS_SECRETS_KEY: _, ...invalid } = VALID_ENV;
 
       expect(() => initEnv(invalid)).toThrow(EnvValidationError);
       expect(getEnv()).toBe(initialized);

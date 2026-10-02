@@ -35,7 +35,6 @@ describe("pgConnectionConfig", () => {
     const envModule = await import("../env.js");
     envModule.initEnv({
       NODE_ENV: "test",
-      SESSION_SECRET: "a".repeat(64),
       DATABASE_URL: SOURCE_DB_URL,
       OPS_SECRETS_KEY: "ab".repeat(32),
     });

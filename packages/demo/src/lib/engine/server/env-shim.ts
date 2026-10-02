@@ -16,7 +16,6 @@ const FAKE_OPS_KEY: string = "0f".repeat(32);
 
 export interface EnvVars {
   readonly NODE_ENV: "development" | "test" | "production";
-  readonly SESSION_SECRET: string;
   readonly DATABASE_URL: string;
   readonly OPS_SECRETS_KEY: string;
   readonly CORS_ORIGIN: string;
@@ -41,8 +40,6 @@ export interface EnvVars {
 
 const fakeEnv: EnvVars = {
   NODE_ENV: "production",
-  SESSION_SECRET:
-    "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
   DATABASE_URL: "pglite://memory",
   OPS_SECRETS_KEY: FAKE_OPS_KEY,
   CORS_ORIGIN: "*",
