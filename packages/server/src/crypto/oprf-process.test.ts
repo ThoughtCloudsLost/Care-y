@@ -324,7 +324,9 @@ describe.skipIf(!IS_LINUX)("removeStaleSocket", () => {
 
   it("does nothing when no file is at the path", () => {
     const socketPath = join(socketDir, `oprf-stale-none-${Date.now()}.sock`);
-    expect(() => removeStaleSocket(socketPath)).not.toThrow();
+    expect(() => {
+      removeStaleSocket(socketPath);
+    }).not.toThrow();
   });
 
   it("removes a socket left by a process that did not clean up", async () => {
@@ -349,7 +351,9 @@ describe.skipIf(!IS_LINUX)("removeStaleSocket", () => {
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- deterministic temp path for test file
     writeFileSync(filePath, "not a socket");
     try {
-      expect(() => removeStaleSocket(filePath)).toThrow(ConfigError);
+      expect(() => {
+        removeStaleSocket(filePath);
+      }).toThrow(ConfigError);
       // eslint-disable-next-line security/detect-non-literal-fs-filename -- deterministic temp path for test file
       expect(existsSync(filePath)).toBe(true);
     } finally {
