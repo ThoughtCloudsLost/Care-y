@@ -24,6 +24,9 @@ dist-health/
 build/
 packages/demo/.seed-snapshot/
 packages/demo/.seed-snapshot.staging-*/
+# Paraglide compiles these from packages/shared/messages on install and in
+# every build, so the message JSON is the only tracked source.
+packages/shared/src/paraglide/
 .svelte-kit/
 .vite/
 

@@ -33,7 +33,9 @@ pre-commit:
         if [ -n "$lintable" ]; then
           # Same heap limit the root lint:strict script uses: typed eslint
           # on a large staged batch exceeds the Node default on this box.
-          echo "$lintable" | NODE_OPTIONS=--max-old-space-size=4096 xargs pnpm exec eslint
+          # -r: GNU xargs otherwise runs eslint once with no paths when the
+          # list is whitespace only, and a bare eslint lints the whole repo.
+          echo "$lintable" | NODE_OPTIONS=--max-old-space-size=4096 xargs -r pnpm exec eslint
         fi
     handbook-refs:
       # Handbook highlight selectors must resolve in product source. Only
