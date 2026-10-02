@@ -308,11 +308,14 @@
     return dashboardLaneCap(laneGridColumns.get(laneId) ?? 1);
   }
 
+  // A list body arrives as undefined before it mounts and as null after
+  // it unmounts (Svelte clears a `bind:this` to null on teardown). Both
+  // mean the lane has no body to measure.
   function setLaneBody(
     laneId: DashboardLaneId,
-    el: HTMLElement | undefined,
+    el: HTMLElement | null | undefined,
   ): void {
-    if (el === undefined) laneBodies.delete(laneId);
+    if (el === undefined || el === null) laneBodies.delete(laneId);
     else laneBodies.set(laneId, el);
   }
 
@@ -1430,7 +1433,7 @@
             }
             bind:bodyElement={
               () => laneBodies.get(lane.id),
-              (el: HTMLElement | undefined) => setLaneBody(lane.id, el)
+              (el: HTMLElement | null | undefined) => setLaneBody(lane.id, el)
             }
             error={lane.error}
             onretry={() => lane.retry()}

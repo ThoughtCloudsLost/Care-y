@@ -16,6 +16,7 @@ LICENSE
 Dockerfile
 Dockerfile.*
 .env*
+*.env.example
 .prettierignore
 *.toml
 .gitleaksignore

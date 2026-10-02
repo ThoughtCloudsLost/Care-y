@@ -107,6 +107,9 @@ services:
     # stay out of the process environment (ADR-129).
     environment:
       - NODE_ENV=production
+      # Sender address for platform mail. Must match the address the SMTP
+      # credentials in the secrets file are issued for.
+      - SMTP_FROM=${SMTP_FROM:?SMTP_FROM must be set in prod.env}
       - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL:?WEBHOOK_BASE_URL must be set in prod.env}
       # Caddy's pinned address (see the caddy service). X-Forwarded-For is
       # honored only from this peer.

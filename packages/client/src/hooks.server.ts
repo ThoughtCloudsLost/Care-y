@@ -12,6 +12,7 @@ import {
   loadInjectedBranding,
   resolveInjectionSlug,
 } from "$lib/server/branding-inject";
+import { stripTemplateComments } from "$lib/server/template-comments";
 import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
 
 /**
@@ -87,6 +88,9 @@ const orgResolution: Handle = async ({ event, resolve }) => {
  *
  * Failure degrades to no injection. Branding must never block a client
  * from reaching the intake form.
+ *
+ * The same transform strips the template's explanatory comments so they
+ * never reach the browser.
  */
 const brandingInjection: Handle = async ({ event, resolve }) => {
   const slug = resolveInjectionSlug(event.locals.orgSlug, dev, DEV_ORG_SLUG);
@@ -100,7 +104,8 @@ const brandingInjection: Handle = async ({ event, resolve }) => {
         });
 
   return resolve(event, {
-    transformPageChunk: ({ html }) => applyBrandingToHtml(html, branding),
+    transformPageChunk: ({ html }) =>
+      applyBrandingToHtml(stripTemplateComments(html), branding),
   });
 };
 

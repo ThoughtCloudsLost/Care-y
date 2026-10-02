@@ -23,6 +23,16 @@
 - [ ] No `{@html}` with user-provided content
 - [ ] Dependencies added are necessary and reviewed (check Socket.dev report)
 
+## Review Invariants
+
+<!-- Each line is a property the whole codebase holds. Check it only after looking at the diff with that question in mind. -->
+
+- [ ] No new column, id, or timestamp lets a sensitive row be paired with its origin (ticket, person, device, time of day)
+- [ ] Every permission check grants exactly the surface its name describes, and no path reuses a broader check for a narrower action
+- [ ] Every change to org state writes its audit row inside the same transaction as the change
+- [ ] Notification recipients match the event's audience and the recipient's own switch
+- [ ] Security, privacy, deletion, and retention copy still names what the mechanism does after this change
+
 ## Testing
 
 - [ ] New/modified code has corresponding tests

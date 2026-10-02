@@ -112,8 +112,12 @@ export interface DashboardArrangementDeps {
   readonly dashboard: () => HTMLElement | undefined;
   /** The context band above the lanes. */
   readonly band: () => HTMLElement | undefined;
-  /** Any one lane's list body; undefined until one is laid out. */
-  readonly laneBody: () => HTMLElement | undefined;
+  /**
+   * Any one lane's list body; undefined until one is laid out, and null
+   * once a bound body has unmounted (Svelte clears a `bind:this` to
+   * null on teardown). Either reads as no body.
+   */
+  readonly laneBody: () => HTMLElement | null | undefined;
   /** The lanes grid the container queries lay out. */
   readonly lanes: () => HTMLElement | undefined;
   /** The page's scroll container, from the shell. */
@@ -169,7 +173,7 @@ export function createDashboardArrangement(
     const scroller = deps.scrollContainer();
     const dashboard = deps.dashboard();
     const band = deps.band();
-    const laneBody = deps.laneBody();
+    const laneBody = deps.laneBody() ?? undefined;
     if (scroller === undefined || dashboard === undefined) return;
     const measure = (): void => {
       contentRoot = dashboard.parentElement === scroller;

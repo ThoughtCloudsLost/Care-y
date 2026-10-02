@@ -25,8 +25,8 @@ function createMockQueryClient(cache?: Record<string, unknown>): QueryClient {
 
 describe("section-registry", () => {
   describe("static section arrays", () => {
-    it("ORGANIZATION_SECTIONS has 8 entries", () => {
-      expect(ORGANIZATION_SECTIONS).toHaveLength(8);
+    it("ORGANIZATION_SECTIONS has 9 entries", () => {
+      expect(ORGANIZATION_SECTIONS).toHaveLength(9);
       expect(ORGANIZATION_SECTIONS.map((s) => s.id)).toEqual([
         "general",
         "branding",
