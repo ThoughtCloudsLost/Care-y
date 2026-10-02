@@ -4,6 +4,7 @@ import {
   AuthError,
   ConflictError,
   CryptoError,
+  DonationProviderError,
   EmailDeliveryError,
   ForbiddenError,
   InternalError,
@@ -66,6 +67,13 @@ describe("AppError hierarchy", () => {
       code: "CONFLICT",
       httpStatus: 409,
       expectedName: "ConflictError",
+    },
+    {
+      name: "DonationProviderError",
+      create: () => new DonationProviderError("DONATION_PROVIDER_UNAVAILABLE"),
+      code: "DONATION_PROVIDER_ERROR",
+      httpStatus: 502,
+      expectedName: "DonationProviderError",
     },
   ];
 

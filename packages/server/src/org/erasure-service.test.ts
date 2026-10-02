@@ -102,6 +102,10 @@ describe.skipIf(!process.env.DATABASE_URL)("createErasureService", () => {
         .deleteFrom("inbound_email_domains")
         .where("org_id", "=", orgId)
         .execute();
+      await platformDb
+        .deleteFrom("donation_connections")
+        .where("org_id", "=", orgId)
+        .execute();
       await platformDb.deleteFrom("orgs").where("id", "=", orgId).execute();
       await platformDb.schema
         .dropSchema(orgSchemaFor(orgId))
@@ -138,6 +142,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createErasureService", () => {
   function buildHarness(overrides?: {
     deleteOrg?: OrgBlobSweeper["deleteOrg"];
     closeSubaccount?: CloseSubaccount;
+    removeDonationWebhooks?: (orgId: OrgId) => Promise<void>;
   }): Harness {
     const calls: string[] = [];
     const deleteOrg = vi.fn<OrgBlobSweeper["deleteOrg"]>(
@@ -157,6 +162,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createErasureService", () => {
       blobSweeper: { deleteOrg },
       secretsEncryptor,
       closeSubaccount,
+      removeDonationWebhooks: overrides?.removeDonationWebhooks ?? null,
       now: steppingClock(),
     });
     return { service, calls, deleteOrg, closeSubaccount };
@@ -399,6 +405,68 @@ describe.skipIf(!process.env.DATABASE_URL)("createErasureService", () => {
       .where("id", "=", bystander.id)
       .executeTakeFirst();
     expect(bystanderRow).toBeDefined();
+  });
+
+  /** A donation connection row for the org; the blob is opaque to erasure. */
+  async function insertDonationConnection(orgId: OrgId): Promise<void> {
+    await platformDb
+      .insertInto("donation_connections")
+      .values({
+        org_id: orgId,
+        provider: "givebutter",
+        config: secretsEncryptor.encrypt(
+          Buffer.from(JSON.stringify({ apiKey: "gb-erasure-placeholder" })),
+        ),
+      })
+      .execute();
+  }
+
+  async function donationConnectionCount(orgId: OrgId): Promise<number> {
+    const rows = await platformDb
+      .selectFrom("donation_connections")
+      .select("id")
+      .where("org_id", "=", orgId)
+      .execute();
+    return rows.length;
+  }
+
+  it("erases an org holding a donation connection and deletes the connection row", async () => {
+    const { orgId } = await createScratchOrg();
+    await insertDonationConnection(orgId);
+    const requestId = await insertDueRequest(orgId);
+    const h = buildHarness();
+
+    await expect(h.service.processRequest(requestId, "cli")).resolves.toBe(
+      "erased",
+    );
+
+    expect(await donationConnectionCount(orgId)).toBe(0);
+    const orgRow = await platformDb
+      .selectFrom("orgs")
+      .select("id")
+      .where("id", "=", orgId)
+      .executeTakeFirst();
+    expect(orgRow).toBeUndefined();
+  });
+
+  it("removes the org's donation webhooks while the connection rows still exist", async () => {
+    const { orgId } = await createScratchOrg();
+    await insertDonationConnection(orgId);
+    const requestId = await insertDueRequest(orgId);
+    const rowsSeen: number[] = [];
+    const removeDonationWebhooks = vi.fn(async (id: OrgId) => {
+      rowsSeen.push(await donationConnectionCount(id));
+    });
+    const h = buildHarness({ removeDonationWebhooks });
+
+    await expect(h.service.processRequest(requestId, "cli")).resolves.toBe(
+      "erased",
+    );
+
+    expect(removeDonationWebhooks).toHaveBeenCalledTimes(1);
+    expect(removeDonationWebhooks).toHaveBeenCalledWith(orgId);
+    expect(rowsSeen).toEqual([1]);
+    expect(await donationConnectionCount(orgId)).toBe(0);
   });
 
   it("defers a request whose snapshot is still owed and runs no step after the claim", async () => {

@@ -26,7 +26,7 @@ export function summarizeAuditMetadata(
 /**
  * Known audit event types to label builders. Built once at module scope:
  * auditEventLabel runs per rendered row, so rebuilding the map per call
- * would allocate 51 closures per row per render.
+ * would allocate 53 closures per row per render.
  */
 type Terms = ReturnType<typeof withTerms> & Record<string, unknown>;
 
@@ -103,6 +103,14 @@ const EVENT_LABELS = new Map<string, (terms: Terms) => string>([
   ["org_key_reseal", () => m.audit_event_org_key_reseal()],
   ["org_key_reindex", () => m.audit_event_org_key_reindex()],
   ["pii_retention_purge", () => m.audit_event_pii_retention_purge()],
+  [
+    "donation_connection_saved",
+    () => m.audit_event_donation_connection_saved(),
+  ],
+  [
+    "donation_connection_removed",
+    () => m.audit_event_donation_connection_removed(),
+  ],
 ]);
 
 /**

@@ -510,6 +510,10 @@ export {
   type AnySseEvent,
   liveEventTypeSchema,
   type LiveEventType,
+  systemNotificationEventTypeSchema,
+  type SystemNotificationEventType,
+  systemLiveEventTypeSchema,
+  type SystemLiveEventType,
   type PushSubscriptionInput,
   type UnsubscribePushInput,
   type MetadataSearchInput,
@@ -659,6 +663,22 @@ export {
   ensureDisbursementNoteTypeInputSchema,
   type EnsureDisbursementNoteTypeInput,
 } from "./schemas/funds.js";
+
+// --- Donation provider schemas ---
+export {
+  inflowProviderIdSchema,
+  saveGivebutterConnectionInputSchema,
+  removeDonationConnectionInputSchema,
+  donationConnectionWireSchema,
+  providerFundSchema,
+  providerFundListSchema,
+  type InflowProviderId,
+  type SaveGivebutterConnectionInput,
+  type RemoveDonationConnectionInput,
+  type DonationConnectionWire,
+  type ProviderFundWire,
+  type ProviderFundListWire,
+} from "./schemas/donations.js";
 
 // --- Terminology schemas ---
 export {
@@ -962,8 +982,10 @@ export {
   // Funds
   fundIdSchema,
   fundLedgerIdSchema,
+  donationConnectionIdSchema,
   type FundId,
   type FundLedgerId,
+  type DonationConnectionId,
   // Knowledge base
   kbCategoryIdSchema,
   kbItemIdSchema,

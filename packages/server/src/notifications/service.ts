@@ -17,6 +17,7 @@ import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type {
   NotificationEventType,
   SseEvent,
+  SystemNotificationEventType,
   SystemSseEvent,
   OrgId,
   OrgSchema,
@@ -70,7 +71,7 @@ export interface NotificationService {
     orgId: OrgId,
     orgSchema: OrgSchema,
     orgSlug: OrgSlug,
-    eventType: SystemSseEvent["type"],
+    eventType: SystemNotificationEventType,
     userIds: readonly UserId[],
   ): Promise<void>;
 }

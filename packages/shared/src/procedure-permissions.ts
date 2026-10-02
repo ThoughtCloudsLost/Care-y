@@ -283,6 +283,12 @@ export const PROCEDURE_PERMISSIONS = {
   "funds.getSettings": Permission.MANAGE_FUNDS,
   "funds.updateSettings": Permission.MANAGE_FUNDS,
 
+  // --- donations ---
+  "donations.listConnections": Permission.MANAGE_FUNDS,
+  "donations.saveGivebutterConnection": Permission.MANAGE_FUNDS,
+  "donations.removeConnection": Permission.MANAGE_FUNDS,
+  "donations.listProviderFunds": Permission.VIEW_FUNDS,
+
   // --- dev ---
   "dev.resetSeedData": Permission.MANAGE_ROLES,
   "dev.seedQuarantine": Permission.MANAGE_ROLES,

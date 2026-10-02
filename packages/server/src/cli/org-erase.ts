@@ -37,6 +37,7 @@ import { withCli, type CliArgs, type CliContext } from "./cli-utils.js";
 import {
   deletionRequestIdSchema,
   type DeletionRequestId,
+  type InflowProviderId,
 } from "@care-y/shared";
 import { getEnv } from "../env.js";
 import { createSecretsEncryptor, deriveSecretsKey } from "../config/secrets.js";
@@ -44,6 +45,11 @@ import type { BlobStoreType } from "../storage/index.js";
 import { createLocalBlobStore } from "../storage/local.js";
 import type { OrgBlobSweeper } from "../storage/store.js";
 import { closeTwilioSubaccount } from "../telephony/twilio.js";
+import { createDonationConnectionService } from "../donations/config-service.js";
+import { createInflowProviderFactory } from "../donations/factory.js";
+import { createProviderFundCache } from "../donations/fund-cache.js";
+import { createGivebutterProvider } from "../donations/givebutter.js";
+import type { InflowProviderConstructor } from "../donations/provider.js";
 import {
   createErasureService,
   type DueErasure,
@@ -190,11 +196,35 @@ export function createCliErasureService(ctx: CliContext): ErasureService {
   } finally {
     opsKey.fill(0);
   }
+  const secretsEncryptor = createSecretsEncryptor(secretsKey);
+
+  // Only the webhook removal is used here. The factory and cache belong to
+  // this process, so invalidating them does not reach the api's copies;
+  // the api lists connections from the table before using either.
+  const inflowProviderConstructors = new Map<
+    InflowProviderId,
+    InflowProviderConstructor
+  >([["givebutter", createGivebutterProvider]]);
+  const donationConnections = createDonationConnectionService({
+    db: ctx.platformDb,
+    secretsEncryptor,
+    factory: createInflowProviderFactory({
+      db: ctx.platformDb,
+      secretsEncryptor,
+      providerConstructors: inflowProviderConstructors,
+    }),
+    providerConstructors: inflowProviderConstructors,
+    fundCache: createProviderFundCache({ ttlMs: 0 }),
+    webhookBaseUrl: env.WEBHOOK_BASE_URL,
+  });
+
   return createErasureService({
     platformDb: ctx.platformDb,
     blobSweeper: createBlobSweeper(env.BLOB_STORE_TYPE, env.BLOB_STORE_PATH),
-    secretsEncryptor: createSecretsEncryptor(secretsKey),
+    secretsEncryptor,
     closeSubaccount: closeTwilioSubaccount,
+    removeDonationWebhooks: (orgId) =>
+      donationConnections.removeWebhooksForOrg(orgId),
     now: () => new Date(),
   });
 }

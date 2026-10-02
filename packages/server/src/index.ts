@@ -78,6 +78,13 @@ import {
   twilioProviderStatic,
 } from "./telephony/twilio.js";
 import { createWebhookHandler } from "./routes/webhooks.js";
+import { createDonationWebhookHandler } from "./routes/donation-webhooks.js";
+import { createInflowProviderFactory } from "./donations/factory.js";
+import { createProviderFundCache } from "./donations/fund-cache.js";
+import { createDonationConnectionService } from "./donations/config-service.js";
+import { createDonationWebhookDispatch } from "./donations/webhook-dispatch.js";
+import { createGivebutterProvider } from "./donations/givebutter.js";
+import type { InflowProviderConstructor } from "./donations/provider.js";
 import { createTelephonyContentService } from "./telephony/telephony-content-service.js";
 import { createGreetingAudioHandler } from "./routes/greeting-audio.js";
 import { createBrandingIconHandler } from "./routes/branding-icons.js";
@@ -207,6 +214,7 @@ import type {
   OrgSlug,
   UserId,
   StoredProviderId,
+  InflowProviderId,
 } from "@care-y/shared";
 import { RoleId } from "@care-y/shared";
 
@@ -518,6 +526,31 @@ const providerFactory = createProviderFactory({
   db,
   secretsEncryptor,
   providerConstructors,
+});
+
+// --- Donation (inflow) providers ---
+
+const inflowProviderConstructors = new Map<
+  InflowProviderId,
+  InflowProviderConstructor
+>([["givebutter", createGivebutterProvider]]);
+
+const inflowProviderFactory = createInflowProviderFactory({
+  db,
+  secretsEncryptor,
+  providerConstructors: inflowProviderConstructors,
+});
+
+// Provider totals are relayed, never stored; this only absorbs bursts.
+const providerFundCache = createProviderFundCache({ ttlMs: 45_000 });
+
+const donationConnectionService = createDonationConnectionService({
+  db,
+  secretsEncryptor,
+  factory: inflowProviderFactory,
+  providerConstructors: inflowProviderConstructors,
+  fundCache: providerFundCache,
+  webhookBaseUrl: env.WEBHOOK_BASE_URL,
 });
 
 // --- BlobStore ---
@@ -875,6 +908,7 @@ const appRouter = createAppRouter({
     fieldEncryptor: encryptor,
     liveEvents: ticketLiveEvents,
   },
+  donationsDeps: { connectionService: donationConnectionService },
   clientDeps: {
     createClientSvc: (tDb, orgId, onTicketChanged) =>
       createClientService({
@@ -1183,6 +1217,22 @@ const webhookHandler = createWebhookHandler(
   env.WEBHOOK_BASE_URL,
 );
 
+// --- Donation webhook handler ---
+
+const donationWebhookHandler = createDonationWebhookHandler({
+  dispatch: createDonationWebhookDispatch({
+    orgService,
+    tenantDb,
+    sseService,
+    connectionService: donationConnectionService,
+    fundCache: providerFundCache,
+  }),
+  rateLimiter: createInMemoryRateLimiter({
+    windowMs: RATE_WINDOW_1M,
+    maxRequests: 60,
+  }),
+});
+
 /**
  * Resolves an active user's role id within an org schema. Shared by the
  * two raw HTTP paths that authorize outside tRPC: the relay and blob
@@ -1428,6 +1478,8 @@ const manifestHandler = createManifestHandler({
 });
 
 const server = createHttpServer(trpcHandler, cors.preflight, [
+  // First match wins, so the Givebutter prefix must precede /webhooks/.
+  { prefix: "/webhooks/givebutter/", handler: donationWebhookHandler },
   { prefix: "/webhooks/", handler: webhookHandler },
   { prefix: "/relay/", handler: relayHandler },
   { prefix: "/notifications/stream", handler: handleSse },

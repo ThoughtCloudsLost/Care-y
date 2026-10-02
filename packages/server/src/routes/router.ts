@@ -66,6 +66,10 @@ import {
   type OrgDeletionRouterDeps,
 } from "./org-deletion.js";
 import { createFundsRouter, type FundsRouterDeps } from "./funds.js";
+import {
+  createDonationsRouter,
+  type DonationsRouterDeps,
+} from "./donations.js";
 
 function healthCheck(): { status: "ok" } {
   return { status: "ok" };
@@ -113,6 +117,7 @@ export interface OptionalRouterDeps {
   readonly keysDeps: KeysRouterDeps | null;
   readonly orgDeletionDeps: OrgDeletionRouterDeps | null;
   readonly fundsDeps: FundsRouterDeps | null;
+  readonly donationsDeps: DonationsRouterDeps | null;
 }
 
 export interface RouterDeps extends OptionalRouterDeps {
@@ -197,6 +202,9 @@ export function createAppRouter(deps: RouterDeps) {
       : {}),
     ...(deps.fundsDeps !== null
       ? { funds: createFundsRouter(deps.fundsDeps) }
+      : {}),
+    ...(deps.donationsDeps !== null
+      ? { donations: createDonationsRouter(deps.donationsDeps) }
       : {}),
   });
 }

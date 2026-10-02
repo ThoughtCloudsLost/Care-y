@@ -227,6 +227,14 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.DELETION_NOT_CANCELLABLE]: () =>
     m.error_deletion_not_cancellable(),
   [ErrorCode.DELETION_SLUG_MISMATCH]: () => m.error_deletion_slug_mismatch(),
+
+  // Donation providers
+  [ErrorCode.DONATION_CONNECTION_NOT_FOUND]: () =>
+    m.error_donation_connection_not_found(),
+  [ErrorCode.DONATION_PROVIDER_REJECTED]: () =>
+    m.error_donation_provider_rejected(),
+  [ErrorCode.DONATION_PROVIDER_UNAVAILABLE]: () =>
+    m.error_donation_provider_unavailable(),
 };
 
 /** Type guard: returns true when the string is a recognized ErrorCode value. */

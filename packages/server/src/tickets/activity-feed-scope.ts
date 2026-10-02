@@ -72,6 +72,8 @@ export const FEED_SCOPE = {
   // Decrypted responses leaving the system, so it is shown even though
   // viewing them is not.
   intake_responses_exported: org(Permission.VIEW_INTAKE_RESPONSES),
+  donation_connection_saved: org(Permission.MANAGE_FUNDS),
+  donation_connection_removed: org(Permission.MANAGE_FUNDS),
 
   // --- Excluded: maintenance or high-volume events that would crowd a
   // five-row feed. They remain on the audit log page. ---
