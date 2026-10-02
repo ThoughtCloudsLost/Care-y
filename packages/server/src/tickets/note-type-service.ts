@@ -32,6 +32,7 @@ export interface NoteTypeRecord {
   readonly minCreateRole: RoleIdValue;
   readonly createdAt: Date;
   readonly notificationHints: readonly string[];
+  readonly systemKey: string | null;
 }
 
 export interface NoteTypeAdminRecord extends NoteTypeRecord {
@@ -72,6 +73,19 @@ export interface NoteTypeService {
     minViewRole: RoleIdValue;
   } | null>;
   getMinCreateRole(noteTypeId: NoteTypeId): Promise<RoleIdValue | undefined>;
+  /**
+   * Create the system note type for `systemKey` if the org does not have it
+   * yet, and return it either way. Concurrent callers race on the unique
+   * index, so the insert ignores a conflict and re-reads.
+   */
+  ensureSystem(input: {
+    systemKey: string;
+    encryptedName: Buffer;
+    encryptedIcon: Buffer;
+    orgKeyGeneration: number;
+  }): Promise<{ record: NoteTypeRecord; created: boolean }>;
+  /** The type's system key, null if it has none, undefined if no such type. */
+  getSystemKey(noteTypeId: NoteTypeId): Promise<string | null | undefined>;
 }
 
 interface NoteTypeRow {
@@ -85,6 +99,7 @@ interface NoteTypeRow {
   min_view_role: RoleIdValue;
   min_create_role: RoleIdValue;
   created_at: Date;
+  system_key: string | null;
 }
 
 function buildNotificationHints(targets: EscalationTarget[]): string[] {
@@ -113,6 +128,7 @@ function toRecord(
     minCreateRole: row.min_create_role,
     createdAt: row.created_at,
     notificationHints: hints,
+    systemKey: row.system_key,
   };
 }
 
@@ -153,9 +169,12 @@ export function createNoteTypeService(
 ): NoteTypeService {
   return {
     async list(): Promise<NoteTypeAdminRecord[]> {
+      // System types are owned by the product, so the admin surface never
+      // lists them.
       const rows = await db
         .selectFrom("note_types")
         .selectAll()
+        .where("system_key", "is", null)
         .orderBy("created_at", "asc")
         .execute();
 
@@ -190,12 +209,16 @@ export function createNoteTypeService(
             row.encrypted_escalation_targets,
             secretsEncryptor,
           );
+          // A system type stays in the list so the timeline can resolve its
+          // name and icon, but no role may pick it in the composer.
           return {
             ...toRecord(row, buildNotificationHints(targets)),
-            canCreate: meetsRoleThreshold({
-              userRoleId,
-              minRoleId: row.min_create_role,
-            }),
+            canCreate:
+              row.system_key === null &&
+              meetsRoleThreshold({
+                userRoleId,
+                minRoleId: row.min_create_role,
+              }),
           };
         }),
         defaultNoteTypeId: config?.default_note_type_id ?? null,
@@ -230,6 +253,16 @@ export function createNoteTypeService(
     },
 
     async update(input): Promise<NoteTypeRecord> {
+      const current = await db
+        .selectFrom("note_types")
+        .select("system_key")
+        .where("id", "=", input.id)
+        .executeTakeFirst();
+      if (!current) throw new NotFoundError(ErrorCode.NOTE_TYPE_NOT_FOUND);
+      if (current.system_key !== null) {
+        throw new ForbiddenError(ErrorCode.NOTE_TYPE_RESERVED);
+      }
+
       // Guard: cannot deactivate the default note type
       if (input.isActive === false) {
         const config = await db
@@ -337,6 +370,45 @@ export function createNoteTypeService(
         .where("id", "=", noteTypeId)
         .executeTakeFirst();
       return row?.min_create_role;
+    },
+
+    async ensureSystem(input): Promise<{
+      record: NoteTypeRecord;
+      created: boolean;
+    }> {
+      const inserted = await db
+        .insertInto("note_types")
+        .values({
+          encrypted_name: input.encryptedName,
+          encrypted_icon: input.encryptedIcon,
+          encrypted_escalation_targets: encryptTargets([], secretsEncryptor),
+          requires_on_close: false,
+          min_view_role: RoleId.VOLUNTEER,
+          min_create_role: RoleId.VOLUNTEER,
+          org_key_generation: input.orgKeyGeneration,
+          system_key: input.systemKey,
+        })
+        .onConflict((oc) => oc.column("system_key").doNothing())
+        .returningAll()
+        .executeTakeFirst();
+      if (inserted) return { record: toRecord(inserted), created: true };
+
+      const existing = await db
+        .selectFrom("note_types")
+        .selectAll()
+        .where("system_key", "=", input.systemKey)
+        .executeTakeFirst();
+      if (!existing) throw new NotFoundError(ErrorCode.NOTE_TYPE_NOT_FOUND);
+      return { record: toRecord(existing), created: false };
+    },
+
+    async getSystemKey(noteTypeId): Promise<string | null | undefined> {
+      const row = await db
+        .selectFrom("note_types")
+        .select("system_key")
+        .where("id", "=", noteTypeId)
+        .executeTakeFirst();
+      return row?.system_key;
     },
   };
 }

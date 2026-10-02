@@ -51,20 +51,34 @@ const FUND = fundIdSchema.parse(globalThis.crypto.randomUUID());
 const USER = userIdSchema.parse(globalThis.crypto.randomUUID());
 const TICKET = "ticket-001";
 
-const { mockEncrypt, mockRecord, mockRevise, mockWrite, mockDeleteByPrefix } =
-  vi.hoisted(() => ({
-    mockEncrypt: vi
-      .fn<(ticketId: string, slot: string, text: string) => Promise<string>>()
-      .mockResolvedValue("sealed-note"),
-    mockRecord: vi
-      .fn<(input: Record<string, unknown>) => Promise<unknown>>()
-      .mockResolvedValue({}),
-    mockRevise: vi
-      .fn<(input: Record<string, unknown>) => Promise<unknown>>()
-      .mockResolvedValue({}),
-    mockWrite: vi.fn<(fundId: string, deltaMinor: number) => void>(),
-    mockDeleteByPrefix: vi.fn<(prefix: string) => void>(),
-  }));
+const {
+  mockEncrypt,
+  mockEnsureNoteType,
+  mockRecord,
+  mockRevise,
+  mockWrite,
+  mockDeleteByPrefix,
+} = vi.hoisted(() => ({
+  mockEncrypt: vi
+    .fn<(ticketId: string, slot: string, text: string) => Promise<string>>()
+    .mockResolvedValue("sealed-note"),
+  mockEnsureNoteType: vi
+    .fn<
+      (input: Record<string, unknown>) => Promise<{
+        id: string;
+        created: boolean;
+      }>
+    >()
+    .mockResolvedValue({ id: "note-type-1", created: false }),
+  mockRecord: vi
+    .fn<(input: Record<string, unknown>) => Promise<unknown>>()
+    .mockResolvedValue({}),
+  mockRevise: vi
+    .fn<(input: Record<string, unknown>) => Promise<unknown>>()
+    .mockResolvedValue({}),
+  mockWrite: vi.fn<(fundId: string, deltaMinor: number) => void>(),
+  mockDeleteByPrefix: vi.fn<(prefix: string) => void>(),
+}));
 
 let funds: FundView[] = [];
 let caseFund: CaseFund = { fundId: null, fund: undefined };
@@ -105,6 +119,7 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     funds: {
+      ensureDisbursementNoteType: { mutate: mockEnsureNoteType },
       recordDisbursement: { mutate: mockRecord },
       reviseDisbursement: { mutate: mockRevise },
     },
@@ -181,6 +196,9 @@ beforeEach(() => {
   funds = [fund(20_000)];
   caseFund = { fundId: FUND, fund: funds[0] };
   mockEncrypt.mockClear();
+  mockEnsureNoteType
+    .mockReset()
+    .mockResolvedValue({ id: "note-type-1", created: false });
   mockRecord.mockReset().mockResolvedValue({});
   mockRevise.mockReset().mockResolvedValue({});
   mockWrite.mockClear();
@@ -218,6 +236,14 @@ describe("DisbursementSheet (record)", () => {
     });
     expect(mockRevise).not.toHaveBeenCalled();
     expect(mockWrite).toHaveBeenCalledWith(FUND, -2_550);
+    // The disbursement note type exists before the note that carries it.
+    expect(mockEnsureNoteType).toHaveBeenCalledWith({
+      encryptedName: `sealed:${m.fund_disbursement_note_type_name()}`,
+      encryptedIcon: "sealed:hand-coins",
+    });
+    expect(mockEnsureNoteType.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRecord.mock.invocationCallOrder[0] ?? 0,
+    );
 
     const input = mockRecord.mock.calls[0]?.[0] ?? {};
     expect(input.balance).toEqual({

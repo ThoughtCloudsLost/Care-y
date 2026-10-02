@@ -18,6 +18,8 @@ import { ForbiddenError, NotFoundError } from "../errors.js";
 import type { TicketChangeListener } from "./ticket-live-events.js";
 import * as crypto from "node:crypto";
 import {
+  DISBURSEMENT_NOTE_TYPE_KEY,
+  ErrorCode,
   newFollowupId,
   newTicketId,
   newKeyGeneration,
@@ -966,6 +968,92 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     );
 
     expect(updated.noteTypeId).toBe(noteTypeId);
+  });
+
+  it("updateInternalNote keeps a note of a system type on that type, while an ordinary typed note moves", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await testDb.db
+      .insertInto("note_types")
+      .values({
+        encrypted_name: Buffer.from("disbursement"),
+        encrypted_icon: Buffer.from("icon"),
+        encrypted_escalation_targets: Buffer.from("[]"),
+        system_key: DISBURSEMENT_NOTE_TYPE_KEY,
+      })
+      .onConflict((oc) => oc.column("system_key").doNothing())
+      .execute();
+    const { id: systemTypeId } = await testDb.db
+      .selectFrom("note_types")
+      .select("id")
+      .where("system_key", "=", DISBURSEMENT_NOTE_TYPE_KEY)
+      .executeTakeFirstOrThrow();
+    const ordinaryA = crypto.randomUUID() as NoteTypeId;
+    const ordinaryB = crypto.randomUUID() as NoteTypeId;
+    await testDb.db
+      .insertInto("note_types")
+      .values([
+        {
+          id: ordinaryA,
+          encrypted_name: Buffer.from("type-a"),
+          encrypted_icon: Buffer.from("icon-a"),
+          encrypted_escalation_targets: Buffer.from("[]"),
+        },
+        {
+          id: ordinaryB,
+          encrypted_name: Buffer.from("type-b"),
+          encrypted_icon: Buffer.from("icon-b"),
+          encrypted_escalation_targets: Buffer.from("[]"),
+        },
+      ])
+      .execute();
+
+    const systemNote = await svc.create(userId, {
+      id: newFollowupId(),
+      ticketId,
+      encryptedContent: Buffer.from("disbursement-envelope"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+      noteTypeId: systemTypeId,
+    });
+    const ordinaryNote = await svc.create(userId, {
+      id: newFollowupId(),
+      ticketId,
+      encryptedContent: Buffer.from("ordinary-content"),
+      source: "volunteer",
+      type: "internal_note",
+      isPrivate: true,
+      mentionedPseudonyms: [],
+      noteTypeId: ordinaryA,
+    });
+
+    await expect(
+      svc.updateInternalNote(
+        userId,
+        systemNote.id,
+        Buffer.from("retyped"),
+        ordinaryA,
+      ),
+    ).rejects.toThrow(ErrorCode.NOTE_TYPE_RESERVED);
+    const unchanged = await testDb.db
+      .selectFrom("followups")
+      .select(["note_type_id", "encrypted_content"])
+      .where("id", "=", systemNote.id)
+      .executeTakeFirstOrThrow();
+    expect(unchanged.note_type_id).toBe(systemTypeId);
+    expect(unchanged.encrypted_content.toString()).toBe(
+      "disbursement-envelope",
+    );
+
+    const { record: moved } = await svc.updateInternalNote(
+      userId,
+      ordinaryNote.id,
+      Buffer.from("ordinary-edited"),
+      ordinaryB,
+    );
+    expect(moved.noteTypeId).toBe(ordinaryB);
   });
 
   it("listSummary includes noteTypeId in results", async () => {

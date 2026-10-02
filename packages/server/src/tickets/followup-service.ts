@@ -693,6 +693,24 @@ export function createFollowUpService(
       throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
     }
 
+    // A note of a system type keeps that type; moving it would detach it
+    // from the path that owns it.
+    const currentTypeId = existing.note_type_id ?? null;
+    if (
+      noteTypeId !== undefined &&
+      currentTypeId !== null &&
+      noteTypeId !== currentTypeId
+    ) {
+      const currentType = await handle
+        .selectFrom("note_types")
+        .select("system_key")
+        .where("id", "=", currentTypeId)
+        .executeTakeFirst();
+      if (typeof currentType?.system_key === "string") {
+        throw new ForbiddenError(ErrorCode.NOTE_TYPE_RESERVED);
+      }
+    }
+
     const updates: Record<string, unknown> = {
       encrypted_content: encryptedContent,
     };

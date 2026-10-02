@@ -12,8 +12,10 @@
  */
 
 import {
+  DISBURSEMENT_NOTE_TYPE_KEY,
   Permission,
   createFundInputSchema,
+  ensureDisbursementNoteTypeInputSchema,
   updateFundInputSchema,
   recordDisbursementInputSchema,
   recordAdjustmentInputSchema,
@@ -34,6 +36,7 @@ import type {
   FollowUpServiceDeps,
 } from "../tickets/followup-service.js";
 import type { AuditService } from "../tickets/audit.js";
+import type { NoteTypeService } from "../tickets/note-type-service.js";
 import type { TicketLiveEvents } from "../tickets/ticket-live-events.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
@@ -75,6 +78,8 @@ export interface FundsRouterDeps {
     deps?: FollowUpServiceDeps,
   ) => FollowUpService;
   readonly createAuditSvc: (tDb: OrgContext["tenantDb"]) => AuditService;
+  /** Note type service, for the system type disbursement notes carry. */
+  readonly createNoteTypeSvc: (tDb: OrgContext["tenantDb"]) => NoteTypeService;
   readonly notificationService: NotificationService;
   /**
    * OPS-tier encryptor the lifecycle notifier uses for mentioned
@@ -111,6 +116,12 @@ export interface RecordedEntryWire {
   readonly balanceVersion: number;
 }
 
+export interface EnsuredNoteTypeWire {
+  readonly id: string;
+  /** True when this call created the type. */
+  readonly created: boolean;
+}
+
 export interface RevisedDisbursementWire {
   readonly entryDate: string;
   readonly balanceVersion: number;
@@ -135,7 +146,7 @@ function toBalanceWrite(balance: FundBalanceInput): FundBalanceWrite {
 export function createFundsRouter(deps: FundsRouterDeps) {
   // The tickets router's audit and outbox path, so a disbursement note is
   // announced exactly as a note written from the case.
-  const { auditAndNotify } = createLifecycleNotifier(deps);
+  const { audit, auditAndNotify } = createLifecycleNotifier(deps);
 
   /** Per-request fund service bound to the caller's tenant. */
   function fundSvc(ctx: LifecycleActor): FundService {
@@ -154,7 +165,8 @@ export function createFundsRouter(deps: FundsRouterDeps) {
       notificationService: deps.notificationService,
       announceCaseNote: (ticket) => {
         // Same event and arguments the tickets router uses for a note
-        // with no mentions and no note type.
+        // with no mentions. The note carries the disbursement type, which
+        // has no escalation targets, so the notice goes without a type id.
         auditAndNotify(ctx, "followup_added", ticket, {
           eventType: "followup_added",
           actorId: ctx.user.id,
@@ -270,8 +282,9 @@ export function createFundsRouter(deps: FundsRouterDeps) {
       .mutation(
         withErrorWrapping(
           async ({ ctx, input }): Promise<RevisedDisbursementWire> => {
-            // A fund manager may correct a note someone else recorded;
-            // anyone else only their own.
+            // A fund manager may correct a disbursement note someone else
+            // recorded; anyone else only their own. The override reaches
+            // only disbursement notes: the service refuses any other note.
             const mayEditAnyNote = await hasPermissionForOrg(
               ctx.org.tenantDb,
               ctx.org.orgSchema,
@@ -305,6 +318,30 @@ export function createFundsRouter(deps: FundsRouterDeps) {
               },
               mayEditAnyNote,
             });
+          },
+        ),
+      ),
+
+    ensureDisbursementNoteType: recordDisbursementsProcedure
+      .input(ensureDisbursementNoteTypeInputSchema)
+      .mutation(
+        withErrorWrapping(
+          async ({ ctx, input }): Promise<EnsuredNoteTypeWire> => {
+            const noteTypes = deps.createNoteTypeSvc(ctx.org.tenantDb);
+            const { record, created } = await noteTypes.ensureSystem({
+              systemKey: DISBURSEMENT_NOTE_TYPE_KEY,
+              encryptedName: Buffer.from(input.encryptedName, "base64"),
+              encryptedIcon: Buffer.from(input.encryptedIcon, "base64"),
+              orgKeyGeneration: ctx.org.sealedBox.generation,
+            });
+            if (created) {
+              audit(ctx.org.tenantDb, {
+                eventType: "note_type_created",
+                actorId: ctx.user.id,
+                metadata: { noteTypeId: record.id },
+              });
+            }
+            return { id: record.id, created };
           },
         ),
       ),

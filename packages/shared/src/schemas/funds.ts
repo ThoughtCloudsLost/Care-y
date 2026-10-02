@@ -145,6 +145,18 @@ export type UpdateFundSettingsInput = z.infer<
   typeof updateFundSettingsInputSchema
 >;
 
+/** System key of the note type every disbursement case note carries. */
+export const DISBURSEMENT_NOTE_TYPE_KEY = "disbursement";
+
+/** Sealed name and icon for the disbursement note type, created once per org. */
+export const ensureDisbursementNoteTypeInputSchema = z.object({
+  encryptedName: base64String("encryptedName"),
+  encryptedIcon: base64String("encryptedIcon"),
+});
+export type EnsureDisbursementNoteTypeInput = z.infer<
+  typeof ensureDisbursementNoteTypeInputSchema
+>;
+
 // --- Payload schemas (browser-side, after decryption) ---
 
 /** ISO 4217 alphabetic code: three uppercase letters. */

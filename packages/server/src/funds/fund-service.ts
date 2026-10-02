@@ -7,10 +7,11 @@
  * `balance_version` still matches the one the browser read, so two
  * entries recorded at once cannot both build on the same starting
  * balance. A disbursement recorded from a case writes the balance, the
- * ledger entry, which names no case, and an ordinary internal note on the
- * case in one transaction; the note's encrypted content is the only link
- * between the two. The server sees the ticket id and the ledger id
- * together only for the length of that request.
+ * ledger entry, which names no case, and an internal note of the org's
+ * disbursement note type on the case in one transaction; the note's
+ * encrypted content is the only link between the two. The server sees
+ * the ticket id and the ledger id together only for the length of that
+ * request.
  */
 
 import type { Kysely, Transaction } from "kysely";
@@ -19,6 +20,7 @@ import type {
   FollowupId,
   FundId,
   FundLedgerId,
+  NoteTypeId,
   OrgId,
   OrgSchema,
   OrgSlug,
@@ -26,8 +28,12 @@ import type {
   TicketId,
   UserId,
 } from "@care-y/shared";
-import { ErrorCode, Permission } from "@care-y/shared";
-import { ConflictError, NotFoundError } from "../errors.js";
+import {
+  DISBURSEMENT_NOTE_TYPE_KEY,
+  ErrorCode,
+  Permission,
+} from "@care-y/shared";
+import { ConflictError, ForbiddenError, NotFoundError } from "../errors.js";
 import type {
   CreateWithinResult,
   FollowUpService,
@@ -186,7 +192,7 @@ export interface FundService {
     input: RecordEntryInput,
   ): Promise<RecordedLedgerEntry>;
   /**
-   * Correct a disbursement: the reversal, the replacement, the rewritten
+   * Correct a disbursement. The reversal, the replacement, the rewritten
    * case note and the new balance commit together or not at all.
    */
   reviseDisbursement(
@@ -213,6 +219,11 @@ export function createFundService(
    * columns under different generations, so the write is refused as stale.
    * Moving the whole row also makes a key-rotation reseal of the same row,
    * which only updates rows below its generation, skip it.
+   *
+   * A balance write does not touch `updated_at`. The ledger stores only a
+   * date so a ledger row cannot be paired with the case note written in the
+   * same transaction, and a per-write timestamp on the fund row would
+   * re-create that pairing. Only metadata edits (`updateFund`) stamp it.
    */
   async function applyBalance(
     trx: Transaction<TenantDatabase>,
@@ -228,7 +239,6 @@ export function createFundService(
         ...(encryptedPayload !== undefined
           ? { encrypted_payload: encryptedPayload }
           : {}),
-        updated_at: new Date(),
       }))
       .where("id", "=", balance.fundId)
       .where("balance_version", "=", balance.expectedVersion);
@@ -251,6 +261,19 @@ export function createFundService(
       .executeTakeFirst();
     if (!exists) throw new NotFoundError(ErrorCode.FUND_NOT_FOUND);
     throw new ConflictError(ErrorCode.FUND_BALANCE_STALE);
+  }
+
+  /** The org's disbursement note type, read inside the caller's transaction. */
+  async function disbursementNoteTypeId(
+    trx: Transaction<TenantDatabase>,
+  ): Promise<NoteTypeId> {
+    const row = await trx
+      .selectFrom("note_types")
+      .select("id")
+      .where("system_key", "=", DISBURSEMENT_NOTE_TYPE_KEY)
+      .executeTakeFirst();
+    if (!row) throw new NotFoundError(ErrorCode.NOTE_TYPE_NOT_FOUND);
+    return row.id;
   }
 
   /** Insert one ledger row and read back the day the database stamped. */
@@ -431,6 +454,7 @@ export function createFundService(
         let note: CreateWithinResult | null = null;
         let ticket: CaseNoteTicket | null = null;
         if (caseNote !== undefined) {
+          const noteTypeId = await disbursementNoteTypeId(trx);
           note = await deps.followUps.createWithin(trx, userId, {
             id: caseNote.followUpId,
             ticketId: caseNote.ticketId,
@@ -439,6 +463,7 @@ export function createFundService(
             isPrivate: true,
             encryptedContent: caseNote.encryptedContent,
             mentionedPseudonyms: [],
+            noteTypeId,
             attachments: [],
           });
           const row = await trx
@@ -488,8 +513,11 @@ export function createFundService(
 
       // The follow-up service checks the actor's access to the note's
       // ticket and its author rule inside the same transaction, so a
-      // refused edit leaves no ledger rows and no balance change.
+      // refused edit leaves no ledger rows and no balance change. The
+      // revision path only ever rewrites a disbursement note; any other
+      // follow-up id is refused and leaves no ledger rows.
       const committed = await db.transaction().execute(async (trx) => {
+        const typeId = await disbursementNoteTypeId(trx);
         const balanceVersion = await applyBalance(trx, balance);
         await insertLedgerEntry(trx, input.reversal, input.orgKeyGeneration);
         const replacement = await insertLedgerEntry(
@@ -509,6 +537,9 @@ export function createFundService(
         // the whole revision rolls back.
         if (note.row.ticket_id !== caseNote.ticketId) {
           throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
+        }
+        if (note.row.note_type_id !== typeId) {
+          throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_EDITABLE);
         }
         return { entryDate: replacement.entryDate, balanceVersion, note };
       });

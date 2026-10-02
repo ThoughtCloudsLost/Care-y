@@ -10,12 +10,19 @@ import {
   createNoteTypeService,
   seedDefaultNoteTypes,
   DEFAULT_NOTE_TYPES,
+  type NoteTypeRecord,
   type NoteTypeService,
 } from "./note-type-service.js";
 import { createSecretsEncryptor } from "../config/secrets.js";
 import { deriveSecretsKey } from "../config/secrets.js";
 import type { SecretsEncryptor } from "../config/secrets.js";
-import { RoleId, type EscalationTarget, type NoteTypeId } from "@care-y/shared";
+import {
+  DISBURSEMENT_NOTE_TYPE_KEY,
+  ErrorCode,
+  RoleId,
+  type EscalationTarget,
+  type NoteTypeId,
+} from "@care-y/shared";
 import { NotFoundError, ForbiddenError } from "../errors.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
@@ -434,6 +441,77 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
         .updateTable("org_config")
         .set({ default_note_type_id: null })
         .execute();
+    });
+  });
+
+  describe("system note types", () => {
+    async function ensureDisbursement(): Promise<{
+      record: NoteTypeRecord;
+      created: boolean;
+    }> {
+      return svc.ensureSystem({
+        systemKey: DISBURSEMENT_NOTE_TYPE_KEY,
+        encryptedName: Buffer.from("sealed-disbursement"),
+        encryptedIcon: Buffer.from("sealed-icon"),
+        orgKeyGeneration: 1,
+      });
+    }
+
+    it("creates the type on the first call and returns it on the next", async () => {
+      const first = await ensureDisbursement();
+      const second = await ensureDisbursement();
+
+      expect(first.created).toBe(true);
+      expect(first.record.systemKey).toBe(DISBURSEMENT_NOTE_TYPE_KEY);
+      expect(second.created).toBe(false);
+      expect(second.record.id).toBe(first.record.id);
+    });
+
+    it("is left out of the admin list", async () => {
+      const { record } = await ensureDisbursement();
+
+      const rows = await svc.list();
+      expect(rows.some((r) => r.id === record.id)).toBe(false);
+    });
+
+    it("is listed as active but never creatable, even for the highest role", async () => {
+      const { record } = await ensureDisbursement();
+
+      const { types } = await svc.listActive(RoleId.ADMIN);
+      const listed = types.find((t) => t.id === record.id);
+      expect(listed).toBeDefined();
+      expect(listed?.canCreate).toBe(false);
+    });
+
+    it("refuses an update", async () => {
+      const { record } = await ensureDisbursement();
+
+      await expect(
+        svc.update({ id: record.id, encryptedName: Buffer.from("renamed") }),
+      ).rejects.toThrow(ErrorCode.NOTE_TYPE_RESERVED);
+      await expect(
+        svc.update({ id: record.id, isActive: false }),
+      ).rejects.toThrow(ForbiddenError);
+    });
+
+    it("getSystemKey returns the key, null for an ordinary type and undefined for an unknown id", async () => {
+      const { record } = await ensureDisbursement();
+      const ordinary = await svc.create({
+        encryptedName: Buffer.from("ordinary"),
+        encryptedIcon: Buffer.from("note"),
+        escalationTargets: [],
+        orgKeyGeneration: 1,
+      });
+
+      expect(await svc.getSystemKey(record.id)).toBe(
+        DISBURSEMENT_NOTE_TYPE_KEY,
+      );
+      expect(await svc.getSystemKey(ordinary.id)).toBeNull();
+      expect(
+        await svc.getSystemKey(
+          "00000000-0000-0000-0000-000000000000" as NoteTypeId,
+        ),
+      ).toBeUndefined();
     });
   });
 
