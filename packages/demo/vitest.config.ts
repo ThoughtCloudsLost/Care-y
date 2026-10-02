@@ -14,5 +14,9 @@ export default defineConfig({
     exclude: ["**/dist/**", "**/node_modules/**", "src/**/*.smoke.test.ts"],
     environment: "jsdom",
     setupFiles: ["src/test-setup.ts"],
+    // The splash test imports the client's splash stylesheet with ?raw.
+    // Without this entry vitest replaces every .css import with an empty
+    // string, raw query included.
+    css: { include: [/splash\.css/] },
   },
 });
