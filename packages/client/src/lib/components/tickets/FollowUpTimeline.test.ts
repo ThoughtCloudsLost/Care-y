@@ -471,18 +471,29 @@ describe("FollowUpTimeline component (timeline mode)", () => {
     });
   });
 
-  describe("disbursement notes", () => {
+  describe("disbursements", () => {
     const fundId = fundIdSchema.parse(globalThis.crypto.randomUUID());
 
-    function renderNote(decrypted: string): void {
-      render(FollowUpTimelineHarness, {
+    const envelope = disbursementNoteContent({
+      ledgerEntryId: newFundLedgerId(),
+      fundId,
+      amountMinor: 2_500,
+      currency: "USD",
+      note: "Groceries",
+    });
+
+    function renderEntry(
+      type: string,
+      decrypted: string | undefined,
+    ): ReturnType<typeof render> {
+      return render(FollowUpTimelineHarness, {
         props: {
           timelineActive: true,
           resolveDecrypted: () => decrypted,
           items: [
             makeItem("d-1", {
               source: "volunteer",
-              type: "internal_note",
+              type,
               createdAt: isoAt(0, 9, 0),
             }),
           ],
@@ -490,33 +501,47 @@ describe("FollowUpTimeline component (timeline mode)", () => {
       });
     }
 
-    it("labels an envelope note with its amount instead of the raw content", () => {
-      renderNote(
-        disbursementNoteContent({
-          ledgerEntryId: newFundLedgerId(),
-          fundId,
-          amountMinor: 2_500,
-          currency: "USD",
-          note: "Groceries",
-        }),
-      );
-
+    function rowName(): string {
       const row = screen.getByRole("button", {
         name: (accessibleName) => accessibleName.startsWith("Jump to: "),
       });
-      const name = row.getAttribute("aria-label") ?? "";
+      return row.getAttribute("aria-label") ?? "";
+    }
+
+    it("labels a disbursement with its amount and the hand-coins glyph", () => {
+      const { container } = renderEntry("disbursement", envelope);
+
+      const name = rowName();
       expect(name).toContain("$25.00");
       expect(name).not.toContain(NOTE_ENVELOPE_MARKER);
       expect(name).not.toContain("ledgerEntryId");
+      expect(
+        container.querySelector(".tl-marker .lucide-hand-coins"),
+      ).not.toBeNull();
+    });
+
+    it("labels a disbursement with the fund eyebrow while its content is decrypting", () => {
+      const { container } = renderEntry("disbursement", undefined);
+
+      expect(rowName()).toMatch(/^Jump to: Disbursement,/);
+      expect(
+        container.querySelector(".tl-marker .lucide-hand-coins"),
+      ).not.toBeNull();
     });
 
     it("never shows the raw content of a malformed envelope", () => {
-      renderNote(`${NOTE_ENVELOPE_MARKER}{"v":1}`);
+      renderEntry("disbursement", `${NOTE_ENVELOPE_MARKER}{"v":1}`);
 
-      const row = screen.getByRole("button", {
-        name: (accessibleName) => accessibleName.startsWith("Jump to: "),
-      });
-      expect(row.getAttribute("aria-label") ?? "").not.toContain('{"v":1}');
+      const name = rowName();
+      expect(name).not.toContain('{"v":1}');
+      expect(name).toMatch(/^Jump to: Disbursement,/);
+    });
+
+    it("does not render an internal note carrying the marker as a disbursement", () => {
+      const { container } = renderEntry("internal_note", envelope);
+
+      expect(rowName()).not.toContain("$25.00");
+      expect(container.querySelector(".lucide-hand-coins")).toBeNull();
     });
   });
 

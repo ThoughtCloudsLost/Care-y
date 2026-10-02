@@ -53,6 +53,11 @@ function permissionForFollowUpType(type: FollowUpType): Permission {
   );
 }
 
+/** Types only a service may write; a client never sends them. */
+const SERVICE_ONLY_FOLLOW_UP_TYPES: ReadonlySet<FollowUpType> = new Set([
+  "disbursement",
+]);
+
 // --- Local permission procedures (used only in this router) ---
 
 const openCasesProcedure = permissionProcedure(Permission.OPEN_CASES);
@@ -274,7 +279,7 @@ import {
   channelSecretSchema,
   clientIdSchema,
 } from "@care-y/shared";
-import type { NoteTypeId, UserId, QueueId } from "@care-y/shared";
+import type { UserId, QueueId } from "@care-y/shared";
 
 import { b64, b64n, b64KeyWrap } from "../utils/ciphertext-wire.js";
 import {
@@ -441,23 +446,6 @@ function buildSearchRoutes(
       }),
     ),
   };
-}
-
-/**
- * Refuse a system note type on an ordinary note write. The ordinary note
- * routes never assign a reserved type, so a reserved type can only be
- * given by the flow that owns it.
- */
-async function refuseReservedNoteType(
-  factory: ((tDb: OrgContext["tenantDb"]) => NoteTypeService) | undefined,
-  tDb: OrgContext["tenantDb"],
-  noteTypeId: NoteTypeId | undefined,
-): Promise<void> {
-  if (noteTypeId === undefined || factory === undefined) return;
-  const systemKey = await factory(tDb).getSystemKey(noteTypeId);
-  if (typeof systemKey === "string") {
-    throw new ForbiddenError(ErrorCode.NOTE_TYPE_RESERVED);
-  }
 }
 
 function buildNoteTypeRoutes(
@@ -990,6 +978,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(createFollowUpInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
+          // The enum admits every type the timeline renders, including
+          // ones written only alongside rows of their own (a disbursement
+          // and its ledger entry), so the boundary refuses them here.
+          if (SERVICE_ONLY_FOLLOW_UP_TYPES.has(input.type)) {
+            throw new ForbiddenError(ErrorCode.FOLLOWUP_TYPE_RESERVED);
+          }
           // An outbound entry reaches the client, so it takes the key for
           // its channel rather than the key for writing on the case.
           await requirePermissionForOrg(
@@ -997,11 +991,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             ctx.org.orgSchema,
             ctx.user.roleId,
             permissionForFollowUpType(input.type),
-          );
-          await refuseReservedNoteType(
-            deps.createNoteTypeSvc,
-            ctx.org.tenantDb,
-            input.noteTypeId,
           );
           if (
             input.type === "internal_note" &&
@@ -1209,11 +1198,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(updateInternalNoteInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          await refuseReservedNoteType(
-            deps.createNoteTypeSvc,
-            ctx.org.tenantDb,
-            input.noteTypeId,
-          );
           const svc = followUpWriteSvc(ctx.org);
           const { record, previousNoteTypeId } = await svc.updateInternalNote(
             ctx.user.id,

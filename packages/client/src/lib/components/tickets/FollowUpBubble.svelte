@@ -21,6 +21,7 @@
   import EmailInboundBubbleContent from "$lib/components/tickets/EmailInboundBubbleContent.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
+  import * as m from "$lib/paraglide/messages.js";
 
   interface FollowUpBubbleProps {
     followUp: {
@@ -42,8 +43,8 @@
     ontogglereaction?: (reaction: ReactionType) => void;
     resolveUserName?: (userId: string) => string;
     /**
-     * Names the fund in a disbursement note. Without it the note reads
-     * as its amount and text alone.
+     * Names the fund in a disbursement. Without it the entry reads as
+     * its amount and text alone.
      */
     resolveFundName?: FundNameResolver;
   }
@@ -83,6 +84,19 @@
     {searchTerm}
     {noteTypeName}
     {noteTypeIcon}
+    {reactions}
+    {currentUserId}
+    {ontogglereaction}
+  />
+{:else if kind === "fund"}
+  <PrivateNote
+    result={readableNoteResult(result, resolveFundName)}
+    encryptedContent={followUp.encryptedContent}
+    authorName={undefined}
+    timestamp={followUp.createdAt}
+    isOwn={isOwnNote}
+    {searchTerm}
+    noteTypeName={m.fund_note_eyebrow()}
     {reactions}
     {currentUserId}
     {ontogglereaction}

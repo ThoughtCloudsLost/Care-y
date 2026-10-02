@@ -18,6 +18,7 @@ const defaultLabels: DetailFiltersConfig["labels"] = {
   typePriority: "Priority",
   typeHold: "Hold",
   typeQueue: "Queue",
+  typeDisbursements: "Disbursements",
   typeMerge: "Merge",
   typeCalls: "Calls",
 };
@@ -167,6 +168,17 @@ describe("createDetailFilters", () => {
       const typePill = df.pills.pills[0];
       expect(typePill?.options.length).toBeGreaterThanOrEqual(10);
       expect(typePill?.options[0]?.value).toBe("note_type:nt-1");
+    });
+
+    it("type pill offers a disbursements chip after the queue chip", () => {
+      const df = createDetailFilters(makeConfig());
+
+      const values = df.pills.pills[0]?.options.map((o) => o.value) ?? [];
+      const queueAt = values.indexOf("__queue__");
+      expect(queueAt).toBeGreaterThanOrEqual(0);
+      expect(values[queueAt + 1]).toBe("__funds__");
+      const chip = df.pills.pills[0]?.options[queueAt + 1];
+      expect(chip?.label).toBe("Disbursements");
     });
 
     it("author pill includes client alias and participants", () => {

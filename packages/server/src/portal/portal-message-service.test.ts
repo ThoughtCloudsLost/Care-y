@@ -1281,6 +1281,37 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(entry).toBeUndefined();
       });
 
+      it("excludes a disbursement follow-up on the client's ticket", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "disbursement",
+            is_private: true,
+            encrypted_content: Buffer.from("disbursement-envelope"),
+            created_by: fixture.userId!,
+            note_type_id: null,
+          })
+          .execute();
+
+        const result = await bootstrap(testDb.db, channel);
+
+        expect(result.callEntries.find((e) => e.id === fuId)).toBeUndefined();
+        expect(
+          result.messages.find(
+            (m) => m.followupId === fuId || m.type === "disbursement",
+          ),
+        ).toBeUndefined();
+      });
+
       it("excludes deleted follow-ups", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
         const channel = await insertTestChannel(testDb.db, fixture.clientId);

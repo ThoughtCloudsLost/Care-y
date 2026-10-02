@@ -44,7 +44,6 @@
     getCurrentPermissions,
   } from "$lib/crypto/context.js";
   import {
-    hasNoteEnvelopeMarker,
     type FollowUpListInput,
     type ReactionSummary,
     type ReactionType,
@@ -107,7 +106,6 @@
   import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
   import { createFundStore } from "$lib/funds/fund-store.svelte.js";
   import {
-    isEnvelopeResult,
     readableNoteResult,
     readableNoteText,
   } from "$lib/funds/fund-display.js";
@@ -353,10 +351,10 @@
     return noteTypesQuery.data.types.find((t) => t.id === id);
   }
 
-  // Disbursement notes carry an envelope instead of typed text. The
-  // fund cache names the fund; the note block shows readable text, and
-  // correcting one goes through the context menu's disbursement sheet,
-  // not the note editor.
+  // A disbursement carries an envelope instead of typed text. The fund
+  // cache names the fund; the entry shows readable text, and correcting
+  // one goes through the context menu's disbursement sheet, not the note
+  // editor.
   const fundStore = createFundStore();
 
   function resolveFundName(fundId: string): string | undefined {
@@ -365,15 +363,6 @@
 
   function noteDisplayResult(result: DecryptResult): DecryptResult {
     return readableNoteResult(result, resolveFundName);
-  }
-
-  function noteEyebrowName(
-    result: DecryptResult,
-    noteTypeId: string | null,
-  ): string | undefined {
-    return isEnvelopeResult(result)
-      ? m.fund_note_eyebrow()
-      : resolveNoteTypeName(noteTypeId);
   }
 
   function resolveNoteTypeName(noteTypeId: string | null): string | undefined {
@@ -511,6 +500,7 @@
     __priority__: ["priority_changed"],
     __queue__: ["queue_changed"],
     __hold__: ["hold_placed", "hold_removed"],
+    __funds__: ["disbursement"],
   };
 
   const serverFilterTypes = $derived.by((): FollowUpType[] => {
@@ -1052,13 +1042,13 @@
       fu.portalWrap,
     );
     const raw = result.status === "ready" ? result.value : undefined;
-    // A disbursement note copies as its readable text and is corrected
+    // A disbursement copies as its readable text and is corrected
     // through the disbursement sheet, never the plain note editor.
+    const isDisbursement = fu.type === "disbursement";
     const disbursement =
-      fu.type === "internal_note" && raw !== undefined
+      isDisbursement && raw !== undefined
         ? (openDisbursementNote(raw) ?? undefined)
         : undefined;
-    const isEnvelope = raw !== undefined && hasNoteEnvelopeMarker(raw);
     const plaintext =
       raw === undefined
         ? undefined
@@ -1075,7 +1065,7 @@
         editDisbursement: m.assist_edit_title(),
         deleteNote: m.ticket_delete_note(),
       },
-      isEnvelope
+      isDisbursement
         ? {
             canRevise:
               disbursement !== undefined &&
@@ -1491,12 +1481,26 @@
               />
             {:else if kind === "note"}
               <PrivateNote
+                result={recResult}
+                authorName={resolveVolunteerName(rec.createdBy)}
+                timestamp={rec.createdAt}
+                isOwn={rec.createdBy === currentUserId}
+                noteTypeName={resolveNoteTypeName(rec.noteTypeId)}
+                noteTypeIcon={resolveNoteTypeIcon(rec.noteTypeId)}
+                {searchTerm}
+                reactions={getReactions(rec.id)}
+                {currentUserId}
+                ontogglereaction={(reaction: ReactionType) =>
+                  handleToggleReaction(rec.id, reaction)}
+                resolveUserName={(uid: string) => resolveVolunteerName(uid)}
+              />
+            {:else if kind === "fund"}
+              <PrivateNote
                 result={noteDisplayResult(recResult)}
                 authorName={resolveVolunteerName(rec.createdBy)}
                 timestamp={rec.createdAt}
                 isOwn={rec.createdBy === currentUserId}
-                noteTypeName={noteEyebrowName(recResult, rec.noteTypeId)}
-                noteTypeIcon={resolveNoteTypeIcon(rec.noteTypeId)}
+                noteTypeName={m.fund_note_eyebrow()}
                 {searchTerm}
                 reactions={getReactions(rec.id)}
                 {currentUserId}
@@ -1666,7 +1670,7 @@
                     ? undefined
                     : bubbleAriaLabel(
                         fu,
-                        kind === "note"
+                        kind === "note" || kind === "fund"
                           ? noteDisplayResult(contentResult)
                           : contentResult,
                       )}
@@ -1705,16 +1709,13 @@
                     />
                   {:else if kind === "note"}
                     <PrivateNote
-                      result={noteDisplayResult(contentResult)}
+                      result={contentResult}
                       authorName={resolveVolunteerName(fu.createdBy)}
                       timestamp={fu.createdAt}
                       isOwn={fu.createdBy === currentUserId}
-                      noteTypeName={noteEyebrowName(
-                        contentResult,
-                        fu.noteTypeId,
-                      )}
+                      noteTypeName={resolveNoteTypeName(fu.noteTypeId)}
                       noteTypeIcon={resolveNoteTypeIcon(fu.noteTypeId)}
-                      onopenedit={onopenedit && !isEnvelopeResult(contentResult)
+                      onopenedit={onopenedit
                         ? () => {
                             const text =
                               contentResult.status === "ready"
@@ -1723,6 +1724,22 @@
                             onopenedit(fu.id, text, fu.noteTypeId ?? null);
                           }
                         : undefined}
+                      onlongpress={() => openContextMenu(fu)}
+                      {searchTerm}
+                      reactions={getReactions(fu.id)}
+                      {currentUserId}
+                      ontogglereaction={(reaction: ReactionType) =>
+                        handleToggleReaction(fu.id, reaction)}
+                      resolveUserName={(uid: string) =>
+                        resolveVolunteerName(uid)}
+                    />
+                  {:else if kind === "fund"}
+                    <PrivateNote
+                      result={noteDisplayResult(contentResult)}
+                      authorName={resolveVolunteerName(fu.createdBy)}
+                      timestamp={fu.createdAt}
+                      isOwn={fu.createdBy === currentUserId}
+                      noteTypeName={m.fund_note_eyebrow()}
                       onlongpress={() => openContextMenu(fu)}
                       {searchTerm}
                       reactions={getReactions(fu.id)}

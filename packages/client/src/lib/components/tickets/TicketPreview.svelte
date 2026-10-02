@@ -49,8 +49,8 @@
   import { systemEventLabel } from "$lib/tickets/system-event-label.js";
   import { formatCallLabel } from "$lib/tickets/call-label.js";
   import { emailPreviewText } from "$lib/editor/email-schema.js";
-  // A disbursement note previews as its amount and text. A card list
-  // holds no fund cache, so the fund's name is left out.
+  // A disbursement previews as its amount and text. A card list holds
+  // no fund cache, so the fund's name is left out.
   import { readableNoteResult } from "$lib/funds/fund-display.js";
 
   interface Props {
@@ -245,11 +245,11 @@
         {:else}
           {@const rawResult = followUpCache.decryptPreview(ticketId, fu)}
           {@const result =
-            kind === "note" ? readableNoteResult(rawResult) : rawResult}
+            kind === "note" || kind === "fund"
+              ? readableNoteResult(rawResult)
+              : rawResult}
           {@const content = isDecryptReady(result) ? result.value : undefined}
-          {#if kind === "note"}
-            {@const NoteIcon = resolveIcon(fu.noteTypeId)}
-            {@const noteTypeName = resolveNoteTypeName(fu.noteTypeId)}
+          {#if kind === "note" || kind === "fund"}
             {@const noteReactions = reactions?.[fu.id] ?? []}
             <div
               class="mini-note-wrap"
@@ -257,9 +257,15 @@
             >
               <div class="mini-note recessed-note">
                 <span class="mini-who mini-note-eyebrow">
-                  <NoteIcon size={10} class="mini-note-icon" />
-                  {#if noteTypeName !== null}
-                    {m.preview_note_internal({ name: noteTypeName })}
+                  {#if kind === "fund"}
+                    {m.fund_note_eyebrow()}
+                  {:else}
+                    {@const NoteIcon = resolveIcon(fu.noteTypeId)}
+                    {@const noteTypeName = resolveNoteTypeName(fu.noteTypeId)}
+                    <NoteIcon size={10} class="mini-note-icon" />
+                    {#if noteTypeName !== null}
+                      {m.preview_note_internal({ name: noteTypeName })}
+                    {/if}
                   {/if}
                 </span>
                 <DecryptPlaceholder

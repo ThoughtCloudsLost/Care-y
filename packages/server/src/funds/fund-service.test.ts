@@ -9,6 +9,8 @@ import {
   type Mock,
 } from "vitest";
 import * as crypto from "node:crypto";
+import type { Kysely } from "kysely";
+import type { TenantDatabase } from "../db/types.js";
 import {
   createTestDb,
   createTestUser,
@@ -23,7 +25,10 @@ import {
   type FundBalanceWrite,
   type FundService,
 } from "./fund-service.js";
-import { createFollowUpService } from "../tickets/followup-service.js";
+import {
+  createFollowUpService,
+  type FollowUpService,
+} from "../tickets/followup-service.js";
 import { createTicketAccessChecker } from "../tickets/access.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { TicketChangeListener } from "../tickets/ticket-live-events.js";
@@ -34,7 +39,6 @@ import {
   NotFoundError,
 } from "../errors.js";
 import {
-  DISBURSEMENT_NOTE_TYPE_KEY,
   ErrorCode,
   RoleId,
   fundIdSchema,
@@ -61,25 +65,55 @@ describe.skipIf(!process.env.DATABASE_URL)("FundService (DB)", () => {
   let announceCaseNote: Mock<(ticket: CaseNoteTicket) => void>;
   let svc: FundService;
 
-  function buildService(): FundService {
+  function buildFollowUps(
+    db: Kysely<TenantDatabase> = testDb.db,
+  ): FollowUpService {
+    return createFollowUpService(db, createTicketAccessChecker(db), {
+      onTicketChanged,
+    });
+  }
+
+  function buildService(
+    db: Kysely<TenantDatabase> = testDb.db,
+    followUps: FollowUpService = buildFollowUps(db),
+  ): FundService {
     const notificationService: NotificationService = {
       dispatch: vi.fn<NotificationService["dispatch"]>(),
       dispatchTicketless,
     };
-    return createFundService(testDb.db, {
+    return createFundService(db, {
       org: {
         orgId: TEST_ORG_ID,
         orgSchema: testDb.schemaName as OrgSchema,
         orgSlug: orgSlugIdSchema.parse("test-org"),
       },
-      followUps: createFollowUpService(
-        testDb.db,
-        createTicketAccessChecker(testDb.db),
-        { onTicketChanged },
-      ),
+      followUps,
       notificationService,
       announceCaseNote,
     });
+  }
+
+  /**
+   * A handle on the test schema that records every query it runs, so a
+   * test can show a path never touches a table. Transactions opened on it
+   * carry the recorder too.
+   */
+  function recordingDb(): { db: Kysely<TenantDatabase>; queries: string[] } {
+    const queries: string[] = [];
+    const db = testDb.db.withPlugin({
+      transformQuery(args) {
+        queries.push(JSON.stringify(args.node));
+        return args.node;
+      },
+      transformResult(args) {
+        return Promise.resolve(args.result);
+      },
+    });
+    return { db, queries };
+  }
+
+  function namesTable(query: string, table: string): boolean {
+    return query.includes(`"name":"${table}"`);
   }
 
   async function createAdmin(): Promise<UserId> {
@@ -169,32 +203,9 @@ describe.skipIf(!process.env.DATABASE_URL)("FundService (DB)", () => {
   }
 
   /**
-   * The org's disbursement note type, inserted directly the first time it
-   * is needed. Ciphertext columns hold placeholder bytes the server never
-   * reads.
+   * An org note type. Ciphertext columns hold placeholder bytes the server
+   * never reads.
    */
-  async function ensureDisbursementType(): Promise<NoteTypeId> {
-    await testDb.db
-      .insertInto("note_types")
-      .values({
-        encrypted_name: Buffer.from("sealed-name"),
-        encrypted_icon: Buffer.from("sealed-icon"),
-        encrypted_escalation_targets: Buffer.from("sealed-targets"),
-        min_view_role: RoleId.VOLUNTEER,
-        min_create_role: RoleId.VOLUNTEER,
-        system_key: DISBURSEMENT_NOTE_TYPE_KEY,
-      })
-      .onConflict((oc) => oc.column("system_key").doNothing())
-      .execute();
-    const row = await testDb.db
-      .selectFrom("note_types")
-      .select("id")
-      .where("system_key", "=", DISBURSEMENT_NOTE_TYPE_KEY)
-      .executeTakeFirstOrThrow();
-    return row.id;
-  }
-
-  /** An ordinary note type with no system key. */
   async function insertOrdinaryNoteType(): Promise<NoteTypeId> {
     const row = await testDb.db
       .insertInto("note_types")
@@ -540,12 +551,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FundService (DB)", () => {
   // --- recordDisbursement ---
 
   describe("recordDisbursement", () => {
-    let disbursementTypeId: NoteTypeId;
-
-    beforeEach(async () => {
-      disbursementTypeId = await ensureDisbursementType();
-    });
-
     it("records a fund-level disbursement with no case note", async () => {
       const actor = await createTestUser(testDb.db);
       const fundId = await newFund();
@@ -589,7 +594,7 @@ describe.skipIf(!process.env.DATABASE_URL)("FundService (DB)", () => {
       expect(after!.updatedAt.getTime()).toBe(before!.updatedAt.getTime());
     });
 
-    it("writes the balance, the ledger row and a private internal note together", async () => {
+    it("writes the balance, the ledger row and a private disbursement follow-up together", async () => {
       const fixture = await createTestTicketFixture(testDb.db, {
         createUser: true,
       });
@@ -632,10 +637,10 @@ describe.skipIf(!process.env.DATABASE_URL)("FundService (DB)", () => {
         .where("id", "=", followUpId)
         .executeTakeFirstOrThrow();
       expect(note.ticket_id).toBe(fixture.ticketId);
-      expect(note.type).toBe("internal_note");
+      expect(note.type).toBe("disbursement");
       expect(note.source).toBe("volunteer");
       expect(note.is_private).toBe(true);
-      expect(note.note_type_id).toBe(disbursementTypeId);
+      expect(note.note_type_id).toBeNull();
       expect(note.created_by).toBe(actorId);
       expect(note.encrypted_content.toString()).toBe("envelope");
 
@@ -757,14 +762,49 @@ describe.skipIf(!process.env.DATABASE_URL)("FundService (DB)", () => {
       expect((await fundBalance(fundId)).version).toBe(0);
     });
 
-    it("stores the case note with the disbursement note type", async () => {
+    it("passes the disbursement type and no note type to createWithin", async () => {
+      const fixture = await createTestTicketFixture(testDb.db, {
+        createUser: true,
+      });
+      const followUps = buildFollowUps();
+      const createWithin = vi.spyOn(followUps, "createWithin");
+      const spied = buildService(testDb.db, followUps);
+      const fundId = await newFund();
+
+      await spied.recordDisbursement(fixture.userId!, {
+        id: newFundLedgerId(),
+        encryptedPayload: Buffer.from("spend"),
+        orgKeyGeneration: 1,
+        balance: balance(fundId, 0),
+        caseNote: {
+          followUpId: newFollowupId(),
+          ticketId: fixture.ticketId,
+          encryptedContent: Buffer.from("envelope"),
+        },
+      });
+
+      expect(createWithin).toHaveBeenCalledTimes(1);
+      expect(createWithin).toHaveBeenCalledWith(
+        expect.anything(),
+        fixture.userId,
+        expect.objectContaining({
+          type: "disbursement",
+          source: "volunteer",
+          isPrivate: true,
+        }),
+      );
+      expect(createWithin.mock.calls[0]?.[2]).not.toHaveProperty("noteTypeId");
+    });
+
+    it("records a case disbursement without querying note types", async () => {
       const fixture = await createTestTicketFixture(testDb.db, {
         createUser: true,
       });
       const fundId = await newFund();
+      const recording = recordingDb();
       const followUpId = newFollowupId();
 
-      await svc.recordDisbursement(fixture.userId!, {
+      await buildService(recording.db).recordDisbursement(fixture.userId!, {
         id: newFundLedgerId(),
         encryptedPayload: Buffer.from("spend"),
         orgKeyGeneration: 1,
@@ -776,54 +816,19 @@ describe.skipIf(!process.env.DATABASE_URL)("FundService (DB)", () => {
         },
       });
 
-      expect(await noteTypeOf(followUpId)).toBe(disbursementTypeId);
-    });
-
-    it("refuses a case note when the org has no disbursement note type and writes no ledger row", async () => {
-      // Hide the type rather than delete it, because earlier notes reference
-      // it. The next beforeEach inserts a fresh one.
-      await testDb.db
-        .updateTable("note_types")
-        .set({ system_key: null })
-        .where("system_key", "=", DISBURSEMENT_NOTE_TYPE_KEY)
-        .execute();
-      const fixture = await createTestTicketFixture(testDb.db, {
-        createUser: true,
-      });
-      const fundId = await newFund();
-      const id = newFundLedgerId();
-      const followUpId = newFollowupId();
-
-      await expect(
-        svc.recordDisbursement(fixture.userId!, {
-          id,
-          encryptedPayload: Buffer.from("spend"),
-          orgKeyGeneration: 1,
-          balance: balance(fundId, 0),
-          caseNote: {
-            followUpId,
-            ticketId: fixture.ticketId,
-            encryptedContent: Buffer.from("envelope"),
-          },
-        }),
-      ).rejects.toThrow(ErrorCode.NOTE_TYPE_NOT_FOUND);
-
-      expect(await ledgerRowExists(id)).toBe(false);
-      expect(await noteContent(followUpId)).toBeNull();
-      expect((await fundBalance(fundId)).version).toBe(0);
-      expect(announceCaseNote).not.toHaveBeenCalled();
+      expect(recording.queries.some((q) => namesTable(q, "followups"))).toBe(
+        true,
+      );
+      expect(recording.queries.some((q) => namesTable(q, "note_types"))).toBe(
+        false,
+      );
+      expect(await noteContent(followUpId)).toBe("envelope");
     });
   });
 
   // --- reviseDisbursement ---
 
   describe("reviseDisbursement", () => {
-    let disbursementTypeId: NoteTypeId;
-
-    beforeEach(async () => {
-      disbursementTypeId = await ensureDisbursementType();
-    });
-
     /** A disbursement with its case note, recorded by the fixture's user. */
     async function recordedDisbursement(): Promise<{
       fundId: FundId;
@@ -952,7 +957,82 @@ describe.skipIf(!process.env.DATABASE_URL)("FundService (DB)", () => {
       });
 
       expect(await noteContent(d.followUpId)).toBe("corrected-by-manager");
-      expect(await noteTypeOf(d.followUpId)).toBe(disbursementTypeId);
+      expect(await noteTypeOf(d.followUpId)).toBeNull();
+    });
+
+    it("rewrites the case record through updateDisbursementWithin, never the note path", async () => {
+      const d = await recordedDisbursement();
+      const followUps = buildFollowUps();
+      const updateDisbursementWithin = vi.spyOn(
+        followUps,
+        "updateDisbursementWithin",
+      );
+      const updateInternalNoteWithin = vi.spyOn(
+        followUps,
+        "updateInternalNoteWithin",
+      );
+      const spied = buildService(testDb.db, followUps);
+
+      await spied.reviseDisbursement(d.authorId, {
+        reversal: {
+          id: newFundLedgerId(),
+          encryptedPayload: Buffer.from("reverse"),
+        },
+        replacement: {
+          id: newFundLedgerId(),
+          encryptedPayload: Buffer.from("replace"),
+        },
+        orgKeyGeneration: 1,
+        balance: balance(d.fundId, 1),
+        caseNote: {
+          followUpId: d.followUpId,
+          ticketId: d.ticketId,
+          encryptedContent: Buffer.from("revised-envelope"),
+        },
+        mayEditAnyNote: false,
+      });
+
+      expect(updateDisbursementWithin).toHaveBeenCalledTimes(1);
+      expect(updateDisbursementWithin).toHaveBeenCalledWith(
+        expect.anything(),
+        d.authorId,
+        d.followUpId,
+        expect.any(Buffer),
+        { anyAuthor: false },
+      );
+      expect(updateInternalNoteWithin).not.toHaveBeenCalled();
+      expect(await noteContent(d.followUpId)).toBe("revised-envelope");
+    });
+
+    it("revises a disbursement without querying note types", async () => {
+      const d = await recordedDisbursement();
+      const recording = recordingDb();
+
+      await buildService(recording.db).reviseDisbursement(d.authorId, {
+        reversal: {
+          id: newFundLedgerId(),
+          encryptedPayload: Buffer.from("reverse"),
+        },
+        replacement: {
+          id: newFundLedgerId(),
+          encryptedPayload: Buffer.from("replace"),
+        },
+        orgKeyGeneration: 1,
+        balance: balance(d.fundId, 1),
+        caseNote: {
+          followUpId: d.followUpId,
+          ticketId: d.ticketId,
+          encryptedContent: Buffer.from("revised-envelope"),
+        },
+        mayEditAnyNote: false,
+      });
+
+      expect(recording.queries.some((q) => namesTable(q, "followups"))).toBe(
+        true,
+      );
+      expect(recording.queries.some((q) => namesTable(q, "note_types"))).toBe(
+        false,
+      );
     });
 
     /**

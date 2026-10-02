@@ -12,10 +12,8 @@
  */
 
 import {
-  DISBURSEMENT_NOTE_TYPE_KEY,
   Permission,
   createFundInputSchema,
-  ensureDisbursementNoteTypeInputSchema,
   updateFundInputSchema,
   recordDisbursementInputSchema,
   recordAdjustmentInputSchema,
@@ -36,7 +34,6 @@ import type {
   FollowUpServiceDeps,
 } from "../tickets/followup-service.js";
 import type { AuditService } from "../tickets/audit.js";
-import type { NoteTypeService } from "../tickets/note-type-service.js";
 import type { TicketLiveEvents } from "../tickets/ticket-live-events.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
@@ -64,9 +61,9 @@ const recordDisbursementsProcedure = permissionProcedure(
 const manageFundsProcedure = permissionProcedure(Permission.MANAGE_FUNDS);
 
 /**
- * Taken from the same sources as the tickets router, so the case note a
- * disbursement writes is created, audited and announced exactly as a note
- * written from the case itself.
+ * Taken from the same sources as the tickets router, so the `disbursement`
+ * follow-up a case disbursement writes is created, audited and announced
+ * exactly as a note written from the case itself.
  */
 export interface FundsRouterDeps {
   readonly createTicketAccess: (
@@ -78,8 +75,6 @@ export interface FundsRouterDeps {
     deps?: FollowUpServiceDeps,
   ) => FollowUpService;
   readonly createAuditSvc: (tDb: OrgContext["tenantDb"]) => AuditService;
-  /** Note type service, for the system type disbursement notes carry. */
-  readonly createNoteTypeSvc: (tDb: OrgContext["tenantDb"]) => NoteTypeService;
   readonly notificationService: NotificationService;
   /**
    * OPS-tier encryptor the lifecycle notifier uses for mentioned
@@ -114,12 +109,6 @@ export interface RecordedEntryWire {
   readonly id: string;
   readonly entryDate: string;
   readonly balanceVersion: number;
-}
-
-export interface EnsuredNoteTypeWire {
-  readonly id: string;
-  /** True when this call created the type. */
-  readonly created: boolean;
 }
 
 export interface RevisedDisbursementWire {
@@ -165,8 +154,8 @@ export function createFundsRouter(deps: FundsRouterDeps) {
       notificationService: deps.notificationService,
       announceCaseNote: (ticket) => {
         // Same event and arguments the tickets router uses for a note
-        // with no mentions. The note carries the disbursement type, which
-        // has no escalation targets, so the notice goes without a type id.
+        // with no mentions. A disbursement carries no note type, so the
+        // notice goes without a type id.
         auditAndNotify(ctx, "followup_added", ticket, {
           eventType: "followup_added",
           actorId: ctx.user.id,
@@ -318,26 +307,6 @@ export function createFundsRouter(deps: FundsRouterDeps) {
               },
               mayEditAnyNote,
             });
-          },
-        ),
-      ),
-
-    ensureDisbursementNoteType: recordDisbursementsProcedure
-      .input(ensureDisbursementNoteTypeInputSchema)
-      .mutation(
-        withErrorWrapping(
-          async ({ ctx, input }): Promise<EnsuredNoteTypeWire> => {
-            const noteTypes = deps.createNoteTypeSvc(ctx.org.tenantDb);
-            // The service writes the audit row in the same transaction
-            // as the type it creates.
-            const { record, created } = await noteTypes.ensureSystem({
-              systemKey: DISBURSEMENT_NOTE_TYPE_KEY,
-              actorId: ctx.user.id,
-              encryptedName: Buffer.from(input.encryptedName, "base64"),
-              encryptedIcon: Buffer.from(input.encryptedIcon, "base64"),
-              orgKeyGeneration: ctx.org.sealedBox.generation,
-            });
-            return { id: record.id, created };
           },
         ),
       ),

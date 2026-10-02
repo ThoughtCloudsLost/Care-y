@@ -441,6 +441,67 @@ describe("fundLedgerPayloadSchema", () => {
       }).success,
     ).toBe(false);
   });
+
+  describe("case pointer", () => {
+    it("accepts a disbursement naming its case and case record", () => {
+      expect(
+        fundLedgerPayloadSchema.safeParse({
+          ...base,
+          amountMinor: -1500,
+          entryType: "disbursement",
+          ticketId: TICKET_ID,
+          followUpId: FOLLOWUP_ID,
+        }).success,
+      ).toBe(true);
+    });
+
+    it("rejects a ticketId without a followUpId, on followUpId", () => {
+      const result = fundLedgerPayloadSchema.safeParse({
+        ...base,
+        amountMinor: -1500,
+        entryType: "disbursement",
+        ticketId: TICKET_ID,
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const followUpIdIssues = result.error.issues.filter((i) =>
+          i.path.includes("followUpId"),
+        );
+        expect(followUpIdIssues.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("rejects an adjustment that names a case", () => {
+      const result = fundLedgerPayloadSchema.safeParse({
+        ...base,
+        amountMinor: 500,
+        entryType: "adjustment",
+        ticketId: TICKET_ID,
+        followUpId: FOLLOWUP_ID,
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const ticketIdIssues = result.error.issues.filter((i) =>
+          i.path.includes("ticketId"),
+        );
+        expect(ticketIdIssues.length).toBeGreaterThan(0);
+      }
+    });
+
+    // A revision sets the pointer on both its reversal and its replacement.
+    it("accepts a reversal that carries the pointer", () => {
+      expect(
+        fundLedgerPayloadSchema.safeParse({
+          ...base,
+          amountMinor: 1500,
+          entryType: "reversal",
+          reversesId: LEDGER_ID,
+          ticketId: TICKET_ID,
+          followUpId: FOLLOWUP_ID,
+        }).success,
+      ).toBe(true);
+    });
+  });
 });
 
 describe("note envelope codec", () => {

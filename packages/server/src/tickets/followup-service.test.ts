@@ -18,7 +18,6 @@ import { ForbiddenError, NotFoundError } from "../errors.js";
 import type { TicketChangeListener } from "./ticket-live-events.js";
 import * as crypto from "node:crypto";
 import {
-  DISBURSEMENT_NOTE_TYPE_KEY,
   ErrorCode,
   newFollowupId,
   newTicketId,
@@ -79,6 +78,30 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
         encrypted_escalation_targets: Buffer.from(JSON.stringify([])),
         min_view_role: minViewRole,
         min_create_role: minViewRole,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    return row.id;
+  }
+
+  /**
+   * Written directly because only the fund service creates this type, and
+   * it does so through `createWithin` alongside a ledger row.
+   */
+  async function insertDisbursementRow(
+    userId: UserId,
+    ticketId: TicketId,
+  ): Promise<FollowupId> {
+    const row = await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "volunteer",
+        type: "disbursement",
+        is_private: true,
+        encrypted_content: Buffer.from("disbursement-envelope"),
+        created_by: userId,
+        note_type_id: null,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
@@ -970,92 +993,6 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     expect(updated.noteTypeId).toBe(noteTypeId);
   });
 
-  it("updateInternalNote keeps a note of a system type on that type, while an ordinary typed note moves", async () => {
-    const { userId, ticketId } = await createTicketFixture();
-
-    await testDb.db
-      .insertInto("note_types")
-      .values({
-        encrypted_name: Buffer.from("disbursement"),
-        encrypted_icon: Buffer.from("icon"),
-        encrypted_escalation_targets: Buffer.from("[]"),
-        system_key: DISBURSEMENT_NOTE_TYPE_KEY,
-      })
-      .onConflict((oc) => oc.column("system_key").doNothing())
-      .execute();
-    const { id: systemTypeId } = await testDb.db
-      .selectFrom("note_types")
-      .select("id")
-      .where("system_key", "=", DISBURSEMENT_NOTE_TYPE_KEY)
-      .executeTakeFirstOrThrow();
-    const ordinaryA = crypto.randomUUID() as NoteTypeId;
-    const ordinaryB = crypto.randomUUID() as NoteTypeId;
-    await testDb.db
-      .insertInto("note_types")
-      .values([
-        {
-          id: ordinaryA,
-          encrypted_name: Buffer.from("type-a"),
-          encrypted_icon: Buffer.from("icon-a"),
-          encrypted_escalation_targets: Buffer.from("[]"),
-        },
-        {
-          id: ordinaryB,
-          encrypted_name: Buffer.from("type-b"),
-          encrypted_icon: Buffer.from("icon-b"),
-          encrypted_escalation_targets: Buffer.from("[]"),
-        },
-      ])
-      .execute();
-
-    const systemNote = await svc.create(userId, {
-      id: newFollowupId(),
-      ticketId,
-      encryptedContent: Buffer.from("disbursement-envelope"),
-      source: "volunteer",
-      type: "internal_note",
-      isPrivate: true,
-      mentionedPseudonyms: [],
-      noteTypeId: systemTypeId,
-    });
-    const ordinaryNote = await svc.create(userId, {
-      id: newFollowupId(),
-      ticketId,
-      encryptedContent: Buffer.from("ordinary-content"),
-      source: "volunteer",
-      type: "internal_note",
-      isPrivate: true,
-      mentionedPseudonyms: [],
-      noteTypeId: ordinaryA,
-    });
-
-    await expect(
-      svc.updateInternalNote(
-        userId,
-        systemNote.id,
-        Buffer.from("retyped"),
-        ordinaryA,
-      ),
-    ).rejects.toThrow(ErrorCode.NOTE_TYPE_RESERVED);
-    const unchanged = await testDb.db
-      .selectFrom("followups")
-      .select(["note_type_id", "encrypted_content"])
-      .where("id", "=", systemNote.id)
-      .executeTakeFirstOrThrow();
-    expect(unchanged.note_type_id).toBe(systemTypeId);
-    expect(unchanged.encrypted_content.toString()).toBe(
-      "disbursement-envelope",
-    );
-
-    const { record: moved } = await svc.updateInternalNote(
-      userId,
-      ordinaryNote.id,
-      Buffer.from("ordinary-edited"),
-      ordinaryB,
-    );
-    expect(moved.noteTypeId).toBe(ordinaryB);
-  });
-
   it("listSummary includes noteTypeId in results", async () => {
     const { userId, ticketId } = await createTicketFixture();
 
@@ -1156,6 +1093,24 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     await expect(
       svc.toggleReaction(userId, "dXwG0zR9BtJp", msg.id, "approve"),
     ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("toggleReaction accepts a disbursement follow-up", async () => {
+    // Before the type existed the case half of a disbursement was an
+    // internal note, so reactions worked on it; the gate admits the new
+    // type so the client's tray keeps agreeing with the server.
+    const { userId, ticketId } = await createTicketFixture();
+    const disbursementId = await insertDisbursementRow(userId, ticketId);
+
+    const added = await svc.toggleReaction(
+      userId,
+      "dXwG0zR9BtJp",
+      disbursementId,
+      "acknowledge",
+    );
+    expect(added).toHaveLength(1);
+    expect(added[0]!.reaction).toBe("acknowledge");
+    expect(added[0]!.userIds).toContain(userId);
   });
 
   it("getReactions batch-loads reactions for multiple followups", async () => {
@@ -2852,6 +2807,34 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     });
   });
 
+  // ── listSummary disbursement keeps encryptedContent ──
+
+  describe("listSummary disbursement content retention", () => {
+    it("retains encryptedContent for disbursement follow-ups, unlike a message", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+
+      await svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-plain-message"),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+      const disbursementId = await insertDisbursementRow(userId, ticketId);
+
+      const summaries = await svc.listSummary(userId, ticketId, { limit: 100 });
+      const message = summaries.find((s) => s.type === "message");
+      const disbursement = summaries.find((s) => s.id === disbursementId);
+      expect(message?.encryptedContent).toBeNull();
+      expect(disbursement?.type).toBe("disbursement");
+      expect(disbursement?.encryptedContent?.toString()).toBe(
+        "disbursement-envelope",
+      );
+    });
+  });
+
   // ── listByTicket with includeClientSource alone ──
 
   describe("listByTicket includeClientSource without createdBy", () => {
@@ -3148,6 +3131,138 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
           ),
       ).rejects.toBeInstanceOf(ForbiddenError);
       expect(await contentOf(note.id)).toBe("original-note");
+    });
+  });
+
+  // --- updateDisbursementWithin (fund service edit path) ---
+
+  describe("updateDisbursementWithin", () => {
+    async function contentOf(id: FollowupId): Promise<string> {
+      const row = await testDb.db
+        .selectFrom("followups")
+        .select("encrypted_content")
+        .where("id", "=", id)
+        .executeTakeFirstOrThrow();
+      return row.encrypted_content.toString();
+    }
+
+    async function grantAccess(
+      userId: UserId,
+      queueId: QueueId,
+    ): Promise<void> {
+      await testDb.db
+        .insertInto("queue_assignments")
+        .values({ queue_id: queueId, user_id: userId })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+    }
+
+    it("rewrites a disbursement for its author", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      const id = await insertDisbursementRow(userId, ticketId);
+
+      const result = await testDb.db
+        .transaction()
+        .execute(async (trx) =>
+          svc.updateDisbursementWithin(
+            trx,
+            userId,
+            id,
+            Buffer.from("revised-envelope"),
+          ),
+        );
+      expect(result.row.id).toBe(id);
+      expect(result.row.type).toBe("disbursement");
+      expect(result.row.note_type_id).toBeNull();
+      expect(result.previousNoteTypeId).toBeNull();
+      expect(await contentOf(id)).toBe("revised-envelope");
+    });
+
+    it("refuses another author's disbursement without anyAuthor", async () => {
+      const { userId, ticketId, queueId } = await createTicketFixture();
+      const id = await insertDisbursementRow(userId, ticketId);
+      const other = await createTestUser(testDb.db);
+      await grantAccess(other.id, queueId);
+
+      await expect(
+        testDb.db
+          .transaction()
+          .execute(async (trx) =>
+            svc.updateDisbursementWithin(
+              trx,
+              other.id,
+              id,
+              Buffer.from("not-yours"),
+            ),
+          ),
+      ).rejects.toThrow(ErrorCode.FOLLOWUP_NOT_OWNED);
+      expect(await contentOf(id)).toBe("disbursement-envelope");
+    });
+
+    it("rewrites another author's disbursement with anyAuthor", async () => {
+      const { userId, ticketId, queueId } = await createTicketFixture();
+      const id = await insertDisbursementRow(userId, ticketId);
+      const other = await createTestUser(testDb.db);
+      await grantAccess(other.id, queueId);
+
+      await testDb.db
+        .transaction()
+        .execute(async (trx) =>
+          svc.updateDisbursementWithin(
+            trx,
+            other.id,
+            id,
+            Buffer.from("corrected-envelope"),
+            { anyAuthor: true },
+          ),
+        );
+      expect(await contentOf(id)).toBe("corrected-envelope");
+    });
+
+    it("refuses an internal note with FOLLOWUP_NOT_EDITABLE", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      const note = await svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("original-note"),
+        source: "volunteer",
+        type: "internal_note",
+        isPrivate: true,
+        mentionedPseudonyms: [],
+      });
+
+      await expect(
+        testDb.db
+          .transaction()
+          .execute(async (trx) =>
+            svc.updateDisbursementWithin(
+              trx,
+              userId,
+              note.id,
+              Buffer.from("not-a-disbursement"),
+            ),
+          ),
+      ).rejects.toThrow(ErrorCode.FOLLOWUP_NOT_EDITABLE);
+      expect(await contentOf(note.id)).toBe("original-note");
+    });
+
+    it("leaves a disbursement unreachable from updateInternalNoteWithin", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      const id = await insertDisbursementRow(userId, ticketId);
+
+      await expect(
+        testDb.db
+          .transaction()
+          .execute(async (trx) =>
+            svc.updateInternalNoteWithin(
+              trx,
+              userId,
+              id,
+              Buffer.from("rewritten-as-note"),
+            ),
+          ),
+      ).rejects.toThrow(ErrorCode.FOLLOWUP_NOT_EDITABLE);
+      expect(await contentOf(id)).toBe("disbursement-envelope");
     });
   });
 });

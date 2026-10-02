@@ -53,7 +53,17 @@ docker compose --env-file prod.env -f docker-compose.prod.yml run --rm api \
 step=up
 docker compose --env-file prod.env -f docker-compose.prod.yml up -d --remove-orphans
 step=apex-probe
-curl -fsS --max-time 10 --resolve "${CAREY_APEX_HOST}:443:127.0.0.1" "https://${CAREY_APEX_HOST}/" >/dev/null   # apex page over TLS (staging CA during first setup: add -k only on that run, from the runbook, never in this file)
+# Caddy restarts in "up -d" and refuses the TLS handshake until it is
+# listening again, so probe up to 15 times, 2 seconds apart. Apex page over
+# TLS (staging CA during first setup: add -k only on that run, from the
+# runbook, never in this file).
+for attempt in {1..15}; do
+  if curl -fsS --max-time 10 --resolve "${CAREY_APEX_HOST}:443:127.0.0.1" "https://${CAREY_APEX_HOST}/" >/dev/null; then
+    break
+  fi
+  if (( attempt == 15 )); then exit 1; fi
+  sleep 2
+done
 step=health-probe
 # The API can still be starting after "up -d", so probe up to 30 times, 2 seconds apart.
 for attempt in {1..30}; do

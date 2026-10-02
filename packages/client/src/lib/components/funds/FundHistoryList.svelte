@@ -1,13 +1,17 @@
 <!--
-  A fund's ledger, newest first: entry type, signed amount, when and who
-  recorded it. Entries a later correction cancelled carry a word badge.
+  A fund's ledger, newest first. Each row shows the entry type, the signed
+  amount, and when and who recorded it. Entries a later correction
+  cancelled carry a word badge.
 
-  Nothing here links an entry to a case: the ledger holds no case, and a
-  disbursement's case note is readable only from the case itself.
+  An entry whose sealed payload names a case opens that case. The row
+  shows no alias, only that a case exists, and the server never reads the
+  pointer: it travels inside the org-key sealed payload.
 -->
 <script lang="ts">
   import { List, ListItem } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { withTerms } from "$lib/terminology/with-terms.js";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -24,9 +28,12 @@
     entries: readonly LedgerEntryView[];
     currency: string;
     reversedIds: ReadonlySet<string>;
+    /** Opens the case an entry was recorded from. */
+    onticketopen: (ticketId: string) => void;
   }
 
-  let { entries, currency, reversedIds }: FundHistoryListProps = $props();
+  let { entries, currency, reversedIds, onticketopen }: FundHistoryListProps =
+    $props();
 
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const orgCache = getOrgDecryptCache();
@@ -49,7 +56,10 @@
     const name =
       resolveVolName(entry.payload.recordedBy, volunteerMap, orgCache) ??
       m.ticket_system_volunteer_fallback();
-    return m.fund_entry_by({ name });
+    const by = m.fund_entry_by({ name });
+    return entry.payload.ticketId !== undefined
+      ? `${by} · ${m.fund_entry_on_case(withTerms())}`
+      : by;
   }
 
   function recordedAtLabel(entry: LedgerEntryView): string {
@@ -67,10 +77,21 @@
   <List nested class="history-list">
     {#each entries as entry (entry.id)}
       {@const reversed = reversedIds.has(entry.id)}
+      {@const ticketId = entry.payload.ticketId}
+      {@const isActivatable = ticketId !== undefined}
       <ListItem
         title={entryLabel(entry)}
         subtitle={recordedByLine(entry)}
-        class={reversed ? "history-reversed" : ""}
+        class={[
+          reversed ? "history-reversed" : "",
+          isActivatable ? "touch-feedback" : "",
+        ].join(" ")}
+        onclick={isActivatable ? () => onticketopen(ticketId) : undefined}
+        onkeydown={isActivatable
+          ? onKeyActivate(() => onticketopen(ticketId))
+          : undefined}
+        role={isActivatable ? "button" : undefined}
+        tabindex={isActivatable ? 0 : undefined}
       >
         {#snippet after()}
           <span class="history-after">
@@ -106,6 +127,11 @@
   /* A cancelled entry is a records fact, not an alarm. */
   :global(.history-reversed) {
     opacity: 0.6;
+  }
+
+  /* A reversed row already sits at touch-feedback's 0.6, so press goes lower. */
+  :global(.history-reversed.touch-feedback:active) {
+    opacity: 0.4;
   }
 
   .history-after {
