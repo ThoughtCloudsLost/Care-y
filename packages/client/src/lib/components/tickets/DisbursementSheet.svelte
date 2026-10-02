@@ -335,7 +335,9 @@
         queryKey: ticketKeys.followUps(ticketId),
       });
     } catch (err: unknown) {
-      // Both calls are single transactions: a failure saved nothing.
+      // The note type request runs first and is idempotent. The record and
+      // revise calls are each one transaction, so a failure there saves
+      // nothing.
       toastStore.show(getErrorMessage(err), 3000);
     } finally {
       saving = false;

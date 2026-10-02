@@ -444,9 +444,9 @@ function buildSearchRoutes(
 }
 
 /**
- * Refuse a system note type on an ordinary note write. A system type is
- * written only by the flow that owns it, never through a follow-up the
- * composer sends.
+ * Refuse a system note type on an ordinary note write. The ordinary note
+ * routes never assign a reserved type, so a reserved type can only be
+ * given by the flow that owns it.
  */
 async function refuseReservedNoteType(
   factory: ((tDb: OrgContext["tenantDb"]) => NoteTypeService) | undefined,

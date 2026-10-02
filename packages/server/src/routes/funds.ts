@@ -146,7 +146,7 @@ function toBalanceWrite(balance: FundBalanceInput): FundBalanceWrite {
 export function createFundsRouter(deps: FundsRouterDeps) {
   // The tickets router's audit and outbox path, so a disbursement note is
   // announced exactly as a note written from the case.
-  const { audit, auditAndNotify } = createLifecycleNotifier(deps);
+  const { auditAndNotify } = createLifecycleNotifier(deps);
 
   /** Per-request fund service bound to the caller's tenant. */
   function fundSvc(ctx: LifecycleActor): FundService {
@@ -328,19 +328,15 @@ export function createFundsRouter(deps: FundsRouterDeps) {
         withErrorWrapping(
           async ({ ctx, input }): Promise<EnsuredNoteTypeWire> => {
             const noteTypes = deps.createNoteTypeSvc(ctx.org.tenantDb);
+            // The service writes the audit row in the same transaction
+            // as the type it creates.
             const { record, created } = await noteTypes.ensureSystem({
               systemKey: DISBURSEMENT_NOTE_TYPE_KEY,
+              actorId: ctx.user.id,
               encryptedName: Buffer.from(input.encryptedName, "base64"),
               encryptedIcon: Buffer.from(input.encryptedIcon, "base64"),
               orgKeyGeneration: ctx.org.sealedBox.generation,
             });
-            if (created) {
-              audit(ctx.org.tenantDb, {
-                eventType: "note_type_created",
-                actorId: ctx.user.id,
-                metadata: { noteTypeId: record.id },
-              });
-            }
             return { id: record.id, created };
           },
         ),

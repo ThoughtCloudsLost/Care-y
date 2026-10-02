@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   createTestDb,
+  createTestUser,
   seedOrgPublicKey,
   testSealedBox,
   TEST_OPS_KEY,
@@ -22,6 +23,7 @@ import {
   RoleId,
   type EscalationTarget,
   type NoteTypeId,
+  type UserId,
 } from "@care-y/shared";
 import { NotFoundError, ForbiddenError } from "../errors.js";
 
@@ -445,33 +447,62 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
   });
 
   describe("system note types", () => {
+    let actorId: UserId;
+
+    beforeAll(async () => {
+      actorId = (await createTestUser(testDb.db)).id;
+    });
+
     async function ensureDisbursement(): Promise<{
       record: NoteTypeRecord;
       created: boolean;
     }> {
       return svc.ensureSystem({
         systemKey: DISBURSEMENT_NOTE_TYPE_KEY,
+        actorId,
         encryptedName: Buffer.from("sealed-disbursement"),
         encryptedIcon: Buffer.from("sealed-icon"),
         orgKeyGeneration: 1,
       });
     }
 
+    async function creationAudits(): Promise<
+      { actor_id: UserId; metadata: Record<string, unknown> }[]
+    > {
+      return testDb.db
+        .selectFrom("audit_log")
+        .select(["actor_id", "metadata"])
+        .where("event_type", "=", "note_type_created")
+        .execute();
+    }
+
     it("creates the type on the first call and returns it on the next", async () => {
       const first = await ensureDisbursement();
+      expect(await creationAudits()).toEqual([
+        {
+          actor_id: actorId,
+          metadata: {
+            noteTypeId: first.record.id,
+            systemKey: DISBURSEMENT_NOTE_TYPE_KEY,
+          },
+        },
+      ]);
+
       const second = await ensureDisbursement();
 
       expect(first.created).toBe(true);
       expect(first.record.systemKey).toBe(DISBURSEMENT_NOTE_TYPE_KEY);
       expect(second.created).toBe(false);
       expect(second.record.id).toBe(first.record.id);
+      expect(await creationAudits()).toHaveLength(1);
     });
 
-    it("is left out of the admin list", async () => {
+    it("is included in the admin list with its systemKey", async () => {
       const { record } = await ensureDisbursement();
 
       const rows = await svc.list();
-      expect(rows.some((r) => r.id === record.id)).toBe(false);
+      const listed = rows.find((r) => r.id === record.id);
+      expect(listed?.systemKey).toBe(DISBURSEMENT_NOTE_TYPE_KEY);
     });
 
     it("is listed as active but never creatable, even for the highest role", async () => {
@@ -483,15 +514,37 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
       expect(listed?.canCreate).toBe(false);
     });
 
-    it("refuses an update", async () => {
+    it("can be renamed but keeps its active flag and roles", async () => {
       const { record } = await ensureDisbursement();
 
-      await expect(
-        svc.update({ id: record.id, encryptedName: Buffer.from("renamed") }),
-      ).rejects.toThrow(ErrorCode.NOTE_TYPE_RESERVED);
+      const renamed = await svc.update({
+        id: record.id,
+        encryptedName: Buffer.from("renamed"),
+      });
+      expect(renamed.encryptedName.toString()).toBe("renamed");
+      expect(renamed.systemKey).toBe(DISBURSEMENT_NOTE_TYPE_KEY);
+
+      // An admin save re-sends every field; unchanged reserved values pass.
+      const resaved = await svc.update({
+        id: record.id,
+        encryptedName: Buffer.from("renamed-again"),
+        minViewRole: record.minViewRole,
+        minCreateRole: record.minCreateRole,
+        requiresOnClose: false,
+        escalationTargets: [],
+      });
+      expect(resaved.encryptedName.toString()).toBe("renamed-again");
+      expect(resaved.minViewRole).toBe(record.minViewRole);
+      expect(resaved.minCreateRole).toBe(record.minCreateRole);
+      expect(resaved.requiresOnClose).toBe(false);
+      expect(await svc.getEscalationTargets(record.id)).toEqual([]);
+
       await expect(
         svc.update({ id: record.id, isActive: false }),
-      ).rejects.toThrow(ForbiddenError);
+      ).rejects.toThrow(ErrorCode.NOTE_TYPE_RESERVED);
+      await expect(
+        svc.update({ id: record.id, minViewRole: RoleId.ADMIN }),
+      ).rejects.toThrow(ErrorCode.NOTE_TYPE_RESERVED);
     });
 
     it("getSystemKey returns the key, null for an ordinary type and undefined for an unknown id", async () => {
