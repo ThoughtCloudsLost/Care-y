@@ -1,42 +1,61 @@
 import { describe, it, expect } from "vitest";
 import { RoleId, ROLE_ID_VALUES } from "@care-y/shared";
+import {
+  BOOT_VIEWER,
+  INITIAL_VIEWER_STATE,
+  TOOLBAR_CLIENT_VIEWERS,
+  TOOLBAR_STAFF_VIEWERS,
+} from "./viewer.js";
 
 /**
- * Data-model tests for the frame toolbar's role definitions. The
- * component itself is presentational Svelte and cannot be mounted
- * without a DOM harness, but the role identifiers it renders must
- * stay in sync with the canonical shared enum. Ported from the
- * former RoleRail.test.ts.
+ * Data-model tests for the frame toolbar's viewer list. The component
+ * itself is presentational Svelte and cannot be mounted without a DOM
+ * harness, so these pin the lists it renders from (viewer.ts): the staff
+ * roles must stay in sync with the canonical shared enum, and the client
+ * viewer sits below them. Ported from the former RoleRail.test.ts.
  */
-describe("FrameToolbar role definitions", () => {
-  /** The toolbar shows exactly three roles in this order. */
-  const TOOLBAR_ROLE_IDS = [
-    RoleId.ADMIN,
-    RoleId.MANAGER,
-    RoleId.VOLUNTEER,
-  ] as const;
+describe("FrameToolbar viewer list", () => {
+  it("lists exactly three staff roles, admin first", () => {
+    expect(TOOLBAR_STAFF_VIEWERS).toEqual([
+      RoleId.ADMIN,
+      RoleId.MANAGER,
+      RoleId.VOLUNTEER,
+    ]);
+  });
 
   it("covers every canonical role ID", () => {
-    // Every value in ROLE_ID_VALUES must appear in the toolbar
     for (const id of ROLE_ID_VALUES) {
-      expect(TOOLBAR_ROLE_IDS).toContain(id);
+      expect(TOOLBAR_STAFF_VIEWERS).toContain(id);
     }
   });
 
-  it("contains only valid role IDs", () => {
-    for (const id of TOOLBAR_ROLE_IDS) {
+  it("contains only valid role IDs above the separator", () => {
+    for (const id of TOOLBAR_STAFF_VIEWERS) {
       expect(ROLE_ID_VALUES).toContain(id);
     }
   });
 
-  it("has no duplicates", () => {
-    const unique = new Set(TOOLBAR_ROLE_IDS);
-    expect(unique.size).toBe(TOOLBAR_ROLE_IDS.length);
+  it("lists Client alone below the separator", () => {
+    expect(TOOLBAR_CLIENT_VIEWERS).toEqual(["client"]);
   });
 
-  it("default boot role is ADMIN", () => {
+  it("never lists Client as a staff role", () => {
+    const staff: readonly string[] = TOOLBAR_STAFF_VIEWERS;
+    expect(staff).not.toContain("client");
+  });
+
+  it("has no duplicates across both halves", () => {
+    const all = [...TOOLBAR_STAFF_VIEWERS, ...TOOLBAR_CLIENT_VIEWERS];
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it("boots as the admin viewer", () => {
     // The toolbar's initial highlight matches the pinned bridge contract
-    expect(TOOLBAR_ROLE_IDS[0]).toBe(RoleId.ADMIN);
+    expect(BOOT_VIEWER).toBe(RoleId.ADMIN);
+    expect(TOOLBAR_STAFF_VIEWERS[0]).toBe(BOOT_VIEWER);
+    expect(INITIAL_VIEWER_STATE.viewer).toBe(RoleId.ADMIN);
+    expect(INITIAL_VIEWER_STATE.lastOrgRole).toBe(RoleId.ADMIN);
+    expect(INITIAL_VIEWER_STATE.pending).toBeNull();
   });
 });
 
@@ -88,8 +107,8 @@ describe("FrameToolbar fullscreen mode", () => {
   });
 
   it("role badge is shared between both modes", () => {
-    // Both modes render the badge trigger with the same TOOLBAR_ROLES
-    // (tested above in "covers every canonical role ID")
+    // Both modes render the badge trigger from the same viewer lists
+    // (tested above in "FrameToolbar viewer list")
     expect(true).toBe(true);
   });
 });

@@ -11,7 +11,6 @@
     isLocale,
   } from "$lib/paraglide/runtime.js";
   import { ArrowRight } from "@lucide/svelte";
-  import { RoleId, type RoleIdValue } from "@care-y/shared";
   import TopBar from "$demo/TopBar.svelte";
   import FrameToolbar from "$demo/FrameToolbar.svelte";
   import FlowBand from "$demo/FlowBand.svelte";
@@ -33,8 +32,22 @@
     type Section,
   } from "$demo/scroll-sections.js";
   import { resolveStoryMessage } from "$demo/story-messages.js";
-  import type { DemoBridge, DemoBridgeState, DemoTopic } from "$demo/bridge.js";
+  import type {
+    DemoBridge,
+    DemoBridgeState,
+    DemoTopic,
+    ViewerId,
+  } from "$demo/bridge.js";
   import { DEMO_TOPICS } from "$demo/bridge.js";
+  import {
+    INITIAL_VIEWER_STATE,
+    VIEWER_SWITCH_TIMEOUT_MS,
+    abandonViewerSwitch,
+    applyViewerSnapshot,
+    beginViewerSwitch,
+    planViewerSwitch,
+    type ViewerState,
+  } from "$demo/viewer.js";
   import {
     createFrameGeometry,
     BEZEL,
@@ -371,8 +384,23 @@
     };
   });
 
-  /** Active role from the bridge snapshot; admin at boot/restart. */
-  let activeRole: RoleIdValue = $state(RoleId.ADMIN);
+  /**
+   * Toolbar viewer, derived from bridge snapshots (viewer.ts); admin at
+   * boot and restart. Raw state holding an immutable value: the reducer
+   * hands back the same object when a snapshot changes nothing, so the
+   * per-tick resync does not re-render the toolbar.
+   */
+  let viewerState: ViewerState = $state.raw(INITIAL_VIEWER_STATE);
+
+  /** Bound on a pending viewer switch; 0 when none is armed. */
+  let viewerSwitchTimer = 0;
+
+  function clearViewerSwitchTimer(): void {
+    if (viewerSwitchTimer !== 0) {
+      clearTimeout(viewerSwitchTimer);
+      viewerSwitchTimer = 0;
+    }
+  }
 
   // Tear down listeners when the component unmounts
   $effect(() => {
@@ -380,6 +408,7 @@
       scrollEngine.destroy();
       unsubscribe?.();
       unsubscribeFlow?.();
+      clearViewerSwitchTimer();
     };
   });
 
@@ -1042,8 +1071,12 @@
     b.setLocale(uiLocale);
 
     // A fresh bridge means a fresh phone, so the band starts from an
-    // empty timeline and fills from this bridge's events only.
+    // empty timeline and fills from this bridge's events only. The
+    // viewer starts over for the same reason: a switch pending against
+    // the old phone can never settle, and the new one boots as admin.
     flowBand.reset();
+    clearViewerSwitchTimer();
+    viewerState = INITIAL_VIEWER_STATE;
     unsubscribeFlow = b.subscribeFlow((event) => {
       flowBand.ingest(event);
     });
@@ -1056,8 +1089,13 @@
     unsubscribe = b.subscribe((state: DemoBridgeState) => {
       progress.markFromState(state);
 
-      // Sync the role rail highlight from the bridge snapshot
-      activeRole = state.role;
+      // Sync the toolbar viewer from the bridge snapshot. The snapshot
+      // carries the staff role and the mounted feature, and the viewer
+      // is derived from both, so this resync cannot revert a client
+      // viewer to the staff role underneath it. It also settles a
+      // pending switch once the phone reports the target.
+      viewerState = applyViewerSnapshot(viewerState, state);
+      if (viewerState.pending === null) clearViewerSwitchTimer();
 
       // Adopt phone-initiated scheme changes (in-app settings row).
       // The guard breaks the echo loop: the outer dark $effect calls
@@ -1115,7 +1153,8 @@
       "",
       window.location.pathname + window.location.search,
     );
-    activeRole = RoleId.ADMIN;
+    clearViewerSwitchTimer();
+    viewerState = INITIAL_VIEWER_STATE;
     // Cancel any in-flight fullscreen animation, then reset the
     // controller and geometry. fsCtrl before geo so the fullscreen
     // override drops before the geometry is rewritten.
@@ -1146,8 +1185,42 @@
     demoMode.set("read");
   }
 
-  function handleRoleChange(role: RoleIdValue): void {
-    bridge?.setRole(role);
+  /**
+   * Toolbar viewer pick. Staff picks keep setRole's whole job (DB role,
+   * permission set, query reset). A client pick writes no role and moves
+   * the phone to /intake instead, and a staff pick made from a client
+   * page brings it back to the last org route. In both cases the shell
+   * follows the route (PhoneApp mounts client routes without AppShell),
+   * so moving the phone is how the shell switches.
+   *
+   * The move goes straight to bridge.setLocation rather than through
+   * the scroll engine. Linked, the store's page-click echo scrolls the
+   * story exactly as a contents-menu pick would. Unlinked, the phone
+   * still moves, because the toolbar is the phone's own control, and
+   * the story stays where the reader left it. The dirty-input guard is
+   * not consulted, matching a staff role pick, which resets every query
+   * without asking either.
+   */
+  function handleViewerChange(target: ViewerId): void {
+    if (bridge === undefined) return;
+    const plan = planViewerSwitch(viewerState, target);
+    if (plan === null) return;
+
+    viewerState = beginViewerSwitch(viewerState, target);
+    clearViewerSwitchTimer();
+    viewerSwitchTimer = window.setTimeout(() => {
+      viewerSwitchTimer = 0;
+      viewerState = abandonViewerSwitch(viewerState, target);
+    }, VIEWER_SWITCH_TIMEOUT_MS);
+
+    if (plan.role !== null) bridge.setRole(plan.role);
+    if (plan.navigate !== null) {
+      bridge.setLocation(
+        plan.navigate.sectionId,
+        plan.navigate.subSlug,
+        "page-click",
+      );
+    }
   }
 
   function handleSectionClick(id: SectionId): void {
@@ -2436,11 +2509,12 @@
         geo.footprintH === fittedPhone.h}
       desktopActive={geo.footprintW === fittedDesktop.w &&
         geo.footprintH === fittedDesktop.h}
-      {activeRole}
+      activeViewer={viewerState.viewer}
+      viewerPending={viewerState.pending !== null}
       onPhonePreset={handlePhonePreset}
       onDesktopPreset={handleDesktopPreset}
       onShrinkGrow={handleShrinkGrow}
-      onRoleChange={handleRoleChange}
+      onViewerChange={handleViewerChange}
       onClose={handleCloseToRead}
       onFullscreen={handleFullscreenEntry}
       ondragstart={startDrag}
@@ -2791,12 +2865,13 @@
           shrunk={false}
           phoneActive={false}
           desktopActive={false}
-          {activeRole}
+          activeViewer={viewerState.viewer}
+          viewerPending={viewerState.pending !== null}
           onPhonePreset={() => exitFsToPreset(fittedPhone.w, fittedPhone.h)}
           onDesktopPreset={() =>
             exitFsToPreset(fittedDesktop.w, fittedDesktop.h)}
           onShrinkGrow={() => undefined}
-          onRoleChange={handleRoleChange}
+          onViewerChange={handleViewerChange}
           onClose={() => undefined}
           onFullscreen={handleExitFullscreen}
           exitMode

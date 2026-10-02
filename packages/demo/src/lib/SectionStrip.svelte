@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Check } from "@lucide/svelte";
   import { prefersReducedMotion } from "svelte/motion";
+  import * as m from "$lib/paraglide/messages.js";
   import { resolveStoryMessage, deriveSubState } from "./story-messages.js";
   import type { Section, SectionId } from "./scroll-sections.js";
   import type { DemoTopic } from "./bridge.js";
@@ -39,6 +40,15 @@
   function msg(key: string): string {
     return resolveStoryMessage(key, locale);
   }
+
+  // Client-arc label at the head of the strip. Reading `locale` makes
+  // the label re-resolve on a locale switch, the same dependency msg()
+  // gives the sub labels.
+  const clientArc: boolean = $derived(section.group === "client");
+  const groupLabel: string = $derived.by(() => {
+    void locale;
+    return m.demo_contents_group_client();
+  });
 </script>
 
 <!--
@@ -49,28 +59,48 @@
   Nothing here dodges the frame. Below the wide breakpoint the frame is
   docked at the bottom of the window and this strip sits at the top, and
   the story's own text is what flows around it.
+
+  Arc grouping at narrow widths is a label, not header chips. The strip
+  holds one section's subs and never the section list, so there is
+  nothing here for group chips to divide; the section list is the
+  TopBar contents menu, which renders the same two labelled arcs at
+  every width. What a narrow reader lacks is a cue for which arc the
+  current section belongs to. Read mode is the narrow default and hides
+  the frame, toolbar badge included, so a client section would
+  otherwise pass for one more staff screen. The strip therefore leads
+  with the arc's name inside the client arc only. The org arc goes
+  unlabelled: it is the arc the handbook assumes from the entry page
+  on, and a label on every org section would spend a 343px row on a
+  word that never changes. The label also renders for a single-sub client
+  section, where the strip would otherwise show nothing, so the cue
+  holds across the whole arc.
 -->
-{#if section.subs.length > 1}
+{#if section.subs.length > 1 || clientArc}
   <nav
     class="section-strip"
     bind:this={stripEl}
     aria-label={msg(section.titleKey)}
   >
-    {#each section.subs as sub (sub.slug)}
-      {@const s = deriveSubState(sub.slug, activeSub, sub.topic, seenTopics)}
-      <button
-        class="strip-item"
-        class:strip-item-active={s.isActive}
-        class:strip-item-seen={s.isSeen && !s.isActive}
-        type="button"
-        onclick={() => onSubClick(section.id, sub.slug)}
-      >
-        <span class="strip-label">{msg(sub.headingKey)}</span>
-        {#if s.isSeen}
-          <Check size={12} class="strip-check" />
-        {/if}
-      </button>
-    {/each}
+    {#if clientArc}
+      <span class="strip-group">{groupLabel}</span>
+    {/if}
+    {#if section.subs.length > 1}
+      {#each section.subs as sub (sub.slug)}
+        {@const s = deriveSubState(sub.slug, activeSub, sub.topic, seenTopics)}
+        <button
+          class="strip-item"
+          class:strip-item-active={s.isActive}
+          class:strip-item-seen={s.isSeen && !s.isActive}
+          type="button"
+          onclick={() => onSubClick(section.id, sub.slug)}
+        >
+          <span class="strip-label">{msg(sub.headingKey)}</span>
+          {#if s.isSeen}
+            <Check size={12} class="strip-check" />
+          {/if}
+        </button>
+      {/each}
+    {/if}
   </nav>
 {/if}
 
@@ -89,6 +119,29 @@
 
   .section-strip::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Arc label: static text in the quiet uppercase of the contents-menu
+     group headings, hairline-ruled off from the options it precedes. It
+     stays pinned while the options scroll under it, so the cue is never
+     scrolled away from. */
+  .strip-group {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 0.625rem 0 0;
+    border-right: 1px solid var(--hair);
+    background: var(--paper);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--muted);
   }
 
   .strip-item {

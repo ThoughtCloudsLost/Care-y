@@ -623,8 +623,8 @@ export const SECTIONS: readonly Section[] = [
       },
       // Record disbursement is an entry in the compose-actions popover
       // (ComposeActions.svelte:153), and neither it nor the trigger
-      // carries a class or testid, so the topic's label match is the
-      // target.
+      // carries a class or testid. PhoneApp's two-stage choreography
+      // opens the popover and rings the entry by its label.
       {
         slug: "disbursement",
         topic: "ticket-disbursement",
@@ -1672,6 +1672,31 @@ const unnarratedSet: ReadonlySet<string> = new Set(UNNARRATED_ROUTES);
 
 export function getSection(id: string): Section | undefined {
   return sectionById.get(id);
+}
+
+/** Contents-menu order of the two arcs. */
+export const SECTION_GROUP_ORDER: readonly SectionGroup[] = ["org", "client"];
+
+export interface SectionGroupEntry {
+  readonly group: SectionGroup;
+  /** The group's sections, in their SECTIONS order. */
+  readonly sections: readonly Section[];
+}
+
+/**
+ * Split sections into their arcs for the contents menu, keeping each
+ * arc's internal order. Membership comes from `section.group`, not from
+ * position: deep-dive sits after the client arc in SECTIONS but belongs
+ * to the org arc, and it lists there. A group with no sections is
+ * dropped rather than rendered as an empty heading.
+ */
+export function groupSections(
+  sections: readonly Section[],
+): readonly SectionGroupEntry[] {
+  return SECTION_GROUP_ORDER.map((group) => ({
+    group,
+    sections: sections.filter((s) => s.group === group),
+  })).filter((entry) => entry.sections.length > 0);
 }
 
 export function getSubByTopic(

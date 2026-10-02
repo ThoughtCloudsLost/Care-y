@@ -10,7 +10,7 @@ const en_demo_guides_menu_label = /** @type {(inputs: Demo_Guides_Menu_LabelInpu
 };
 
 const es_demo_guides_menu_label = /** @type {(inputs: Demo_Guides_Menu_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Guias`)
+	return /** @type {LocalizedString} */ (`Guías`)
 };
 
 const en_xa2_demo_guides_menu_label = /** @type {(inputs: Demo_Guides_Menu_LabelInputs) => LocalizedString} */ () => {

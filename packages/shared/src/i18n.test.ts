@@ -262,6 +262,7 @@ describe("es.json values differ from en.json", () => {
     // Single-role initials
     ["demo_role_admin_initial", "single letter initial: A"],
     ["demo_role_volunteer_initial", "single letter initial: V"],
+    ["demo_role_client_initial", "single letter initial: C (Client, Cliente)"],
 
     // Phone placeholders (locale-neutral format)
     [

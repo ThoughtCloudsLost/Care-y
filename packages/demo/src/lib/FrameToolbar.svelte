@@ -8,7 +8,7 @@
    *
    *   Left:   close (to read mode), minimize/restore, fullscreen entry
    *   Center: phone + desktop preset buttons (absolutely centered)
-   *   Right:  user badge with a role-switch dropdown menu
+   *   Right:  user badge with a viewer-switch dropdown menu
    *
    * The bar background is the drag surface (same pattern as
    * .bezel-strip: `role="presentation"` + pointer handlers). There is
@@ -39,7 +39,12 @@
     ChevronDown,
     X,
   } from "@lucide/svelte";
-  import { RoleId, type RoleIdValue } from "@care-y/shared";
+  import { RoleId } from "@care-y/shared";
+  import type { ViewerId } from "$demo/bridge.js";
+  import {
+    TOOLBAR_STAFF_VIEWERS,
+    TOOLBAR_CLIENT_VIEWERS,
+  } from "$demo/viewer.js";
 
   interface Props {
     /** Whether the frame is in shrunk state. */
@@ -48,13 +53,19 @@
     phoneActive: boolean;
     /** Whether the desktop preset matches the current footprint. */
     desktopActive: boolean;
-    /** The currently active demo role. */
-    activeRole: RoleIdValue;
+    /** Who the phone is showing the product as. */
+    activeViewer: ViewerId;
+    /**
+     * True while a viewer switch is settling (a role write, or the
+     * phone moving into or out of the client arc). The badge shows the
+     * switch in progress and the menu stays shut until it lands.
+     */
+    viewerPending: boolean;
     /** Callbacks for chrome actions. */
     onPhonePreset: () => void;
     onDesktopPreset: () => void;
     onShrinkGrow: () => void;
-    onRoleChange: (role: RoleIdValue) => void;
+    onViewerChange: (viewer: ViewerId) => void;
     /** Close the frame: leaves simulate mode for read mode. */
     onClose: () => void;
     /** Enter or exit fullscreen mode. */
@@ -73,11 +84,12 @@
     shrunk,
     phoneActive,
     desktopActive,
-    activeRole,
+    activeViewer,
+    viewerPending,
     onPhonePreset,
     onDesktopPreset,
     onShrinkGrow,
-    onRoleChange,
+    onViewerChange,
     onClose,
     onFullscreen,
     exitMode = false,
@@ -87,40 +99,63 @@
   }: Props = $props();
 
   // -----------------------------------------------------------------------
-  // Role definitions
+  // Viewer definitions
   //
   // Same structure as the former RoleRail: localized labels, tooltips,
-  // and initials from the shared i18n keys. Admin is first (matches the
-  // pinned bridge boot contract).
+  // and initials from the shared i18n keys. The order and membership
+  // come from viewer.ts, so the list the tests pin is the list rendered:
+  // the three staff roles with Admin first (the pinned bridge boot
+  // contract), then Client below a separator. Client is not a role. It
+  // is the reader the client arc is written for, and picking it moves
+  // the phone rather than rewriting who is signed in.
   // -----------------------------------------------------------------------
 
-  interface RoleOption {
-    readonly id: RoleIdValue;
+  interface ViewerOption {
+    readonly id: ViewerId;
     readonly label: () => string;
     readonly tooltip: () => string;
     readonly initial: () => string;
   }
 
-  const TOOLBAR_ROLES: readonly RoleOption[] = [
-    {
-      id: RoleId.ADMIN,
-      label: () => m.demo_role_admin_label(),
-      tooltip: () => m.demo_role_admin_tooltip(),
-      initial: () => m.demo_role_admin_initial(),
-    },
-    {
-      id: RoleId.MANAGER,
-      label: () => m.demo_role_manager_label(),
-      tooltip: () => m.demo_role_manager_tooltip(),
-      initial: () => m.demo_role_manager_initial(),
-    },
-    {
-      id: RoleId.VOLUNTEER,
-      label: () => m.demo_role_volunteer_label(),
-      tooltip: () => m.demo_role_volunteer_tooltip(),
-      initial: () => m.demo_role_volunteer_initial(),
-    },
-  ];
+  function viewerOption(id: ViewerId): ViewerOption {
+    switch (id) {
+      case RoleId.ADMIN:
+        return {
+          id,
+          label: () => m.demo_role_admin_label(),
+          tooltip: () => m.demo_role_admin_tooltip(),
+          initial: () => m.demo_role_admin_initial(),
+        };
+      case RoleId.MANAGER:
+        return {
+          id,
+          label: () => m.demo_role_manager_label(),
+          tooltip: () => m.demo_role_manager_tooltip(),
+          initial: () => m.demo_role_manager_initial(),
+        };
+      case RoleId.VOLUNTEER:
+        return {
+          id,
+          label: () => m.demo_role_volunteer_label(),
+          tooltip: () => m.demo_role_volunteer_tooltip(),
+          initial: () => m.demo_role_volunteer_initial(),
+        };
+      case "client":
+        return {
+          id,
+          label: () => m.demo_role_client_label(),
+          tooltip: () => m.demo_role_client_tooltip(),
+          initial: () => m.demo_role_client_initial(),
+        };
+    }
+  }
+
+  const STAFF_OPTIONS: readonly ViewerOption[] = TOOLBAR_STAFF_VIEWERS.map(
+    (id) => viewerOption(id),
+  );
+  const CLIENT_OPTIONS: readonly ViewerOption[] = TOOLBAR_CLIENT_VIEWERS.map(
+    (id) => viewerOption(id),
+  );
 
   // -----------------------------------------------------------------------
   // Progressive collapse
@@ -257,6 +292,9 @@
   let menuRef: HTMLDivElement | undefined = $state(undefined);
 
   function toggleMenu(): void {
+    // The trigger stays focusable while a switch settles (aria-disabled
+    // rather than disabled), so the guard lives here.
+    if (viewerPending) return;
     menuOpen = !menuOpen;
   }
 
@@ -264,8 +302,9 @@
     menuOpen = false;
   }
 
-  function selectRole(role: RoleIdValue): void {
-    onRoleChange(role);
+  function selectViewer(viewer: ViewerId): void {
+    if (viewerPending) return;
+    onViewerChange(viewer);
     closeMenu();
   }
 
@@ -423,10 +462,8 @@
     }
   }
 
-  // Derive active role option for the badge label
-  const activeRoleOption: RoleOption | undefined = $derived(
-    TOOLBAR_ROLES.find((r) => r.id === activeRole),
-  );
+  // Derive the active viewer option for the badge label
+  const activeViewerOption: ViewerOption = $derived(viewerOption(activeViewer));
 </script>
 
 <!-- The bar container is positioned by the parent (App.svelte) via
@@ -684,26 +721,57 @@
       {/if}
     </div>
 
+    <!-- While a switch settles the badge keeps the current viewer's
+         seal (the snapshot still reports it) but reads "Switching view",
+         and the trigger is aria-disabled rather than disabled so focus
+         stays on it and the busy state is announced. -->
     <button
       class="badge-trigger"
       class:badge-trigger--compact={badgeCompact}
+      class:badge-trigger--pending={viewerPending}
       type="button"
       bind:this={triggerRef}
       onclick={toggleMenu}
       aria-haspopup="menu"
       aria-expanded={menuOpen}
-      aria-label={m.demo_role_rail_label()}
+      aria-label={viewerPending
+        ? m.demo_viewer_switching()
+        : m.demo_role_rail_label()}
+      aria-disabled={viewerPending}
+      aria-busy={viewerPending}
+      title={viewerPending ? m.demo_viewer_switching() : undefined}
     >
       <span class="identity-seal badge-seal badge-seal--active">
-        {activeRoleOption?.initial() ?? "?"}
+        {activeViewerOption.initial()}
       </span>
       <span class="badge-label" class:badge-label--hidden={badgeCompact}>
-        {activeRoleOption?.label() ?? ""}
+        {viewerPending ? m.demo_viewer_switching() : activeViewerOption.label()}
       </span>
       <span class="badge-chevron" class:badge-chevron--hidden={badgeCompact}>
         <ChevronDown size={14} />
       </span>
     </button>
+
+    {#snippet viewerItem(option: ViewerOption)}
+      <button
+        class="role-menu-item"
+        role="menuitemradio"
+        aria-checked={activeViewer === option.id}
+        type="button"
+        onclick={() => selectViewer(option.id)}
+      >
+        <span
+          class="identity-seal menu-seal"
+          class:menu-seal--active={activeViewer === option.id}
+        >
+          {option.initial()}
+        </span>
+        <div class="role-menu-text">
+          <span class="role-menu-label">{option.label()}</span>
+          <span class="role-menu-desc">{option.tooltip()}</span>
+        </div>
+      </button>
+    {/snippet}
 
     {#if menuOpen}
       <div
@@ -715,25 +783,12 @@
         bind:this={menuRef}
         onkeydown={handleMenuKeydown}
       >
-        {#each TOOLBAR_ROLES as role (role.id)}
-          <button
-            class="role-menu-item"
-            role="menuitemradio"
-            aria-checked={activeRole === role.id}
-            type="button"
-            onclick={() => selectRole(role.id)}
-          >
-            <span
-              class="identity-seal menu-seal"
-              class:menu-seal--active={activeRole === role.id}
-            >
-              {role.initial()}
-            </span>
-            <div class="role-menu-text">
-              <span class="role-menu-label">{role.label()}</span>
-              <span class="role-menu-desc">{role.tooltip()}</span>
-            </div>
-          </button>
+        {#each STAFF_OPTIONS as option (option.id)}
+          {@render viewerItem(option)}
+        {/each}
+        <div class="role-menu-separator" role="separator"></div>
+        {#each CLIENT_OPTIONS as option (option.id)}
+          {@render viewerItem(option)}
         {/each}
       </div>
     {/if}
@@ -925,6 +980,17 @@
     height: 44px;
   }
 
+  /* Switch in flight: the badge dims and stops reading as a control
+     until the snapshot reports the new viewer. */
+  .badge-trigger--pending {
+    cursor: progress;
+    opacity: 0.6;
+  }
+
+  .badge-trigger--pending:hover {
+    background: transparent;
+  }
+
   .badge-trigger--compact {
     gap: 0;
     padding: 0;
@@ -1043,6 +1109,14 @@
 
   .role-menu-item[aria-checked="true"] {
     background: rgba(255, 255, 255, 0.04);
+  }
+
+  /* Hairline between the staff roles and the client viewer, the same
+     rule the preset menu draws above its fold-in action. */
+  .role-menu-separator {
+    height: 1px;
+    margin: 2px 4px;
+    background: #333;
   }
 
   /* Seal tokens inside the menu, matching the badge's pinned dark scheme. */

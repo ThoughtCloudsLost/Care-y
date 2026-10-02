@@ -10,7 +10,7 @@ const en_demo_agg_placeholder = /** @type {(inputs: Demo_Agg_PlaceholderInputs) 
 };
 
 const es_demo_agg_placeholder = /** @type {(inputs: Demo_Agg_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esta vista estara disponible pronto.`)
+	return /** @type {LocalizedString} */ (`Esta vista estará disponible pronto.`)
 };
 
 const en_xa2_demo_agg_placeholder = /** @type {(inputs: Demo_Agg_PlaceholderInputs) => LocalizedString} */ () => {

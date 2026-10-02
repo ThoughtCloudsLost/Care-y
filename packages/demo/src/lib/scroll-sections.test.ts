@@ -22,6 +22,8 @@ import {
   SUB_ROUTES,
   UNNARRATED_ROUTES,
   DEFAULT_CLIENT_DETAIL_IDS,
+  SECTION_GROUP_ORDER,
+  groupSections,
 } from "./scroll-sections.js";
 import {
   DEMO_INTAKE_FORM_ID,
@@ -1860,5 +1862,46 @@ describe("deep-dive section", () => {
       expect(result!.sub.slug).toBe(sub.slug);
       expect(result!.section.id).toBe("deep-dive");
     }
+  });
+});
+
+describe("groupSections (contents-menu arcs)", () => {
+  const grouped = groupSections(SECTIONS);
+
+  it("lists the org arc first, then the client arc", () => {
+    expect(grouped.map((g) => g.group)).toEqual(["org", "client"]);
+    expect(SECTION_GROUP_ORDER).toEqual(["org", "client"]);
+  });
+
+  it("partitions every section into exactly one arc", () => {
+    const listed = grouped.flatMap((g) => g.sections.map((s) => s.id));
+    expect([...listed].sort()).toEqual(SECTIONS.map((s) => s.id).sort());
+  });
+
+  it("files each section under its own group field, not its position", () => {
+    for (const entry of grouped) {
+      for (const section of entry.sections) {
+        expect(section.group).toBe(entry.group);
+      }
+    }
+    // deep-dive sits after the client arc in SECTIONS but is org.
+    const org = grouped.find((g) => g.group === "org");
+    expect(org?.sections.at(-1)?.id).toBe("deep-dive");
+  });
+
+  it("keeps the client arc in journey order", () => {
+    const client = grouped.find((g) => g.group === "client");
+    expect(client?.sections.map((s) => s.id)).toEqual([
+      "client-intake",
+      "client-privacy",
+      "client-portal",
+      "client-account",
+      "client-share",
+    ]);
+  });
+
+  it("drops an arc with no sections", () => {
+    const orgOnly = SECTIONS.filter((s) => s.group === "org");
+    expect(groupSections(orgOnly).map((g) => g.group)).toEqual(["org"]);
   });
 });

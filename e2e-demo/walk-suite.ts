@@ -20,6 +20,10 @@ import {
 import {
   DEMO_DETAIL_TICKET_ID,
   DEMO_DETAIL_ARTICLE_ID,
+  DEMO_PORTAL_CHANNEL_ID,
+  DEMO_SHARE_ID,
+  DEMO_INTAKE_FORM_SLUG,
+  DEMO_CLOSED_FORM_SLUG,
 } from "../packages/demo/src/lib/bridge.js";
 import {
   ENGINE_BOOT_TIMEOUT,
@@ -94,8 +98,21 @@ function loginStageForTarget(target: string | null): string | null {
 // Derives the ConvergenceExpectation.detail from the phone command's
 // detail value. Sentinel IDs (DEMO_DETAIL_TICKET_ID,
 // DEMO_DETAIL_ARTICLE_ID) become nonNull because the runtime resolves
-// them to real seeded IDs.
+// them to real seeded IDs. The client sentinels get the same treatment:
+// they are whole path prefixes (portal/<id>, share/<id>, intake/<slug>)
+// that PhoneApp swaps for the seeded ones.
+//
+// A detail carrying its own query (the admin forms, responses, and logs
+// routes) converges on its path part only: the router keeps the query in
+// the URL and stores the bare path as the detail.
 // -----------------------------------------------------------------------
+
+const CLIENT_SENTINEL_DETAILS: ReadonlySet<string> = new Set([
+  DEMO_PORTAL_CHANNEL_ID,
+  DEMO_SHARE_ID,
+  `intake/${DEMO_INTAKE_FORM_SLUG}`,
+  `intake/${DEMO_CLOSED_FORM_SLUG}`,
+]);
 
 function detailExpectation(
   detail: string | null,
@@ -103,8 +120,22 @@ function detailExpectation(
   if (detail === null) return null;
   if (detail === DEMO_DETAIL_TICKET_ID) return { nonNull: true };
   if (detail === DEMO_DETAIL_ARTICLE_ID) return { nonNull: true };
-  return detail;
+  if (CLIENT_SENTINEL_DETAILS.has(detail)) return { nonNull: true };
+  const query = detail.indexOf("?");
+  return query === -1 ? detail : detail.slice(0, query);
 }
+
+// -----------------------------------------------------------------------
+// Phone-free sections
+//
+// deep-dive has no product route: the phone stays on whatever screen
+// it was showing and its subs name no region, so there is no feature to
+// converge on and nothing to highlight. scroll-sections.test.ts holds
+// the same exemption (PHONE_FREE_SECTIONS) in its highlight-coverage
+// check, which is the unit-level twin of the highlight layer below.
+// -----------------------------------------------------------------------
+
+const PHONE_FREE_SECTIONS: ReadonlySet<string> = new Set(["deep-dive"]);
 
 // -----------------------------------------------------------------------
 // Assertion gap helper
@@ -208,7 +239,8 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
     });
 
     // Generate one test per section
-    for (const [sectionIndex, section] of SECTIONS.entries()) {
+    for (const section of SECTIONS) {
+      if (PHONE_FREE_SECTIONS.has(section.id)) continue;
       test(`section: ${section.id}`, async () => {
         // Budget per section: sub-heavy sections (ticket-detail has 15
         // subs) cannot fit the config's default 120s when a convergence
@@ -235,7 +267,7 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
           const isLoginCrossing = !loginCrossed;
           loginCrossed = true;
 
-          await clickSectionTab(page, sectionIndex);
+          await clickSectionTab(page, section.id);
 
           // Crossing out of login plays the auth fast-forward; converge
           // only on the destination, never on intermediate stages.
@@ -351,7 +383,7 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
               // reset the scripted flow.)
               const current = await readBridgeState(page);
               if (current.location.sectionId !== section.id) {
-                await clickSectionTab(page, sectionIndex);
+                await clickSectionTab(page, section.id);
                 await awaitConvergence(
                   page,
                   { feature: cmd.feature, sectionId: section.id },

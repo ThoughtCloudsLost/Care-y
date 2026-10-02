@@ -10,7 +10,7 @@ const en_demo_agg_menu_label = /** @type {(inputs: Demo_Agg_Menu_LabelInputs) =>
 };
 
 const es_demo_agg_menu_label = /** @type {(inputs: Demo_Agg_Menu_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Paginas de referencia`)
+	return /** @type {LocalizedString} */ (`Páginas de referencia`)
 };
 
 const en_xa2_demo_agg_menu_label = /** @type {(inputs: Demo_Agg_Menu_LabelInputs) => LocalizedString} */ () => {

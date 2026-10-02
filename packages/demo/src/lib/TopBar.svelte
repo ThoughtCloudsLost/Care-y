@@ -16,7 +16,13 @@
     Search,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { SECTIONS, type Section, type SectionId } from "./scroll-sections.js";
+  import {
+    SECTIONS,
+    groupSections,
+    type Section,
+    type SectionGroup,
+    type SectionId,
+  } from "./scroll-sections.js";
   import { DRAWER_DEFAULT_MEASURE } from "./fullscreen.svelte.js";
   import { chromeFade } from "./chrome-fade.js";
   import {
@@ -127,6 +133,10 @@
         : null,
   );
 
+  // Prev and next walk SECTIONS by flat index, across the arc boundary,
+  // even though the contents menu lists the arcs separately: the story
+  // is read in that order, with the client arc after settings.
+  //
   // Entry page (activeSection === null): prev goes nowhere, next goes
   // to SECTIONS[0]. From SECTIONS[0]: prev returns to the entry page
   // via onHomeClick.
@@ -244,6 +254,22 @@
   function selectSection(id: SectionId): void {
     onSectionClick(id);
     closeMenus();
+  }
+
+  // -----------------------------------------------------------------------
+  // Contents grouping
+  //
+  // The sections list renders as two labelled arcs off section.group:
+  // the organization, read as a signed-in member, and the client portal,
+  // read as a help-seeker. SECTIONS is static, so this is computed once.
+  // -----------------------------------------------------------------------
+
+  const GROUPED_SECTIONS = groupSections(SECTIONS);
+
+  function groupLabel(group: SectionGroup): string {
+    return group === "client"
+      ? m.demo_contents_group_client()
+      : m.demo_contents_group_org();
   }
 
   function selectGuide(slug: GuideSlug): void {
@@ -448,28 +474,53 @@
               total: String(total),
             })}
           </div>
-          {#each SECTIONS as section, i (section.id)}
-            {@const state = deriveSectionState(section, seenTopics)}
-            <button
-              class="contents-item"
-              class:contents-item-active={activeSection === section.id}
-              role="menuitemradio"
-              aria-checked={activeSection === section.id}
-              type="button"
-              onclick={() => selectSection(section.id)}
+          <!-- Numbering restarts in each arc. A flat SECTIONS index under
+               the headings would read 1 to 15 and 21 in the first arc
+               (deep-dive belongs to it but sits last in SECTIONS) and 16
+               to 20 in the second. A continuous count down the menu
+               would renumber deep-dive 16 and the intake form 17, which
+               no longer matches the order prev and next walk. Counting
+               within the arc keeps every number a position under the
+               heading it sits beneath. -->
+          {#each GROUPED_SECTIONS as entry, gi (entry.group)}
+            <div
+              class="contents-group"
+              role="group"
+              aria-label={groupLabel(entry.group)}
             >
-              <span class="contents-index">{i + 1}</span>
-              <span class="contents-item-label">
-                {sectionLabel(section.titleKey)}
-              </span>
-              <span class="contents-count">
-                {#if state.complete}
-                  <Check size={12} class="contents-check" />
-                {:else if state.topicCount > 0}
-                  {state.seenCount}/{state.topicCount}
-                {/if}
-              </span>
-            </button>
+              <!-- aria-hidden: the group's aria-label already names it. -->
+              <div
+                class="contents-header"
+                class:contents-header-guides={gi > 0}
+                aria-hidden="true"
+              >
+                {groupLabel(entry.group)}
+              </div>
+              {#each entry.sections as section, i (section.id)}
+                {@const state = deriveSectionState(section, seenTopics)}
+                <button
+                  class="contents-item"
+                  class:contents-item-active={activeSection === section.id}
+                  role="menuitemradio"
+                  aria-checked={activeSection === section.id}
+                  type="button"
+                  data-section-id={section.id}
+                  onclick={() => selectSection(section.id)}
+                >
+                  <span class="contents-index">{i + 1}</span>
+                  <span class="contents-item-label">
+                    {sectionLabel(section.titleKey)}
+                  </span>
+                  <span class="contents-count">
+                    {#if state.complete}
+                      <Check size={12} class="contents-check" />
+                    {:else if state.topicCount > 0}
+                      {state.seenCount}/{state.topicCount}
+                    {/if}
+                  </span>
+                </button>
+              {/each}
+            </div>
           {/each}
           {#if visibleGuides.length > 0}
             <div class="contents-header contents-header-guides">

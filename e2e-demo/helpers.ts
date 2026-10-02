@@ -6,7 +6,10 @@
  */
 
 import type { Page } from "@playwright/test";
-import type { DemoBridgeState } from "../packages/demo/src/lib/bridge.js";
+import type {
+  DemoBridgeState,
+  SectionId,
+} from "../packages/demo/src/lib/bridge.js";
 import type { PulseLogEntry } from "../packages/demo/src/lib/pulse-log.js";
 import type { HighlightLogEntry } from "../packages/demo/src/lib/highlight-log.js";
 
@@ -230,10 +233,11 @@ export async function awaitConvergence(
 // Navigation controls
 //
 // The story renders ONE section per page (App.svelte pageSections).
-// Sections switch via the TopBar tabs (nav.section-tabs, one button
-// per SECTIONS entry, in order) and subs via the SectionRail buttons
-// (nav.section-rail, one button per sub, in order; rendered only on
-// wide layouts and only when the section has more than one sub).
+// Sections switch via the TopBar contents picker (one menu item per
+// SECTIONS entry, listed under its arc's heading) and subs via the
+// SectionRail buttons (nav.section-rail, one button per sub, in order;
+// rendered only on wide layouts and only when the section has more
+// than one sub).
 //
 // These are the supported page-click paths. Clicking the flow text
 // headings is NOT viable from automation: any programmatic scroll or
@@ -242,19 +246,28 @@ export async function awaitConvergence(
 // -----------------------------------------------------------------------
 
 /**
- * Switch sections by clicking the TopBar tab at `sectionIndex`
- * (SECTIONS order). Tabs are always-visible buttons, so a plain
- * locator click is safe.
+ * Switch sections through the TopBar contents picker: open it, then
+ * click the item for `sectionId`.
+ *
+ * Items are addressed by data-section-id, not by position. The menu
+ * lists the org and client arcs under separate headings, and deep-dive
+ * belongs to the org arc while sitting last in SECTIONS, so menu order
+ * is not SECTIONS order. The picker closes on selection.
  */
 export async function clickSectionTab(
   page: Page,
-  sectionIndex: number,
+  sectionId: SectionId,
 ): Promise<void> {
-  const tab = page
-    .locator("nav.section-tabs button.section-tab")
-    .nth(sectionIndex);
-  await tab.waitFor({ state: "visible", timeout: 5_000 });
-  await tab.click();
+  const trigger = page
+    .locator("header.top-bar button.contents-trigger")
+    .first();
+  await trigger.waitFor({ state: "visible", timeout: 5_000 });
+  await trigger.click();
+  const item = page.locator(
+    `.contents-panel button.contents-item[data-section-id="${sectionId}"]`,
+  );
+  await item.waitFor({ state: "visible", timeout: 5_000 });
+  await item.click();
 }
 
 /**

@@ -494,7 +494,9 @@ export interface DemoBridgeState {
    */
   readonly engineReady: boolean;
   /** The signed-in user's current role. Starts as ADMIN; tracks role
-   *  switcher state. */
+   *  switcher state. Stays the staff role while the client viewer is
+   *  shown: that viewer writes no role, and the page derives it from
+   *  `feature` instead (viewer.ts). */
   readonly role: RoleIdValue;
   /**
    * Whether the phone document is in the dark scheme. Changes when the

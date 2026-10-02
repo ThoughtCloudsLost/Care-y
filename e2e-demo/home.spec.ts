@@ -10,6 +10,7 @@ import {
   waitForPhoneBridge,
   readBridgeState,
   awaitConvergence,
+  clickSectionTab,
 } from "./helpers.js";
 
 test.describe("home return", () => {
@@ -85,22 +86,24 @@ test.describe("home return", () => {
     await expect(entryTitle).toContainText("How CARE-Y works");
     await expect(entryTitle.locator(".flow-line").first()).toBeVisible();
 
-    // Click a section tab and assert normal navigation resumes.
-    // Use the first section tab (login, index 0).
-    const loginTab = page
-      .locator("nav.section-tabs button.section-tab")
-      .first();
-    await loginTab.click();
+    // Pick a section from the contents panel and assert normal
+    // navigation resumes. Login is the first section.
+    await clickSectionTab(page, "login");
 
     // The entry title should be gone, replaced by the login section.
     await expect(entryTitle).not.toContainText("How CARE-Y works", {
       timeout: 5_000,
     });
 
-    // The login section tab should now be active.
-    const activeTab = page.locator(
-      "nav.section-tabs button.section-tab-active",
-    );
-    await expect(activeTab).toBeVisible();
+    // The login entry in the contents panel should now be the active one.
+    await page
+      .locator("header.top-bar button.contents-trigger")
+      .first()
+      .click();
+    await expect(
+      page.locator(
+        '.contents-panel button.contents-item-active[data-section-id="login"]',
+      ),
+    ).toBeVisible();
   });
 });
