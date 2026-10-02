@@ -1,0 +1,99 @@
+name: E2E
+
+# Runs the Playwright suite on a hosted runner, on demand only. It is not a
+# required check and nothing triggers it automatically: the suite is slow
+# and heavier than an 8 GB development machine likes, so this is a way to
+# run it elsewhere. Start it from the Actions tab or with
+#
+#   gh workflow run e2e.yml --ref <branch> -f projects=chromium
+#
+# The HTML report is attached to the run as an artifact either way.
+on:
+  workflow_dispatch:
+    inputs:
+      projects:
+        description: Which Playwright projects to run
+        type: choice
+        default: chromium
+        options:
+          - chromium
+          - all
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          paraglide: "true"
+
+      - name: Install Playwright browsers
+        run: |
+          if [ "${{ inputs.projects }}" = "all" ]; then
+            pnpm exec playwright install --with-deps
+          else
+            pnpm exec playwright install --with-deps chromium
+          fi
+
+      # Same values as the CI test stack. The dev compose file reads .env.
+      - name: Create .env
+        run: |
+          cat > .env <<'EOF'
+          DATABASE_URL=postgresql://care_y:ci_test_password@db:5432/care_y
+          POSTGRES_USER=care_y
+          POSTGRES_PASSWORD=ci_test_password
+          POSTGRES_DB=care_y
+          NODE_ENV=development
+          PORT=3000
+          OPS_SECRETS_KEY=0000000000000000000000000000000000000000000000000000000000000000
+          CORS_ORIGIN=http://localhost:5174
+          SMTP_HOST=mailpit
+          SMTP_PORT=1025
+          SMTP_FROM=noreply@test.care-y.app
+          EOF
+          # Strip leading whitespace from heredoc (YAML block scalar indentation)
+          sed -i 's/^[[:space:]]*//' .env
+
+      - name: Generate OPRF test shares
+        run: |
+          pnpm --filter @care-y/server exec tsx src/scripts/generate-oprf-shares.ts \
+            | grep '^OPRF_SHARE_' >> .env
+
+      # Builds the dev stack, migrates, and bootstraps the dev org, the same
+      # path a developer takes before `pnpm test:e2e`.
+      - name: Dev stack
+        run: node scripts/dev-setup.mjs
+
+      - name: Seed the e2e org
+        run: pnpm test:e2e:seed
+
+      # Playwright starts Vite on :5174 itself (webServer in the config).
+      # CI=true, which the runner sets, gives the suite its two retries.
+      - name: Playwright
+        run: |
+          if [ "${{ inputs.projects }}" = "all" ]; then
+            pnpm test:e2e
+          else
+            pnpm test:e2e --project=chromium --project=onboarding-setup --project=onboarding --project=first-login
+          fi
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
+      - name: Stop the dev stack
+        if: always()
+        run: docker compose down -v
