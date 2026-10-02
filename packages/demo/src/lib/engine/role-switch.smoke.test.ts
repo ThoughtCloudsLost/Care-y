@@ -48,6 +48,8 @@ const VOLUNTEER_PERMISSIONS: readonly Permission[] = [
   Permission.VIEW_KNOWLEDGE_BASE,
   Permission.EDIT_KNOWLEDGE_BASE,
   Permission.VIEW_OWN_SHIFTS,
+  Permission.VIEW_FUNDS,
+  Permission.RECORD_DISBURSEMENTS,
 ];
 
 const ADMIN_ONLY_PERMISSIONS: readonly Permission[] = [
