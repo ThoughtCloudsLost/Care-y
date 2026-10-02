@@ -32,7 +32,7 @@
  */
 
 // Must stay the first import: cli-utils boots the secrets loader before
-// anything below reaches db.ts (ADR-129).
+// anything below reaches db.ts (ADR-131).
 import { withCli, type CliArgs, type CliContext } from "./cli-utils.js";
 import {
   deletionRequestIdSchema,
