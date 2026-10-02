@@ -156,7 +156,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     }
 
     function audit(): DonationAuditContext {
-      return { tenantDb: testDb.db, actorId: actor.id };
+      return { orgSchema: testDb.schemaName as OrgSchema, actorId: actor.id };
     }
 
     /** A fresh API key with a fake provider behind it. */
@@ -197,6 +197,38 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .where("org_id", "=", org)
         .execute();
       return rows.length;
+    }
+
+    /**
+     * Run a test against an org of its own, so row counts see only what
+     * the test saved. The org and its connections are deleted after.
+     */
+    async function withFreshOrg(
+      label: string,
+      run: (org: OrgId) => Promise<void>,
+    ): Promise<void> {
+      const org = orgIdSchema.parse(randomUUID());
+      await testDb.platformDb
+        .insertInto("orgs")
+        .values({
+          id: org,
+          slug: `donsvc-${label}-${org.slice(0, 8)}` as OrgSlug,
+          schema_name: `${testDb.schemaName}_${label}` as OrgSchema,
+        })
+        .execute();
+
+      try {
+        await run(org);
+      } finally {
+        await testDb.platformDb
+          .deleteFrom("donation_connections")
+          .where("org_id", "=", org)
+          .execute();
+        await testDb.platformDb
+          .deleteFrom("orgs")
+          .where("id", "=", org)
+          .execute();
+      }
     }
 
     describe("saveGivebutter", () => {
@@ -246,6 +278,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(provider.registerWebhook).not.toHaveBeenCalled();
       });
 
+      it("serialises concurrent saves of one new key into a single connection", async () => {
+        const { service } = setup();
+        const provider = fakeProvider();
+        const apiKey = newKey(provider);
+
+        const results = await Promise.all([
+          service.saveGivebutter(orgId, { apiKey }, audit()),
+          service.saveGivebutter(orgId, { apiKey }, audit()),
+        ]);
+
+        expect(results[0].id).toBe(results[1].id);
+        const matching = (await service.list(orgId)).filter(
+          (c) => c.keyHint === apiKey.slice(-4),
+        );
+        expect(matching).toHaveLength(1);
+        expect(provider.registerWebhook).toHaveBeenCalledTimes(1);
+      });
+
       it("keeps the connection without a webhook when registration fails", async () => {
         const { service } = setup();
         const provider = fakeProvider();
@@ -256,7 +306,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         await expect(
           service.saveGivebutter(orgId, { apiKey }, audit()),
-        ).rejects.toBeInstanceOf(DonationProviderError);
+        ).rejects.toThrow(ErrorCode.DONATION_WEBHOOK_NOT_REGISTERED);
 
         const saved = (await service.list(orgId)).find(
           (c) => c.keyHint === apiKey.slice(-4),
@@ -280,7 +330,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         await expect(
           service.saveGivebutter(orgId, { apiKey }, audit()),
-        ).rejects.toThrow(ErrorCode.DONATION_PROVIDER_UNAVAILABLE);
+        ).rejects.toThrow(ErrorCode.DONATION_WEBHOOK_NOT_REGISTERED);
 
         expect(provider.deleteWebhook).toHaveBeenCalledWith("wh_nosecret");
         const saved = (await service.list(orgId)).find(
@@ -288,7 +338,167 @@ describe.skipIf(!process.env.DATABASE_URL)(
         );
         expect(saved?.webhookRegistered).toBe(false);
       });
+
+      it("saving the same key twice yields one row and one connection id", async () => {
+        await withFreshOrg("d", async (org) => {
+          const { service } = setup();
+          const apiKey = newKey();
+
+          const first = await service.saveGivebutter(org, { apiKey }, audit());
+          const second = await service.saveGivebutter(org, { apiKey }, audit());
+
+          expect(second.id).toBe(first.id);
+          expect(await connectionCount(org)).toBe(1);
+          expect((await service.list(org)).map((c) => c.id)).toEqual([
+            first.id,
+          ]);
+        });
+      });
+
+      it("a different key yields a second row", async () => {
+        await withFreshOrg("e", async (org) => {
+          const { service } = setup();
+
+          const first = await service.saveGivebutter(
+            org,
+            { apiKey: newKey() },
+            audit(),
+          );
+          const second = await service.saveGivebutter(
+            org,
+            { apiKey: newKey() },
+            audit(),
+          );
+
+          expect(second.id).not.toBe(first.id);
+          expect(await connectionCount(org)).toBe(2);
+        });
+      });
+
+      it("a matching key retries webhook registration when the connection has none", async () => {
+        await withFreshOrg("f", async (org) => {
+          const { service, factory } = setup();
+          const provider = fakeProvider();
+          provider.registerWebhook.mockRejectedValueOnce(
+            new DonationProviderError(ErrorCode.DONATION_PROVIDER_UNAVAILABLE),
+          );
+          const apiKey = newKey(provider);
+
+          await expect(
+            service.saveGivebutter(org, { apiKey }, audit()),
+          ).rejects.toBeInstanceOf(DonationProviderError);
+          const [stored] = await service.list(org);
+          expect(stored?.webhookRegistered).toBe(false);
+          const invalidate = vi.spyOn(factory, "invalidate");
+
+          const retried = await service.saveGivebutter(
+            org,
+            { apiKey },
+            audit(),
+          );
+
+          expect(retried.id).toBe(stored?.id);
+          expect(retried.webhookRegistered).toBe(true);
+          expect(provider.registerWebhook).toHaveBeenCalledTimes(2);
+          expect(invalidate).toHaveBeenCalledWith(retried.id);
+          expect(await connectionCount(org)).toBe(1);
+          expect(await service.list(org)).toEqual([
+            expect.objectContaining({
+              id: retried.id,
+              webhookRegistered: true,
+            }),
+          ]);
+        });
+      });
+
+      it("a matching key with a registered webhook does not register again", async () => {
+        await withFreshOrg("g", async (org) => {
+          const { service, factory } = setup();
+          const provider = fakeProvider();
+          provider.registerWebhook.mockResolvedValueOnce({
+            id: "wh_once",
+            secret: "secret-once",
+          });
+          const apiKey = newKey(provider);
+
+          const first = await service.saveGivebutter(org, { apiKey }, audit());
+          const invalidate = vi.spyOn(factory, "invalidate");
+          const second = await service.saveGivebutter(org, { apiKey }, audit());
+
+          expect(second.id).toBe(first.id);
+          expect(second.webhookRegistered).toBe(true);
+          expect(provider.registerWebhook).toHaveBeenCalledTimes(1);
+          expect(invalidate).toHaveBeenCalledWith(first.id);
+          expect(await storedConfig(first.id)).toEqual({
+            apiKey,
+            webhookId: "wh_once",
+            webhookSecret: "secret-once",
+          });
+          expect(await connectionCount(org)).toBe(1);
+        });
+      });
+
+      it("a matching key writes an audit row with the existing connection id", async () => {
+        const { service } = setup();
+        const apiKey = newKey();
+
+        const first = await service.saveGivebutter(orgId, { apiKey }, audit());
+        const second = await service.saveGivebutter(orgId, { apiKey }, audit());
+
+        expect(second.id).toBe(first.id);
+        expect(await auditRowsFor("donation_connection_saved", first.id)).toBe(
+          2,
+        );
+      });
+
+      it("rolls back the connection when the audit row cannot be written", async () => {
+        await withFreshOrg("h", async (org) => {
+          const { service } = setup();
+          const provider = fakeProvider();
+
+          await expect(
+            service.saveGivebutter(
+              org,
+              { apiKey: newKey(provider) },
+              brokenAudit(),
+            ),
+          ).rejects.toThrow();
+
+          expect(await connectionCount(org)).toBe(0);
+          expect(provider.registerWebhook).not.toHaveBeenCalled();
+        });
+      });
+
+      it("writes exactly one audit row per save", async () => {
+        const { service } = setup();
+
+        const first = await service.saveGivebutter(
+          orgId,
+          { apiKey: newKey() },
+          audit(),
+        );
+        const second = await service.saveGivebutter(
+          orgId,
+          { apiKey: newKey() },
+          audit(),
+        );
+
+        expect(await auditRowsFor("donation_connection_saved", first.id)).toBe(
+          1,
+        );
+        expect(await auditRowsFor("donation_connection_saved", second.id)).toBe(
+          1,
+        );
+      });
     });
+
+    /** An audit context whose schema does not exist, so its insert fails. */
+    function brokenAudit(): DonationAuditContext {
+      return {
+        orgSchema: `${testDb.schemaName}_missing` as OrgSchema,
+        actorId: actor.id,
+      };
+    }
 
     describe("list", () => {
       it("lists only the org's own connections", async () => {
@@ -328,6 +538,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         await service.remove(orgId, saved.id, audit());
 
+        expect(provider.deleteWebhook).toHaveBeenCalledTimes(1);
         expect(provider.deleteWebhook).toHaveBeenCalledWith("wh_remove");
         expect((await service.list(orgId)).map((c) => c.id)).not.toContain(
           saved.id,
@@ -380,6 +591,28 @@ describe.skipIf(!process.env.DATABASE_URL)(
           theirs.id,
         );
       });
+
+      it("keeps the row when the audit row cannot be written", async () => {
+        const { service } = setup();
+        const provider = fakeProvider();
+        const saved = await service.saveGivebutter(
+          orgId,
+          { apiKey: newKey(provider) },
+          audit(),
+        );
+
+        await expect(
+          service.remove(orgId, saved.id, brokenAudit()),
+        ).rejects.toThrow();
+
+        expect((await service.list(orgId)).map((c) => c.id)).toContain(
+          saved.id,
+        );
+        expect(
+          await auditRowsFor("donation_connection_removed", saved.id),
+        ).toBe(0);
+        expect(provider.deleteWebhook).not.toHaveBeenCalled();
+      });
     });
 
     describe("lookupWebhookSecret", () => {
@@ -413,17 +646,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     describe("listProviderFunds", () => {
       it("marks a failing connection unavailable and returns the rest", async () => {
-        const freshOrg = orgIdSchema.parse(randomUUID());
-        await testDb.platformDb
-          .insertInto("orgs")
-          .values({
-            id: freshOrg,
-            slug: `donsvc-c-${freshOrg.slice(0, 8)}` as OrgSlug,
-            schema_name: `${testDb.schemaName}_c` as OrgSchema,
-          })
-          .execute();
-
-        try {
+        await withFreshOrg("c", async (freshOrg) => {
           const { service } = setup();
           const healthy = fakeProvider();
           const failing = fakeProvider();
@@ -466,16 +689,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             ],
             unavailableConnectionIds: [bad.id],
           });
-        } finally {
-          await testDb.platformDb
-            .deleteFrom("donation_connections")
-            .where("org_id", "=", freshOrg)
-            .execute();
-          await testDb.platformDb
-            .deleteFrom("orgs")
-            .where("id", "=", freshOrg)
-            .execute();
-        }
+        });
       });
     });
   },

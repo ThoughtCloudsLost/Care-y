@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import * as m from "$lib/paraglide/messages.js";
 import QueueCards from "./QueueCards.svelte";
 import {
   resolveQueueAppearance,
@@ -32,12 +33,17 @@ if (typeof Element.prototype.animate !== "function") {
 
 afterEach(cleanup);
 
+type QueueFundBalance =
+  | { kind: "amount"; amount: string; belowZero: boolean }
+  | { kind: "unavailable" };
+
 interface QueueOverrides {
   id?: string;
   name?: string | null;
   openCount?: number;
   urgentCount?: number;
   appearance?: QueueAppearance;
+  fundBalance?: QueueFundBalance;
 }
 
 function makeQueue(overrides: QueueOverrides = {}) {
@@ -148,5 +154,46 @@ describe("QueueCards", () => {
   it("omits the glyph when no appearance is provided", () => {
     const { container } = renderQueues([makeQueue()]);
     expect(container.querySelector(".queue-tile .queue-glyph")).toBeNull();
+  });
+
+  it("shows the fund's available amount on the tile", () => {
+    const { container } = renderQueues([
+      makeQueue({
+        fundBalance: { kind: "amount", amount: "$120.00", belowZero: false },
+      }),
+    ]);
+    const balance = container.querySelector(".queue-balance");
+    expect(balance?.textContent.trim()).toBe(
+      m.fund_available_amount({ amount: "$120.00" }),
+    );
+    expect(balance?.classList.contains("queue-balance-below")).toBe(false);
+  });
+
+  it("says a balance below zero in words", () => {
+    const { container } = renderQueues([
+      makeQueue({
+        fundBalance: { kind: "amount", amount: "-$5.00", belowZero: true },
+      }),
+    ]);
+    const balance = container.querySelector(".queue-balance");
+    expect(balance?.textContent.trim()).toBe(
+      m.fund_available_below_zero({ amount: "-$5.00" }),
+    );
+    expect(balance?.classList.contains("queue-balance-below")).toBe(true);
+  });
+
+  it("says the raised total is unavailable instead of a number", () => {
+    renderQueues([
+      makeQueue({ name: "Intake", fundBalance: { kind: "unavailable" } }),
+    ]);
+    const tile = screen.getByRole("button", { name: /Intake/ });
+    const balance = tile.querySelector(".queue-balance");
+    expect(balance?.textContent.trim()).toBe(
+      m.fund_balance_raised_unavailable(),
+    );
+    expect(balance?.classList.contains("queue-balance-below")).toBe(false);
+    expect(tile.getAttribute("aria-label")).toContain(
+      m.fund_balance_raised_unavailable(),
+    );
   });
 });

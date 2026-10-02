@@ -155,13 +155,22 @@
     return Math.abs(edit.envelope.amountMinor) - amountMinor;
   });
 
-  const balanceNow = $derived(fund?.balance?.balanceMinor ?? null);
+  /** The fund's available figure: the sealed balance plus raised. */
+  const balanceNow = $derived(fund?.available);
+  const balanceNowBelowZero = $derived(
+    balanceNow?.kind === "amount" && isBelowZero(balanceNow.minor),
+  );
+  const balanceNowUnavailable = $derived(balanceNow?.kind === "unavailable");
 
-  /** The fund's balance once this entry is saved. */
+  /**
+   * The fund's available figure once this entry is saved. Null unless the
+   * figure is known, so an unavailable raised total never previews a
+   * dip below zero.
+   */
   const balanceAfterSave = $derived(
-    balanceNow === null || deltaMinor === null
+    balanceNow?.kind !== "amount" || deltaMinor === null
       ? null
-      : balanceAfter(balanceNow, deltaMinor),
+      : balanceAfter(balanceNow.minor, deltaMinor),
   );
 
   const showBelowZero = $derived(
@@ -172,9 +181,13 @@
   );
 
   const balanceLine = $derived.by((): string | undefined => {
-    if (balanceNow === null || fund === undefined) return undefined;
-    const amount = formatAmount(balanceNow, fund.currency);
-    return isBelowZero(balanceNow)
+    if (balanceNow === undefined || fund === undefined) return undefined;
+    if (balanceNow.kind === "pending") return undefined;
+    if (balanceNow.kind === "unavailable") {
+      return m.fund_balance_raised_unavailable();
+    }
+    const amount = formatAmount(balanceNow.minor, fund.currency);
+    return balanceNowBelowZero
       ? m.fund_available_below_zero({ amount })
       : m.fund_available_amount({ amount });
   });
@@ -376,8 +389,8 @@
       {#if balanceLine !== undefined}
         <p
           class="disbursement-balance num"
-          class:disbursement-balance-below={balanceNow !== null &&
-            isBelowZero(balanceNow)}
+          class:disbursement-balance-below={balanceNowBelowZero}
+          class:disbursement-balance-unavailable={balanceNowUnavailable}
         >
           {balanceLine}
         </p>
@@ -462,8 +475,10 @@
   }
 
   /* Below zero is distinct but neutral: muted italic, never a red alarm.
-     The words carry the meaning, so hue is not the only signal. */
-  .disbursement-balance-below {
+     The words carry the meaning, so hue is not the only signal. A raised
+     total the provider could not supply takes the same treatment. */
+  .disbursement-balance-below,
+  .disbursement-balance-unavailable {
     color: var(--muted);
     font-style: italic;
   }

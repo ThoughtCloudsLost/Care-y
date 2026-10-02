@@ -10,8 +10,8 @@
  * Routes (routes/donations.ts, routes/donation-webhooks.ts) delegate here.
  */
 
-import { randomUUID } from "node:crypto";
-import type { Kysely } from "kysely";
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import { sql, type Kysely, type Transaction } from "kysely";
 import {
   ErrorCode,
   donationConnectionIdSchema,
@@ -20,6 +20,7 @@ import {
   type DonationConnectionWire,
   type InflowProviderId,
   type OrgId,
+  type OrgSchema,
   type ProviderFundListWire,
   type ProviderFundWire,
   type SaveGivebutterConnectionInput,
@@ -56,9 +57,9 @@ export interface DonationConnectionServiceDeps {
   readonly webhookBaseUrl: string;
 }
 
-/** Who made a change, and the tenant database their audit row goes to. */
+/** Who made a change, and the org schema their audit row goes to. */
 export interface DonationAuditContext {
-  readonly tenantDb: Kysely<TenantDatabase>;
+  readonly orgSchema: OrgSchema;
   readonly actorId: UserId;
 }
 
@@ -70,7 +71,9 @@ export interface DonationConnectionService {
    * Check a Givebutter key against the provider, store it, then register
    * the donation webhook. A refused or unreachable key stores nothing. A
    * webhook registration failure leaves the connection saved without a
-   * webhook and rethrows.
+   * webhook and rethrows. A key that matches one of the org's existing
+   * Givebutter connections updates that connection instead of adding a
+   * row, and retries the webhook registration when it has none.
    */
   saveGivebutter(
     orgId: OrgId,
@@ -111,6 +114,23 @@ export interface DonationConnectionService {
    * is tried. Never throws, and leaves the rows for the caller to delete.
    */
   removeWebhooksForOrg(orgId: OrgId): Promise<void>;
+}
+
+/**
+ * Compare two API keys in constant time. A length mismatch returns false
+ * before comparing, since timingSafeEqual needs equal lengths. Both
+ * buffers are zeroed after.
+ */
+function sameKey(a: string, b: string): boolean {
+  const left = Buffer.from(a, "utf-8");
+  const right = Buffer.from(b, "utf-8");
+  try {
+    if (left.length !== right.length) return false;
+    return timingSafeEqual(left, right);
+  } finally {
+    left.fill(0);
+    right.fill(0);
+  }
 }
 
 export function createDonationConnectionService(
@@ -218,6 +238,107 @@ export function createDonationConnectionService(
     }
   }
 
+  /**
+   * The org's connection of this provider whose stored key matches the
+   * given one, oldest first, or undefined when none does. Each stored key
+   * is compared in constant time.
+   */
+  async function findByKey(
+    handle: Kysely<PlatformDatabase> | Transaction<PlatformDatabase>,
+    orgId: OrgId,
+    provider: InflowProviderId,
+    apiKey: string,
+  ): Promise<
+    | { id: DonationConnectionId; created_at: Date; config: ConnectionSecrets }
+    | undefined
+  > {
+    const rows = await handle
+      .selectFrom("donation_connections")
+      .select(["id", "config", "created_at"])
+      .where("org_id", "=", orgId)
+      .where("provider", "=", provider)
+      .orderBy("created_at", "asc")
+      .orderBy("id", "asc")
+      .execute();
+
+    for (const row of rows) {
+      const config = openConfig(provider, row.config);
+      if (sameKey(apiKey, config.apiKey)) {
+        return { id: row.id, created_at: row.created_at, config };
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Record a connection change in the org's audit log, inside the
+   * transaction that writes the connection row, so neither lands without
+   * the other.
+   */
+  async function auditConnectionChange(
+    trx: Transaction<PlatformDatabase>,
+    audit: DonationAuditContext,
+    eventType: "donation_connection_saved" | "donation_connection_removed",
+    connectionId: DonationConnectionId,
+    provider: string,
+  ): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- .withSchema() preserves source type param; runtime instance is correct, TS can't express the schema swap
+    const tenantTrx = trx.withSchema(
+      audit.orgSchema,
+    ) as unknown as Kysely<TenantDatabase>;
+    await tenantTrx
+      .insertInto("audit_log")
+      .values({
+        event_type: eventType,
+        actor_id: audit.actorId,
+        ticket_id: null,
+        metadata: { connectionId, provider },
+      })
+      .execute();
+  }
+
+  /**
+   * Register the donation webhook for a stored connection, seal its id
+   * and signing secret into the connection's config, and drop the cached
+   * provider. Returns the config as stored.
+   */
+  async function registerWebhookFor(
+    candidate: InflowProvider,
+    orgId: OrgId,
+    connectionId: DonationConnectionId,
+    config: ConnectionSecrets,
+  ): Promise<ConnectionSecrets> {
+    const registered = await candidate.registerWebhook(
+      `${webhookBase}/webhooks/givebutter/${orgId}/${connectionId}`,
+    );
+    if (registered.secret === null) {
+      // Without the secret no delivery can be checked, so a webhook
+      // that reported none is removed rather than left half working.
+      await deleteWebhookQuietly(candidate, registered.id);
+      throw new DonationProviderError(ErrorCode.DONATION_PROVIDER_UNAVAILABLE);
+    }
+
+    const withWebhook: ConnectionSecrets = {
+      ...config,
+      webhookId: registered.id,
+      webhookSecret: registered.secret,
+    };
+    try {
+      await db
+        .updateTable("donation_connections")
+        .set({ config: sealConfig(withWebhook), updated_at: new Date() })
+        .where("id", "=", connectionId)
+        .execute();
+    } catch (err: unknown) {
+      // The stored blob does not know about this webhook, so nothing
+      // would ever remove it. Take it down before reporting the failure.
+      await deleteWebhookQuietly(candidate, registered.id);
+      throw err;
+    }
+    factory.invalidate(connectionId);
+    return withWebhook;
+  }
+
   return {
     async list(orgId: OrgId): Promise<DonationConnectionWire[]> {
       const rows = await db
@@ -244,75 +365,103 @@ export function createDonationConnectionService(
       audit: DonationAuditContext,
     ): Promise<DonationConnectionWire> {
       const provider: InflowProviderId = "givebutter";
-      let config: ConnectionSecrets = { apiKey: input.apiKey };
+      const submitted: ConnectionSecrets = { apiKey: input.apiKey };
 
       // Credential check: one read before anything is stored. A refused
       // key surfaces as DONATION_PROVIDER_REJECTED.
-      const candidate = constructorFor(provider)(config);
+      const candidate = constructorFor(provider)(submitted);
       await candidate.listFunds();
 
-      const connectionId = donationConnectionIdSchema.parse(randomUUID());
-      const inserted = await db
-        .insertInto("donation_connections")
-        .values({
-          id: connectionId,
-          org_id: orgId,
-          provider,
-          config: sealConfig(config),
-        })
-        .returning(["created_at"])
-        .executeTakeFirstOrThrow();
-
-      // The connection row lives in the platform database and the audit
-      // log in the org's tenant schema, so the two cannot share one
-      // transaction. The audit row is written as soon as the platform
-      // write has succeeded; a failure between the two would leave the
-      // connection without its audit row, and it is not retried here.
-      await audit.tenantDb
-        .insertInto("audit_log")
-        .values({
-          event_type: "donation_connection_saved",
-          actor_id: audit.actorId,
-          ticket_id: null,
-          metadata: { connectionId, provider },
-        })
-        .execute();
-
-      const registered = await candidate.registerWebhook(
-        `${webhookBase}/webhooks/givebutter/${orgId}/${connectionId}`,
-      );
-      if (registered.secret === null) {
-        // Without the secret no delivery can be checked, so a webhook
-        // that reported none is removed rather than left half working.
-        await deleteWebhookQuietly(candidate, registered.id);
-        throw new DonationProviderError(
-          ErrorCode.DONATION_PROVIDER_UNAVAILABLE,
+      // The same key saved again updates its connection rather than
+      // adding a second row for it. Nothing in the table can enforce that
+      // (the key lives only inside the sealed blob), so saves for one org
+      // run one at a time: a transaction-scoped advisory lock keyed on the
+      // org serialises the lookup and the write that depends on it. The
+      // row and its audit entry commit before the webhook call, so the
+      // network round trip never holds the lock or the transaction open.
+      const stored = await db.transaction().execute(async (trx) => {
+        await sql`select pg_advisory_xact_lock(hashtext(${orgId}))`.execute(
+          trx,
         );
-      }
+        const existing = await findByKey(trx, orgId, provider, input.apiKey);
+        if (existing !== undefined) {
+          await trx
+            .updateTable("donation_connections")
+            .set({
+              config: sealConfig(existing.config),
+              updated_at: new Date(),
+            })
+            .where("id", "=", existing.id)
+            .where("org_id", "=", orgId)
+            .execute();
+          await auditConnectionChange(
+            trx,
+            audit,
+            "donation_connection_saved",
+            existing.id,
+            provider,
+          );
+          return {
+            id: existing.id,
+            created_at: existing.created_at,
+            config: existing.config,
+          };
+        }
 
-      config = {
-        ...config,
-        webhookId: registered.id,
-        webhookSecret: registered.secret,
-      };
-      try {
-        await db
-          .updateTable("donation_connections")
-          .set({ config: sealConfig(config), updated_at: new Date() })
-          .where("id", "=", connectionId)
-          .execute();
-      } catch (err: unknown) {
-        // The stored blob does not know about this webhook, so nothing
-        // would ever remove it. Take it down before reporting the failure.
-        await deleteWebhookQuietly(candidate, registered.id);
-        throw err;
+        const connectionId = donationConnectionIdSchema.parse(randomUUID());
+        const row = await trx
+          .insertInto("donation_connections")
+          .values({
+            id: connectionId,
+            org_id: orgId,
+            provider,
+            config: sealConfig(submitted),
+          })
+          .returning(["created_at"])
+          .executeTakeFirstOrThrow();
+        await auditConnectionChange(
+          trx,
+          audit,
+          "donation_connection_saved",
+          connectionId,
+          provider,
+        );
+        return {
+          id: connectionId,
+          created_at: row.created_at,
+          config: submitted,
+        };
+      });
+
+      let config = stored.config;
+      if (config.webhookId === undefined) {
+        // The row exists whether or not the provider registers the
+        // webhook, so a failure here reports that state by its own code:
+        // the admin sees the saved connection and the remove-and-retry
+        // path rather than a generic provider error and no card.
+        try {
+          config = await registerWebhookFor(
+            candidate,
+            orgId,
+            stored.id,
+            config,
+          );
+        } catch (err: unknown) {
+          if (err instanceof DonationProviderError) {
+            throw new DonationProviderError(
+              ErrorCode.DONATION_WEBHOOK_NOT_REGISTERED,
+            );
+          }
+          throw err;
+        }
+      } else {
+        factory.invalidate(stored.id);
       }
-      factory.invalidate(connectionId);
 
       return toWire({
-        id: connectionId,
+        id: stored.id,
         provider,
-        created_at: inserted.created_at,
+        created_at: stored.created_at,
         config,
       });
     },
@@ -332,11 +481,14 @@ export function createDonationConnectionService(
         throw new NotFoundError(ErrorCode.DONATION_CONNECTION_NOT_FOUND);
       }
 
-      const config = openConfig(row.provider, row.config);
-      if (config.webhookId !== undefined) {
+      // The provider is built while the row still exists, since the
+      // factory reads it; the webhook itself is removed only once the
+      // delete has committed.
+      const { webhookId } = openConfig(row.provider, row.config);
+      let provider: InflowProvider | undefined;
+      if (webhookId !== undefined) {
         try {
-          const provider = await providerFor(orgId, connectionId);
-          await deleteWebhookQuietly(provider, config.webhookId);
+          provider = await providerFor(orgId, connectionId);
         } catch (_buildErr: unknown) {
           console.warn(
             "Could not build a donation provider to remove its webhook",
@@ -344,23 +496,24 @@ export function createDonationConnectionService(
         }
       }
 
-      await db
-        .deleteFrom("donation_connections")
-        .where("id", "=", connectionId)
-        .where("org_id", "=", orgId)
-        .execute();
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .deleteFrom("donation_connections")
+          .where("id", "=", connectionId)
+          .where("org_id", "=", orgId)
+          .execute();
+        await auditConnectionChange(
+          trx,
+          audit,
+          "donation_connection_removed",
+          connectionId,
+          row.provider,
+        );
+      });
 
-      // Platform row and tenant audit log cannot share a transaction; the
-      // audit row follows the delete as in saveGivebutter.
-      await audit.tenantDb
-        .insertInto("audit_log")
-        .values({
-          event_type: "donation_connection_removed",
-          actor_id: audit.actorId,
-          ticket_id: null,
-          metadata: { connectionId, provider: row.provider },
-        })
-        .execute();
+      if (provider !== undefined && webhookId !== undefined) {
+        await deleteWebhookQuietly(provider, webhookId);
+      }
 
       factory.invalidate(connectionId);
       fundCache.invalidate(connectionId);

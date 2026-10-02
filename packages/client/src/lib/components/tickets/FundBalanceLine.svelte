@@ -1,12 +1,15 @@
 <!--
   One line in the case panel: the fund the case's queue draws on and its
-  sealed balance. Built as a panel section like PanelNotesSection and
+  available figure (the sealed balance plus what a linked provider
+  raised). Built as a panel section like PanelNotesSection and
   LinkedCasesSection (BlockTitle header, one List below it); the row is a
   Konsta ListItem with the value in the after slot.
 
   Renders nothing without the permission to read funds, or when the
   queue has no fund. A balance below zero is spelled out in words and
-  set in muted italic, never in an alarm color.
+  set in muted italic, never in an alarm color. A raised total the
+  provider could not supply is said in words in the same muted style,
+  never as a number.
 -->
 <script lang="ts">
   import { BlockTitle, List, ListItem } from "konsta/svelte";
@@ -30,14 +33,19 @@
   const caseFund = createCaseFund(() => ticketId, fundStore);
 
   const fund = $derived(caseFund.fund);
-  const balanceMinor = $derived(fund?.balance?.balanceMinor ?? null);
+  const available = $derived(fund?.available);
+  const unavailable = $derived(available?.kind === "unavailable");
   const belowZero = $derived(
-    balanceMinor !== null && isBelowZero(balanceMinor),
+    available?.kind === "amount" && isBelowZero(available.minor),
   );
 
   const balanceLabel = $derived.by((): string | undefined => {
-    if (fund === undefined || balanceMinor === null) return undefined;
-    const amount = formatAmount(balanceMinor, fund.currency);
+    if (fund === undefined || available === undefined) return undefined;
+    if (available.kind === "pending") return undefined;
+    if (available.kind === "unavailable") {
+      return m.fund_balance_raised_unavailable();
+    }
+    const amount = formatAmount(available.minor, fund.currency);
     return belowZero
       ? m.fund_available_below_zero({ amount })
       : m.fund_available_amount({ amount });
@@ -55,7 +63,11 @@
         {#if balanceLabel === undefined}
           <InlineSkeleton width="8ch" />
         {:else}
-          <span class="fund-balance num" class:fund-balance-below={belowZero}>
+          <span
+            class="fund-balance num"
+            class:fund-balance-below={belowZero}
+            class:fund-balance-unavailable={unavailable}
+          >
             {balanceLabel}
           </span>
         {/if}
@@ -71,8 +83,10 @@
   }
 
   /* Below zero is distinct but neutral: muted italic, never a red alarm.
-     The words carry the meaning, so hue is not the only signal. */
-  .fund-balance-below {
+     The words carry the meaning, so hue is not the only signal. A raised
+     total the provider could not supply takes the same treatment. */
+  .fund-balance-below,
+  .fund-balance-unavailable {
     color: var(--muted);
     font-style: italic;
   }

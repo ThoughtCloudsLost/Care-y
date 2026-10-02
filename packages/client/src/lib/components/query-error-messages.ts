@@ -235,6 +235,8 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
     m.error_donation_provider_rejected(),
   [ErrorCode.DONATION_PROVIDER_UNAVAILABLE]: () =>
     m.error_donation_provider_unavailable(),
+  [ErrorCode.DONATION_WEBHOOK_NOT_REGISTERED]: () =>
+    m.error_donation_webhook_not_registered(),
 };
 
 /** Type guard: returns true when the string is a recognized ErrorCode value. */

@@ -5,6 +5,7 @@ import {
   type SSEEvent,
 } from "./index.svelte.js";
 import type { QueryClient } from "@tanstack/svelte-query";
+import { fundKeys } from "$lib/query/keys.js";
 import {
   liveEventTypeSchema,
   notificationEventTypeSchema,
@@ -126,6 +127,20 @@ describe("handleEvent", () => {
     expect(qc.invalidateQueries).toHaveBeenCalledTimes(1);
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["funds"],
+    });
+  });
+
+  // A provider reported new gifts: every fund query refetches, and so do
+  // the provider totals, which sit outside the ["funds"] family.
+  it("invalidates the fund cache and the provider totals on funds_inflow_changed", () => {
+    handleEvent({ type: "funds_inflow_changed" }, qc);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledTimes(2);
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["funds"],
+    });
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: fundKeys.providerFunds(),
     });
   });
 

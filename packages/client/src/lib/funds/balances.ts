@@ -7,16 +7,18 @@
  * adjustments either sign, reversals the negation of the entry they
  * cancel.
  *
- * What every surface displays is the fund's sealed running balance:
- * each write carries the previous balance plus the entry's amount
- * (balanceAfter). The ledger is the audit trail. Summed, it must equal
- * the sealed balance:
+ * Each write seals the fund's running balance as the previous balance
+ * plus the entry's amount (balanceAfter). The ledger is the audit trail.
+ * Summed, it must equal the sealed balance:
  *
- *   raised (provider, zero until linked) + adjusted - disbursed
+ *   adjusted - disbursed (ledgerSum)
  *
- * which is raised plus the plain sum of every entry. The split into
- * adjusted and disbursed attributes each reversal to the kind of entry
- * it cancels, so a corrected disbursement stays under disbursed.
+ * which is the plain sum of every entry. The sealed balance never holds
+ * the provider's raised figure. What a surface shows as available is the
+ * sealed balance plus that raised figure once the fund is linked, added
+ * at display time. The split into adjusted and disbursed attributes each
+ * reversal to the kind of entry it cancels, so a corrected disbursement
+ * stays under disbursed.
  */
 
 import type { FundLedgerPayload } from "@care-y/shared";
@@ -35,7 +37,7 @@ export interface LedgerTotals {
   readonly adjusted: number;
   /** Net money out, as a positive number when money left the fund. */
   readonly disbursed: number;
-  /** What the sealed balance should equal. */
+  /** Raised plus the ledger sum: the fund's available figure. */
   readonly available: number;
 }
 
@@ -97,14 +99,22 @@ export function computeLedgerTotals(
 }
 
 /**
- * Whether the sealed balance agrees with the ledger. A mismatch is what
- * the audit page offers to recompute.
+ * What the sealed balance should equal: the ledger's own sum, without
+ * the provider's raised figure, which the sealed balance never holds.
+ */
+export function ledgerSum(totals: LedgerTotals): number {
+  return totals.adjusted - totals.disbursed;
+}
+
+/**
+ * Whether the sealed balance agrees with the ledger. Raised plays no
+ * part. A mismatch is what the audit page offers to recompute.
  */
 export function ledgerMatchesBalance(
   totals: LedgerTotals,
   balanceMinor: number,
 ): boolean {
-  return totals.available === balanceMinor;
+  return ledgerSum(totals) === balanceMinor;
 }
 
 /** Entries grouped by the fund id inside each payload. */
@@ -130,13 +140,24 @@ export function indexById<T extends { readonly id: string }>(
   return new Map(rows.map((row) => [row.id, row] as const));
 }
 
-/** Ledger totals for every fund that has at least one entry. */
+/**
+ * Ledger totals for every fund that has at least one entry or a raised
+ * figure. Each fund's totals carry its raised figure from `raisedByFund`
+ * (zero when absent), so a linked fund with an empty ledger still
+ * reports what it raised.
+ */
 export function computeLedgerTotalsByFund(
   entries: readonly BalanceEntry[],
+  raisedByFund: ReadonlyMap<string, number> = new Map(),
 ): Map<string, LedgerTotals> {
   const totals = new Map<string, LedgerTotals>();
   for (const [fundId, list] of groupByFund(entries)) {
-    totals.set(fundId, computeLedgerTotals(list));
+    totals.set(fundId, computeLedgerTotals(list, raisedByFund.get(fundId)));
+  }
+  for (const [fundId, raised] of raisedByFund) {
+    if (!totals.has(fundId)) {
+      totals.set(fundId, computeLedgerTotals([], raised));
+    }
   }
   return totals;
 }

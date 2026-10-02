@@ -4,11 +4,14 @@
   fund's ledger sits right below it on the audit page, so there is
   nothing to open.
 
-  The large figure is the fund's sealed running balance, the one every
-  other surface shows. The breakdown underneath sums the ledger. The
-  raised line appears only once the fund is linked to a provider. A
-  balance below zero is spelled out in words and set in muted italic,
-  never in an alarm color.
+  The large figure is the fund's available figure, the one every other
+  surface shows: the sealed running balance plus what a linked provider
+  raised. The breakdown underneath sums the ledger. The raised line
+  appears only once the fund is linked to a provider. A raised total the
+  provider could not supply is said in words in place of a number, in
+  the same muted style as below zero; it never shows as zero. A balance
+  below zero is spelled out in words and set in muted italic, never in
+  an alarm color.
 -->
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
@@ -17,28 +20,28 @@
   import type { LedgerTotals } from "$lib/funds/balances.js";
   import { isBelowZero } from "$lib/funds/balances.js";
   import { formatAmount } from "$lib/funds/fund-display.js";
+  import type {
+    FundAvailable,
+    FundRaised,
+  } from "$lib/funds/fund-store.svelte.js";
 
   interface FundBalanceCardProps {
     /** Null while the fund itself is loading. */
     name: string | null;
     currency: string;
-    /** The sealed balance; null while it decrypts. */
-    balanceMinor: number | null;
+    /** The sealed balance plus raised, as every surface shows it. */
+    available: FundAvailable;
     /** The ledger summed; null while it loads or decrypts. */
     totals: LedgerTotals | null;
-    providerLinked: boolean;
+    /** The linked provider fund's raised state. */
+    raised: FundRaised;
   }
 
-  let {
-    name,
-    currency,
-    balanceMinor,
-    totals,
-    providerLinked,
-  }: FundBalanceCardProps = $props();
+  let { name, currency, available, totals, raised }: FundBalanceCardProps =
+    $props();
 
   const belowZero = $derived(
-    balanceMinor !== null && isBelowZero(balanceMinor),
+    available.kind === "amount" && isBelowZero(available.minor),
   );
 </script>
 
@@ -50,11 +53,15 @@
       {name}
     {/if}
   </span>
-  {#if balanceMinor === null}
+  {#if available.kind === "pending"}
     <span class="fund-available num"><InlineSkeleton width="7ch" /></span>
-  {:else}
+  {:else if available.kind === "unavailable"}
+    <span class="fund-available fund-unavailable">
+      {m.fund_balance_raised_unavailable()}
+    </span>
+  {:else if available.kind === "amount"}
     <span class="fund-available num" class:fund-below={belowZero}>
-      {formatAmount(balanceMinor, currency)}
+      {formatAmount(available.minor, currency)}
     </span>
     <span class="fund-caption" class:fund-below={belowZero}>
       {belowZero ? m.fund_balance_below_zero() : m.fund_balance_available()}
@@ -62,12 +69,20 @@
   {/if}
   {#if totals !== null}
     <span class="fund-breakdown num">
-      {#if providerLinked}
+      {#if raised.kind !== "unlinked"}
         <span class="fund-line">
           <span class="fund-line-label">{m.fund_balance_raised()}</span>
-          <span class="fund-line-value">
-            {formatAmount(totals.raised, currency)}
-          </span>
+          {#if raised.kind === "unavailable"}
+            <span class="fund-line-value fund-unavailable">
+              {m.fund_balance_raised_unavailable()}
+            </span>
+          {:else if raised.kind === "pending"}
+            <span class="fund-line-value"><InlineSkeleton width="5ch" /></span>
+          {:else}
+            <span class="fund-line-value">
+              {formatAmount(totals.raised, currency)}
+            </span>
+          {/if}
         </span>
       {/if}
       <span class="fund-line">
@@ -126,8 +141,10 @@
   }
 
   /* Below zero is distinct but neutral: muted italic, never a red alarm.
-     The caption says so in words. */
-  .fund-below {
+     The caption says so in words. A raised total the provider could not
+     supply takes the same neutral treatment. */
+  .fund-below,
+  .fund-unavailable {
     color: var(--ink-2);
     font-style: italic;
   }

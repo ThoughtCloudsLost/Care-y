@@ -167,7 +167,10 @@ if (typeof Element.prototype.animate !== "function") {
   }) as unknown as Element["animate"];
 }
 
-function fund(balanceMinor: number): FundView {
+function fund(
+  balanceMinor: number,
+  overrides: Partial<FundView> = {},
+): FundView {
   return {
     id: FUND,
     name: "Transit and gas",
@@ -177,8 +180,13 @@ function fund(balanceMinor: number): FundView {
     sortOrder: 0,
     orgKeyGeneration: 1,
     balance: { balanceMinor, version: 7 },
+    raised: { kind: "unlinked" },
+    available: { kind: "amount", minor: balanceMinor },
+    ...overrides,
   };
 }
+
+const LINK = { connectionId: "c-1", externalFundId: "gb-1" };
 
 function amountInput(): HTMLElement {
   return screen.getByPlaceholderText(m.fund_amount_placeholder());
@@ -289,6 +297,50 @@ describe("DisbursementSheet (record)", () => {
         .getByRole("button", { name: m.common_save() })
         .hasAttribute("disabled"),
     ).toBe(false);
+  });
+
+  it("shows the available figure including what the provider raised", () => {
+    funds = [
+      fund(1_000, {
+        providerLink: LINK,
+        raised: { kind: "amount", minor: 9_000 },
+        available: { kind: "amount", minor: 10_000 },
+      }),
+    ];
+    caseFund = { fundId: FUND, fund: funds[0] };
+    render(DisbursementSheet, { props });
+
+    expect(
+      screen.getByText(
+        m.fund_available_amount({ amount: formatAmount(10_000, "USD") }),
+      ),
+    ).toBeTruthy();
+  });
+
+  it("says the raised total is unavailable and previews no dip below zero", async () => {
+    funds = [
+      fund(1_000, {
+        providerLink: LINK,
+        raised: { kind: "unavailable" },
+        available: { kind: "unavailable" },
+      }),
+    ];
+    caseFund = { fundId: FUND, fund: funds[0] };
+    const { container } = render(DisbursementSheet, { props });
+
+    expect(screen.getByText(m.fund_balance_raised_unavailable())).toBeTruthy();
+
+    await fireEvent.input(amountInput(), { target: { value: "5000" } });
+
+    expect(container.textContent).not.toContain(formatAmount(-499_000, "USD"));
+    expect(container.querySelector(".disbursement-balance-below")).toBeNull();
+    // The write path is unchanged: the delta still reaches the writer.
+    await fireEvent.click(
+      screen.getByRole("button", { name: m.common_save() }),
+    );
+    await waitFor(() => {
+      expect(mockWrite).toHaveBeenCalledWith(FUND, -500_000);
+    });
   });
 
   it("keeps the sheet open and says why when the write fails", async () => {

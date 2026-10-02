@@ -1,8 +1,10 @@
 <!--
   Fund ledger (audit): one balance card per active fund with that fund's
-  full ledger below it. The card's figure is the sealed running balance
-  every other surface shows; its breakdown sums the ledger. When the two
-  disagree, a fund manager can reseal the balance from the ledger.
+  full ledger below it. The card's figure is the fund's available figure
+  every other surface shows (the sealed balance plus what a linked
+  provider raised); its breakdown sums the ledger. When the sealed
+  balance and the ledger sum disagree, a fund manager can reseal the
+  balance from the ledger.
 
   Admission comes from the admin destination registry (AUDIT_FUNDS), the
   same rule that shows the hub tile. This is the only surface that
@@ -39,7 +41,7 @@
     invalidateFunds,
     type FundView,
   } from "$lib/funds/fund-store.svelte.js";
-  import { ledgerMatchesBalance } from "$lib/funds/balances.js";
+  import { ledgerMatchesBalance, ledgerSum } from "$lib/funds/balances.js";
   import { formatAmount } from "$lib/funds/fund-display.js";
 
   const permissionsGetter = getCurrentPermissions();
@@ -48,7 +50,7 @@
   const canRecompute = $derived(canCall(permissions, "funds.setBalance"));
 
   const fundStore = createFundStore();
-  const ledger = createFundLedger();
+  const ledger = createFundLedger(fundStore);
   const balanceWriter = createBalanceWriter(fundStore);
   const queryClient = useQueryClient();
   const navbarCtx = getNavbarOverrideCtx();
@@ -76,21 +78,24 @@
     !ledger.isLoading && !ledger.decrypting && ledger.unreadableCount === 0,
   );
 
-  /** The ledger's sum when it disagrees with the sealed balance. */
+  /**
+   * The ledger's sum when it disagrees with the sealed balance. Raised is
+   * left out: the sealed balance never holds it.
+   */
   function mismatchedTotal(fund: FundView): number | null {
     if (!ledgerComplete || fund.balance === null) return null;
     const totals = ledger.totals(fund.id);
     return ledgerMatchesBalance(totals, fund.balance.balanceMinor)
       ? null
-      : totals.available;
+      : ledgerSum(totals);
   }
 
   let recomputingId = $state<string | null>(null);
 
-  async function recompute(fund: FundView, ledgerSum: number): Promise<void> {
+  async function recompute(fund: FundView, sumMinor: number): Promise<void> {
     recomputingId = fund.id;
     try {
-      await balanceWriter.set(fund.id, ledgerSum, async (balance) =>
+      await balanceWriter.set(fund.id, sumMinor, async (balance) =>
         requireRouter(trpc.funds, "funds").setBalance.mutate({ balance }),
       );
       haptic();
@@ -130,9 +135,9 @@
         <FundBalanceCard
           name={null}
           currency=""
-          balanceMinor={null}
+          available={{ kind: "pending" }}
           totals={null}
-          providerLinked={false}
+          raised={{ kind: "unlinked" }}
         />
       </div>
     {:else if fundStore.activeFunds.length === 0 && !fundStore.decrypting}
@@ -144,25 +149,25 @@
         </Register>
       {/if}
       {#each fundStore.activeFunds as fund (fund.id)}
-        {@const ledgerSum = mismatchedTotal(fund)}
+        {@const mismatchSum = mismatchedTotal(fund)}
         <section class="fund-block" aria-label={fund.name}>
           <FundBalanceCard
             name={fund.name}
             currency={fund.currency}
-            balanceMinor={fund.balance?.balanceMinor ?? null}
+            available={fund.available}
             totals={ledgerComplete ? ledger.totals(fund.id) : null}
-            providerLinked={fund.providerLink !== null}
+            raised={fund.raised}
           />
-          {#if ledgerSum !== null}
+          {#if mismatchSum !== null}
             <Register kind="careful" role="status">
               <p class="fund-mismatch">
                 {m.fund_recompute_mismatch({
-                  amount: formatAmount(ledgerSum, fund.currency),
+                  amount: formatAmount(mismatchSum, fund.currency),
                 })}
               </p>
               {#if canRecompute}
                 <SoftButton
-                  onclick={() => void recompute(fund, ledgerSum)}
+                  onclick={() => void recompute(fund, mismatchSum)}
                   disabled={recomputingId !== null}
                   full
                 >

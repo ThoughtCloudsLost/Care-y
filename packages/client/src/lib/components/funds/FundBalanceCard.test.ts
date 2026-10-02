@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
- * FundBalanceCard tests: the sealed balance as the headline figure, the
+ * FundBalanceCard tests: the available figure as the headline, the
  * ledger breakdown underneath (raised only once linked), a balance below
- * zero said in words, and the loading states.
+ * zero said in words, a raised total the provider could not supply said
+ * in words (never zero), and the loading states.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -10,6 +11,10 @@ import { render, cleanup } from "@testing-library/svelte";
 import * as m from "$lib/paraglide/messages.js";
 import { formatAmount } from "$lib/funds/fund-display.js";
 import type { LedgerTotals } from "$lib/funds/balances.js";
+import type {
+  FundAvailable,
+  FundRaised,
+} from "$lib/funds/fund-store.svelte.js";
 import FundBalanceCard from "./FundBalanceCard.svelte";
 
 vi.stubGlobal(
@@ -34,15 +39,21 @@ const totals: LedgerTotals = {
   available: 47_500,
 };
 
+const UNLINKED: FundRaised = { kind: "unlinked" };
+
+function amount(minor: number): FundAvailable {
+  return { kind: "amount", minor };
+}
+
 describe("FundBalanceCard", () => {
   it("shows the sealed balance and the ledger breakdown", () => {
     const { container } = render(FundBalanceCard, {
       props: {
         name: "Groceries",
         currency: "USD",
-        balanceMinor: 47_500,
+        available: amount(47_500),
         totals,
-        providerLinked: false,
+        raised: UNLINKED,
       },
     });
     const text = container.textContent;
@@ -60,13 +71,43 @@ describe("FundBalanceCard", () => {
       props: {
         name: "Groceries",
         currency: "USD",
-        balanceMinor: 47_500,
-        totals,
-        providerLinked: true,
+        available: amount(57_500),
+        totals: { ...totals, raised: 10_000, available: 57_500 },
+        raised: { kind: "amount", minor: 10_000 },
       },
     });
+    const text = container.textContent;
 
-    expect(container.textContent).toContain(m.fund_balance_raised());
+    expect(text).toContain(m.fund_balance_raised());
+    expect(text).toContain(formatAmount(10_000, "USD"));
+    expect(text).toContain(formatAmount(57_500, "USD"));
+    expect(text).not.toContain(m.fund_balance_raised_unavailable());
+  });
+
+  it("says the raised total is unavailable in the figure and on the raised line", () => {
+    const { container } = render(FundBalanceCard, {
+      props: {
+        name: "Groceries",
+        currency: "USD",
+        available: { kind: "unavailable" },
+        totals,
+        raised: { kind: "unavailable" },
+      },
+    });
+    const text = container.textContent;
+    const figure = container.querySelector(".fund-available");
+    const raisedLine = container.querySelector(".fund-line-value");
+
+    expect(figure?.textContent.trim()).toBe(
+      m.fund_balance_raised_unavailable(),
+    );
+    expect(raisedLine?.textContent.trim()).toBe(
+      m.fund_balance_raised_unavailable(),
+    );
+    // Never a zero standing in for the missing figure, and no caption.
+    expect(text).not.toContain(formatAmount(0, "USD"));
+    expect(text).not.toContain(m.fund_balance_available());
+    expect(text).not.toContain(m.fund_balance_below_zero());
   });
 
   it("says below zero in words", () => {
@@ -74,9 +115,9 @@ describe("FundBalanceCard", () => {
       props: {
         name: "Transit",
         currency: "USD",
-        balanceMinor: -2_500,
+        available: amount(-2_500),
         totals: null,
-        providerLinked: false,
+        raised: UNLINKED,
       },
     });
     const text = container.textContent;
@@ -90,9 +131,9 @@ describe("FundBalanceCard", () => {
       props: {
         name: "Transit",
         currency: "USD",
-        balanceMinor: 1_000,
+        available: amount(1_000),
         totals: null,
-        providerLinked: false,
+        raised: UNLINKED,
       },
     });
 
@@ -104,9 +145,9 @@ describe("FundBalanceCard", () => {
       props: {
         name: "Transit",
         currency: "USD",
-        balanceMinor: 1_000,
+        available: amount(1_000),
         totals,
-        providerLinked: false,
+        raised: UNLINKED,
       },
     });
 

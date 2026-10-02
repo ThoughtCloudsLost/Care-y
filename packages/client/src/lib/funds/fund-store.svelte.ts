@@ -9,6 +9,14 @@
  * under fundKeys, so all surfaces read one cache. Writes and the
  * fund_entry_recorded SSE event invalidate fundKeys.all.
  *
+ * The sealed balance is the ledger's running sum and never holds what a
+ * donation provider raised. Raised is a display-time term: when at least
+ * one fund is linked, the store also reads donations.listProviderFunds
+ * (the server relays the provider's totals, never stores them) and gives
+ * each fund a raised state and an available figure, the sealed balance
+ * plus raised. A figure the relay could not supply is unavailable, never
+ * zero. Only funds_inflow_changed refetches the relay.
+ *
  * The ledger is a separate cache (createFundLedger) that only the audit
  * page opens. Nothing else fetches it: a balance never needs it.
  *
@@ -37,6 +45,8 @@ import {
   type FundLedgerId,
   type FundLedgerPayload,
   type FundPayload,
+  type FundProviderLink,
+  type ProviderFundListWire,
 } from "@care-y/shared";
 import { trpc } from "$lib/trpc/index.js";
 import { fundKeys, queueKeys, ticketKeys } from "$lib/query/keys.js";
@@ -83,6 +93,28 @@ export interface SealedBalance {
   readonly version: number;
 }
 
+/**
+ * Provider inflow for one fund. Never a zero standing in for a figure
+ * that could not be read.
+ */
+export type FundRaised =
+  | { readonly kind: "unlinked" }
+  | { readonly kind: "pending" }
+  | { readonly kind: "amount"; readonly minor: number }
+  | { readonly kind: "unavailable" };
+
+/** What a surface shows as the fund's available balance. */
+export type FundAvailable =
+  | { readonly kind: "pending" }
+  | { readonly kind: "amount"; readonly minor: number }
+  | { readonly kind: "unavailable" };
+
+/** Provider totals by fund, and the connections the relay could not read. */
+export interface ProviderFundIndex {
+  readonly raisedByKey: ReadonlyMap<string, number>;
+  readonly unavailableConnectionIds: ReadonlySet<string>;
+}
+
 /** A fund whose payload decrypted and validated. */
 export interface FundView {
   readonly id: FundId;
@@ -96,7 +128,14 @@ export interface FundView {
   readonly orgKeyGeneration: number;
   /** Null while the sealed balance decrypts, or when it is unreadable. */
   readonly balance: SealedBalance | null;
+  /** What the linked provider fund raised, or why there is no figure. */
+  readonly raised: FundRaised;
+  /** The sealed balance plus raised, as surfaces show it. */
+  readonly available: FundAvailable;
 }
+
+/** A fund as decrypted, before the provider's raised figure is applied. */
+type OpenedFund = Omit<FundView, "raised" | "available">;
 
 /** A ledger entry whose payload decrypted and validated. */
 export interface LedgerEntryView {
@@ -151,6 +190,86 @@ export function decryptQueueFundId(
     table: "queues",
     id: queue.id,
   });
+}
+
+// ── Provider inflow ─────────────────────────────────────────────────
+
+/** How a fund's link and a provider fund meet in the index. */
+export function providerLinkKey(link: FundProviderLink): string {
+  return `${link.connectionId}:${link.externalFundId}`;
+}
+
+/** Index the relayed provider funds by connection and external id. */
+export function indexProviderFunds(
+  list: ProviderFundListWire,
+): ProviderFundIndex {
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- plain lookup built and returned by a pure function, not reactive state
+  const raisedByKey = new Map<string, number>();
+  for (const providerFund of list.funds) {
+    raisedByKey.set(
+      `${providerFund.connectionId}:${providerFund.externalId}`,
+      providerFund.raisedMinor,
+    );
+  }
+  return {
+    raisedByKey,
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- plain lookup built and returned by a pure function, not reactive state
+    unavailableConnectionIds: new Set<string>(list.unavailableConnectionIds),
+  };
+}
+
+/** Whether any fund is linked, so the provider totals are worth reading. */
+export function needsProviderFunds(
+  funds: readonly { readonly providerLink: FundProviderLink | null }[],
+): boolean {
+  return funds.some((f) => f.providerLink !== null);
+}
+
+/**
+ * A fund's raised state. A linked fund the provider does not list, or
+ * one whose connection could not be read, is unavailable, never zero.
+ */
+export function fundRaised(
+  link: FundProviderLink | null,
+  index: ProviderFundIndex | "loading" | "unavailable",
+): FundRaised {
+  if (link === null) return { kind: "unlinked" };
+  if (index === "loading") return { kind: "pending" };
+  if (index === "unavailable") return { kind: "unavailable" };
+  if (index.unavailableConnectionIds.has(link.connectionId)) {
+    return { kind: "unavailable" };
+  }
+  const minor = index.raisedByKey.get(providerLinkKey(link));
+  if (minor === undefined) return { kind: "unavailable" };
+  return { kind: "amount", minor };
+}
+
+/** The sealed balance plus raised, once both are known. */
+export function fundAvailable(
+  balance: SealedBalance | null,
+  raised: FundRaised,
+): FundAvailable {
+  if (balance === null) return { kind: "pending" };
+  switch (raised.kind) {
+    case "unlinked":
+      return { kind: "amount", minor: balance.balanceMinor };
+    case "pending":
+      return { kind: "pending" };
+    case "amount":
+      return { kind: "amount", minor: balance.balanceMinor + raised.minor };
+    case "unavailable":
+      return { kind: "unavailable" };
+  }
+}
+
+/** Fund id to raised figure, for the funds whose raised is a known amount. */
+export function raisedByFund(funds: readonly FundView[]): Map<string, number> {
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- plain lookup built and returned by a pure function, not reactive state
+  const raised = new Map<string, number>();
+  for (const f of funds) {
+    if (f.raised.kind === "amount") raised.set(f.id, f.raised.minor);
+  }
+  return raised;
 }
 
 /** Refetch funds, the ledger and the fund settings. */
@@ -432,8 +551,8 @@ function openCached(
 function openFunds(
   rows: readonly FundRow[],
   orgCache: OrgDecryptCache,
-): Opened<FundView> {
-  const items: FundView[] = [];
+): Opened<OpenedFund> {
+  const items: OpenedFund[] = [];
   let pending = 0;
   let unreadable = 0;
   for (const row of rows) {
@@ -491,7 +610,7 @@ function openFunds(
 
 /**
  * Bind the fund session cache to the calling component. Call at the top
- * of a component script block: it creates a query and reads context.
+ * of a component script block: it creates queries and reads context.
  */
 export function createFundStore(): FundStore {
   const mounted = trpc.funds !== undefined;
@@ -509,8 +628,42 @@ export function createFundStore(): FundStore {
   }));
 
   const opened = $derived(openFunds(fundsQuery.data?.funds ?? [], orgCache));
-  const fundById = $derived(indexById(opened.items));
-  const activeFunds = $derived(opened.items.filter((f) => f.isActive));
+
+  const donationsMounted = trpc.donations !== undefined;
+  const mayReadProviderFunds = $derived(
+    donationsMounted &&
+      canCall(permissionsGetter(), "donations.listProviderFunds"),
+  );
+  const providerFundsEnabled = $derived(
+    enabled && mayReadProviderFunds && needsProviderFunds(opened.items),
+  );
+  const providerFundsQuery = createQuery(() => ({
+    queryKey: fundKeys.providerFunds(),
+    queryFn: async (): Promise<ProviderFundListWire> =>
+      requireRouter(trpc.donations, "donations").listProviderFunds.query(),
+    enabled: providerFundsEnabled,
+  }));
+
+  // Consulted only for linked funds. A relay the session cannot reach,
+  // or one that failed, leaves every linked fund unavailable.
+  const providerIndex = $derived.by(
+    (): ProviderFundIndex | "loading" | "unavailable" => {
+      if (!mayReadProviderFunds || providerFundsQuery.isError) {
+        return "unavailable";
+      }
+      const data = providerFundsQuery.data;
+      return data === undefined ? "loading" : indexProviderFunds(data);
+    },
+  );
+
+  const funds = $derived(
+    opened.items.map((f): FundView => {
+      const raised = fundRaised(f.providerLink, providerIndex);
+      return { ...f, raised, available: fundAvailable(f.balance, raised) };
+    }),
+  );
+  const fundById = $derived(indexById(funds));
+  const activeFunds = $derived(funds.filter((f) => f.isActive));
 
   return {
     get enabled() {
@@ -532,7 +685,7 @@ export function createFundStore(): FundStore {
       return opened.unreadable;
     },
     get funds() {
-      return opened.items;
+      return funds;
     },
     get activeFunds() {
       return activeFunds;
@@ -542,6 +695,8 @@ export function createFundStore(): FundStore {
     },
     refetch() {
       void fundsQuery.refetch();
+      // refetch() runs even on a disabled query, so gate it here.
+      if (providerFundsEnabled) void providerFundsQuery.refetch();
     },
   };
 }
@@ -612,7 +767,10 @@ export interface FundLedger {
   readonly reversedIds: ReadonlySet<string>;
   /** A fund's readable entries, newest first. */
   entries(fundId: string): readonly LedgerEntryView[];
-  /** A fund's ledger summed, to check against its sealed balance. */
+  /**
+   * A fund's ledger summed, with the provider's raised figure when the
+   * store has one. The sealed balance is checked against ledgerSum.
+   */
   totals(fundId: string): LedgerTotals;
   refetch(): void;
 }
@@ -653,10 +811,11 @@ function byRecordedAtDesc(a: LedgerEntryView, b: LedgerEntryView): number {
 
 /**
  * The full ledger, for the audit page. Grouping by fund happens after
- * decryption: a ledger row carries no fund id in the clear. Call during
- * component setup.
+ * decryption: a ledger row carries no fund id in the clear. Each fund's
+ * totals take its raised figure from `store`, for funds whose raised is
+ * a known amount. Call during component setup.
  */
-export function createFundLedger(): FundLedger {
+export function createFundLedger(store: FundStore): FundLedger {
   const mounted = trpc.funds !== undefined;
   const orgCache = getOrgDecryptCache();
   const permissionsGetter = getCurrentPermissions();
@@ -678,7 +837,9 @@ export function createFundLedger(): FundLedger {
     for (const list of grouped.values()) list.sort(byRecordedAtDesc);
     return grouped;
   });
-  const totals = $derived(computeLedgerTotalsByFund(opened.items));
+  const totals = $derived(
+    computeLedgerTotalsByFund(opened.items, raisedByFund(store.funds)),
+  );
   const reversed = $derived(reversedEntryIds(opened.items));
 
   return {
