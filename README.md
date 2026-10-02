@@ -61,7 +61,7 @@ CARE-Y makes that scenario architecturally impossible. The server stores only ci
 - [**Notifications.**](#notifications) Four channels, none carrying case content. All case data is encrypted, so the server cannot include details even if it tried. Members configure which channels are active in their preferences. ([handbook: notification preferences](https://handbook.care-y.org/#settings/notifications))
 - **Role-based access.** Volunteer, Manager, and Admin roles with granular permissions. Encryption key status visible per user. ([handbook: roles](https://handbook.care-y.org/#admin-people/roles))
 - Installable **PWA** with dark mode and offline asset caching. The service worker never caches encrypted content.
-- [**Fund accounting.**](#fund-accounting) Encrypted fund tracking tied to cases and queues. Donation platform integration with no donor data entering CARE-Y. ([planned](#roadmap))
+- [**Fund accounting.**](#fund-accounting) Encrypted fund tracking tied to cases and queues. Donation platform integration with no donor data entering CARE-Y.
 - [**Exposure system.**](#exposure-system) Security education through the member's own session, showing what is protected, what depends on their choices, and what the system cannot protect. ([partially built](#roadmap))
 - [**i18n.**](#accessibility-and-language) English and Spanish via Paraglide JS (compile-time, tree shaken). Adding a language requires only a JSON file. ([handbook: language selection](https://handbook.care-y.org/#settings/language))
 - **[Interactive handbook.](https://handbook.care-y.org)** Runs the real frontend, server, and PostgreSQL database (via WebAssembly) entirely in the browser. Every interaction fires actual API calls against that database, and ticket decryption happens client-side with real keys. Organizations considering CARE-Y can operate the product themselves before trusting it, and organizations can use the handbook for onboarding new members.
@@ -173,11 +173,10 @@ All case data is encrypted, so notifications carry event types only, never case 
 Encrypted fund tracking tied to cases and queues. Financial data is encrypted in the browser before it reaches the server, so a seized database reveals no dollar amounts, no fund balances, and no record of which person received money.
 
 - **Fund balances** appear on the dashboard and on each case. Queues can be linked to funding buckets for specific client needs (grant-restricted funds, donations earmarked for a cause). When a case enters the queue, those funds are automatically associated.
-- **Disbursements** are recorded directly from a case by members.
+- **Disbursements** are recorded directly from a case by members. Each one is an entry on the case thread, encrypted with the case's own key, so only members with access to that case can read what the money was for.
+- **Fund history.** Members with the fund audit permission see each entry in a fund's history. A disbursement row says only that it is on a case, and an auditor who also has access to that case can open it from there.
 - **Fundraising platforms.** Orgs can connect donation platforms like [Givebutter](https://help.givebutter.com/en/articles/5489015-how-to-access-the-givebutter-public-api-key) so incoming totals update automatically. Donor names and contact details never enter CARE-Y. Everything also works with no platform connected, with members recording transactions by hand.
 - **Direct aid delivery (future).** Sending aid to clients from within a case through providers like [Tremendous](https://developers.tremendous.com/docs/introduction) with configurable approval workflows. Recipient details encrypted like other case data.
-
-Fund accounting is not yet implemented. See [Roadmap](#roadmap) for status.
 
 ---
 
@@ -224,7 +223,7 @@ CARE-Y encrypts data in the member's browser. The server stores only ciphertext 
 | **Org resources** (KB articles, settings)       | Any logged-in member in that org                                                                                                 | Nothing. Still requires a member's password to unlock.                                                                                                                                                                                                                                                   |
 | **Public branding** (logo, name, color)         | Anyone who visits the intake page                                                                                                | Visual identity only. This is intentionally public so clients recognize the org.                                                                                                                                                                                                                         |
 | **Phone credentials** (Twilio config)           | The server itself (automated)                                                                                                    | Phone system API access only. No client data, no member keys.                                                                                                                                                                                                                                            |
-| **Fund data** (planned)                         | Fund balances are readable by any logged-in member. Which case received money is readable only by members assigned to that case. | Entry counts and timestamps per fund (metadata only). No readable amounts, no fund balances, no money-to-person link. Balances are computed in the member's browser, never on the server. A full server compromise also yields donation platform API access (same situation as phone credentials above). |
+| **Fund data**                                   | Fund balances are readable by any logged-in member. Which case received money is readable only by members assigned to that case. | Entry counts and timestamps per fund (metadata only). No readable amounts, no fund balances, no money-to-person link. Balances are computed in the member's browser, never on the server. A full server compromise also yields donation platform API access (same situation as phone credentials above). |
 
 **Key guarantees:**
 
@@ -293,7 +292,7 @@ Each organization gets an isolated PostgreSQL schema (`org_<uuid>`). Cross-org q
 - **Outbound email:** member composes a reply, browser sends the content to the relay endpoint, server constructs the email (org branded HTML, reply-to with hashed token), sends via SMTP, and zeros the buffer. The browser then encrypts the message and stores it on the case thread. The server never retains the plaintext.
 - **Inbound email:** a separate SMTP receiver process accepts replies. It hashes the reply-to token to find the ticket, encrypts the email body on arrival, and stores only ciphertext. The original plaintext exists only in the sender's own mail system.
 - **Telephony abstraction:** [Twilio](https://www.twilio.com/docs/iam/api-keys/keys-in-console) initially, [SignalWire](https://signalwire.com/docs) hybrid (self-hosted voice) planned. Switching providers requires configuration changes only. ([handbook: telephony provider](https://handbook.care-y.org/#admin-comms/provider))
-- **Fund accounting (planned):** ledger amounts encrypted in the browser before reaching the server. Balances computed in the browser from decrypted records and donation platform totals fetched on demand through the relay, never stored. The money to case connection is readable only with per-ticket case access.
+- **Fund accounting:** ledger amounts encrypted in the browser before reaching the server. Balances computed in the browser from decrypted records and donation platform totals fetched on demand through the relay, never stored. The money to case connection is readable only with per-ticket case access.
 
 ---
 
@@ -454,6 +453,7 @@ CARE-Y is pre-alpha. This list reflects current plans, and ordering can shift.
         <details><summary><b>Intake forms</b></summary>Client-facing forms with custom fields and conditional pages, submissions encrypted before storage. (<a href="https://handbook.care-y.org/#admin-forms/builder">handbook</a>)</details>
         <details><summary><b>KB</b></summary>Rich text articles, categories, voting, and search, all encrypted with the org key. (<a href="https://handbook.care-y.org/#library">handbook</a>)</details>
         <details><summary><b>Queues</b></summary>Tickets routed into org defined queues with priority levels and assignment workflows. (<a href="https://handbook.care-y.org/#admin-people/queues">handbook</a>)</details>
+        <details><summary><b>Funding</b></summary>Encrypted fund tracking with balances on the dashboard and on each case. Donation platforms (Givebutter first) connect as live inflow sources. Donor data never enters CARE-Y. (<a href="#fund-accounting">fund accounting section</a>)</details>
       </td>
       <td valign="top">
         <details><summary><b>Search</b></summary>Unified search across tickets, articles, and members. Decrypted and searched client-side. (<a href="https://handbook.care-y.org/#search">handbook</a>)</details>
@@ -471,7 +471,6 @@ CARE-Y is pre-alpha. This list reflects current plans, and ordering can shift.
         <details><summary><b>Docs</b></summary>Runs the real application (frontend, server, and PostgreSQL via WebAssembly) entirely in the browser. Members use it for onboarding, and orgs considering the platform can operate it themselves before committing. (<a href="https://handbook.care-y.org">handbook</a>)</details>
       </td>
       <td valign="top">
-        <details><summary><b>Funding</b></summary>Encrypted fund tracking with balances on the dashboard and on each case. Donation platforms (Givebutter first) connect as live inflow sources. Donor data never enters CARE-Y. (<a href="#fund-accounting">fund accounting section</a>)</details>
         <details><summary><b>Aid delivery</b></summary>Sending aid to clients from within a case through swappable providers with approval workflows. Recipient details encrypted like other case data.</details>
         <details><summary><b>Repro builds</b></summary>Verifiable client builds so deployments can be audited against published source.</details>
         <details><summary><b>Tor</b></summary>Onion address access so members and clients can connect without revealing that they use the service.</details>
