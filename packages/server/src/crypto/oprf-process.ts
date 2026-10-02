@@ -1,10 +1,10 @@
 import sodium from "sodium-native";
 import { createServer, type Socket, type Server } from "node:net";
-import { chmodSync } from "node:fs";
+import { chmodSync, lstatSync, unlinkSync } from "node:fs";
 import { timingSafeEqual, randomBytes } from "node:crypto";
 import { getSodium } from "@care-y/crypto";
 import { taggedBlindEvaluate } from "./oprf-server.js";
-import { CryptoError } from "../errors.js";
+import { ConfigError, CryptoError } from "../errors.js";
 import {
   frameMessage,
   frameError,
@@ -177,6 +177,33 @@ function dropCredentials(config: ProcessConfig): void {
   }
 }
 
+/**
+ * Remove a socket file left at the listen path by a previous process.
+ *
+ * The socket lives in a volume that outlives the container, and a process
+ * stopped by SIGKILL (or one that exits before close finishes) leaves the
+ * file behind, so the next listen fails with EADDRINUSE. Only a socket is
+ * removed; any other file at the path is refused, since this process owns
+ * the path and nothing else should be there.
+ */
+export function removeStaleSocket(socketPath: string): void {
+  let isSocket: boolean;
+  try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- operator-controlled socket path from env
+    isSocket = lstatSync(socketPath).isSocket();
+  } catch (err) {
+    if (err instanceof Error && "code" in err && err.code === "ENOENT") return;
+    throw err;
+  }
+  if (!isSocket) {
+    throw new ConfigError(
+      `OPRF socket path is occupied by a file that is not a socket: ${socketPath}`,
+    );
+  }
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- operator-controlled socket path from env
+  unlinkSync(socketPath);
+}
+
 export async function startOprfProcess(config: ProcessConfig): Promise<Server> {
   await getSodium();
 
@@ -187,6 +214,7 @@ export async function startOprfProcess(config: ProcessConfig): Promise<Server> {
     handleConnection(socket, secure);
   });
 
+  removeStaleSocket(config.socketPath);
   server.listen(config.socketPath, () => {
     // Node creates sockets with umask-derived permissions (typically 0755).
     // Unix socket connect requires write permission. Restrict to owner+group
@@ -197,11 +225,15 @@ export async function startOprfProcess(config: ProcessConfig): Promise<Server> {
     dropCredentials(config);
   });
 
+  // Zero the share, then exit once close has removed the socket file.
+  // Exiting in the same tick as close() left the file behind. close()
+  // waits for open connections, so a fallback exit bounds the wait; a
+  // file left by that path is removed at the next start.
   function shutdown(): void {
-    server.close();
     sodium.sodium_mprotect_readwrite(secure.buffer);
     sodium.sodium_memzero(secure.buffer);
-    process.exit(0);
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 2_000).unref();
   }
 
   process.on("SIGTERM", shutdown);
