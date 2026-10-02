@@ -241,8 +241,9 @@ const enginePromise: Promise<DemoEngineResult> = afterFirstPaint.then(
   },
 );
 
-// The seed's read cursors store their time inside ciphertext, so the
-// boot's time shift reaches them only once the crypto worker is keyed.
+// The seed's read cursors and fund ledger entries store their time
+// inside ciphertext, out of the boot's SQL time shift. The reseal that
+// moves them runs once the crypto worker is keyed.
 // Registered before mount, so it is in place before any keying starts.
 setPostKeyStep(async (bridge) => {
   const engine = await enginePromise;

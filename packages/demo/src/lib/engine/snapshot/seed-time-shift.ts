@@ -4,17 +4,18 @@
  * the visitor arrived rather than whenever the snapshot was built. The
  * demo boot calls this right after loading the snapshot's rows.
  *
- * Every timestamp and timestamptz column in the demo's schemas is shifted
- * by the same amount, future times such as expiries included, so the gaps
- * between times stay exactly as the seed wrote them. Columns come from the
- * Postgres catalog, so a new migration's time columns are shifted without
- * touching this file. The schema stores no time as an epoch integer and
+ * Every timestamp, timestamptz and date column in the demo's schemas is
+ * shifted by the same amount, future times such as expiries included, so
+ * the gaps between times stay exactly as the seed wrote them. Columns come
+ * from the Postgres catalog, so a new migration's time columns are shifted
+ * without touching this file. The schema stores no time as an epoch integer and
  * none of its json columns carry one, so these columns are every
  * plaintext time the seed writes.
  *
- * One encrypted payload holds an absolute time, the per-account read
- * cursor. SQL cannot reach inside ciphertext; read-cursor-reseal.ts
- * shifts those after sign-in.
+ * Two kinds of encrypted payload hold an absolute time: the per-account
+ * read cursor and each fund ledger entry's recorded time. SQL cannot reach
+ * inside ciphertext; read-cursor-reseal.ts and fund-ledger-reseal.ts shift
+ * those after sign-in.
  *
  * Statements are built with Kysely (a typed description of the few
  * pg_catalog columns read here, and a loose one for the tables) and run
@@ -55,8 +56,12 @@ interface TimeCatalogDatabase {
   "pg_catalog.pg_type": { oid: number; typname: string };
 }
 
-/** Postgres's names for timestamp and timestamptz. */
-const TIME_TYPE_NAMES: readonly string[] = ["timestamp", "timestamptz"];
+/**
+ * Postgres's names for timestamp, timestamptz and date. A date plus an
+ * interval is a timestamp, which the assignment casts back to the
+ * column's date.
+ */
+const TIME_TYPE_NAMES: readonly string[] = ["timestamp", "timestamptz", "date"];
 
 /** Kysely's migration bookkeeping, which boot writes itself. */
 const BOOKKEEPING_TABLES: ReadonlySet<string> = new Set([

@@ -11,8 +11,9 @@
  * (scripts/build-seed-snapshot.ts), by replaying the shared seed data
  * through the product's own endpoints. Boot loads its rows and blobs, then
  * moves every seeded time forward by the gap between build time and now.
- * The one time stored inside ciphertext, the read cursor, moves after the
- * crypto worker is keyed (DemoEngineResult.resealSeedTimes).
+ * The times stored inside ciphertext, the read cursor and each fund
+ * ledger entry's recorded time, move after the crypto worker is keyed
+ * (DemoEngineResult.resealSeedTimes).
  *
  * The building blocks (migrations, crypto services, the fabricated
  * session, the blob store and resolver) live in engine-core.ts, which the
@@ -65,6 +66,7 @@ import {
   resealReadCursors,
   type ReadCursorResealDeps,
 } from "./snapshot/read-cursor-reseal.js";
+import { resealFundLedger } from "./snapshot/fund-ledger-reseal.js";
 
 import { requireRouter } from "$lib/errors.js";
 
@@ -145,10 +147,11 @@ export interface DemoEngineResult {
   readonly snapshotSizes: SeedSnapshotSizes;
   /**
    * Move the time inside each seeded read cursor by timeShiftMs, through
-   * the product's read cursor calls. Needs a crypto bridge keyed as the
-   * admin; call it after keying and before any ticket query reads a
-   * cursor. Runs once: later calls share the first successful run, and a
-   * failed run can be retried.
+   * the product's read cursor calls, and inside each seeded fund ledger
+   * entry, written to the table directly. Needs a crypto bridge keyed as
+   * the admin; call it after keying and before any ticket query reads a
+   * cursor. Each half runs once: later calls share its first successful
+   * run, and a failed half can be retried without repeating the other.
    */
   resealSeedTimes(bridge: SeedTimeResealBridge): Promise<void>;
   /**
@@ -314,21 +317,42 @@ export async function bootDemoEngine(
     sealedBox: createSealedBoxEncryptor(seedResult.orgPublicKey, 1),
   });
 
-  // 8. The read cursor reseal, run once the caller holds a keyed bridge.
+  // 8. The read cursor and fund ledger reseals, run once the caller
+  // holds a keyed bridge. Memoized apart: a retry after one fails must
+  // not shift the other a second time.
   const app = session.trpc as unknown as AppTrpc;
-  let reseal: Promise<void> | null = null;
+  let cursorReseal: Promise<void> | null = null;
+  let ledgerReseal: Promise<void> | null = null;
+  async function resealLedgerWithManifestKey(): Promise<void> {
+    const orgSecretKey = decode(manifest.orgSecretKey);
+    try {
+      await resealFundLedger({
+        pg,
+        schema: DEMO_ORG_SCHEMA,
+        orgPublicKey: decode(manifest.orgPublicKey),
+        orgSecretKey,
+        deltaMs: timeShiftMs,
+      });
+    } finally {
+      orgSecretKey.fill(0);
+    }
+  }
   async function resealSeedTimes(bridge: SeedTimeResealBridge): Promise<void> {
-    reseal ??= resealReadCursors({
+    cursorReseal ??= resealReadCursors({
       tickets: requireRouter(app.tickets, "tickets"),
       bridge,
       userId: manifest.adminUserId,
       ticketIds: manifest.readCursorTicketIds,
       deltaMs: timeShiftMs,
     }).catch((err: unknown) => {
-      reseal = null;
+      cursorReseal = null;
       throw err;
     });
-    await reseal;
+    ledgerReseal ??= resealLedgerWithManifestKey().catch((err: unknown) => {
+      ledgerReseal = null;
+      throw err;
+    });
+    await Promise.all([cursorReseal, ledgerReseal]);
   }
 
   return {

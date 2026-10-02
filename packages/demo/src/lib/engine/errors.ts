@@ -39,9 +39,10 @@ export class SeedSnapshotLoadError extends Error {
 }
 
 /**
- * Raised when the demo cannot move a seeded read cursor's stored time by
- * the boot's time shift, because the cursor does not open, does not parse
- * as the product's cursor payload, or the write back fails.
+ * Raised when the demo cannot move a time stored inside seeded
+ * ciphertext (a read cursor or a fund ledger entry) by the boot's time
+ * shift, because the payload does not open, does not parse as the
+ * product's payload, or the write back fails.
  */
 export class SeedTimeResealError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {

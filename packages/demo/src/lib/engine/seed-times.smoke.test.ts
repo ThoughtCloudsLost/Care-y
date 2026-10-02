@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { cursorSlot, decode } from "@care-y/crypto";
-import type { TicketId } from "@care-y/shared";
+import { cursorSlot, decode, requireSodium } from "@care-y/crypto";
+import { fundLedgerPayloadSchema, type TicketId } from "@care-y/shared";
 import { SEED_HANDBOOK_TICKET } from "@care-y/shared/dev/seed-handbook-ticket.js";
 import type { SeedSnapshotManifest } from "@care-y/shared/dev/seed-snapshot.js";
 
@@ -33,7 +33,10 @@ import {
  * database. The ciphertext half keys a real CryptoBridge as the demo
  * admin (over the in-process worker the snapshot builder uses), reads the
  * story ticket's read state the way the tickets list does, and counts
- * unread replies before and after the read cursor reseal.
+ * unread replies before and after the read cursor reseal. The fund
+ * ledger entries are opened with the manifest's org key before boot's
+ * first reseal and after it, and each recorded time must have moved by
+ * exactly the shift.
  */
 
 type AppTrpc = typeof RealTrpcClient;
@@ -46,6 +49,14 @@ const SHIFT_AHEAD_MS = 5 * 24 * 60 * MINUTE_MS;
  * a build takes seconds to a few minutes.
  */
 const BUILD_SLACK_MS = 15 * MINUTE_MS;
+
+/** One fund ledger entry as the reseal leaves it, opened. */
+interface OpenedLedgerEntry {
+  readonly generation: number;
+  readonly recordedAt: number;
+  /** Every payload field except recordedAt. */
+  readonly rest: Record<string, unknown>;
+}
 
 /** A timestamp as the caller adapter hands it over (Date or ISO text). */
 function toMs(value: unknown): number {
@@ -80,6 +91,39 @@ describe("seed time shift", () => {
   let manifest: SeedSnapshotManifest;
   let shiftTo: number;
   let storyTicketId: TicketId;
+  let ledgerBeforeReseal: ReadonlyMap<string, OpenedLedgerEntry>;
+
+  /** Every fund ledger row, opened with the manifest's org key. */
+  async function readLedger(): Promise<Map<string, OpenedLedgerEntry>> {
+    const rows = await engine.tDb
+      .selectFrom("fund_ledger")
+      .select(["id", "encrypted_payload", "org_key_generation"])
+      .execute();
+    const sodium = requireSodium();
+    const orgPublicKey = decode(manifest.orgPublicKey);
+    const orgSecretKey = decode(manifest.orgSecretKey);
+    const entries = new Map<string, OpenedLedgerEntry>();
+    try {
+      for (const row of rows) {
+        const plaintext = sodium.crypto_box_seal_open(
+          new Uint8Array(row.encrypted_payload),
+          orgPublicKey,
+          orgSecretKey,
+        );
+        const { recordedAt, ...rest } = fundLedgerPayloadSchema.parse(
+          JSON.parse(new TextDecoder().decode(plaintext)),
+        );
+        entries.set(row.id, {
+          generation: row.org_key_generation,
+          recordedAt: Date.parse(recordedAt),
+          rest,
+        });
+      }
+    } finally {
+      orgSecretKey.fill(0);
+    }
+    return entries;
+  }
 
   beforeAll(async () => {
     const contents = await loadSmokeSnapshot();
@@ -92,6 +136,7 @@ describe("seed time shift", () => {
     const first = engine.ticketIds[0];
     if (first === undefined) expect.fail("The snapshot has no tickets");
     storyTicketId = first as TicketId;
+    ledgerBeforeReseal = await readLedger();
   }, SMOKE_SNAPSHOT_TIMEOUT_MS);
 
   it("shifts by the gap between the build time and the target", () => {
@@ -222,6 +267,41 @@ describe("seed time shift", () => {
           bridge.destroy();
         }
       });
+    },
+    SMOKE_SNAPSHOT_TIMEOUT_MS,
+  );
+
+  it(
+    "reseals each fund ledger entry with its recorded time moved by the shift",
+    async () => {
+      expect(ledgerBeforeReseal.size).toBeGreaterThan(0);
+      const app = engine.trpc as unknown as AppTrpc;
+
+      await withInProcessCryptoWorker(async () => {
+        const bridge = new CryptoBridge("dedicated");
+        try {
+          await keyAsAdmin(app, bridge);
+          // Shares the run the read cursor test started when it ran
+          // first; a second call moves nothing again either way.
+          await engine.resealSeedTimes(bridge);
+          await engine.resealSeedTimes(bridge);
+        } finally {
+          await bridge.zeroAll();
+          bridge.destroy();
+        }
+      });
+
+      const after = await readLedger();
+      expect([...after.keys()].sort()).toEqual(
+        [...ledgerBeforeReseal.keys()].sort(),
+      );
+      for (const [id, entry] of after) {
+        const before = ledgerBeforeReseal.get(id);
+        if (before === undefined) expect.fail(`New ledger entry ${id}`);
+        expect(entry.recordedAt).toBe(before.recordedAt + engine.timeShiftMs);
+        expect(entry.generation).toBe(before.generation);
+        expect(entry.rest).toEqual(before.rest);
+      }
     },
     SMOKE_SNAPSHOT_TIMEOUT_MS,
   );
