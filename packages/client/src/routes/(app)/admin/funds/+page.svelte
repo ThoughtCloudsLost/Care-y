@@ -105,6 +105,12 @@
       invalidateFunds(queryClient);
     }
   }
+
+  // ── Navigation ──
+
+  function handleTicketOpen(ticketId: string): void {
+    void goto(resolve(`/tickets/${ticketId}`));
+  }
 </script>
 
 {#if hasAccess && ledger.enabled}
@@ -174,6 +180,7 @@
             entries={ledger.entries(fund.id)}
             currency={fund.currency}
             reversedIds={ledger.reversedIds}
+            onticketopen={handleTicketOpen}
           />
         </section>
       {/each}

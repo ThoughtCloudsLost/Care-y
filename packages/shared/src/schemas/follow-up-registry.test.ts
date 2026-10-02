@@ -4,9 +4,16 @@ import {
   queueEventParamsSchema,
 } from "./follow-up-registry.js";
 import type { RenderVariant } from "./follow-up-registry.js";
+import { followUpTypeSchema } from "./tickets.js";
 import type { QueueId } from "../ids.js";
 
 describe("CONTENT_TYPE_REGISTRY", () => {
+  it("has exactly one entry per follow-up type", () => {
+    expect(Object.keys(CONTENT_TYPE_REGISTRY).sort()).toEqual(
+      [...followUpTypeSchema.options].sort(),
+    );
+  });
+
   it("has an entry for contact_correction", () => {
     const entry = CONTENT_TYPE_REGISTRY.contact_correction;
     expect(entry).toBeDefined();
@@ -48,6 +55,7 @@ describe("CONTENT_TYPE_REGISTRY", () => {
       ["contact_correction", "correction"],
       ["email_outbound", "email"],
       ["email_inbound", "email"],
+      ["disbursement", "disbursement"],
     ])("type %s has renderVariant '%s'", (type, expected) => {
       const entry =
         CONTENT_TYPE_REGISTRY[type as keyof typeof CONTENT_TYPE_REGISTRY];
@@ -61,6 +69,7 @@ describe("CONTENT_TYPE_REGISTRY", () => {
         "contact_correction",
         "email_outbound",
         "email_inbound",
+        "disbursement",
       ]);
       for (const [type, meta] of Object.entries(CONTENT_TYPE_REGISTRY)) {
         if (!typesWithVariant.has(type)) {
@@ -102,6 +111,37 @@ describe("CONTENT_TYPE_REGISTRY", () => {
 
     it("has the email renderVariant (timeline landmark)", () => {
       expect(CONTENT_TYPE_REGISTRY.email_inbound.renderVariant).toBe("email");
+    });
+  });
+
+  describe("disbursement entry", () => {
+    it("has an entry for disbursement", () => {
+      expect(CONTENT_TYPE_REGISTRY.disbursement).toBeDefined();
+    });
+
+    it("has category 'fund', so no note path applies to it", () => {
+      expect(CONTENT_TYPE_REGISTRY.disbursement.category).toBe("fund");
+    });
+
+    it("allows only volunteer source", () => {
+      expect(CONTENT_TYPE_REGISTRY.disbursement.allowedSources).toEqual([
+        "volunteer",
+      ]);
+    });
+
+    it("uses ticket-key encryption", () => {
+      expect(CONTENT_TYPE_REGISTRY.disbursement.encryption).toBe("ticket-key");
+    });
+
+    it("has encrypted content and no event params", () => {
+      // A plaintext event_params pointer to the ledger row would pair the
+      // case with the entry from a database dump; the pointer stays sealed.
+      expect(CONTENT_TYPE_REGISTRY.disbursement.hasEncryptedContent).toBe(true);
+      expect(CONTENT_TYPE_REGISTRY.disbursement.hasEventParams).toBe(false);
+    });
+
+    it("is not groupable", () => {
+      expect(CONTENT_TYPE_REGISTRY.disbursement.groupable).toBe(false);
     });
   });
 

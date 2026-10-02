@@ -1,6 +1,7 @@
 import type { SearchProvider, SearchResult } from "../types.js";
 import { fuzzySearch } from "../fuzzy.js";
 import { MessageSquareText } from "@lucide/svelte";
+import type { ContentCategory } from "@care-y/shared";
 import * as m from "$lib/paraglide/messages.js";
 import ConversationSearchResult from "$lib/components/search/ConversationSearchResult.svelte";
 import { followUpKind } from "$lib/tickets/follow-up-utils.js";
@@ -10,7 +11,7 @@ export interface ConversationSearchData {
   readonly followUpId: string;
   readonly source: string;
   readonly type: string;
-  readonly kind: "message" | "system" | "note" | "article" | "correction";
+  readonly kind: ContentCategory;
   readonly plaintext: string;
   readonly searchTerm: string;
   readonly authorName: string | undefined;

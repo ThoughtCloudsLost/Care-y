@@ -21,12 +21,12 @@ export interface ContextMenuEvent {
   readonly followUpId: string;
   readonly actions: readonly ContextAction[];
   /**
-   * Decrypted text content, for copy action. A disbursement note carries
-   * its readable text here, never the envelope.
+   * Decrypted text content, for copy action. A disbursement carries its
+   * readable text here, never the envelope.
    */
   readonly plaintext: string | undefined;
   readonly noteTypeId: string | null;
-  /** The envelope of a disbursement note, for the correction sheet. */
+  /** The opened envelope of a disbursement, for the correction sheet. */
   readonly disbursement?: DisbursementNoteEnvelope;
 }
 
@@ -44,7 +44,10 @@ interface Labels {
   readonly deleteNote: string;
 }
 
-/** Present when the note carries a disbursement envelope. */
+/**
+ * What the account may do with a disbursement follow-up. Read only when
+ * the follow-up's type is `disbursement`.
+ */
 export interface DisbursementNoteAccess {
   /** The account may correct disbursements at all. */
   readonly canRevise: boolean;
@@ -73,12 +76,12 @@ export function getContextMenuActions(
     actions.push({ id: "editMessage", label: labels.editMessage });
   }
 
-  // A disbursement note is corrected through its own sheet, which
-  // rewrites the ledger and the note together. The plain note editor
-  // would drop the envelope.
+  // A disbursement is corrected through its own sheet, which rewrites
+  // the ledger and the case record together. It is never edited or
+  // deleted as a note; the server refuses both.
   const isOwn = fu.createdBy === currentUserId;
   if (
-    fu.type === "internal_note" &&
+    fu.type === "disbursement" &&
     disbursement !== undefined &&
     disbursement.canRevise &&
     (isOwn || disbursement.canReviseOthers)
@@ -88,9 +91,7 @@ export function getContextMenuActions(
 
   // Edit/delete only for own internal notes
   if (fu.type === "internal_note" && isOwn) {
-    if (disbursement === undefined) {
-      actions.push({ id: "edit", label: labels.editNote });
-    }
+    actions.push({ id: "edit", label: labels.editNote });
     actions.push({
       id: "delete",
       label: labels.deleteNote,

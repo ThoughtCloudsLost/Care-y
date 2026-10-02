@@ -79,8 +79,6 @@ function makeNoteTypeSvc(
       getEscalationTargets: vi.fn(),
       getEscalationContext: vi.fn().mockResolvedValue(escalationContext),
       getMinCreateRole: vi.fn(),
-      ensureSystem: vi.fn(),
-      getSystemKey: vi.fn(),
     }) as unknown as NoteTypeService;
 }
 

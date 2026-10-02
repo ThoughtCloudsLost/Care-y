@@ -5,14 +5,16 @@
   encryption, mutation and dismiss lifecycle; callers provide ticketId,
   opened/ondismiss, and the disbursement when correcting one.
 
-  Recording is one server call: the Org Key ledger entry (amount and
-  fund, no case), the fund's next sealed balance, and an internal note on
-  this case whose content is the disbursement envelope, encrypted under
-  the ticket key exactly as InternalNoteSheet encrypts a note.
+  Recording is one server call: the Org Key ledger entry (amount, fund,
+  and the case and case record it was recorded from, all sealed), the
+  fund's next sealed balance, and a disbursement follow-up on this case
+  whose content is the disbursement envelope, encrypted under the ticket
+  key exactly as InternalNoteSheet encrypts a note.
 
-  Correcting is one server call too: a reversal of the entry the note
-  names, a replacement entry, the rewritten note and the new balance,
-  applied together or not at all. A correction stays in the entry's
+  Correcting is one server call too: a reversal of the entry the
+  envelope names and a replacement entry (both naming this case), the
+  rewritten envelope and the new balance, applied together or not at
+  all. A correction stays in the entry's
   fund, because the server applies one fund's balance per write.
 
   A disbursement that takes the fund below zero shows a soft warning and
@@ -31,7 +33,7 @@
   } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
-  import { noteTypeKeys, ticketKeys } from "$lib/query/keys.js";
+  import { ticketKeys } from "$lib/query/keys.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import {
@@ -57,11 +59,14 @@
     type FundView,
   } from "$lib/funds/fund-store.svelte.js";
   import {
+    FundPayloadError,
+    casePointer,
     disbursementNoteContent,
     disbursementPayload,
     disbursementRevision,
     recorderId,
     sealLedgerPayload,
+    type CasePointer,
   } from "$lib/funds/fund-payloads.js";
   import {
     balanceAfter,
@@ -218,21 +223,13 @@
   }
 
   /**
-   * Every disbursement note carries the org's disbursement note type. The
-   * first save in an org creates it, sealed under the Org Key like any
-   * other note type.
+   * The case and case record the ledger entries name, sealed inside each
+   * payload. An id that does not validate records nothing.
    */
-  async function ensureNoteType(): Promise<void> {
-    const result = await fundsRouter.ensureDisbursementNoteType.mutate({
-      encryptedName: await orgKeyManager.encryptText(
-        m.fund_disbursement_note_type_name(),
-      ),
-      encryptedIcon: await orgKeyManager.encryptText("hand-coins"),
-    });
-    if (result.created) {
-      // The timeline resolves the new type's name and icon from this list.
-      void queryClient.invalidateQueries({ queryKey: noteTypeKeys.all });
-    }
+  function caseRefFor(followUpId: string): CasePointer {
+    const caseRef = casePointer(ticketId, followUpId);
+    if (caseRef === null) throw new FundPayloadError("ledger");
+    return caseRef;
   }
 
   async function recordNew(
@@ -240,7 +237,6 @@
     recordedBy: UserId,
     minor: number,
   ): Promise<void> {
-    await ensureNoteType();
     const ledgerEntryId = newFundLedgerId();
     const followUpId = newFollowupId();
     const encryptedPayload = await sealLedgerPayload(
@@ -249,6 +245,7 @@
         fundId: target.id,
         recordedBy,
         amountMinor: minor,
+        caseRef: caseRefFor(followUpId),
       }),
     );
     const encryptedContent = await encryptNote(
@@ -272,12 +269,12 @@
     recordedBy: UserId,
     minor: number,
   ): Promise<void> {
-    await ensureNoteType();
     const { envelope } = current;
     const revision = disbursementRevision({
       envelope,
       amountMinor: minor,
       recordedBy,
+      caseRef: caseRefFor(current.followUpId),
     });
     const reversalId = newFundLedgerId();
     const replacementId = newFundLedgerId();
@@ -335,9 +332,8 @@
         queryKey: ticketKeys.followUps(ticketId),
       });
     } catch (err: unknown) {
-      // The note type request runs first and is idempotent. The record and
-      // revise calls are each one transaction, so a failure there saves
-      // nothing.
+      // The record and revise calls are each one transaction, so a failure
+      // saves nothing.
       toastStore.show(getErrorMessage(err), 3000);
     } finally {
       saving = false;

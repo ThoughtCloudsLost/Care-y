@@ -14,8 +14,10 @@ import {
   encodeNoteEnvelope,
   fundBalancePayloadSchema,
   fundLedgerPayloadSchema,
+  followupIdSchema,
   fundPayloadSchema,
   hasNoteEnvelopeMarker,
+  ticketIdSchema,
   userIdSchema,
   type DisbursementNoteEnvelope,
   type FundBalancePayload,
@@ -23,6 +25,8 @@ import {
   type FundLedgerId,
   type FundLedgerPayload,
   type FundPayload,
+  type FollowupId,
+  type TicketId,
   type UserId,
 } from "@care-y/shared";
 import { ClientError } from "$lib/errors.js";
@@ -142,6 +146,38 @@ interface EntryContext {
   readonly recordedAt?: Date;
 }
 
+/**
+ * The case a disbursement was recorded from and the follow-up that holds
+ * its note. Sealed inside the ledger payload, never in a column.
+ */
+export interface CasePointer {
+  readonly ticketId: TicketId;
+  readonly followUpId: FollowupId;
+}
+
+/**
+ * The case pointer for a ledger payload, or null when either id is not
+ * valid (the caller records nothing).
+ */
+export function casePointer(
+  ticketId: string,
+  followUpId: string,
+): CasePointer | null {
+  const ticket = ticketIdSchema.safeParse(ticketId);
+  const followUp = followupIdSchema.safeParse(followUpId);
+  return ticket.success && followUp.success
+    ? { ticketId: ticket.data, followUpId: followUp.data }
+    : null;
+}
+
+function casePointerFields(
+  caseRef: CasePointer | undefined,
+): Partial<CasePointer> {
+  return caseRef !== undefined
+    ? { ticketId: caseRef.ticketId, followUpId: caseRef.followUpId }
+    : {};
+}
+
 function validLedgerPayload(candidate: unknown): FundLedgerPayload {
   const parsed = fundLedgerPayloadSchema.safeParse(candidate);
   if (!parsed.success) throw new FundPayloadError("ledger");
@@ -150,10 +186,14 @@ function validLedgerPayload(candidate: unknown): FundLedgerPayload {
 
 /**
  * A disbursement. Takes the amount as a positive number of minor units
- * and stores it negative, per the ledger sign convention.
+ * and stores it negative, per the ledger sign convention. `caseRef`
+ * names the case it was recorded from, when it was.
  */
 export function disbursementPayload(
-  ctx: EntryContext & { readonly amountMinor: number },
+  ctx: EntryContext & {
+    readonly amountMinor: number;
+    readonly caseRef?: CasePointer;
+  },
 ): FundLedgerPayload {
   return validLedgerPayload({
     v: 1,
@@ -162,6 +202,7 @@ export function disbursementPayload(
     fundId: ctx.fundId,
     recordedAt: (ctx.recordedAt ?? new Date()).toISOString(),
     recordedBy: ctx.recordedBy,
+    ...casePointerFields(ctx.caseRef),
   });
 }
 
@@ -180,8 +221,9 @@ export function adjustmentPayload(
 }
 
 /**
- * The reversal of an existing entry: same fund, negated amount, and a
- * pointer to the entry it cancels.
+ * The reversal of an existing entry. It carries the same fund, the negated
+ * amount and a pointer to the entry it cancels. `caseRef` names the case
+ * of the disbursement being reversed, when it has one.
  */
 export function reversalPayload(ctx: {
   readonly reverses: {
@@ -190,6 +232,7 @@ export function reversalPayload(ctx: {
   };
   readonly recordedBy: UserId;
   readonly recordedAt?: Date;
+  readonly caseRef?: CasePointer;
 }): FundLedgerPayload {
   return validLedgerPayload({
     v: 1,
@@ -199,6 +242,7 @@ export function reversalPayload(ctx: {
     recordedAt: (ctx.recordedAt ?? new Date()).toISOString(),
     recordedBy: ctx.recordedBy,
     reversesId: ctx.reverses.id,
+    ...casePointerFields(ctx.caseRef),
   });
 }
 
@@ -216,13 +260,16 @@ export interface DisbursementRevision {
  * the entry the envelope names and a new disbursement of the corrected
  * amount, both in the envelope's fund. The envelope duplicates the
  * entry's amount and fund, so no ledger read is needed. `amountMinor`
- * is the corrected amount as a positive number of minor units.
+ * is the corrected amount as a positive number of minor units. The
+ * envelope names no case, so the caller supplies `caseRef` and both
+ * rows carry it.
  */
 export function disbursementRevision(ctx: {
   readonly envelope: DisbursementNoteEnvelope;
   readonly amountMinor: number;
   readonly recordedBy: UserId;
   readonly recordedAt?: Date;
+  readonly caseRef?: CasePointer;
 }): DisbursementRevision {
   const original = Math.abs(ctx.envelope.amountMinor);
   const corrected = Math.abs(ctx.amountMinor);
@@ -235,12 +282,14 @@ export function disbursementRevision(ctx: {
       },
       recordedBy: ctx.recordedBy,
       recordedAt,
+      caseRef: ctx.caseRef,
     }),
     replacement: disbursementPayload({
       fundId: ctx.envelope.fundId,
       recordedBy: ctx.recordedBy,
       amountMinor: corrected,
       recordedAt,
+      caseRef: ctx.caseRef,
     }),
     deltaMinor: original - corrected,
   };

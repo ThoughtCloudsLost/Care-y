@@ -512,6 +512,98 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(row.deleted_at).not.toBeNull();
       });
 
+      /**
+       * A disbursement row as the fund service leaves it. Inserted directly
+       * because no ticket route may write one.
+       */
+      async function insertDisbursement(
+        userId: UserId,
+        ticketId: TicketId,
+      ): Promise<FollowupId> {
+        const row = await tenantDb
+          .insertInto("followups")
+          .values({
+            ticket_id: ticketId,
+            source: "volunteer",
+            type: "disbursement",
+            is_private: true,
+            encrypted_content: Buffer.from("disbursement-envelope"),
+            created_by: userId,
+            note_type_id: null,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+        return row.id;
+      }
+
+      it("refuses a client-sent disbursement follow-up and writes no row", async () => {
+        const { user, ticketId } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        const id = crypto.randomUUID() as FollowupId;
+
+        await expectTrpcError(
+          caller.tickets.createFollowUp({
+            id,
+            ticketId,
+            encryptedContent: testEncryptedContent(0x77),
+            source: "volunteer",
+            type: "disbursement",
+            isPrivate: true,
+            mentionedPseudonyms: [],
+          }),
+          "FORBIDDEN",
+          ErrorCode.FOLLOWUP_TYPE_RESERVED,
+        );
+
+        const row = await tenantDb
+          .selectFrom("followups")
+          .select("id")
+          .where("id", "=", id)
+          .executeTakeFirst();
+        expect(row).toBeUndefined();
+      });
+
+      it("refuses to edit a disbursement through updateInternalNote", async () => {
+        const { user, ticketId } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        const id = await insertDisbursement(user.id, ticketId);
+
+        await expectTrpcError(
+          caller.tickets.updateInternalNote({
+            followUpId: id,
+            encryptedContent: testEncryptedContent(0x78),
+          }),
+          "FORBIDDEN",
+          ErrorCode.FOLLOWUP_NOT_EDITABLE,
+        );
+
+        const row = await tenantDb
+          .selectFrom("followups")
+          .select("encrypted_content")
+          .where("id", "=", id)
+          .executeTakeFirstOrThrow();
+        expect(row.encrypted_content.toString()).toBe("disbursement-envelope");
+      });
+
+      it("refuses to delete a disbursement through deleteInternalNote", async () => {
+        const { user, ticketId } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        const id = await insertDisbursement(user.id, ticketId);
+
+        await expectTrpcError(
+          caller.tickets.deleteInternalNote({ followUpId: id }),
+          "FORBIDDEN",
+          ErrorCode.FOLLOWUP_NOT_DELETABLE,
+        );
+
+        const row = await tenantDb
+          .selectFrom("followups")
+          .select("deleted_at")
+          .where("id", "=", id)
+          .executeTakeFirstOrThrow();
+        expect(row.deleted_at).toBeNull();
+      });
+
       it("rejects unauthenticated follow-up creation", async () => {
         const caller = createUnauthCaller();
         await expectTrpcError(

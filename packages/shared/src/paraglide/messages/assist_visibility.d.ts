@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The amount counts toward the fund balance the whole team sees. The note, and the fact that this {ticket} received it, stay with the {ticket}." |
+* | "The amount counts toward the fund balance the whole team sees. The note stays with the {ticket}. Fund auditors can open this {ticket} from the fund's history." |
 *
 * @param {Assist_VisibilityInputs} inputs
 * @param {{ locale?: "en" | "es" | "en-XA" }} options

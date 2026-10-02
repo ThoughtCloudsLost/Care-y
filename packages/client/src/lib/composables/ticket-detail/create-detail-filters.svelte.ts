@@ -37,6 +37,7 @@ export interface DetailFiltersConfig {
     readonly typePriority: string;
     readonly typeHold: string;
     readonly typeQueue: string;
+    readonly typeDisbursements: string;
     readonly typeMerge: string;
     readonly typeCalls: string;
   };
@@ -135,6 +136,7 @@ export function createDetailFilters(
     { value: "__priority__", label: config.labels.typePriority },
     { value: "__hold__", label: config.labels.typeHold },
     { value: "__queue__", label: config.labels.typeQueue },
+    { value: "__funds__", label: config.labels.typeDisbursements },
     { value: "merge_note", label: config.labels.typeMerge },
     { value: "phone_call", label: config.labels.typeCalls },
   ]);
