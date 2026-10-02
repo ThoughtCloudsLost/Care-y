@@ -104,6 +104,8 @@ import type {
   DeletionRequestId,
   FundId,
   FundLedgerId,
+  DonationConnectionId,
+  InflowProviderId,
 } from "@care-y/shared";
 
 export interface OrgsTable {
@@ -215,6 +217,20 @@ export interface PlatformAuditLogTable {
   created_at: ColumnType<Date, Date | undefined, never>;
 }
 
+// --- Donation provider connections ---
+
+export interface DonationConnectionsTable {
+  id: Generated<DonationConnectionId>;
+  org_id: OrgId;
+  /** No CHECK constraint; readers re-narrow with inflowProviderIdSchema. */
+  provider: InflowProviderId;
+  /** OPS_SECRETS_KEY sealed JSON: { apiKey, webhookId?, webhookSecret? }. */
+  config: Buffer;
+  key_version: ColumnType<number, number | undefined, number>;
+  created_at: ColumnType<Date, Date | undefined, Date>;
+  updated_at: ColumnType<Date, Date | undefined, Date>;
+}
+
 export interface PlatformDatabase {
   orgs: OrgsTable;
   oprf_config: OprfConfigTable;
@@ -225,6 +241,7 @@ export interface PlatformDatabase {
   inbound_email_domains: InboundEmailDomainsTable;
   deletion_requests: DeletionRequestsTable;
   platform_audit_log: PlatformAuditLogTable;
+  donation_connections: DonationConnectionsTable;
 }
 
 export interface UsersTable {

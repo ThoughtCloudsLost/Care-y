@@ -196,6 +196,14 @@ export const ErrorCode = {
   DELETION_NOT_CANCELLABLE: "DELETION_NOT_CANCELLABLE",
   /** The typed confirmation does not match the org's slug. */
   DELETION_SLUG_MISMATCH: "DELETION_SLUG_MISMATCH",
+
+  // --- Donation providers ---
+  /** No donation connection with that id exists in the caller's org. */
+  DONATION_CONNECTION_NOT_FOUND: "DONATION_CONNECTION_NOT_FOUND",
+  /** The donation provider refused the stored or submitted credentials. */
+  DONATION_PROVIDER_REJECTED: "DONATION_PROVIDER_REJECTED",
+  /** The donation provider could not be reached, was rate limiting, or answered with a server error or an unreadable body. */
+  DONATION_PROVIDER_UNAVAILABLE: "DONATION_PROVIDER_UNAVAILABLE",
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];

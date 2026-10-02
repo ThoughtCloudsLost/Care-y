@@ -305,6 +305,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         blobSweeper,
         secretsEncryptor: createSecretsEncryptor(TEST_OPS_KEY),
         closeSubaccount: vi.fn<CloseSubaccount>(async () => undefined),
+        removeDonationWebhooks: null,
         now: () => new Date(),
       });
     }

@@ -54,13 +54,27 @@ export type SseEvent = z.infer<typeof sseEventSchema>;
 
 // --- System SSE event (ticketless notifications, e.g., voicemail quarantine) ---
 
+/** Ticketless notification events that also travel over the SSE stream. */
+export const systemNotificationEventTypeSchema = z.enum([
+  "voicemail_quarantined",
+  "org_deletion_requested",
+  "org_deletion_cancelled",
+  "fund_entry_recorded",
+]);
+export type SystemNotificationEventType = z.infer<
+  typeof systemNotificationEventTypeSchema
+>;
+
+/**
+ * Ticketless events that exist only on the SSE stream, the counterpart of
+ * `liveEventTypeSchema` for events with no ticket. A connected viewer
+ * refetches; nothing enters the outbox, preferences, push or email.
+ */
+export const systemLiveEventTypeSchema = z.enum(["funds_inflow_changed"]);
+export type SystemLiveEventType = z.infer<typeof systemLiveEventTypeSchema>;
+
 export const systemSseEventSchema = z.object({
-  type: z.enum([
-    "voicemail_quarantined",
-    "org_deletion_requested",
-    "org_deletion_cancelled",
-    "fund_entry_recorded",
-  ]),
+  type: z.union([systemNotificationEventTypeSchema, systemLiveEventTypeSchema]),
   timestamp: z.iso.datetime(),
 });
 export type SystemSseEvent = z.infer<typeof systemSseEventSchema>;
@@ -162,6 +176,8 @@ export const auditEventTypeSchema = z.enum([
   "org_key_reindex",
   "pii_retention_purge",
   "client_deleted",
+  "donation_connection_saved",
+  "donation_connection_removed",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 
