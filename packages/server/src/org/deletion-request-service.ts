@@ -22,7 +22,6 @@ import {
   type OrgSchema,
   type OrgSlug,
   type SystemNotificationEventType,
-  type SystemSseEvent,
   type UserId,
 } from "@care-y/shared";
 import type {

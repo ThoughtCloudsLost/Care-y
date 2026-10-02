@@ -312,7 +312,9 @@ describe("createGivebutterProvider", () => {
         Authorization: `Bearer ${API_KEY}`,
         "Content-Type": "application/json",
       });
-      expect(JSON.parse(String(init?.body))).toEqual({
+      const body = init?.body;
+      if (typeof body !== "string") throw new Error("body is not a string");
+      expect(JSON.parse(body)).toEqual({
         url: "https://care-y.app/webhooks/givebutter/a/b",
         events: ["transaction.succeeded"],
         name: "CARE-Y",

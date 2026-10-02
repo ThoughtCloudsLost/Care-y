@@ -223,7 +223,7 @@ export function createCliErasureService(ctx: CliContext): ErasureService {
     blobSweeper: createBlobSweeper(env.BLOB_STORE_TYPE, env.BLOB_STORE_PATH),
     secretsEncryptor,
     closeSubaccount: closeTwilioSubaccount,
-    removeDonationWebhooks: (orgId) =>
+    removeDonationWebhooks: async (orgId) =>
       donationConnections.removeWebhooksForOrg(orgId),
     now: () => new Date(),
   });

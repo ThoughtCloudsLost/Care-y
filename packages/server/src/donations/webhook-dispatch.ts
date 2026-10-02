@@ -72,13 +72,13 @@ export function createDonationWebhookDispatch(
       const org = await deps.orgService.findById(orgId);
       if (org?.isActive !== true) return null;
 
-      const secret = await deps.connectionService.lookupWebhookSecret(
+      const lookup = await deps.connectionService.lookupWebhookSecret(
         orgId,
         connectionId,
       );
-      if (secret === null) return null;
+      if (lookup === null) return null;
 
-      return { orgSchema: org.schemaName, secret };
+      return { orgSchema: org.schemaName, secret: lookup };
     },
 
     async onDonation(
