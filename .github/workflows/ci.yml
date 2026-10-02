@@ -108,7 +108,10 @@ jobs:
       - name: Lint (strict)
         run: pnpm run lint:strict --cache-strategy content --concurrency auto
 
-  test:
+  # Only the server project needs Postgres and the OPRF processes. The
+  # client, shared and crypto projects run on the runner itself in
+  # test-client-shared-crypto, the same split the local scripts use.
+  test-server:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
@@ -159,23 +162,57 @@ jobs:
       # Coverage instrumentation taxes every test file. Pull requests run
       # the suite plain; the push to main after a merge runs it with
       # coverage and enforces the thresholds in coverage-thresholds.json.
-      - name: Tests
+      - name: Server tests
         if: github.event_name == 'pull_request'
-        run: docker compose -f docker-compose.test.yml exec app pnpm vitest run
+        run: docker compose -f docker-compose.test.yml exec app pnpm vitest run --project server
 
-      - name: Tests + coverage
+      - name: Server tests + coverage
         if: github.event_name == 'push'
-        run: docker compose -f docker-compose.test.yml exec app pnpm vitest run --coverage
+        run: docker compose -f docker-compose.test.yml exec app pnpm vitest run --project server --coverage
 
       - name: Stop test containers
         if: always()
         run: docker compose -f docker-compose.test.yml down
 
+  test-client-shared-crypto:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Client and shared tests import the compiled messages, which are not tracked.
+      - name: Compile paraglide
+        run: pnpm --filter @care-y/shared run build:paraglide && pnpm --filter @care-y/client run build:paraglide
+
+      - name: Client, shared and crypto tests
+        if: github.event_name == 'pull_request'
+        run: pnpm vitest run --project client --project shared --project crypto
+
+      - name: Client, shared and crypto tests + coverage
+        if: github.event_name == 'push'
+        run: pnpm vitest run --project client --project shared --project crypto --coverage
+
   # The one context the main branch ruleset requires. Runs whether or not
   # the legs passed, and fails unless every one of them succeeded, so a
   # cancelled or skipped leg cannot read as green.
   ci:
-    needs: [check, lint, test]
+    needs: [check, lint, test-server, test-client-shared-crypto]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -186,7 +223,7 @@ jobs:
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          echo "check lint test: $RESULTS"
+          echo "check lint test-server test-client-shared-crypto: $RESULTS"
           for r in $RESULTS; do
             [ "$r" = "success" ] || { echo "::error::a CI leg did not succeed ($RESULTS)"; exit 1; }
           done
