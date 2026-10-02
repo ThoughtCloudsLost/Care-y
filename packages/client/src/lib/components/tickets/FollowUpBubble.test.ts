@@ -279,7 +279,7 @@ describe("FollowUpBubble (email_outbound)", () => {
   });
 });
 
-describe("FollowUpBubble (disbursement note)", () => {
+describe("FollowUpBubble (disbursement)", () => {
   const fundId = fundIdSchema.parse(globalThis.crypto.randomUUID());
   const envelope = disbursementNoteContent({
     ledgerEntryId: newFundLedgerId(),
@@ -292,7 +292,7 @@ describe("FollowUpBubble (disbursement note)", () => {
   it("renders the envelope as readable text", () => {
     const { container } = render(FollowUpBubble, {
       props: {
-        followUp: makeFollowUp("internal_note", "volunteer"),
+        followUp: makeFollowUp("disbursement", "volunteer"),
         result: ready(envelope),
         resolveFundName: (id: string) =>
           id === fundId ? "Emergency housing" : undefined,

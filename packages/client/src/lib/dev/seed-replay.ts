@@ -56,6 +56,7 @@ import {
 } from "@care-y/shared/dev/seed-handbook-ticket.js";
 import {
   adjustmentPayload,
+  casePointer,
   disbursementNoteContent,
   disbursementPayload,
   recorderId,
@@ -145,11 +146,7 @@ export interface SeedReplayClient {
    */
   readonly funds?: Pick<
     FundsClient,
-    | "create"
-    | "list"
-    | "recordAdjustment"
-    | "recordDisbursement"
-    | "ensureDisbursementNoteType"
+    "create" | "list" | "recordAdjustment" | "recordDisbursement"
   >;
 }
 
@@ -2046,6 +2043,7 @@ async function runReplay(
       case "merge_note":
       case "share_link":
       case "contact_correction":
+      case "disbursement":
         // Merge rows are skipped above; the others never occur in the
         // handbook thread.
         throw new SeedReplayError(`Handbook row type not replayed: ${type}`);
@@ -2204,9 +2202,6 @@ async function runReplay(
       }
     }
 
-    // Every case note below carries the disbursement note type, which the
-    // first one has to bring into existence.
-    let disbursementNoteTypeEnsured = false;
     for (const def of SEED_DISBURSEMENTS) {
       const fund = seeded[def.fundIndex];
       if (fund === undefined) continue;
@@ -2217,6 +2212,14 @@ async function runReplay(
       if (def.storyIndex !== null && ticketId === undefined) continue;
 
       const ledgerEntryId = newFundLedgerId();
+      // The case record's id comes first so the sealed ledger entry can
+      // name the case and the follow-up it lands in.
+      const followUpId = newFollowupId();
+      const caseRef =
+        ticketId === undefined ? undefined : casePointer(ticketId, followUpId);
+      if (caseRef === null) {
+        throw new SeedReplayError("A seeded case disbursement has no valid id");
+      }
       const encryptedPayload = await sealLedgerPayload(
         sealer,
         disbursementPayload({
@@ -2224,6 +2227,7 @@ async function runReplay(
           recordedBy,
           amountMinor: def.amountMinor,
           recordedAt: daysAgo(def.daysAgo),
+          caseRef,
         }),
       );
       const deltaMinor = -def.amountMinor;
@@ -2237,16 +2241,7 @@ async function runReplay(
         landed(fund, deltaMinor, result);
         continue;
       }
-      if (!disbursementNoteTypeEnsured) {
-        // Dev seed only, always English, so the name is a literal.
-        await fundsRouter.ensureDisbursementNoteType.mutate({
-          encryptedName: seal("Disbursement", orgPublicKey),
-          encryptedIcon: seal("hand-coins", orgPublicKey),
-        });
-        disbursementNoteTypeEnsured = true;
-      }
       await cacheTicketKey(ticketId);
-      const followUpId = newFollowupId();
       const encryptedContent = await bridge.encrypt(
         ticketId,
         followupSlot(followUpId),

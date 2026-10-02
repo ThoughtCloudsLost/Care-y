@@ -69,6 +69,7 @@ export const followUpTypeSchema = z.enum([
   "contact_correction",
   "email_outbound",
   "email_inbound",
+  "disbursement",
 ]);
 export type FollowUpType = z.infer<typeof followUpTypeSchema>;
 

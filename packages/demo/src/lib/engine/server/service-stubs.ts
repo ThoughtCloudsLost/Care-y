@@ -559,8 +559,6 @@ export async function buildServiceStubs(
       createTicketAccess: createTicketAccessChecker,
       createFollowUpSvc: createFollowUpService,
       createAuditSvc: createAuditService,
-      createNoteTypeSvc: (svcTDb: Kysely<TenantDatabase>) =>
-        createNoteTypeService(svcTDb, secretsEncryptor),
       notificationService: notificationServiceStub,
     },
   });

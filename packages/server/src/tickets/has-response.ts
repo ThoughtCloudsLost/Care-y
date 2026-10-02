@@ -13,7 +13,7 @@ import type { TenantDatabase } from "../db/types.js";
  * follow-up other than an internal note (a reply, outbound text or email,
  * or an outbound call attempt), or any answered call, inbound included.
  * The inbound message that opened the ticket, system events and internal
- * notes leave it New. Deleted rows never count.
+ * notes and disbursements leave it New. Deleted rows never count.
  *
  * The builder is created here with no tables in scope, so the helper
  * assumes nothing about the calling query. Callers pass the ticket id as
@@ -36,7 +36,7 @@ export function hasResponse(
         w.or([
           w.and([
             w("f.source", "=", "volunteer"),
-            w("f.type", "!=", "internal_note"),
+            w("f.type", "not in", ["internal_note", "disbursement"]),
           ]),
           w.and([
             w("f.type", "=", "phone_call"),
