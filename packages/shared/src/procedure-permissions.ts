@@ -278,7 +278,6 @@ export const PROCEDURE_PERMISSIONS = {
   "funds.recordDisbursement": Permission.RECORD_DISBURSEMENTS,
   "funds.recordAdjustment": Permission.MANAGE_FUNDS,
   "funds.reviseDisbursement": Permission.RECORD_DISBURSEMENTS,
-  "funds.ensureDisbursementNoteType": Permission.RECORD_DISBURSEMENTS,
   "funds.setBalance": Permission.MANAGE_FUNDS,
   "funds.getSettings": Permission.MANAGE_FUNDS,
   "funds.updateSettings": Permission.MANAGE_FUNDS,

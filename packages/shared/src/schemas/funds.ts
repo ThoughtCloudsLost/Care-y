@@ -5,13 +5,13 @@
  * tRPC boundary: every encrypted field is an opaque base64 string that the
  * route converts to a Buffer. Payload schemas validate what the browser
  * decrypts: the fund record, its running balance and the ledger entry are
- * Org Key sealed JSON, and the case note envelope is ticket-key encrypted
- * internal note content.
+ * Org Key sealed JSON, and the case note envelope is the ticket-key
+ * encrypted content of a disbursement follow-up.
  * The server never parses a payload; it cannot open one.
  *
  * Nothing about a fund or an entry sits in a plaintext column. The fund an
- * entry belongs to, its amount, its type, who recorded it and when (beyond
- * the day) all live inside the ciphertext.
+ * entry belongs to, its amount, its type, the case it was recorded from,
+ * who recorded it and when (beyond the day) all live inside the ciphertext.
  */
 
 import { z } from "zod";
@@ -42,8 +42,8 @@ export const updateFundInputSchema = z.object({
 export type UpdateFundInput = z.infer<typeof updateFundInputSchema>;
 
 /**
- * The case half of a disbursement: an internal note encrypted exactly as
- * any other note on the case, whose content is a note envelope.
+ * The case half of a disbursement: a disbursement follow-up encrypted
+ * under the case's ticket key, whose content is a note envelope.
  */
 export const disbursementCaseNoteInputSchema = z.object({
   followUpId: followupIdSchema,
@@ -145,18 +145,6 @@ export type UpdateFundSettingsInput = z.infer<
   typeof updateFundSettingsInputSchema
 >;
 
-/** System key of the note type every disbursement case note carries. */
-export const DISBURSEMENT_NOTE_TYPE_KEY = "disbursement";
-
-/** Sealed name and icon for the disbursement note type, created once per org. */
-export const ensureDisbursementNoteTypeInputSchema = z.object({
-  encryptedName: base64String("encryptedName"),
-  encryptedIcon: base64String("encryptedIcon"),
-});
-export type EnsureDisbursementNoteTypeInput = z.infer<
-  typeof ensureDisbursementNoteTypeInputSchema
->;
-
 // --- Payload schemas (browser-side, after decryption) ---
 
 /** ISO 4217 alphabetic code: three uppercase letters. */
@@ -210,6 +198,13 @@ export type FundEntryType = z.infer<typeof fundEntryTypeSchema>;
  * disbursement is negative, an adjustment takes either sign, and a
  * reversal carries the negation of the entry it names in `reversesId`.
  * Only a reversal names another entry.
+ *
+ * A disbursement recorded from a case names that case and its case record,
+ * and so do the reversal and replacement a revision writes for it. The
+ * pointer lives in here rather than in a column because a plaintext link
+ * would pair the case with the entry from a database dump. Adjustments,
+ * fund-level disbursements and rows written before the pointer existed
+ * carry none, so both fields are optional, set together or not at all.
  */
 export const fundLedgerPayloadSchema = z
   .object({
@@ -220,6 +215,10 @@ export const fundLedgerPayloadSchema = z
     recordedAt: z.iso.datetime(),
     recordedBy: userIdSchema,
     reversesId: fundLedgerIdSchema.optional(),
+    /** The case this entry was recorded from, when it was. */
+    ticketId: ticketIdSchema.optional(),
+    /** The case record that holds the note and the pointer back here. */
+    followUpId: followupIdSchema.optional(),
   })
   .refine((d) => d.entryType !== "disbursement" || d.amountMinor < 0, {
     message: "A disbursement amount must be negative",
@@ -231,10 +230,18 @@ export const fundLedgerPayloadSchema = z
       message: "reversesId is required on a reversal and allowed nowhere else",
       path: ["reversesId"],
     },
-  );
+  )
+  .refine((d) => (d.ticketId === undefined) === (d.followUpId === undefined), {
+    message: "ticketId and followUpId are set together",
+    path: ["followUpId"],
+  })
+  .refine((d) => d.entryType !== "adjustment" || d.ticketId === undefined, {
+    message: "An adjustment names no case",
+    path: ["ticketId"],
+  });
 export type FundLedgerPayload = z.infer<typeof fundLedgerPayloadSchema>;
 
-// --- Case note envelope (internal note content, ticket-key encrypted) ---
+// --- Case note envelope (ticket-key encrypted follow-up content) ---
 
 /**
  * First character of a note that carries a structured envelope. A control

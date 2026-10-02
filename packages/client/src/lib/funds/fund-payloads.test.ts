@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   NOTE_ENVELOPE_MARKER,
+  followupIdSchema,
   fundIdSchema,
   hasNoteEnvelopeMarker,
   newFundLedgerId,
+  ticketIdSchema,
   userIdSchema,
 } from "@care-y/shared";
 import {
@@ -11,6 +13,7 @@ import {
   adjustmentPayload,
   buildBalancePayload,
   buildFundPayload,
+  casePointer,
   disbursementNoteContent,
   disbursementPayload,
   disbursementRevision,
@@ -29,6 +32,10 @@ import {
 const FUND = fundIdSchema.parse(globalThis.crypto.randomUUID());
 const USER = userIdSchema.parse(globalThis.crypto.randomUUID());
 const AT = new Date("2026-09-15T10:30:00.000Z");
+const CASE = {
+  ticketId: ticketIdSchema.parse(globalThis.crypto.randomUUID()),
+  followUpId: followupIdSchema.parse(globalThis.crypto.randomUUID()),
+};
 
 /** A sealer that records the plaintext and returns a fixed ciphertext. */
 function recordingSealer(): FundSealer & { readonly calls: string[] } {
@@ -201,6 +208,84 @@ describe("ledger payloads", () => {
     expect(revision.deltaMinor).toBe(
       revision.reversal.amountMinor + revision.replacement.amountMinor,
     );
+  });
+
+  it("builds a case pointer only from valid ids", () => {
+    expect(casePointer(CASE.ticketId, CASE.followUpId)).toEqual(CASE);
+    expect(casePointer("ticket-1", CASE.followUpId)).toBeNull();
+    expect(casePointer(CASE.ticketId, "fu-1")).toBeNull();
+  });
+
+  it("names the case a disbursement was recorded from", () => {
+    const payload = disbursementPayload({
+      fundId: FUND,
+      recordedBy: USER,
+      recordedAt: AT,
+      amountMinor: 2_500,
+      caseRef: CASE,
+    });
+    expect(payload.ticketId).toBe(CASE.ticketId);
+    expect(payload.followUpId).toBe(CASE.followUpId);
+  });
+
+  it("names no case on a disbursement recorded without one", () => {
+    const payload = disbursementPayload({
+      fundId: FUND,
+      recordedBy: USER,
+      recordedAt: AT,
+      amountMinor: 2_500,
+    });
+    expect(payload).not.toHaveProperty("ticketId");
+    expect(payload).not.toHaveProperty("followUpId");
+  });
+
+  it("carries the reversed disbursement's case onto the reversal", () => {
+    const id = newFundLedgerId();
+    const original = disbursementPayload({
+      fundId: FUND,
+      recordedBy: USER,
+      recordedAt: AT,
+      amountMinor: 700,
+      caseRef: CASE,
+    });
+    const reversal = reversalPayload({
+      reverses: { id, payload: original },
+      recordedBy: USER,
+      recordedAt: AT,
+      caseRef: CASE,
+    });
+    expect(reversal.ticketId).toBe(original.ticketId);
+    expect(reversal.followUpId).toBe(original.followUpId);
+
+    const bare = reversalPayload({
+      reverses: { id, payload: original },
+      recordedBy: USER,
+      recordedAt: AT,
+    });
+    expect(bare).not.toHaveProperty("ticketId");
+    expect(bare).not.toHaveProperty("followUpId");
+  });
+
+  it("names the case on both rows of a revision", () => {
+    const revision = disbursementRevision({
+      envelope: {
+        v: 1,
+        kind: "disbursement",
+        ledgerEntryId: newFundLedgerId(),
+        fundId: FUND,
+        amountMinor: 5_000,
+        currency: "USD",
+        note: "",
+      },
+      amountMinor: 3_500,
+      recordedBy: USER,
+      recordedAt: AT,
+      caseRef: CASE,
+    });
+    for (const row of [revision.reversal, revision.replacement]) {
+      expect(row.ticketId).toBe(CASE.ticketId);
+      expect(row.followUpId).toBe(CASE.followUpId);
+    }
   });
 
   it("seals and opens a ledger payload", async () => {

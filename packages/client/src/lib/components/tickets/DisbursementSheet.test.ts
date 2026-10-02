@@ -5,6 +5,7 @@
  * correcting is one reviseDisbursement call with a reversal, a
  * replacement, the balance and the rewritten note. Neither path writes
  * a reversal through recordDisbursement or edits the note separately.
+ * Every sealed ledger payload names the case and its case record.
  *
  * The fund cache, the case fund and the balance writer are stubs, so no
  * query or Worker runs. The writer stub records the delta it was given
@@ -23,8 +24,10 @@ import { followupSlot } from "@care-y/crypto";
 import {
   ErrorCode,
   NOTE_ENVELOPE_MARKER,
+  followupIdSchema,
   fundIdSchema,
   newFundLedgerId,
+  ticketIdSchema,
   userIdSchema,
   type DisbursementNoteEnvelope,
 } from "@care-y/shared";
@@ -49,36 +52,30 @@ import type {
 
 const FUND = fundIdSchema.parse(globalThis.crypto.randomUUID());
 const USER = userIdSchema.parse(globalThis.crypto.randomUUID());
-const TICKET = "ticket-001";
+const TICKET = ticketIdSchema.parse(globalThis.crypto.randomUUID());
+const EDITED = followupIdSchema.parse(globalThis.crypto.randomUUID());
 
-const {
-  mockEncrypt,
-  mockEnsureNoteType,
-  mockRecord,
-  mockRevise,
-  mockWrite,
-  mockDeleteByPrefix,
-} = vi.hoisted(() => ({
-  mockEncrypt: vi
-    .fn<(ticketId: string, slot: string, text: string) => Promise<string>>()
-    .mockResolvedValue("sealed-note"),
-  mockEnsureNoteType: vi
-    .fn<
-      (input: Record<string, unknown>) => Promise<{
-        id: string;
-        created: boolean;
-      }>
-    >()
-    .mockResolvedValue({ id: "note-type-1", created: false }),
-  mockRecord: vi
-    .fn<(input: Record<string, unknown>) => Promise<unknown>>()
-    .mockResolvedValue({}),
-  mockRevise: vi
-    .fn<(input: Record<string, unknown>) => Promise<unknown>>()
-    .mockResolvedValue({}),
-  mockWrite: vi.fn<(fundId: string, deltaMinor: number) => void>(),
-  mockDeleteByPrefix: vi.fn<(prefix: string) => void>(),
-}));
+/** The ledger payload inside the stub sealer's `sealed:` ciphertext. */
+function sealedLedger(ciphertext: unknown): Record<string, unknown> {
+  const text = String(ciphertext);
+  expect(text.startsWith("sealed:")).toBe(true);
+  return JSON.parse(text.slice("sealed:".length)) as Record<string, unknown>;
+}
+
+const { mockEncrypt, mockRecord, mockRevise, mockWrite, mockDeleteByPrefix } =
+  vi.hoisted(() => ({
+    mockEncrypt: vi
+      .fn<(ticketId: string, slot: string, text: string) => Promise<string>>()
+      .mockResolvedValue("sealed-note"),
+    mockRecord: vi
+      .fn<(input: Record<string, unknown>) => Promise<unknown>>()
+      .mockResolvedValue({}),
+    mockRevise: vi
+      .fn<(input: Record<string, unknown>) => Promise<unknown>>()
+      .mockResolvedValue({}),
+    mockWrite: vi.fn<(fundId: string, deltaMinor: number) => void>(),
+    mockDeleteByPrefix: vi.fn<(prefix: string) => void>(),
+  }));
 
 let funds: FundView[] = [];
 let caseFund: CaseFund = { fundId: null, fund: undefined };
@@ -119,7 +116,6 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     funds: {
-      ensureDisbursementNoteType: { mutate: mockEnsureNoteType },
       recordDisbursement: { mutate: mockRecord },
       reviseDisbursement: { mutate: mockRevise },
     },
@@ -196,9 +192,6 @@ beforeEach(() => {
   funds = [fund(20_000)];
   caseFund = { fundId: FUND, fund: funds[0] };
   mockEncrypt.mockClear();
-  mockEnsureNoteType
-    .mockReset()
-    .mockResolvedValue({ id: "note-type-1", created: false });
   mockRecord.mockReset().mockResolvedValue({});
   mockRevise.mockReset().mockResolvedValue({});
   mockWrite.mockClear();
@@ -234,16 +227,10 @@ describe("DisbursementSheet (record)", () => {
     await waitFor(() => {
       expect(mockRecord).toHaveBeenCalledTimes(1);
     });
+    // The funds stub carries no note type procedure: the save makes no
+    // call besides the record itself.
     expect(mockRevise).not.toHaveBeenCalled();
     expect(mockWrite).toHaveBeenCalledWith(FUND, -2_550);
-    // The disbursement note type exists before the note that carries it.
-    expect(mockEnsureNoteType).toHaveBeenCalledWith({
-      encryptedName: `sealed:${m.fund_disbursement_note_type_name()}`,
-      encryptedIcon: "sealed:hand-coins",
-    });
-    expect(mockEnsureNoteType.mock.invocationCallOrder[0]).toBeLessThan(
-      mockRecord.mock.invocationCallOrder[0] ?? 0,
-    );
 
     const input = mockRecord.mock.calls[0]?.[0] ?? {};
     expect(input.balance).toEqual({
@@ -260,6 +247,11 @@ describe("DisbursementSheet (record)", () => {
     expect(caseNote).toMatchObject({
       ticketId: TICKET,
       encryptedContent: "sealed-note",
+    });
+    // The sealed entry names this case and the case record it writes.
+    expect(sealedLedger(input.encryptedPayload)).toMatchObject({
+      ticketId: TICKET,
+      followUpId: caseNote.followUpId,
     });
     // The note is encrypted under the slot of the follow-up id sent.
     const [ticketId, slot, content] = mockEncrypt.mock.calls[0] ?? [];
@@ -334,7 +326,7 @@ describe("DisbursementSheet (correct)", () => {
     opened: true,
     ondismiss: vi.fn(),
     ticketId: TICKET,
-    edit: { followUpId: "fu-9", envelope },
+    edit: { followUpId: EDITED, envelope },
   };
 
   it("prefills the amount and note", () => {
@@ -372,19 +364,26 @@ describe("DisbursementSheet (correct)", () => {
     );
     expect(input.balance).toMatchObject({ fundId: FUND, expectedVersion: 7 });
     expect(input.caseNote).toMatchObject({
-      followUpId: "fu-9",
+      followUpId: EDITED,
       ticketId: TICKET,
       encryptedContent: "sealed-note",
     });
+    // Both sealed entries name this case and the case record revised.
+    for (const row of [reversal, replacement]) {
+      expect(sealedLedger(row.encryptedPayload)).toMatchObject({
+        ticketId: TICKET,
+        followUpId: EDITED,
+      });
+    }
 
     // The rewritten note names the replacement entry.
     const content = mockEncrypt.mock.calls[0]?.[2] ?? "";
-    expect(mockEncrypt.mock.calls[0]?.[1]).toBe(followupSlot("fu-9"));
+    expect(mockEncrypt.mock.calls[0]?.[1]).toBe(followupSlot(EDITED));
     expect(content).toContain(String(replacement.id));
     expect(content).not.toContain(ledgerEntryId);
 
     await waitFor(() => {
-      expect(mockDeleteByPrefix).toHaveBeenCalledWith("fu-9");
+      expect(mockDeleteByPrefix).toHaveBeenCalledWith(EDITED);
     });
   });
 

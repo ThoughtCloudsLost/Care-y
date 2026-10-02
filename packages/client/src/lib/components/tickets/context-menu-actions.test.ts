@@ -121,31 +121,31 @@ describe("getContextMenuActions", () => {
     expect(actions[0]!.id).toBe("copy");
   });
 
-  describe("disbursement notes", () => {
-    const note = {
-      type: "internal_note",
+  describe("disbursements", () => {
+    const entry = {
+      type: "disbursement",
       source: "volunteer",
       createdBy: "user-1",
     };
 
-    it("offers the disbursement editor instead of the note editor", () => {
-      const ids = getContextMenuActions(note, "user-1", false, labels, {
+    it("offers copy and the disbursement editor to the author", () => {
+      const ids = getContextMenuActions(entry, "user-1", false, labels, {
         canRevise: true,
         canReviseOthers: false,
       }).map((a) => a.id);
-      expect(ids).toEqual(["copy", "editDisbursement", "delete"]);
+      expect(ids).toEqual(["copy", "editDisbursement"]);
     });
 
-    it("drops both editors without the revise permission", () => {
-      const ids = getContextMenuActions(note, "user-1", false, labels, {
+    it("offers copy only without the revise permission", () => {
+      const ids = getContextMenuActions(entry, "user-1", false, labels, {
         canRevise: false,
         canReviseOthers: false,
       }).map((a) => a.id);
-      expect(ids).toEqual(["copy", "delete"]);
+      expect(ids).toEqual(["copy"]);
     });
 
     it("lets a fund manager correct someone else's disbursement", () => {
-      const ids = getContextMenuActions(note, "user-2", false, labels, {
+      const ids = getContextMenuActions(entry, "user-2", false, labels, {
         canRevise: true,
         canReviseOthers: true,
       }).map((a) => a.id);
@@ -153,11 +153,48 @@ describe("getContextMenuActions", () => {
     });
 
     it("keeps other people's disbursements closed to everyone else", () => {
-      const ids = getContextMenuActions(note, "user-2", false, labels, {
+      const ids = getContextMenuActions(entry, "user-2", false, labels, {
         canRevise: true,
         canReviseOthers: false,
       }).map((a) => a.id);
       expect(ids).toEqual(["copy"]);
+    });
+
+    it("never offers note edit or delete, even to the author or an admin", () => {
+      const cases: [string, boolean][] = [
+        ["user-1", false],
+        ["user-1", true],
+        ["user-2", true],
+      ];
+      for (const [userId, isAdmin] of cases) {
+        for (const access of [
+          undefined,
+          { canRevise: true, canReviseOthers: true },
+        ]) {
+          const ids = getContextMenuActions(
+            entry,
+            userId,
+            isAdmin,
+            labels,
+            access,
+          ).map((a) => a.id);
+          expect(ids).not.toContain("edit");
+          expect(ids).not.toContain("delete");
+        }
+      }
+    });
+
+    it("ignores disbursement access on an internal note", () => {
+      const note = {
+        type: "internal_note",
+        source: "volunteer",
+        createdBy: "user-1",
+      };
+      const ids = getContextMenuActions(note, "user-1", false, labels, {
+        canRevise: true,
+        canReviseOthers: true,
+      }).map((a) => a.id);
+      expect(ids).toEqual(["copy", "edit", "delete"]);
     });
   });
 });

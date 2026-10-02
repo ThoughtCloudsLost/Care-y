@@ -170,8 +170,8 @@ export interface CreateWithinResult {
 }
 
 /**
- * What `updateInternalNoteWithin` leaves for `finishUpdate`: the rewritten
- * row and the note type it carried before.
+ * What `updateInternalNoteWithin` and `updateDisbursementWithin` leave for
+ * `finishUpdate`: the rewritten row and the note type it carried before.
  */
 export interface UpdateWithinResult {
   readonly row: Selectable<FollowupsTable>;
@@ -284,10 +284,23 @@ export interface FollowUpService {
   ): Promise<UpdateWithinResult>;
   /**
    * The after-commit half of `updateInternalNote`: the live ticket-change
-   * event. Call only once the transaction `updateInternalNoteWithin` ran
-   * on has committed.
+   * event. Call only once the transaction `updateInternalNoteWithin` or
+   * `updateDisbursementWithin` ran on has committed.
    */
   finishUpdate(result: UpdateWithinResult): FollowUpRecord;
+  /**
+   * Rewrite a `disbursement` follow-up's sealed content inside the
+   * caller's transaction. Same access, author and deleted checks as
+   * `updateInternalNoteWithin`; refuses any other type. Only the fund
+   * service calls this.
+   */
+  updateDisbursementWithin(
+    trx: Transaction<TenantDatabase>,
+    userId: UserId,
+    followUpId: FollowupId,
+    encryptedContent: Buffer,
+    opts?: { anyAuthor?: boolean },
+  ): Promise<UpdateWithinResult>;
 }
 
 /**
@@ -660,9 +673,12 @@ export function createFollowUpService(
   }
 
   /**
-   * Checks and rewrite of an internal note on the given handle. The
-   * access checker is passed in so a caller's transaction can check
-   * through its own connection, as `createWithin` does.
+   * Checks and rewrite of an internal note or a disbursement on the given
+   * handle. `expectedType` names the one type the caller may rewrite, so
+   * the note routes cannot reach a disbursement and the fund service
+   * cannot reach a note. The access checker is passed in so a caller's
+   * transaction can check through its own connection, as `createWithin`
+   * does.
    */
   async function editInternalNote(
     handle: Kysely<TenantDatabase>,
@@ -672,6 +688,7 @@ export function createFollowUpService(
     encryptedContent: Buffer,
     noteTypeId: NoteTypeId | undefined,
     anyAuthor: boolean,
+    expectedType: "internal_note" | "disbursement",
   ): Promise<UpdateWithinResult> {
     const existing = await handle
       .selectFrom("followups")
@@ -683,7 +700,7 @@ export function createFollowUpService(
 
     await checker.assertAccess(userId, existing.ticket_id);
 
-    if (existing.type !== "internal_note") {
+    if (existing.type !== expectedType) {
       throw new ForbiddenError(ErrorCode.FOLLOWUP_NOT_EDITABLE);
     }
     if (existing.source !== "volunteer") {
@@ -691,24 +708,6 @@ export function createFollowUpService(
     }
     if (existing.deleted_at !== null) {
       throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
-    }
-
-    // A note of a system type keeps that type; moving it would detach it
-    // from the path that owns it.
-    const currentTypeId = existing.note_type_id ?? null;
-    if (
-      noteTypeId !== undefined &&
-      currentTypeId !== null &&
-      noteTypeId !== currentTypeId
-    ) {
-      const currentType = await handle
-        .selectFrom("note_types")
-        .select("system_key")
-        .where("id", "=", currentTypeId)
-        .executeTakeFirst();
-      if (typeof currentType?.system_key === "string") {
-        throw new ForbiddenError(ErrorCode.NOTE_TYPE_RESERVED);
-      }
     }
 
     const updates: Record<string, unknown> = {
@@ -758,6 +757,26 @@ export function createFollowUpService(
         encryptedContent,
         undefined,
         opts?.anyAuthor ?? false,
+        "internal_note",
+      );
+    },
+
+    async updateDisbursementWithin(
+      trx,
+      userId,
+      followUpId,
+      encryptedContent,
+      opts,
+    ) {
+      return editInternalNote(
+        trx,
+        createTicketAccessChecker(trx),
+        userId,
+        followUpId,
+        encryptedContent,
+        undefined,
+        opts?.anyAuthor ?? false,
+        "disbursement",
       );
     },
 
@@ -1029,10 +1048,14 @@ export function createFollowUpService(
       }
 
       return orderedRows.map((row): FollowUpSummaryRecord => {
+        // A disbursement is volunteer-sourced but carries sealed content the
+        // timeline opens, so it is not a plain message. Without this line the
+        // summary nulls its encryptedContent and the variant has nothing to show.
         const isPlainMessage =
           row.source !== "system" &&
           row.type !== "internal_note" &&
-          row.type !== "phone_call";
+          row.type !== "phone_call" &&
+          row.type !== "disbursement";
         const rec = recByFu.get(row.id);
         const att = attByFu.get(row.id);
 
@@ -1105,6 +1128,7 @@ export function createFollowUpService(
         encryptedContent,
         noteTypeId,
         false,
+        "internal_note",
       );
       return {
         record: finishUpdate(result),
@@ -1188,7 +1212,7 @@ export function createFollowUpService(
       if (row.deleted_at !== null) {
         throw new NotFoundError(ErrorCode.FOLLOWUP_NOT_FOUND);
       }
-      if (row.type !== "internal_note") {
+      if (row.type !== "internal_note" && row.type !== "disbursement") {
         throw new ForbiddenError(ErrorCode.INSUFFICIENT_PERMISSIONS);
       }
 

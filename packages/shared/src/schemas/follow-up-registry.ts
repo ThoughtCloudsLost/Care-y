@@ -5,9 +5,10 @@ import { ticketPrioritySchema } from "./tickets.js";
 import { userIdSchema, queueIdSchema } from "../ids.js";
 
 export type ContentCategory =
-  "message" | "system" | "note" | "article" | "correction";
+  "message" | "system" | "note" | "article" | "correction" | "fund";
 
-export type RenderVariant = "call" | "share" | "correction" | "email";
+export type RenderVariant =
+  "call" | "share" | "correction" | "email" | "disbursement";
 
 export interface ContentTypeMeta {
   readonly category: ContentCategory;
@@ -193,5 +194,14 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     hasEventParams: false,
     groupable: false,
     renderVariant: "email",
+  },
+  disbursement: {
+    category: "fund",
+    allowedSources: ["volunteer"],
+    encryption: "ticket-key",
+    hasEncryptedContent: true,
+    hasEventParams: false,
+    groupable: false,
+    renderVariant: "disbursement",
   },
 } as const;

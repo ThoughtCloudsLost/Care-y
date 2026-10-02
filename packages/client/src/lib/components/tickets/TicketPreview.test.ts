@@ -9,6 +9,7 @@ import {
   newFundLedgerId,
 } from "@care-y/shared";
 import { disbursementNoteContent } from "$lib/funds/fund-payloads.js";
+import * as m from "$lib/paraglide/messages.js";
 
 // IntersectionObserver stub for DecryptPlaceholder
 vi.stubGlobal(
@@ -330,7 +331,7 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(container.querySelector("[data-direction]")).toBeNull();
   });
 
-  it("previews a disbursement note as its amount and text", () => {
+  it("previews a disbursement as its amount and text", () => {
     mockDecryptContent.mockReturnValue(
       disbursementNoteContent({
         ledgerEntryId: newFundLedgerId(),
@@ -340,7 +341,7 @@ describe("TicketPreview (mini-bubbles)", () => {
         note: "Gas card",
       }),
     );
-    const fu = makeFollowUp({ type: "internal_note", source: "volunteer" });
+    const fu = makeFollowUp({ type: "disbursement", source: "volunteer" });
     const { container } = render(TicketPreview, {
       props: { ticketId: "ticket-preview-1", followUps: [fu], multiline: true },
     });
@@ -349,6 +350,11 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(text).toContain("$45.00");
     expect(text).not.toContain(NOTE_ENVELOPE_MARKER);
     expect(text).not.toContain("ledgerEntryId");
+    // The eyebrow names the entry; no note type icon stands beside it.
+    const eyebrow = container.querySelector(".mini-note-eyebrow");
+    expect(eyebrow?.textContent.trim()).toBe(m.fund_note_eyebrow());
+    expect(container.querySelector(".mini-note-icon")).toBeNull();
+    expect(container.querySelector("[data-direction]")).toBeNull();
   });
 
   it("renders multiple follow-ups with correct alignment", () => {

@@ -2664,13 +2664,16 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       ).toEqual([false, false, false]);
     });
 
-    it("ignores system events and internal notes", async () => {
+    it("ignores system events, internal notes and disbursements", async () => {
+      // A disbursement is volunteer-sourced but private to the team; the
+      // client never sees it, so it is not a response.
       expect(
         await hasResponseAcrossReads([
           { source: "system", type: "volunteer_assigned" },
           { source: "system", type: "hold_placed" },
           { source: "system", type: "priority_changed" },
           { source: "volunteer", type: "internal_note" },
+          { source: "volunteer", type: "disbursement" },
         ]),
       ).toEqual([false, false, false]);
     });

@@ -44,11 +44,6 @@ export function disbursementNoteText(
   return envelope.note === "" ? headline : `${headline}\n${envelope.note}`;
 }
 
-/** Whether a decrypted note carries an envelope (so plain-note edit is off). */
-export function isEnvelopeResult(result: DecryptResult): boolean {
-  return result.status === "ready" && hasNoteEnvelopeMarker(result.value);
-}
-
 /** Looks up a fund's name, or undefined when the session cannot read it. */
 export type FundNameResolver = (fundId: string) => string | undefined;
 

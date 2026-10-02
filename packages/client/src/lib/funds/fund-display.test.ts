@@ -12,7 +12,6 @@ import {
 import { disbursementNoteContent } from "./fund-payloads.js";
 import {
   disbursementNoteText,
-  isEnvelopeResult,
   readableNoteResult,
   readableNoteText,
 } from "./fund-display.js";
@@ -29,14 +28,6 @@ const envelopeContent = disbursementNoteContent({
   amountMinor: 5_000,
   currency: "USD",
   note: "Bus pass for the week",
-});
-
-describe("isEnvelopeResult", () => {
-  it("is true only for a ready envelope", () => {
-    expect(isEnvelopeResult(ready(envelopeContent))).toBe(true);
-    expect(isEnvelopeResult(ready("A typed note"))).toBe(false);
-    expect(isEnvelopeResult(LOADING)).toBe(false);
-  });
 });
 
 describe("readableNoteResult", () => {

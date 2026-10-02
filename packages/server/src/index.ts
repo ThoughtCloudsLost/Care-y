@@ -903,7 +903,6 @@ const appRouter = createAppRouter({
     createTicketAccess: createTicketAccessChecker,
     createFollowUpSvc: createFollowUpService,
     createAuditSvc: createAuditService,
-    createNoteTypeSvc: (tDb) => createNoteTypeService(tDb, secretsEncryptor),
     notificationService,
     fieldEncryptor: encryptor,
     liveEvents: ticketLiveEvents,

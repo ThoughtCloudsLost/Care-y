@@ -8,7 +8,7 @@ import {
   vi,
   type Mock,
 } from "vitest";
-import { getSodium, requireSodium, encode } from "@care-y/crypto";
+import { getSodium, requireSodium, encode, decode } from "@care-y/crypto";
 import { NOTE_ENVELOPE_MARKER, RoleId } from "@care-y/shared";
 import { SEED_HANDBOOK_TICKET } from "@care-y/shared/dev/seed-handbook-ticket.js";
 import { SeedReplayError } from "$lib/errors.js";
@@ -190,10 +190,6 @@ function createFakeServer(): FakeServer {
     ],
     ["funds.recordAdjustment", recordEntry],
     ["funds.recordDisbursement", recordEntry],
-    [
-      "funds.ensureDisbursementNoteType",
-      () => ({ id: nextId("disbursement-note-type"), created: true }),
-    ],
   ]);
   for (const path of [
     "tickets.createFollowUp",
@@ -313,6 +309,20 @@ describe("seedReplay", () => {
   let loadVoicemail: Mock<() => Promise<Uint8Array>>;
   let progress: string[];
   let deps: SeedReplayDeps;
+  let orgKeys: { publicKey: Uint8Array; privateKey: Uint8Array };
+
+  /** Open an Org Key sealed payload the replay sent. */
+  function unseal(ciphertext: unknown): unknown {
+    if (typeof ciphertext !== "string") {
+      throw new FakeProcedureError("Sealed payload is not a string");
+    }
+    const plaintext = requireSodium().crypto_box_seal_open(
+      decode(ciphertext),
+      orgKeys.publicKey,
+      orgKeys.privateKey,
+    );
+    return JSON.parse(new TextDecoder().decode(plaintext));
+  }
 
   beforeAll(async () => {
     await getSodium();
@@ -325,7 +335,8 @@ describe("seedReplay", () => {
     phoneLookup = vi.fn(fakeLookup);
     loadVoicemail = vi.fn(() => Promise.resolve(VOICEMAIL));
     progress = [];
-    const orgPublicKey = requireSodium().crypto_box_keypair().publicKey;
+    orgKeys = requireSodium().crypto_box_keypair();
+    const orgPublicKey = orgKeys.publicKey;
     deps = {
       client: server.client,
       bridge: fake.bridge,
@@ -514,21 +525,27 @@ describe("seedReplay", () => {
     );
     expect(envelopes).toHaveLength(withNote.length);
 
-    // The disbursement note type is ensured once, before the first case
-    // note that carries it.
-    const ensured = server.calls.findIndex(
-      (c) => c.path === "funds.ensureDisbursementNoteType",
-    );
-    const firstCaseNote = server.calls.findIndex(
-      (c) =>
-        c.path === "funds.recordDisbursement" &&
-        readField(c.input, "caseNote") !== undefined,
-    );
+    // A case disbursement's sealed entry names the case and the case
+    // record it lands in; fund-level spending names no case.
+    for (const input of disbursements) {
+      const payload = unseal(readField(input, "encryptedPayload"));
+      const caseNote = readField(input, "caseNote");
+      if (caseNote === undefined) {
+        expect(readField(payload, "ticketId")).toBeUndefined();
+        expect(readField(payload, "followUpId")).toBeUndefined();
+        continue;
+      }
+      expect(readField(payload, "ticketId")).toBe(
+        readString(caseNote, "ticketId"),
+      );
+      expect(readField(payload, "followUpId")).toBe(
+        readString(caseNote, "followUpId"),
+      );
+    }
+    // The case record is its own follow-up type; no note type is ensured.
     expect(
       inputsOf(server.calls, "funds.ensureDisbursementNoteType"),
-    ).toHaveLength(1);
-    expect(ensured).toBeGreaterThanOrEqual(0);
-    expect(ensured).toBeLessThan(firstCaseNote);
+    ).toHaveLength(0);
   });
 
   it("chains each fund's balance version and seals under the row's generation", async () => {
